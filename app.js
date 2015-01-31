@@ -13,7 +13,7 @@ var express  = require('express')
   , facebook = require('facebook-node-sdk')
   , mongo    = require('mongoose')
   , socketio = require('socket.io')
-  , middleware = require('./lib/middlewares')
+  , middleware = require('./lib/util/middlewares')
   , time     = require('time')
   , async    = require('async')
   , session  = require('express-session')
@@ -72,14 +72,14 @@ app.use(express.logger());
 app.engine('html', cons.swig);
 app.set('view cache', false);
 app.set('view engine', 'html');
-app.set('views', __dirname + '/views');
+app.set('views', __dirname + '/lib/views');
 app.use(express.methodOverride());
 app.use(express.bodyParser());
 app.use(express.cookieParser());
 app.use(session(sessionConfig));
 app.use(flash());
 
-configModel = require('./models/config')(app);
+configModel = require('./lib/models/config')(app);
 
 async.series([
   function (next) {
@@ -91,9 +91,9 @@ async.series([
   }, function (next) {
     var config = app.set('config');
 
-    app.set('mailer', require('./lib/mailer')(app));
+    app.set('mailer', require('./lib/util/mailer')(app));
 
-    models = require('./models')(app);
+    models = require('./lib/models')(app);
     models.Config = configModel;
 
     // configure application
@@ -185,7 +185,7 @@ async.series([
     });
 
     app.set('io', io);
-    require('./routes')(app);
+    require('./lib/routes')(app);
 
     next();
   }
