@@ -52,7 +52,7 @@
     "grunt-mocha-test": "^0.12.7",
     "grunt-sass": "~0.18.0",
     "method-override": "^2.3.1",
-    "mongoose": "^3.8.0",
+    "mongoose": "^3.8.0 && <3.9.3",
     "mongoose-paginate": "^3.1.0",
     "morgan": "^1.5.1",
     "multer": "^0.1.8",
