@@ -12,6 +12,19 @@ if (!window) {
 }
 window.Crowi = Crowi;
 
+function isExternalLink(url) {
+  var baseUrl = $('body').data('baseurl');
+
+}
+
+function OpenExternalLink(el) {
+  var url = el.href;
+  w = window.open();
+  w.document.write('<meta http-equiv="refresh" content="0;url='+url+'">');
+  w.document.close();
+  return false;
+}
+
 Crowi.createErrorView = function(msg) {
   $('#main').prepend($('<p class="alert-message error">' + msg + '</p>'));
 };

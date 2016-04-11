@@ -18,7 +18,7 @@
 {% endblock %}
 
 {% block html_body %}
-<body class="crowi main-container {% block html_base_css %}{% endblock %}">
+<body class="crowi main-container {% block html_base_css %}{% endblock %}" data-baseurl="{{ config.crowi['app:url'] }}">
 <div id="fb-root"></div>
 <script>
   window.fbAsyncInit = function() {
