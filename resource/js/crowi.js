@@ -606,13 +606,15 @@ $(function() {
 
     // History Diff
     var allRevisionIds = [];
-    $.each($('.diff-view'), function() {
+    $.each($('.parent-diff-view, .diff-view'), function() {
       allRevisionIds.push($(this).data('revisionId'));
     });
+    var allGroupRevisionIds = [];
+    $.each($('.parent-diff-view'), function() {
+      allGroupRevisionIds.push($(this).data('revisionId'));
+    });
 
-    $('.diff-view').on('click', function(e) {
-      e.preventDefault();
-
+    var handleDiffView = function(idPrefix, self, allRevisionIds) {
       var getBeforeRevisionId = function(revisionId) {
         var currentPos = $.inArray(revisionId, allRevisionIds);
         if (currentPos < 0) {
@@ -627,10 +629,10 @@ $(function() {
         return beforeRevisionId;
       };
 
-      var revisionId = $(this).data('revisionId');
+      var revisionId = $(self).data('revisionId');
       var beforeRevisionId = getBeforeRevisionId(revisionId);
-      var $diffDisplay = $('#diff-display-' + revisionId);
-      var $diffIcon = $('#diff-icon-' + revisionId);
+      var $diffDisplay = $('#' + idPrefix + '-display-' + revisionId);
+      var $diffIcon = $('#' + idPrefix + '-icon-' + revisionId);
 
       if ($diffIcon.hasClass('fa-arrow-circle-right')) {
         $diffIcon.removeClass('fa-arrow-circle-right');
@@ -668,10 +670,48 @@ $(function() {
           $diffDisplay.slideToggle();
         });
       }
+    };
+
+    $('.parent-diff-view').on('click', function(e) {
+      e.preventDefault();
+
+      handleDiffView('parent-diff', this, allGroupRevisionIds);
+    });
+
+    $('.diff-view').on('click', function(e) {
+      e.preventDefault();
+
+      console.log(allRevisionIds);
+
+      handleDiffView('diff', this, allRevisionIds);
+    });
+
+    $('.revision-children-toggle').on('click', function() {
+      var revisionId = $(this).data('revisionId');
+      var $parentDiffDisplay = $('#parent-diff-display-' + revisionId);
+
+      var $icon = $('#revision-children-toggle-icon-' + revisionId);
+      if ($icon.hasClass('fa-arrow-circle-right')) {
+        // when open details, change icon
+        $icon.removeClass('fa-arrow-circle-right');
+        $icon.addClass('fa-arrow-circle-down');
+
+        // if open parent diff then close it.
+        if ($parentDiffDisplay.is(':visible')) {
+          $('#parent-diff-toggle-' + revisionId).click();
+        }
+      } else {
+        // when close details, change icon
+        $icon.removeClass('fa-arrow-circle-down');
+        $icon.addClass('fa-arrow-circle-right');
+      }
+
+      var $target = $('#revision-children-' + revisionId);
+      $target.slideToggle();
     });
 
     // default open
-    $('.diff-view').each(function(i, diffView) {
+    $('.parent-diff-view').each(function(i, diffView) {
       if (i < 2) {
         $(diffView).click();
       }

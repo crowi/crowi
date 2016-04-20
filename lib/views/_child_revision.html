@@ -1,0 +1,20 @@
+{# variables: revision #}
+<div class="revision-hisory-outer child-revision">
+  <img src="{{ revision.author|picture }}" class="picture picture-rounded">
+  <div class="revision-history-main">
+    <div class="revision-history-author">
+      <strong>{% if revision.author %}{{ revision.author.username }}{% else %}-{% endif %}</strong>
+    </div>
+    <div class="revision-history-comment">
+    </div>
+    <div class="revision-history-meta">
+      {{ revision.createdAt|datetz('Y-m-d H:i:s') }}
+      <br>
+      <a href="?revision={{ revision._id.toString() }}"><i class="fa fa-history"></i> このバージョンを見る</a>
+      <a class="diff-view" data-revision-id="{{ revision._id.toString() }}">
+        <i id="diff-icon-{{ revision._id.toString() }}" class="fa fa-arrow-circle-right"></i> 差分を見る
+      </a>
+      <pre id="diff-display-{{ revision._id.toString() }}" style="display: none"></pre>
+    </div>
+  </div>
+</div>

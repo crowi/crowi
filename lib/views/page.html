@@ -127,26 +127,41 @@
       {% if not page %}
       {% else %}
       <div class="revision-history-list">
-        {% for t in tree %}
-        <div class="revision-hisory-outer">
-          <img src="{{ t.author|picture }}" class="picture picture-rounded">
-          <div class="revision-history-main">
-            <div class="revision-history-author">
-              <strong>{% if t.author %}{{ t.author.username }}{% else %}-{% endif %}</strong>
-            </div>
-            <div class="revision-history-comment">
-            </div>
-            <div class="revision-history-meta">
-              {{ t.createdAt|datetz('Y-m-d H:i:s') }}
-              <br>
-              <a href="?revision={{ t._id.toString() }}"><i class="fa fa-history"></i> このバージョンを見る</a>
-              <a class="diff-view" data-revision-id="{{ t._id.toString() }}">
-                <i id="diff-icon-{{ t._id.toString() }}" class="fa fa-arrow-circle-right"></i> 差分を見る
-              </a>
-              <pre class="" id="diff-display-{{ t._id.toString()}}" style="display: none"></pre>
+        {% for tree in groupingTree %}
+          {% set parent = tree.parent %}
+          {% set children = tree.children %}
+          {% set parent_revision_id = tree.parent._id.toString() %}
+          <div class="revision-hisory-outer">
+            <img src="{{ parent.author|picture }}" class="picture picture-rounded">
+            <div class="revision-history-main">
+              <div class="revision-history-author">
+                <strong>{% if parent.author %}{{ parent.author.username }}{% else %}-{% endif %}</strong>
+              </div>
+              <div class="revision-history-comment">
+              </div>
+              <div class="revision-history-meta">
+                {{ parent.createdAt|datetz('Y-m-d H:i:s') }}
+                <br>
+                <a href="?revision={{ parent_revision_id }}"><i class="fa fa-history"></i> このバージョンを見る</a>
+                <a class="parent-diff-view" id="parent-diff-toggle-{{ parent_revision_id }}" data-revision-id="{{ parent_revision_id }}">
+                  <i id="parent-diff-icon-{{ parent_revision_id }}" class="fa fa-arrow-circle-right"></i> 差分を見る
+                </a>
+                {% if children.length > 0 %}
+                  <a class="revision-children-toggle" data-revision-id="{{ parent_revision_id }}">
+                    <i id="revision-children-toggle-icon-{{ parent_revision_id }}" class="fa fa-arrow-circle-right"></i> さらに詳細
+                  </a>
+                {% endif %}
+                <pre id="parent-diff-display-{{ parent_revision_id }}" style="display: none"></pre>
+              </div>
             </div>
           </div>
-        </div>
+          {% if children.length > 0 %}
+            <div id="revision-children-{{ parent_revision_id }}" style="display: none;">
+              {% for revision in children %}
+                {% include '_child_revision.html' %}
+              {% endfor %}
+            </div>
+          {% endif %}
         {% endfor %}
       </div>
       {% endif %}
