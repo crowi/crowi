@@ -2,6 +2,36 @@ $(function() {
   var pageId = $('#content-main').data('page-id');
   var pagePath= $('#content-main').data('path');
 
+  var watchTimer = undefined;
+  var prevContent = "";
+  var previewOn = function() {
+    if (watchTimer === undefined) {
+      // first time render
+      var renderer = new Crowi.renderer($('#form-body').val(), $('#preview-body'));
+      renderer.render();
+
+      // set preview watch timer
+      watchTimer = setInterval(function() {
+        var content = $('#form-body').val();
+        if (prevContent != content) {
+          var renderer = new Crowi.renderer($('#form-body').val(), $('#preview-body'));
+          renderer.render();
+          prevContent = content;
+        }
+      }, 500);
+    }
+  };
+
+  var previewOff = function() {
+    // clear preview watch timer
+    if (watchTimer !== undefined) {
+      clearInterval(watchTimer);
+      $('#preview-body').html('');
+      prevContent = '';
+      watchTimer = undefined;
+    }
+  };
+
   // show/hide
   function FetchPagesUpdatePostAndInsert(path) {
     $.get('/_api/pages.updatePost', {path: path}, function(res) {
@@ -19,10 +49,12 @@ $(function() {
     if (slackConfigured) {
       FetchPagesUpdatePostAndInsert(pagePath);
     }
+    previewOn();
   }
 
   $('a[data-toggle="tab"][href="#edit-form"]').on('show.bs.tab', function() {
     $('.content-main').addClass('on-edit');
+    previewOn();
 
     if (slackConfigured) {
       var $slackChannels = $('#page-form-slack-channel');
@@ -37,24 +69,13 @@ $(function() {
 
   $('a[data-toggle="tab"][href="#edit-form"]').on('hide.bs.tab', function() {
     $('.content-main').removeClass('on-edit');
+    previewOff();
   });
 
   $('[data-toggle="popover"]').popover();
 
-  // preview watch
-  var originalContent = $('#form-body').val();
-  var prevContent = "";
-  var watchTimer = setInterval(function() {
-    var content = $('#form-body').val();
-    if (prevContent != content) {
-      var renderer = new Crowi.renderer($('#form-body').val(), $('#preview-body'));
-      renderer.render();
-
-      prevContent = content;
-    }
-  }, 500);
-
   // edit detection
+  var originalContent = $('#form-body').val();
   var isFormChanged = false;
   $(window).on('beforeunload', function(e) {
     if (isFormChanged) {
