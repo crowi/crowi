@@ -6,12 +6,17 @@
 var hljs = require('highlight.js');
 var jsdiff = require('diff');
 var marked = require('marked');
+var mermaid = require('mermaid');
 var Crowi = {};
 
 if (!window) {
   window = {};
 }
 window.Crowi = Crowi;
+
+mermaid.initialize({
+  startOnLoad: false
+});
 
 Crowi.createErrorView = function(msg) {
   $('#main').prepend($('<p class="alert-message error">' + msg + '</p>'));
@@ -137,6 +142,14 @@ Crowi.rendererType = {};
 Crowi.rendererType.markdown = function(){};
 Crowi.rendererType.markdown.prototype = {
   render: function(contentText) {
+    var markedRenderer = new marked.Renderer();
+    markedRenderer.code = function(code, language) {
+      if (typeof language !== 'undefined' && language.match(/^mermaid/)) {
+        return '<div class="crowi-mermaid">' + code + '</div>';
+      }
+
+      return '<pre><code>' + code + '</code></pre>';
+    };
 
     marked.setOptions({
       gfm: true,
@@ -162,7 +175,8 @@ Crowi.rendererType.markdown.prototype = {
       sanitize: false,
       smartLists: true,
       smartypants: false,
-      langPrefix: 'lang-'
+      langPrefix: 'lang-',
+      renderer: markedRenderer
     });
 
     var contentHtml = Crowi.unescape(contentText);
@@ -178,6 +192,7 @@ Crowi.rendererType.markdown.prototype = {
         throw err;
       }
       $body.html(content);
+      mermaid.init({}, $body.children('.crowi-mermaid'));
     });
   },
   preFormatMarkdown: function(content){
@@ -226,7 +241,6 @@ Crowi.userPicture = function (user) {
     return '/images/userpicture.png';
   }
 };
-
 
 $(function() {
   var pageId = $('#content-main').data('page-id');
