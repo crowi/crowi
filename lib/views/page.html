@@ -110,6 +110,7 @@
     {# formatted text #}
     <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
       {% include '_revision_toc.html' %}
+      <div class="wiki {{ revision.format }}" id="revision-body-content"></div>
     </div>
 
     {# edit form #}
