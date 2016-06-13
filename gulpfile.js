@@ -165,9 +165,13 @@ gulp.task('css:sass', function() {
 });
 
 gulp.task('css:concat', ['css:sass'], function() {
-  return gulp.src([css.main, 'node_modules/highlight.js/styles/tomorrow-night.css'])
+  return gulp.src([
+    css.main,
+    'node_modules/highlight.js/styles/tomorrow-night.css',
+    'node_modules/mermaid/dist/mermaid.css',
+  ])
     .pipe(concat('crowi.css'))
-    .pipe(gulp.dest(dirs.cssDist))
+    .pipe(gulp.dest(dirs.cssDist));
 });
 
 gulp.task('css:min', ['css:concat'], function() {

@@ -130,8 +130,8 @@
 
   <script type="text/javascript">
     $(function(){
-        $('#view-timeline .timeline-body').each(function()
-        {
+      $('a[data-toggle="tab"][href="#view-timeline"]').on('shown.bs.tab', function (e) {
+        $('#view-timeline .timeline-body').each(function() {
           var id = $(this).attr('id');
           var contentId = '#' + id + ' > script';
           var revisionBody = '#' + id + ' .revision-body';
@@ -139,7 +139,7 @@
           var renderer = new Crowi.renderer($(contentId).html(), $(revisionBody));
           renderer.render();
         });
-        //$('.tooltip .tabs').tabs();
+      });
     });
   </script>
 
