@@ -2,6 +2,11 @@
 
 {% block html_title %}{{ path|path2name }} · {{ path }}{% endblock %}
 
+{% block html_base_attr %}
+  data-spy="scroll"
+  data-target="#search-result-list"
+{% endblock %}
+
 {% block content_head %}
 
 {% block content_head_before %}
@@ -13,21 +18,38 @@
       <a href="#" title="Bookmark" class="bookmark-link" id="bookmark-button" data-bookmarked="0"><i class="fa fa-star-o"></i></a>
 
     {% endif %}
-    <h1 class="title" id="revision-path">
-      {{ path|insertSpaceToEachSlashes }}
+    <h1 class="title">
+      <span class="" id="revision-path">{{ path|insertSpaceToEachSlashes }}</span>
+      {% if searchConfigured() && path != '/' %}
+      <form class="input-group search-input-group hidden-xs hidden-sm" data-toggle="tooltip" data-placement="bottom" title="{{ path }} 以下から検索" id="search-listpage-form">
+        <input type="text" class="search-listpage-input form-control" data-path="{{ path }}" id="search-listpage-input">
+        <span class="input-group-btn search-listpage-submit-group">
+          <button type="submit" class="btn btn-default" id="search-listpage-submit">
+            <i class="fa fa-search"></i>
+          </button>
+        </span>
+        <a class="search-listpage-clear" id="search-listpage-clear"><i class="fa fa-times-circle"></i></a>
+      </form>
+      {% endif %}
     </h1>
   </header>
 </div>
 
 {% endblock %}
 
-{% block content_head_after %}
-{% endblock %}
-
 {% block content_main %}
 
 {% block content_main_before %}
 {% endblock %}
+
+{# page-list-search should be fully managed by react.js,
+ # but now the header and page list content is rendered separately by the server,
+ # so now bind the values through the hidden fields.
+ #}
+{% if searchConfigured() && path != '/' %}
+<div id="page-list-search">
+</div>
+{% endif %}
 
 <div class="page-list content-main {% if req.body.pageForm %}on-edit{% endif %}"
   id="content-main"
@@ -70,13 +92,7 @@
     <div class="wiki tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body-content">{{ page.revision.body|nl2br|safe }}</div>
 
     <script type="text/template" id="raw-text-original">{{ page.revision.body }}</script>
-    <script type="text/javascript">
-      $(function(){
-          var renderer = new Crowi.renderer($('#raw-text-original').html());
-          renderer.render();
-          Crowi.correctHeaders('#revision-body-content');
-      });
-    </script>
+
     <div class="tab-pane edit-form portal-form {% if req.body.pageForm %}active{% endif %}" id="edit-form">
       {% include '_form.html' with {forceGrant: 1} %}
     </div>
@@ -128,20 +144,6 @@
   </div>
 </div>
 
-  <script type="text/javascript">
-    $(function(){
-        $('#view-timeline .timeline-body').each(function()
-        {
-          var id = $(this).attr('id');
-          var contentId = '#' + id + ' > script';
-          var revisionBody = '#' + id + ' .revision-body';
-          var revisionPath = '#' + id + ' .revision-path';
-          var renderer = new Crowi.renderer($(contentId).html(), $(revisionBody));
-          renderer.render();
-        });
-        //$('.tooltip .tabs').tabs();
-    });
-  </script>
 
 </div> {# /.content-main #}
 {% include 'modal/widget_what_is_portal.html' %}

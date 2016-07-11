@@ -1,11 +1,15 @@
 /* jshint browser: true, jquery: true */
-/* global FB, marked */
 /* Author: Sotaro KARASAWA <sotarok@crocos.co.jp>
 */
 
 var hljs = require('highlight.js');
 var jsdiff = require('diff');
 var marked = require('marked');
+var io = require('socket.io-client');
+
+//require('bootstrap-sass');
+//require('jquery.cookie');
+
 var Crowi = {};
 
 if (!window) {
@@ -137,6 +141,7 @@ Crowi.rendererType = {};
 Crowi.rendererType.markdown = function(){};
 Crowi.rendererType.markdown.prototype = {
   render: function(contentText) {
+
     marked.setOptions({
       gfm: true,
       highlight: function (code, lang, callback) {
@@ -165,6 +170,8 @@ Crowi.rendererType.markdown.prototype = {
     });
 
     var contentHtml = Crowi.unescape(contentText);
+    // TODO 前処理系のプラグイン化
+    contentHtml = this.preFormatMarkdown(contentHtml);
     contentHtml = this.expandImage(contentHtml);
     contentHtml = this.link(contentHtml);
 
@@ -176,6 +183,12 @@ Crowi.rendererType.markdown.prototype = {
       }
       $body.html(content);
     });
+  },
+  preFormatMarkdown: function(content){
+    var x = content
+      .replace(/^(#{1,})([^\s]+)?(.*)$/gm, '$1 $2$3') // spacer for section
+      .replace(/>[\s]*\n>[\s]*\n/g, '> <br>\n> \n');
+    return x;
   },
   link: function (content) {
     return content
@@ -219,6 +232,23 @@ Crowi.userPicture = function (user) {
 };
 
 
+//CrowiSearcher = function(path, $el) {
+//  this.$el = $el;
+//  this.path = path;
+//  this.searchResult = {};
+//};
+//CrowiSearcher.prototype.querySearch = function(keyword, option) {
+//};
+//CrowiSearcher.prototype.search = function(keyword) {
+//  var option = {};
+//  this.querySearch(keyword, option);
+//  this.$el.html(this.render());
+//};
+//CrowiSearcher.prototype.render = function() {
+//  return $('<div>');
+//};
+
+
 $(function() {
   var pageId = $('#content-main').data('page-id');
   var revisionId = $('#content-main').data('page-revision-id');
@@ -229,9 +259,25 @@ $(function() {
 
   Crowi.linkPath();
 
+  $('[data-toggle="popover"]').popover();
   $('[data-toggle="tooltip"]').tooltip();
   $('[data-tooltip-stay]').tooltip('show');
 
+  $('#toggle-sidebar').click(function(e) {
+    var $mainContainer = $('.main-container');
+    if ($mainContainer.hasClass('aside-hidden')) {
+      $('.main-container').removeClass('aside-hidden');
+      $.cookie('aside-hidden', 0, { expires: 30, path: '/' });
+    } else {
+      $mainContainer.addClass('aside-hidden');
+      $.cookie('aside-hidden', 1, { expires: 30, path: '/' });
+    }
+    return false;
+  });
+
+  if ($.cookie('aside-hidden') == 1) {
+    $('.main-container').addClass('aside-hidden');
+  }
 
   $('.copy-link').on('click', function () {
     $(this).select();
@@ -308,11 +354,98 @@ $(function() {
     var $link = $(this);
     var text = $link.text();
     var path = $link.data('path');
-    var shortPath = $link.data('short-path');
+    var shortPath = new String($link.data('short-path'));
 
-    $link.html(path.replace(new RegExp(shortPath + '(/)?$'), '<strong>' + shortPath + '$1</strong>'));
+    var escape = function(s) {
+      return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    };
+    var pattern = escape(shortPath) + '(/)?$';
+
+    $link.html(path.replace(new RegExp(pattern), '<strong>' + shortPath + '$1</strong>'));
   });
 
+  // for list page
+  $('#view-timeline .timeline-body').each(function()
+  {
+    var id = $(this).attr('id');
+    var contentId = '#' + id + ' > script';
+    var revisionBody = '#' + id + ' .revision-body';
+    var revisionPath = '#' + id + ' .revision-path';
+    var renderer = new Crowi.renderer($(contentId).html(), $(revisionBody));
+    renderer.render();
+  });
+
+  // login
+  $('#register').on('click', function() {
+    $('#login-dialog').addClass('to-flip');
+    return false;
+  });
+  $('#login').on('click', function() {
+    $('#login-dialog').removeClass('to-flip');
+    return false;
+  });
+  $('#btn-login-facebook').click(function(e)
+  {
+    var afterLogin = function(response) {
+      if (response.status !== 'connected') {
+        $('#login-form-errors').html('<p class="alert alert-danger">Facebookでのログインに失敗しました。</p>');
+      } else {
+        location.href = '/login/facebook';
+      }
+    };
+    FB.getLoginStatus(function(response) {
+      if (response.status === 'connected') {
+        afterLogin(response);
+      } else {
+        FB.login(function(response) {
+          afterLogin(response);
+        }, {scope: 'email'});
+      }
+    });
+  });
+
+  $('#register-form input[name="registerForm[username]"]').change(function(e) {
+    var username = $(this).val();
+    $('#input-group-username').removeClass('has-error');
+    $('#help-block-username').html("");
+
+    $.getJSON('/_api/check_username', {username: username}, function(json) {
+      if (!json.valid) {
+        $('#help-block-username').html('<i class="fa fa-warning"></i>このユーザーIDは利用できません。<br>');
+        $('#input-group-username').addClass('has-error');
+      }
+    });
+  });
+
+  $('#btn-register-facebook').click(function(e)
+  {
+    var afterLogin = function(response) {
+      if (response.status !== 'connected') {
+        $('#register-form-errors').html('<p class="alert alert-danger">Facebookでのログインに失敗しました。</p>');
+
+      } else {
+        var authR = response.authResponse;
+        $('#register-form input[name="registerForm[fbId]"]').val(authR.userID);
+        FB.api('/me?fields=name,username,email', function(res) {
+          $('#register-form input[name="registerForm[name]"]').val(res.name);
+          $('#register-form input[name="registerForm[username]"]').val(res.username || '');
+          $('#register-form input[name="registerForm[email]"]').val(res.email);
+
+          $('#register-form .facebook-info').remove();
+          $('#register-form').prepend('<div class="facebook-info"><img src="//graph.facebook.com/' + res.id + '/picture?size=square" width="25"> <i class="fa fa-facebook-square"></i> ' + res.name + 'さんとして登録します</div>');
+        });
+      }
+    };
+    FB.getLoginStatus(function(response) {
+      if (response.status === 'connected') {
+        afterLogin(response);
+      } else {
+        FB.login(function(response) {
+          afterLogin(response);
+        }, {scope: 'email'});
+      }
+    });
+  });
 
   if (pageId) {
 
@@ -338,7 +471,7 @@ $(function() {
         }
       });
       $('[data-affix-disable]').on('click', function(e) {
-        $elm = $($(this).data('affix-disable'));
+        var $elm = $($(this).data('affix-disable'));
         $(window).off('.affix');
         $elm.removeData('affix').removeClass('affix affix-top affix-bottom');
         return false;
@@ -427,7 +560,7 @@ $(function() {
 
     // post comment event
     $('#page-comment-form').on('submit', function() {
-      $button = $('#commenf-form-button');
+      var $button = $('#comment-form-button');
       $button.attr('disabled', 'disabled');
       $.post('/_api/comments.add', $(this).serialize(), function(data) {
         $button.removeAttr('disabled');
@@ -716,5 +849,40 @@ $(function() {
         $(diffView).click();
       }
     });
-  }
+
+    // presentation
+    var presentaionInitialized = false
+      , $b = $('body');
+
+    $(document).on('click', '.toggle-presentation', function(e) {
+      var $a = $(this);
+
+      e.preventDefault();
+      $b.toggleClass('overlay-on');
+
+      if (!presentaionInitialized) {
+        presentaionInitialized = true;
+
+        $('<iframe />').attr({
+          src: $a.attr('href')
+        }).appendTo($('#presentation-container'));
+      }
+    }).on('click', '.fullscreen-layer', function() {
+      $b.toggleClass('overlay-on');
+    });
+
+    //
+    var me = $('body').data('me');
+    var socket = io();
+    socket.on('page edited', function (data) {
+      if (data.user._id != me
+        && data.page.path == pagePath) {
+        $('#notifPageEdited').show();
+        $('#notifPageEdited .edited-user').html(data.user.name);
+      }
+    });
+  } // end if pageId
+
+  // for search
+  //
 });

@@ -4,7 +4,7 @@ Crowi - The Simple & Powerful Communication Tool Based on Wiki
 ================================================================
 
 
-[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy)
+[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.4.0)
 
 [![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
 [![Join the chat at https://gitter.im/crowi/general](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/crowi/general)
@@ -37,10 +37,12 @@ Dependencies
 
 * Node.js (4.2.x)
 * MongoDB
+* Elasticsearch (optional)
 * Redis (optional)
 * Amazon S3 (optional)
 * Facebook Application (optional)
 * Google Project (optional)
+* Slack App (optional)
 
 
 Start Up on Local
@@ -59,6 +61,7 @@ $ PASSWORD_SEED=somesecretstring MONGO_URI=mongodb://username:password@localhost
 * `NODE_ENV`: `production` OR `development`.
 * `MONGO_URI`: URI to connect MongoDB. This parameter is also by `MONGOHQ_URL` OR `MONGOLAB_URI`.
 * `REDIS_URL`: URI to connect Redis (to session store). This parameter is also by `REDISTOGO_URL`.
+* `ELASTICSEARCH_URI`: URI to connect Elasticearch.
 * `PASSWORD_SEED`: A password seed is used by password hash generator.
 * `SECRET_TOKEN`: A secret key for verifying the integrity of signed cookies.
 * `FILE_UPLOAD`: `aws` (default), `local`, `none`
