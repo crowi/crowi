@@ -17,9 +17,39 @@ if (!window) {
 }
 window.Crowi = Crowi;
 
+Crowi.baseUrl = $('body').data('baseurl');
 Crowi.createErrorView = function(msg) {
   $('#main').prepend($('<p class="alert-message error">' + msg + '</p>'));
 };
+
+function OpenExternalLink(url) {
+  var w = window.open();
+  w.document.write('<meta http-equiv="refresh" content="0;url=' + url + '">');
+  w.document.close();
+
+  return false;
+}
+
+Crowi.isExternalLink = function(url) {
+  var regExp = new RegExp('^' + Crowi.baseUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (url.match(regExp)) {
+    return false;
+  }
+  return true;
+};
+
+Crowi.externalReplacer = function($target) {
+  $('a', $target).each(function(i, elm) {
+    var url = elm.href;
+    var $link = $(this);
+    if (Crowi.isExternalLink(url)) {
+      $link.attr('rel', 'noreferrer');
+      $link.on('click', function() {
+        return OpenExternalLink(url);
+      });
+    }
+  });
+}
 
 Crowi.linkPath = function(revisionPath) {
   var $revisionPath = revisionPath || '#revision-path';
@@ -373,6 +403,7 @@ $(function() {
     var revisionPath = '#' + id + ' .revision-path';
     var renderer = new Crowi.renderer($(contentId).html(), $(revisionBody));
     renderer.render();
+    Crowi.externalReplacer($(revisionBody));
   });
 
   // login
@@ -456,6 +487,7 @@ $(function() {
       renderer.render();
       Crowi.correctHeaders('#revision-body-content');
       Crowi.revisionToc('#revision-body-content', '#revision-toc');
+      Crowi.externalReplacer($('#revision-body-content'));
     }
 
     // header
