@@ -228,6 +228,31 @@
         </div>
 
         <div class="form-group">
+          <div class="col-xs-9 col-xs-offset-3">
+            <div class="checkbox">
+              <label>
+                <input class="" type="checkbox" name="settingForm[google:requireLogin]" value="1" {% if settingForm['google:requireLogin'] %}checked{% endif %}>
+                Googleログイン必須にする
+              </label>
+            </div>
+          <p class="help-block">
+            チェックを入れると、ユーザーはすべてのアクセスにGoogleログインを求められます。<br>
+            このチェックを入れると、またWiki上にアカウントのないGoogleアカウントで初めてログインされたときに、自動で新規アカウントが作成されます。(「登録の制限」が「公開」の場合)<br>
+            <br>
+            「登録の制限」で設定した値は、以下のように解釈されます。<br>
+          </p>
+          <ul class="help-block">
+            <li>「公開」 ... Googleログインのできる人なら誰でも登録できます。(*)</li>
+            <li>「制限」 ... 登録後、承認待ちになります。</li>
+            <li>「非公開」 ... 登録できません。</li>
+          </ul>
+          <p class="help-block">
+            (*) 特定の Google Apps に登録を制限する場合、「登録許可メールアドレスのホワイトリスト」を設定してください。
+          </p>
+          </div>
+        </div>
+
+        <div class="form-group">
           <div class="col-xs-offset-3 col-xs-6">
             <input type="hidden" name="_csrf" value="{{ _csrf() }}">
             <button type="submit" class="btn btn-primary">更新</button>
