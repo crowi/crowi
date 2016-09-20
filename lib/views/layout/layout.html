@@ -14,6 +14,17 @@
   <link rel="stylesheet" href="/css/crowi{% if env  == 'production' %}.min{% endif %}.css">
   <script src="/js/bundled{% if env  == 'production' %}.min{% endif %}.js"></script>
   <link href='//fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+  <script type="text/javascript"
+          src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML">
+  </script>
+  <script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+      displayMath: [ ['$$','$$'], ["\\[","\\]"] ]
+    }
+  });
+</script>
 </head>
 {% endblock %}
 
