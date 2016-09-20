@@ -65,7 +65,7 @@ $(function() {
     var content = $('#form-body').val();
     var parsedHTML = crowiRenderer.render(content);
     $('#preview-body').html(parsedHTML);
-		MathJax.Hub.Queue(["Typeset",MathJax.Hub,"preview-body"]);
+    MathJax.Hub.Queue(["Typeset",MathJax.Hub,"preview-body"]);
   }
 
   // for initialize preview
@@ -291,14 +291,14 @@ $(function() {
         break;
       case 13:
         handleEnterKey(event);
-				MathJax.Hub.Queue(["Typeset",MathJax.Hub,"preview-body"]);
+        MathJax.Hub.Queue(["Typeset",MathJax.Hub,"preview-body"]);
         break;
       case 27:
         handleEscapeKey(event);
         break;
       case 32:
         handleSpaceKey(event);
-				MathJax.Hub.Queue(["Typeset",MathJax.Hub,"preview-body"]);
+        MathJax.Hub.Queue(["Typeset",MathJax.Hub,"preview-body"]);
         break;
       default:
     }
