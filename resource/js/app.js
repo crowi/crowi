@@ -8,6 +8,7 @@ import HeaderSearchBox  from './components/HeaderSearchBox';
 import SearchPage  from './components/SearchPage';
 import PageListSearch  from './components/PageListSearch';
 //import PageComment  from './components/PageComment';
+import NotificationPage from './components/NotificationPage';
 
 if (!window) {
   window = {};
@@ -25,6 +26,7 @@ const componentMappings = {
   'search-page': <SearchPage />,
   'page-list-search': <PageListSearch />,
   //'page-comment': <PageComment />,
+  'notification-page': <NotificationPage />,
 };
 
 Object.keys(componentMappings).forEach((key) => {
@@ -33,5 +35,3 @@ Object.keys(componentMappings).forEach((key) => {
     ReactDOM.render(componentMappings[key], elem);
   }
 });
-
-
