@@ -32,6 +32,9 @@
     </div>
 
     <div class="col-md-9">
+      <div id="admin-user-page">
+      </div>
+
       <p>
         <button  data-toggle="collapse" class="btn btn-default" href="#inviteUserForm">新規ユーザーの招待</button>
       </p>
@@ -86,7 +89,6 @@
             <th>名前</th>
             <th>メールアドレス</th>
             <th>作成日</th>
-            <th>最終ログイン</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -110,7 +112,6 @@
             <td>{{ sUser.name }}</td>
             <td>{{ sUser.email }}</td>
             <td>{{ sUser.createdAt|date('Y-m-d') }}</td>
-            <td>{{ sUser.lastLoginAt }}</td>
             <td>
               <div class="btn-group admin-user-menu">
                 <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">

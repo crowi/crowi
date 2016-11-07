@@ -934,4 +934,7 @@ window.addEventListener('hashchange', function(e) {
   if (location.hash == '' || location.hash.match(/^#head.+/)) {
     $('a[data-toggle="tab"][href="#revision-body"]').tab('show');
   }
+
+  console.log('xx 4');
+  return false;
 });

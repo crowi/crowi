@@ -1,6 +1,7 @@
 {% extends '2column.html' %}
 
-{% block footer %}
+{% block body_end %}
+  {% parent %}
   <script src="{{ assets('/js/admin.js') }}"></script>
-{% endblock footer %}
+{% endblock body_end %}
 

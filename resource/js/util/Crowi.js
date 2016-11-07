@@ -94,6 +94,18 @@ export default class Crowi {
     return null;
   }
 
+  findUserByEmail(email) {
+    // FIME: calculation order
+    for (let i = 0; i < data.users.length; i++) {
+      const user = data.users[i];
+      if (user.email && user.email == email) {
+        return user;
+      }
+    }
+
+    return null;
+  }
+
   findUser(username) {
     if (this.userByName && this.userByName[username]) {
       return this.userByName[username];

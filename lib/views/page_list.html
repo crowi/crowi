@@ -233,6 +233,8 @@
 {% endblock %} {# side_header #}
 
 {% block body_end %}
+  {% parent %}
+
 <div id="crowi-modals">
   {% include 'modal/what_is_portal.html' %}
   {% include 'modal/unportalize.html' %}
@@ -261,4 +263,4 @@
     </div>
   </div>
 </div>
-{% endblock %} {# body_end #}
+{% endblock body_end %}
