@@ -34,9 +34,6 @@
         <a href="#user-bookmark-list" data-toggle="tab"><i class="fa fa-star"></i> Bookmarks</a>
       </li>
       <li>
-        <a href="#user-notification-list" data-toggle="tab"><i class="fa fa-globe"></i> Notifications</a>
-      </li>
-      <li>
         <a href="#user-created-list" data-toggle="tab"><i class="fa fa-pencil"></i> Recent Created</a>
       </li>
       <li>
@@ -54,19 +51,6 @@
             <div class="user-page-list-additional-link">
               <a href="/user/{{ pageUser.username }}/bookmarks"><i class="fa fa-angle-double-right"></i> See bookmarks</a>
             </div>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="tab-pane user-notification-list notification-list" id="user-notification-list">
-        <div class="notification-list-container">
-          {% if notificationList.length == 0 %}
-          No notifications yet.
-          {% else %}
-          {% include 'widget/notification_list.html' with { notifications: notificationList, pagePropertyName: 'page' } %}
-          <div class="user-notification-list-additional-link">
-            <a href="/user/{{ pageUser.username }}/notifications"><i class="fa fa-angle-double-right"></i> See notifications</a>
-          </div>
           {% endif %}
         </div>
       </div>
@@ -92,3 +76,4 @@
 {% endif %}
 
 {% endblock %}
+
