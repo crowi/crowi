@@ -65,13 +65,6 @@
       </li>
       #}
       {% if user %}
-      {#
-      <li id="" class="notif">
-        <a href="" id="notif-opener">
-          <i class="fa fa-globe"></i> <span class="badge badge-danger">6</span>
-        </a>
-      </li>
-      #}
       <li id="" class="dropdown">
         <button class="btn btn-default create-page-button" data-target="#create-page" data-toggle="modal">
           <i class="fa fa-pencil"></i> 作成
@@ -82,6 +75,7 @@
           <img src="{{ user|picture }}" class="picture picture-rounded" width="25" /> {{ user.name }}
         </a>
       </li>
+      {# insert notification-indicator here by app.js #}
       <li class="dropdown">
         <a href="#" class="dropdown-toggle" data-toggle="dropdown"><i class="fa fa-bars"></i> <label class="sr-only">メニュー</label></a>
         <ul class="dropdown-menu">
