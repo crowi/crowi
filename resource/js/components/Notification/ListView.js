@@ -3,15 +3,21 @@ import Notification from './Notification';
 
 export default class ListView extends React.Component {
 
+  handleOnClick(notification) {
+    if (this.props.notificationClickHandler) {
+      this.props.notificationClickHandler(notification);
+    }
+  }
+
   render() {
-    const listView = this.props.pages.map((notification) => {
-      return <Notification notification={notification} />;
+    let listView = this.props.notifications.map((notification) => {
+      return <Notification notification={notification} onClick={this.handleOnClick.bind(this)}/>;
     });
 
     return (
       <div className="notification-list">
         <ul className="notification-list-ul">
-        {listView}
+          {listView}
         </ul>
       </div>
     );
