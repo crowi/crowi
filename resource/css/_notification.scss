@@ -1,0 +1,52 @@
+.notification-list-li {
+  list-style-type: none;
+}
+
+.notification-box {
+  background-color: #fff;
+  cursor: pointer;
+  padding: 0.5em 1em;
+
+  // Flexbox
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+
+  // Flexbox for Safari
+  display: -webkit-flex;
+  -webkit-flex-direction: row;
+  -webkit-align-items: center;
+
+  .notification-box-image {
+    width: 36px;
+  }
+
+  .notification-box-message {
+
+    .notification-box-text {
+
+    }
+
+    .notification-box-time {
+      padding-top: 0.3em;
+      font-size: small;
+    }
+  }
+}
+.notification-box:hover {
+  background-color: #eee;
+}
+.notification-read {
+
+}
+.notification-unread {
+  background-color: #f0f4f3;
+}
+
+// Header
+#notif-opener-li {
+  .dropdown-menu {
+    width: 400px;
+    font-size: small;
+  }
+}
