@@ -63,47 +63,47 @@ describe('Notification', function () {
     });
   });
 
-  describe('CreateByPageAndComment', function() {
-    context('Notification', function() {
-      it('should created', function(done) {
-        Promise.resolve().then(function() {
-          return Page.findPageByPath('/page1');
-        }).then(function(page) {
-          return Promise.resolve().then(function() {
-            return Comment.getCommentsByPageId(page._id);
-          }).then(function(comments) {
-            return {
-              page: page,
-              comments: comments
-            };
-          });
-        }).then(function(data) {
-          return Promise.resolve().then(function() {
-            return Notification.createByPageAndComment(data.page, data.comments[0]);
-          }).then(function(notification) {
-            return {
-              notification: notification,
-              page: data.page,
-              comments: data.comments
-            };
-          });
-        }).then(function(data) {
-          var notification = data.notification;
-          var page = data.page;
-          var comments = data.comments;
+  // describe('CreateByPageAndComment', function() {
+  //   context('Notification', function() {
+  //     it('should created', function(done) {
+  //       Promise.resolve().then(function() {
+  //         return Page.findPageByPath('/page1');
+  //       }).then(function(page) {
+  //         return Promise.resolve().then(function() {
+  //           return Comment.getCommentsByPageId(page._id);
+  //         }).then(function(comments) {
+  //           return {
+  //             page: page,
+  //             comments: comments
+  //           };
+  //         });
+  //       }).then(function(data) {
+  //         return Promise.resolve().then(function() {
+  //           return Notification.createByPageAndComment(data.page, data.comments[0]);
+  //         }).then(function(notification) {
+  //           return {
+  //             notification: notification,
+  //             page: data.page,
+  //             comments: data.comments
+  //           };
+  //         });
+  //       }).then(function(data) {
+  //         var notification = data.notification;
+  //         var page = data.page;
+  //         var comments = data.comments;
 
-          expect(notification).to.instanceof(Notification);
-          expect(notification.to).to.equal(page.creator);
-          expect(notification.from).to.equal(comments[0].creator);
-          expect(notification.type).to.equal('comment');
+  //         expect(notification).to.instanceof(Notification);
+  //         expect(notification.to).to.equal(page.creator);
+  //         expect(notification.from).to.equal(comments[0].creator);
+  //         expect(notification.type).to.equal('comment');
 
-          done();
-        }).catch(function(error) {
-          done(error);
-        });
-      });
-    });
-  });
+  //         done();
+  //       }).catch(function(error) {
+  //         done(error);
+  //       });
+  //     });
+  //   });
+  // });
 
   // describe('FindByUser', function() {
   //   context('find', function() {
