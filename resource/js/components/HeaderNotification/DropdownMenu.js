@@ -9,8 +9,6 @@ export default class DropdownMenu extends React.Component {
   }
 
   handleOnClick(notification) {
-    console.log('DropDown Click', notification);
-
     if (this.props.notificationClickHandler) {
       this.props.notificationClickHandler(notification);
     }
@@ -29,6 +27,7 @@ export default class DropdownMenu extends React.Component {
     return (
       <ul className="dropdown-menu">
         {listView}
+        <li><a href="/me/notifications" className="notification-see-all">See All</a></li>
       </ul>
     );
   }
