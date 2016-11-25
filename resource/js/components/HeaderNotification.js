@@ -1,6 +1,7 @@
 import React from 'react';
 import axios from 'axios';
 import DropdownMenu from './HeaderNotification/DropdownMenu';
+import io from 'socket.io-client';
 
 export default class HeaderNotification extends React.Component {
   constructor(props) {
@@ -9,20 +10,66 @@ export default class HeaderNotification extends React.Component {
     this.crowi = window.crowi; // FIXME
 
     this.state = {
-      count: '123',
-      notifications: []
+      count: '',
+      notifications: [],
+      is_read: true,
     };
   }
 
   componentDidMount() {
-    this.fetch();
+    this.initializeSocket();
+    this.fetchList();
+    this.fetchStatus();
   }
 
-  fetch() {
-    this.crowi.apiGet('/notification.list')
+  initializeSocket() {
+    const socket = io();
+    socket.on('notification updated', (data) => {
+      if (this.props.me === data.status.user) {
+        this.fetchList();
+        this.fetchStatus();
+      }
+    });
+  }
+
+  fetchStatus() {
+    this.crowi.apiGet('/notification.status')
+      .then(res => {
+        if (res.status !== null) {
+          if (res.status.is_read === false && res.status.count > 0) {
+            this.setState({
+              count: res.status.count,
+              is_read: res.status.is_read,
+            });
+          }
+        }
+      })
+      .catch(err => {
+        // TODO: error handling
+      })
+    ;
+  }
+
+  updateStatus() {
+    this.crowi.apiPost('/notification.status_read')
       .then(res => {
         this.setState({
-          count: 456,
+          count: '',
+          is_read: true,
+        });
+      })
+      .catch(err => {
+        // TODO: error handling
+      });
+    ;
+  }
+
+  fetchList() {
+    const limit = 6;
+
+    this.crowi.apiGet('/notification.list', {limit: limit})
+      .then(res => {
+        this.setState({
           notifications: res.notifications
         });
       })
@@ -34,22 +81,17 @@ export default class HeaderNotification extends React.Component {
 
   handleOnClick(e) {
     e.preventDefault(e);
-    console.log('click click');
-    this.setState({
-      count: '',
-    });
+    this.updateStatus();
   }
 
   handleNotificationOnClick(notification) {
-    console.log('hey!!!', notification);
-
     this.crowi.apiPost('/notification.read', {id: notification._id})
       .then(res => {
         // jump to target page
         window.location.href = notification.target.path;
       })
       .catch(err => {
-        console.log(err);
+        // TODO: error handling
       })
     ;
   }
