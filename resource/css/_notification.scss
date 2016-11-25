@@ -1,7 +1,6 @@
 .notification-list-li {
   list-style-type: none;
 }
-
 .notification-box {
   background-color: #fff;
   cursor: pointer;
@@ -33,9 +32,11 @@
     }
   }
 }
+
 .notification-box:hover {
   background-color: #eee;
 }
+
 .notification-read {
 
 }
@@ -48,5 +49,9 @@
   .dropdown-menu {
     width: 400px;
     font-size: small;
+
+    .notification-see-all {
+      text-align: center;
+    }
   }
 }
