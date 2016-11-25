@@ -38,8 +38,9 @@ Object.keys(componentMappings).forEach((key) => {
 });
 
 // Insert Notification indicator to navbar
-let temp = document.createElement('div');
-ReactDOM.render(<HeaderNotification />, temp);
+const me = $('body').data('me');
+const temp = document.createElement('div');
+ReactDOM.render(<HeaderNotification me={me} />, temp);
 
 let target = document.querySelector('#login-user');
 let parent = target.parentNode;
