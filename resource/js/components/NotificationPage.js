@@ -21,8 +21,6 @@ export default class NotificationPage extends React.Component {
   }
 
   handleNotificationOnClick(notification) {
-    console.log('Notification page', notification);
-
     this.crowi.apiPost('/notification.read', {id: notification._id})
       .then(res => {
         // jump to target page

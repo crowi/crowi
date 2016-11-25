@@ -43,7 +43,6 @@ export default class Notification extends React.Component {
 
   render() {
     const notification = this.props.notification;
-    console.log(notification);
 
     let boxClass = 'notification-box';
     if (notification.is_read === false) {
