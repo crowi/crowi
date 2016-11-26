@@ -1,7 +1,14 @@
-.notification-list-li {
-  list-style-type: none;
+.notification-list {
+  .notification-list-ul {
+    margin: 0;
+    .notification-list-li {
+      list-style-type: none;
+    }
+  }
 }
+
 .notification-box {
+  border-bottom: 0.5px solid #ccc;
   background-color: #fff;
   cursor: pointer;
   padding: 0.5em 1em;
@@ -23,7 +30,7 @@
   .notification-box-message {
 
     .notification-box-text {
-
+      min-height: 36px;
     }
 
     .notification-box-time {
@@ -53,5 +60,31 @@
     .notification-see-all {
       text-align: center;
     }
+  }
+}
+
+// Pager
+.notification-pager {
+  // Flexbox
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+
+  // Flexbox for Safari
+  display: -webkit-flex !important;
+  -webkit-flex-direction: row;
+  -webkit-align-items: center;
+
+  margin: 10px 0;
+
+  .pager {
+    width: 50%;
+    margin: 0;
+    text-align: center;
+    font-size: small;
+  }
+  .pager-prev {
+  }
+  .padding-next {
   }
 }
