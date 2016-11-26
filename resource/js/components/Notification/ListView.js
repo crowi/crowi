@@ -22,7 +22,7 @@ export default class ListView extends React.Component {
       </div>
     );
   }
-}
+};
 
 ListView.propTypes = {
   notifications: React.PropTypes.array.isRequired,
