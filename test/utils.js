@@ -57,6 +57,16 @@ fs.readdirSync(MODEL_DIR).forEach(function(file) {
 
 crowi.models = models;
 
+// create dummy Socket.IO server
+crowi.getIo = function() {
+  return {
+    sockets: {
+      emit: function(str, obj) {
+      }
+    }
+  };
+};
+
 module.exports = {
   models: models,
   mongoose: mongoose,
