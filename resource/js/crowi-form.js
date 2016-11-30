@@ -416,7 +416,10 @@ $(function() {
         path: location.pathname
       },
       progressText: '(Uploading file...)',
-      urlText: "\n![file]({filename})\n"
+      urlText: "\n![file]({filename})\n",
+      allowedTypes: [
+          '*'
+      ]
     };
 
     attachmentOption.onFileUploadResponse = function(res) {
