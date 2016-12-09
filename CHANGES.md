@@ -1,6 +1,10 @@
 CHANGES
 ========
 
+## 1.5.2
+
+*
+
 ## 1.5.1
 
 * Fix: Broken corwi.min.js (thank you @Bakudankun #135)
