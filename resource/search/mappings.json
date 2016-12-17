@@ -47,7 +47,7 @@
     "pages": {
       "properties" : {
         "path": {
-          "type" : "multi_field",
+          "type" : "string",
           "fields" : {
             "raw": {"type" : "string", "index" : "not_analyzed"},
             "ja": {"type" : "string", "analyzer" : "kuromoji"},
@@ -55,7 +55,7 @@
           }
         },
         "body": {
-          "type" : "multi_field",
+          "type" : "string",
           "fields" : {
             "ja": {"type" : "string", "analyzer" : "kuromoji"},
             "en": {"type" : "string", "analyzer" : "english"}
