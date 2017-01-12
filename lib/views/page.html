@@ -8,13 +8,12 @@
 {% endblock %}
 
 <div class="header-wrap">
-  {% if not page.isDeleted() %}
   <header id="page-header">
-    <p class="stopper"><a href="#" data-affix-disable="#page-header"><i class="fa fa-chevron-up"></i></a></p>
-
-
+    {% if not page.isDeleted() %}
+      <p class="stopper"><a href="#" data-affix-disable="#page-header"><i class="fa fa-chevron-up"></i></a></p>
+    {% endif %}
     <div class="flex-title-line">
-      <h1 class="title flex-item-title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
+      <h1 class="title flex-item-title" {% if not page.isDeleted() %}id="revision-path"{% endif %}>{{ path|insertSpaceToEachSlashes }}</h1>
       {% if page %}
       <div class="flex-item-action">
         <a href="#" title="Bookmark" class="bookmark-link" id="bookmark-button" data-csrftoken="{{ csrf() }}" data-bookmarked="0"><i class="fa fa-star-o"></i></a>
@@ -29,13 +28,6 @@
       {% endif %}
     </div>
   </header>
-  {% else %}
-  {# trash/* #}
-  <header id="page-header">
-    <a href="#" title="Bookmark" class="bookmark-link" id="bookmark-button" data-csrftoken="{{ csrf() }}" data-bookmarked="0"><i class="fa fa-star-o"></i></a>
-    <h1 class="title">{{ path|insertSpaceToEachSlashes }}</h1>
-  </header>
-  {% endif %}
 </div>
 
 {% block content_head_after %}
