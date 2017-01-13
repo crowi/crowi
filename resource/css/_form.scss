@@ -1,3 +1,5 @@
+$markdown-edit-helper-height: 36px;
+
 .crowi.main-container .main .content-main.on-edit { // {{{ Edit Form of Page
   padding: 0;
 
@@ -16,7 +18,7 @@
 
   .tab-content {
     top: 48px;
-    bottom: 58px;
+    bottom: (58px + $markdown-edit-helper-height);
     padding: 0 12px;
     position: absolute;
     z-index: 1051;
@@ -26,6 +28,11 @@
 
     .alert-info {
       display: none;
+    }
+
+    #markdown-edit-helper {
+      height: $markdown-edit-helper-height;
+      border-bottom: solid 1px #ccc;
     }
 
     .edit-form { // {{{

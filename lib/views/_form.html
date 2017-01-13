@@ -8,6 +8,7 @@
   </ul>
 </div>
 {% endif %}
+<div id="markdown-edit-helper"></div>
 <div id="form-box" class="row">
   <form action="/_/edit" id="page-form" method="post" class="col-md-6 {% if isUploadable() %}uploadable{% endif %} page-form">
     <textarea name="pageForm[body]" class="form-control" id="form-body">{% if pageForm.body %}{{ pageForm.body }}{% elseif not page.revision.body %}# {{ path|path2name }}{% else %}{{ page.revision.body }}{% endif %}</textarea>
