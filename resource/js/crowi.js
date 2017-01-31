@@ -756,7 +756,7 @@ $(function() {
 
           $diffDisplay.text('');
 
-          var diff = jsdiff.diffLines(previousText, currentText);
+          var diff = jsdiff.diffLines(previousText, currentText, {'newlineIsToken': true});
           diff.forEach(function(part) {
             var color = part.added ? 'green' : part.removed ? 'red' : 'grey';
             var $span = $('<span>');
