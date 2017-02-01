@@ -9,6 +9,7 @@ import SearchPage  from './components/SearchPage';
 import PageListSearch  from './components/PageListSearch';
 //import PageComment  from './components/PageComment';
 import SeenUserList from './components/SeenUserList';
+import BackLink from './components/BackLink';
 
 if (!window) {
   window = {};
@@ -21,12 +22,19 @@ crowi.fetchUsers();
 const crowiRenderer = new CrowiRenderer();
 window.crowiRenderer = crowiRenderer;
 
+const contentMain = document.querySelector('#content-main');
+let pageId = null;
+if (contentMain !== null) {
+  pageId = contentMain.dataset.pageId;
+}
+
 const componentMappings = {
   'search-top': <HeaderSearchBox />,
   'search-page': <SearchPage />,
   'page-list-search': <PageListSearch />,
   //'page-comment': <PageComment />,
   'seen-user-list': <SeenUserList />,
+  'backlink-list': <BackLink pageId={pageId} crowi={crowi} />,
 };
 
 Object.keys(componentMappings).forEach((key) => {
