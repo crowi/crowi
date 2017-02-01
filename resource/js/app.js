@@ -9,7 +9,7 @@ import SearchPage  from './components/SearchPage';
 import PageListSearch  from './components/PageListSearch';
 //import PageComment  from './components/PageComment';
 import SeenUserList from './components/SeenUserList';
-import BackLink from './components/BackLink';
+import Backlink from './components/Backlink';
 
 if (!window) {
   window = {};
@@ -34,7 +34,7 @@ const componentMappings = {
   'page-list-search': <PageListSearch />,
   //'page-comment': <PageComment />,
   'seen-user-list': <SeenUserList />,
-  'backlink-list': <BackLink pageId={pageId} crowi={crowi} />,
+  'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
 };
 
 Object.keys(componentMappings).forEach((key) => {
