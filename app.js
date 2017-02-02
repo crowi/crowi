@@ -5,6 +5,8 @@
  * @author  Sotaro KARASAWA <sotarok@crocos.co.jp>
  */
 
+require('dotenv').config();
+
 var crowi = new (require('./lib/crowi'))(__dirname, process.env);
 
 crowi.init()
