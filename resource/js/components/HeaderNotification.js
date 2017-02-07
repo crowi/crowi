@@ -98,16 +98,16 @@ export default class HeaderNotification extends React.Component {
 
   render() {
     return (
-      <div id="notif-wrapper">
-        <li id="notif-opener-li" className="notif">
-          <a href="#" id="notif-opener" className="dropdown-toggle" data-toggle="dropdown" onClick={this.handleOnClick.bind(this)}>
-            <i className="fa fa-globe"></i> <span className="badge badge-danger">{this.state.count}</span>
-          </a>
-          <DropdownMenu
-            notifications={this.state.notifications}
-            notificationClickHandler={this.handleNotificationOnClick.bind(this)}
-            />
-        </li>
+      <div className="notification-wrapper">
+        <a href="#" id="notif-opener" className="dropdown-toggle" data-toggle="dropdown"
+          onClick={this.handleOnClick.bind(this)}
+          >
+          <i className="fa fa-bell" /> <span className="badge badge-danger">{this.state.count}</span>
+        </a>
+        <DropdownMenu
+          notifications={this.state.notifications}
+          notificationClickHandler={this.handleNotificationOnClick.bind(this)}
+          />
       </div>
     );
   }

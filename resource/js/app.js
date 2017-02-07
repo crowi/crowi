@@ -22,6 +22,7 @@ crowi.fetchUsers();
 const crowiRenderer = new CrowiRenderer();
 window.crowiRenderer = crowiRenderer;
 
+const me = $('body').data('me');
 const componentMappings = {
   'search-top': <HeaderSearchBox />,
   'search-page': <SearchPage />,
@@ -29,6 +30,7 @@ const componentMappings = {
   'notification-page': <NotificationPage />,
   //'page-comment': <PageComment />,
   'seen-user-list': <SeenUserList />,
+  'header-notification': <HeaderNotification me={me} />,
 };
 
 Object.keys(componentMappings).forEach((key) => {
@@ -37,12 +39,3 @@ Object.keys(componentMappings).forEach((key) => {
     ReactDOM.render(componentMappings[key], elem);
   }
 });
-
-// Insert Notification indicator to navbar
-const me = $('body').data('me');
-const temp = document.createElement('div');
-ReactDOM.render(<HeaderNotification me={me} />, temp);
-
-let target = document.querySelector('#login-user');
-let parent = target.parentNode;
-parent.insertBefore(temp.querySelector('#notif-opener-li'), target.nextSibling);

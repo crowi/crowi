@@ -1,3 +1,4 @@
+
 .notification-list {
   .notification-list-ul {
     margin: 0;
@@ -53,12 +54,34 @@
 
 // Header
 #notif-opener-li {
-  .dropdown-menu {
-    width: 400px;
-    font-size: small;
+}
 
-    .notification-see-all {
-      text-align: center;
+.nav > .header-notification {
+  > div.notification-wrapper {
+    > a {
+      line-height: 20px;
+      position: relative;
+      display: block;
+      padding: 15px 9px;
+      color: #ccc;
+
+    }
+
+    &.open {
+      > a, > a:focus {
+        background: inherit;
+        color: #fff;
+      }
+    }
+
+
+    .dropdown-menu {
+      width: 400px;
+      font-size: small;
+
+      .notification-see-all {
+        text-align: center;
+      }
     }
   }
 }
