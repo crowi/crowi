@@ -74,6 +74,15 @@
       }
     }
 
+    .notification-badge {
+      position: absolute;
+      display: block;
+      top: 10px;
+      right: -6px;
+      font-size: 9px;
+      padding: 4px;
+      background-color: rgba(217, 83, 79, 0.8);
+    }
 
     .dropdown-menu {
       width: 400px;

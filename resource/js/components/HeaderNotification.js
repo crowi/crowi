@@ -97,12 +97,18 @@ export default class HeaderNotification extends React.Component {
   }
 
   render() {
+
+    let badge = '';
+    if (this.state.count > 0) {
+      badge = <span className="badge badge-danger notification-badge">{this.state.count}</span>;
+    }
+
     return (
       <div className="notification-wrapper">
         <a href="#" id="notif-opener" className="dropdown-toggle" data-toggle="dropdown"
           onClick={this.handleOnClick.bind(this)}
           >
-          <i className="fa fa-bell" /> <span className="badge badge-danger">{this.state.count}</span>
+          <i className="fa fa-bell" /> {badge}
         </a>
         <DropdownMenu
           notifications={this.state.notifications}
