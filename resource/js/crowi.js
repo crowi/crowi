@@ -271,7 +271,9 @@ $(function() {
         var page = res.page;
 
         $('#newPageNameCheck').removeClass('alert-danger');
-        $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> 移動しました。移動先にジャンプします。');
+        //$('#newPageNameCheck').html('<img src="/images/loading_s.gif"> 移動しました。移動先にジャンプします。');
+        // fix
+        $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.');
 
         setTimeout(function() {
           top.location.href = page.path + '?renamed=' + pagePath;
@@ -404,7 +406,7 @@ $(function() {
 
     $.getJSON('/_api/check_username', {username: username}, function(json) {
       if (!json.valid) {
-        $('#help-block-username').html('<i class="fa fa-warning"></i>このユーザーIDは利用できません。<br>');
+        $('#help-block-username').html('<i class="fa fa-warning"></i> This User ID is not available.<br>');
         $('#input-group-username').addClass('has-error');
       }
     });
@@ -559,8 +561,12 @@ $(function() {
 
     // attachment
     var $pageAttachmentList = $('.page-attachments ul');
-    $.get('/_api/attachment/page/' + pageId, function(res) {
-      var attachments = res.data.attachments;
+    $.get('/_api/attachments.list', {page_id: pageId}, function(res) {
+      if (!res.ok) {
+        return ;
+      }
+
+      var attachments = res.attachments;
       if (attachments.length > 0) {
         $.each(attachments, function(i, file) {
           $pageAttachmentList.append(
@@ -619,7 +625,7 @@ $(function() {
     }
 
     // Like
-    var $likeButton = $('#like-button');
+    var $likeButton = $('.like-button');
     var $likeCount = $('#like-count');
     $likeButton.click(function() {
       var liked = $likeButton.data('liked');
@@ -681,21 +687,6 @@ $(function() {
       });
     }
 
-    var $seenUserList = $("#seen-user-list");
-    if ($seenUserList && $seenUserList.length > 0) {
-      var seenUsers = $seenUserList.data('seen-users');
-      var seenUsersArray = seenUsers.split(',');
-      if (seenUsers && seenUsersArray.length > 0 && seenUsersArray.length <= 10) {
-        // FIXME: user data cache
-        $.get('/_api/users.list', {user_ids: seenUsers}, function(res) {
-          // ignore unless response has error
-          if (res.ok) {
-            AddToSeenUser(res.users);
-          }
-        });
-      }
-    }
-
     function CreateUserLinkWithPicture (user) {
       var $userHtml = $('<a>');
       $userHtml.data('user-id', user._id);
@@ -708,12 +699,6 @@ $(function() {
 
       $userHtml.append($userPicture);
       return $userHtml;
-    }
-
-    function AddToSeenUser (users) {
-      $.each(users, function(i, user) {
-        $seenUserList.append(CreateUserLinkWithPicture(user));
-      });
     }
 
     // History Diff

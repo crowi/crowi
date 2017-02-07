@@ -2,7 +2,6 @@ var chai = require('chai')
   , expect = chai.expect
   , sinon = require('sinon')
   , sinonChai = require('sinon-chai')
-  , Promise = require('bluebird')
   , utils = require('../utils.js')
   ;
 chai.use(sinonChai);
@@ -15,7 +14,7 @@ describe('User', function () {
   describe('Create and Find.', function () {
     context('The user', function() {
       it('should created', function(done) {
-        User.createUserByEmailAndPassword('Aoi Miyazaki', 'aoi', 'aoi@example.com', 'hogefuga11', function (err, userData) {
+        User.createUserByEmailAndPassword('Aoi Miyazaki', 'aoi', 'aoi@example.com', 'hogefuga11', 'en', function (err, userData) {
           expect(err).to.be.null;
           expect(userData).to.instanceof(User);
           done();
@@ -28,6 +27,18 @@ describe('User', function () {
           expect(userData).to.instanceof(User);
           done();
         });
+      });
+
+      it('should be found by findUsersByPartOfEmail', function(done) {
+
+        User.findUsersByPartOfEmail('ao', {})
+        .then(function(userData) {
+          expect(userData).to.be.array;
+          expect(userData[0]).to.instanceof(User);
+          expect(userData[0].email).to.equal('aoi@example.com');
+          done();
+        });
+
       });
     });
   });

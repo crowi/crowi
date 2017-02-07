@@ -7,9 +7,9 @@ import CrowiRenderer from './util/CrowiRenderer';
 import HeaderSearchBox  from './components/HeaderSearchBox';
 import SearchPage  from './components/SearchPage';
 import PageListSearch  from './components/PageListSearch';
-//import PageComment  from './components/PageComment';
 import NotificationPage from './components/NotificationPage';
 import HeaderNotification from './components/HeaderNotification';
+import SeenUserList from './components/SeenUserList';
 
 if (!window) {
   window = {};
@@ -28,6 +28,7 @@ const componentMappings = {
   'page-list-search': <PageListSearch />,
   'notification-page': <NotificationPage />,
   //'page-comment': <PageComment />,
+  'seen-user-list': <SeenUserList />,
 };
 
 Object.keys(componentMappings).forEach((key) => {
