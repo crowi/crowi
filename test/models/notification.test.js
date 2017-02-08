@@ -31,7 +31,7 @@ describe('Notification', function () {
 
         var activity = {
           user: user_id_1,
-          target_model: 'Page',
+          targetModel: 'Page',
           target: target_id,
           action: 'COMMENT',
         };
@@ -39,11 +39,11 @@ describe('Notification', function () {
         return Notification.upsertByActivity(user_id_1, sameActivityUsers, activity)
           .then(function(notification) {
             expect(notification.user.toString()).to.be.equal(user_id_1.toString());
-            expect(notification.target_model).to.be.equal('Page');
+            expect(notification.targetModel).to.be.equal('Page');
             expect(notification.target.toString()).to.be.equal(target_id.toString());
             expect(notification.action).to.be.equal('COMMENT');
-            expect(notification.is_read).to.be.equal(false);
-            expect(notification.action_users_count).to.be.equal(3);
+            expect(notification.isRead).to.be.equal(false);
+            expect(notification.actionUsersCount).to.be.equal(3);
           })
           .catch(function(err) {
             throw new Error(err);
@@ -64,7 +64,7 @@ describe('Notification', function () {
 
         var activity = {
           user: user_id_1,
-          target_model: 'Page2', // invalid
+          targetModel: 'Page2', // invalid
           target: target_id,
           action: 'COMMENT',
         };
