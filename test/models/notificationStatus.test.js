@@ -23,7 +23,7 @@ describe('NotificationStatus', function () {
           .then(function(notificationStatus) {
             expect(notificationStatus.user.toString()).to.be.equal(user_id_1.toString());
             expect(notificationStatus.count).to.be.equal(3);
-            expect(notificationStatus.is_read).to.be.equal(false);
+            expect(notificationStatus.isRead).to.be.equal(false);
           })
           .catch(function(err) {
             throw new Error(err);
