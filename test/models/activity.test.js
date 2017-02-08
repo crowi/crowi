@@ -19,7 +19,7 @@ describe('Activity', function () {
 
         var parameters = {
           user: user_id,
-          target_model: 'Page',
+          targetModel: 'Page',
           target: target_id,
           action: 'COMMENT',
         };
@@ -28,7 +28,7 @@ describe('Activity', function () {
           .then(function(activity) {
             expect(activity.user).to.be.equal(user_id);
             expect(activity.target).to.be.equal(target_id);
-            expect(activity.target_model).to.be.equal('Page');
+            expect(activity.targetModel).to.be.equal('Page');
             expect(activity.action).to.be.equal('COMMENT');
           }, function(err) {
             throw new Error(err);
@@ -44,7 +44,7 @@ describe('Activity', function () {
 
         var parameters = {
           user: user_id,
-          target_model: 'Page2', // validation error
+          targetModel: 'Page2', // validation error
           target: target_id,
           action: 'COMMENT',
         };
