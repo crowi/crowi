@@ -12,7 +12,7 @@ export default class HeaderNotification extends React.Component {
     this.state = {
       count: '',
       notifications: [],
-      is_read: true,
+      isRead: true,
     };
   }
 
@@ -36,10 +36,10 @@ export default class HeaderNotification extends React.Component {
     this.crowi.apiGet('/notification.status')
       .then(res => {
         if (res.status !== null) {
-          if (res.status.is_read === false && res.status.count > 0) {
+          if (res.status.isRead === false && res.status.count > 0) {
             this.setState({
               count: res.status.count,
-              is_read: res.status.is_read,
+              isRead: res.status.isRead,
             });
           }
         }
@@ -55,7 +55,7 @@ export default class HeaderNotification extends React.Component {
       .then(res => {
         this.setState({
           count: '',
-          is_read: true,
+          isRead: true,
         });
       })
       .catch(err => {

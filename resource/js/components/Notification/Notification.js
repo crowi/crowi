@@ -11,18 +11,18 @@ export default class Notification extends React.Component {
   }
 
   getActionUsers() {
-    const latest_users = this.props.notification.latest_action_users.map((user) => {
+    const latestUsers = this.props.notification.latestActionUsers.map((user) => {
       return user.username;
     });
 
-    let actioned_users = '';
-    if (latest_users.length === 1) {
-      actioned_users = latest_users[0];
+    let actionedUsers = '';
+    if (latestUsers.length === 1) {
+      actionedUsers = latestUsers[0];
     } else {
-      actioned_users = latest_users.join(', ');
+      actionedUsers = latestUsers.join(', ');
     }
 
-    return actioned_users;
+    return actionedUsers;
   }
 
   getActionedTime() {
@@ -30,11 +30,11 @@ export default class Notification extends React.Component {
   }
 
   getUserImage() {
-    const latest_action_users = this.props.notification.latest_action_users;
+    const latestActionUsers = this.props.notification.latestActionUsers;
 
-    if (latest_action_users.length >= 1) {
-      if (latest_action_users[0].image) {
-        return latest_action_users[0].image;
+    if (latestActionUsers.length >= 1) {
+      if (latestActionUsers[0].image) {
+        return latestActionUsers[0].image;
       }
     }
 
@@ -45,7 +45,7 @@ export default class Notification extends React.Component {
     const notification = this.props.notification;
 
     let boxClass = 'notification-box';
-    if (notification.is_read === false) {
+    if (notification.isRead === false) {
       boxClass += ' notification-unread';
     }
 
