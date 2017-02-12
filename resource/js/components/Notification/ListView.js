@@ -1,5 +1,6 @@
 import React from 'react';
-import Notification from './Notification';
+import Notification     from './Notification';
+import NullNotification from './NullNotification';
 
 export default class ListView extends React.Component {
 
@@ -10,9 +11,14 @@ export default class ListView extends React.Component {
   }
 
   render() {
-    let listView = this.props.notifications.map((notification) => {
-      return <Notification notification={notification} onClick={this.handleOnClick.bind(this)}/>;
-    });
+    let listView;
+    if (this.props.notifications.length <= 0) {
+      listView = <NullNotification />;
+    } else {
+      listView = this.props.notifications.map((notification) => {
+        return <Notification notification={notification} onClick={this.handleOnClick.bind(this)}/>;
+      });
+    }
 
     return (
       <div className="notification-list">

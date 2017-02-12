@@ -1,5 +1,6 @@
 import React from 'react';
-import Notification from '../Notification/Notification';
+import Notification     from '../Notification/Notification';
+import NullNotification from '../Notification/NullNotification';
 
 export default class DropdownMenu extends React.Component {
   constructor(props) {
@@ -15,14 +16,19 @@ export default class DropdownMenu extends React.Component {
   }
 
   render() {
-    let listView = this.props.notifications.map((notification) => {
-      return (
-        <Notification
-          notification={notification}
-          onClick={this.handleOnClick.bind(this)}
-          />
-      );
-    });
+    let listView;
+    if (this.props.notifications.length <= 0) {
+      listView = <NullNotification />;
+    } else {
+      listView = this.props.notifications.map((notification) => {
+        return (
+            <Notification
+              notification={notification}
+              onClick={this.handleOnClick.bind(this)}
+              />
+        );
+      });
+    }
 
     return (
       <ul className="dropdown-menu">
