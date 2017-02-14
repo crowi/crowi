@@ -21,7 +21,7 @@ export default class DropdownMenu extends React.Component {
     let listView;
 
     if (!this.props.loaded) {
-      listView = <li className="notifications-loader"><Icon name="pulse" spin={true} /></li>;
+      listView = <li className="notification-loader"><Icon name="pulse" spin={true} /></li>;
     } else if (this.props.notifications.length <= 0) {
       listView = <NullNotification />;
     } else {
@@ -38,6 +38,7 @@ export default class DropdownMenu extends React.Component {
 
     return (
       <ul className="dropdown-menu">
+        <li className="notification-arrow"></li>
         {listView}
         <li><a href="/me/notifications" className="notification-see-all">See All</a></li>
       </ul>
