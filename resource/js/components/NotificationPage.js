@@ -10,13 +10,12 @@ export default class NotificationPage extends React.Component {
   constructor(props) {
     super(props);
 
-    this.crowi = window.crowi; // FIXME
-
     this.limit  = 16;
     this.offset = 0;
 
     this.state = {
       notifications: [],
+      loaded: false,
       hasPrev: false,
       hasNext: false,
     };
@@ -27,7 +26,7 @@ export default class NotificationPage extends React.Component {
   }
 
   handleNotificationOnClick(notification) {
-    this.crowi.apiPost('/notification.read', {id: notification._id})
+    this.props.crowi.apiPost('/notification.read', {id: notification._id})
       .then(res => {
         // jump to target page
         window.location.href = notification.target.path;
@@ -39,13 +38,14 @@ export default class NotificationPage extends React.Component {
   }
 
   getNotifications() {
-    this.crowi.apiGet('/notification.list', {
+    this.props.crowi.apiGet('/notification.list', {
       limit: this.limit,
       offset: this.offset,
     })
       .then(res => {
         return this.setState({
           notifications: res.notifications,
+          loaded: true,
           hasPrev: res.hasPrev,
           hasNext: res.hasNext,
         });
@@ -79,6 +79,7 @@ export default class NotificationPage extends React.Component {
           handleNextClick={this.handleNextClick.bind(this)}
           />
         <ListView
+          loaded={this.state.loaded}
           notifications={this.state.notifications}
           notificationClickHandler={this.handleNotificationOnClick.bind(this)}
           />

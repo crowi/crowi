@@ -2,6 +2,8 @@
 .notification-list {
   .notification-list-ul {
     margin: 0;
+    padding: 0;
+
     .notification-list-li {
       list-style-type: none;
     }
@@ -25,13 +27,14 @@
   -webkit-align-items: center;
 
   .notification-box-image {
-    width: 36px;
+    img {
+      margin-right: 16px;
+    }
   }
 
   .notification-box-message {
 
     .notification-box-text {
-      min-height: 36px;
     }
 
     .notification-box-time {
@@ -52,9 +55,6 @@
   background-color: #f0f4f3;
 }
 
-// Header
-#notif-opener-li {
-}
 
 .nav > .header-notification {
   > div.notification-wrapper {
@@ -81,13 +81,17 @@
       right: -6px;
       font-size: 9px;
       padding: 4px;
-      background-color: rgba(217, 83, 79, 0.8);
+      background-color: rgba(255, 37, 31, 0.8)
     }
 
     .dropdown-menu {
       width: 400px;
       font-size: small;
 
+      .notifications-loader {
+        padding: 8px 0;
+        text-align: center;
+      }
       .notification-see-all {
         text-align: center;
       }

@@ -36,11 +36,11 @@ const componentMappings = {
   'search-top': <HeaderSearchBox />,
   'search-page': <SearchPage />,
   'page-list-search': <PageListSearch />,
-  'notification-page': <NotificationPage />,
+  'notification-page': <NotificationPage crowi={crowi} />,
   //'revision-history': <PageHistory pageId={pageId} />,
   //'page-comment': <PageComment />,
   'seen-user-list': <SeenUserList />,
-  'header-notification': <HeaderNotification me={me} />,
+  'header-notification': <HeaderNotification me={me} crowi={crowi} />,
 };
 
 Object.keys(componentMappings).forEach((key) => {

@@ -1,5 +1,10 @@
 import React from 'react';
 
+import Icon        from '../Common/Icon';
+import UserDate    from '../Common/UserDate';
+import UserPicture from '../User/UserPicture';
+import PagePath    from '../PageList/PagePath';
+
 export default class Notification extends React.Component {
 
   handleOnClick(e) {
@@ -11,13 +16,17 @@ export default class Notification extends React.Component {
   }
 
   getActionUsers() {
-    const latestUsers = this.props.notification.latestActionUsers.map((user) => {
-      return user.username;
+    const notification = this.props.notification;
+    const latestUsers = notification.latestActionUsers.map((user) => {
+      return '@' + user.username;
     });
 
     let actionedUsers = '';
-    if (latestUsers.length === 1) {
+    const latestUsersCount = latestUsers.length;
+    if (latestUsersCount === 1) {
       actionedUsers = latestUsers[0];
+    } else if (notification.actionUsersCount >= 4) {
+      actionedUsers = latestUsers.slice(0, 2).join(', ') + ` and ${notification.actionUsersCount - 2} others`;
     } else {
       actionedUsers = latestUsers.join(', ');
     }
@@ -25,20 +34,15 @@ export default class Notification extends React.Component {
     return actionedUsers;
   }
 
-  getActionedTime() {
-    return this.props.notification.createdAt.toString();
-  }
-
   getUserImage() {
     const latestActionUsers = this.props.notification.latestActionUsers;
 
-    if (latestActionUsers.length >= 1) {
-      if (latestActionUsers[0].image) {
-        return latestActionUsers[0].image;
-      }
+    if (latestActionUsers.length < 1) {
+      // what is this case?
+      return '';
     }
 
-    return '/images/userpicture.png'; // TODO: use const
+    return <UserPicture user={latestActionUsers[0]} />
   }
 
   render() {
@@ -53,13 +57,15 @@ export default class Notification extends React.Component {
       <li className="notification-list-li">
         <div className={boxClass} onClick={this.handleOnClick.bind(this)}>
           <div className="notification-box-image">
-            <img src={this.getUserImage()} className="picture picture-rounded" />
+            {this.getUserImage()}
           </div>
           <div className="notification-box-message">
             <div className="notification-box-text">
-              <span><b>{this.getActionUsers()}</b> commented on <b>{notification.target.path}</b></span>
+              <span><b>{this.getActionUsers()}</b> commented on <PagePath page={notification.target} /></span>
             </div>
-            <div className="notification-box-time">{this.getActionedTime()}</div>
+            <div className="notification-box-time">
+              <Icon name="comment" /> <UserDate dateTime={notification.createdAt} format="fromNow" />
+            </div>
           </div>
         </div>
       </li>

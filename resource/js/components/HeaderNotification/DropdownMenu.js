@@ -1,6 +1,8 @@
 import React from 'react';
+
 import Notification     from '../Notification/Notification';
 import NullNotification from '../Notification/NullNotification';
+import Icon             from '../Common/Icon';
 
 export default class DropdownMenu extends React.Component {
   constructor(props) {
@@ -17,12 +19,16 @@ export default class DropdownMenu extends React.Component {
 
   render() {
     let listView;
-    if (this.props.notifications.length <= 0) {
+
+    if (!this.props.loaded) {
+      listView = <li className="notifications-loader"><Icon name="pulse" spin={true} /></li>;
+    } else if (this.props.notifications.length <= 0) {
       listView = <NullNotification />;
     } else {
       listView = this.props.notifications.map((notification) => {
         return (
             <Notification
+              key={"notification:header:" + notification._id}
               notification={notification}
               onClick={this.handleOnClick.bind(this)}
               />

@@ -1,16 +1,16 @@
 import React from 'react';
-import axios from 'axios';
-import DropdownMenu from './HeaderNotification/DropdownMenu';
 import io from 'socket.io-client';
+
+import DropdownMenu from './HeaderNotification/DropdownMenu';
+import Icon         from './Common/Icon';
 
 export default class HeaderNotification extends React.Component {
   constructor(props) {
     super(props);
 
-    this.crowi = window.crowi; // FIXME
-
     this.state = {
       count: '',
+      loaded: false,
       notifications: [],
       isRead: true,
     };
@@ -33,7 +33,7 @@ export default class HeaderNotification extends React.Component {
   }
 
   fetchStatus() {
-    this.crowi.apiGet('/notification.status')
+    this.props.crowi.apiGet('/notification.status')
       .then(res => {
         if (res.status !== null) {
           if (res.status.isRead === false && res.status.count > 0) {
@@ -51,7 +51,7 @@ export default class HeaderNotification extends React.Component {
   }
 
   updateStatus() {
-    this.crowi.apiPost('/notification.status_read')
+    this.props.crowi.apiPost('/notification.status_read')
       .then(res => {
         this.setState({
           count: '',
@@ -61,15 +61,16 @@ export default class HeaderNotification extends React.Component {
       .catch(err => {
         // TODO: error handling
       });
-    ;
+
   }
 
   fetchList() {
     const limit = 6;
 
-    this.crowi.apiGet('/notification.list', {limit: limit})
+    this.props.crowi.apiGet('/notification.list', {limit: limit})
       .then(res => {
         this.setState({
+          loaded: true,
           notifications: res.notifications
         });
       })
@@ -85,7 +86,7 @@ export default class HeaderNotification extends React.Component {
   }
 
   handleNotificationOnClick(notification) {
-    this.crowi.apiPost('/notification.read', {id: notification._id})
+    this.props.crowi.apiPost('/notification.read', {id: notification._id})
       .then(res => {
         // jump to target page
         window.location.href = notification.target.path;
@@ -108,9 +109,10 @@ export default class HeaderNotification extends React.Component {
         <a href="#" id="notif-opener" className="dropdown-toggle" data-toggle="dropdown"
           onClick={this.handleOnClick.bind(this)}
           >
-          <i className="fa fa-bell" /> {badge}
+          <Icon name="bell" /> {badge}
         </a>
         <DropdownMenu
+          loaded={this.state.loaded}
           notifications={this.state.notifications}
           notificationClickHandler={this.handleNotificationOnClick.bind(this)}
           />

@@ -10,11 +10,19 @@ import moment from 'moment';
 export default class UserDate extends React.Component {
 
   render() {
-    const dt = moment(this.props.dateTime).format(this.props.format);
+    const format = this.props.format;
+    const dt = moment(this.props.dateTime);
+
+    let dtFormat;
+    if (format === 'fromNow') {
+      dtFormat = dt.fromNow();
+    } else {
+      dtFormat = dt.format(format);
+    }
 
     return (
       <span className={this.props.className}>
-        {dt}
+        {dtFormat}
       </span>
     );
   }
@@ -27,7 +35,6 @@ UserDate.propTypes = {
 };
 
 UserDate.defaultProps = {
-  dateTime: 'now',
   format: 'YYYY/MM/DD HH:mm:ss',
   className: '',
 };
