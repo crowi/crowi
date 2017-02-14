@@ -5,14 +5,12 @@ import UserDate    from '../Common/UserDate';
 import UserPicture from '../User/UserPicture';
 import PagePath    from '../PageList/PagePath';
 
+import PageCommentNotification from './ModelAction/PageCommentNotification';
+
 export default class Notification extends React.Component {
 
-  handleOnClick(e) {
-    e.preventDefault();
-
-    if (this.props.onClick) {
-      this.props.onClick(this.props.notification);
-    }
+  onClickHandler() {
+    this.props.onClickHandler(this.props.notification);
   }
 
   getActionUsers() {
@@ -46,37 +44,25 @@ export default class Notification extends React.Component {
   }
 
   render() {
+    let cmp = '';
     const notification = this.props.notification;
+    const componentName = `${notification.targetModel}:${notification.action}`;
 
-    let boxClass = 'notification-box';
-    if (notification.isRead === false) {
-      boxClass += ' notification-unread';
+    switch (componentName) {
+      case 'Page:COMMENT':
+        cmp = <PageCommentNotification {...this.props} onClick={this.onClickHandler.bind(this)} />
+        break;
+      default:
     }
 
-    return (
-      <li className="notification-list-li">
-        <div className={boxClass} onClick={this.handleOnClick.bind(this)}>
-          <div className="notification-box-image">
-            {this.getUserImage()}
-          </div>
-          <div className="notification-box-message">
-            <div className="notification-box-text">
-              <span><b>{this.getActionUsers()}</b> commented on <PagePath page={notification.target} /></span>
-            </div>
-            <div className="notification-box-time">
-              <Icon name="comment" /> <UserDate dateTime={notification.createdAt} format="fromNow" />
-            </div>
-          </div>
-        </div>
-      </li>
-    );
+    return cmp;
   }
 }
 
 Notification.propTypes = {
   notification: React.PropTypes.object.isRequired,
+  onClickHandler: React.PropTypes.func.isRequired,
 };
 
 Notification.defaultProps = {
-  notification: {},
 };

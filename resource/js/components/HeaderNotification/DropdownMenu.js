@@ -7,14 +7,6 @@ import Icon             from '../Common/Icon';
 export default class DropdownMenu extends React.Component {
   constructor(props) {
     super(props);
-    this.state = {
-    };
-  }
-
-  handleOnClick(notification) {
-    if (this.props.notificationClickHandler) {
-      this.props.notificationClickHandler(notification);
-    }
   }
 
   render() {
@@ -30,7 +22,7 @@ export default class DropdownMenu extends React.Component {
             <Notification
               key={"notification:header:" + notification._id}
               notification={notification}
-              onClick={this.handleOnClick.bind(this)}
+              onClickHandler={this.props.notificationClickHandler}
               />
         );
       });
@@ -48,8 +40,8 @@ export default class DropdownMenu extends React.Component {
 
 DropdownMenu.propTypes = {
   notifications: React.PropTypes.array.isRequired,
+  notificationClickHandler: React.PropTypes.func.isRequired,
 };
 
 DropdownMenu.defaultProps = {
-  notifications: [],
 };

@@ -1,5 +1,4 @@
 import React from 'react';
-import io from 'socket.io-client';
 
 import DropdownMenu from './HeaderNotification/DropdownMenu';
 import Icon         from './Common/Icon';
@@ -23,8 +22,7 @@ export default class HeaderNotification extends React.Component {
   }
 
   initializeSocket() {
-    const socket = io();
-    socket.on('notification updated', (data) => {
+    this.props.crowi.getSocket().on('notification updated', (data) => {
       if (this.props.me === data.status.user) {
         this.fetchList();
         this.fetchStatus();

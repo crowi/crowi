@@ -5,12 +5,6 @@ import Icon             from '../Common/Icon';
 
 export default class ListView extends React.Component {
 
-  handleOnClick(notification) {
-    if (this.props.notificationClickHandler) {
-      this.props.notificationClickHandler(notification);
-    }
-  }
-
   render() {
     let listView;
 
@@ -23,7 +17,7 @@ export default class ListView extends React.Component {
         return <Notification
           key={"notification:list:" + notification._id}
           notification={notification}
-          onClick={this.handleOnClick.bind(this)}
+          onClickHandler={this.props.notificationClickHandler}
           />;
       });
     }
@@ -40,8 +34,8 @@ export default class ListView extends React.Component {
 
 ListView.propTypes = {
   notifications: React.PropTypes.array.isRequired,
+  notificationClickHandler: React.PropTypes.func.isRequired,
 };
 
 ListView.defaultProps = {
-  notifications: [],
 };
