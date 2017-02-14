@@ -35,6 +35,18 @@
     </a>
   {% if searchConfigured() %}
   <div class="navbar-form navbar-left search-top" role="search" id="search-top">
+    <div className="search-box">
+      <form action="/_search" class="search-form form-group input-group search-top-input-group">
+        <input class="search-top-input form-control" disabled=disabled
+          type="text"
+          placeholder="Search ... Page Title (Path) and Content" />
+        <span class="input-group-btn">
+          <button type="submit" class="btn btn-default">
+            <i class="search-top-icon fa fa-search"></i>
+          </button>
+        </span>
+      </form>
+    </div>
   </div>
   {% endif %}
   </div>
@@ -65,6 +77,11 @@
         </button>
       </li>
       <li id="header-notification" class="header-notification">
+        <div class="notification-wrapper">
+          <a href="#">
+            <i class="fa fa-bell"></i>
+          </a>
+        </div>
       </li>
       <li id="login-user">
         <a href="/user/{{ user.username }}" id="link-mypage">
