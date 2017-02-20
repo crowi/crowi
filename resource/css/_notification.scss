@@ -87,8 +87,20 @@
     .dropdown-menu {
       width: 400px;
       font-size: small;
+      top: 90%;
 
-      .notifications-loader {
+      .notification-arrow {
+        background: #fff;
+        width: 10px;
+        height: 10px;
+        position: absolute;
+        right: 10px;
+        top: -4px;
+        transform: rotate(45deg);
+        border-radius: 2px;
+      }
+
+      .notification-loader {
         padding: 8px 0;
         text-align: center;
       }

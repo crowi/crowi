@@ -723,14 +723,18 @@ $(function() {
 
     //
     var me = $('body').data('me');
-    var socket = io();
-    socket.on('page edited', function (data) {
-      if (data.user._id != me
-        && data.page.path == pagePath) {
-        $('#notifPageEdited').show();
-        $('#notifPageEdited .edited-user').html(data.user.name);
+    if (window.crowi) {
+      var socket = window.crowi.getSocket();
+      if (socket) {
+        socket.on('page edited', function (data) {
+          if (data.user._id != me
+            && data.page.path == pagePath) {
+            $('#notifPageEdited').show();
+            $('#notifPageEdited .edited-user').html(data.user.name);
+          }
+        });
       }
-    });
+    }
   } // end if pageId
 
   // hash handling
