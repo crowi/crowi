@@ -2,7 +2,6 @@
 /* Author: Sotaro KARASAWA <sotarok@crocos.co.jp>
 */
 
-var jsdiff = require('diff');
 var io = require('socket.io-client');
 
 //require('bootstrap-sass');
@@ -271,7 +270,9 @@ $(function() {
         var page = res.page;
 
         $('#newPageNameCheck').removeClass('alert-danger');
-        $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> 移動しました。移動先にジャンプします。');
+        //$('#newPageNameCheck').html('<img src="/images/loading_s.gif"> 移動しました。移動先にジャンプします。');
+        // fix
+        $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.');
 
         setTimeout(function() {
           top.location.href = page.path + '?renamed=' + pagePath;
@@ -314,6 +315,24 @@ $(function() {
       } else {
         var page = res.page;
         top.location.href = page.path;
+      }
+    });
+
+    return false;
+  });
+  $('#unlink-page-form').submit(function(e) {
+    $.ajax({
+      type: 'POST',
+      url: '/_api/pages.unlink',
+      data: $('#unlink-page-form').serialize(),
+      dataType: 'json'
+    }).done(function(res) {
+      if (!res.ok) {
+        $('#delete-errors').html('<i class="fa fa-times-circle"></i> ' + res.error);
+        $('#delete-errors').addClass('alert-danger');
+      } else {
+        var page = res.page;
+        top.location.href = page.path + '?unlinked=true';
       }
     });
 
@@ -404,7 +423,7 @@ $(function() {
 
     $.getJSON('/_api/check_username', {username: username}, function(json) {
       if (!json.valid) {
-        $('#help-block-username').html('<i class="fa fa-warning"></i>このユーザーIDは利用できません。<br>');
+        $('#help-block-username').html('<i class="fa fa-warning"></i> This User ID is not available.<br>');
         $('#input-group-username').addClass('has-error');
       }
     });
@@ -557,71 +576,6 @@ $(function() {
       return false;
     });
 
-    // attachment
-    var $pageAttachmentList = $('.page-attachments ul');
-    $.get('/_api/attachments.list', {page_id: pageId}, function(res) {
-      if (!res.ok) {
-        return ;
-      }
-
-      var attachments = res.attachments;
-      if (attachments.length > 0) {
-        $.each(attachments, function(i, file) {
-          $pageAttachmentList.append(
-          '<li><a href="' + file.fileUrl + '">' + (file.originalName || file.fileName) + '</a> <span class="label label-default">' + file.fileFormat + '</span></li>'
-          );
-        })
-      } else {
-        $('.page-attachments').remove();
-      }
-    });
-
-    // bookmark
-    var $bookmarkButton = $('#bookmark-button');
-    $.get('/_api/bookmarks.get', {page_id: pageId}, function(res) {
-      if (res.ok) {
-        if (res.bookmark) {
-          MarkBookmarked();
-        }
-      }
-    });
-
-    $bookmarkButton.click(function() {
-      var bookmarked = $bookmarkButton.data('bookmarked');
-      var token = $bookmarkButton.data('csrftoken');
-      if (!bookmarked) {
-        $.post('/_api/bookmarks.add', {_csrf: token, page_id: pageId}, function(res) {
-          if (res.ok && res.bookmark) {
-            MarkBookmarked();
-          }
-        });
-      } else {
-        $.post('/_api/bookmarks.remove', {_csrf: token, page_id: pageId}, function(res) {
-          if (res.ok) {
-            MarkUnBookmarked();
-          }
-        });
-      }
-
-      return false;
-    });
-
-    function MarkBookmarked()
-    {
-      $('i', $bookmarkButton)
-        .removeClass('fa-star-o')
-        .addClass('fa-star');
-      $bookmarkButton.data('bookmarked', 1);
-    }
-
-    function MarkUnBookmarked()
-    {
-      $('i', $bookmarkButton)
-        .removeClass('fa-star')
-        .addClass('fa-star-o');
-      $bookmarkButton.data('bookmarked', 0);
-    }
-
     // Like
     var $likeButton = $('.like-button');
     var $likeCount = $('#like-count');
@@ -698,87 +652,6 @@ $(function() {
       $userHtml.append($userPicture);
       return $userHtml;
     }
-
-    // History Diff
-    var allRevisionIds = [];
-    $.each($('.diff-view'), function() {
-      allRevisionIds.push($(this).data('revisionId'));
-    });
-
-    $('.diff-view').on('click', function(e) {
-      e.preventDefault();
-
-      var getBeforeRevisionId = function(revisionId) {
-        var currentPos = $.inArray(revisionId, allRevisionIds);
-        if (currentPos < 0) {
-          return false;
-        }
-
-        var beforeRevisionId = allRevisionIds[currentPos + 1];
-        if (typeof beforeRevisionId === 'undefined') {
-          return false;
-        }
-
-        return beforeRevisionId;
-      };
-
-      var revisionId = $(this).data('revisionId');
-      var beforeRevisionId = getBeforeRevisionId(revisionId);
-      var $diffDisplay = $('#diff-display-' + revisionId);
-      var $diffIcon = $('#diff-icon-' + revisionId);
-
-      if ($diffIcon.hasClass('fa-arrow-circle-right')) {
-        $diffIcon.removeClass('fa-arrow-circle-right');
-        $diffIcon.addClass('fa-arrow-circle-down');
-      } else {
-        $diffIcon.removeClass('fa-arrow-circle-down');
-        $diffIcon.addClass('fa-arrow-circle-right');
-      }
-
-      if (beforeRevisionId === false) {
-        $diffDisplay.text('差分はありません');
-        $diffDisplay.slideToggle();
-      } else {
-        var revisionIds = revisionId + ',' + beforeRevisionId;
-
-        if ($diffDisplay.data('loaded')) {
-          $diffDisplay.slideToggle();
-          return true;
-        }
-
-        $.ajax({
-          type: 'GET',
-          url: '/_api/revisions.list?revision_ids=' + revisionIds,
-          dataType: 'json'
-        }).done(function(res) {
-          var currentText = res[0].body;
-          var previousText = res[1].body;
-
-          $diffDisplay.text('');
-
-          var diff = jsdiff.diffLines(previousText, currentText);
-          diff.forEach(function(part) {
-            var color = part.added ? 'green' : part.removed ? 'red' : 'grey';
-            var $span = $('<span>');
-            $span.css('color', color);
-            $span.text(part.value);
-            $diffDisplay.append($span);
-          });
-
-          $diffDisplay.data('loaded', 1);
-          $diffDisplay.slideToggle();
-        });
-      }
-    });
-
-    // default open
-    $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {
-      $('.diff-view').each(function(i, diffView) {
-        if (i < 2) {
-          $(diffView).click();
-        }
-      });
-    });
 
     // presentation
     var presentaionInitialized = false

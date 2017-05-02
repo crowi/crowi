@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 
 import PageBody from '../Page/PageBody.js';
 
@@ -14,7 +15,12 @@ export default class SearchResultList extends React.Component {
     let returnBody = body;
 
     this.props.searchingKeyword.split(' ').forEach((keyword) => {
-      const k = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (keyword === '') {
+        return;
+      }
+      const k = keyword
+            .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+            .replace(/(^"|"$)/g, ''); // for phrase (quoted) keyword
       const keywordExp = new RegExp(`(${k}(?!(.*?\]|.*?\\)|.*?"|.*?>)))`, 'ig');
       returnBody = returnBody.replace(keywordExp, '<em class="highlighted">$&</em>');
     });
@@ -45,12 +51,11 @@ export default class SearchResultList extends React.Component {
 }
 
 SearchResultList.propTypes = {
-  pages: React.PropTypes.array.isRequired,
-  searchingKeyword: React.PropTypes.string.isRequired,
+  pages: PropTypes.array.isRequired,
+  searchingKeyword: PropTypes.string.isRequired,
 };
 
 SearchResultList.defaultProps = {
   pages: [],
   searchingKeyword: '',
 };
-

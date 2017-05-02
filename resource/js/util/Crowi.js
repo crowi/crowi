@@ -7,6 +7,8 @@ import axios from 'axios'
 export default class Crowi {
   constructor(context, window) {
     this.context = context;
+    this.config = {};
+    this.csrfToken = context.csrfToken;
 
     this.location = window.location || {};
     this.document = window.document || {};
@@ -22,6 +24,7 @@ export default class Crowi {
 
     this.users = [];
     this.userByName = {};
+    this.userById   = {};
     this.draft = {};
 
     this.recoverData();
@@ -31,9 +34,18 @@ export default class Crowi {
     return context;
   }
 
+  setConfig(config) {
+    this.config = config;
+  }
+
+  getConfig() {
+    return this.config;
+  }
+
   recoverData() {
     const keys = [
       'userByName',
+      'userById',
       'users',
       'draft',
     ];
@@ -50,7 +62,7 @@ export default class Crowi {
   }
 
   fetchUsers () {
-    const interval = 1000*60*10; // 5min
+    const interval = 1000*60*15; // 15min
     const currentTime = new Date();
     if (!this.localStorage.lastFetched && interval > currentTime - new Date(this.localStorage.lastFetched)) {
       return ;
@@ -62,12 +74,17 @@ export default class Crowi {
       this.localStorage.users = JSON.stringify(data.users);
 
       let userByName = {};
+      let userById = {};
       for (let i = 0; i < data.users.length; i++) {
         const user = data.users[i];
         userByName[user.username] = user;
+        userById[user._id] = user;
       }
       this.userByName = userByName;
       this.localStorage.userByName = JSON.stringify(userByName);
+
+      this.userById = userById;
+      this.localStorage.userById = JSON.stringify(userById);
 
       this.localStorage.lastFetched = new Date();
     }).catch(err => {
@@ -94,6 +111,14 @@ export default class Crowi {
     return null;
   }
 
+  findUserById(userId) {
+    if (this.userById && this.userById[userId]) {
+      return this.userById[userId];
+    }
+
+    return null;
+  }
+
   findUser(username) {
     if (this.userByName && this.userByName[username]) {
       return this.userByName[username];
@@ -103,22 +128,27 @@ export default class Crowi {
   }
 
   apiGet(path, params) {
-    return this.apiRequest('get', path, params);
+    return this.apiRequest('get', path, {params: params});
   }
 
   apiPost(path, params) {
+    if (!params._csrf) {
+      params._csrf = this.csrfToken;
+    }
+
     return this.apiRequest('post', path, params);
   }
 
   apiRequest(method, path, params) {
+
     return new Promise((resolve, reject) => {
-      axios[method](`/_api${path}`, {params})
+      axios[method](`/_api${path}`, params)
       .then(res => {
         if (res.data.ok) {
           resolve(res.data);
         } else {
           // FIXME?
-          reject(new Error(res.data));
+          reject(new Error(res.error));
         }
       }).catch(res => {
           // FIXME?
