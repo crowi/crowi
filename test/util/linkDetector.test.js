@@ -33,6 +33,8 @@ describe('Url test', function () {
     text += 'http://localhost:3000/user/suzuki/%E3%83%A1%E3%83%A2/2017/01/31/ddd#aaa';
     text += ' bbbbb ';
     text += 'http://localhost:3000/user/suzuki/メモ/2017/02/01/ddd?a=1';
+    text += 'ee ';
+    text += '[/user/suzuki/memo/2017/05/06/eee]';
 
     var results = linkDetector.search(text);
 
@@ -42,9 +44,10 @@ describe('Url test', function () {
     expect(results.objectIds).to.contain('58842b9ccf3556baedce2763');
 
     expect(results).to.have.property('paths');
-    expect(results.paths).to.have.length(3);
+    expect(results.paths).to.have.length(4);
     expect(results.paths).to.contain('/user/suzuki/memo/2017/01/22/ccc');
     expect(results.paths).to.contain('/user/suzuki/メモ/2017/01/31/ddd');
     expect(results.paths).to.contain('/user/suzuki/メモ/2017/02/01/ddd');
+    expect(results.paths).to.contain('/user/suzuki/memo/2017/05/06/eee');
   });
 });
