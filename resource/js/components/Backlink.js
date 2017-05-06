@@ -1,4 +1,6 @@
 import React from 'react';
+import PropTypes from 'prop-types';
+
 import UserPicture from './User/UserPicture';
 
 class Backlink extends React.Component {
@@ -95,7 +97,7 @@ class Backlink extends React.Component {
     const readMore = this.createReadMore();
 
     return (
-      <div className="meta backlink">
+      <div>
         <p className="backlink-title">Backlinks</p>
         <ul className="backlink-list">{lists}</ul>
         {readMore}
@@ -105,10 +107,10 @@ class Backlink extends React.Component {
 }
 
 Backlink.propTypes = {
-  crowi:  React.PropTypes.object.isRequired,
-  pageId: React.PropTypes.string.isRequired,
-  limit:  React.PropTypes.number,
-  offset: React.PropTypes.number,
+  crowi:  PropTypes.object.isRequired,
+  pageId: PropTypes.string.isRequired,
+  limit:  PropTypes.number,
+  offset: PropTypes.number,
 };
 
 Backlink.defaultProps = {
