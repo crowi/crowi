@@ -68,7 +68,7 @@ class Backlink extends React.Component {
     const user = backlink.fromRevision.author;
 
     return (
-      <li className="backlink-item">
+      <li className="backlink-item" key={"crowi:page:backlink:" + backlink._id}>
         <a className="backlink-link" href={path}>
           <span className="backlink-picture"><UserPicture user={user} /></span>
           <span className="backlink-path">{path}</span>
