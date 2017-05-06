@@ -64,7 +64,7 @@ export default class Crowi {
   fetchUsers () {
     const interval = 1000*60*15; // 15min
     const currentTime = new Date();
-    if (!this.localStorage.lastFetched && interval > currentTime - new Date(this.localStorage.lastFetched)) {
+    if (this.localStorage.lastFetched && interval > currentTime - new Date(this.localStorage.lastFetched)) {
       return ;
     }
 
@@ -117,6 +117,18 @@ export default class Crowi {
     }
 
     return null;
+  }
+
+  findUserByIds(userIds) {
+    let users = [];
+    for (let userId of userIds) {
+      let user = this.findUserById(userId);
+      if (user) {
+        users.push(user);
+      }
+    }
+
+    return users;
   }
 
   findUser(username) {
