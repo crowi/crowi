@@ -1,6 +1,30 @@
 CHANGES
 ========
 
+## 1.6.1
+
+- Feature: Non-image file uploads and its settings,
+- Feature: Attachment remove #205,
+- Feature: Attachment redirector (and proxy),
+- Feature: Delete page completely and delete redirect,
+- Fix: Not render Emoji in code block #202,
+- Fix: Order of parsing access token order,
+- Changes: Page name with spaces around `/` is now not creatable,
+- API Changes:
+    - Changed `attachments.add`
+    - Add `attachments.remove`
+- Library Update: Now using webpack2, React.js 15.5,
+- And some refactorings, bug fixes, internal fixes. (Thank you @yuki-takei, @okonomi)
+
+## 1.6.0
+
+- I18N
+- Improved diff view
+- - Minus search
+- - Supports Elasticsearch 5.x
+- Special thank you for the great pull requests: @b4b4r07 @kaz @hasete2 @okonomi
+- And also special thanks for the translation: @Hidsm
+
 ## 1.5.3
 
 * Added node-shrinkwrap.json

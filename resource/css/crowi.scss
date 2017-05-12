@@ -18,6 +18,7 @@
 @import 'portal';
 @import 'search';
 @import 'notification';
+@import 'attachments';
 
 
 ul {
@@ -26,8 +27,7 @@ ul {
 
 
 .meta {
-
-  margin-top: 32px;
+  margin-top: 0;
   padding: 16px;
   color: #666;
   border-top: solid 1px #ccc;
@@ -39,6 +39,10 @@ ul {
     width: 16px;
     height: 16px;
   }
+}
+
+.page-meta {
+  margin-bottom: 0;
 }
 
 .help-block {

@@ -10,7 +10,9 @@ import PageListSearch   from './components/PageListSearch';
 import PageHistory      from './components/PageHistory';
 import NotificationPage from './components/NotificationPage';
 import HeaderNotification from './components/HeaderNotification';
+import PageAttachment   from './components/PageAttachment';
 import SeenUserList     from './components/SeenUserList';
+import BookmarkButton   from './components/BookmarkButton';
 //import PageComment  from './components/PageComment';
 
 if (!window) {
@@ -19,13 +21,22 @@ if (!window) {
 
 const mainContent = document.querySelector('#content-main');
 let pageId = null;
+let pageContent = null;
 if (mainContent !== null) {
   pageId = mainContent.attributes['data-page-id'].value;
+  const rawText = document.getElementById('raw-text-original');
+  if (rawText) {
+    pageContent = rawText.innerHTML;
+  }
 }
 
 // FIXME
-const crowi = new Crowi({me: $('#content-main').data('current-username')}, window);
+const crowi = new Crowi({
+  me: $('#content-main').data('current-username'),
+  csrfToken: $('#content-main').data('csrftoken'),
+}, window);
 window.crowi = crowi;
+crowi.setConfig(JSON.parse(document.getElementById('crowi-context-hydrate').textContent || '{}'));
 crowi.fetchUsers();
 
 const crowiRenderer = new CrowiRenderer();
@@ -33,14 +44,17 @@ window.crowiRenderer = crowiRenderer;
 
 const me = $('body').data('me');
 const componentMappings = {
-  'search-top': <HeaderSearchBox />,
-  'search-page': <SearchPage />,
-  'page-list-search': <PageListSearch />,
+  'search-top': <HeaderSearchBox crowi={crowi} />,
+  'search-page': <SearchPage crowi={crowi} />,
+  'page-list-search': <PageListSearch crowi={crowi} />,
+  'header-notification': <HeaderNotification me={me} crowi={crowi} />,
   'notification-page': <NotificationPage crowi={crowi} />,
+  'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
+
   //'revision-history': <PageHistory pageId={pageId} />,
   //'page-comment': <PageComment />,
-  'seen-user-list': <SeenUserList />,
-  'header-notification': <HeaderNotification me={me} crowi={crowi} />,
+  'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
+  'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
 };
 
 Object.keys(componentMappings).forEach((key) => {
