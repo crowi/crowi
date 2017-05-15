@@ -1,0 +1,52 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "path_ja": "dummy"
+          }
+        },
+        {
+          "boosting": {
+            "positive": {
+              "match_all": {}
+            },
+            "negative": {
+              "regexp": {
+                "path_ja": "[0-9]{4}*[0-9]{2}"
+              }
+            },
+            "negative_boost": 0.7
+          }
+        },
+        {
+          "boosting": {
+            "positive": {
+              "match_all": {}
+            },
+            "negative": {
+              "regexp": {
+                "path_ja": "user"
+              }
+            },
+            "negative_boost": 0.5
+          }
+        },
+        {
+          "boosting": {
+            "positive": {
+              "match_all": {}
+            },
+            "negative": {
+              "regexp": {
+                "path_ja": "user*[0-9]{4}*[0-9]{2}"
+              }
+            },
+            "negative_boost": 0.1
+          }
+        }
+      ]
+    }
+  }
+}
