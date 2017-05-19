@@ -61,107 +61,24 @@
 </div>
 {% endif %}
 
-<div class="page-list content-main {% if req.body.pageForm %}on-edit{% endif %}"
-  id="content-main"
+<div id="content-main"
+  class="page-list content-main {% if req.body.pageForm %}on-edit{% endif %}"
   data-path="{{ path }}"
   data-path-shortname="{{ path|path2name }}"
-  data-page-portal="{% if page and page.isPortal() %}1{% else %}0{% endif %}"
   data-page-id="{% if page %}{{ page._id.toString() }}{% endif %}"
   data-current-user="{% if user %}{{ user._id.toString() }}{% endif %}"
   data-current-username="{% if user %}{{ user.username }}{% endif %}"
   data-page-revision-id="{% if revision %}{{ revision._id.toString() }}{% endif %}"
   data-page-revision-created="{% if revision %}{{ revision.createdAt|datetz('U') }}{% endif %}"
   data-page-is-seen="{% if page and page.isSeenUser(user) %}1{% else %}0{% endif %}"
+  data-page-portal="{% if page and page.isPortal() %}1{% else %}0{% endif %}"
   data-csrftoken="{{ csrf() }}"
   >
 
-<div class="portal {% if not page or req.query.offset > 0 %}hide{% endif %}">
-
-  <ul class="nav nav-tabs hidden-print">
-   {# portal tab #}
-    <li class=" {% if not req.body.pageForm %}active{% endif %}">
-      {% if page %}
-      <a href="#revision-body" data-toggle="tab">
-        <i class="fa fa-magic"></i>
-        PORTAL
-      </a>
-      {% else %}
-      <a>Create Portal: {{ path }}</a>
-      {% endif %}
-    </li>
-    <li {% if req.body.pageForm %}class="active"{% endif %}><a href="#edit-form" data-toggle="tab"><i class="fa fa-pencil-square-o"></i> {{ t('Edit') }}</a></li>
-
-    {% if not page %}
-    <li class="pull-right close-button">
-      <a href="#" id="portal-form-close">
-        <i class="fa fa-times"></i>
-      </a>
-    </li>
-    {% else %}
-    <li class="dropdown pull-right">
-      <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-        <i class="fa fa-wrench"></i> <span class="caret"></span>
-      </a>
-      <ul class="dropdown-menu">
-        <li><a href="#" data-target="#unportalize" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Unportalize') }}</a></li>
-      </ul>
-    </li>
-    <li class="pull-right"><a href="#revision-history" data-toggle="tab"><i class="fa fa-history"></i> History</a></li>
-    {% endif %}
-  </ul>
-
-  <div class="tab-content">
-  {% if page and not page.isLatestRevision() %}
-  <div class="alert alert-warning">
-    <strong>{{ t('Warning') }}: </strong> {{ t('page.notice.version') }} <i class="fa fa-magic"></i> <a href="{{ page.path }}">最新のポータルを表示</a>
-  </div>
-  {% endif %}
-    <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
-      <div class="wiki" id="revision-body-content">
-        <i class="fa fa-spinner fa-pulse fa-fw"></i>
-      </div>
-    </div>
-
-    <script type="text/template" id="raw-text-original">{{ page.revision.body }}</script>
-
-    <div class="tab-pane edit-form portal-form {% if req.body.pageForm %}active{% endif %}" id="edit-form">
-      {% include '_form.html' with {forceGrant: 1} %}
-    </div>
-
-    <div class="tab-pane revision-history" id="revision-history">
-      <h1><i class="fa fa-history"></i> History</h1>
-      {% if not page %}
-      {% else %}
-      <div class="revision-history-list">
-        {% for tr in tree %}
-        <div class="revision-hisory-outer">
-          <img src="{{ tr.author|picture }}" class="picture picture-rounded">
-          <div class="revision-history-main">
-            <div class="revision-history-author">
-              <strong>{% if tr.author %}{{ tr.author.username }}{% else %}-{% endif %}</strong>
-            </div>
-            <div class="revision-history-comment">
-            </div>
-            <div class="revision-history-meta">
-              {{ tr.createdAt|datetz('Y-m-d H:i:s') }}
-              <br>
-              <a href="?revision={{ tr._id.toString() }}"><i class="fa fa-history"></i> {{ t('View this version') }}</a>
-              <a class="diff-view" data-revision-id="{{ tr._id.toString() }}">
-                <i id="diff-icon-{{ tr._id.toString() }}" class="fa fa-arrow-circle-right"></i> {{ t('View diff') }}
-              </a>
-              <div class="" id="diff-display-{{ tr._id.toString()}}" style="display: none"></div>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-    </div>
-  </div>
-
-</div> {# /.portal #}
+  {% include 'widget/page_content.html' %}
 
 <div class="page-list-container">
+
   <ul class="nav nav-tabs">
       <li class="active"><a href="#view-list" data-toggle="tab">{{ t('List View') }}</a></li>
       <li><a href="#view-timeline" data-toggle="tab">{{ t('Timeline View') }}</a></li>

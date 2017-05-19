@@ -1,0 +1,36 @@
+<div class="page-content {% if not page or req.query.offset > 0 %}hide{% endif %}">
+
+  {% include 'page_content_alerts.html' %}
+  {% include 'page_content_tabs.html' %}
+
+  <div class="tab-content wiki-content">
+
+    <script type="text/template" id="raw-text-original">{{ page.revision.body }}</script>
+
+    {# formatted text #}
+    <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
+      <div class="revision-toc" id="revision-toc">
+        <a data-toggle="collapse" data-parent="#revision-toc" href="#revision-toc-content" class="revision-toc-head collapsed">{{ t('Table of Contents') }}</a>
+
+      </div>
+      <div class="wiki" id="revision-body-content">
+      </div>
+    </div>
+
+    {# edit form #}
+    {% if not page.isDeleted() %}
+    <div class="edit-form tab-pane {% if req.body.pageForm %}active{% endif %}" id="edit-form">
+      {% include '../_form.html' %}
+    </div>
+    {% endif %}
+
+    {# raw revision history #}
+    {% if not page %}
+    {% else %}
+    <div class="tab-pane revision-history" id="revision-history">
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
