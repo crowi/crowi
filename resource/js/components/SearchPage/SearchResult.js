@@ -61,6 +61,7 @@ export default class SearchResult extends React.Component {
           excludePathString={excludePathString}
           >
           <div className="page-list-option">
+            <span>{page._score}</span>
             <a href={page.path}><i className="fa fa-arrow-circle-right" /></a>
           </div>
         </Page>
