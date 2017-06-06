@@ -11,22 +11,22 @@
 
         <div class="modal-header">
           <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-          <h4 class="modal-title">ポータル化を解除する</h4>
+          <h4 class="modal-title">{{ t('Unportalize page') }}</h4>
         </div>
         <div class="modal-body">
           <ul>
-           <li>このポータル化を解除し、通常のページに戻します。</li>
+            <li>{{ t('Unportalize and make it normal page.') }}</li>
           </ul>
             <div class="form-group">
               <p>
-                <label for="">このページ</label><br><code>{{ page.path }}</code>
+              <label for="">{{ t('This page') }}</label><br><code>{{ page.path }}</code>
               </p>
               <p>
-                <label for="">解除後のページ</label><br><code>{{ unportalizedPath }}</code>
+                <label for="">{{ t('Unportalized page') }}</label><br><code>{{ unportalizedPath }}</code>
               </p>
               {% if isTopPage() %}
               <p class="alert alert-info">
-              このポータルはトップページのポータルのため、特別なページに移動します。
+              {{ t('This page will moved to the special page because this is the top page.') }}
               </p>
               {% endif %}
             </div>
