@@ -12,7 +12,7 @@ module.exports = function(crowi) {
     return hasher.digest('hex');
   }
 
-  attachmentSchema = new mongoose.Schema({
+  const attachmentSchema = new mongoose.Schema({
     page: { type: ObjectId, ref: 'Page', index: true },
     creator: { type: ObjectId, ref: 'User', index: true  },
     filePath: { type: String, required: true },
@@ -133,7 +133,7 @@ module.exports = function(crowi) {
     return new Promise((resolve, reject) => {
       Attachment.getListByPageId(pageId)
       .then((attachments) => {
-        for (attachment of attachments) {
+        for (const attachment of attachments) {
           Attachment.removeAttachment(attachment).then((res) => {
             // do nothing
           }).catch((err) => {

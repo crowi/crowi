@@ -9,8 +9,8 @@ module.exports = function(crowi, app) {
     , fs = require('fs')
     , fileUploader = require('../util/fileUploader')(crowi, app)
     , ApiResponse = require('../util/apiResponse')
-    , actions = {}
-    , api = {};
+    , actions = {} as any
+    , api = {} as any;
 
   actions.api = api;
 
@@ -89,7 +89,7 @@ module.exports = function(crowi, app) {
     var id = req.body.page_id || 0,
       path = decodeURIComponent(req.body.path) || null,
       pageCreated = false,
-      page = {};
+      page = {} as any;
 
     debug('id and path are: ', id, path);
 
@@ -114,7 +114,7 @@ module.exports = function(crowi, app) {
       } else {
         Page.findPageById(id).then(resolve).catch(reject);
       }
-    }).then(function(pageData) {
+    }).then(function(pageData: any) {
       page = pageData;
       id = pageData._id;
 

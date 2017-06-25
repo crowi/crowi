@@ -95,7 +95,7 @@ module.exports = function(crowi) {
   }
 
   function getLanguageLabels() {
-    var lang = {};
+    var lang = {} as any;
     lang.LANG_EN    = LANG_EN;
     lang.LANG_EN_US = LANG_EN_US;
     lang.LANG_EN_GB = LANG_EN_GB;
@@ -668,6 +668,7 @@ module.exports = function(crowi) {
 
   userSchema.statics.getUsernameByPath = function(path) {
     var username = null;
+    var m;
     if (m = path.match(/^\/user\/([^\/]+)\/?/)) {
       username = m[1];
     }

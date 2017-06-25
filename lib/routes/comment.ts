@@ -6,8 +6,8 @@ module.exports = function(crowi, app) {
     , User = crowi.model('User')
     , Page = crowi.model('Page')
     , ApiResponse = require('../util/apiResponse')
-    , actions = {}
-    , api = {};
+    , actions = {} as any
+    , api = {} as any;
 
   actions.api = api;
 

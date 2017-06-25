@@ -9,8 +9,8 @@ module.exports = function(crowi, app) {
     , User = models.User
     , Revision = models.Revision
     //, pluginService = require('../service/plugin')
-    , actions = {}
-    , api = {}
+    , actions = {} as any
+    , api = {} as any
     ;
 
   actions.api = api;

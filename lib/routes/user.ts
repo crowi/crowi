@@ -6,8 +6,8 @@ module.exports = function(crowi, app) {
     , Revision = crowi.model('Revision')
     , Bookmark = crowi.model('Bookmark')
     , ApiResponse = require('../util/apiResponse')
-    , actions = {}
-    , api = {};
+    , actions = {} as any
+    , api = {} as any;
 
   actions.api = api;
 

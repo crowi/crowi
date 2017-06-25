@@ -7,7 +7,7 @@ module.exports = function(config) {
 
   var google = require('googleapis')
     , debug = require('debug')('crowi:lib:googleAuth')
-    , lib = {}
+    , lib = {} as any
     ;
 
   function createOauth2Client(url) {

@@ -8,9 +8,9 @@ module.exports = function(crowi, app) {
     , Revision = crowi.model('Revision')
     , Bookmark = crowi.model('Bookmark')
     , ApiResponse = require('../util/apiResponse')
-    , actions = {}
+    , actions = {} as any
   ;
-  actions.api = {};
+  actions.api = {} as any;
 
   /**
    * @api {get} /bookmarks.get Get bookmark of the page with the user
@@ -25,7 +25,7 @@ module.exports = function(crowi, app) {
     Bookmark.findByPageIdAndUserId(pageId, req.user)
     .then(function(data) {
       debug('bookmark found', pageId, data);
-      var result = {};
+      var result = {} as any;
       if (data) {
       }
 
@@ -54,7 +54,7 @@ module.exports = function(crowi, app) {
         return res.json(ApiResponse.success({bookmark: null}));
       }
     }).then(function(data) {
-      var result = {};
+      var result = {} as any;
       data.depopulate('page');
       data.depopulate('user');
 

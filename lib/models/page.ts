@@ -565,7 +565,7 @@ module.exports = function(crowi) {
         {status: null},
         {status: STATUS_PUBLISHED},
       ],
-    };
+    } as any;
 
     if (!user.equals(currentUser._id)) {
       conditions.grant = GRANT_PUBLIC;
@@ -592,7 +592,7 @@ module.exports = function(crowi) {
     var Page = this
       , options = options || {}
       , publicOnly = options.publicOnly || true
-      , criteria = {redirectTo: null,}
+      , criteria = {redirectTo: null,} as any
       ;
 
     if (publicOnly) {
@@ -949,7 +949,7 @@ module.exports = function(crowi) {
   pageSchema.statics.removePageByPath = function(pagePath) {
     var Page = this;
 
-    return Page.findPageByPath(redirectPath)
+    return Page.findPageByPath(pagePath)
       .then(function(pageData) {
         return Page.removePageById(pageData.id);
       });

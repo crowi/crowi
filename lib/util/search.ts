@@ -61,6 +61,7 @@ SearchClient.prototype.shouldIndexed = function(page) {
 SearchClient.prototype.parseUri = function(uri) {
   var index_name = 'crowi';
   var host = uri;
+  var m;
   if (m = uri.match(/^(https?:\/\/[^\/]+)\/(.+)$/)) {
     host = m[1];
     index_name = m[2];
