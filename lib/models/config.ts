@@ -146,7 +146,7 @@ module.exports = function(crowi) {
   configSchema.statics.loadAllConfig = function(callback)
   {
     var Config = this
-      , config = {};
+      , config = {} as any;
     config.crowi = {}; // crowi namespace
 
     Config.find()

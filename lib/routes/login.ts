@@ -10,7 +10,7 @@ module.exports = function(crowi, app) {
     , User = crowi.model('User')
     , Config = crowi.model('Config')
     , Revision = crowi.model('Revision')
-    , actions = {};
+    , actions = {} as any;
 
 
   var clearGoogleSession = function(req) {

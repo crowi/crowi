@@ -10,7 +10,7 @@ module.exports = function(crowi, app) {
 
     , sprintf = require('sprintf')
 
-    , actions = {};
+    , actions = {} as any;
 
   // register page events
 
@@ -75,7 +75,7 @@ module.exports = function(crowi, app) {
     var pagerOptions = {
       offset: offset,
       limit : limit
-    };
+    } as any;
     var queryOptions = {
       offset: offset,
       limit : limit + 1
@@ -86,7 +86,7 @@ module.exports = function(crowi, app) {
       path: path,
       pages: [],
       tree: [],
-    };
+    } as any;
 
     Page.hasPortalPage(path, req.user, req.query.revision)
     .then(function(portalPage) {
@@ -129,7 +129,7 @@ module.exports = function(crowi, app) {
     var pagerOptions = {
       offset: offset,
       limit : limit
-    };
+    } as any;
     var queryOptions = {
       offset: offset,
       limit : limit + 1,
@@ -140,7 +140,7 @@ module.exports = function(crowi, app) {
       page: null,
       path: path,
       pages: [],
-    };
+    } as any;
 
     Page.findListByStartWith(path, req.user, queryOptions)
     .then(function(pageList) {
@@ -207,7 +207,7 @@ module.exports = function(crowi, app) {
       page: pageData,
       revision: pageData.revision || {},
       author: pageData.revision.author || false,
-    };
+    } as any;
     var userPage = isUserPage(pageData.path);
     var userData = null;
 
@@ -258,7 +258,7 @@ module.exports = function(crowi, app) {
 
   actions.pageShow = function(req, res) {
     var path = path || getPathFromRequest(req);
-    var options = {};
+    var options = {} as any;
 
     // FIXME: せっかく getPathFromRequest になってるのにここが生 params[0] だとダサイ
     var isMarkdown = req.params[0].match(/.+\.md$/) || false;
@@ -334,7 +334,7 @@ module.exports = function(crowi, app) {
     debug('notify: ', notify);
 
     var redirectPath = encodeURI(path);
-    var pageData = {};
+    var pageData = {} as any;
     var updateOrCreate;
     var previousRevision = false;
 
@@ -409,9 +409,9 @@ module.exports = function(crowi, app) {
     var offset = parseInt(req.query.offset)  || 0;
 
     var user;
-    var renderVars = {};
+    var renderVars = {} as any;
 
-    var pagerOptions = { offset: offset, limit : limit };
+    var pagerOptions = { offset: offset, limit : limit } as any;
     var queryOptions = { offset: offset, limit : limit + 1, populatePage: true, requestUser: req.user};
 
     User.findUserByUsername(username)
@@ -446,9 +446,9 @@ module.exports = function(crowi, app) {
     var offset = parseInt(req.query.offset) || 0;
 
     var user;
-    var renderVars = {};
+    var renderVars = {} as any;
 
-    var pagerOptions = { offset: offset, limit : limit };
+    var pagerOptions = { offset: offset, limit : limit } as any;
     var queryOptions = { offset: offset, limit : limit + 1};
 
 
@@ -477,7 +477,7 @@ module.exports = function(crowi, app) {
     });
   };
 
-  var api = actions.api = {};
+  var api = actions.api = {} as any;
 
   /**
    * redirector
@@ -515,7 +515,7 @@ module.exports = function(crowi, app) {
     var limit = 50;
     var offset = parseInt(req.query.offset) || 0;
 
-    var pagerOptions = { offset: offset, limit : limit };
+    var pagerOptions = { offset: offset, limit : limit } as any;
     var queryOptions = { offset: offset, limit : limit + 1};
 
     // Accepts only one of these
@@ -546,7 +546,7 @@ module.exports = function(crowi, app) {
       }
       pagerOptions.length = pages.length;
 
-      var result = {};
+      var result = {} as any;
       result.pages = pages;
       return res.json(ApiResponse.success(result));
     }).catch(function(err) {
@@ -658,7 +658,7 @@ module.exports = function(crowi, app) {
 
     Page.findPage(pagePath, req.user, revisionId)
     .then(function(pageData) {
-      var result = {};
+      var result = {} as any;
       result.page = pageData;
 
       return res.json(ApiResponse.success(result));
@@ -684,7 +684,7 @@ module.exports = function(crowi, app) {
     .then(function(page) {
       return page.seen(req.user);
     }).then(function(user) {
-      var result = {};
+      var result = {} as any;
       result.seenUser = user;
 
       return res.json(ApiResponse.success(result));
@@ -798,7 +798,7 @@ module.exports = function(crowi, app) {
       return Page.deletePage(pageData, req.user);
     }).then(function(data) {
       debug('Page deleted', data.path);
-      var result = {};
+      var result = {} as any;
       result.page = data;
 
       return res.json(ApiResponse.success(result));
@@ -825,7 +825,7 @@ module.exports = function(crowi, app) {
       return Page.revertDeletedPage(pageData, req.user);
     }).then(function(data) {
       debug('Complete to revert deleted page', data.path);
-      var result = {};
+      var result = {} as any;
       result.page = data;
 
       return res.json(ApiResponse.success(result));
@@ -854,7 +854,7 @@ module.exports = function(crowi, app) {
       createRedirectPage: req.body.create_redirect || 0,
       moveUnderTrees: req.body.move_trees || 0,
     };
-    var page = {};
+    var page = {} as any;
 
     if (!Page.isCreatableName(newPagePath)) {
       return res.json(ApiResponse.error(sprintf('このページ名は作成できません (%s)', newPagePath)));
@@ -875,7 +875,7 @@ module.exports = function(crowi, app) {
 
         return Page.rename(pageData, newPagePath, req.user, options);
       }).then(function() {
-        var result = {};
+        var result = {} as any;
         result.page = page;
 
         return res.json(ApiResponse.success(result));
@@ -904,7 +904,7 @@ module.exports = function(crowi, app) {
         .then(() => pageData);
     }).then(function(data) {
       debug('Redirect Page deleted', data.path);
-      var result = {};
+      var result = {} as any;
       result.page = data;
 
       return res.json(ApiResponse.success(result));

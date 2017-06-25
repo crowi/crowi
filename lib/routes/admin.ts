@@ -9,7 +9,7 @@ module.exports = function(crowi, app) {
     , ApiResponse = require('../util/apiResponse')
 
     , MAX_PAGE_LIST = 5
-    , actions = {};
+    , actions = {} as any;
 
   function createPager(total, limit, page, pagesCount, maxPageList) {
     const pager = {
@@ -69,7 +69,7 @@ module.exports = function(crowi, app) {
     return res.render('admin/index');
   };
 
-  actions.app = {};
+  actions.app = {} as any;
   actions.app.index = function(req, res) {
     var settingForm;
     settingForm = Config.setupCofigFormData('crowi', req.config);
@@ -83,7 +83,7 @@ module.exports = function(crowi, app) {
   };
 
   // app.get('/admin/notification'               , admin.notification.index);
-  actions.notification = {};
+  actions.notification = {} as any;
   actions.notification.index = function(req, res) {
     var config = crowi.getConfig();
     var UpdatePost = crowi.model('UpdatePost');
@@ -169,7 +169,7 @@ module.exports = function(crowi, app) {
     });
   };
 
-  actions.search = {};
+  actions.search = {} as any;
   actions.search.index = function(req, res) {
     var search = crowi.getSearcher();
     if (!search) {
@@ -221,7 +221,7 @@ module.exports = function(crowi, app) {
     });
   };
 
-  actions.user = {};
+  actions.user = {} as any;
   actions.user.index = function(req, res) {
     var page = parseInt(req.query.page) || 1;
 
@@ -350,7 +350,7 @@ module.exports = function(crowi, app) {
     });
   }
 
-  actions.api = {};
+  actions.api = {} as any;
   actions.api.appSetting = function(req, res) {
     var form = req.form.settingForm;
 
@@ -442,7 +442,7 @@ module.exports = function(crowi, app) {
     var option = {
       host: form['mail:smtpHost'],
       port: form['mail:smtpPort'],
-    };
+    } as any;
     if (form['mail:smtpUser'] && form['mail:smtpPassword']) {
       option.auth = {
         user: form['mail:smtpUser'],

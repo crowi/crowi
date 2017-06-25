@@ -1,0 +1,33 @@
+{
+    "compilerOptions": {
+        "plugins": [
+            {
+                "name": "tslint-language-service",
+                "alwaysShowRuleFailuresAsWarnings": true
+            }
+        ],
+        "allowJs": true,
+        "checkJs": true,
+        "forceConsistentCasingInFileNames": true,
+        "jsx": "react",
+        "lib": [
+            "es2017"
+        ],
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "noEmitOnError": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitAny": false,
+        "noImplicitThis": false, // should be true in a future
+        "noImplicitReturns": true,
+        "noUnusedParameters": false,
+        "noUnusedLocals": false,
+        "strictNullChecks": false,
+        "alwaysStrict": true,
+        "outDir": ".build",
+        "pretty": true,
+        "sourceMap": true,
+        "target": "es5",
+        "traceResolution": false // true for debugging
+    }
+}

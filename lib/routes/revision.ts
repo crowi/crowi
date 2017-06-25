@@ -5,9 +5,9 @@ module.exports = function(crowi, app) {
     , Page = crowi.model('Page')
     , Revision = crowi.model('Revision')
     , ApiResponse = require('../util/apiResponse')
-    , actions = {}
+    , actions = {} as any
   ;
-  actions.api = {};
+  actions.api = {} as any;
 
   /**
    * @api {get} /revisions.get Get revision

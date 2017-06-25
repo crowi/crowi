@@ -9,13 +9,13 @@ module.exports = function(crowi) {
     , nodemailer = require('nodemailer')
     , swig = require('swig')
     , config = crowi.getConfig()
-    , mailConfig = {}
-    , mailer = {}
+    , mailConfig = {} as any
+    , mailer = {} as any
     , MAIL_TEMPLATE_DIR = crowi.mailDir
     ;
 
 
-  function createSMTPClient(option)
+  function createSMTPClient(option?)
   {
     var client;
 
@@ -44,7 +44,7 @@ module.exports = function(crowi) {
     return client;
   }
 
-  function createSESClient(option)
+  function createSESClient(option?)
   {
     var client;
 
@@ -88,7 +88,7 @@ module.exports = function(crowi) {
 
   function setupMailConfig (overrideConfig) {
     var c = overrideConfig
-      , mc = {}
+      , mc = {} as any
       ;
     mc = mailConfig;
 

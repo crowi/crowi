@@ -10,7 +10,7 @@ module.exports = function(crowi) {
     Botkit = require('botkit'),
     sprintf = require('sprintf'),
     bot = null,
-    slack = {};
+    slack = {} as any;
   slack.controller = undefined;
 
   slack.createBot = function() {

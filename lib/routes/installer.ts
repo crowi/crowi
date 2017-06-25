@@ -6,7 +6,7 @@ module.exports = function(crowi, app) {
     , Config = models.Config
     , User = models.User
 
-    , actions = {};
+    , actions = {} as any;
 
   actions.index = function(req, res) {
     return res.render('installer');

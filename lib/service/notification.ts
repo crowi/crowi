@@ -11,7 +11,7 @@ Notification.prototype.hasSlackConfig = function()
   if (!this.config.notification['slack']) {
     return false;
   }
-
+  return undefined; // FIXME
   //var config = ;
 };
 

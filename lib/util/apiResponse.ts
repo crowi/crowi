@@ -1,10 +1,9 @@
 'use strict';
 
-function ApiResponse () {
-};
+const ApiResponse = {} as any;
 
 ApiResponse.error = function (err) {
-  var result = {};
+  var result = {} as any;
 
   result = {
     ok: false

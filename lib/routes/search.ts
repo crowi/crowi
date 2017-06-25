@@ -8,8 +8,8 @@ module.exports = function(crowi, app) {
 
     , sprintf = require('sprintf')
 
-    , actions = {};
-  var api = actions.api = {};
+    , actions = {} as any;
+  var api = actions.api = {} as any;
 
   actions.searchPage = function(req, res) {
     var keyword = req.query.q || null;
@@ -50,7 +50,7 @@ module.exports = function(crowi, app) {
     } else {
       doSearch = search.searchKeyword(keyword, {});
     }
-    var result = {};
+    var result = {} as any;
     doSearch
       .then(function(data) {
         result.meta = data.meta;
