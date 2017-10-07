@@ -7,14 +7,14 @@ var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.en
   , crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
   ;
 
-mongoose.Promise = global.Promise;
+mongoose.Promise = Promise;
 
 before('Create database connection and clean up', function (done) {
   if (!mongoUri) {
     return done();
   }
 
-  mongoose.connect(mongoUri);
+  mongoose.connect(mongoUri, { useMongoClient: true });
 
   function clearDB() {
     for (var i in mongoose.connection.collections) {
@@ -24,7 +24,7 @@ before('Create database connection and clean up', function (done) {
   }
 
   if (mongoose.connection.readyState === 0) {
-    mongoose.connect(mongoUri, function (err) {
+    mongoose.connect(mongoUri, { useMongoClient: true }, function (err) {
       if (err) {
         throw err;
       }
