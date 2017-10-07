@@ -1,4 +1,4 @@
-import marked from 'marked';
+import showdown from 'showdown';
 import hljs from 'highlight.js';
 
 import MarkdownFixer from './PreProcessor/MarkdownFixer';
@@ -96,35 +96,12 @@ export default class CrowiRenderer {
   parseMarkdown(markdown, dom) {
     let parsed = '';
 
-    const markedRenderer = new marked.Renderer();
-    markedRenderer.code = this.codeRenderer;
+    // https://github.com/showdownjs/showdown#valid-options
+    const converter = new showdown.Converter();
+    showdown.setFlavor('github');
 
     try {
-      // TODO
-      marked.setOptions({
-        gfm: true,
-        tables: true,
-        breaks: true,
-        pedantic: false,
-        sanitize: false,
-        smartLists: true,
-        smartypants: false,
-        renderer: markedRenderer,
-      });
-
-      // override
-      marked.Lexer.lex = function(src, options) {
-        var lexer = new marked.Lexer(options);
-
-        // this is maybe not an official way
-        if (lexer.rules) {
-          lexer.rules.fences = /^ *(`{3,}|~{3,})[ \.]*([^\r\n]+)? *\n([\s\S]*?)\s*\1 *(?:\n+|$)/;
-        }
-
-        return lexer.lex(src);
-      };
-
-      parsed = marked(markdown);
+      parsed = converter.makeHtml(markdown);
     } catch (e) { console.log(e, e.stack); }
 
     return parsed;
