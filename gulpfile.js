@@ -26,10 +26,6 @@ var dirs = {
   jsDist: './public/js',
 };
 
-var tests = {
-  watch: ['test/**/*.test.js'],
-}
-
 var css = {
   src: dirs.cssSrc + '/' + pkg.name + '.scss',
   main: dirs.cssDist + '/crowi-main.css',
@@ -40,23 +36,6 @@ var css = {
 };
 
 var js = {
-  bundledSrc: [
-    'node_modules/jquery/dist/jquery.js',
-    'node_modules/bootstrap-sass/assets/javascripts/bootstrap.js',
-    'node_modules/inline-attachment/src/inline-attachment.js',
-    'node_modules/jquery.cookie/jquery.cookie.js',
-    'resource/thirdparty-js/jquery.selection.js',
-  ],
-  src:          dirs.jsSrc  + '/app.js',
-
-  bundled:      dirs.jsDist + '/bundled.js',
-  dist:         dirs.jsDist + '/crowi.js',
-  app:          dirs.jsDist + '/app.js',
-  admin:        dirs.jsDist + '/admin.js',
-  form:         dirs.jsDist + '/form.js',
-  presentation: dirs.jsDist + '/presentation.js',
-
-  clientWatch: ['resource/js/**/*.js'],
   watch: ['test/**/*.test.js', 'app.js', 'lib/**/*.js'],
   lint: ['app.js', 'lib/**/*.js'],
   tests: tests.watch,
@@ -68,49 +47,6 @@ var cssIncludePaths = [
   'node_modules/reveal.js/css'
 ];
 
-gulp.task('js:del', function() {
-  var fileList = [];
-
-  var actualFiles = fs.readdirSync(dirs.jsDist);
-  fileList = actualFiles.map(function(fn){
-    if (!fn.match(/.js(on)?$/)) {
-      return false
-    }
-    return dirs.jsDist + '/' + fn;
-  }).filter(function(v) { return v; });
-
-  return del(fileList);
-});
-
-gulp.task('js:concat', ['js:del'], function() {
-  return gulp.src(js.bundledSrc)
-    .pipe(concat('bundled.js')) // jQuery
-    .pipe(gulp.dest(dirs.jsDist));
-});
-
-// move task for css and js to webpack over time.
-gulp.task('webpack', ['js:concat'], function() {
-  return gulp.src(js.src)
-    .pipe(webpackStream(
-      require('./webpack.config.js'),
-      webpack))   // pass webpack2 to webpack-stream
-    .pipe(gulp.dest(dirs.jsDist));
-});
-
-gulp.task('jshint', function() {
-  return gulp.src(js.lint)
-    .pipe(jshint())
-    .pipe(jshint.reporter(stylish));
-});
-
-gulp.task('test', function() {
-  return gulp.src(js.tests)
-    .pipe(mocha({
-      r: 'test/bootstrap.js',
-      globals: ['chai'],
-      R: 'dot',
-    }));
-});
 
 gulp.task('css:sass', function() {
   gulp.src(css.revealSrc) // reveal
@@ -162,8 +98,6 @@ gulp.task('watch', function() {
   cssWatcher.on('change', watchLogger);
   var jsWatcher = gulp.watch(js.clientWatch, ['webpack']);
   jsWatcher.on('change', watchLogger);
-  var testWatcher = gulp.watch(js.watch, ['test']);
-  testWatcher.on('change', watchLogger);
 });
 
 gulp.task('css', ['css:sass', 'css:concat',]);
