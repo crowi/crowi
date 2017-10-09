@@ -4,8 +4,8 @@
 
 import $ from 'jquery';
 
-import  'bootstrap-sass';
-import  'jquery.cookie';
+import 'bootstrap-sass';
+import 'jquery.cookie';
 //require('bootstrap-sass');
 //require('jquery.cookie');
 
@@ -42,15 +42,15 @@ Crowi.linkPath = function(revisionPath) {
   splittedPath.shift();
   splittedPath.forEach(function(sub) {
     path += '/';
-    pathHtml += ' <a href="' + crowi.escape(path) + '">/</a> ';
+    pathHtml += ' <a href="' + Crowi.escape(path) + '">/</a> ';
     if (sub) {
       path += sub;
-      pathHtml += '<a href="' + crowi.escape(path) + '">' + crowi.escape(sub) + '</a>';
+      pathHtml += '<a href="' + Crowi.escape(path) + '">' + Crowi.escape(sub) + '</a>';
     }
   });
   if (path.substr(-1, 1) != '/') {
     path += '/';
-    pathHtml += ' <a href="' + crowi.escape(path) + '" class="last-path">/</a>';
+    pathHtml += ' <a href="' + Crowi.escape(path) + '" class="last-path">/</a>';
   }
   $title.html(pathHtml);
 };
@@ -111,6 +111,27 @@ Crowi.revisionToc = function(contentId, tocId) {
       });
     });
   });
+};
+
+
+Crowi.escape = function(s) {
+  s = s.replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/'/g, '&#39;')
+    .replace(/"/g, '&quot;')
+    ;
+  return s;
+};
+Crowi.unescape = function(s) {
+  s = s.replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, '\'')
+    .replace(/&quot;/g, '"')
+    ;
+  return s;
 };
 
 // original: middleware.swigFilter
@@ -361,8 +382,8 @@ $(function() {
     var escape = function(s) {
       return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     };
-    path = crowi.escape(path);
-    var pattern = escape(crowi.escape(shortPath)) + '(/)?$';
+    path = Crowi.escape(path);
+    var pattern = escape(Crowi.escape(shortPath)) + '(/)?$';
 
     $link.html(path.replace(new RegExp(pattern), '<strong>' + shortPath + '$1</strong>'));
   });
@@ -379,7 +400,7 @@ $(function() {
         var $revisionBody = $(revisionBody);
         var revisionPath = '#' + id + ' .revision-path';
 
-        var markdown = crowi.unescape($(contentId).html());
+        var markdown = Crowi.unescape($(contentId).html());
         var parsedHTML = crowiRenderer.render(markdown, $revisionBody.get(0));
         $revisionBody.html(parsedHTML);
 
@@ -425,7 +446,7 @@ $(function() {
     // if page exists
     var $rawTextOriginal = $('#raw-text-original');
     if ($rawTextOriginal.length > 0) {
-      var markdown = crowi.unescape($('#raw-text-original').html());
+      var markdown = Crowi.unescape($('#raw-text-original').html());
       var revisionBody = $('#revision-body-content');
       var parsedHTML = crowiRenderer.render(markdown, revisionBody.get(0));
       revisionBody.html(parsedHTML);
