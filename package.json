@@ -120,11 +120,11 @@
     "jshint": "jshint lib/**/*.js resource/js/**/*.js",
     "test": "mocha -r test/bootstrap.js --globals chai --reporter dot test/**/*.test.js",
     "build": "npm run build:prod",
-    "build:dev:watch": "npm run webpack -- --watch",
-    "build:dev": "webpack --progress --profile",
-    "build:prod": "webpack --progress --profile --bail",
+    "build:dev":  "npm run webpack -- --progress --profile",
+    "build:prod": "npm run webpack -- --profile --bail",
     "webpack": "webpack",
-    "postinstall": "build:prod"
+    "watch": "npm run webpack -- --progress --profile --watch",
+    "postinstall": "npm run build:prod"
   },
   "env": {
     "NODE_ENV": "production"
