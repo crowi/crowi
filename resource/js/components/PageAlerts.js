@@ -18,17 +18,19 @@ export default class PageAlers extends React.Component {
     const socket = this.props.crowi.getWebSocket();
 
     socket.on('page edited', (data) => {
+      const user = data.user;
+      const crowi = this.props.crowi;
       console.log('page edited', data);
-      this.setState({
-        alertAppeared: true,
-        message: 'edit',
-        data: data,
-      });
-      //if (data.user._id != me
-      //  && data.page.path == pagePath) {
-      //  $('#notifPageEdited').show();
-      //  $('#notifPageEdited .edited-user').html(data.user.name);
-      //}
+      console.log('page edited', crowi.me);
+
+      if (user.username != crowi.me
+        && this.props.pageId == data.page._id) {
+        this.setState({
+          alertAppeared: true,
+          message: 'edit',
+          data: data,
+        });
+      }
     });
   }
 
