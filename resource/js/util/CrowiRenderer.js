@@ -1,3 +1,5 @@
+import Crowi from './Crowi';
+
 import marked from 'marked';
 import hljs from 'highlight.js';
 
@@ -79,7 +81,7 @@ export default class CrowiRenderer {
         result = code;
       }
 
-      result = (escape ? result : this.crowi.escape(result, true));
+      result = (escape ? result : Crowi.escape(result, true));
 
       let citeTag = '';
       if (langFn) {
@@ -89,7 +91,7 @@ export default class CrowiRenderer {
     }
 
     // no lang specified
-    return `<pre class="wiki-code"><code>${this.crowi.escape(code, true)}\n</code></pre>`;
+    return `<pre class="wiki-code"><code>${Crowi.escape(code, true)}\n</code></pre>`;
 
   }
 
