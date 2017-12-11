@@ -20,8 +20,6 @@ export default class PageAlers extends React.Component {
     socket.on('page edited', (data) => {
       const user = data.user;
       const crowi = this.props.crowi;
-      console.log('page edited', data);
-      console.log('page edited', crowi.me);
 
       if (user.username != crowi.me
         && this.props.pageId == data.page._id) {
