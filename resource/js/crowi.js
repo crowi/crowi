@@ -441,6 +441,21 @@ $(function() {
     });
   });
 
+  // omg /login/invited
+  $('#invited-form input[name="invitedForm[username]"]').change(function(e) {
+    var username = $(this).val();
+    $('#input-group-username').removeClass('has-error');
+    $('#help-block-username').html("");
+
+    $.getJSON('/_api/check_username', {username: username}, function(json) {
+      if (!json.valid) {
+        $('#help-block-username').html('<i class="fa fa-warning"></i> This User ID is not available.<br>');
+        $('#input-group-username').addClass('has-error');
+      }
+    });
+  });
+
+
   if (pageId) {
 
     // if page exists
