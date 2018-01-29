@@ -108,11 +108,13 @@
   },
   "devDependencies": {
     "chai": "~4.1.0",
+    "concurrently": "^3.5.1",
     "jshint": "~2.9.5",
     "mocha": "~3.4.2",
     "proxyquire": "~1.8.0",
     "sinon": "~2.3.8",
-    "sinon-chai": "~2.12.0"
+    "sinon-chai": "~2.12.0",
+    "supervisor": "^0.12.0"
   },
   "license": "MIT",
   "scripts": {
@@ -122,8 +124,10 @@
     "build": "npm run build:prod",
     "build:dev": "npm run webpack -- --progress --profile",
     "build:prod": "npm run webpack -- --profile --bail",
+    "dev": "concurrently --kill-others \"npm run dev:server\" \"npm run watch\"",
+    "dev:server": "DEBUG=crowi:* NODE_ENV=development supervisor -w 'lib/' -e 'js' -- app.js",
     "webpack": "webpack",
-    "watch": "npm run webpack -- --progress --profile --watch",
+    "watch": "npm run build:dev -- --watch",
     "postinstall": "npm run build:prod"
   },
   "env": {
