@@ -1,6 +1,10 @@
-{% extends '2column.html' %}
+{% extends 'single.html' %}
 
-{% block footer %}
-  <script src="{{ assets('/js/admin.js') }}"></script>
-{% endblock footer %}
+{% block html_additional_headers %}
+  {% parent %}
+  <script src="{{ webpack_asset('legacy-admin').js }}" defer></script>
+{% endblock %}
 
+{# disable custom script in admin page #}
+{% block custom_script %}
+{% endblock %}

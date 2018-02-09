@@ -1,5 +1,4 @@
 .crowi { // {{{
-  font-family: 'Open Sans', 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
   h1, h2, h3, h4, h5, h6 {
     font-weight: 500;
   }
@@ -70,10 +69,11 @@
 
       .header-wrap {
         padding: 16px 16px 0 16px;
+        min-height: 70px;
       }
 
       .content-main {
-        padding: 16px;
+        padding: 8px 16px;
       }
     }
 
@@ -102,15 +102,6 @@
         cursor: pointer;
       }
     } // }}}
-
-    .page-list {
-      .page-list-link {
-      }
-      .page-list-meta {
-        font-size: .9em;
-        color: #999;
-      }
-    }
 
   } // }}}
 } // }}}

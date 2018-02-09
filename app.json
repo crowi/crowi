@@ -1,15 +1,13 @@
 {
-  "name": "Crowi",
-  "description": "The simple & powerful Wiki",
+  "name": "crowi-plus",
+  "description": "Enhanced Crowi",
   "keywords": [
     "wiki",
     "communication"
   ],
-  "website": "https://crowi.wiki/",
-  "repository": "https://github.com/crowi/crowi",
+  "repository": "https://github.com/weseek/crowi-plus",
   "success_url": "/",
   "env": {
-    "NODE_ENV": "production",
     "SECRET_TOKEN": {
       "description": "A secret key for verifying the integrity of signed cookies.",
       "generator": "secret"
@@ -17,13 +15,18 @@
     "PASSWORD_SEED": {
       "description": "A password seed is used by password hash generator. ",
       "generator": "secret"
+    },
+    "INSTALL_PLUGINS": {
+      "description": "Comma-separated list of plugin package names to install.",
+      "value": "crowi-plugin-lsx",
+      "required": false
     }
   },
   "addons": [
     "mongolab",
     "redistogo",
     {
-      "plan": "bonsai",
+      "plan": "bonsai:sandbox-6",
       "options": {
         "version": "5.1"
       }

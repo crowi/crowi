@@ -6,13 +6,42 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
+    <!-- polyfills for IE11 -->
+    <script>
+      var userAgent = window.navigator.userAgent.toLowerCase();
+      if (userAgent.indexOf('msie') != -1 || userAgent.indexOf('trident') != -1) {
+        var scriptElement = document.createElement('script');
+        scriptElement.src = 'https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.23.0/polyfill.min.js';
+        var headElement = document.getElementsByTagName('head')[0];
+        headElement.appendChild(scriptElement);
+      }
+    </script>
 
-    <link rel="stylesheet" type="text/css" href="/css/crowi-reveal{% if env  == 'production' %}.min{% endif %}.css">
-    <link rel="stylesheet" type="text/css" href="/js/reveal/lib/css/zenburn.css">
+    <!-- jQuery, emojione (expect to hit the cache) -->
+    <script src="https://cdn.jsdelivr.net/combine/npm/emojione@3.1.2,npm/jquery@3.3.1"></script>
+    <!-- highlight.js -->
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.12.0/build/highlight.min.js"></script>
 
-    <script src="{{ assets('/js/bundled.js') }}"></script>
+    {% if env === 'development' %}
+      <script src="/dll/vendor.dll.js"></script>
+      <script src="{{ webpack_asset('dev').js }}" async></script>
+    {% endif %}
+
+    <script src="{{ webpack_asset('style').js }}"></script>
+    <script src="{{ webpack_asset('style-presentation').js }}"></script>
+    <script src="{{ webpack_asset('commons').js }}" defer></script>
+    <script src="{{ webpack_asset('legacy-presentation').js }}" defer></script>
 
     <title>{{ path|path2name }} | {{ path }}</title>
+
+    <!-- Google Fonts -->
+    <link href='https://fonts.googleapis.com/css?family=Lato:400,700' rel='stylesheet' type='text/css'>
+    <!-- highlight.js -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/github.css">
+
+    <style>
+      {{ customCss() }}
+    </style>
   </head>
   <body>
     <div class="reveal">
@@ -29,6 +58,5 @@
       </div>
     </div>
 
-    <script src="{{ assets('/js/presentation.js') }}"></script>
   </body>
 </html>

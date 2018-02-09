@@ -1,17 +1,25 @@
 import React from 'react';
+import md5 from 'md5';
 import PropTypes from 'prop-types';
 
 // TODO UserComponent?
 export default class UserPicture extends React.Component {
 
   getUserPicture(user) {
-    // from swig.setFilter('picture', function(user)
-
-    if (user.image && user.image != '/images/userpicture.png') {
-      return user.image;
-    } else {
-      return '/images/userpicture.png';
+    // gravatar
+    if (user.isGravatarEnabled === true) {
+      return this.generateGravatarSrc(user);
     }
+    // uploaded image
+    else {
+      return user.image || '/images/userpicture.png';
+    }
+  }
+
+  generateGravatarSrc(user) {
+    const email = user.email || '';
+    const hash = md5(email.trim().toLowerCase());
+    return `https://gravatar.com/avatar/${hash}`;
   }
 
   getClassName() {

@@ -1,7 +1,36 @@
-config/default.js
-node_modules/
-bower_components/
-public/js/*
-public/css/*
-public/uploads/*
-.env
+# Logs
+logs
+*.log
+npm-debug.log.*
+
+# OS generated files #
+.DS_Store
+.Trash-*
+ehthumbs.db
+Icon?
+Thumbs.db
+
+# Node Files #
+/node_modules/
+/bower_components/
+npm-debug.log
+/npm-debug.log.*
+
+# Dist #
+/report/
+/public/
+/src/*/__build__/
+/__build__/**
+/src/*/dist/
+/.awcache
+.webpack.json
+/compiled/
+/tmp/
+
+# Doc #
+/doc/
+
+# IDE #
+.idea
+.vscode
+

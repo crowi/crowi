@@ -1,3 +1,6 @@
+// import crowi variable
+@import 'utilities';
+
 div.body {
   padding: 10px;
 }
@@ -40,19 +43,23 @@ div.body {
 
 .revision-head {
 
-  .revision-head-link {
-    display: none;
+  .revision-head-link,
+  .revision-head-edit-button {
+    visibility: hidden;
     font-size: 0.6em;
     padding-top: 4px;
     padding-left: 10px;
   }
-  &:hover .revision-head-link {
-    display: inline-block;
+  &:hover .revision-head-link,
+  &:hover .revision-head-edit-button {
+    visibility: unset;
   }
+
+
 }
 
 .wiki {
-  line-height: 1.6em;
+  line-height: 1.8em;
   font-size: 15px;
 
   h1, h2, h3, h4, h5, h6 {
@@ -65,37 +72,40 @@ div.body {
   }
 
   h1 {
+    margin-top: 2em;
     padding-bottom: 0.3em;
-    font-size: 2.3em;
-    font-weight: bold;
+    font-size: 1.8em;
     border-bottom: solid 1px #ccc;
   }
   h2 {
-    padding-bottom: 0.3em;
-    font-size: 1.8em;
+    padding-bottom: 0.5em;
+    font-size: 1.4em;
     line-height: 1.225;
     font-weight: bold;
     border-bottom: 1px solid #eee;
   }
   h3 {
-    font-size: 1.5em;
+    font-size: 1.2em;
     font-weight: bold;
   }
   h4 {
-    font-size: 1.3em;
+    font-size: 1.1em;
     font-weight: normal;
   }
   h5 {
-    font-size: 1.1em;
+    font-size: 1.05em;
     font-weight: normal;
   }
 
   p {
     font-weight: normal;
-    margin-bottom: 9px;
+    margin: 15px 0;
   }
   blockquote {
     font-size: .9em;
+    margin: 0 0 30px 0;
+    padding: 0 20px;
+    color: darken(gray, 10%);
   }
 
   a {
@@ -108,6 +118,7 @@ div.body {
     }
   }
 
+/* ensure to disable in crowi-plus system
   pre {
     line-height: 1.4em;
     font-size: .9em;
@@ -117,45 +128,62 @@ div.body {
     font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
     word-wrap: break-word;
   }
+*/
+  pre {
+    border: none;
+  }
 
   img {
     margin: 5px 0;
+/* ensure to disable in crowi-plus system
     box-shadow: 0 0 5px 0px rgba(0,0,0,.2);
     border: solid 1px #ccc;
+*/
     max-width: 100%;
   }
+/* ensure to disable in crowi-plus system
   .noborder img, .img.noborder {
     box-shadow: none;
     border: none;
   }
+*/
 
-  img.emoji {
-    width: 1.1em;
-    margin: 1px;
+  img.emojione {
+    margin-top: -0.3em !important;
+    margin-bottom: 0 !important;
     border: none;
     box-shadow: none;
-    vertical-align: middle;
-    display: inline;
   }
 
   ul, ol {
     padding-left: 30px;
+    margin: 20px 0;
 
     li {
+      margin: 5px 0;
       line-height: 1.8em;
+    }
 
-      p {
-        margin-top: 10px;
-        margin-bottom: 0;
-
-        &:first-child {
-          margin-top: 0;
-        }
-      }
+    ul, ol {
+      margin: 0;
     }
   }
 
-  .wiki-code {
+  // borrowed from https://www.npmjs.com/package/github-markdown-css
+  .contains-task-list {
+    .task-list-item {
+      list-style-type: none;
+    }
+    .task-list-item+.task-list-item {
+      margin-top: 3px;
+    }
+    .task-list-item input {
+      margin: 0 0.2em 0.25em -1.6em;
+      vertical-align: middle;
+    }
+  }
+
+  pre.hljs {
     position: relative;
 
     cite {
@@ -165,10 +193,15 @@ div.body {
       padding: 0 4px;
       background: #ccc;
       color: #333;
-      font-size: .8em;
-
+      font-style: normal;
+      font-weight: bold;
+      opacity: 0.6;
     }
   };
+
+  p code {  // only inline code blocks
+    font-family: $font-family-monospace-not-strictly;
+  }
 
   .page-template-builder {
     position: relative;
@@ -192,70 +225,6 @@ div.body {
     border-radius: 3px;
   }
 
-  // {{{ table (copied from bootstrap .table
-  table {
-    width: 100%;
-    margin-bottom: $line-height-computed;
-    // Cells
-    > thead,
-    > tbody,
-    > tfoot {
-      > tr {
-        > th,
-        > td {
-          padding: $table-cell-padding;
-          line-height: $line-height-base;
-          vertical-align: top;
-          border-top: 1px solid $table-border-color;
-        }
-      }
-    }
-    // Bottom align for column headings
-    > thead > tr > th {
-      vertical-align: bottom;
-      border-bottom: 2px solid $table-border-color;
-    }
-    // Remove top border from thead by default
-    > caption + thead,
-    > colgroup + thead,
-    > thead:first-child {
-      > tr:first-child {
-        > th,
-        > td {
-          border-top: 0;
-        }
-      }
-    }
-    // Account for multiple tbody instances
-    > tbody + tbody {
-      border-top: 2px solid $table-border-color;
-    }
-
-    // Nesting
-    table {
-      background-color: $body-bg;
-    }
-
-    // .table-bordered
-    border: 1px solid $table-border-color;
-    > thead,
-    > tbody,
-    > tfoot {
-      > tr {
-        > th,
-        > td {
-          border: 1px solid $table-border-color;
-        }
-      }
-    }
-    > thead > tr {
-      > th,
-      > td {
-        border-bottom-width: 2px;
-      }
-    }
-  }
-  // }}}
 }
 
 

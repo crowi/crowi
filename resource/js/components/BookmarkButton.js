@@ -16,6 +16,12 @@ export default class BookmarkButton extends React.Component {
   }
 
   componentDidMount() {
+    // if guest user
+    if (!this.isUserLoggedIn()) {
+      // do nothing
+      return;
+    }
+
     this.props.crowi.apiGet('/bookmarks.get', {page_id: this.props.pageId})
     .then(res => {
       if (res.bookmark) {
@@ -50,7 +56,16 @@ export default class BookmarkButton extends React.Component {
     this.setState({bookmarked: false});
   }
 
+  isUserLoggedIn() {
+    return this.props.crowi.me !== '';
+  }
+
   render() {
+    // if guest user
+    if (!this.isUserLoggedIn()) {
+      return <div></div>;
+    }
+
     const iconName = this.state.bookmarked ? 'star' : 'star-o';
 
     return (
