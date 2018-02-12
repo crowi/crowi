@@ -5,6 +5,7 @@
         "browsers": ["last 2 versions"]
       }
     }],
+    "flow",
     "react"
   ],
   "plugins": [
