@@ -2,22 +2,31 @@
 @import 'utilities';
 
 // import bootstrap
-@import 'bootstrap';
+$bootstrap-sass-asset-helper: true;
+@import "~bootstrap-sass/assets/stylesheets/bootstrap";
 
-@import 'font-awesome';
+// import toastr styles
+@import '~toastr/build/toastr';
 
 // crowi component
-@import 'layout';
-@import 'page';
-@import 'page_list';
-@import 'form';
-@import 'wiki';
 @import 'admin';
+@import 'attachments';
 @import 'comment';
-@import 'user';
+@import 'comment_crowi-plus';
+@import 'delete';
+@import 'form';
+@import 'layout';
+@import 'layout_crowi-plus';
+@import 'page_list';
+@import 'page';
+@import 'page_crowi-plus';
 @import 'portal';
 @import 'search';
-@import 'attachments';
+@import 'shortcuts';
+@import 'user';
+@import 'user_crowi-plus';
+@import 'wiki';
+@import 'wiki_crowi-plus';
 
 
 ul {
@@ -107,27 +116,19 @@ footer {
 }
 
 .modal.create-page {
+
+  @media (min-width: $screen-sm-min) { // {{{ more than tablet size
+    .modal-dialog {
+      width: 750px;
+    }
+  }
+
   .modal-body {
     h3, h4 {
       margin-bottom: 10px;
     }
 
     form {
-
-      input.form-control {
-        border: none;
-        box-shadow: none;
-        border-bottom: dotted 1px #444;
-        border-radius: 0;
-        padding: 6px;
-        height: 34px;
-        font-weight: bold;
-        background: #f0f0f0;
-
-        &:focus {
-          background: #ddd;
-        }
-      }
 
       .page-name-addons {
         position: absolute;
@@ -147,8 +148,15 @@ footer {
         display: inline-block;
       }
       .page-today-input2 {
-        width: 100%;
+        // width: 100%;
         display: inline-block;
+      }
+      #page-name-inputter input {
+        min-width: 300px; // Workaround to display placeholder.
+                          //   cf https://github.com/ericgio/react-bootstrap-typeahead/issues/256
+      }
+      .create-page-under-tree-label code {
+        font-family: $font-family-monospace-not-strictly;
       }
     }
   }
@@ -190,7 +198,6 @@ footer {
 // }}}
 
 .dropdown-menu {
-   z-index: 10060;
   .dropdown-button {
     padding: 3px 20px;
   }
@@ -216,6 +223,13 @@ footer {
       padding: 5px 20px;
     }
   }
+}
+.dropdown-disabled {
+  cursor: not-allowed;
+}
+
+.edit-button.edit-button-disabled {
+  cursor: not-allowed;
 }
 
 // user picture
@@ -439,5 +453,16 @@ input.searching {
     width: 100%;
     height: 100%;
     border: 0;
+  }
+}
+
+.cmd-key.mac {
+  &:after {
+    content: '⌘';
+  }
+}
+.cmd-key.win {
+  &:after {
+    content: 'Ctrl';
   }
 }

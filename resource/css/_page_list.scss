@@ -1,5 +1,5 @@
 
-.crowi.main-container .main .content-main .timeline-body { // {{{
+.crowi.main-container .main .timeline-body { // {{{
   .revision-path {
     margin-top: 1.6em;
     margin-bottom: 0;
@@ -21,13 +21,17 @@
     line-height: 1.6em;
     font-size: 15px;
   }
+}
 
+.page-list, .content-main {
   .page-list-ul {
+    margin: 0;
     padding-left: 0;
 
     > li {
+      margin: 0;
       list-style: none;
-      line-height: 1.8em;
+      color: #666;
 
       .page-list-option {
         float: right;
@@ -42,8 +46,7 @@
       > a {
         display: inline;
         padding: 0 4px;
-        font-size: 1.1em;
-        color: #666;
+        color: inherit;
 
         strong {
           color: #333;
@@ -51,7 +54,23 @@
       }
 
       > span.page-list-meta {
+        font-size: .9em;
+        color: #999;
+
+        >span {
+          margin-right: .3rem;
+        }
       }
+    }
+
+    // after second level indent
+    .page-list-ul {
+      padding-left: 2rem;
+    }
+
+    // override .page-list-ul
+    &.page-list-ul-flat {
+      padding-left: 0;
     }
   }
 }

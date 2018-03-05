@@ -1,3 +1,8 @@
+// import react-bootstrap-typeahead
+@import "~react-bootstrap-typeahead/css/Typeahead";
+
+@import "./page_list";
+
 .search-listpage-icon {
   font-size: 16px;
   color: #999;
@@ -17,61 +22,54 @@
 
 .search-input-group {
   display: inline-block;
+  margin-left: 20px;
   margin-bottom: 0;
   width: 200px;
   vertical-align: bottom;
-
-  .search-listpage-submit-group {
-    position: absolute;
-    width: 30px;
-    height: 30px;
-    padding-left: 197px;
-    border-radius: 0;
-
-    > .btn {
-      padding: 6px 12px 7px;
-    }
-  }
 }
-
 
 .search-top {
   .search-top-input-group {
-    .search-top-input {
-      width: 400px;
-    }
-    .btn {
-      padding: 6px 12px 7px;
-      margin-left: -3px;
-    }
-
     .search-top-clear {
       position: absolute;
       right: 40px;
       z-index: 10;
       width: 22px;
       height: 22px;
+      top: 7px;
       color: #ccc;
-      padding: 8px;
+      padding: 0;
     }
   }
-}
 
-.search-suggest {
-  // => dicided by JS
-  // top: 43px;
-  // left: 125px;
-  //display: none;
-  position: absolute;
-  width: 500px;
-  background: #fff;
-  border: solid 1px #ccc;
-  box-shadow: 0 0 1px rgba(0,0,0,.3);
-  padding: 16px;
+  // using react-bootstrap-typeahead
+  // see: https://github.com/ericgio/react-bootstrap-typeahead
+  .rbt-menu {
+    li a span {
+      .picture {
+        width: 14px;
+        height: 14px;
+      }
 
+      .page-path {
+        display: inline;
+        padding: 0 4px;
+        color: inherit;
+      }
 
-  .searching {
-    color: #666;
+      .page-list-meta {
+        font-size: .9em;
+        color: #999;
+
+        >span {
+          margin-right: .3rem;
+        }
+      }
+    }
+  }
+  // hide loading icon
+  .rbt-aux {
+    display: none;
   }
 }
 
@@ -82,33 +80,38 @@
     nav {
       &.affix {
         top: 8px;
-        width: 33.33333%;
-        padding-right: 30px;
+        width: 32%;
+        padding-right: 0;
         padding-bottom: 50px;
         height: 100%;
         overflow-y: scroll;
       }
       .nav {
-
         > li {
-          padding: 0px 11px 0 8px;
+          padding: 0px 10px 0 0;
           &.active {
-            padding: 0px 8px;
+            padding-right: 7px;
             border-right: solid 3px #666;
             background: #f0f0f0;
           }
         }
       }
     }
-  }
-
-  .search-result-content {
-    padding-bottom: 32px;
 
     .search-result-meta {
       margin-bottom: 16px;
       font-weight: bold;
     }
+
+    .search-result-list-delete-checkbox {
+      margin: 0 10px 0 0;
+      vertical-align: middle;
+    }
+  }
+
+  .search-result-content {
+    padding-bottom: 32px;
+
     .search-result-page {
       > h2 {
         font-size: 20px;
@@ -128,26 +131,13 @@
 }
 
 // Smartphone and Tablet
-@media (max-width: $screen-sm-max) {
+@media (max-width: $screen-xs-max) {
   .search-top {
     margin-top: 4px 0 0 0;
     padding: 0;
     border-style: none !important;
     box-shadow: none !important;
     -webkit-box-shadow: none !important;
-
-    .search-form {
-      width: 76%;
-    }
-
-    .search-top-input-group {
-      .search-top-input {
-        width: 100%;
-      }
-      .btn {
-        z-index: 10;
-      }
-    }
   }
 
   .search-result {
@@ -165,19 +155,31 @@
   }
 }
 
-// Smartphone
-@media (max-width: $screen-xs-max) {
-  .search-top {
-    .search-form {
-      min-width: 40%;
-      max-width: 50%;
-      width: 50%;
-    }
-    .search-box {
-      .search-suggest {
-        left: 2%;
-        width: 94%;
-      }
+.search-top .search-form {
+  @media (min-width: $screen-sm-max) {
+    // using react-bootstrap-typeahead
+    // see: https://github.com/ericgio/react-bootstrap-typeahead
+    .rbt-input input {
+      width: 500px !important;
     }
   }
+  @media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
+    background-color: #0f0;
+    // using react-bootstrap-typeahead
+    // see: https://github.com/ericgio/react-bootstrap-typeahead
+    .rbt-input input {
+      width: 270px !important;
+    }
+  }
+  @media (min-width: $screen-xs-min) and (max-width: $screen-xs-max) {
+    width: 70%;
+  }
+  @media (min-width: $screen-xs-min*2/3) and (max-width: $screen-xs-min) {
+    width: 58%;
+  }
+  @media (max-width: $screen-xs-min*2/3) {
+    width: 40%;
+    min-width: 120px;
+  }
 }
+

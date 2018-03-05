@@ -1,3 +1,6 @@
+// import diff2html styles
+@import "~diff2html/dist/diff2html.css";
+
 .crowi.main-container {
   // padding controll of .header-wrap and .content-main are moved to _layout and _form
 
@@ -62,6 +65,7 @@
       }
 
       .flex-title-line {
+        line-height: 1;
         display: -webkit-flex;
         display: flex;
         -webkit-align-items: center;
@@ -85,7 +89,11 @@
         margin-top: 0;
         margin-bottom: 0;
 
-        a:last-child {
+        .btn-copy-container {
+          font-size: 0.65em;
+        }
+
+        a.last-path {
           color: #D1E2E4;
           opacity: .4;
 
@@ -93,6 +101,20 @@
             color: inherit;
           }
         }
+
+      }
+
+      .url-line {
+        color: #999;
+        font-size: 1rem;
+      }
+
+      // change button opacity
+      .btn.btn-muted {
+        opacity: 0.3;
+      }
+      &:hover .btn.btn-muted {
+        opacity: unset;
       }
     }
 
@@ -103,7 +125,7 @@
 
       // alert component settings for trash page and moved page
       // see: https://jsfiddle.net/me420sky/2/
-      .alert-trash, .alert-moved {
+      .alert-trash, .alert-moved, .alert-unlinked {
         padding: 10px 15px;
 
         span {
@@ -224,10 +246,11 @@
         font-size: 1.1em;
       }
 
-      a {
-        color: #ccc;
-        &:hover { color: #aaa;}
-      }
+      // disabled in crowi-plus -- 2017.06.03 Yuki Takei
+      // a {
+      //   color: #ccc;
+      //   &:hover { color: #aaa;}
+      // }
 
       ul.fitted-list {
         padding-left: 0;
@@ -244,7 +267,7 @@
 
   .footer { // {{{
     position: fixed;
-    width: 100%;
+    width: calc(25% - 18px);
     bottom: 0px;
     height: 26px;
     padding: 4px;
@@ -349,3 +372,17 @@
   }
 
 } // }}}
+
+// for not_found.html
+.crowi.main-container {
+  .message-not-found {
+    margin-top: 10px;
+    margin-left: 16px;
+  }
+
+  .content-main.content-main-not-found {
+    .nav {
+      margin-top: 16px;
+    }
+  }
+}

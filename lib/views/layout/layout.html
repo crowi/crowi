@@ -22,19 +22,93 @@
   <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96">
   <link rel="icon" type="image/png" href="/android-chrome-192x192.png" sizes="192x192">
 
-  <link rel="stylesheet" href="/css/crowi{% if env  == 'production' %}.min{% endif %}.css">
+  {{ customHeader() }}
 
-  <script src="{{ assets('/js/polyfill.js') }}"></script>
-  <script src="{{ assets('/js/bundled.js') }}"></script>
-  <link href='//fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+  <!-- polyfills for IE11 -->
+  <script>
+    var userAgent = window.navigator.userAgent.toLowerCase();
+    if (userAgent.indexOf('msie') != -1 || userAgent.indexOf('trident') != -1) {
+      var scriptElement = document.createElement('script');
+      scriptElement.src = 'https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.23.0/polyfill.min.js';
+      var headElement = document.getElementsByTagName('head')[0];
+      headElement.appendChild(scriptElement);
+    }
+  </script>
+
+  <!-- jQuery, emojione -->
+  <script src="https://cdn.jsdelivr.net/combine/npm/emojione@3.1.2,npm/jquery@3.3.1"></script>
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.12.0/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/combine/
+gh/highlightjs/cdn-release@9.12.0/build/languages/dockerfile.min.js,
+gh/highlightjs/cdn-release@9.12.0/build/languages/go.min.js,
+gh/highlightjs/cdn-release@9.12.0/build/languages/gradle.min.js,
+gh/highlightjs/cdn-release@9.12.0/build/languages/json.min.js,
+gh/highlightjs/cdn-release@9.12.0/build/languages/less.min.js,
+gh/highlightjs/cdn-release@9.12.0/build/languages/scss.min.js,
+gh/highlightjs/cdn-release@9.12.0/build/languages/typescript.min.js,
+gh/highlightjs/cdn-release@9.12.0/build/languages/yaml.min.js
+" defer></script>
+
+  {% if local_config.env.MATHJAX %}
+    <!-- Mathjax -->
+    <script type="text/x-mathjax-config" async>
+      MathJax.Hub.Config({
+        skipStartupTypeset: true,
+        extensions: ["tex2jax.js"],
+        jax: ["input/TeX", "output/SVG"],
+        tex2jax: {
+          processEscapes: true
+        },
+        showMathMenu: false,
+        showMathMenuMSIE: false,
+        showProcessingMessages: false,
+        messageStyle: "none"
+      });
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js" async></script>
+  {% endif %}
+
+  {% if env === 'development' %}
+    <script src="/dll/vendor.dll.js"></script>
+    <script src="{{ webpack_asset('dev').js }}" async></script>
+  {% endif %}
+
+  <script src="{{ webpack_asset('style').js }}"></script>
+  <script src="{{ webpack_asset('commons').js }}" defer></script>
+  {% if isEnabledPlugins() %}
+    <script src="{{ webpack_asset('plugin').js }}" defer></script>
+  {% endif %}
+  {% block html_head_loading_legacy %}
+    <script src="{{ webpack_asset('legacy').js }}" defer></script>
+  {% endblock %}
+  <script src="{{ webpack_asset('app').js }}" defer></script>
+
+  <!-- Google Fonts -->
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700' rel='stylesheet' type='text/css'>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+  <!-- emojione -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emojione@3.1.2/extras/css/emojione.min.css">
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/github.css">
+
+  {% block html_additional_headers %}{% endblock %}
+
+  <style>
+    {{ customCss() }}
+  </style>
 </head>
 {% endblock %}
 
 {% block html_body %}
 <body
-  class="crowi main-container {% block html_base_css %}{% endblock %}"
+  class="crowi main-container {% block html_base_css %}{% endblock %} {% if 'crowi-plus' === layoutType() %}crowi-plus{% endif %}"
   data-me="{{ user._id.toString() }}"
+  data-plugin-enabled="{{ isEnabledPlugins() }}"
  {% block html_base_attr %}{% endblock %}
+  data-csrftoken="{{ csrf() }}"
+  data-current-username="{% if user %}{{ user.username }}{% endif %}"
  >
 
 {% block layout_head_nav %}
@@ -110,7 +184,7 @@
         </ul>
       </li>
       {% else %}
-      <li id="login-user"><a href="/login" id="login"><i class="fa fa-user"></i> Login</a></li>
+      <li id="login-user"><a href="/login"><i class="fa fa-user"></i> Login</a></li>
       {% endif %}
       {% if config.crowi['app:confidential'] && config.crowi['app:confidential'] != '' %}
       <li class="confidential"><a href="#">{{ config.crowi['app:confidential'] }}</a></li>
@@ -139,7 +213,7 @@
 {% block body_end %}
 {% endblock %}
 
-{% include '../modal/help.html' %}
+{% include '../modal/shortcuts.html' %}
 </body>
 {% endblock %}
 
@@ -147,6 +221,10 @@
 {{ local_config|json|safe }}
 </script>
 
-<script src="{{ assets('/js/crowi.js') }}"></script>
-<script src="{{ assets('/js/app.js') }}"></script>
+{% block custom_script %}
+<script>
+  {{ customScript() }}
+</script>
+{% endblock %}
+
 </html>

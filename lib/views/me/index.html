@@ -15,6 +15,7 @@
 
   <ul class="nav nav-tabs">
     <li class="active"><a href="/me"><i class="fa fa-gears"></i> {{ t('User Information') }}</a></li>
+    <li><a href="/me/external-accounts"><i class="fa fa-user-plus"></i> {{ t('External Accounts') }}</a></li>
     <li><a href="/me/password"><i class="fa fa-key"></i> {{ t('Password Settings') }}</a></li>
     <li><a href="/me/apiToken"><i class="fa fa-rocket"></i> {{ t('API Settings') }}</a></li>
   </ul>
@@ -56,10 +57,10 @@
           <input class="form-control" type="text" name="userForm[name]" value="{{ user.name }}" required>
         </div>
       </div>
-      <div class="form-group {% if not user.email %}has-error{% endif %}">
+      <div class="form-group">
         <label for="userForm[email]" class="col-sm-2 control-label">{{ t('Email') }}</label>
         <div class="col-sm-4">
-          <input class="form-control" type="email" name="userForm[email]" value="{{ user.email }}" required>
+          <input class="form-control" type="email" name="userForm[email]" value="{{ user.email }}">
         </div>
         <div class="col-sm-offset-2 col-sm-10">
           {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
@@ -91,16 +92,43 @@
   </div>
 
   <div class="form-box">
+
+    <!-- separeted form tag -->
+    <form action="/me/imagetype" id="formImageType" method="post" class="form" role="form"></form>
+
     <fieldset>
+
       <legend>{{ t('Set Profile Image') }}</legend>
+
+      <div class="form-group col-sm-offset-1 col-sm-3">
+        <div class="radio">
+          <h4>
+            <input type="radio" form="formImageType" name="imagetypeForm[isGravatarEnabled]" value="true" {% if user.isGravatarEnabled %}checked="checked"{% endif %}>
+            <img src="https://gravatar.com/avatar/00000000000000000000000000000000?s=24" /> Gravatar
+            <a href="https://gravatar.com/">
+              <small><i class="fa fa-external-link" aria-hidden="true"></i></small>
+            </a>
+          </h4>
+        </div>
+
+        <img src="{{ user|gravatar }}" width="64">
+      </div><!-- /.col-sm* -->
+
+      <div class="form-group col-sm-8">
+        <div class="radio">
+          <h4>
+            <input type="radio" form="formImageType" name="imagetypeForm[isGravatarEnabled]" value="false" {% if !user.isGravatarEnabled  %}checked="checked"{% endif %}>
+            {{ t('Upload Image') }}
+          </h4>
+        </div>
         <div class="form-group">
           <div id="pictureUploadFormMessage"></div>
-          <label for="" class="col-sm-3 control-label">
+          <label for="" class="col-sm-4 control-label">
             {{ t('Current Image') }}
           </label>
-          <div class="col-sm-9">
+          <div class="col-sm-8">
             <p>
-            <img src="{{ user|picture }}" width="64" id="settingUserPicture"><br>
+            <img src="{{ user|uploadedpicture }}" width="64" id="settingUserPicture"><br>
             </p>
             <p>
             {% if user.image %}
@@ -110,13 +138,13 @@
             {% endif %}
             </p>
           </div>
-        </div> {# /.form-group# #}
+        </div><!-- /.form-group -->
 
         <div class="form-group">
-          <label for="" class="col-sm-3 control-label">
+          <label for="" class="col-sm-4 control-label">
             {{ t('Upload new image') }}
           </label>
-          <div class="col-sm-9">
+          <div class="col-sm-8">
             {% if isUploadable() %}
             <form action="/_api/me/picture/upload" id="pictureUploadForm" method="post" class="form-horizontal" role="form" enctype="multipart/form-data">
               <input name="userPicture" type="file" accept="image/*">
@@ -128,44 +156,54 @@
             * {{ t('page_me.form_help.profile_image2') }}<br>
             {% endif %}
           </div>
-        </div>
-      </fieldset>
-    </div>
-    <script>
-    $(function()
-    {
-      $("#pictureUploadForm input[name=userPicture]").on('change', function(){
-        var $form = $('#pictureUploadForm');
-        var fd = new FormData($form[0]);
-        if ($(this).val() == '') {
-          return false;
-        }
+        </div><!-- /.form-group -->
 
-        $('#pictureUploadFormProgress').html('<img src="/images/loading_s.gif"> アップロード中...');
-        $.ajax($form.attr("action"), {
-          type: 'post',
-          processData: false,
-          contentType: false,
-          data: fd,
-          dataType: 'json',
-          success: function(data){
-            if (data.status) {
-              $('#settingUserPicture').attr('src', data.url + '?time=' + (new Date()));
-              $('#pictureUploadFormMessage')
-                .addClass('alert alert-success')
-                .html('変更しました');
-            } else {
-              $('#pictureUploadFormMessage')
-                .addClass('alert alert-danger')
-                .html('変更中にエラーが発生しました。');
-            }
-            $('#pictureUploadFormProgress').html('');
-          }
-        });
+      </div><!-- /.col-sm- -->
+
+      <div class="form-group">
+        <div class="col-sm-offset-4 col-sm-6">
+          <button type="submit" form="formImageType" class="btn btn-primary">{{ t('Update') }}</button>
+        </div>
+      </div>
+
+    </fieldset>
+  </div><!-- /.form-box -->
+
+  <script>
+  $(function()
+  {
+    $("#pictureUploadForm input[name=userPicture]").on('change', function(){
+      var $form = $('#pictureUploadForm');
+      var fd = new FormData($form[0]);
+      if ($(this).val() == '') {
         return false;
+      }
+
+      $('#pictureUploadFormProgress').html('<img src="/images/loading_s.gif"> アップロード中...');
+      $.ajax($form.attr("action"), {
+        type: 'post',
+        processData: false,
+        contentType: false,
+        data: fd,
+        dataType: 'json',
+        success: function(data){
+          if (data.status) {
+            $('#settingUserPicture').attr('src', data.url + '?time=' + (new Date()));
+            $('#pictureUploadFormMessage')
+              .addClass('alert alert-success')
+              .html('変更しました');
+          } else {
+            $('#pictureUploadFormMessage')
+              .addClass('alert alert-danger')
+              .html('変更中にエラーが発生しました。');
+          }
+          $('#pictureUploadFormProgress').html('');
+        }
       });
+      return false;
     });
-    </script>
+  });
+  </script>
 
   <div class="row">
     {% if googleLoginEnabled() %}

@@ -1,14 +1,11 @@
-import emojify from 'emojify.js';
-
+/**
+ * DEPRECATED
+ * replaced by markdown-it-emoji -- 2018.01.30 Yuki Takei
+ *
 export default class Emoji {
 
-  constructor() {
-    emojify.setConfig({
-      img_dir: '/emoji_images/basic',
-    });
-  }
-
   process(markdown) {
-    return emojify.replace(markdown);
+    return emojione.shortnameToImage(markdown);
   }
 }
+*/
