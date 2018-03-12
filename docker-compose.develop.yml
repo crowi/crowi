@@ -1,0 +1,54 @@
+version: '3'
+services:
+  crowi:
+    build: .
+    environment:
+      NODE_ENV: development
+      MONGO_URI: mongodb://mongodb:27017/crowi
+      REDIS_URL: redis://redis:6379/crowi
+      ELASTICSEARCH_URI: elasticsearch:9200/crowi
+      PLANTUML_URI: //localhost:8080
+      FILE_UPLOAD: local
+    volumes:
+    - .:/crowi
+    - /crowi/node_modules
+    - /crowi/public/css
+    - /crowi/public/js
+    restart: always
+    ports:
+    - 3000:3000
+    links:
+    - mongodb
+    - elasticsearch
+    - redis
+    - plantuml
+
+  mongodb:
+    image: mongo:3.6.3
+    volumes:
+    - ./data/mongodb:/data/db
+    restart: always
+    ports:
+    - 27017:27017
+
+  elasticsearch:
+    build:
+      context: ./elasticsearch
+    environment:
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+    - 9200:9200
+    - 9300:9300
+
+  redis:
+    image: redis:4.0.8
+    restart: always
+    ports:
+    - 6379:6379
+
+  plantuml:
+    image: plantuml/plantuml-server:latest
+    restart: always
+    ports:
+    - 8080:8080
