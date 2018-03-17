@@ -57,10 +57,19 @@
 
     <div class="row">
       {% if googleLoginEnabled() %}
-      <div class="col-md-8">
+      <div class="col-md-6">
         <p>{{ t('Sign in by Google Account') }}</p>
         <form role="form" action="/login/google" method="get">
           <button type="submit" class="btn btn-block btn-google"><i class="fa fa-google-plus-square"></i> {{ t('Sign in') }}</button>
+          <input type="hidden" name="_csrf" value="{{ csrf() }}">
+        </form>
+      </div>
+      {% endif %}
+      {% if googleLoginEnabled() %}
+      <div class="col-md-6">
+        <p>{{ t('Sign in by GitHub Account') }}</p>
+        <form role="form" action="/login/github" method="get">
+          <button type="submit" class="btn btn-block btn-github"><i class="fa fa-github-square"></i> {{ t('Sign in') }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
         </form>
       </div>
@@ -177,6 +186,15 @@
         <form role="form" method="post" action="/register/google">
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
           <button type="submit" class="btn btn-block btn-google"><i class="fa fa-google-plus-square"></i> {{ t('Login') }}</button>
+        </form>
+      </div>
+      {% endif %}
+      {% if googleLoginEnabled() %}
+      <div class="col-md-6">
+        <p>{{ t('Sign up with GitHub Account') }}</p>
+        <form role="form" method="post" action="/register/github">
+          <input type="hidden" name="_csrf" value="{{ csrf() }}">
+          <button type="submit" class="btn btn-block btn-github"><i class="fa fa-github-square"></i> {{ t('Login') }}</button>
         </form>
       </div>
       {% endif %}
