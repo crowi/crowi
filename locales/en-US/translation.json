@@ -48,6 +48,7 @@
   "Updated": "Updated",
   "Upload new image": "Upload new image",
   "Google Setting": "Google Setting",
+  "GitHub Setting": "GitHub Setting",
   "Connected": "Connected",
   "Disconnect": "Disconnect",
 
@@ -105,7 +106,10 @@
       "google_connect1": "With Google Connect, you can sign in with your Google Account.",
       "google_connect2": "Only Google Apps accounts with the following email addresses are connectable Google accounts:",
       "google_disconnect1": "If you disconnect your Google account, you will be unable to sign in using Google Authentication",
-      "google_disconnect2": "After disconnecting your Google account, you can sign in normally using your email and password"
+      "google_disconnect2": "After disconnecting your Google account, you can sign in normally using your email and password",
+      "github_connect1": "With GitHub Connect, you can sign in with your GitHub Account.",
+      "github_disconnect1": "If you disconnect your GitHub account, you will be unable to sign in using GitHub Authentication",
+      "github_disconnect2": "After disconnecting your GitHub account, you can sign in normally using your email and password"
     }
   },
   "page_me_apitoken": {
