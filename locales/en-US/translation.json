@@ -16,16 +16,6 @@
   "Update Page": "Update Page",
   "Warning": "Warning",
 
-  "Sign in": "Sign in",
-  "Sign up is here": "Sign up",
-  "Sign in is here": "Sign in",
-  "Sign up": "Sign up",
-  "Sign up with Google Account": "Sign up with Google Account",
-  "Sign in with Google Account": "Sign in with Google Account",
-  "Sign up with this Google Account": "Sign up with this Google Account",
-  "Example": "Example",
-  "Taro Yamada": "James Bond",
-
   "List View": "List",
   "Timeline View": "Timeline",
   "Presentation Mode": "Presentation Mode",
@@ -83,11 +73,23 @@
   "Deleted Pages": "Deleted Pages",
   "Sign out": "Logout",
 
+  "page_login": {
+    "sign_in": "Sign in",
+    "sign_up_is_here": "Sign up",
+    "sign_in_with": "Sign in with %s Account"
+  },
+
   "page_register": {
+    "example": "Example",
+    "taro_yamada": "James Bond",
+    "sign_up": "Sign up",
+    "sign_up_with": "Sign up with %s Account",
+    "sign_in_is_here": "Sign in",
     "notice": {
       "restricted": "Admin approval required.",
       "restricted_defail": "Once the admin approves your sign up, you'll be able to access this wiki.",
-      "google_account_continue": "Enter your user ID, name and password to continue."
+      "register_with_this": "Sign up with this %s Account.",
+      "social_account_continue": "Enter your user ID, name and password to continue."
     },
     "form_help": {
       "email": "You must have email address which listed below to sign up to this wiki.",
