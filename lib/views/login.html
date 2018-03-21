@@ -65,7 +65,7 @@
         </form>
       </div>
       {% endif %}
-      {% if googleLoginEnabled() %}
+      {% if githubLoginEnabled() %}
       <div class="col-md-6">
         <p>{{ t('page_login.sign_in_with', "GitHub") }}</p>
         <form role="form" action="/login/github" method="get">
@@ -190,7 +190,7 @@
         </form>
       </div>
       {% endif %}
-      {% if googleLoginEnabled() %}
+      {% if githubLoginEnabled() %}
       <div class="col-md-6">
         <p>{{ t('page_register.sign_up_with', "GitHub") }}</p>
         <form role="form" method="post" action="/register/github">
