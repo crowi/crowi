@@ -48,6 +48,7 @@
   "Updated": "更新しました",
   "Upload new image": "新しい画像をアップロード",
   "Google Setting": "Google設定",
+  "GitHub Setting": "GitHub設定",
   "Connected": "接続されています",
   "Disconnect": "接続を解除",
 
@@ -105,7 +106,10 @@
       "google_connect1": "Googleコネクトをすると、Googleアカウントでログイン可能になります。",
       "google_connect2": "コネクト可能なGoogleアカウントは、以下のメールアドレスの発行できるGoogle Appsアカウントに限られます。",
       "google_disconnect1": "接続を解除すると、Googleでログインができなくなります。",
-      "google_disconnect2": "解除後はメールアドレスとパスワードでログインすることができます。"
+      "google_disconnect2": "解除後はメールアドレスとパスワードでログインすることができます。",
+      "github_connect1": "GitHubコネクトをすると、GitHubアカウントでログイン可能になります。",
+      "github_disconnect1": "接続を解除すると、GitHubでログインができなくなります。",
+      "github_disconnect2": "解除後はメールアドレスとパスワードでログインすることができます。"
     }
   },
   "page_me_apitoken": {
