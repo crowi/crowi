@@ -260,7 +260,7 @@
       <form action="/_api/admin/settings/github" method="post" class="form-horizontal" id="githubSettingForm" role="form">
       <fieldset>
       <legend>GitHub 設定</legend>
-        <p class="well">GitHub プロジェクトの設定をすると、GitHub アカウントにコネクトして登録やログインが可能になります。</p>
+        <p class="well">GitHub プロジェクトの設定をすると、GitHub アカウントにコネクトして登録やログインが可能になります。また、Organizationを指定した場合は、その組織に所属するアカウントのみがコネクトできるようになります。</p>
 
         <div class="form-group">
           <label for="settingForm[github:clientId]" class="col-xs-3 control-label">Client ID</label>
@@ -273,6 +273,13 @@
           <label for="settingForm[github:clientSecret]" class="col-xs-3 control-label">Client Secret</label>
           <div class="col-xs-6">
             <input class="form-control" type="text" name="settingForm[github:clientSecret]" value="{{ settingForm['github:clientSecret'] }}">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="settingForm[github:organization]" class="col-xs-3 control-label">Organization</label>
+          <div class="col-xs-6">
+            <input class="form-control" type="text" name="settingForm[github:organization]" value="{{ settingForm['github:organization'] }}">
           </div>
         </div>
 

@@ -269,8 +269,7 @@
               </p>
               {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
               <p class="help-block">
-                {{ t('page_register.form_help.email') }}<br>
-                {{ t('page_me.form_help.github_connect2') }}
+                {{ t('page_register.form_help.email') }}
               </p>
               <ul>
                 {% for em in config.crowi['security:registrationWhiteList'] %}
