@@ -257,13 +257,42 @@
       </fieldset>
       </form>
 
+      <form action="/_api/admin/settings/github" method="post" class="form-horizontal" id="githubSettingForm" role="form">
+      <fieldset>
+      <legend>GitHub 設定</legend>
+        <p class="well">GitHub プロジェクトの設定をすると、GitHub アカウントにコネクトして登録やログインが可能になります。</p>
+
+        <div class="form-group">
+          <label for="settingForm[github:clientId]" class="col-xs-3 control-label">Client ID</label>
+          <div class="col-xs-6">
+            <input class="form-control" type="text" name="settingForm[github:clientId]" value="{{ settingForm['github:clientId'] }}">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="settingForm[github:clientSecret]" class="col-xs-3 control-label">Client Secret</label>
+          <div class="col-xs-6">
+            <input class="form-control" type="text" name="settingForm[github:clientSecret]" value="{{ settingForm['github:clientSecret'] }}">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="col-xs-offset-3 col-xs-6">
+            <input type="hidden" name="_csrf" value="{{ csrf() }}">
+            <button type="submit" class="btn btn-primary">更新</button>
+          </div>
+        </div>
+
+      </fieldset>
+      </form>
+
     </div>
   </div>
 
   <script>
     $(function()
     {
-      $('#appSettingForm, #secSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm').each(function() {
+      $('#appSettingForm, #secSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(function() {
         $(this).submit(function()
         {
           function showMessage(formId, msg, status) {
