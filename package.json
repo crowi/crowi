@@ -28,6 +28,7 @@
     "npm": "4.x"
   },
   "dependencies": {
+    "@octokit/rest": "^15.2.5",
     "@slack/client": "~3.13.0",
     "async": "~1.5.0",
     "aws-sdk": "~2.88.0",
