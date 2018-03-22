@@ -11,9 +11,9 @@ services:
       FILE_UPLOAD: local
     volumes:
     - .:/crowi
-    - /crowi/node_modules
-    - /crowi/public/css
-    - /crowi/public/js
+    - node_modules:/crowi/node_modules
+    - css:/crowi/public/css
+    - js:/crowi/public/js
     restart: always
     ports:
     - 3000:3000
@@ -52,3 +52,8 @@ services:
     restart: always
     ports:
     - 8080:8080
+
+volumes:
+  node_modules:
+  css:
+  js:
