@@ -25,6 +25,14 @@ services:
     - elasticsearch
     - redis
     - plantuml
+  gulp:
+    build: .
+    command: npm run build watch
+    volumes:
+    - .:/crowi
+    - node_modules:/crowi/node_modules
+    - css:/crowi/public/css
+    - js:/crowi/public/js
 
   mongodb:
     image: mongo:3.6.3
