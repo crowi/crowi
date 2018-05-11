@@ -25,6 +25,7 @@ services:
     - elasticsearch
     - redis
     - plantuml
+
   gulp:
     build: .
     command: npm run build watch
