@@ -20,8 +20,8 @@ const config = {
     admin:        path.join(__dirname, '/../client/crowi-admin.js'),
   },
   output: {
-    path: path.join(__dirname, "/../public/js"),
-    filename: "[name].js"
+    path: path.join(__dirname, '/../public/js'),
+    filename: '[name].js'
   },
   devtool: 'inline-source-map',
   resolve: {
@@ -42,7 +42,7 @@ const config = {
   },
   plugins: [
     new webpack.optimize.CommonsChunkPlugin({
-      name: "bundled",
+      name: 'bundled',
       minChunks: Infinity,
     }),
     new webpack.ProvidePlugin({
