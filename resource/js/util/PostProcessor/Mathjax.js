@@ -52,6 +52,10 @@ export default class Mathjax {
       return html;
     }
 
+    if (typeof dom === 'undefined') {
+      return html;
+    }
+
     const intervalId = setInterval(() => {
       if (this.crowi.window.MathJax) {
         const MathJax = this.crowi.window.MathJax;
