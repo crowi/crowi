@@ -1,6 +1,6 @@
 {
   "name": "crowi",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "description": "The simple & powerful Wiki",
   "tags": [
     "wiki",
@@ -24,8 +24,8 @@
     "url": "https://github.com/crowi/crowi.git"
   },
   "engines": {
-    "node": "6.x",
-    "npm": "4.x"
+    "node": "8.x",
+    "npm": "5.x"
   },
   "dependencies": {
     "@slack/client": "~3.13.0",
