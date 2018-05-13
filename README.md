@@ -66,6 +66,11 @@ or please write `.env`.
 * `SECRET_TOKEN`: A secret key for verifying the integrity of signed cookies.
 * `FILE_UPLOAD`: `aws` (default), `local`, `none`
 
+Optional:
+
+* `MATHJAX`: If set `1`, enable MathJax feature.
+* `PLANTUML_URI`: If set the url of PlantUML server, then enable PlantUML feature. e.g. `http://localhost:18080`.
+
 see: [.env.sample](./.env.sample)
 
 License
