@@ -9,7 +9,7 @@ services:
       NODE_ENV: development
       MONGO_URI: mongodb://mongodb:27017/crowi
       REDIS_URL: redis://redis:6379/crowi
-      ELASTICSEARCH_URI: elasticsearch:9200/crowi
+      ELASTICSEARCH_URI: elasticsearch1:9200/
       PLANTUML_URI: //localhost:8080
       FILE_UPLOAD: local
     volumes:
@@ -22,7 +22,7 @@ services:
     - 3000:3000
     links:
     - mongodb
-    - elasticsearch
+    - elasticsearch1
     - redis
     - plantuml
 
@@ -43,15 +43,38 @@ services:
     ports:
     - 27017:27017
 
-  elasticsearch:
-    build:
-      context: ./elasticsearch
+  elasticsearch1:
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.6.9
+    container_name: elasticsearch1
     environment:
+      cluster.name: docker-cluster
+      bootstrap.memory_lock: "true"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
       xpack.security.enabled: "false"
-      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+    - ./data/elasticsearch1:/usr/share/elasticsearch/data
     ports:
     - 9200:9200
-    - 9300:9300
+
+  elasticsearch2:
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.6.9
+    container_name: elasticsearch2
+    environment:
+      cluster.name: docker-cluster
+      bootstrap.memory_lock: "true"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      xpack.security.enabled: "false"
+      discovery.zen.ping.unicast.hosts: elasticsearch1
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+    - ./data/elasticsearch2:/usr/share/elasticsearch/data
 
   redis:
     image: redis:4.0.8
