@@ -68,6 +68,37 @@ or please write `.env`.
 
 see: [.env.sample](./.env.sample)
 
+For develop
+-------------
+
+We can use docker-compose for develop without complicated settings.
+
+```
+$ docker-compose -f docker-compose.development.yml up
+```
+
+### Features
+
+- Express restarts when a file changed
+- Gulp compiled assets automatically
+
+## When a trouble occured
+
+Please try the following commands.
+
+```
+# Stop containers
+$ docker-compose -f docker-compose.development.yml stop
+# Remove containers
+$ docker-compose -f docker-compose.development.yml rm
+# Remove images
+$ docker-compose -f docker-compose.development.yml images -q | xargs docker rmi -f
+# Remove volumes
+$ docker volume rm crowi_css crowi_js crowi_node_modules
+# Build images
+$ docker-compose -f docker-compose.development.yml build
+```
+
 License
 ---------
 
