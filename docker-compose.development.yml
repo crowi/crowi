@@ -29,7 +29,10 @@ services:
     - plantuml
 
   gulp:
-    build: .
+    build:
+      context: .
+      args:
+        NODE_ENV: development
     command: npm run build watch
     volumes:
     - .:/crowi
