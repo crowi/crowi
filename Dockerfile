@@ -8,7 +8,6 @@ ENV NODE_ENV ${NODE_ENV}
 WORKDIR /crowi
 
 ADD . /crowi
-RUN echo ${NODE_ENV}
 RUN npm install --unsafe-perm
 
 CMD npm run start
