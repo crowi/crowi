@@ -5,7 +5,7 @@ machine:
   environment:
     MONGO_URI: mongodb://127.0.0.1/crowi_test
   node:
-      version: 8.9.3
+    version: 8.11.1
   post:
     - npm install -g npm@5
 notify:

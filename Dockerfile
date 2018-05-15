@@ -1,4 +1,4 @@
-FROM node:6.13.1
+FROM node:8.11.1
 
 ARG NODE_ENV="production"
 
