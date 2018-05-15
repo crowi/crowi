@@ -68,6 +68,20 @@ or please write `.env`.
 
 see: [.env.sample](./.env.sample)
 
+For develop
+-------------
+
+We can use docker-compose for develop without complicated settings.
+
+```
+$ docker-compose -f docker-compose.development.yml up
+```
+
+### Features
+
+- Express restarts when a file changed
+- Gulp compiled assets automatically
+
 License
 ---------
 
