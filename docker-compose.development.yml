@@ -28,18 +28,6 @@ services:
     - redis
     - plantuml
 
-  gulp:
-    build:
-      context: .
-      args:
-        NODE_ENV: development
-    command: npm run build watch
-    volumes:
-    - .:/crowi
-    - node_modules:/crowi/node_modules
-    - css:/crowi/public/css
-    - js:/crowi/public/js
-
   mongodb:
     image: mongo:3.6.3
     volumes:
