@@ -1,12 +1,14 @@
 version: '3'
 services:
   crowi:
-    build: .
+    build:
+      context: .
+      args:
+        NODE_ENV: development
     command: npm run dev
     tty: true
     environment:
       DEBUG: "crowi:*"
-      NODE_ENV: development
       MONGO_URI: mongodb://mongodb:27017/crowi
       REDIS_URL: redis://redis:6379/crowi
       ELASTICSEARCH_URI: elasticsearch:9200/
