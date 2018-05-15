@@ -115,7 +115,7 @@
     "flow-bin": "^0.65.0",
     "jshint": "~2.9.5",
     "mocha": "~3.4.2",
-    "nodemon": "~1.14.12",
+    "nodemon": "^1.17.2",
     "proxyquire": "~1.8.0",
     "sinon": "~2.3.8",
     "sinon-chai": "~2.12.0"
