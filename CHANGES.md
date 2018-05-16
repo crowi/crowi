@@ -7,6 +7,7 @@ CHANGES
 - Fix: Handle error on search page (#276)
 - Fix: Clear session when failing google login (Thank you @chuganzy, #273)
 - Fix: Error on bulk operation for adding large amout of pages to search (#271)
+- Fix: Specify bonsai version for heroku.
 - Dev: Added docker-compose for development environment.
 
 ## 1.6.3
