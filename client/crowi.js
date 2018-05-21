@@ -710,6 +710,10 @@ $(function() {
   $('a[data-toggle="tab"][href="#revision-body"]').on('show.bs.tab', function() {
     window.history.pushState('', '',  location.href.replace(location.hash, ''));
   });
+
+  $(document).on('click', '#external-share .dropdown-menu', function (e) {
+    e.stopPropagation();
+  });
 });
 
 Crowi.findHashFromUrl = function(url)

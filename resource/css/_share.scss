@@ -1,0 +1,16 @@
+.share-box {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  width: 30rem;
+
+  .share-box-header {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .share-box-content {
+    margin-top: 8px;
+    padding: 8px 0;
+  }
+}

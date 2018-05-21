@@ -16,6 +16,16 @@
     <div class="flex-title-line">
       <h1 class="title flex-item-title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
       {% if page %}
+      <div id="external-share" class="flex-item-action dropdown">
+        <button class="btn btn-primary" data-toggle="dropdown">
+          <i class="fa fa-external-link-alt"></i>
+          Share
+          <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu pull-right">
+          <li id="share-box"></li>
+        </ul>
+      </div>
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">

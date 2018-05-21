@@ -12,6 +12,7 @@ import PageAttachment   from './components/PageAttachment';
 import PageAlerts       from './components/PageAlerts';
 import SeenUserList     from './components/SeenUserList';
 import BookmarkButton   from './components/BookmarkButton';
+import ShareBox  from './components/ShareBox';
 //import PageComment  from './components/PageComment';
 
 if (!window) {
@@ -52,6 +53,7 @@ const componentMappings = {
   //'page-comment': <PageComment />,
   'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
+  'share-box': <ShareBox />,
 
 };
 
