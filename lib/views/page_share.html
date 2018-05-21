@@ -1,0 +1,93 @@
+{% extends 'layout/single.html' %}
+
+{% block html_title %}{{ path|path2name }} · {{ path }}{% endblock %}
+
+{% block layout_head_nav %}
+<nav class="crowi-header navbar navbar-default" role="navigation">
+  <!-- Brand and toggle get grouped for better mobile display -->
+  <div class="navbar-header">
+    <a class="navbar-brand" href="/">
+      <img alt="Crowi" src="/logo/32x32.png" width="16">
+      <span class="hidden-xs">{% block title %}{{ config.crowi['app:title']|default('Crowi') }}{% endblock %}</span>
+    </a>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content_head %}
+
+{% block content_head_before %}
+{% endblock %}
+
+{% block content_head_after %}
+{% endblock %}
+
+{% endblock %}
+
+{% block content_main %}
+
+{% block content_main_before %}
+{% endblock %}
+
+<div id="content-main" class="content-main {% if not page or req.body.pageForm %}on-edit{% endif %}"
+  data-path="{{ path }}"
+  data-path-shortname="{{ path|path2name }}"
+  data-page-id="{% if page %}{{ page._id.toString() }}{% endif %}"
+  data-current-user="{% if user %}{{ user._id.toString() }}{% endif %}"
+  data-current-username="{% if user %}{{ user.username }}{% endif %}"
+  data-page-revision-id="{% if revision %}{{ revision._id.toString() }}{% endif %}"
+  data-page-revision-created="{% if revision %}{{ revision.createdAt|datetz('U') }}{% endif %}"
+  data-page-is-seen="{% if page and page.isSeenUser(user) %}1{% else %}0{% endif %}"
+  data-csrftoken="{{ csrf() }}"
+  >
+
+  <div class="tab-content wiki-content">
+
+    <script type="text/template" id="raw-text-original">{{ revision.body }}</script>
+
+    {# formatted text #}
+    <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
+      <div class="revision-toc" id="revision-toc">
+        <a data-toggle="collapse" data-parent="#revision-toc" href="#revision-toc-content" class="revision-toc-head collapsed">{{ t('Table of Contents') }}</a>
+
+      </div>
+      <div class="wiki" id="revision-body-content"></div>
+    </div>
+
+  </div>
+
+  <div id="page-alerts"></div>
+</div>
+
+{% block content_main_after %}
+{% endblock %}
+
+{% endblock %}
+
+{% block content_footer %}
+
+
+{% if page %}
+<div class="page-attachments meta" id="page-attachment">
+</div>
+
+<p class="page-meta meta">
+  {# for BC #}
+  {% if page.lastUpdateUser %}
+    Last updated at {{ page.updatedAt|datetz('Y-m-d H:i:s') }} by <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-rounded"> {{ page.lastUpdateUser.name }}<br>
+  {% else %}
+    Last updated at {{ page.revision.createdAt|datetz('Y-m-d H:i:s') }} by <img src="{{ page.revision.author|picture }}" class="picture picture-rounded"> {{ page.revision.author.name }}<br>
+  {% endif %}
+  {# /for BC #}
+  Created at {{ page.createdAt|datetz('Y-m-d H:i:s') }} by <img src="{{ page.creator|default(page.creator)|picture }}" class="picture picture-rounded"> {{ page.creator.name }}<br>
+</p>
+{% endif %}
+
+{% endblock %}
+
+{% block footer %}
+{% endblock %}
+
+{% block body_end %}
+  {% parent %}
+{% endblock %}
