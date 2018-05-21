@@ -5,7 +5,7 @@ export default class Icon extends React.Component {
 
   render() {
     const name = this.props.name || null;
-    const isSpin = this.props.spin ? ' fa-spinner' : '';
+    const isSpin = this.props.spin ? ' fa-spinner fa-pulse' : '';
     const { solid: s, regular: r, light: l } = this.props;
     const type = s ? 's' : r ? 'r' : l ? 'l' :'';
 
