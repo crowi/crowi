@@ -435,7 +435,7 @@ $(function() {
 
     $.getJSON('/_api/check_username', {username: username}, function(json) {
       if (!json.valid) {
-        $('#help-block-username').html('<i class="fa fa-warning"></i> This User ID is not available.<br>');
+        $('#help-block-username').html('<i class="fa fa-exclamation-triangle"></i> This User ID is not available.<br>');
         $('#input-group-username').addClass('has-error');
       }
     });
