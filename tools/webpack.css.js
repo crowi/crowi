@@ -32,7 +32,7 @@ const config = {
             options: {
               includePaths: [
                 './node_modules/bootstrap-sass/assets/stylesheets',
-                './node_modules/font-awesome/scss',
+                './node_modules/@fortawesome/fontawesome-free-webfonts/scss',
                 './node_modules/reveal.js/css',
               ]
             }
