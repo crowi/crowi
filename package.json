@@ -104,6 +104,7 @@
     "sprintf": "~0.1.5",
     "style-loader": "~0.19.0",
     "swig": "~1.4.0",
+    "uuid": "^3.2.1",
     "vinyl-source-stream": "~1.1.0",
     "webpack": "~3.6.0",
     "webpack-merge": "~4.1.0",

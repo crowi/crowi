@@ -53,7 +53,7 @@ const componentMappings = {
   //'page-comment': <PageComment />,
   'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
-  'share-box': <ShareBox />,
+  'share-box': <ShareBox pageId={pageId} crowi={crowi} />,
 
 };
 
