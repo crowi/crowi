@@ -12,5 +12,11 @@
   .share-box-content {
     margin-top: 8px;
     padding: 8px 0;
+
+    .input-group-btn {
+      > .btn {
+        padding: 6px 12px 7px;
+      }
+    }
   }
 }
