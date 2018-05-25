@@ -98,8 +98,6 @@ $ docker-compose -f docker-compose.development.yml stop
 $ docker-compose -f docker-compose.development.yml rm
 # Remove images
 $ docker-compose -f docker-compose.development.yml images -q | xargs docker rmi -f
-# Remove volumes
-$ docker volume rm crowi_css crowi_js crowi_node_modules
 # Build images
 $ docker-compose -f docker-compose.development.yml build
 ```
