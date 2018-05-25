@@ -27,11 +27,29 @@ function ActionButton(isCreated, isChanging, createAction, deleteAction) {
   );
 }
 
+function Content(isCreated, share) {
+  const baseUrl = "http://localhost:3000";
+  const isActive = share => share.status === "active";
+  const activeShare = share.filter(isActive).length > 0 ? share.filter(isActive)[0] : {};
+  const shareId = activeShare.id;
+  const url = `${baseUrl}/_share/${shareId}`;
+  console.log(share);
+  return isCreated ? (
+    <div className="input-group">
+      <span className="input-group-addon">共有用リンク</span>
+      <input readOnly="" className="copy-link form-control" type="text" value={ url } />
+    </div>
+  ) : (
+    "まだリンクは作成されていません"
+  );
+}
+
 export default class ShareBox extends React.Component {
   constructor(props) {
     super(props);
 
     this.state = {
+      share: [],
       isChanging: false,
       isCreated: props.isCreated
     };
@@ -45,6 +63,7 @@ export default class ShareBox extends React.Component {
     this.props.crowi
       .apiGet("/shares.list", { page_id: this.props.pageId })
       .then(({ share }) => {
+        this.updateState({ share });
         if (share.filter(share => share.status === "active").length > 0) {
           this.updateState({ isCreated: true });
         }
@@ -55,11 +74,8 @@ export default class ShareBox extends React.Component {
   }
 
   updateState(state) {
-    const isChanging =
-      state.isChanging === undefined ? this.state.isChanging : state.isChanging;
-    const isCreated =
-      state.isCreated === undefined ? this.state.isCreated : state.isCreated;
-    this.setState({ isChanging, isCreated });
+    const newState = Object.assign(this.state, state);
+    this.setState(newState);
   }
 
   updateLink(promise) {
@@ -86,20 +102,8 @@ export default class ShareBox extends React.Component {
     this.updateLink(this.props.crowi.apiPost("/shares.delete", { page_id: this.props.pageId }));
   }
 
-  // <button type="submit" class="btn btn-danger btn-sm">
-  //   <i class="fa fa-unlink" aria-hidden="true"></i>
-  //     リンクを削除
-  //   </button>
-  // </div>
-  // <div class="share-box-content">
-  //   <div class="input-group">
-  //     <span class="input-group-addon">共有用リンク</span>
-  //     <input readonly="" class="copy-link form-control" type="text" value="http://localhost:3000/5afa882da0238b00d24535d1" />
-  //   </div>
-  // </div>
-
   render() {
-    const { isCreated, isChanging } = this.state;
+    const { share, isCreated, isChanging } = this.state;
     return (
       <div className="share-box">
         <div className="share-box-header">
@@ -111,7 +115,12 @@ export default class ShareBox extends React.Component {
             this.deleteLink
           )}
         </div>
-        <div className="share-box-content">まだリンクは作成されていません</div>
+        <div className="share-box-content">
+          {Content(
+            isCreated,
+            share
+          )}
+        </div>
       </div>
     );
   }
