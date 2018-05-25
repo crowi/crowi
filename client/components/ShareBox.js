@@ -34,9 +34,16 @@ function Content(isCreated, activeShare) {
     const url = `${baseUrl}/_share/${shareId}`;
     return (
       <div className="input-group">
-        <input className="copy-link form-control" type="text" defaultValue={ url } readOnly />
+        <input
+          className="copy-link form-control"
+          type="text"
+          defaultValue={url}
+          readOnly
+        />
         <span className="input-group-btn">
-          <button className="btn btn-default" type="button">Copy</button>
+          <button className="btn btn-default" type="button">
+            Copy
+          </button>
         </span>
       </div>
     );
@@ -88,23 +95,29 @@ export default class ShareBox extends React.Component {
     this.updateState({ isChanging: true });
     promise
       .then(({ share }) => {
-        console.log(isCreated, !isCreated)
         this.updateState({ isCreated: !isCreated, activeShare: share });
       })
       .catch(err => {
         alert(err.message);
       })
       .finally(() => {
-        this.updateState({ isChanging: false })
-      })
+        this.updateState({ isChanging: false });
+      });
   }
 
   createLink(e) {
-    this.updateLink(this.props.crowi.apiPost("/shares.create", { id: uuidv4(), page_id: this.props.pageId }));
+    this.updateLink(
+      this.props.crowi.apiPost("/shares.create", {
+        id: uuidv4(),
+        page_id: this.props.pageId
+      })
+    );
   }
 
   deleteLink(e) {
-    this.updateLink(this.props.crowi.apiPost("/shares.delete", { page_id: this.props.pageId }));
+    this.updateLink(
+      this.props.crowi.apiPost("/shares.delete", { page_id: this.props.pageId })
+    );
   }
 
   render() {
@@ -121,10 +134,7 @@ export default class ShareBox extends React.Component {
           )}
         </div>
         <div className="share-box-content">
-          {Content(
-            isCreated,
-            activeShare
-          )}
+          {Content(isCreated, activeShare)}
         </div>
       </div>
     );
