@@ -27,21 +27,21 @@ function ActionButton(isCreated, isChanging, createAction, deleteAction) {
   );
 }
 
-function Content(isCreated, share) {
-  const baseUrl = "http://localhost:3000";
-  const isActive = share => share.status === "active";
-  const activeShare = share.filter(isActive).length > 0 ? share.filter(isActive)[0] : {};
-  const shareId = activeShare.id;
-  const url = `${baseUrl}/_share/${shareId}`;
-  console.log(share);
-  return isCreated ? (
-    <div className="input-group">
-      <span className="input-group-addon">共有用リンク</span>
-      <input readOnly="" className="copy-link form-control" type="text" value={ url } />
-    </div>
-  ) : (
-    "まだリンクは作成されていません"
-  );
+function Content(isCreated, activeShare) {
+  if (isCreated) {
+    const baseUrl = "http://localhost:3000";
+    const shareId = activeShare.id;
+    const url = `${baseUrl}/_share/${shareId}`;
+    return (
+      <div className="input-group">
+        <input className="copy-link form-control" type="text" defaultValue={ url } readOnly />
+        <span className="input-group-btn">
+          <button className="btn btn-default" type="button">Copy</button>
+        </span>
+      </div>
+    );
+  }
+  return "まだリンクは作成されていません";
 }
 
 export default class ShareBox extends React.Component {
@@ -49,7 +49,8 @@ export default class ShareBox extends React.Component {
     super(props);
 
     this.state = {
-      share: [],
+      shares: [],
+      activeShare: {},
       isChanging: false,
       isCreated: props.isCreated
     };
@@ -64,8 +65,12 @@ export default class ShareBox extends React.Component {
       .apiGet("/shares.list", { page_id: this.props.pageId })
       .then(({ share }) => {
         this.updateState({ share });
-        if (share.filter(share => share.status === "active").length > 0) {
-          this.updateState({ isCreated: true });
+        const isActive = share => share.status === "active";
+        const activeShares = share.filter(isActive);
+        const hasActive = activeShares.length > 0;
+        const activeShare = hasActive ? activeShares[0] : {};
+        if (hasActive) {
+          this.updateState({ isCreated: true, activeShare });
         }
       })
       .catch(err => {
@@ -82,9 +87,9 @@ export default class ShareBox extends React.Component {
     const { isCreated } = this.state;
     this.updateState({ isChanging: true });
     promise
-      .then(() => {
+      .then(({ share }) => {
         console.log(isCreated, !isCreated)
-        this.updateState({ isCreated: !isCreated });
+        this.updateState({ isCreated: !isCreated, activeShare: share });
       })
       .catch(err => {
         alert(err.message);
@@ -103,7 +108,7 @@ export default class ShareBox extends React.Component {
   }
 
   render() {
-    const { share, isCreated, isChanging } = this.state;
+    const { activeShare, isCreated, isChanging } = this.state;
     return (
       <div className="share-box">
         <div className="share-box-header">
@@ -118,7 +123,7 @@ export default class ShareBox extends React.Component {
         <div className="share-box-content">
           {Content(
             isCreated,
-            share
+            activeShare
           )}
         </div>
       </div>
