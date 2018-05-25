@@ -29,9 +29,8 @@ function ActionButton(isCreated, isChanging, createAction, deleteAction) {
 
 function Content(isCreated, activeShare) {
   if (isCreated) {
-    const baseUrl = "http://localhost:3000";
     const shareId = activeShare.id;
-    const url = `${baseUrl}/_share/${shareId}`;
+    const url = `${location.origin}/_share/${shareId}`;
     return (
       <div className="input-group">
         <input
