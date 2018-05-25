@@ -46,7 +46,7 @@ export default class Attachment extends React.Component {
 
           {fileInUse}
 
-          <a className="text-danger attachment-delete" onClick={this._onAttachmentDeleteClicked}><Icon name="trash" regular /></a>
+          <a className="text-danger attachment-delete" onClick={this._onAttachmentDeleteClicked}><Icon name="trash" solid /></a>
       </li>
     );
   }
