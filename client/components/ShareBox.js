@@ -27,7 +27,7 @@ function ActionButton(isCreated, isChanging, createAction, deleteAction) {
   );
 }
 
-function Content(isCreated, activeShare) {
+function Content(isCreated, activeShare, createRef, selectAction, copyAction) {
   if (isCreated) {
     const shareId = activeShare.id;
     const url = `${location.origin}/_share/${shareId}`;
@@ -38,8 +38,10 @@ function Content(isCreated, activeShare) {
           type="text"
           defaultValue={url}
           readOnly
+          onClick={selectAction}
+          ref={createRef}
         />
-        <span className="input-group-btn">
+        <span className="input-group-btn" onClick={copyAction}>
           <button className="btn btn-default" type="button">
             Copy
           </button>
@@ -64,6 +66,9 @@ export default class ShareBox extends React.Component {
     this.updateLink = this.updateLink.bind(this);
     this.createLink = this.createLink.bind(this);
     this.deleteLink = this.deleteLink.bind(this);
+    this.selectAction = this.selectAction.bind(this);
+    this.createRef = this.createRef.bind(this);
+    this.copyAction = this.copyAction.bind(this);
   }
 
   componentDidMount() {
@@ -119,6 +124,19 @@ export default class ShareBox extends React.Component {
     );
   }
 
+  selectAction(e) {
+    this.inputRef.select();
+  }
+
+  createRef(node) {
+    this.inputRef = node;
+  }
+
+  copyAction(e) {
+    this.inputRef.select();
+    document.execCommand("copy");
+  }
+
   render() {
     const { activeShare, isCreated, isChanging } = this.state;
     return (
@@ -133,7 +151,13 @@ export default class ShareBox extends React.Component {
           )}
         </div>
         <div className="share-box-content">
-          {Content(isCreated, activeShare)}
+          {Content(
+            isCreated,
+            activeShare,
+            this.createRef,
+            this.selectAction,
+            this.copyAction
+          )}
         </div>
       </div>
     );
