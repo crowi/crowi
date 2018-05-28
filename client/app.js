@@ -12,7 +12,7 @@ import PageAttachment   from './components/PageAttachment';
 import PageAlerts       from './components/PageAlerts';
 import SeenUserList     from './components/SeenUserList';
 import BookmarkButton   from './components/BookmarkButton';
-import ShareBox  from './components/ShareBox';
+import ShareBox         from './components/ExternalShare/ShareBox';
 //import PageComment  from './components/PageComment';
 
 if (!window) {
