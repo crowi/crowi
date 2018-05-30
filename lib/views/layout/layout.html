@@ -22,9 +22,8 @@
   <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96">
   <link rel="icon" type="image/png" href="/android-chrome-192x192.png" sizes="192x192">
 
-  <link rel="stylesheet" href="/css/crowi{% if env  == 'production' %}.min{% endif %}.css">
+  <link rel="stylesheet" href="/css/crowi.css">
 
-  <script src="{{ assets('/js/polyfill.js') }}"></script>
   <script src="{{ assets('/js/bundled.js') }}"></script>
   <link href='//fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
 </head>
@@ -147,6 +146,6 @@
 {{ local_config|json|safe }}
 </script>
 
-<script src="{{ assets('/js/crowi.js') }}"></script>
 <script src="{{ assets('/js/app.js') }}"></script>
+<script src="{{ assets('/js/crowi.js') }}"></script>
 </html>

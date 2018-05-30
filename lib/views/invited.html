@@ -18,11 +18,11 @@
 <div class="login-dialog" id="login-dialog">
 
   <div class="login-dialog-inner front">
-    <h2>ユーザー情報入力</h2>
+    <h2>{{ t('Sign up') }}</h2>
 
     <p>
-    ようこそ!<br>
-    はじめに、あなたのことを教えて下さい。
+    Welcome to {{ config.crowi['app:title'] }}!<br>
+    {{ t('page_register.note.invited') }}
     </p>
 
     <div id="login-form-errors">
@@ -45,43 +45,43 @@
     </div>
     <form role="form" id="invited-form" action="/login/activateInvited" method="post">
 
-      <label>メールアドレス</label>
+      <label>{{ t('Email') }}</label>
       <div class="input-group">
         <span class="input-group-addon"><i class="fa fa-envelope"></i></span>
         <input type="text" class="form-control" disabled value="{{ user.email }}">
       </div>
       <p class="help-block">
-      このメールアドレスで招待を受け取っています。
+      {{ t('page_register.form_help.invited_email') }}
       </p>
 
-      <label>ユーザーID</label>
+      <label>{{ t('User ID') }}</label>
       <div class="input-group" id="input-group-username">
         <span class="input-group-addon"><strong>@</strong></span>
-        <input type="text" class="form-control" placeholder="記入例: taroyama" name="invitedForm[username]" value="{{ req.body.invitedForm.username }}" required>
+        <input type="text" class="form-control" placeholder="{{ t('Example') }}: taroyama" name="invitedForm[username]" value="{{ req.body.invitedForm.username }}" required>
       </div>
       <p class="help-block">
       <span id="help-block-username" class="text-danger"></span>
-      ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。
+      {{ t('page_register.form_help.user_id') }}
       </p>
 
-      <label>名前</label>
+      <label>{{ t('Name') }}</label>
       <div class="input-group">
         <span class="input-group-addon"><i class="fa fa-user"></i></span>
-        <input type="text" class="form-control" placeholder="記入例: 山田 太郎" name="invitedForm[name]" value="{{ req.body.invitedForm.name }}" required>
+        <input type="text" class="form-control" placeholder="{{ t('Example') }}: {{ t('Taro Yamada') }}" name="invitedForm[name]" value="{{ req.body.invitedForm.name }}" required>
       </div>
 
-      <label>パスワード</label>
+      <label>{{ t('Password') }}</label>
       <div class="input-group">
         <span class="input-group-addon"><i class="fa fa-key"></i></span>
         <input type="password" class="form-control" placeholder="Password" name="invitedForm[password]" required>
       </div>
       <p class="help-block">
-      現在、仮パスワードでログインしています。新しいパスワードを決定してください。<br>
-      パスワードは6文字以上の半角英数字または記号
+      {{ t('page_register.form_help.invited_password') }}<br>
+      {{ t('page_register.form_help.password') }}
       </p>
 
       <input type="hidden" name="_csrf" value="{{ csrf() }}">
-      <input type="submit" class="btn btn-primary btn-lg btn-block" value="登録を完了">
+      <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('Sign up') }}">
     </form>
 
     <hr>
@@ -89,22 +89,6 @@
   </div>
 </div>
 
-<script>
-$(function() {
-  $('#invited-form input[name="invitedForm[username]"]').change(function(e) {
-    var username = $(this).val();
-    $('#input-group-username').removeClass('has-error');
-    $('#help-block-username').html("");
-
-    $.getJSON('/_api/check_username', {username: username}, function(json) {
-      if (!json.valid) {
-        $('#help-block-username').html('<i class="fa fa-warning"></i>このユーザーIDは利用できません。<br>');
-        $('#input-group-username').addClass('has-error');
-      }
-    });
-  });
-});
-</script>
 </div>
 
 {% endblock %}
