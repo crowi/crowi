@@ -66,6 +66,11 @@ or please write `.env`.
 * `SECRET_TOKEN`: A secret key for verifying the integrity of signed cookies.
 * `FILE_UPLOAD`: `aws` (default), `local`, `none`
 
+Optional:
+
+* `MATHJAX`: If set `1`, enable MathJax feature.
+* `PLANTUML_URI`: If set the url of PlantUML server, then enable PlantUML feature. e.g. `http://localhost:18080`.
+
 see: [.env.sample](./.env.sample)
 
 For develop
@@ -93,8 +98,6 @@ $ docker-compose -f docker-compose.development.yml stop
 $ docker-compose -f docker-compose.development.yml rm
 # Remove images
 $ docker-compose -f docker-compose.development.yml images -q | xargs docker rmi -f
-# Remove volumes
-$ docker volume rm crowi_css crowi_js crowi_node_modules
 # Build images
 $ docker-compose -f docker-compose.development.yml build
 ```

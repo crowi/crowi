@@ -1,12 +1,7 @@
 version: '3'
 services:
-  crowi:
-    build:
-      context: .
-      args:
-        NODE_ENV: development
-    command: npm run dev
-    tty: true
+  node:
+    image: node:8.11.2
     environment:
       DEBUG: "crowi:*"
       MONGO_URI: mongodb://mongodb:27017/crowi
@@ -14,39 +9,26 @@ services:
       ELASTICSEARCH_URI: elasticsearch:9200/
       PLANTUML_URI: //localhost:8080
       FILE_UPLOAD: local
+    working_dir: /home/node/app
     volumes:
-    - .:/crowi
-    - node_modules:/crowi/node_modules
-    - css:/crowi/public/css
-    - js:/crowi/public/js
-    restart: always
+      - ./:/home/node/app
+      - /home/node/app/node_modules
     ports:
-    - 3000:3000
+      - 3000:3000
     links:
-    - mongodb
-    - elasticsearch
-    - redis
-    - plantuml
-
-  gulp:
-    build:
-      context: .
-      args:
-        NODE_ENV: development
-    command: npm run build watch
-    volumes:
-    - .:/crowi
-    - node_modules:/crowi/node_modules
-    - css:/crowi/public/css
-    - js:/crowi/public/js
+      - mongodb
+      - elasticsearch
+      - redis
+      - plantuml
+    command: bash -c "npm install && npm run dev"
 
   mongodb:
     image: mongo:3.6.3
     volumes:
-    - ./data/mongodb:/data/db
+      - ./data/mongodb:/data/db
     restart: always
     ports:
-    - 27017:27017
+      - 27017:27017
 
   elasticsearch:
     build:
@@ -64,23 +46,18 @@ services:
         soft: -1
         hard: -1
     volumes:
-    - ./data/elasticsearch:/usr/share/elasticsearch/data
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
     ports:
-    - 9200:9200
+      - 9200:9200
 
   redis:
     image: redis:4.0.8
     restart: always
     ports:
-    - 6379:6379
+      - 6379:6379
 
   plantuml:
     image: plantuml/plantuml-server:latest
     restart: always
     ports:
-    - 8080:8080
-
-volumes:
-  node_modules:
-  css:
-  js:
+      - 8080:8080

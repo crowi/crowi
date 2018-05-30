@@ -1,3 +1,5 @@
+import Crowi from './Crowi';
+
 import marked from 'marked';
 import hljs from 'highlight.js';
 

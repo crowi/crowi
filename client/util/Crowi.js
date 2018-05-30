@@ -3,6 +3,7 @@
  */
 
 import axios from 'axios'
+import io from 'socket.io-client';
 
 export default class Crowi {
   constructor(context, window) {
@@ -29,6 +30,8 @@ export default class Crowi {
     this.draft = {};
 
     this.recoverData();
+
+    this.socket = io();
   }
 
   getContext() {
@@ -41,6 +44,10 @@ export default class Crowi {
 
   getConfig() {
     return this.config;
+  }
+
+  getWebSocket() {
+    return this.socket;
   }
 
   recoverData() {
