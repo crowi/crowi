@@ -4,7 +4,7 @@ Crowi - The Simple & Powerful Communication Tool Based on Wiki
 ================================================================
 
 
-[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.6.0)
+[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.6.4)
 
 [![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
 [![Join the chat at https://gitter.im/crowi/general](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/crowi/general)
@@ -98,8 +98,6 @@ $ docker-compose -f docker-compose.development.yml stop
 $ docker-compose -f docker-compose.development.yml rm
 # Remove images
 $ docker-compose -f docker-compose.development.yml images -q | xargs docker rmi -f
-# Remove volumes
-$ docker volume rm crowi_css crowi_js crowi_node_modules
 # Build images
 $ docker-compose -f docker-compose.development.yml build
 ```

@@ -1,6 +1,15 @@
 CHANGES
 ========
 
+## 1.6.4
+
+- Fix: Can't unportalize in case (#286)
+- Fix: Handle error on search page (#276)
+- Fix: Clear session when failing google login (Thank you @chuganzy, #273)
+- Fix: Error on bulk operation for adding large amout of pages to search (#271)
+- Fix: Specify bonsai version for heroku.
+- Dev: Added docker-compose for development environment.
+
 ## 1.6.3
 
 - Fix: Invalid MathJax setting
