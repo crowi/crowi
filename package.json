@@ -73,7 +73,7 @@
     "i18next-node-fs-backend": "~1.0.0",
     "i18next-sprintf-postprocessor": "~0.2.2",
     "inline-attachment": "~2.0.3",
-    "jquery": "~2.1.4",
+    "jquery": "~3.3.1",
     "jquery.cookie": "~1.4.1",
     "jshint-stylish": "~2.2.0",
     "kerberos": "0.0.23",
