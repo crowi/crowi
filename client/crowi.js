@@ -286,7 +286,7 @@ $(function() {
         $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.');
 
         setTimeout(function() {
-          top.location.href = page.path + '?renamed=' + pagePath;
+          top.location.href = page.path + '?redirectFrom=' + pagePath;
         }, 1000);
       }
     });
