@@ -2,17 +2,21 @@
 /* Author: Sotaro KARASAWA <sotarok@crocos.co.jp>
 */
 
-var io = require('socket.io-client');
+import $ from 'jquery';
 
+import 'bootstrap-sass';
+import 'jquery.cookie';
 //require('bootstrap-sass');
 //require('jquery.cookie');
 
-var Crowi = {};
+const Crowi = {};
 
 if (!window) {
   window = {};
 }
 window.Crowi = Crowi;
+
+const crowi = window.crowi;
 
 Crowi.createErrorView = function(msg) {
   $('#main').prepend($('<p class="alert-message error">' + msg + '</p>'));
@@ -282,7 +286,7 @@ $(function() {
         $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.');
 
         setTimeout(function() {
-          top.location.href = page.path + '?renamed=' + pagePath;
+          top.location.href = page.path + '?redirectFrom=' + pagePath;
         }, 1000);
       }
     });
@@ -436,6 +440,21 @@ $(function() {
       }
     });
   });
+
+  // omg /login/invited
+  $('#invited-form input[name="invitedForm[username]"]').change(function(e) {
+    var username = $(this).val();
+    $('#input-group-username').removeClass('has-error');
+    $('#help-block-username').html("");
+
+    $.getJSON('/_api/check_username', {username: username}, function(json) {
+      if (!json.valid) {
+        $('#help-block-username').html('<i class="fa fa-warning"></i> This User ID is not available.<br>');
+        $('#input-group-username').addClass('has-error');
+      }
+    });
+  });
+
 
   if (pageId) {
 
@@ -678,17 +697,6 @@ $(function() {
       }
     }).on('click', '.fullscreen-layer', function() {
       $b.toggleClass('overlay-on');
-    });
-
-    //
-    var me = $('body').data('me');
-    var socket = io();
-    socket.on('page edited', function (data) {
-      if (data.user._id != me
-        && data.page.path == pagePath) {
-        $('#notifPageEdited').show();
-        $('#notifPageEdited .edited-user').html(data.user.name);
-      }
     });
   } // end if pageId
 

@@ -86,6 +86,9 @@
     "sign_up": "Sign up",
     "sign_up_with": "Sign up with %s Account",
     "sign_in_is_here": "Sign in",
+    "note": {
+        "invited": "Tell me a bit about you :)"
+    },
     "notice": {
       "restricted": "Admin approval required.",
       "restricted_defail": "Once the admin approves your sign up, you'll be able to access this wiki.",
@@ -95,7 +98,9 @@
     "form_help": {
       "email": "You must have email address which listed below to sign up to this wiki.",
       "password": "Your password must be at least 6 characters long.",
-      "user_id": "The URL of pages you create will contain your User ID. Your User ID can consist of letters, numbers, and some symbols."
+      "user_id": "The URL of pages you create will contain your User ID. Your User ID can consist of letters, numbers, and some symbols.",
+      "invited_email": "You've invited with this email address.",
+      "invited_password": "Please change current temporary password."
     }
   },
 

@@ -348,8 +348,6 @@ input.searching {
 
 // notification
 .fk-notif {
-  display: none;
-
   bottom: 0;
   left: 0;
   width: 100%;
@@ -445,3 +443,9 @@ input.searching {
     border: 0;
   }
 }
+
+
+
+// import
+@import '../../node_modules/highlight.js/styles/tomorrow-night.css';
+@import '../../node_modules/diff2html/dist/diff2html.css';
