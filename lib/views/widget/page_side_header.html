@@ -27,7 +27,7 @@
   <div class="like-box">
     <dl class="dl-horizontal">
       <dt>
-        <i class="fa fa-thumbs-o-up"></i> {{ t('Like!') }}
+        <i class="far fa-thumbs-up"></i> {{ t('Like!') }}
       </dt>
       <dd>
         <p class="liker-count">
@@ -36,7 +36,7 @@
           data-csrftoken="{{ csrf() }}"
           data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
           class="like-button btn btn-default btn-sm {% if page.isLiked(user) %}active{% endif %}"
-          ><i class="fa fa-thumbs-o-up"></i> {{ t('Like!') }}</button>
+          ><i class="far fa-thumbs-up"></i> {{ t('Like!') }}</button>
         </p>
         <p id="liker-list" class="liker-list" data-likers="{{ page.liker|default([])|join(',') }}">
         </p>
