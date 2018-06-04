@@ -1,13 +1,29 @@
-machine:
-  timezone: UTC
-  services:
-    - mongodb
-  environment:
-    MONGO_URI: mongodb://127.0.0.1/crowi_test
-  node:
-    version: 8.11.1
-  post:
-    - npm install -g npm@5
+version: 2
+jobs:
+  build:
+    working_directory: /home/node/app
+    docker:
+      - image: node:8.11.2
+        environment:
+          DEBUG: "crowi:*"
+          MONGO_URI: mongodb://localhost:27017/crowi
+          REDIS_URL: redis://localhost:6379/crowi
+          ELASTICSEARCH_URI: //localhost:9200/
+          PLANTUML_URI: //localhost:8080
+          FILE_UPLOAD: local
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 17.11.0-ce
+      - restore_cache:
+          keys:
+            - node_modules_{{ checksum "package-lock.json" }}
+      - run: npm install
+      - save_cache:
+          key: node_modules_{{ checksum "package-lock.json" }}
+          paths:
+            - /home/node/app/node_modules
+      - run: npm run build
 notify:
   webhooks:
     - url: https://webhooks.gitter.im/e/5a035388e3274b621d20
