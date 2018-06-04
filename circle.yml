@@ -5,7 +5,7 @@ jobs:
     docker:
       - image: node:8.11.2
         environment:
-          DEBUG: "crowi:*"
+          NODE_ENV: development
           MONGO_URI: mongodb://localhost:27017/crowi
           REDIS_URL: redis://localhost:6379/crowi
           ELASTICSEARCH_URI: //localhost:9200/
