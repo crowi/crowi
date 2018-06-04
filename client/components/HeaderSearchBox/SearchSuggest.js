@@ -21,7 +21,7 @@ export default class SearchSuggest extends React.Component {
     if (this.props.searchError !== null) {
       return (
         <div className="search-suggest" id="search-suggest">
-          <i className="searcing fa fa-warning"></i> Error on searching.
+          <i className="searcing fa fa-exclamation-triangle"></i> Error on searching.
         </div>
       );
     }
