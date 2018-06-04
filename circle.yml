@@ -11,6 +11,7 @@ jobs:
           ELASTICSEARCH_URI: //localhost:9200/
           PLANTUML_URI: //localhost:8080
           FILE_UPLOAD: local
+      - image: mongo:3.6.3
     steps:
       - checkout
       - setup_remote_docker:
@@ -24,6 +25,7 @@ jobs:
           paths:
             - /home/node/app/node_modules
       - run: npm run build
+      - run: npm run test
 notify:
   webhooks:
     - url: https://webhooks.gitter.im/e/5a035388e3274b621d20
