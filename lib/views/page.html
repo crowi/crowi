@@ -19,7 +19,7 @@
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
-            <i class="fa fa-star-o"></i>
+            <i class="far fa-star"></i>
           </p>
         </span>
       </div>
@@ -28,7 +28,7 @@
             data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
             class="like-button btn btn-default btn-sm {% if page.isLiked(user) %}active{% endif %}"
-        ><i class="fa fa-thumbs-o-up"></i></button>
+        ><i class="far fa-thumbs-up"></i></button>
       </div>
       {% endif %}
     </div>
@@ -41,7 +41,7 @@
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
-            <i class="fa fa-star-o"></i>
+            <i class="far fa-star"></i>
           </a>
         </span>
       </div>
@@ -115,7 +115,7 @@
           </form>
         </li>
       </ul>{# /.pull-right #}
-      <i class="fa fa-trash-o" aria-hidden="true"></i>
+      <i class="fa fa-trash-alt" aria-hidden="true"></i>
       This page is in the trash.<br>
       Deleted by <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-sm picture-rounded"> {{ page.lastUpdateUser.name }} at {{ page.updatedAt|datetz('Y-m-d H:i:s') }}
     </div>
@@ -133,7 +133,7 @@
       </a>
     </li>
 
-    <li {% if req.body.pageForm %}class="active"{% endif %}><a href="#edit-form" data-toggle="tab"><i class="fa fa-pencil-square-o"></i> {{ t('Edit') }}</a></li>
+    <li {% if req.body.pageForm %}class="active"{% endif %}><a href="#edit-form" data-toggle="tab"><i class="fa fa-edit"></i> {{ t('Edit') }}</a></li>
 
 
     <li class="dropdown pull-right">
@@ -145,7 +145,7 @@
        <li><a href="?presentation=1" class="toggle-presentation"><i class="fa fa-arrows-alt"></i> {{ t('Presentation Mode') }} (beta)</a></li>
        {% if isDeletablePage() %}
        <li class="divider"></li>
-       <li class=""><a href="#" data-target="#deletePage" data-toggle="modal"><i class="fa fa-trash-o text-danger"></i> {{ t('Delete') }}</a></li>
+       <li class=""><a href="#" data-target="#deletePage" data-toggle="modal"><i class="fa fa-trash-alt text-danger"></i> {{ t('Delete') }}</a></li>
        {% endif %}
       </ul>
     </li>
