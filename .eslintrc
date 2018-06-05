@@ -4,12 +4,17 @@
   "env": {
     "browser": true,
     "node": true,
-    "es6": true
+    "es6": true,
+    "mocha": true
   },
   "rules": {
-    "react/jsx-filename-extension": ["error", { "extensions": [".js"] }],
     "react/prefer-stateless-function": "off",
     "prettier/prettier": "error"
   },
-  "plugins": ["prettier"]
+  "plugins": ["prettier"],
+  "globals": {
+    "ROOT_DIR": true,
+    "MODEL_DIR": true,
+    "testDBUtil": true
+  }
 }
