@@ -13,10 +13,10 @@ export default class Attachment extends React.Component {
 
   iconNameByFormat(format) {
     if (format.match(/image\/.+/i)) {
-      return 'file-image-o';
+      return 'file-image';
     }
 
-    return 'file-o';
+    return 'file';
   }
 
   _onAttachmentDeleteClicked(event) {
@@ -38,7 +38,7 @@ export default class Attachment extends React.Component {
     return (
       <li>
           <User user={attachment.creator} />
-          <Icon name={formatIcon} />
+          <Icon name={formatIcon} regular />
 
           <a href={attachment.url}> {attachment.originalName}</a>
 
@@ -46,7 +46,7 @@ export default class Attachment extends React.Component {
 
           {fileInUse}
 
-          <a className="text-danger attachment-delete" onClick={this._onAttachmentDeleteClicked}><Icon name="trash-o" /></a>
+          <a className="text-danger attachment-delete" onClick={this._onAttachmentDeleteClicked}><Icon name="trash" solid /></a>
       </li>
     );
   }
