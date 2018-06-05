@@ -106,12 +106,22 @@
     "webpack-stream": "~4.0.0"
   },
   "devDependencies": {
+    "babel-eslint": "^8.2.3",
     "chai": "~4.1.0",
     "concurrently": "~3.5.1",
+    "eslint": "^4.19.1",
+    "eslint-config-prettier": "^2.9.0",
+    "eslint-loader": "^2.0.0",
+    "eslint-plugin-flowtype": "^2.49.3",
+    "eslint-plugin-import": "^2.12.0",
+    "eslint-plugin-jsx-a11y": "^6.0.3",
+    "eslint-plugin-prettier": "^2.6.0",
+    "eslint-plugin-react": "^7.9.1",
     "flow-bin": "^0.65.0",
     "jshint": "~2.9.5",
     "mocha": "~3.4.2",
     "nodemon": "^1.17.2",
+    "prettier": "^1.13.4",
     "proxyquire": "~1.8.0",
     "sinon": "~2.3.8",
     "sinon-chai": "~2.12.0"
