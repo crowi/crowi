@@ -160,19 +160,23 @@ export default class Crowi {
   }
 
   apiRequest(method, path, params) {
-
     return new Promise((resolve, reject) => {
+      const createError = (message, info = {}) => {
+        let error = new Error(message);
+        error.info = info;
+        return error;
+      };
       axios[method](`/_api${path}`, params)
-      .then(res => {
-        if (res.data.ok) {
-          resolve(res.data);
+      .then(({ error, data }) => {
+        if (data.ok) {
+          resolve(data);
         } else {
           // FIXME?
-          reject(new Error(res.error));
+          reject(createError(error, data.info));
         }
-      }).catch(res => {
-          // FIXME?
-        reject(new Error('Error'));
+      }).catch(() => {
+        // FIXME?
+        reject(createError('Error'));
       });
     });
   }
