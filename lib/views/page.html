@@ -142,6 +142,7 @@
       </a>
       <ul class="dropdown-menu">
        <li><a href="#" data-target="#renamePage" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Move') }}</a></li>
+       <li><a href="#" data-target="#renameTree" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Move Tree') }}</a></li>
        <li><a href="?presentation=1" class="toggle-presentation"><i class="fa fa-arrows-alt"></i> {{ t('Presentation Mode') }} (beta)</a></li>
        {% if isDeletablePage() %}
        <li class="divider"></li>
@@ -243,6 +244,9 @@
 
 {% if page %}
 <div class="page-attachments meta" id="page-attachment">
+</div>
+
+<div class="" id="rename-tree">
 </div>
 
 <p class="page-meta meta">
