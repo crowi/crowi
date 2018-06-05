@@ -138,6 +138,8 @@
     "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon --watch ./lib/ --watch ./locales/ --ext 'js,json' --exec node app.js",
     "dev:client": "NODE_ENV=development webpack --progress --profile --colors --display-error-details --config tools/webpack.config.js",
     "flow": "flow",
+    "format": "prettier --write '**/*.js'",
+    "lint": "eslint '**/*.js'",
     "test": "mocha -r test/bootstrap.js --globals chai --reporter dot test/**/*.test.js",
     "build": "npm run prod:client",
     "prod:client": "NODE_ENV=production webpack --bail --progress --colors --display-error-details --config tools/webpack.config.js",
