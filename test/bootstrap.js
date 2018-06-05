@@ -26,7 +26,7 @@ testDBUtil = {
             return new Promise(function(resolve, reject) {
               newDoc.save(function(err, data) {
                 createdModels.push(data)
-                return r()
+                return resolve()
               })
             })
           })
