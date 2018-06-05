@@ -1,38 +1,29 @@
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from 'react'
+import PropTypes from 'prop-types'
 
-import { createPatch } from 'diff';
-import { Diff2Html } from 'diff2html';
+import { createPatch } from 'diff'
+import { Diff2Html } from 'diff2html'
 
 export default class RevisionDiff extends React.Component {
-
   render() {
     const currentRevision = this.props.currentRevision,
       previousRevision = this.props.previousRevision,
-      revisionDiffOpened = this.props.revisionDiffOpened;
+      revisionDiffOpened = this.props.revisionDiffOpened
 
-
-    let diffViewHTML = '';
-    if (currentRevision.body
-      && previousRevision.body
-      && revisionDiffOpened) {
-
-      let previousText = previousRevision.body;
+    let diffViewHTML = ''
+    if (currentRevision.body && previousRevision.body && revisionDiffOpened) {
+      let previousText = previousRevision.body
       if (currentRevision._id == previousRevision._id) {
-        previousText = '';
+        previousText = ''
       }
 
-      const patch = createPatch(
-        currentRevision.path,
-        previousText,
-        currentRevision.body
-      );
+      const patch = createPatch(currentRevision.path, previousText, currentRevision.body)
 
-      diffViewHTML = Diff2Html.getPrettyHtml(patch);
+      diffViewHTML = Diff2Html.getPrettyHtml(patch)
     }
 
-    const diffView = {__html: diffViewHTML};
-    return <div className="revision-history-diff" dangerouslySetInnerHTML={diffView} />;
+    const diffView = { __html: diffViewHTML }
+    return <div className="revision-history-diff" dangerouslySetInnerHTML={diffView} />
   }
 }
 
