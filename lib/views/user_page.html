@@ -19,7 +19,7 @@
       <h2>{{ pageUser.name }}</h2>
       <ul>
         <li class="user-page-username"><i class="fa fa-user"></i> @{{ pageUser.username }}</li>
-        <li class="user-page-email"><i class="fa fa-envelope-o"></i> {{ pageUser.email }}</li>
+        <li class="user-page-email"><i class="fa fa-envelope"></i> {{ pageUser.email }}</li>
         {% if pageUser.introduction %}
         <li class="user-page-introduction"><p>{{ pageUser.introduction|nl2br }}</p></li>
         {% endif %}
@@ -34,11 +34,11 @@
         <a href="#user-bookmark-list" data-toggle="tab"><i class="fa fa-star"></i> Bookmarks</a>
       </li>
       <li>
-        <a href="#user-created-list" data-toggle="tab"><i class="fa fa-pencil"></i> Recent Created</a>
+        <a href="#user-created-list" data-toggle="tab"><i class="fa fa-pencil-alt"></i> Recent Created</a>
       </li>
       {% if user._id.toString() == pageUser._id.toString() %}
       <li>
-        <a href="/me"><i class="fa fa-gears"></i> Settings</a>
+        <a href="/me"><i class="fa fa-cogs"></i> Settings</a>
       </li>
       {% endif %}
     </ul>
