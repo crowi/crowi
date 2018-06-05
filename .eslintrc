@@ -16,5 +16,16 @@
     "ROOT_DIR": true,
     "MODEL_DIR": true,
     "testDBUtil": true
-  }
+  },
+  "overrides": [
+    {
+      "files": "*.test.js",
+      "rules": {
+        "handle-callback-err": "off",
+        "no-redeclare": "off",
+        "no-unused-expressions": "off",
+        "no-unused-vars": "off"
+      }
+    }
+  ]
 }
