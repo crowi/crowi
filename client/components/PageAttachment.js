@@ -1,12 +1,12 @@
-import React from 'react';
+import React from 'react'
 
-import Icon from './Common/Icon';
-import PageAttachmentList from './PageAttachment/PageAttachmentList';
-import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal';
+import Icon from './Common/Icon'
+import PageAttachmentList from './PageAttachment/PageAttachmentList'
+import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal'
 
 export default class PageAttachment extends React.Component {
   constructor(props) {
-    super(props);
+    super(props)
 
     this.state = {
       attachments: [],
@@ -14,79 +14,80 @@ export default class PageAttachment extends React.Component {
       attachmentToDelete: null,
       deleting: false,
       deleteError: '',
-    };
+    }
 
-    this.onAttachmentDeleteClicked = this.onAttachmentDeleteClicked.bind(this);
-    this.onAttachmentDeleteClickedConfirm = this.onAttachmentDeleteClickedConfirm.bind(this);
+    this.onAttachmentDeleteClicked = this.onAttachmentDeleteClicked.bind(this)
+    this.onAttachmentDeleteClickedConfirm = this.onAttachmentDeleteClickedConfirm.bind(this)
   }
 
   componentDidMount() {
-    const pageId = this.props.pageId;
+    const pageId = this.props.pageId
 
     if (!pageId) {
-      return ;
+      return
     }
 
-    this.props.crowi.apiGet('/attachments.list', {page_id: pageId })
-    .then(res => {
-      const attachments = res.attachments;
-      let inUse = {};
+    this.props.crowi.apiGet('/attachments.list', { page_id: pageId }).then(res => {
+      const attachments = res.attachments
+      let inUse = {}
 
       for (const attachment of attachments) {
-        inUse[attachment._id] = this.checkIfFileInUse(attachment);
+        inUse[attachment._id] = this.checkIfFileInUse(attachment)
       }
 
       this.setState({
         attachments: attachments,
         inUse: inUse,
-      });
-    });
+      })
+    })
   }
 
   checkIfFileInUse(attachment) {
     if (this.props.pageContent.match(attachment.url)) {
-      return true;
+      return true
     }
-    return false;
+    return false
   }
 
   onAttachmentDeleteClicked(attachment) {
     this.setState({
       attachmentToDelete: attachment,
-    });
+    })
   }
 
   onAttachmentDeleteClickedConfirm(attachment) {
-    const attachmentId = attachment._id;
+    const attachmentId = attachment._id
     this.setState({
       deleting: true,
-    });
+    })
 
-    this.props.crowi.apiPost('/attachments.remove', {attachment_id: attachmentId})
-    .then(res => {
-      this.setState({
-        attachments: this.state.attachments.filter((at) => {
-          return at._id != attachmentId;
-        }),
-        attachmentToDelete: null,
-        deleting: false,
-      });
-    }).catch(err => {
-      this.setState({
-        deleteError: 'Something went wrong.',
-        deleting: false,
-      });
-    });
+    this.props.crowi
+      .apiPost('/attachments.remove', { attachment_id: attachmentId })
+      .then(res => {
+        this.setState({
+          attachments: this.state.attachments.filter(at => {
+            return at._id != attachmentId
+          }),
+          attachmentToDelete: null,
+          deleting: false,
+        })
+      })
+      .catch(err => {
+        this.setState({
+          deleteError: 'Something went wrong.',
+          deleting: false,
+        })
+      })
   }
 
   render() {
-    const attachmentToDelete = this.state.attachmentToDelete;
-    let deleteModalClose = () => this.setState({ attachmentToDelete: null });
-    let showModal = attachmentToDelete !== null;
+    const attachmentToDelete = this.state.attachmentToDelete
+    let deleteModalClose = () => this.setState({ attachmentToDelete: null })
+    let showModal = attachmentToDelete !== null
 
-    let deleteInUse = null;
+    let deleteInUse = null
     if (attachmentToDelete !== null) {
-      deleteInUse = this.state.inUse[attachmentToDelete._id] || false;
+      deleteInUse = this.state.inUse[attachmentToDelete._id] || false
     }
 
     return (
@@ -101,7 +102,6 @@ export default class PageAttachment extends React.Component {
           show={showModal}
           animation={false}
           onHide={deleteModalClose}
-
           attachmentToDelete={attachmentToDelete}
           inUse={deleteInUse}
           deleting={this.state.deleting}
@@ -109,6 +109,6 @@ export default class PageAttachment extends React.Component {
           onAttachmentDeleteClickedConfirm={this.onAttachmentDeleteClickedConfirm}
         />
       </div>
-    );
+    )
   }
 }

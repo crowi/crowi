@@ -1,32 +1,30 @@
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from 'react'
+import PropTypes from 'prop-types'
 
-import UserDate     from '../Common/UserDate';
-import Icon         from '../Common/Icon';
-import UserPicture  from '../User/UserPicture';
+import UserDate from '../Common/UserDate'
+import Icon from '../Common/Icon'
+import UserPicture from '../User/UserPicture'
 
 export default class Revision extends React.Component {
-
   constructor(props) {
-    super(props);
+    super(props)
 
-    this._onDiffOpenClicked = this._onDiffOpenClicked.bind(this);
+    this._onDiffOpenClicked = this._onDiffOpenClicked.bind(this)
   }
 
-  componentDidMount() {
-  }
+  componentDidMount() {}
 
   _onDiffOpenClicked() {
-    this.props.onDiffOpenClicked(this.props.revision);
+    this.props.onDiffOpenClicked(this.props.revision)
   }
 
   render() {
-    const revision = this.props.revision;
-    const author = revision.author;
+    const revision = this.props.revision
+    const author = revision.author
 
-    let pic = '';
+    let pic = ''
     if (typeof author === 'object') {
-      pic = <UserPicture user={author} />;
+      pic = <UserPicture user={author} />
     }
 
     return (
@@ -40,7 +38,7 @@ export default class Revision extends React.Component {
             <UserDate dateTime={revision.createdAt} />
           </p>
           <p>
-            <a href={"?revision=" + revision._id }>
+            <a href={'?revision=' + revision._id}>
               <Icon name="history" /> View this version
             </a>
             <a className="diff-view" onClick={this._onDiffOpenClicked}>
@@ -49,7 +47,7 @@ export default class Revision extends React.Component {
           </p>
         </div>
       </div>
-    );
+    )
   }
 }
 
@@ -57,4 +55,3 @@ Revision.propTypes = {
   revision: PropTypes.object,
   onDiffOpenClicked: PropTypes.func.isRequired,
 }
-
