@@ -115,7 +115,7 @@ SearchPage.propTypes = {
   query: PropTypes.object,
 }
 SearchPage.defaultProps = {
-  //pollInterval: 1000,
+  // pollInterval: 1000,
   query: SearchPage.getQueryByLocation(location || {}),
   searchError: null,
 }

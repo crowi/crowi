@@ -59,7 +59,7 @@ export default class SearchForm extends React.Component {
   }
 
   handleBlur(event) {
-    //this.props.isShown(false);
+    // this.props.isShown(false);
   }
 
   handleChange(event) {

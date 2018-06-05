@@ -39,7 +39,7 @@ $(function() {
     $.post('/_api/admin/users.resetPassword', $(this).serialize(), function(res) {
       if (res.ok) {
         // TODO Fix
-        //location.reload();
+        // location.reload();
         $('#admin-password-reset-modal').modal('hide')
         $('#admin-password-reset-modal-done').modal('show')
 

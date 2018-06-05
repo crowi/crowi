@@ -28,7 +28,7 @@ export default class Tsv2Table {
     let headers = []
     let headLine = codeLines[0] || ''
 
-    //console.log('head', headLine);
+    // console.log('head', headLine);
     headers = this.splitColums(headLine).map(col => {
       return `<th>${Crowi.escape(col)}</th>`
     })
