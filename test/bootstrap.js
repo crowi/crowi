@@ -1,8 +1,9 @@
 'use strict'
 
 var express = require('express')
-var ROOT_DIR = __dirname + '/..'
-var MODEL_DIR = __dirname + '/../lib/models'
+var path = require('path')
+var ROOT_DIR = path.join(__dirname, './..')
+var MODEL_DIR = path.join(__dirname, './../lib/models')
 var testDBUtil
 
 testDBUtil = {
