@@ -592,6 +592,38 @@ $(function() {
       return false
     })
 
+    const AddToLikers = function(users) {
+      $.each(users, function(i, user) {
+        $likerList.append(CreateUserLinkWithPicture(user))
+      })
+    }
+
+    const CreateUserLinkWithPicture = function(user) {
+      var $userHtml = $('<a>')
+      $userHtml.data('user-id', user._id)
+      $userHtml.attr('href', '/user/' + user.username)
+      $userHtml.attr('title', user.name)
+
+      var $userPicture = $('<img class="picture picture-xs picture-rounded">')
+      $userPicture.attr('alt', user.name)
+      $userPicture.attr('src', Crowi.userPicture(user))
+
+      $userHtml.append($userPicture)
+      return $userHtml
+    }
+
+    const MarkLiked = function() {
+      $likeButton.addClass('active')
+      $likeButton.data('liked', 1)
+      $likeCount.text(parseInt($likeCount.text()) + 1)
+    }
+
+    const MarkUnLiked = function() {
+      $likeButton.removeClass('active')
+      $likeButton.data('liked', 0)
+      $likeCount.text(parseInt($likeCount.text()) - 1)
+    }
+
     // Like
     var $likeButton = $('.like-button')
     var $likeCount = $('#like-count')
@@ -623,24 +655,6 @@ $(function() {
       }
     }
 
-    function AddToLikers(users) {
-      $.each(users, function(i, user) {
-        $likerList.append(CreateUserLinkWithPicture(user))
-      })
-    }
-
-    function MarkLiked() {
-      $likeButton.addClass('active')
-      $likeButton.data('liked', 1)
-      $likeCount.text(parseInt($likeCount.text()) + 1)
-    }
-
-    function MarkUnLiked() {
-      $likeButton.removeClass('active')
-      $likeButton.data('liked', 0)
-      $likeCount.text(parseInt($likeCount.text()) - 1)
-    }
-
     if (!isSeen) {
       $.post('/_api/pages.seen', { page_id: pageId }, function(res) {
         // ignore unless response has error
@@ -648,20 +662,6 @@ $(function() {
           $('#content-main').data('page-is-seen', 1)
         }
       })
-    }
-
-    function CreateUserLinkWithPicture(user) {
-      var $userHtml = $('<a>')
-      $userHtml.data('user-id', user._id)
-      $userHtml.attr('href', '/user/' + user.username)
-      $userHtml.attr('title', user.name)
-
-      var $userPicture = $('<img class="picture picture-xs picture-rounded">')
-      $userPicture.attr('alt', user.name)
-      $userPicture.attr('src', Crowi.userPicture(user))
-
-      $userHtml.append($userPicture)
-      return $userHtml
     }
 
     // presentation
