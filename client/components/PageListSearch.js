@@ -73,7 +73,7 @@ export default class PageListSearch extends React.Component {
     // this is not fired now because of force-data-bound by jQuery
     const keyword = event.target.value
     this.setState({ searchedKeyword: keyword })
-    //console.log('Changed');
+    // console.log('Changed');
   }
 
   stopSearching() {
@@ -164,6 +164,6 @@ PageListSearch.propTypes = {
   query: PropTypes.object,
 }
 PageListSearch.defaultProps = {
-  //pollInterval: 1000,
+  // pollInterval: 1000,
   query: PageListSearch.getQueryByLocation(location || {}),
 }

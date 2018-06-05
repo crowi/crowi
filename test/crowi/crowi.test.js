@@ -46,7 +46,7 @@ describe('Test for Crowi application context', function() {
         expect(mongoose.connection.readyState).to.equals(1)
         done()
       }).catch(function(err) {
-        //console.log('readyState', mongoose.connection.readyState);
+        // console.log('readyState', mongoose.connection.readyState);
         if (mongoose.connection.readyState === 2 || mongoose.connection.readyState === 1) {
           // alreaady connected
           // throught

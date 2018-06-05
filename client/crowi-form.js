@@ -4,9 +4,9 @@ $(function() {
   var pageId = $('#content-main').data('page-id')
   var pagePath = $('#content-main').data('path')
 
-  //require('inline-attachment/src/inline-attachment');
-  //require('jquery.selection');
-  //require('bootstrap-sass');
+  // require('inline-attachment/src/inline-attachment');
+  // require('jquery.selection');
+  // require('bootstrap-sass');
 
   // show/hide
   function FetchPagesUpdatePostAndInsert(path) {
@@ -267,7 +267,7 @@ $(function() {
           listMark = listMark.replace(/\s*\d+/, indent + (num + 1))
         }
       }
-      //$target.selection('insert', {text: "\n" + listMark, mode: 'before'});
+      // $target.selection('insert', {text: "\n" + listMark, mode: 'before'});
       var pos = $target.selection('getPos')
       insertText(pos.start, pos.start, '\n' + listMark, 'replace')
       var newPosition = pos.start + ('\n' + listMark).length
@@ -292,7 +292,7 @@ $(function() {
       }
       var prevLine = getPrevLine(event)
       if (!prevLine || (!currentLine.text.match(/---/) && !prevLine.text.match(/\|/g))) {
-        //$target.selection('insert', {text: "\n" + row.join(' --- ') + "\n" + row.join('  '), mode: 'before'});
+        // $target.selection('insert', {text: "\n" + row.join(' --- ') + "\n" + row.join('  '), mode: 'before'});
         var pos = $target.selection('getPos')
         insertText(pos.start, pos.start, '\n' + row.join(' --- ') + '\n' + row.join('  '), 'after')
         $target.selection('setPos', {
@@ -300,7 +300,7 @@ $(function() {
           end: currentLine.caret + 6 * row.length - 1,
         })
       } else {
-        //$target.selection('insert', {text: "\n" + row.join('  '), mode: 'before'});
+        // $target.selection('insert', {text: "\n" + row.join('  '), mode: 'before'});
         var pos = $target.selection('getPos')
         insertText(pos.start, pos.end, '\n' + row.join('  '), 'after')
         $target.selection('setPos', { start: currentLine.caret + 3, end: currentLine.caret + 3 })
@@ -333,7 +333,7 @@ $(function() {
       var checkMark = match[3] == ' ' ? 'x' : ' '
       var replaceTo = match[1] + match[2] + ' [' + checkMark + '] ' + match[4]
       $target.selection('setPos', { start: currentLine.start, end: currentLine.end })
-      //$target.selection('replace', {text: replaceTo, mode: 'keep'});
+      // $target.selection('replace', {text: replaceTo, mode: 'keep'});
       insertText(currentLine.start, currentLine.end, replaceTo, 'replace')
       $target.selection('setPos', { start: currentLine.caret, end: currentLine.caret })
       $target.trigger('input')
@@ -376,7 +376,7 @@ $(function() {
       }
     }
 
-    //$target.selection('insert', {text: pasteText, mode: 'after'});
+    // $target.selection('insert', {text: pasteText, mode: 'after'});
     insertText(currentLine.caret, currentLine.caret, pasteText, 'replace')
 
     var newPos = currentLine.caret + pasteText.length

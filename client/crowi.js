@@ -6,8 +6,8 @@ import $ from 'jquery'
 
 import 'bootstrap-sass'
 import 'jquery.cookie'
-//require('bootstrap-sass');
-//require('jquery.cookie');
+// require('bootstrap-sass');
+// require('jquery.cookie');
 
 const Crowi = {}
 
@@ -276,7 +276,7 @@ $(function() {
         var page = res.page
 
         $('#newPageNameCheck').removeClass('alert-danger')
-        //$('#newPageNameCheck').html('<img src="/images/loading_s.gif"> 移動しました。移動先にジャンプします。');
+        // $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> 移動しました。移動先にジャンプします。');
         // fix
         $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.')
 

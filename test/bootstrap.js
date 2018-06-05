@@ -22,7 +22,7 @@ testDBUtil = {
             Object.keys(entity).forEach(function(k) {
               newDoc[k] = entity[k]
             })
-            return new Promise(function(r, rj) {
+            return new Promise(function(resolve, reject) {
               newDoc.save(function(err, data) {
                 createdModels.push(data)
                 return r()

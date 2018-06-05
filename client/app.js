@@ -12,7 +12,7 @@ import PageAttachment from './components/PageAttachment'
 import PageAlerts from './components/PageAlerts'
 import SeenUserList from './components/SeenUserList'
 import BookmarkButton from './components/BookmarkButton'
-//import PageComment  from './components/PageComment';
+// import PageComment  from './components/PageComment';
 
 if (!window) {
   window = {}
@@ -51,8 +51,8 @@ const componentMappings = {
   'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
   'page-alerts': <PageAlerts pageId={pageId} crowi={crowi} />,
 
-  //'revision-history': <PageHistory pageId={pageId} />,
-  //'page-comment': <PageComment />,
+  // 'revision-history': <PageHistory pageId={pageId} />,
+  // 'page-comment': <PageComment />,
   'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
 }

@@ -55,13 +55,13 @@ const config = {
   },
   plugins: [
     extractSass,
-    //new ExtractTextPlugin(
+    // new ExtractTextPlugin(
     //  './node_modules/highlight.js/styles/tomorrow-night.css'
-    //),
-    //new ExtractTextPlugin([
+    // ),
+    // new ExtractTextPlugin([
     //  './node_modules/highlight.js/styles/tomorrow-night.css',
     //  './node_modules/diff2html/dist/diff2html.css',
-    //]),
+    // ]),
   ],
 }
 
