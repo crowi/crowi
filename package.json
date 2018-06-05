@@ -28,6 +28,7 @@
     "npm": "5.x"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free-webfonts": "^1.0.9",
     "@octokit/rest": "^15.2.5",
     "@slack/client": "~3.13.0",
     "async": "~1.5.0",
@@ -66,7 +67,6 @@
     "express-session": "~1.15.4",
     "extract-text-webpack-plugin": "~3.0.1",
     "file-loader": "~1.1.5",
-    "font-awesome": "~4.7.0",
     "googleapis": "=12.3.0",
     "highlight.js": "~9.12.0",
     "i18next": "~8.4.3",

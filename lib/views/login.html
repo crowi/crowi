@@ -60,7 +60,7 @@
       <div class="col-md-6">
         <p>{{ t('page_login.sign_in_with', "Google") }}</p>
         <form role="form" action="/login/google" method="get">
-          <button type="submit" class="btn btn-block btn-google"><i class="fa fa-google-plus-square"></i> {{ t('page_login.sign_in') }}</button>
+          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('page_login.sign_in') }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
         </form>
       </div>
@@ -69,7 +69,7 @@
       <div class="col-md-6">
         <p>{{ t('page_login.sign_in_with', "GitHub") }}</p>
         <form role="form" action="/login/github" method="get">
-          <button type="submit" class="btn btn-block btn-github"><i class="fa fa-github-square"></i> {{ t('page_login.sign_in') }}</button>
+          <button type="submit" class="btn btn-block btn-github"><i class="fab fa-github-square"></i> {{ t('page_login.sign_in') }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
         </form>
       </div>
@@ -77,7 +77,7 @@
     </div>
 
     {% if config.crowi['security:registrationMode'] != 'Closed' %}
-    <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil"></i> {{ t('page_login.sign_up_is_here') }}</a></p>
+    <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil-alt"></i> {{ t('page_login.sign_up_is_here') }}</a></p>
     {% endif %}
   </div>
 
@@ -186,7 +186,7 @@
         <p>{{ t('page_register.sign_up_with', "Google") }}</p>
         <form role="form" method="post" action="/register/google">
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
-          <button type="submit" class="btn btn-block btn-google"><i class="fa fa-google-plus-square"></i> {{ t('page_register.sign_up') }}</button>
+          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('page_register.sign_up') }}</button>
         </form>
       </div>
       {% endif %}
@@ -195,13 +195,13 @@
         <p>{{ t('page_register.sign_up_with', "GitHub") }}</p>
         <form role="form" method="post" action="/register/github">
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
-          <button type="submit" class="btn btn-block btn-github"><i class="fa fa-github-square"></i> {{ t('page_register.sign_up') }}</button>
+          <button type="submit" class="btn btn-block btn-github"><i class="fab fa-github-square"></i> {{ t('page_register.sign_up') }}</button>
         </form>
       </div>
       {% endif %}
     </div>
 
-    <p class="bottom-text"><a href="#login" id="login"><i class="fa fa-sign-out"></i> {{ t('page_register.sign_in_is_here') }}</a></p>
+    <p class="bottom-text"><a href="#login" id="login"><i class="fa fa-sign-out-alt"></i> {{ t('page_register.sign_in_is_here') }}</a></p>
   </div>
   {% endif %} {# if registrationMode == Closed #}
 
