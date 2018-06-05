@@ -1,14 +1,14 @@
-var chai = require('chai'),
-  expect = chai.expect,
-  sinon = require('sinon'),
-  sinonChai = require('sinon-chai'),
-  utils = require('../utils.js')
+var chai = require('chai')
+var expect = chai.expect
+var sinon = require('sinon')
+var sinonChai = require('sinon-chai')
+var utils = require('../utils.js')
 chai.use(sinonChai)
 
 describe('User', function() {
-  var Page = utils.models.Page,
-    User = utils.models.User,
-    conn = utils.mongoose.connection
+  var Page = utils.models.Page
+  var User = utils.models.User
+  var conn = utils.mongoose.connection
 
   describe('Create and Find.', function() {
     context('The user', function() {

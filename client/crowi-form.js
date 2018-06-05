@@ -468,8 +468,8 @@ $(function() {
       var result = JSON.parse(res.response)
 
       if (result.ok && result.pageCreated) {
-        var page = result.page,
-          pageId = page._id
+        var page = result.page
+        var pageId = page._id
 
         $('#content-main').data('page-id', page._id)
         $('#page-form [name="pageForm[currentRevision]"]').val(page.revision._id)

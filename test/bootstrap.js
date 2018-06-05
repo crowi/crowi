@@ -1,9 +1,9 @@
 'use strict'
 
-var express = require('express'),
-  ROOT_DIR = __dirname + '/..',
-  MODEL_DIR = __dirname + '/../lib/models',
-  testDBUtil
+var express = require('express')
+var ROOT_DIR = __dirname + '/..'
+var MODEL_DIR = __dirname + '/../lib/models'
+var testDBUtil
 
 testDBUtil = {
   generateFixture: function(conn, model, fixture) {

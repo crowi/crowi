@@ -6,12 +6,12 @@ import RevisionDiff from './RevisionDiff'
 
 export default class PageRevisionList extends React.Component {
   render() {
-    const revisions = this.props.revisions,
-      revisionCount = this.props.revisions.length
+    const revisions = this.props.revisions
+    const revisionCount = this.props.revisions.length
 
     const revisionList = this.props.revisions.map((revision, idx) => {
-      const revisionId = revision._id,
-        revisionDiffOpened = this.props.diffOpened[revisionId] || false
+      const revisionId = revision._id
+      const revisionDiffOpened = this.props.diffOpened[revisionId] || false
 
       let previousRevision
       if (idx + 1 < revisionCount) {
