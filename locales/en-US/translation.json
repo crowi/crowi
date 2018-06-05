@@ -4,6 +4,7 @@
   "Delete": "Delete",
   "Move": "Move",
   "Moved": "Moved",
+  "Move Tree": "Move Tree",
   "Unlinked": "Unlinked",
   "Like!": "Like!",
   "Seen by": "Seen by",
@@ -160,6 +161,7 @@
       "redirect": "Redirect to new page if someone accesses <code>%s</code>"
     }
   },
+  "Rename tree": "Rename tree",
 
   "modal_help": {
       "basic": {

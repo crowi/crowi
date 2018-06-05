@@ -12,6 +12,7 @@ import PageListSearch   from './components/PageListSearch';
 import PageHistory      from './components/PageHistory';
 import PageAttachment   from './components/PageAttachment';
 import PageAlerts       from './components/PageAlerts';
+import RenameTree       from './components/RenameTree/RenameTree';
 import SeenUserList     from './components/SeenUserList';
 import BookmarkButton   from './components/BookmarkButton';
 //import PageComment  from './components/PageComment';
@@ -49,6 +50,7 @@ const componentMappings = {
   'page-list-search': <PageListSearch crowi={crowi} />,
   'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
   'page-alerts': <PageAlerts pageId={pageId} crowi={crowi} />,
+  'rename-tree': <RenameTree pageId={pageId} crowi={crowi} />,
 
   //'revision-history': <PageHistory pageId={pageId} />,
   //'page-comment': <PageComment />,
