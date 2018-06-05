@@ -3,20 +3,20 @@
 module.exports = function(crowi) {
   'use strict'
 
-  var aws = require('aws-sdk'),
-    fs = require('fs'),
-    path = require('path'),
-    debug = require('debug')('crowi:lib:fileUploaderAws'),
-    lib = {},
-    getAwsConfig = function() {
-      var config = crowi.getConfig()
-      return {
-        accessKeyId: config.crowi['aws:accessKeyId'],
-        secretAccessKey: config.crowi['aws:secretAccessKey'],
-        region: config.crowi['aws:region'],
-        bucket: config.crowi['aws:bucket'],
-      }
+  var aws = require('aws-sdk')
+  var fs = require('fs')
+  var path = require('path')
+  var debug = require('debug')('crowi:lib:fileUploaderAws')
+  var lib = {}
+  var getAwsConfig = function() {
+    var config = crowi.getConfig()
+    return {
+      accessKeyId: config.crowi['aws:accessKeyId'],
+      secretAccessKey: config.crowi['aws:secretAccessKey'],
+      region: config.crowi['aws:region'],
+      bucket: config.crowi['aws:bucket'],
     }
+  }
 
   function S3Factory() {
     const awsConfig = getAwsConfig()
@@ -82,8 +82,8 @@ module.exports = function(crowi) {
   }
 
   lib.generateUrl = function(filePath) {
-    var awsConfig = getAwsConfig(),
-      url = 'https://' + awsConfig.bucket + '.s3.amazonaws.com/' + filePath
+    var awsConfig = getAwsConfig()
+    var url = 'https://' + awsConfig.bucket + '.s3.amazonaws.com/' + filePath
 
     return url
   }

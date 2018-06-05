@@ -6,9 +6,9 @@ import { Diff2Html } from 'diff2html'
 
 export default class RevisionDiff extends React.Component {
   render() {
-    const currentRevision = this.props.currentRevision,
-      previousRevision = this.props.previousRevision,
-      revisionDiffOpened = this.props.revisionDiffOpened
+    const currentRevision = this.props.currentRevision
+    const previousRevision = this.props.previousRevision
+    const revisionDiffOpened = this.props.revisionDiffOpened
 
     let diffViewHTML = ''
     if (currentRevision.body && previousRevision.body && revisionDiffOpened) {

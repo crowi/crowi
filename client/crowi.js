@@ -665,8 +665,8 @@ $(function() {
     }
 
     // presentation
-    var presentaionInitialized = false,
-      $b = $('body')
+    var presentaionInitialized = false
+    var $b = $('body')
 
     $(document)
       .on('click', '.toggle-presentation', function(e) {

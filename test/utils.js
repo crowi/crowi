@@ -1,10 +1,10 @@
 'use strict'
 
-var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || null,
-  mongoose = require('mongoose'),
-  fs = require('fs'),
-  models = {},
-  crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
+var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || null
+var mongoose = require('mongoose')
+var fs = require('fs')
+var models = {}
+var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
 
 mongoose.Promise = global.Promise
 

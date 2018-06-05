@@ -54,8 +54,8 @@ export default class CrowiRenderer {
   }
 
   codeRenderer(code, lang, escaped) {
-    let result = '',
-      hl
+    let result = ''
+    let hl
 
     if (lang) {
       const langAndFn = lang.split(':')

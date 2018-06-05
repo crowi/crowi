@@ -1,14 +1,14 @@
-var chai = require('chai'),
-  expect = chai.expect,
-  sinon = require('sinon'),
-  sinonChai = require('sinon-chai'),
-  proxyquire = require('proxyquire'),
-  path = require('path')
+var chai = require('chai')
+var expect = chai.expect
+var sinon = require('sinon')
+var sinonChai = require('sinon-chai')
+var proxyquire = require('proxyquire')
+var path = require('path')
 chai.use(sinonChai)
 
 describe('Test for Crowi application context', function() {
-  var Crowi = require('../../lib/crowi'),
-    mongoose = require('mongoose')
+  var Crowi = require('../../lib/crowi')
+  var mongoose = require('mongoose')
 
   describe('construction', function() {
     it('initialize crowi context', function() {
