@@ -147,38 +147,33 @@ export default class Crowi {
     return null;
   }
 
-  apiGet(path, params) {
-    return this.apiRequest('get', path, {params: params});
+  async apiGet(path, params) {
+    return await this.apiRequest('get', path, {params: params});
   }
 
-  apiPost(path, params) {
+  async apiPost(path, params) {
     if (!params._csrf) {
       params._csrf = this.csrfToken;
     }
 
-    return this.apiRequest('post', path, params);
+    return await this.apiRequest('post', path, params);
   }
 
-  apiRequest(method, path, params) {
-    return new Promise((resolve, reject) => {
-      const createError = (message, info = {}) => {
-        let error = new Error(message);
-        error.info = info;
-        return error;
-      };
-      axios[method](`/_api${path}`, params)
-      .then(({ error, data }) => {
-        if (data.ok) {
-          resolve(data);
-        } else {
-          // FIXME?
-          reject(createError(error, data.info));
-        }
-      }).catch(() => {
-        // FIXME?
-        reject(createError('Error'));
+  async apiRequest(method, path, params) {
+    const createError = (message, info = {}) => {
+      let error = new Error(message);
+      error.info = info;
+      return error;
+    };
+    const { data } = await axios[method](`/_api${path}`, params)
+      .catch(function () {
+        throw createError("Error");
       });
-    });
+    const { ok, error, info } = data;
+    if (ok) {
+      return data;
+    }
+    throw createError(error, info);
   }
 
   static escape (html, encode) {
