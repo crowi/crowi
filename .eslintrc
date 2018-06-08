@@ -8,8 +8,19 @@
     "mocha": true
   },
   "rules": {
+    "eqeqeq": "off",
+    "handle-callback-err": "off",
+    "new-cap": "off",
+    "no-global-assign": "off",
+    "no-inner-declarations": "off",
+    "no-new-wrappers": "off",
+    "no-redeclare": "off",
+    "no-undef": "off",
+    "no-unused-vars": "off",
+    "no-useless-escape": "off",
+    "prettier/prettier": "error",
     "react/prefer-stateless-function": "off",
-    "prettier/prettier": "error"
+    "standard/no-callback-literal": "off"
   },
   "plugins": ["prettier"],
   "globals": {
