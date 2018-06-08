@@ -19,16 +19,37 @@ class RenameTree extends React.Component {
     this.handleClose = this.handleClose.bind(this);
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
+    this.handleError = this.handleError.bind(this);
+    this.convertPathMapToTree = this.convertPathMapToTree.bind(this);
+    this.checkTreeRenamable = this.checkTreeRenamable.bind(this);
 
     this.state = {
       show: false,
-      newPath: location.pathname,
+      newPath: RenameTree.getPath({ removeTrailingSlash: true }),
       pathMap: {},
-      errors: {}
+      error: null,
+      errors: {},
+      renamable: false,
+      removing: false,
+      timeoutId: null
     };
 
     // TODO: DropdownのReact化の際に消す？
     $("a[data-target='#renameTree']").click(this.handleShow);
+  }
+
+  static getPath(options = { removeTrailingSlash: false }) {
+    const { removeTrailingSlash } = options;
+    let path;
+    path = decodeURIComponent(location.pathname);
+    if (removeTrailingSlash) {
+      path = RenameTree.removeTrailingSlash(path);
+    }
+    return path;
+  }
+
+  static removeTrailingSlash(string) {
+    return string.endsWith("/") ? string.substring(0, string.length - 1) : string;
   }
 
   convertPathMapToTree(pathMap) {
@@ -56,13 +77,11 @@ class RenameTree extends React.Component {
       };
     };
     const getParents = (paths, path) => {
-      const removeTrailingSlash = string =>
-        string.endsWith("/") ? string.substring(0, string.length - 1) : string;
       return paths
         .filter(function(p) {
           return (
             path !== p &&
-            path.startsWith(removeTrailingSlash(p)) &&
+            path.startsWith(RenameTree.removeTrailingSlash(p)) &&
             !p.endsWith("/")
           );
         })
@@ -143,30 +162,53 @@ class RenameTree extends React.Component {
   }
 
   handleChange(e) {
-    this.setState({ newPath: e.target.value });
+    clearTimeout(this.state.timeoutId);
+    const timeoutId = setTimeout(async () => await this.checkTreeRenamable(), 600);
+    this.setState({ newPath: e.target.value, timeoutId });
+  }
+
+  async checkTreeRenamable() {
+    const { crowi } = this.props;
+    const { newPath: new_path } = this.state;
+    const path = RenameTree.getPath({ removeTrailingSlash: true });
+    try {
+      const data = await crowi.apiPost("/pages.checkTreeRenamable", { path, new_path });
+      const { path_map: pathMap } = data;
+      this.setState({ pathMap, renamable: true, error: null });
+    } catch (error) {
+      this.handleError(error);
+    }
   }
 
   async handleSubmit() {
-    const { crowi, pageId: page_id } = this.props;
+    const { crowi } = this.props;
     const { newPath: new_path } = this.state;
+    const path = RenameTree.getPath({ removeTrailingSlash: true });
+    const create_redirect = 1;
+    this.setState({ removing: true });
     try {
-      const data = await crowi.apiPost("/pages.checkTreeRenamable", {
-        page_id,
-        new_path
-      });
-      const { path_map: pathMap } = data;
-      this.setState({ pathMap });
+      await crowi.apiPost("/pages.renameTree", { path, new_path, create_redirect });
     } catch (error) {
-      const { info } = error;
-      if (info) {
-        const { path_map: pathMap, errors } = info;
-        this.setState({ pathMap, errors });
-      }
+      this.handleError(error);
+    }
+    setTimeout(() => {
+      top.location.href = new_path + '?redirectFrom=' + RenameTree.getPath();
+    }, 1000);
+  }
+
+  handleError(error) {
+    const { info } = error;
+    let newState = { renamable: false, error: error.message, removing: false };
+    if (info && Object.keys(info).length > 0) {
+      const { path_map: pathMap, errors } = info;
+      this.setState({ ...newState, pathMap, errors });
+    } else {
+      this.setState(newState);
     }
   }
 
   render() {
-    const { show, newPath, pathMap, errors } = this.state;
+    const { show, newPath, pathMap, error, errors, renamable, removing } = this.state;
     const { t } = this.props;
     return (
       <Modal show={show} onHide={this.handleClose}>
@@ -178,7 +220,7 @@ class RenameTree extends React.Component {
         <Modal.Body>
           <FormGroup>
             <ControlLabel>{t("Current page name")}</ControlLabel>
-            <code>{location.pathname}</code>
+            <code>{RenameTree.getPath()}</code>
           </FormGroup>
           <FormGroup>
             <ControlLabel>{t("New page name")}</ControlLabel>
@@ -195,7 +237,9 @@ class RenameTree extends React.Component {
         </Modal.Body>
 
         <Modal.Footer>
-          <Button type="submit" bsStyle="primary" onClick={this.handleSubmit}>
+          {error && <p><small className="pull-left alert-danger"><Icon name="times-circle" /> {error}</small></p>}
+          {removing && <p><small className="pull-left"><img src="/images/loading_s.gif" /> Page tree moved! Redirecting to new location.</small></p>}
+          <Button type="submit" bsStyle="primary" onClick={this.handleSubmit} disabled={!renamable}>
             Rename!
           </Button>
         </Modal.Footer>
