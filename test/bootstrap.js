@@ -9,7 +9,7 @@ var testDBUtil
 testDBUtil = {
   generateFixture: function(conn, model, fixture) {
     if (conn.readyState == 0) {
-      return Promise.reject()
+      return Promise.reject(new Error())
     }
     var m = conn.model(model)
 
