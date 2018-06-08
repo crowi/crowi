@@ -11,14 +11,14 @@ module.exports = function(crowi) {
   lib.deleteFile = function(filePath) {
     debug('File deletion: ' + filePath)
     return new Promise(function(resolve, reject) {
-      reject(err)
+      reject(new Error())
     })
   }
 
   lib.uploadFile = function(filePath, contentType, fileStream, options) {
     debug('File uploading: ' + filePath)
     return new Promise(function(resolve, reject) {
-      reject()
+      reject(new Error())
     })
   }
 
