@@ -1,8 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 
-import Crowi from './util/Crowi'
-import CrowiRenderer from './util/CrowiRenderer'
+import i18n from './i18n';
+
+import Crowi from './util/Crowi';
+import CrowiRenderer from './util/CrowiRenderer';
 
 import HeaderSearchBox from './components/HeaderSearchBox'
 import SearchPage from './components/SearchPage'
