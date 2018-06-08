@@ -103,6 +103,7 @@
         <i class="fa fa-wrench"></i> <span class="caret"></span>
       </a>
       <ul class="dropdown-menu">
+        <li><a href="#" data-target="#renameTree" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Move Tree') }}</a></li>
         <li><a href="#" data-target="#unportalize" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Unportalize') }}</a></li>
       </ul>
     </li>
@@ -163,8 +164,19 @@
 
 <div class="page-list-container">
   <ul class="nav nav-tabs">
-      <li class="active"><a href="#view-list" data-toggle="tab">{{ t('List View') }}</a></li>
-      <li><a href="#view-timeline" data-toggle="tab">{{ t('Timeline View') }}</a></li>
+    <li class="active"><a href="#view-list" data-toggle="tab">{{ t('List View') }}</a></li>
+    <li><a href="#view-timeline" data-toggle="tab">{{ t('Timeline View') }}</a></li>
+
+    {% if !isTopPage() and not page %}
+      <li class="dropdown pull-right">
+        <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+          <i class="fa fa-wrench"></i> <span class="caret"></span>
+        </a>
+        <ul class="dropdown-menu">
+          <li><a href="#" data-target="#renameTree" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Move Tree') }}</a></li>
+        </ul>
+      </li>
+    {% endif %}
   </ul>
 
   <div class="tab-content">
@@ -221,6 +233,9 @@
 
 
 {% block content_footer %}
+<div id="rename-tree">
+</div>
+
 <footer>
 
 </footer>
