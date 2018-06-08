@@ -4,10 +4,6 @@ import PropTypes from 'prop-types'
 import PageBody from '../Page/PageBody.js'
 
 export default class SearchResultList extends React.Component {
-  constructor(props) {
-    super(props)
-  }
-
   render() {
     const resultList = this.props.pages.map(page => {
       const pageBody = page.revision.body
