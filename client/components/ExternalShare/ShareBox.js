@@ -1,8 +1,9 @@
 import React from "react";
 import PropTypes from "prop-types";
 import uuidv4 from "uuid/v4";
-import { Button, InputGroup, FormControl } from 'react-bootstrap';
+import { Button } from 'react-bootstrap';
 import Icon from "../Common/Icon";
+import ShareBoxContent from "./ShareBoxContent";
 
 function ActionButton(isCreated, isChanging, createAction, deleteAction) {
   const { button, icon, text, action } = isCreated
@@ -27,29 +28,6 @@ function ActionButton(isCreated, isChanging, createAction, deleteAction) {
   );
 }
 
-function Content(isCreated, activeShare, createRef, selectAction, copyAction) {
-  if (isCreated) {
-    const shareId = activeShare.id;
-    const url = `${location.origin}/_share/${shareId}`;
-    return (
-      <InputGroup>
-        <FormControl
-          bsClass="copy-link form-control"
-          type="text"
-          defaultValue={url}
-          readOnly
-          onClick={selectAction}
-          inputRef={createRef}
-        />
-        <InputGroup.Button onClick={copyAction}>
-          <Button>Copy</Button>
-        </InputGroup.Button>
-      </InputGroup>
-    );
-  }
-  return "まだリンクは作成されていません";
-}
-
 export default class ShareBox extends React.Component {
   constructor(props) {
     super(props);
@@ -64,9 +42,6 @@ export default class ShareBox extends React.Component {
     this.updateLink = this.updateLink.bind(this);
     this.createLink = this.createLink.bind(this);
     this.deleteLink = this.deleteLink.bind(this);
-    this.selectAction = this.selectAction.bind(this);
-    this.createRef = this.createRef.bind(this);
-    this.copyAction = this.copyAction.bind(this);
   }
 
   componentDidMount() {
@@ -122,19 +97,6 @@ export default class ShareBox extends React.Component {
     );
   }
 
-  selectAction(e) {
-    this.inputRef.select();
-  }
-
-  createRef(node) {
-    this.inputRef = node;
-  }
-
-  copyAction(e) {
-    this.inputRef.select();
-    document.execCommand("copy");
-  }
-
   render() {
     const { activeShare, isCreated, isChanging } = this.state;
     return (
@@ -148,15 +110,7 @@ export default class ShareBox extends React.Component {
             this.deleteLink
           )}
         </div>
-        <div className="share-box-content">
-          {Content(
-            isCreated,
-            activeShare,
-            this.createRef,
-            this.selectAction,
-            this.copyAction
-          )}
-        </div>
+        <ShareBoxContent isCreated={isCreated} activeShare={activeShare} />
       </div>
     );
   }
