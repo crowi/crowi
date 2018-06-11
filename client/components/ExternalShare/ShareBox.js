@@ -1,29 +1,29 @@
 import React from "react";
 import PropTypes from "prop-types";
 import uuidv4 from "uuid/v4";
+import { Button, InputGroup, FormControl } from 'react-bootstrap';
 import Icon from "../Common/Icon";
 
 function ActionButton(isCreated, isChanging, createAction, deleteAction) {
   const { button, icon, text, action } = isCreated
     ? {
-        button: "btn-danger",
+        button: "danger",
         icon: "unlink",
         text: "リンクを削除",
         action: deleteAction
       }
     : {
-        button: "btn-primary",
+        button: "primary",
         icon: "link",
         text: "リンクを作成",
         action: createAction
       };
   const iconName = isChanging ? "spinner" : icon;
-  const buttonClass = ["btn", "btn-sm", button].join(" ");
   return (
-    <button onClick={action} className={buttonClass} disabled={isChanging}>
+    <Button onClick={action} bsStyle={button} bsSize="small" disabled={isChanging}>
       <Icon name={iconName} spin={isChanging} />
       {text}
-    </button>
+    </Button>
   );
 }
 
@@ -32,21 +32,19 @@ function Content(isCreated, activeShare, createRef, selectAction, copyAction) {
     const shareId = activeShare.id;
     const url = `${location.origin}/_share/${shareId}`;
     return (
-      <div className="input-group">
-        <input
-          className="copy-link form-control"
+      <InputGroup>
+        <FormControl
+          bsClass="copy-link form-control"
           type="text"
           defaultValue={url}
           readOnly
           onClick={selectAction}
-          ref={createRef}
+          inputRef={createRef}
         />
-        <span className="input-group-btn" onClick={copyAction}>
-          <button className="btn btn-default" type="button">
-            Copy
-          </button>
-        </span>
-      </div>
+        <InputGroup.Button onClick={copyAction}>
+          <Button>Copy</Button>
+        </InputGroup.Button>
+      </InputGroup>
     );
   }
   return "まだリンクは作成されていません";
