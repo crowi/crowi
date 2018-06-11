@@ -48,6 +48,10 @@ class RenameTree extends React.Component {
     return path;
   }
 
+  static addTrailingSlash(string) {
+    return string.endsWith("/") ? string : `${string}/`;
+  }
+
   static removeTrailingSlash(string) {
     return string.endsWith("/") ? string.substring(0, string.length - 1) : string;
   }
@@ -174,6 +178,8 @@ class RenameTree extends React.Component {
     try {
       const data = await crowi.apiPost("/pages.checkTreeRenamable", { path, new_path });
       const { path_map: pathMap } = data;
+      // ${pathMap} has not ${path} key if location is PageList
+      pathMap[path] = new_path;
       this.setState({ pathMap, renamable: true, error: null });
     } catch (error) {
       this.handleError(error);
@@ -187,13 +193,17 @@ class RenameTree extends React.Component {
     const create_redirect = 1;
     this.setState({ removing: true });
     try {
-      await crowi.apiPost("/pages.renameTree", { path, new_path, create_redirect });
+      const data = await crowi.apiPost("/pages.renameTree", { path, new_path, create_redirect });
+      const { pages } = data;
+      const urls = pages.map(({ path }) => path);
+      const exists = (path) => urls.includes(path);
+      const redirect = (to) => () => top.location.href = to;
+      const pageUrl = `${new_path}?redirectFrom=${RenameTree.getPath()}`;
+      const listUrl = RenameTree.addTrailingSlash(new_path);
+      setTimeout(redirect(exists(new_path) ? pageUrl : listUrl), 1000);
     } catch (error) {
       this.handleError(error);
     }
-    setTimeout(() => {
-      top.location.href = new_path + '?redirectFrom=' + RenameTree.getPath();
-    }, 1000);
   }
 
   handleError(error) {
