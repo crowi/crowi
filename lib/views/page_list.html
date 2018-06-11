@@ -38,7 +38,7 @@
             data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
             class="like-button btn btn-default btn-sm {% if page.isLiked(user) %}active{% endif %}"
-        ><i class="fa fa-thumbs-o-up"></i></button>
+        ><i class="far fa-thumbs-up"></i></button>
       </div>
       {% endif %}
     </div>
@@ -89,7 +89,7 @@
       <a>Create Portal: {{ path }}</a>
       {% endif %}
     </li>
-    <li {% if req.body.pageForm %}class="active"{% endif %}><a href="#edit-form" data-toggle="tab"><i class="fa fa-pencil-square-o"></i> {{ t('Edit') }}</a></li>
+    <li {% if req.body.pageForm %}class="active"{% endif %}><a href="#edit-form" data-toggle="tab"><i class="fa fa-edit"></i> {{ t('Edit') }}</a></li>
 
     {% if not page %}
     <li class="pull-right close-button">
@@ -118,7 +118,7 @@
   {% endif %}
     <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
       <div class="wiki" id="revision-body-content">
-        <i class="fa fa-spinner fa-pulse fa-fw"></i>
+        <i class="fa fa-spinner fa-pulse"></i>
       </div>
     </div>
 
