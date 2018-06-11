@@ -5,14 +5,8 @@
         "browsers": ["last 2 versions"]
       }
     }],
+    "stage-2",
     "flow",
     "react"
-  ],
-  "plugins": [
-    "transform-class-properties",
-    "transform-object-rest-spread",
-    "transform-es2015-parameters",
-    "transform-es2015-spread",
-    "transform-es2015-for-of"
   ]
 }

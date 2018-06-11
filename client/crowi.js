@@ -286,7 +286,7 @@ $(function() {
         $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.');
 
         setTimeout(function() {
-          top.location.href = page.path + '?renamed=' + pagePath;
+          top.location.href = page.path + '?redirectFrom=' + pagePath;
         }, 1000);
       }
     });
@@ -453,6 +453,38 @@ $(function() {
         $('#input-group-username').addClass('has-error');
       }
     });
+  });
+
+  // moved from view /me/index.html
+  $("#pictureUploadForm input[name=userPicture]").on('change', function(){
+    var $form = $('#pictureUploadForm');
+    var fd = new FormData($form[0]);
+    if ($(this).val() == '') {
+      return false;
+    }
+
+    $('#pictureUploadFormProgress').html('<img src="/images/loading_s.gif"> Uploading ...');
+    $.ajax($form.attr("action"), {
+      type: 'post',
+      processData: false,
+      contentType: false,
+      data: fd,
+      dataType: 'json',
+      success: function(data){
+        if (data.status) {
+          $('#settingUserPicture').attr('src', data.url + '?time=' + (new Date()));
+          $('#pictureUploadFormMessage')
+            .addClass('alert alert-success')
+            .html('Updated.');
+        } else {
+          $('#pictureUploadFormMessage')
+            .addClass('alert alert-danger')
+            .html('Failed to update profile picture.');
+        }
+        $('#pictureUploadFormProgress').html('');
+      }
+    });
+    return false;
   });
 
 
