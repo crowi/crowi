@@ -1,7 +1,7 @@
 import React from "react";
 import PropTypes from "prop-types";
 import uuidv4 from "uuid/v4";
-import Icon from "./Common/Icon";
+import Icon from "../Common/Icon";
 
 function ActionButton(isCreated, isChanging, createAction, deleteAction) {
   const { button, icon, text, action } = isCreated
