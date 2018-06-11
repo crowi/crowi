@@ -112,7 +112,7 @@
     "concurrently": "~3.5.1",
     "flow-bin": "^0.65.0",
     "jshint": "~2.9.5",
-    "mocha": "~3.4.2",
+    "mocha": "~5.2.0",
     "nodemon": "^1.17.2",
     "proxyquire": "~1.8.0",
     "sinon": "~2.3.8",
