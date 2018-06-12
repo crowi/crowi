@@ -1,9 +1,10 @@
 import React from "react";
 import PropTypes from "prop-types";
 import uuidv4 from "uuid/v4";
-import { Button } from 'react-bootstrap';
+import { Button } from "react-bootstrap";
 import Icon from "../Common/Icon";
 import ShareBoxContent from "./ShareBoxContent";
+import SettingModal from "./SettingModal";
 
 function ActionButton(isCreated, isChanging, createAction, deleteAction) {
   const { button, icon, text, action } = isCreated
@@ -21,7 +22,12 @@ function ActionButton(isCreated, isChanging, createAction, deleteAction) {
       };
   const iconName = isChanging ? "spinner" : icon;
   return (
-    <Button onClick={action} bsStyle={button} bsSize="small" disabled={isChanging}>
+    <Button
+      onClick={action}
+      bsStyle={button}
+      bsSize="small"
+      disabled={isChanging}
+    >
       <Icon name={iconName} spin={isChanging} />
       {text}
     </Button>
@@ -36,12 +42,15 @@ export default class ShareBox extends React.Component {
       shares: [],
       activeShare: {},
       isChanging: false,
-      isCreated: props.isCreated
+      isCreated: props.isCreated,
+      showModal: false
     };
 
     this.updateLink = this.updateLink.bind(this);
     this.createLink = this.createLink.bind(this);
     this.deleteLink = this.deleteLink.bind(this);
+    this.handleOpen = this.handleOpen.bind(this);
+    this.handleClose = this.handleClose.bind(this);
   }
 
   componentDidMount() {
@@ -97,8 +106,16 @@ export default class ShareBox extends React.Component {
     );
   }
 
+  handleOpen(e) {
+    this.setState({ showModal: true });
+  }
+
+  handleClose(e) {
+    this.setState({ showModal: false });
+  }
+
   render() {
-    const { activeShare, isCreated, isChanging } = this.state;
+    const { activeShare, isCreated, isChanging, showModal } = this.state;
     return (
       <div className="share-box">
         <div className="share-box-header">
@@ -110,7 +127,17 @@ export default class ShareBox extends React.Component {
             this.deleteLink
           )}
         </div>
-        <ShareBoxContent isCreated={isCreated} activeShare={activeShare} />
+        <ShareBoxContent
+          isCreated={isCreated}
+          activeShare={activeShare}
+          handleOpen={this.handleOpen}
+        />
+        <SettingModal
+          show={showModal}
+          handleClose={this.handleClose}
+          activeShare={activeShare}
+          crowi={this.props.crowi}
+        />
       </div>
     );
   }
