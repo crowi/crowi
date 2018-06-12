@@ -19,7 +19,7 @@
     <div class="col-md-9">
 
       <ul class="nav nav-tabs">
-        <li class="active"><a href="#slack" data-toggle="tab"><i class="fa fa-slack"></i> Slack</a></li>
+        <li class="active"><a href="#slack" data-toggle="tab"><i class="fab fa-slack"></i> Slack</a></li>
       </ul>
 
       <br>
@@ -73,12 +73,12 @@
         {% if hasSlackToken %}
         <p>Crowi and Slack is already <strong>connected</strong>. You can re-connect to refresh and overwirte the token with your Slack account.</p>
         <a class="btn btn-default" href="{{ slackAuthUrl }}">
-          <i class="fa fa-slack"></i> Reconnect to Slack
+          <i class="fab fa-slack"></i> Reconnect to Slack
         </a>
         {% else %}
         <p>Slack clientId and clientSecret is configured. Now, you can connect with Slack.</p>
         <a class="btn btn-primary" href="{{ slackAuthUrl }}">
-          <i class="fa fa-slack"></i> Connect to Slack
+          <i class="fab fa-slack"></i> Connect to Slack
         </a>
         {% endif %}
       </div>
