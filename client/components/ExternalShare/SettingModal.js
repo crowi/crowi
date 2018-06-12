@@ -57,6 +57,11 @@ export default class SettingModal extends React.Component {
   }
 
   handleSubmit(e) {
+    const { shareId, secretKeyword, restricted } = this.state;
+    this.props.crowi.apiPost("/shares/secretKeyword", {
+      share_id: shareId,
+      secret_keyword: restricted ? secretKeyword : null
+    });
   }
 
   render() {
