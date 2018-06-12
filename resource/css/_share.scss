@@ -1,3 +1,7 @@
+#external-share .dropdown-menu {
+  z-index: 1060;
+}
+
 .share-box {
   display: flex;
   flex-direction: column;
@@ -22,5 +26,11 @@
         padding: 6px 12px 7px;
       }
     }
+  }
+}
+
+.share-setting-modal {
+  .secret-keyword {
+    margin-top: 8px;
   }
 }
