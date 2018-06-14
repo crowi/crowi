@@ -55,7 +55,7 @@ $(function() {
     return false;
   });
 
-  $('#appSettingForm, #secSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm').each(function() {
+  $('#appSettingForm, #secSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(function() {
     $(this).submit(function()
     {
       function showMessage(formId, msg, status) {
