@@ -16,16 +16,6 @@
   "Update Page": "ページを更新",
   "Warning": "注意",
 
-  "Sign in": "ログイン",
-  "Sign up is here": "新規登録はこちら",
-  "Sign in is here": "ログインはこちら",
-  "Sign up": "新規登録",
-  "Sign up with Google Account": "Google で登録",
-  "Sign in with Google Account": "Google でログイン",
-  "Sign up with this Google Account": "この Google アカウントで登録します",
-  "Example": "例",
-  "Taro Yamada": "山田 太郎",
-
   "List View": "リスト表示",
   "Timeline View": "タイムライン表示",
   "Presentation Mode": "プレゼンモード",
@@ -58,6 +48,9 @@
   "Updated": "更新しました",
   "Upload new image": "新しい画像をアップロード",
   "Google Setting": "Google設定",
+  "Google Connect": "Googleコネクト",
+  "GitHub Setting": "GitHub設定",
+  "GitHub Connect": "GitHubコネクト",
   "Connected": "接続されています",
   "Disconnect": "接続を解除",
 
@@ -83,15 +76,26 @@
   "Deleted Pages": "削除済みページ",
   "Sign out": "ログアウト",
 
+  "page_login": {
+    "sign_in": "ログイン",
+    "sign_up_is_here": "新規登録はこちら",
+    "sign_in_with": "%s でログイン"
+  },
+
   "page_register": {
+    "example": "例",
+    "taro_yamada": "山田 太郎",
+    "sign_up": "新規登録",
+    "sign_up_with": "%s で登録",
+    "sign_in_is_here": "ログインはこちら",
     "note": {
         "invited": "はじめに、あなたのことを教えて下さい。"
     },
     "notice": {
-       "restricted": "この Wiki への新規登録は制限されています。",
-       "restricted_defail": "利用を開始するには、新規登録後、管理者による承認が必要です。",
-       "google_account_continue": "ユーザーID、名前、パスワードを決めて登録を継続してください。"
-
+      "restricted": "この Wiki への新規登録は制限されています。",
+      "restricted_defail": "利用を開始するには、新規登録後、管理者による承認が必要です。",
+      "register_with_this": "この %s アカウントで登録します。",
+      "social_account_continue": "ユーザーID、名前、パスワードを決めて登録を継続してください。"
     },
     "form_help": {
       "email": "この Wiki では以下のメールアドレスのみ登録可能です。",
@@ -109,7 +113,10 @@
       "google_connect1": "Googleコネクトをすると、Googleアカウントでログイン可能になります。",
       "google_connect2": "コネクト可能なGoogleアカウントは、以下のメールアドレスの発行できるGoogle Appsアカウントに限られます。",
       "google_disconnect1": "接続を解除すると、Googleでログインができなくなります。",
-      "google_disconnect2": "解除後はメールアドレスとパスワードでログインすることができます。"
+      "google_disconnect2": "解除後はメールアドレスとパスワードでログインすることができます。",
+      "github_connect1": "GitHubコネクトをすると、GitHubアカウントでログイン可能になります。",
+      "github_disconnect1": "接続を解除すると、GitHubでログインができなくなります。",
+      "github_disconnect2": "解除後はメールアドレスとパスワードでログインすることができます。"
     }
   },
   "page_me_apitoken": {
