@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free-webfonts": "^1.0.9",
+    "@octokit/rest": "^15.2.5",
     "@slack/client": "~3.13.0",
     "async": "~1.5.0",
     "aws-sdk": "~2.88.0",
@@ -89,6 +90,8 @@
     "node-sass": "~4.5.3",
     "nodemailer": "~2.7.0",
     "nodemailer-ses-transport": "~1.5.0",
+    "passport": "^0.4.0",
+    "passport-github": "^1.1.0",
     "plantuml-encoder": "~1.2.4",
     "react": "~15.5.0",
     "react-bootstrap": "~0.30.10",
