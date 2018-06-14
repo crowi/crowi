@@ -1,36 +1,44 @@
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from 'react'
+import PropTypes from 'prop-types'
 
 export default class PageListMeta extends React.Component {
-
   isPortalPath(path) {
     if (path.match(/.*\/$/)) {
-      return true;
+      return true
     }
 
-    return false;
+    return false
   }
 
   render() {
     // TODO isPortal()
-    const page = this.props.page;
+    const page = this.props.page
 
     // portal check
-    let PortalLabel;
+    let PortalLabel
     if (this.isPortalPath(page.path)) {
-      PortalLabel = <span className="label label-info">PORTAL</span>;
+      PortalLabel = <span className="label label-info">PORTAL</span>
     }
 
-    let CommentCount;
+    let CommentCount
     if (page.commentCount > 0) {
-      CommentCount = <span><i className="fa fa-comment" />{page.commentCount}</span>;
+      CommentCount = (
+        <span>
+          <i className="fa fa-comment" />
+          {page.commentCount}
+        </span>
+      )
     }
 
-    let LikerCount;
+    let LikerCount
     if (page.liker.length > 0) {
-      LikerCount = <span><i className="fa fa-thumbs-up" />{page.liker.length}</span>;
+      LikerCount = (
+        <span>
+          <i className="fa fa-thumbs-up" />
+          {page.liker.length}
+        </span>
+      )
     }
-
 
     return (
       <span className="page-list-meta">
@@ -38,15 +46,14 @@ export default class PageListMeta extends React.Component {
         {CommentCount}
         {LikerCount}
       </span>
-    );
+    )
   }
 }
 
 PageListMeta.propTypes = {
   page: PropTypes.object.isRequired,
-};
+}
 
 PageListMeta.defaultProps = {
   page: {},
-};
-
+}

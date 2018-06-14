@@ -1,7 +1,7 @@
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from 'react'
+import PropTypes from 'prop-types'
 
-import moment from 'moment';
+import moment from 'moment'
 
 /**
  * UserDate
@@ -9,15 +9,10 @@ import moment from 'moment';
  * display date depends on user timezone of user settings
  */
 export default class UserDate extends React.Component {
-
   render() {
-    const dt = moment(this.props.dateTime).format(this.props.format);
+    const dt = moment(this.props.dateTime).format(this.props.format)
 
-    return (
-      <span className={this.props.className}>
-        {dt}
-      </span>
-    );
+    return <span className={this.props.className}>{dt}</span>
   }
 }
 
@@ -25,11 +20,10 @@ UserDate.propTypes = {
   dateTime: PropTypes.string.isRequired,
   format: PropTypes.string,
   className: PropTypes.string,
-};
+}
 
 UserDate.defaultProps = {
   dateTime: 'now',
   format: 'YYYY/MM/DD HH:mm:ss',
   className: '',
-};
-
+}

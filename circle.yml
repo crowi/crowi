@@ -25,6 +25,7 @@ jobs:
           paths:
             - /home/node/app/node_modules
       - run: npm run build
+      - run: npm run lint
       - run: npm run test
 notify:
   webhooks:
