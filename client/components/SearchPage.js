@@ -1,15 +1,14 @@
 // This is the root component for #search-page
 
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from 'react'
+import PropTypes from 'prop-types'
 
-import SearchForm from './SearchPage/SearchForm';
-import SearchResult from './SearchPage/SearchResult';
+import SearchForm from './SearchPage/SearchForm'
+import SearchResult from './SearchPage/SearchResult'
 
 export default class SearchPage extends React.Component {
-
   constructor(props) {
-    super(props);
+    super(props)
 
     this.state = {
       location: location,
@@ -20,83 +19,85 @@ export default class SearchPage extends React.Component {
       searchError: null,
     }
 
-    this.search = this.search.bind(this);
-    this.changeURL = this.changeURL.bind(this);
+    this.search = this.search.bind(this)
+    this.changeURL = this.changeURL.bind(this)
   }
 
   componentDidMount() {
-    const keyword = this.state.searchingKeyword;
-    if (keyword !== '')  {
-      this.search({keyword});
+    const keyword = this.state.searchingKeyword
+    if (keyword !== '') {
+      this.search({ keyword })
     }
   }
 
   static getQueryByLocation(location) {
-    let search = location.search || '';
-    let query = {};
+    let search = location.search || ''
+    let query = {}
 
-    search.replace(/^\?/, '').split('&').forEach(function(element) {
-      let queryParts = element.split('=');
-      query[queryParts[0]] = decodeURIComponent(queryParts[1]).replace(/\+/g, ' ');
-    });
+    search
+      .replace(/^\?/, '')
+      .split('&')
+      .forEach(function(element) {
+        let queryParts = element.split('=')
+        query[queryParts[0]] = decodeURIComponent(queryParts[1]).replace(/\+/g, ' ')
+      })
 
-    return query;
+    return query
   }
 
   changeURL(keyword, refreshHash) {
-    let hash = location.hash || '';
+    let hash = location.hash || ''
     // TODO 整理する
     if (refreshHash || this.state.searchedKeyword !== '') {
-        hash = '';
+      hash = ''
     }
-    if (window.history && window.history.pushState){
-      window.history.pushState('', `Search - ${keyword}`, `/_search?q=${keyword}${hash}`);
+    if (window.history && window.history.pushState) {
+      window.history.pushState('', `Search - ${keyword}`, `/_search?q=${keyword}${hash}`)
     }
   }
 
   search(data) {
-    const keyword = data.keyword;
+    const keyword = data.keyword
     if (keyword === '') {
       this.setState({
         searchingKeyword: '',
         searchedPages: [],
         searchResultMeta: {},
         searchError: null,
-      });
+      })
 
-      return true;
+      return true
     }
 
     this.setState({
       searchingKeyword: keyword,
-    });
+    })
 
-    this.props.crowi.apiGet('/search', {q: keyword})
-    .then(res => {
-      this.changeURL(keyword);
+    this.props.crowi
+      .apiGet('/search', { q: keyword })
+      .then(res => {
+        this.changeURL(keyword)
 
-      this.setState({
-        searchedKeyword: keyword,
-        searchedPages: res.data,
-        searchResultMeta: res.meta,
-      });
-    }).catch(err => {
-      // TODO error
-      this.setState({
-        searchError: err,
-      });
-    });
-  };
+        this.setState({
+          searchedKeyword: keyword,
+          searchedPages: res.data,
+          searchResultMeta: res.meta,
+        })
+      })
+      .catch(err => {
+        // TODO error
+        this.setState({
+          searchError: err,
+        })
+      })
+  }
 
   render() {
     return (
       <div>
         <div className="header-wrap">
           <header>
-            <SearchForm
-              onSearchFormChanged={this.search}
-              keyword={this.state.searchingKeyword}
-              />
+            <SearchForm onSearchFormChanged={this.search} keyword={this.state.searchingKeyword} />
           </header>
         </div>
 
@@ -104,18 +105,17 @@ export default class SearchPage extends React.Component {
           pages={this.state.searchedPages}
           searchingKeyword={this.state.searchingKeyword}
           searchResultMeta={this.state.searchResultMeta}
-          />
+        />
       </div>
-    );
+    )
   }
 }
 
 SearchPage.propTypes = {
   query: PropTypes.object,
-};
+}
 SearchPage.defaultProps = {
-  //pollInterval: 1000,
+  // pollInterval: 1000,
   query: SearchPage.getQueryByLocation(location || {}),
   searchError: null,
-};
-
+}
