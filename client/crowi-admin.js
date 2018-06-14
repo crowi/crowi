@@ -55,49 +55,51 @@ $(function() {
     return false
   })
 
-  $('#appSettingForm, #secSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm').each(function() {
-    $(this).submit(function() {
-      function showMessage(formId, msg, status) {
-        $('#' + formId + ' .alert').remove()
+  $('#appSettingForm, #secSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(
+    function() {
+      $(this).submit(function() {
+        function showMessage(formId, msg, status) {
+          $('#' + formId + ' .alert').remove()
 
-        if (!status) {
-          status = 'success'
-        }
-        var $message = $('<p class="alert"></p>')
-        $message.addClass('alert-' + status)
-        $message.html(msg.replace('\n', '<br>'))
-        $message.insertAfter('#' + formId + ' legend')
-
-        if (status == 'success') {
-          setTimeout(function() {
-            $message.fadeOut({
-              complete: function() {
-                $message.remove()
-              },
-            })
-          }, 5000)
-        }
-      }
-
-      var $form = $(this)
-      var $id = $form.attr('id')
-      var $button = $('button', this)
-      $button.attr('disabled', 'disabled')
-      var jqxhr = $
-        .post($form.attr('action'), $form.serialize(), function(data) {
-          if (data.status) {
-            showMessage($id, '更新しました')
-          } else {
-            showMessage($id, data.message, 'danger')
+          if (!status) {
+            status = 'success'
           }
-        })
-        .fail(function() {
-          showMessage($id, 'エラーが発生しました', 'danger')
-        })
-        .always(function() {
-          $button.removeAttr('disabled')
-        })
-      return false
-    })
-  })
+          var $message = $('<p class="alert"></p>')
+          $message.addClass('alert-' + status)
+          $message.html(msg.replace('\n', '<br>'))
+          $message.insertAfter('#' + formId + ' legend')
+
+          if (status == 'success') {
+            setTimeout(function() {
+              $message.fadeOut({
+                complete: function() {
+                  $message.remove()
+                },
+              })
+            }, 5000)
+          }
+        }
+
+        var $form = $(this)
+        var $id = $form.attr('id')
+        var $button = $('button', this)
+        $button.attr('disabled', 'disabled')
+        var jqxhr = $
+          .post($form.attr('action'), $form.serialize(), function(data) {
+            if (data.status) {
+              showMessage($id, '更新しました')
+            } else {
+              showMessage($id, data.message, 'danger')
+            }
+          })
+          .fail(function() {
+            showMessage($id, 'エラーが発生しました', 'danger')
+          })
+          .always(function() {
+            $button.removeAttr('disabled')
+          })
+        return false
+      })
+    },
+  )
 })

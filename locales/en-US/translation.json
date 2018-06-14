@@ -16,16 +16,6 @@
   "Update Page": "Update Page",
   "Warning": "Warning",
 
-  "Sign in": "Sign in",
-  "Sign up is here": "Sign up",
-  "Sign in is here": "Sign in",
-  "Sign up": "Sign up",
-  "Sign up with Google Account": "Sign up with Google Account",
-  "Sign in with Google Account": "Sign in with Google Account",
-  "Sign up with this Google Account": "Sign up with this Google Account",
-  "Example": "Example",
-  "Taro Yamada": "James Bond",
-
   "List View": "List",
   "Timeline View": "Timeline",
   "Presentation Mode": "Presentation Mode",
@@ -58,6 +48,9 @@
   "Updated": "Updated",
   "Upload new image": "Upload new image",
   "Google Setting": "Google Setting",
+  "Google Connect": "Google Connect",
+  "GitHub Setting": "GitHub Setting",
+  "GitHub Connect": "GitHub Connect",
   "Connected": "Connected",
   "Disconnect": "Disconnect",
 
@@ -83,14 +76,26 @@
   "Deleted Pages": "Deleted Pages",
   "Sign out": "Logout",
 
+  "page_login": {
+    "sign_in": "Sign in",
+    "sign_up_is_here": "Sign up",
+    "sign_in_with": "Sign in with %s Account"
+  },
+
   "page_register": {
+    "example": "Example",
+    "taro_yamada": "James Bond",
+    "sign_up": "Sign up",
+    "sign_up_with": "Sign up with %s Account",
+    "sign_in_is_here": "Sign in",
     "note": {
         "invited": "Tell me a bit about you :)"
     },
     "notice": {
       "restricted": "Admin approval required.",
       "restricted_defail": "Once the admin approves your sign up, you'll be able to access this wiki.",
-      "google_account_continue": "Enter your user ID, name and password to continue."
+      "register_with_this": "Sign up with this %s Account.",
+      "social_account_continue": "Enter your user ID, name and password to continue."
     },
     "form_help": {
       "email": "You must have email address which listed below to sign up to this wiki.",
@@ -108,7 +113,10 @@
       "google_connect1": "With Google Connect, you can sign in with your Google Account.",
       "google_connect2": "Only Google Apps accounts with the following email addresses are connectable Google accounts:",
       "google_disconnect1": "If you disconnect your Google account, you will be unable to sign in using Google Authentication",
-      "google_disconnect2": "After disconnecting your Google account, you can sign in normally using your email and password"
+      "google_disconnect2": "After disconnecting your Google account, you can sign in normally using your email and password",
+      "github_connect1": "With GitHub Connect, you can sign in with your GitHub Account.",
+      "github_disconnect1": "If you disconnect your GitHub account, you will be unable to sign in using GitHub Authentication",
+      "github_disconnect2": "After disconnecting your GitHub account, you can sign in normally using your email and password"
     }
   },
   "page_me_apitoken": {

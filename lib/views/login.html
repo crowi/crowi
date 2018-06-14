@@ -1,6 +1,6 @@
 {% extends 'layout/single-nologin.html' %}
 
-{% block html_title %}{{ t('Sign in') }} · {% endblock %}
+{% block html_title %}{{ t('page_login.sign_in') }} · {% endblock %}
 
 {% block content_main %}
 
@@ -15,10 +15,10 @@
 
 <div class="login-dialog-container flip-container col-md-5">
 
-<div class="login-dialog flipper {% if req.query.register or req.body.registerForm or isRegistering or googleId %}to-flip{% endif %}" id="login-dialog">
+<div class="login-dialog flipper {% if req.query.register or req.body.registerForm or isRegistering or googleId or githubId %}to-flip{% endif %}" id="login-dialog">
 
   <div class="login-dialog-inner front">
-    <h2>{{ t('Sign in') }}</h2>
+    <h2>{{ t('page_login.sign_in') }}</h2>
 
     <div id="login-form-errors">
       {% set message = req.flash('warningMessage') %}
@@ -50,17 +50,26 @@
       </div>
 
       <input type="hidden" name="_csrf" value="{{ csrf() }}">
-      <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('Sign in') }}">
+      <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('page_login.sign_in') }}">
     </form>
 
     <hr>
 
     <div class="row">
       {% if googleLoginEnabled() %}
-      <div class="col-md-8">
-        <p>{{ t('Sign in by Google Account') }}</p>
+      <div class="col-md-6">
+        <p>{{ t('page_login.sign_in_with', "Google") }}</p>
         <form role="form" action="/login/google" method="get">
-          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('Sign in') }}</button>
+          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('page_login.sign_in') }}</button>
+          <input type="hidden" name="_csrf" value="{{ csrf() }}">
+        </form>
+      </div>
+      {% endif %}
+      {% if githubLoginEnabled() %}
+      <div class="col-md-6">
+        <p>{{ t('page_login.sign_in_with', "GitHub") }}</p>
+        <form role="form" action="/login/github" method="get">
+          <button type="submit" class="btn btn-block btn-github"><i class="fab fa-github-square"></i> {{ t('page_login.sign_in') }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
         </form>
       </div>
@@ -68,14 +77,14 @@
     </div>
 
     {% if config.crowi['security:registrationMode'] != 'Closed' %}
-    <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil-alt"></i> {{ t('Sign up is here') }}</a></p>
+    <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil-alt"></i> {{ t('page_login.sign_up_is_here') }}</a></p>
     {% endif %}
   </div>
 
   {% if config.crowi['security:registrationMode'] != 'Closed' %}
   <div class="register-dialog-inner back">
 
-    <h2>{{ t('Sign up') }}</h2>
+    <h2>{{ t('page_register.sign_up') }}</h2>
 
     {% if config.crowi['security:registrationMode'] == 'Restricted' %}
     <p class="alert alert-warning">
@@ -84,15 +93,15 @@
     </p>
     {% endif %}
 
-    {% if googleId %}
-    <div class="google-info alert alert-info">
-      {% if googleImage %}
+    {% if issuerName %}
+    <div class="google-info github-info alert alert-info">
+      {% if socialImage %}
       <p class="text-center">
-        <img src="{{ googleImage }}" class="picture picture-rounded picture-lg">
+        <img src="{{ socialImage }}" class="picture picture-rounded picture-lg">
       </p>
       {% endif %}
-      <code>{{ googleEmail }}</code> {{ t('page_register with this Google Account') }}<br>
-      {{ t('page_register.notice.google_account_continue') }}
+      <code>{{ socialEmail }}</code> {{ t('page_register.notice.register_with_this', issuerName) }}<br>
+      {{ t('page_register.notice.social_account_continue') }}
     </div>
     {% endif %}
 
@@ -119,11 +128,12 @@
 
     <form role="form" method="post" action="/register" id="register-form">
       <input type="hidden" class="form-control" name="registerForm[googleId]" value="{{ googleId|default(req.body.registerForm.googleId) }}">
+      <input type="hidden" class="form-control" name="registerForm[githubId]" value="{{ githubId|default(req.body.registerForm.githubId) }}">
 
       <label>{{ t('User ID') }}</label>
       <div class="input-group" id="input-group-username">
         <span class="input-group-addon"><strong>@</strong></span>
-        <input type="text" class="form-control" placeholder="{{ t('Example') }}: taroyama" name="registerForm[username]" value="{{ req.body.registerForm.username }}" required>
+        <input type="text" class="form-control" placeholder="{{ t('page_register.example') }}: taroyama" name="registerForm[username]" value="{{ req.body.registerForm.username }}" required>
       </div>
       <p class="help-block">
       <span id="help-block-username" class="text-danger"></span>
@@ -133,13 +143,13 @@
       <label>{{ t('Name') }}</label>
       <div class="input-group">
         <span class="input-group-addon"><i class="fa fa-user"></i></span>
-        <input type="text" class="form-control" placeholder="{{ t('Example') }}: {{ t('Taro Yamada') }}" name="registerForm[name]" value="{{ googleName|default(req.body.registerForm.name) }}" required>
+        <input type="text" class="form-control" placeholder="{{ t('page_register.example') }}: {{ t('page_register.taro_yamada') }}" name="registerForm[name]" value="{{ socialName|default(req.body.registerForm.name) }}" required>
       </div>
 
       <label>{{ t('Email') }}</label>
       <div class="input-group">
         <span class="input-group-addon"><i class="fa fa-envelope"></i></span>
-        <input type="email" class="form-control" placeholder="E-mail" name="registerForm[email]" value="{{ googleEmail|default(req.body.registerForm.email) }}" required>
+        <input type="email" class="form-control" placeholder="E-mail" name="registerForm[email]" value="{{ socialEmail|default(req.body.registerForm.email) }}" required>
       </div>
       {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
       <p class="help-block">
@@ -161,11 +171,11 @@
         {{ t('page_register.form_help.password') }}
       </p>
 
-      {% if googleImage %}
-        <input type="hidden" name="registerForm[googleImage]" value="{{ googleImage }}">
+      {% if socialImage %}
+        <input type="hidden" name="registerForm[socialImage]" value="{{ socialImage }}">
       {% endif  %}
       <input type="hidden" name="_csrf" value="{{ csrf() }}">
-      <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('Sign up') }}">
+      <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('page_register.sign_up') }}">
     </form>
 
     <hr>
@@ -173,16 +183,25 @@
     <div class="row">
       {% if googleLoginEnabled() %}
       <div class="col-md-6">
-        <p>{{ t('Sign up with Google Account') }}</p>
+        <p>{{ t('page_register.sign_up_with', "Google") }}</p>
         <form role="form" method="post" action="/register/google">
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
-          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('Login') }}</button>
+          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('page_register.sign_up') }}</button>
+        </form>
+      </div>
+      {% endif %}
+      {% if githubLoginEnabled() %}
+      <div class="col-md-6">
+        <p>{{ t('page_register.sign_up_with', "GitHub") }}</p>
+        <form role="form" method="post" action="/register/github">
+          <input type="hidden" name="_csrf" value="{{ csrf() }}">
+          <button type="submit" class="btn btn-block btn-github"><i class="fab fa-github-square"></i> {{ t('page_register.sign_up') }}</button>
         </form>
       </div>
       {% endif %}
     </div>
 
-    <p class="bottom-text"><a href="#login" id="login"><i class="fa fa-sign-out-alt"></i> {{ t('Sign in is here') }}</a></p>
+    <p class="bottom-text"><a href="#login" id="login"><i class="fa fa-sign-out-alt"></i> {{ t('page_register.sign_in_is_here') }}</a></p>
   </div>
   {% endif %} {# if registrationMode == Closed #}
 
