@@ -5,6 +5,7 @@ services:
       context: .
       args:
         NODE_ENV: development
+    tty: true
     environment:
       DEBUG: "crowi:*"
       MONGO_URI: mongodb://mongodb:27017/crowi
