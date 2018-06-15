@@ -1,42 +1,39 @@
-import plantuml from 'plantuml-encoder';
-import crypto from 'crypto';
+import plantuml from 'plantuml-encoder'
+import crypto from 'crypto'
 
 export default class PlantUML {
-
   constructor(crowi) {
-    this.crowi = crowi;
-
+    this.crowi = crowi
   }
 
   generateId(token) {
-    const hasher = require('crypto').createHash('md5');
-    hasher.update(token);
-    return hasher.digest('hex');
+    const hasher = require('crypto').createHash('md5')
+    hasher.update(token)
+    return hasher.digest('hex')
   }
 
   process(code, lang) {
-    const config = crowi.getConfig();
+    const config = crowi.getConfig()
     if (!config.env.PLANTUML_URI) {
-      return `<pre class="wiki-code"><code>${Crowi.escape(code, true)}\n</code></pre>`;
+      return `<pre class="wiki-code"><code>${Crowi.escape(code, true)}\n</code></pre>`
     }
 
-    let plantumlUri = config.env.PLANTUML_URI;
+    let plantumlUri = config.env.PLANTUML_URI
     if (plantumlUri.substr(-1) !== '/') {
-      plantumlUri += '/';
+      plantumlUri += '/'
     }
-    const id = this.generateId(code + lang);
+    const id = this.generateId(code + lang)
     const encoded = plantuml.encode(`@startuml
 
 skinparam monochrome true
 
 ${code}
-@enduml`);
+@enduml`)
 
     return `
       <div id="${id}" class="plantuml noborder">
         <img src="${plantumlUri}svg/${encoded}">
       </div>
-    `;
+    `
   }
 }
-

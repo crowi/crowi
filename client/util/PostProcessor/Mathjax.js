@@ -1,26 +1,24 @@
-
 export default class Mathjax {
-
   constructor(crowi) {
-    this.crowi = crowi;
-    this.defaultUrl = '//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?skipStartupTypeset=true';
+    this.crowi = crowi
+    this.defaultUrl = '//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?skipStartupTypeset=true'
 
-    this.mathJaxConfigured = false;
+    this.mathJaxConfigured = false
 
-    const config = crowi.getConfig();
+    const config = crowi.getConfig()
 
     if (config.env.MATHJAX) {
-      this.mathJaxConfigured = true;
+      this.mathJaxConfigured = true
 
       if (crowi.window.MathJax) {
-        return ;
+        return
       }
 
-      const document = crowi.document;
-      const head = document.getElementsByTagName('head')[0];
+      const document = crowi.document
+      const head = document.getElementsByTagName('head')[0]
 
-      const mathJaxConfig= document.createElement('script');
-      mathJaxConfig.type = 'text/x-mathjax-config';
+      const mathJaxConfig = document.createElement('script')
+      mathJaxConfig.type = 'text/x-mathjax-config'
       mathJaxConfig.text = `MathJax.Hub.Config({
       extensions: ["tex2jax.js"],
       jax: ["input/TeX", "output/SVG"],
@@ -34,37 +32,37 @@ export default class Mathjax {
       showProcessingMessages: false,
       messageStyle: "none",
       skipStartupTypeset: true
-    });`;
-      head.appendChild(mathJaxConfig);
+    });`
+      head.appendChild(mathJaxConfig)
 
-      const script = document.createElement('script');
-      script.type = 'text/javascript';
-      script.src = this.defaultUrl;
+      const script = document.createElement('script')
+      script.type = 'text/javascript'
+      script.src = this.defaultUrl
 
-      head.appendChild(script);
+      head.appendChild(script)
     }
 
-    this.process = this.process.bind(this);
+    this.process = this.process.bind(this)
   }
 
   process(html, dom) {
     if (!this.mathJaxConfigured) {
-      return html;
+      return html
     }
 
     if (typeof dom === 'undefined') {
-      return html;
+      return html
     }
 
     const intervalId = setInterval(() => {
       if (this.crowi.window.MathJax) {
-        const MathJax = this.crowi.window.MathJax;
+        const MathJax = this.crowi.window.MathJax
 
-        MathJax.Hub.Queue(["Typeset", MathJax.Hub, dom.id]);
-        clearInterval(intervalId);
+        MathJax.Hub.Queue(['Typeset', MathJax.Hub, dom.id])
+        clearInterval(intervalId)
       }
-    }, 100);
+    }, 100)
 
-    return html;
+    return html
   }
 }
