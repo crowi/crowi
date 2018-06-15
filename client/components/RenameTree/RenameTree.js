@@ -153,19 +153,19 @@ class RenameTree extends React.Component {
 
   handleChange(e) {
     clearTimeout(this.state.timeoutId)
-    const timeoutId = setTimeout(async () => await this.checkTreeRenamable(), 600)
+    const timeoutId = setTimeout(() => this.checkTreeRenamable(), 600)
     this.setState({ newPath: e.target.value, timeoutId })
   }
 
   async checkTreeRenamable() {
     const { crowi } = this.props
-    const { newPath: new_path } = this.state
+    const { newPath } = this.state
     const path = RenameTree.getPath({ removeTrailingSlash: true })
     try {
-      const data = await crowi.apiPost('/pages.checkTreeRenamable', { path, new_path })
+      const data = await crowi.apiPost('/pages.checkTreeRenamable', { path, new_path: newPath })
       const { path_map: pathMap } = data
       // ${pathMap} has not ${path} key if location is PageList
-      pathMap[path] = new_path
+      pathMap[path] = newPath
       this.setState({ pathMap, renamable: true, error: null })
     } catch (error) {
       this.handleError(error)
@@ -174,19 +174,23 @@ class RenameTree extends React.Component {
 
   async handleSubmit() {
     const { crowi } = this.props
-    const { newPath: new_path } = this.state
+    const { newPath } = this.state
     const path = RenameTree.getPath({ removeTrailingSlash: true })
-    const create_redirect = 1
+    const createRedirect = 1
     this.setState({ removing: true })
     try {
-      const data = await crowi.apiPost('/pages.renameTree', { path, new_path, create_redirect })
+      const data = await crowi.apiPost('/pages.renameTree', {
+        path,
+        new_path: newPath,
+        create_redirect: createRedirect,
+      })
       const { pages } = data
       const urls = pages.map(({ path }) => path)
       const exists = path => urls.includes(path)
       const redirect = to => () => (top.location.href = to)
-      const pageUrl = `${new_path}?redirectFrom=${RenameTree.getPath()}`
-      const listUrl = RenameTree.addTrailingSlash(new_path)
-      setTimeout(redirect(exists(new_path) ? pageUrl : listUrl), 1000)
+      const pageUrl = `${newPath}?redirectFrom=${RenameTree.getPath()}`
+      const listUrl = RenameTree.addTrailingSlash(newPath)
+      setTimeout(redirect(exists(newPath) ? pageUrl : listUrl), 1000)
     } catch (error) {
       this.handleError(error)
     }

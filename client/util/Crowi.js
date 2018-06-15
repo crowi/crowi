@@ -144,7 +144,7 @@ export default class Crowi {
   }
 
   async apiGet(path, params) {
-    return await this.apiRequest('get', path, { params: params })
+    return this.apiRequest('get', path, { params: params })
   }
 
   async apiPost(path, params) {
@@ -152,7 +152,7 @@ export default class Crowi {
       params._csrf = this.csrfToken
     }
 
-    return await this.apiRequest('post', path, params)
+    return this.apiRequest('post', path, params)
   }
 
   async apiRequest(method, path, params) {
