@@ -1,54 +1,56 @@
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from 'react'
+import PropTypes from 'prop-types'
 
-import Icon from '../Common/Icon';
-import User from '../User/User';
+import Icon from '../Common/Icon'
+import User from '../User/User'
 
 export default class Attachment extends React.Component {
   constructor(props) {
-    super(props);
+    super(props)
 
-    this._onAttachmentDeleteClicked = this._onAttachmentDeleteClicked.bind(this);
+    this._onAttachmentDeleteClicked = this._onAttachmentDeleteClicked.bind(this)
   }
 
   iconNameByFormat(format) {
     if (format.match(/image\/.+/i)) {
-      return 'file-image';
+      return 'file-image'
     }
 
-    return 'file';
+    return 'file'
   }
 
   _onAttachmentDeleteClicked(event) {
-    this.props.onAttachmentDeleteClicked(this.props.attachment);
+    this.props.onAttachmentDeleteClicked(this.props.attachment)
   }
 
   render() {
-    const attachment = this.props.attachment;
+    const attachment = this.props.attachment
     const attachmentId = attachment._id
-    const formatIcon = this.iconNameByFormat(attachment.fileFormat);
+    const formatIcon = this.iconNameByFormat(attachment.fileFormat)
 
-    let fileInUse = '';
+    let fileInUse = ''
     if (this.props.inUse) {
-      fileInUse = <span className="attachment-in-use label label-info">In Use</span>;
+      fileInUse = <span className="attachment-in-use label label-info">In Use</span>
     }
 
-    const fileType = <span className="attachment-filetype label label-default">{attachment.fileFormat}</span>;
+    const fileType = <span className="attachment-filetype label label-default">{attachment.fileFormat}</span>
 
     return (
       <li>
-          <User user={attachment.creator} />
-          <Icon name={formatIcon} regular />
+        <User user={attachment.creator} />
+        <Icon name={formatIcon} regular />
 
-          <a href={attachment.url}> {attachment.originalName}</a>
+        <a href={attachment.url}> {attachment.originalName}</a>
 
-          {fileType}
+        {fileType}
 
-          {fileInUse}
+        {fileInUse}
 
-          <a className="text-danger attachment-delete" onClick={this._onAttachmentDeleteClicked}><Icon name="trash" solid /></a>
+        <a className="text-danger attachment-delete" onClick={this._onAttachmentDeleteClicked}>
+          <Icon name="trash" solid />
+        </a>
       </li>
-    );
+    )
   }
 }
 
@@ -56,7 +58,6 @@ Attachment.propTypes = {
   attachment: PropTypes.object.isRequired,
   inUse: PropTypes.bool.isRequired,
   onAttachmentDeleteClicked: PropTypes.func.isRequired,
-};
+}
 
-Attachment.defaultProps = {
-};
+Attachment.defaultProps = {}
