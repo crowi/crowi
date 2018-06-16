@@ -128,6 +128,7 @@
     "flow-bin": "^0.65.0",
     "mocha": "~5.2.0",
     "nodemon": "^1.17.2",
+    "onchange": "^4.0.0",
     "prettier": "^1.13.4",
     "proxyquire": "~1.8.0",
     "sinon": "~2.3.8",
@@ -136,16 +137,17 @@
   "license": "MIT",
   "scripts": {
     "start": "node app.js",
-    "dev": "concurrently --kill-others \"npm run dev:server\" \"npm run watch\"",
+    "dev": "concurrently --kill-others \"npm run dev:server\" \"npm run dev:client\" \"npm run watch\" ",
     "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon --watch ./lib/ --watch ./locales/ --ext 'js,json' --exec node app.js",
     "dev:client": "NODE_ENV=development webpack --progress --profile --colors --display-error-details --watch --config tools/webpack.config.js",
     "flow": "flow",
-    "format": "prettier --write '**/*.js'",
-    "lint": "eslint '**/*.js'",
+    "format": "eslint --fix \"**/*.js\"",
+    "lint": "eslint \"**/*.js\"",
     "test": "mocha -r test/bootstrap.js --globals chai --reporter dot test/**/*.test.js",
     "build": "npm run prod:client",
     "prod:client": "NODE_ENV=production webpack --bail --progress --colors --display-error-details --config tools/webpack.config.js",
     "webpack": "webpack",
+    "watch": "onchange \"**/*.js\" -e \"bin\" -e \"client/thirdparty-js\" -e \"node_modules\" -e \"public\" -f add -f change -- eslint --fix \"{{changed}}\"",
     "postinstall": "npm run build"
   },
   "env": {
