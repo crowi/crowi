@@ -1,7 +1,11 @@
 version: '3'
 services:
-  node:
-    image: node:8.11.2
+  crowi:
+    build:
+      context: .
+      args:
+        NODE_ENV: development
+    tty: true
     environment:
       DEBUG: "crowi:*"
       MONGO_URI: mongodb://mongodb:27017/crowi
@@ -9,10 +13,9 @@ services:
       ELASTICSEARCH_URI: elasticsearch:9200/
       PLANTUML_URI: //localhost:8080
       FILE_UPLOAD: local
-    working_dir: /home/node/app
     volumes:
-      - ./:/home/node/app
-      - /home/node/app/node_modules
+      - ./:/crowi
+      - /crowi/node_modules
     ports:
       - 3000:3000
     links:
