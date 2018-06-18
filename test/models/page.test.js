@@ -331,4 +331,77 @@ describe('Page', () => {
       })
     })
   })
+
+  describe('Rename Tree', () => {
+    let user
+
+    const generatePages = paths => {
+      const grant = Page.GRANT_PUBLIC
+      const grantedUsers = [user]
+      const creator = user
+      return paths.map(path => ({ path, grant, grantedUsers, creator }))
+    }
+
+    before(async () => {
+      user = createdUsers[0]
+      await Page.remove({})
+    })
+
+    context('A page already exists in the destination', () => {
+      beforeEach(async () => {
+        const paths = ['/jp/hoge', '/us/hoge/huga', '/jp/hoge/huga']
+        await testDBUtil.generateFixture(conn, 'Page', generatePages(paths))
+      })
+
+      describe('checkPagesRenamable', () => {
+        it('should return error', async () => {
+          const paths = await Page.findChildrenByPath('/jp/hoge', user, {})
+          const pathMap = Page.getPathMap(paths, 'jp', 'us')
+          const [error] = await Page.checkPagesRenamable(Object.values(pathMap), user)
+          expect(error).to.be.equal(true)
+        })
+      })
+
+      afterEach(async () => Page.remove({}))
+    })
+
+    context('The number of pages is greater than 50', () => {
+      let treeSize
+      beforeEach(async () => {
+        await Page.remove({})
+        const children = Array.from(new Array(50).keys()).map(v => `/parent/${v}`)
+        const paths = ['/parent', ...children]
+        treeSize = paths.length
+        await testDBUtil.generateFixture(conn, 'Page', generatePages(paths))
+      })
+
+      describe('findChildrenByPath', () => {
+        it('should rename more than 50 pages', async () => {
+          const pages = Page.findChildrenByPath('/parent', user, {})
+          expect(pages.length).to.be.not.equal(treeSize)
+        })
+      })
+
+      afterEach(async () => Page.remove({}))
+    })
+
+    context('The name of the tree starts with the name of another tree', () => {
+      beforeEach(async () => {
+        await Page.remove({})
+        const paths = ['/car', '/car/ambulance', '/car/minicar', '/car/taxi', '/carrot']
+        await testDBUtil.generateFixture(conn, 'Page', generatePages(paths))
+      })
+
+      describe('findChildrenByPath', () => {
+        it('should not contain other trees', async () => {
+          const pages = await Page.findChildrenByPath('/car', user, {})
+          console.log('pages', pages)
+          expect(pages).to.instanceof(Array)
+          expect(pages.some(page => page.path === '/carrot')).to.be.equal(false)
+        })
+      })
+
+      afterEach(async () => Page.remove({}))
+    })
+  })
 })
