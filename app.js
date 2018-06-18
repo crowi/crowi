@@ -6,12 +6,13 @@
  */
 
 // load .env
-require('dotenv').config();
+require('dotenv').config()
 
-var crowi = new (require('./lib/crowi'))(__dirname, process.env);
+var crowi = new (require('./lib/crowi'))(__dirname, process.env)
 
-crowi.init()
+crowi
+  .init()
   .then(function() {
-    return crowi.start();
-  }).catch(crowi.exitOnError);
-
+    return crowi.start()
+  })
+  .catch(crowi.exitOnError)
