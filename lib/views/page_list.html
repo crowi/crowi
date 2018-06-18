@@ -167,7 +167,7 @@
     <li class="active"><a href="#view-list" data-toggle="tab">{{ t('List View') }}</a></li>
     <li><a href="#view-timeline" data-toggle="tab">{{ t('Timeline View') }}</a></li>
 
-    {% if !isTopPage() and not page %}
+    {% if !isTopPage() and !isTrashPage() and !isUserPageList(path) %}
       <li class="dropdown pull-right">
         <a class="dropdown-toggle" data-toggle="dropdown" href="#">
           <i class="fa fa-wrench"></i> <span class="caret"></span>
