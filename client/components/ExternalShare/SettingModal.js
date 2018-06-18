@@ -1,72 +1,62 @@
-import React from "react";
-import PropTypes from "prop-types";
-import {
-  Button,
-  Checkbox,
-  Col,
-  ControlLabel,
-  Form,
-  FormControl,
-  FormGroup,
-  Modal,
-  Radio
-} from "react-bootstrap";
+import React from 'react'
+import PropTypes from 'prop-types'
+import { Button, Checkbox, Col, ControlLabel, Form, FormControl, FormGroup, Modal, Radio } from 'react-bootstrap'
 
 export default class SettingModal extends React.Component {
   constructor(props) {
-    super(props);
+    super(props)
 
     this.state = {
       shareId: null,
       secretKeyword: null,
-      restricted: false
-    };
+      restricted: false,
+    }
 
-    this.setRestricted = this.setRestricted.bind(this);
-    this.setSecretKeyword = this.setSecretKeyword.bind(this);
-    this.handleSubmit = this.handleSubmit.bind(this);
+    this.setRestricted = this.setRestricted.bind(this)
+    this.setSecretKeyword = this.setSecretKeyword.bind(this)
+    this.handleSubmit = this.handleSubmit.bind(this)
   }
 
   componentWillReceiveProps(nextProps) {
-    const { activeShare: share = {} } = nextProps;
-    const { id: shareId, secretKeyword = "" } = share;
+    const { activeShare: share = {} } = nextProps
+    const { id: shareId, secretKeyword = '' } = share
 
     this.setState({
       shareId,
       secretKeyword,
-      restricted: !!secretKeyword
-    });
+      restricted: !!secretKeyword,
+    })
   }
 
   setRestricted(value) {
     return () => {
-      this.setState({ restricted: value });
-    };
+      this.setState({ restricted: value })
+    }
   }
 
   setSecretKeyword(e) {
-    this.setState({ secretKeyword: e.target.value });
+    this.setState({ secretKeyword: e.target.value })
   }
 
   canSubmit() {
-    const { restricted, secretKeyword } = this.state;
+    const { restricted, secretKeyword } = this.state
     if (!restricted) {
-      return true;
+      return true
     }
-    return !!secretKeyword && secretKeyword.length > 0;
+    return !!secretKeyword && secretKeyword.length > 0
   }
 
   handleSubmit(e) {
-    const { shareId, secretKeyword, restricted } = this.state;
-    this.props.crowi.apiPost("/shares/secretKeyword", {
+    const { shareId, secretKeyword, restricted } = this.state
+    this.props.crowi.apiPost('/shares/secretKeyword', {
       share_id: shareId,
-      secret_keyword: restricted ? secretKeyword : null
-    });
+      secret_keyword: restricted ? secretKeyword : null,
+    })
   }
 
   render() {
-    const { show, handleClose } = this.props;
-    const { restricted, secretKeyword } = this.state;
+    const { show, handleClose } = this.props
+    const { restricted, secretKeyword } = this.state
     return (
       <Modal className="share-setting-modal" show={show} onHide={handleClose}>
         <Modal.Header closeButton>
@@ -79,18 +69,10 @@ export default class SettingModal extends React.Component {
                 閲覧制限
               </Col>
               <Col sm={10}>
-                <Radio
-                  name="restricted"
-                  onClick={this.setRestricted(false)}
-                  defaultChecked={!restricted}
-                >
+                <Radio name="restricted" onClick={this.setRestricted(false)} defaultChecked={!restricted}>
                   リンクを知っている人
                 </Radio>
-                <Radio
-                  name="restricted"
-                  onClick={this.setRestricted(true)}
-                  defaultChecked={restricted}
-                >
+                <Radio name="restricted" onClick={this.setRestricted(true)} defaultChecked={restricted}>
                   秘密のキーワードを知っている人
                 </Radio>
                 {restricted && (
@@ -112,7 +94,7 @@ export default class SettingModal extends React.Component {
           </Button>
         </Modal.Footer>
       </Modal>
-    );
+    )
   }
 }
 
@@ -120,8 +102,8 @@ SettingModal.propTypes = {
   share: PropTypes.object.isRequired,
   show: PropTypes.bool.isRequired,
   handleClose: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired
-};
+  crowi: PropTypes.object.isRequired,
+}
 SettingModal.defaultProps = {
-  show: false
-};
+  show: false,
+}

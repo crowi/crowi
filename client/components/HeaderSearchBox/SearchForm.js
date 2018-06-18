@@ -1,78 +1,77 @@
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from 'react'
+import PropTypes from 'prop-types'
 
 // Header.SearchForm
 export default class SearchForm extends React.Component {
-
   constructor(props) {
-    super(props);
+    super(props)
 
     this.state = {
       keyword: '',
       searchedKeyword: '',
-    };
+    }
 
-    this.handleChange = this.handleChange.bind(this);
-    this.handleFocus = this.handleFocus.bind(this);
-    this.handleBlur = this.handleBlur.bind(this);
-    this.clearForm = this.clearForm.bind(this);
-    this.ticker = null;
+    this.handleChange = this.handleChange.bind(this)
+    this.handleFocus = this.handleFocus.bind(this)
+    this.handleBlur = this.handleBlur.bind(this)
+    this.clearForm = this.clearForm.bind(this)
+    this.ticker = null
   }
 
   componentDidMount() {
-    this.ticker = setInterval(this.searchFieldTicker.bind(this), this.props.pollInterval);
+    this.ticker = setInterval(this.searchFieldTicker.bind(this), this.props.pollInterval)
   }
 
   componentWillUnmount() {
-    clearInterval(this.ticker);
+    clearInterval(this.ticker)
   }
 
   search() {
     if (this.state.searchedKeyword != this.state.keyword) {
-      this.props.onSearchFormChanged({keyword: this.state.keyword});
-      this.setState({searchedKeyword: this.state.keyword});
+      this.props.onSearchFormChanged({ keyword: this.state.keyword })
+      this.setState({ searchedKeyword: this.state.keyword })
     }
   }
 
   getFormClearComponent() {
     if (this.state.keyword !== '') {
-      return <a className="search-top-clear" onClick={this.clearForm}><i className="fa fa-times-circle" /></a>;
-
+      return (
+        <a className="search-top-clear" onClick={this.clearForm}>
+          <i className="fa fa-times-circle" />
+        </a>
+      )
     } else {
-      return '';
+      return ''
     }
   }
 
   clearForm() {
-    this.setState({keyword: ''});
-    this.search();
+    this.setState({ keyword: '' })
+    this.search()
   }
 
   searchFieldTicker() {
-    this.search();
+    this.search()
   }
 
   handleFocus(event) {
-    this.props.isShown(true);
+    this.props.isShown(true)
   }
 
   handleBlur(event) {
-    //this.props.isShown(false);
+    // this.props.isShown(false);
   }
 
   handleChange(event) {
-    const keyword = event.target.value;
-    this.setState({keyword});
+    const keyword = event.target.value
+    this.setState({ keyword })
   }
 
   render() {
-    const formClear = this.getFormClearComponent();
+    const formClear = this.getFormClearComponent()
 
     return (
-      <form
-        action="/_search"
-        className="search-form form-group input-group search-top-input-group"
-      >
+      <form action="/_search" className="search-form form-group input-group search-top-input-group">
         <input
           autoComplete="off"
           type="text"
@@ -86,12 +85,12 @@ export default class SearchForm extends React.Component {
         />
         <span className="input-group-btn">
           <button type="submit" className="btn btn-default">
-            <i className="search-top-icon fa fa-search"></i>
+            <i className="search-top-icon fa fa-search" />
           </button>
         </span>
         {formClear}
       </form>
-    );
+    )
   }
 }
 
@@ -99,7 +98,7 @@ SearchForm.propTypes = {
   onSearchFormChanged: PropTypes.func.isRequired,
   isShown: PropTypes.func.isRequired,
   pollInterval: PropTypes.number,
-};
+}
 SearchForm.defaultProps = {
   pollInterval: 1000,
-};
+}

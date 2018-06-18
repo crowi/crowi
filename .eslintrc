@@ -1,0 +1,42 @@
+{
+  "parser": "babel-eslint",
+  "extends": ["standard", "prettier", "prettier/flowtype", "prettier/react"],
+  "env": {
+    "browser": true,
+    "node": true,
+    "es6": true,
+    "mocha": true
+  },
+  "rules": {
+    "eqeqeq": "off",
+    "handle-callback-err": "off",
+    "new-cap": "off",
+    "no-global-assign": "off",
+    "no-inner-declarations": "off",
+    "no-new-wrappers": "off",
+    "no-redeclare": "off",
+    "no-undef": "off",
+    "no-unused-vars": "off",
+    "no-useless-escape": "off",
+    "prettier/prettier": "error",
+    "react/prefer-stateless-function": "off",
+    "standard/no-callback-literal": "off"
+  },
+  "plugins": ["prettier"],
+  "globals": {
+    "ROOT_DIR": true,
+    "MODEL_DIR": true,
+    "testDBUtil": true
+  },
+  "overrides": [
+    {
+      "files": "*.test.js",
+      "rules": {
+        "handle-callback-err": "off",
+        "no-redeclare": "off",
+        "no-unused-expressions": "off",
+        "no-unused-vars": "off"
+      }
+    }
+  ]
+}

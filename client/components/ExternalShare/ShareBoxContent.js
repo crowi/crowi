@@ -1,34 +1,34 @@
-import React from "react";
-import PropTypes from "prop-types";
-import { Button, InputGroup, FormControl } from "react-bootstrap";
+import React from 'react'
+import PropTypes from 'prop-types'
+import { Button, InputGroup, FormControl } from 'react-bootstrap'
 
 export default class ShareBoxContent extends React.Component {
   constructor(props) {
-    super(props);
+    super(props)
 
-    this.selectAction = this.selectAction.bind(this);
-    this.createRef = this.createRef.bind(this);
-    this.copyAction = this.copyAction.bind(this);
+    this.selectAction = this.selectAction.bind(this)
+    this.createRef = this.createRef.bind(this)
+    this.copyAction = this.copyAction.bind(this)
   }
 
   selectAction(e) {
-    this.inputRef.select();
+    this.inputRef.select()
   }
 
   createRef(node) {
-    this.inputRef = node;
+    this.inputRef = node
   }
 
   copyAction(e) {
-    this.inputRef.select();
-    document.execCommand("copy");
+    this.inputRef.select()
+    document.execCommand('copy')
   }
 
   render() {
-    const { activeShare, isCreated, handleOpen } = this.props;
+    const { activeShare, isCreated, handleOpen } = this.props
     if (isCreated) {
-      const shareId = activeShare.id;
-      const url = `${location.origin}/_share/${shareId}`;
+      const shareId = activeShare.id
+      const url = `${location.origin}/_share/${shareId}`
       return (
         <div className="share-box-content">
           <InputGroup>
@@ -48,19 +48,17 @@ export default class ShareBoxContent extends React.Component {
             リンクの設定
           </Button>
         </div>
-      );
+      )
     }
-    return (
-      <div className="share-box-content">まだリンクは作成されていません</div>
-    );
+    return <div className="share-box-content">まだリンクは作成されていません</div>
   }
 }
 
 ShareBoxContent.propTypes = {
   isCreated: PropTypes.bool,
-  activeShare: PropTypes.object
-};
+  activeShare: PropTypes.object,
+}
 ShareBoxContent.defaultProps = {
   isCreated: false,
-  activeShare: {}
-};
+  activeShare: {},
+}
