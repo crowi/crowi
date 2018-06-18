@@ -107,6 +107,7 @@ class RenameTree extends React.Component {
       )
     }
 
+    const { t } = this.props
     const renderNodeErrors = function(nodeErrors) {
       const DottedLine = () => (
         <div className="dotted-line">
@@ -118,7 +119,7 @@ class RenameTree extends React.Component {
       return (
         <span className="errors">
           <DottedLine />
-          {nodeErrors.join(', ')}
+          {nodeErrors.map(e => t(e)).join(', ')}
         </span>
       )
     }
@@ -234,7 +235,7 @@ class RenameTree extends React.Component {
           {error && (
             <p>
               <small className="pull-left alert-danger">
-                <Icon name="times-circle" /> {error}
+                <Icon name="times-circle" /> {t(error)}
               </small>
             </p>
           )}

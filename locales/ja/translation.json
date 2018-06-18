@@ -170,6 +170,13 @@
     }
   },
   "Rename tree": "階層を移動する",
+  "rename_tree": {
+    "error": {
+      "can_not_use_this_name": "作成できないページ名です。",
+      "already_exists": "同じ名前のページが既に存在します。",
+      "can_not_move": "ページを移動できません。"
+    }
+  },
 
   "modal_help": {
       "basic": {
