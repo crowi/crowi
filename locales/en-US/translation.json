@@ -170,6 +170,13 @@
     }
   },
   "Rename tree": "Rename tree",
+  "rename_tree": {
+    "error": {
+      "can_not_use_this_name": "Can not use this name for a page.",
+      "already_exists": "The same name page already exists.",
+      "can_not_move": "Can not move this page."
+    }
+  },
 
   "modal_help": {
       "basic": {
