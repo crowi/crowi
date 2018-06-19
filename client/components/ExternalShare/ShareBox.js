@@ -1,6 +1,5 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import uuidv4 from 'uuid/v4'
 import { Button } from 'react-bootstrap'
 import Icon from '../Common/Icon'
 import ShareBoxContent from './ShareBoxContent'
@@ -89,7 +88,6 @@ export default class ShareBox extends React.Component {
   createLink(e) {
     this.updateLink(
       this.props.crowi.apiPost('/shares.create', {
-        id: uuidv4(),
         page_id: this.props.pageId,
       }),
     )
