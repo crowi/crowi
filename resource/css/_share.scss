@@ -34,3 +34,13 @@
     margin-top: 8px;
   }
 }
+
+#secret-keyword-form-container {
+  display: flex;
+  justify-content: center;
+  height: calc(100vh - #{$crowiHeaderHeight});
+
+  & > div {
+    margin: 48px auto;
+  }
+}
