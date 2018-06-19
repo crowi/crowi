@@ -1,6 +1,6 @@
 {% extends 'layout/single.html' %}
 
-{% block html_title %}{{ path|path2name }} · {{ path }}{% endblock %}
+{% block html_title %}{{ path|path2name }} ·{% endblock %}
 
 {% block layout_head_nav %}
 <nav class="crowi-header navbar navbar-default" role="navigation">
@@ -29,27 +29,18 @@
 {% block content_main_before %}
 {% endblock %}
 
-<div id="content-main" class="content-main {% if not page or req.body.pageForm %}on-edit{% endif %}"
-  data-path="{{ path }}"
-  data-path-shortname="{{ path|path2name }}"
+{% if hasSecretPassword %}
+<div id="content-main" class="content-main"
   data-page-id="{% if page %}{{ page._id.toString() }}{% endif %}"
-  data-current-user="{% if user %}{{ user._id.toString() }}{% endif %}"
-  data-current-username="{% if user %}{{ user.username }}{% endif %}"
   data-page-revision-id="{% if revision %}{{ revision._id.toString() }}{% endif %}"
   data-page-revision-created="{% if revision %}{{ revision.createdAt|datetz('U') }}{% endif %}"
-  data-page-is-seen="{% if page and page.isSeenUser(user) %}1{% else %}0{% endif %}"
-  data-csrftoken="{{ csrf() }}"
-  >
-
+>
   <div class="tab-content wiki-content">
-
     <script type="text/template" id="raw-text-original">{{ revision.body }}</script>
 
-    {# formatted text #}
-    <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
+    <div class="tab-pane active" id="revision-body">
       <div class="revision-toc" id="revision-toc">
         <a data-toggle="collapse" data-parent="#revision-toc" href="#revision-toc-content" class="revision-toc-head collapsed">{{ t('Table of Contents') }}</a>
-
       </div>
       <div class="wiki" id="revision-body-content"></div>
     </div>
@@ -58,6 +49,9 @@
 
   <div id="page-alerts"></div>
 </div>
+{% else%}
+<div id="secret-keyword-form-container" data-csrftoken="{{ csrf() }}" data-share-id="{{ shareId }}"></div>
+{% endif %}
 
 {% block content_main_after %}
 {% endblock %}
