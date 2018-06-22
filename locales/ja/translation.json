@@ -163,6 +163,9 @@
   "New page name": "移動先のページ名",
   "Current page name": "現在のページ名",
   "Redirect": "リダイレクトする",
+
+  "Incorrect secret keyword": "秘密のパスワードが間違っています",
+
   "modal_rename": {
     "help": {
       "redirect": "チェックを入れると、<code>%s</code>にアクセスされた際に自動的に新しいページにジャンプします。"
