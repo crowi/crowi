@@ -163,6 +163,9 @@
   "New page name": "New page name",
   "Current page name": "Current page name",
   "Redirect": "Redirect",
+
+  "Incorrect secret keyword": "Incorrect secret keyword",
+
   "modal_rename": {
     "help": {
       "redirect": "Redirect to new page if someone accesses <code>%s</code>"
