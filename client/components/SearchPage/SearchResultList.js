@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import PageBody from '../Page/PageBody.js'
+import PageBody from 'components/Page/PageBody.js'
 
 export default class SearchResultList extends React.Component {
   render() {
