@@ -8,5 +8,14 @@
     "stage-2",
     "flow",
     "react"
+  ],
+  "plugins": [
+    ["module-resolver", {
+      "root": ["."],
+      "alias": {
+        "locales": "./locales",
+        "components": "./client/components"
+      }
+    }]
   ]
 }
