@@ -1,8 +1,8 @@
 import React from 'react'
 import { Button, Modal } from 'react-bootstrap'
 
-import Icon from '../Common/Icon'
-import User from '../User/User'
+import Icon from 'components/Common/Icon'
+import User from 'components/User/User'
 
 export default class DeleteAttachmentModal extends React.Component {
   constructor(props) {
