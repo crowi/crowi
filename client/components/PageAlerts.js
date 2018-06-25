@@ -1,6 +1,5 @@
 import React from 'react'
 
-import Icon from './Common/Icon'
 import PageAlert from './PageAlerts/PageAlert'
 
 export default class PageAlers extends React.Component {
