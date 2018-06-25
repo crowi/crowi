@@ -49,7 +49,7 @@ export default class ShareBox extends React.Component {
 
   componentDidMount() {
     this.props.crowi
-      .apiGet('/shares.list', { page_id: this.props.pageId })
+      .apiGet('/shares.get', { page_id: this.props.pageId })
       .then(({ share }) => {
         this.updateState({ share })
         const isActive = share => share.status === 'active'
