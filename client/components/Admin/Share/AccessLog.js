@@ -56,8 +56,12 @@ export default class AccessLog extends React.Component {
     const start = (current - 1) * limit + 1
     return (
       <tbody>
-        {this.state.accesses.map(({ tracking, createdAt }, i) => {
+        {this.state.accesses.map(({ share, tracking, createdAt }, i) => {
           const index = start + i
+          const {
+            id,
+            page: { path },
+          } = share
           const { userAgent, remoteAddress } = tracking
           const info = platform.parse(userAgent)
           console.log(info)
@@ -65,6 +69,7 @@ export default class AccessLog extends React.Component {
           return (
             <tr key={index}>
               <td>{index}</td>
+              <td>{path}</td>
               <td>{info.name}</td>
               <td>{info.os.toString()}</td>
               <td>{remoteAddress}</td>
@@ -110,6 +115,7 @@ export default class AccessLog extends React.Component {
           <thead>
             <tr>
               <th>#</th>
+              <th>ページ名</th>
               <th>ブラウザ</th>
               <th>OS</th>
               <th>IPアドレス</th>
