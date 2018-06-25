@@ -1,0 +1,37 @@
+{% extends '../layout/admin.html' %}
+
+{% block html_title %}外部共有管理 · {{ path }}{% endblock %}
+
+{% block content_head %}
+<div class="header-wrap">
+  <header id="page-header">
+    <h1 class="title" id="">外部共有管理</h1>
+  </header>
+</div>
+{% endblock %}
+
+{% block content_main %}
+<div class="content-main">
+
+  {% set emessage = req.flash('errorMessage') %}
+  {% if emessage.length %}
+  <div class="alert alert-danger">
+    {{ emessage }}
+  </div>
+  {% endif %}
+
+  <div class="row">
+    <div class="col-md-3">
+      {% include './widget/menu.html' with {current: 'share'} %}
+    </div>
+    <div class="col-md-9">
+      <div id="admin-share"></div>
+    </div>
+  </div>
+
+</div>
+{% endblock content_main %}
+
+{% block content_footer %}
+{% endblock content_footer %}
+

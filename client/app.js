@@ -16,6 +16,7 @@ import SeenUserList from './components/SeenUserList'
 import BookmarkButton from './components/BookmarkButton'
 import ShareBox from './components/ExternalShare/ShareBox'
 import SecretKeywordFormContainer from './components/ExternalShare/SecretKeywordForm/SecretKeywordFormContainer'
+import AdminShare from './components/Admin/Share/AdminShare'
 // import PageComment  from './components/PageComment';
 
 if (!window) {
@@ -61,6 +62,7 @@ const componentMappings = {
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
   'share-box': <ShareBox pageId={pageId} crowi={crowi} />,
   'secret-keyword-form-container': <SecretKeywordFormContainer pageId={pageId} crowi={crowi} />,
+  'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
 }
 
 Object.keys(componentMappings).forEach(key => {
