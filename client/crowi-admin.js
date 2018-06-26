@@ -84,13 +84,14 @@ $(function() {
         var $id = $form.attr('id')
         var $button = $('button', this)
         $button.attr('disabled', 'disabled')
-        var jqxhr = $.post($form.attr('action'), $form.serialize(), function(data) {
-          if (data.status) {
-            showMessage($id, '更新しました')
-          } else {
-            showMessage($id, data.message, 'danger')
-          }
-        })
+        var jqxhr = $
+          .post($form.attr('action'), $form.serialize(), function(data) {
+            if (data.status) {
+              showMessage($id, '更新しました')
+            } else {
+              showMessage($id, data.message, 'danger')
+            }
+          })
           .fail(function() {
             showMessage($id, 'エラーが発生しました', 'danger')
           })
