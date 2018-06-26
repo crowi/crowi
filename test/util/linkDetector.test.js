@@ -1,8 +1,8 @@
-var chai = require('chai'),
-  expect = chai.expect,
-  sinon = require('sinon'),
-  sinonChai = require('sinon-chai'),
-  utils = require('../utils.js')
+var chai = require('chai')
+var expect = chai.expect
+var sinon = require('sinon')
+var sinonChai = require('sinon-chai')
+var utils = require('../utils.js')
 chai.use(sinonChai)
 
 describe('Url test', function() {
