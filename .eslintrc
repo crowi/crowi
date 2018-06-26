@@ -21,7 +21,6 @@
     "handle-callback-err": "off",
     "no-global-assign": "off",
     "no-inner-declarations": "off",
-    "no-new-wrappers": "off",
     "no-redeclare": "off",
     "prettier/prettier": "error",
     "react/prefer-stateless-function": "off",

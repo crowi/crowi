@@ -371,7 +371,7 @@ $(function() {
   $('.page-list-link').each(function() {
     var $link = $(this)
     var path = $link.data('path')
-    var shortPath = new String($link.data('short-path'))
+    var shortPath = $link.attr('data-short-path')
 
     var escape = function(s) {
       return s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
