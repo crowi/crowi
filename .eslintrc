@@ -18,7 +18,6 @@
   "rules": {
     "eqeqeq": "off",
     "handle-callback-err": "off",
-    "new-cap": "off",
     "no-global-assign": "off",
     "no-inner-declarations": "off",
     "no-new-wrappers": "off",

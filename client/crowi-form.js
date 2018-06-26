@@ -396,7 +396,8 @@ $(function() {
   }
   var bindInlineAttachment = function($form, attachmentOption) {
     var editor = createEditorInstance($form)
-    var inlineattach = new inlineAttachment(attachmentOption, editor)
+    var InlineAttachment = inlineAttachment
+    var inlineattach = new InlineAttachment(attachmentOption, editor)
     $form.bind({
       'paste.inlineattach': function(e) {
         inlineattach.onPaste(e.originalEvent)
