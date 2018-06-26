@@ -44,8 +44,6 @@ export default class DeleteAttachmentModal extends React.Component {
       return null
     }
 
-    const inUse = this.props.inUse
-
     const props = Object.assign({}, this.props)
     delete props.onAttachmentDeleteClickedConfirm
     delete props.attachmentToDelete
