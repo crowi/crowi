@@ -29,6 +29,8 @@ export default class Page extends React.Component {
 Page.propTypes = {
   page: PropTypes.object.isRequired,
   linkTo: PropTypes.string,
+  excludePathString: PropTypes.string,
+  children: PropTypes.element,
 }
 
 Page.defaultProps = {

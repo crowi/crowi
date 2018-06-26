@@ -45,7 +45,7 @@ export default class SearchResult extends React.Component {
       }
       return (
         <div className="content-main">
-          <i className="fa fa-meh" /> No page found with "{this.props.searchingKeyword}"{under}
+          <i className="fa fa-meh" /> No page found with &quot;{this.props.searchingKeyword}&quot;{under}
         </div>
       )
     }
@@ -82,9 +82,9 @@ export default class SearchResult extends React.Component {
           </div>
           <div className="col-md-8 search-result-content" id="search-result-content">
             <div className="search-result-meta">
-              <i className="fa fa-lightbulb-o" /> Found {this.props.searchResultMeta.total} pages with "{
+              <i className="fa fa-lightbulb-o" /> Found {this.props.searchResultMeta.total} pages with &quot;{
                 this.props.searchingKeyword
-              }"
+              }&quot;
             </div>
             <SearchResultList pages={this.props.pages} searchingKeyword={this.props.searchingKeyword} />
           </div>
@@ -99,6 +99,7 @@ SearchResult.propTypes = {
   pages: PropTypes.array.isRequired,
   searchingKeyword: PropTypes.string.isRequired,
   searchResultMeta: PropTypes.object.isRequired,
+  searchError: PropTypes.object,
 }
 SearchResult.defaultProps = {
   tree: '',

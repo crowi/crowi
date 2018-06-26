@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 
 import Icon from '../Common/Icon'
 
@@ -17,4 +18,8 @@ export default class PageAlert extends React.Component {
       </div>
     )
   }
+}
+
+PageAlert.propTypes = {
+  data: PropTypes.object,
 }
