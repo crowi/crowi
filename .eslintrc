@@ -1,6 +1,14 @@
 {
   "parser": "babel-eslint",
-  "extends": ["standard", "prettier", "prettier/flowtype", "prettier/react"],
+  "extends": [
+    "standard",
+    "plugin:flowtype/recommended",
+    "plugin:react/recommended",
+    "prettier",
+    "prettier/standard",
+    "prettier/flowtype",
+    "prettier/react"
+  ],
   "env": {
     "browser": true,
     "node": true,
@@ -22,7 +30,7 @@
     "react/prefer-stateless-function": "off",
     "standard/no-callback-literal": "off"
   },
-  "plugins": ["prettier"],
+  "plugins": ["flowtype", "react", "prettier"],
   "globals": {
     "ROOT_DIR": true,
     "MODEL_DIR": true,
