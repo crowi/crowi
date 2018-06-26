@@ -24,7 +24,6 @@
     "no-new-wrappers": "off",
     "no-redeclare": "off",
     "no-undef": "off",
-    "no-useless-escape": "off",
     "prettier/prettier": "error",
     "react/prefer-stateless-function": "off",
     "standard/no-callback-literal": "off"

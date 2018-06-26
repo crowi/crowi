@@ -28,7 +28,7 @@ export default class PagePath extends React.Component {
     const page = this.props.page
     const pagePath = page.path.replace(this.props.excludePathString.replace(/^\//, ''), '')
     const shortPath = this.getShortPath(pagePath)
-    const shortPathEscaped = shortPath.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+    const shortPathEscaped = shortPath.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
     const pathPrefix = pagePath.replace(new RegExp(shortPathEscaped + '(/)?$'), '')
 
     return (

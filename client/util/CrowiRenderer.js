@@ -111,7 +111,7 @@ export default class CrowiRenderer {
 
         // this is maybe not an official way
         if (lexer.rules) {
-          lexer.rules.fences = /^ *(`{3,}|~{3,})[ \.]*([^\r\n]+)? *\n([\s\S]*?)\s*\1 *(?:\n+|$)/
+          lexer.rules.fences = /^ *(`{3,}|~{3,})[ .]*([^\r\n]+)? *\n([\s\S]*?)\s*\1 *(?:\n+|$)/
         }
 
         return lexer.lex(src)
