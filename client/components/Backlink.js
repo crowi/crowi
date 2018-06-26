@@ -93,10 +93,7 @@ class Backlink extends React.Component {
   }
 
   render() {
-    let lists = []
-    this.state.backLinks.forEach(backLink => {
-      lists.push(this.createList(backLink))
-    })
+    const lists = this.state.backLinks.map(backLink => this.createList(backLink))
 
     if (lists.length === 0) {
       return <div className="backlink" />
