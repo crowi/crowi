@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { Button, Modal } from 'react-bootstrap'
 
 import Icon from '../Common/Icon'
@@ -77,4 +78,12 @@ export default class DeleteAttachmentModal extends React.Component {
       </Modal>
     )
   }
+}
+
+DeleteAttachmentModal.propTypes = {
+  inUse: PropTypes.bool,
+  deleting: PropTypes.bool,
+  deleteError: PropTypes.string,
+  attachmentToDelete: PropTypes.object,
+  onAttachmentDeleteClickedConfirm: PropTypes.func,
 }

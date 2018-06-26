@@ -42,6 +42,7 @@ export default class PagePath extends React.Component {
 
 PagePath.propTypes = {
   page: PropTypes.object.isRequired,
+  excludePathString: PropTypes.string,
 }
 
 PagePath.defaultProps = {
