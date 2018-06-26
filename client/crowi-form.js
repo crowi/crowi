@@ -277,7 +277,7 @@ $(function() {
       $target.selection('setPos', { start: currentLine.start, end: currentLine.end })
     } else if (currentLine.text.match(/^.*\|\s*$/)) {
       // new row for table
-      if (currentLine.text.match(/^[\|\s]+$/)) {
+      if (currentLine.text.match(/^[|\s]+$/)) {
         $target.selection('setPos', { start: currentLine.start, end: currentLine.end })
         return
       }
@@ -369,7 +369,7 @@ $(function() {
     var $target = $(event.target)
     var pasteText = event.clipboardData.getData('text')
 
-    var match = currentLine.text.match(/^(\s*(?:>|\-|\+|\*|\d+\.) (?:\[(?:x| )\] )?)/)
+    var match = currentLine.text.match(/^(\s*(?:>|-|\+|\*|\d+\.) (?:\[(?:x| )\] )?)/)
     if (match) {
       if (pasteText.match(/(?:\r\n|\r|\n)/)) {
         pasteText = pasteText.replace(/(\r\n|\r|\n)/g, '$1' + match[1])

@@ -374,7 +374,7 @@ $(function() {
     var shortPath = new String($link.data('short-path'))
 
     var escape = function(s) {
-      return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+      return s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
     }
     path = Crowi.escape(path)
     var pattern = escape(Crowi.escape(shortPath)) + '(/)?$'
