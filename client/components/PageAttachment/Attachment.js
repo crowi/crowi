@@ -25,7 +25,6 @@ export default class Attachment extends React.Component {
 
   render() {
     const attachment = this.props.attachment
-    const attachmentId = attachment._id
     const formatIcon = this.iconNameByFormat(attachment.fileFormat)
 
     let fileInUse = ''

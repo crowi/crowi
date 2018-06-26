@@ -1,7 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import Icon from './Common/Icon'
 import PageAttachmentList from './PageAttachment/PageAttachmentList'
 import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal'
 

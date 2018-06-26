@@ -72,7 +72,7 @@ $(function() {
 
   // for initialize preview
   renderPreview()
-  var watchTimer = setInterval(function() {
+  setInterval(function() {
     var content = $('#form-body').val()
     if (prevContent != content) {
       renderPreview()
@@ -395,7 +395,6 @@ $(function() {
     $form.unbind('.inlineattach')
   }
   var bindInlineAttachment = function($form, attachmentOption) {
-    var $this = $form
     var editor = createEditorInstance($form)
     var inlineattach = new inlineAttachment(attachmentOption, editor)
     $form.bind({
