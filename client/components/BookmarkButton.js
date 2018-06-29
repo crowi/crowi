@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import Icon from './Common/Icon'
+import Icon from 'components/Common/Icon'
 
 export default class BookmarkButton extends React.Component {
   constructor(props) {
