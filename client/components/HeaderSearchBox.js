@@ -77,6 +77,7 @@ export default class SearchBox extends React.Component {
 }
 
 SearchBox.propTypes = {
+  crowi: PropTypes.object.isRequired,
   // pollInterval: PropTypes.number,
 }
 SearchBox.defaultProps = {

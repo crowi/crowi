@@ -7,7 +7,7 @@ export default class PlantUML {
   }
 
   generateId(token) {
-    const hasher = require('crypto').createHash('md5')
+    const hasher = crypto.createHash('md5')
     hasher.update(token)
     return hasher.digest('hex')
   }

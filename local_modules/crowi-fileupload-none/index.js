@@ -4,8 +4,6 @@ module.exports = function(crowi) {
   'use strict'
 
   var debug = require('debug')('crowi:lib:fileUploaderNone')
-  var Config = crowi.model('Config')
-  var config = crowi.getConfig()
   var lib = {}
 
   lib.deleteFile = function(filePath) {

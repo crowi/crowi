@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import UserPicture from '../User/UserPicture'
+import UserPicture from 'components/User/UserPicture'
 
 export default class UserList extends React.Component {
   isSeenUserListShown() {
