@@ -521,13 +521,13 @@ $(function() {
       var $commentImage = $('<img class="picture picture-rounded">').attr('src', Crowi.userPicture(creator))
       var $commentCreator = $('<div class="page-comment-creator">').text(creator.username)
 
-      var $commentRevision = $('<a class="page-comment-revision label">')
+      var $commentRevision = $('<a class="page-comment-revision badge">')
         .attr('href', '?revision=' + revision)
         .text(revision.substr(0, 8))
       if (revision !== revisionId) {
-        $commentRevision.addClass('label-default')
+        $commentRevision.addClass('badge-secondary')
       } else {
-        $commentRevision.addClass('label-primary')
+        $commentRevision.addClass('badge-primary')
       }
 
       var $commentMeta = $('<div class="page-comment-meta">')
