@@ -1,8 +1,8 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import Icon from '../Common/Icon'
-import User from '../User/User'
+import Icon from 'components/Common/Icon'
+import User from 'components/User/User'
 
 export default class Attachment extends React.Component {
   constructor(props) {
@@ -25,7 +25,6 @@ export default class Attachment extends React.Component {
 
   render() {
     const attachment = this.props.attachment
-    const attachmentId = attachment._id
     const formatIcon = this.iconNameByFormat(attachment.fileFormat)
 
     let fileInUse = ''
