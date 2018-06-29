@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import ListView from '../PageList/ListView'
+import ListView from 'components/PageList/ListView'
 
 export default class SearchSuggest extends React.Component {
   render() {
