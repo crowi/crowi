@@ -1,8 +1,9 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { Button, Modal } from 'react-bootstrap'
 
-import Icon from '../Common/Icon'
-import User from '../User/User'
+import Icon from 'components/Common/Icon'
+import User from 'components/User/User'
 
 export default class DeleteAttachmentModal extends React.Component {
   constructor(props) {
@@ -43,8 +44,6 @@ export default class DeleteAttachmentModal extends React.Component {
       return null
     }
 
-    const inUse = this.props.inUse
-
     const props = Object.assign({}, this.props)
     delete props.onAttachmentDeleteClickedConfirm
     delete props.attachmentToDelete
@@ -77,4 +76,12 @@ export default class DeleteAttachmentModal extends React.Component {
       </Modal>
     )
   }
+}
+
+DeleteAttachmentModal.propTypes = {
+  inUse: PropTypes.bool,
+  deleting: PropTypes.bool,
+  deleteError: PropTypes.string,
+  attachmentToDelete: PropTypes.object,
+  onAttachmentDeleteClickedConfirm: PropTypes.func,
 }
