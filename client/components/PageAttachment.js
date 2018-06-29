@@ -1,6 +1,6 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 
-import Icon from './Common/Icon'
 import PageAttachmentList from './PageAttachment/PageAttachmentList'
 import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal'
 
@@ -111,4 +111,10 @@ export default class PageAttachment extends React.Component {
       </div>
     )
   }
+}
+
+PageAttachment.propTypes = {
+  pageId: PropTypes.string,
+  crowi: PropTypes.object.isRequired,
+  pageContent: PropTypes.string,
 }
