@@ -25,9 +25,9 @@ export default class ShareBoxContent extends React.Component {
   }
 
   render() {
-    const { activeShare, isCreated, handleOpen } = this.props
+    const { share, isCreated, handleOpen } = this.props
     if (isCreated) {
-      const shareId = activeShare.id
+      const shareId = share.id
       const url = `${location.origin}/_share/${shareId}`
       return (
         <div className="share-box-content">
@@ -56,9 +56,9 @@ export default class ShareBoxContent extends React.Component {
 
 ShareBoxContent.propTypes = {
   isCreated: PropTypes.bool,
-  activeShare: PropTypes.object,
+  share: PropTypes.object,
 }
 ShareBoxContent.defaultProps = {
   isCreated: false,
-  activeShare: {},
+  share: {},
 }

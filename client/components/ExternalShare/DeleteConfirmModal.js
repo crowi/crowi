@@ -4,15 +4,15 @@ import { Button, Modal } from 'react-bootstrap'
 
 export default class DeleteConfirmModal extends React.Component {
   render() {
-    const { show, handleClose, handleDelete } = this.props
+    const { show, onHide, handleDelete } = this.props
     return (
-      <Modal show={show} onHide={handleClose}>
+      <Modal show={show} onHide={onHide}>
         <Modal.Header closeButton>
           <Modal.Title>このページへの共有リンクを削除しますか？</Modal.Title>
         </Modal.Header>
         <Modal.Body>リンクが削除されると、そのリンクからこのページを見ることはできなくなります。</Modal.Body>
         <Modal.Footer>
-          <Button onClick={handleClose}>キャンセル</Button>
+          <Button onClick={onHide}>キャンセル</Button>
           <Button onClick={handleDelete} bsStyle="danger">
             削除
           </Button>
@@ -24,7 +24,7 @@ export default class DeleteConfirmModal extends React.Component {
 
 DeleteConfirmModal.propTypes = {
   show: PropTypes.bool.isRequired,
-  handleClose: PropTypes.func.isRequired,
+  onHide: PropTypes.func.isRequired,
   handleDelete: PropTypes.func.isRequired,
 }
 DeleteConfirmModal.defaultProps = {

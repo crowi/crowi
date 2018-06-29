@@ -2,7 +2,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import Icon from '../Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
-import { Button, Checkbox, Col, ControlLabel, Form, FormControl, FormGroup, Modal, Radio } from 'react-bootstrap'
+import { Button, Col, ControlLabel, FormControl, FormGroup, Modal, Radio } from 'react-bootstrap'
 
 export default class SettingModal extends React.Component {
   constructor(props) {
@@ -24,7 +24,7 @@ export default class SettingModal extends React.Component {
   }
 
   componentWillReceiveProps(nextProps) {
-    const { activeShare: share = {} } = nextProps
+    const { share = {} } = nextProps
     const { id: shareId, secretKeyword = '' } = share
 
     this.setState({
@@ -77,10 +77,10 @@ export default class SettingModal extends React.Component {
   }
 
   render() {
-    const { show, handleClose, isChanging } = this.props
+    const { show, onHide, isChanging } = this.props
     const { restricted, secretKeyword, showConfirmModal } = this.state
     return (
-      <Modal className="share-setting-modal" show={show} onHide={handleClose}>
+      <Modal className="share-setting-modal" show={show} onHide={onHide}>
         <Modal.Header closeButton>
           <Modal.Title>リンクの設定</Modal.Title>
         </Modal.Header>
@@ -109,7 +109,7 @@ export default class SettingModal extends React.Component {
               </Col>
             </FormGroup>
           </div>
-          <DeleteConfirmModal show={showConfirmModal} handleClose={this.handleClose} handleDelete={this.handleDelete} />
+          <DeleteConfirmModal show={showConfirmModal} onHide={this.handleClose} handleDelete={this.handleDelete} />
         </Modal.Body>
         <Modal.Footer>
           <Button className="pull-left" onClick={this.handleOpen} bsStyle="danger" disabled={isChanging}>
@@ -126,9 +126,8 @@ export default class SettingModal extends React.Component {
 }
 
 SettingModal.propTypes = {
-  share: PropTypes.object.isRequired,
   show: PropTypes.bool.isRequired,
-  handleClose: PropTypes.func.isRequired,
+  onHide: PropTypes.func.isRequired,
   crowi: PropTypes.object.isRequired,
 }
 SettingModal.defaultProps = {
