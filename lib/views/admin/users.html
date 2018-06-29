@@ -151,11 +151,11 @@
           <tr>
             <td>
               <img src="{{ sUser|picture }}" class="picture picture-rounded" />
-              <span class="label {{ css.userStatus(sUser) }}">
+              <span class="badge {{ css.userStatus(sUser) }}">
                 {{ consts.userStatus[sUser.status] }}
               </span><br>
               {% if sUser.admin %}
-              <span class="label label-primary">
+              <span class="badge badge-primary">
                 Admin
               </span>
               {% endif %}
