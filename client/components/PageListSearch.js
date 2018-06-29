@@ -161,6 +161,7 @@ export default class PageListSearch extends React.Component {
 }
 
 PageListSearch.propTypes = {
+  crowi: PropTypes.object.isRequired,
   query: PropTypes.object,
 }
 PageListSearch.defaultProps = {

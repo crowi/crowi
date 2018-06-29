@@ -369,12 +369,11 @@ $(function() {
   // list-link
   $('.page-list-link').each(function() {
     var $link = $(this)
-    var text = $link.text()
     var path = $link.data('path')
-    var shortPath = new String($link.data('short-path'))
+    var shortPath = $link.attr('data-short-path')
 
     var escape = function(s) {
-      return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+      return s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
     }
     path = Crowi.escape(path)
     var pattern = escape(Crowi.escape(shortPath)) + '(/)?$'
@@ -391,7 +390,7 @@ $(function() {
         var contentId = '#' + id + ' > script'
         var revisionBody = '#' + id + ' .revision-body'
         var $revisionBody = $(revisionBody)
-        var revisionPath = '#' + id + ' .revision-path'
+        // var revisionPath = '#' + id + ' .revision-path'
 
         var markdown = Crowi.unescape($(contentId).html())
         var parsedHTML = crowiRenderer.render(markdown, $revisionBody.get(0))
