@@ -11,14 +11,14 @@ testDBUtil = {
     if (conn.readyState == 0) {
       return Promise.reject(new Error())
     }
-    var m = conn.model(model)
+    var Model = conn.model(model)
 
     return new Promise(function(resolve, reject) {
       var createdModels = []
       fixture
         .reduce(function(promise, entity) {
           return promise.then(function() {
-            var newDoc = new m()
+            var newDoc = new Model()
 
             Object.keys(entity).forEach(function(k) {
               newDoc[k] = entity[k]
