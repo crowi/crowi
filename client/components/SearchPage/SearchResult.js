@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import Page from '../PageList/Page'
+import Page from 'components/PageList/Page'
 import SearchResultList from './SearchResultList'
 
 // Search.SearchResult

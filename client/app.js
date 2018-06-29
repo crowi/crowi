@@ -4,14 +4,14 @@ import ReactDOM from 'react-dom'
 import Crowi from './util/Crowi'
 import CrowiRenderer from './util/CrowiRenderer'
 
-import HeaderSearchBox from './components/HeaderSearchBox'
-import SearchPage from './components/SearchPage'
-import PageListSearch from './components/PageListSearch'
-import PageHistory from './components/PageHistory'
-import PageAttachment from './components/PageAttachment'
-import PageAlerts from './components/PageAlerts'
-import SeenUserList from './components/SeenUserList'
-import BookmarkButton from './components/BookmarkButton'
+import HeaderSearchBox from 'components/HeaderSearchBox'
+import SearchPage from 'components/SearchPage'
+import PageListSearch from 'components/PageListSearch'
+import PageHistory from 'components/PageHistory'
+import PageAttachment from 'components/PageAttachment'
+import PageAlerts from 'components/PageAlerts'
+import SeenUserList from 'components/SeenUserList'
+import BookmarkButton from 'components/BookmarkButton'
 
 if (!window) {
   window = {}
