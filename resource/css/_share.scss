@@ -35,6 +35,17 @@
   }
 }
 
+.access-log-modal {
+  .share-info > div {
+    display: flex;
+    margin: 10px;
+    dd {
+      flex: 1;
+      margin-left: 10px;
+    }
+  }
+}
+
 #secret-keyword-form-container {
   display: flex;
   justify-content: center;
