@@ -1,5 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import Icon from '../Common/Icon'
+import DeleteConfirmModal from './DeleteConfirmModal'
 import { Button, Checkbox, Col, ControlLabel, Form, FormControl, FormGroup, Modal, Radio } from 'react-bootstrap'
 
 export default class SettingModal extends React.Component {
@@ -10,11 +12,15 @@ export default class SettingModal extends React.Component {
       shareId: null,
       secretKeyword: null,
       restricted: false,
+      showConfirmModal: false,
     }
 
     this.setRestricted = this.setRestricted.bind(this)
     this.setSecretKeyword = this.setSecretKeyword.bind(this)
     this.handleSubmit = this.handleSubmit.bind(this)
+    this.handleOpen = this.handleOpen.bind(this)
+    this.handleClose = this.handleClose.bind(this)
+    this.handleDelete = this.handleDelete.bind(this)
   }
 
   componentWillReceiveProps(nextProps) {
@@ -46,7 +52,7 @@ export default class SettingModal extends React.Component {
     return !!secretKeyword && secretKeyword.length > 0
   }
 
-  handleSubmit(e) {
+  handleSubmit() {
     const { shareId, secretKeyword, restricted } = this.state
     this.props.crowi.apiPost('/shares/secretKeyword.set', {
       share_id: shareId,
@@ -54,9 +60,25 @@ export default class SettingModal extends React.Component {
     })
   }
 
+  handleOpen() {
+    this.setState({ showConfirmModal: true })
+  }
+
+  handleClose() {
+    this.setState({ showConfirmModal: false })
+  }
+
+  handleDelete() {
+    const { handleDelete } = this.props
+    this.handleClose()
+    if (handleDelete) {
+      handleDelete()
+    }
+  }
+
   render() {
-    const { show, handleClose } = this.props
-    const { restricted, secretKeyword } = this.state
+    const { show, handleClose, isChanging } = this.props
+    const { restricted, secretKeyword, showConfirmModal } = this.state
     return (
       <Modal className="share-setting-modal" show={show} onHide={handleClose}>
         <Modal.Header closeButton>
@@ -87,9 +109,14 @@ export default class SettingModal extends React.Component {
               </Col>
             </FormGroup>
           </div>
+          <DeleteConfirmModal show={showConfirmModal} handleClose={this.handleClose} handleDelete={this.handleDelete} />
         </Modal.Body>
         <Modal.Footer>
-          <Button onClick={this.handleSubmit} disabled={!this.canSubmit()}>
+          <Button className="pull-left" onClick={this.handleOpen} bsStyle="danger" disabled={isChanging}>
+            <Icon name={isChanging ? 'spinner' : 'unlink'} spin={isChanging} />
+            リンクを削除
+          </Button>
+          <Button onClick={this.handleSubmit} bsStyle="primary" disabled={!this.canSubmit()}>
             設定を保存
           </Button>
         </Modal.Footer>

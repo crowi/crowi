@@ -5,28 +5,13 @@ import Icon from '../Common/Icon'
 import ShareBoxContent from './ShareBoxContent'
 import SettingModal from './SettingModal'
 
-function ActionButton(isCreated, isChanging, createAction, deleteAction) {
-  const { button, icon, text, action } = isCreated
-    ? {
-        button: 'danger',
-        icon: 'unlink',
-        text: 'リンクを削除',
-        action: deleteAction,
-      }
-    : {
-        button: 'primary',
-        icon: 'link',
-        text: 'リンクを作成',
-        action: createAction,
-      }
-  const iconName = isChanging ? 'spinner' : icon
-  return (
-    <Button onClick={action} bsStyle={button} bsSize="small" disabled={isChanging}>
-      <Icon name={iconName} spin={isChanging} />
-      {text}
+const CreateButton = (isCreated, isChanging, handleCreate) =>
+  !isCreated && (
+    <Button onClick={handleCreate} bsStyle="primary" bsSize="small" disabled={isChanging}>
+      <Icon name={isChanging ? 'spinner' : 'link'} spin={isChanging} />
+      リンクを作成
     </Button>
   )
-}
 
 export default class ShareBox extends React.Component {
   constructor(props) {
@@ -51,13 +36,13 @@ export default class ShareBox extends React.Component {
     this.props.crowi
       .apiGet('/shares.get', { page_id: this.props.pageId })
       .then(({ share }) => {
-        this.updateState({ share })
+        this.setState({ share })
         const isActive = share => share.status === 'active'
         const activeShares = share.filter(isActive)
         const hasActive = activeShares.length > 0
         const activeShare = hasActive ? activeShares[0] : {}
         if (hasActive) {
-          this.updateState({ isCreated: true, activeShare })
+          this.setState({ isCreated: true, activeShare })
         }
       })
       .catch(err => {
@@ -65,43 +50,35 @@ export default class ShareBox extends React.Component {
       })
   }
 
-  updateState(state) {
-    const newState = Object.assign(this.state, state)
-    this.setState(newState)
-  }
-
-  updateLink(promise) {
+  async updateLink(promise) {
     const { isCreated } = this.state
-    this.updateState({ isChanging: true })
-    promise
+    this.setState({ isChanging: true })
+    return promise
       .then(({ share }) => {
-        this.updateState({ isCreated: !isCreated, activeShare: share })
+        this.setState({ isCreated: !isCreated, activeShare: share })
       })
       .catch(err => {
         alert(err.message)
       })
       .finally(() => {
-        this.updateState({ isChanging: false })
+        this.setState({ isChanging: false, showModal: false })
       })
   }
 
-  createLink(e) {
-    this.updateLink(
-      this.props.crowi.apiPost('/shares.create', {
-        page_id: this.props.pageId,
-      }),
-    )
+  createLink() {
+    this.updateLink(this.props.crowi.apiPost('/shares.create', { page_id: this.props.pageId }))
   }
 
-  deleteLink(e) {
+  deleteLink() {
     this.updateLink(this.props.crowi.apiPost('/shares.delete', { page_id: this.props.pageId }))
   }
 
-  handleOpen(e) {
+  handleOpen() {
     this.setState({ showModal: true })
   }
 
-  handleClose(e) {
+  handleClose() {
+    console.log('close modal')
     this.setState({ showModal: false })
   }
 
@@ -111,12 +88,14 @@ export default class ShareBox extends React.Component {
       <div className="share-box">
         <div className="share-box-header">
           <h5>外部に共有</h5>
-          {ActionButton(isCreated, isChanging, this.createLink, this.deleteLink)}
+          {CreateButton(isCreated, isChanging, this.createLink)}
         </div>
         <ShareBoxContent isCreated={isCreated} activeShare={activeShare} handleOpen={this.handleOpen} />
         <SettingModal
           show={showModal}
           handleClose={this.handleClose}
+          handleDelete={this.deleteLink}
+          isChanging={isChanging}
           activeShare={activeShare}
           crowi={this.props.crowi}
         />
