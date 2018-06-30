@@ -10,22 +10,35 @@
       z-index: 1040;
       background: $crowiHeaderBackground;
       height: $crowiHeaderHeight;
-      border-radius: 0;
-      border: none;
-      margin-bottom: 0;
-
+      padding: 0;
       box-shadow: 0 3px 10px 0px rgba(0,0,0,.3);
+      flex-wrap: nowrap;
 
       .navbar-brand {
+        margin-left: 1rem;
         font-weight: bold;
         img {
           display: inline;
           margin-right: 8px;
         }
       }
+
+      .navbar-toggler {
+        border: 1px solid #ddd;
+        color: #ccc;
+        line-height: unset;
+        margin-right: 1rem;
+      }
+
       .navbar-collapse {
         background: $crowiHeaderBackground;
-        align-items: center;
+        flex-grow: 0;
+
+        @include media-breakpoint-down(sm) {
+          position: absolute;
+          top: $crowiHeaderHeight;
+          width: 100vw;
+        }
       }
 
       .navbar-brand,
@@ -37,29 +50,40 @@
       }
 
       .navbar-nav {
-        align-items: center;
-        .nav-item > button {
-          margin: 0 $nav-link-padding-x;
+        padding-left: 1rem;
+        padding-right: 1rem;
+
+        @include media-breakpoint-up(sm) {
+          align-items: center;
+
+          .nav-item > button {
+            margin: 0 $nav-link-padding-x;
+          }
         }
 
         .dropdown-toggle:after {
           display: none;
         }
-      }
 
-      .confidential {
-        a {
-          border: solid 2px #f00;
-          background: #fff;
-          color: #f00;
-          font-weight: bold;
-          height: 42px;
-          margin-top: 5px;
-          padding: 10px;
-          margin-left: 1rem;
+        .confidential {
+          a {
+            display: inline-block;
+            border: solid 2px #f00;
+            background: #fff;
+            color: #f00;
+            font-weight: bold;
+            padding: 10px;
+
+            @include media-breakpoint-down(sm) {
+              margin-bottom: 1rem;
+            }
+
+            @include media-breakpoint-up(sm) {
+              margin-left: 1rem;
+            }
+          }
         }
       }
-
     } // }}}
 
     .main {
@@ -114,10 +138,6 @@
     }
 
   } // }}}
-} // }}}
-
-
-.crowi.single { // {{{
 } // }}}
 
 .crowi.single.nologin { // {{{

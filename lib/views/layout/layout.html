@@ -38,18 +38,23 @@
  >
 
 {% block layout_head_nav %}
-<nav class="crowi-header navbar navbar-expand-lg" role="navigation">
+<nav class="crowi-header navbar navbar-expand-md" role="navigation">
   <a class="navbar-brand" href="/">
     <img alt="Crowi" src="/logo/32x32.png" width="16">
     <span class="d-none d-sm-inline">{% block title %}{{ config.crowi['app:title']|default('Crowi') }}{% endblock %}</span>
   </a>
 
-  <div class="collapse navbar-collapse">
-    {% if searchConfigured() %}
-    <div class="search-top" role="search" id="search-top">
-    </div>
-    {% endif %}
-    <ul class="navbar-nav ml-auto">
+  {% if searchConfigured() %}
+  <div class="search-top" role="search" id="search-top">
+  </div>
+  {% endif %}
+
+  <button class="btn navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+    <i class="fa fa-bars"></i>
+  </button>
+
+  <div id="navbarContent" class="collapse navbar-collapse ml-auto">
+    <ul class="navbar-nav">
       {% if user and user.admin %}
       <li class="nav-item">
         <a href="/admin" id="link-mypage" class="nav-link">

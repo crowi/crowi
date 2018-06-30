@@ -36,11 +36,14 @@
 
 
 .search-top {
+  flex: 1;
+  margin-right: 1rem;
+
   .search-top-input-group {
     margin: 0;
 
     .search-top-input {
-      width: 400px;
+      max-width: 400px;
     }
     .btn {
       padding: 6px 12px 7px;
@@ -71,7 +74,6 @@
 
 
 .search-result {
-
   .search-result-list {
     nav {
       &.affix {
@@ -123,27 +125,6 @@
 
 // Smartphone and Tablet
 @include media-breakpoint-down(sm) {
-  .search-top {
-    margin-top: 4px 0 0 0;
-    padding: 0;
-    border-style: none !important;
-    box-shadow: none !important;
-    -webkit-box-shadow: none !important;
-
-    .search-form {
-      width: 76%;
-    }
-
-    .search-top-input-group {
-      .search-top-input {
-        width: 100%;
-      }
-      .btn {
-        z-index: 10;
-      }
-    }
-  }
-
   .search-result {
     .search-result-content {
       .search-result-page {
@@ -162,11 +143,6 @@
 // Smartphone
 @include media-breakpoint-down(xs) {
   .search-top {
-    .search-form {
-      min-width: 40%;
-      max-width: 50%;
-      width: 50%;
-    }
     .search-box {
       .search-suggest {
         left: 2%;
