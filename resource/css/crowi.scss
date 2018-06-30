@@ -1,8 +1,6 @@
-// import crowi variable
-@import 'utilities';
-
-// import bootstrap
+@import 'theme';
 @import 'bootstrap';
+@import 'variables';
 
 @import "fontawesome";
 @import "fa-brands";
@@ -170,28 +168,6 @@ footer {
 .popular-page-low {
   color: #ab7c7c;
 }
-
-
-// {{{ add badge variation
-.badge-default {
-  @include label-variant($label-default-bg);
-}
-.badge-primary {
-  @include label-variant($label-primary-bg);
-}
-.badge-success {
-  @include label-variant($label-success-bg);
-}
-.badge-info {
-  @include label-variant($label-info-bg);
-}
-.badge-warning {
-  @include label-variant($label-warning-bg);
-}
-.badge-danger {
-  @include label-variant($label-danger-bg);
-}
-// }}}
 
 .dropdown-menu {
    z-index: 10060;
