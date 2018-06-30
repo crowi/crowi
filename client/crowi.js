@@ -339,7 +339,7 @@ $(function() {
   })
 
   $('#create-portal-button').on('click', function(e) {
-    $('.portal').removeClass('hide')
+    $('.portal').removeClass('d-none')
     $('.content-main').addClass('on-edit')
     $('.portal a[data-toggle="tab"][href="#edit-form"]').tab('show')
 
@@ -354,7 +354,7 @@ $(function() {
     }
   })
   $('#portal-form-close').on('click', function(e) {
-    $('.portal').addClass('hide')
+    $('.portal').addClass('d-none')
     $('.content-main').removeClass('on-edit')
 
     return false
