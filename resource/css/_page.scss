@@ -190,7 +190,7 @@
       .like-box {
         padding-bottom: 0;
 
-        .dl-horizontal {
+        dl {
           margin-bottom: 0;
 
           dt, dd {
@@ -202,7 +202,6 @@
             width: 80px;
           }
           dd {
-            margin-left: 90px;
             text-align: right;
           }
         }
