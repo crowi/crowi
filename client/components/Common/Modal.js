@@ -56,8 +56,8 @@ export default class Modal extends React.Component {
                 </div>
               </div>
               <div className="modal-footer">
-                <p>
-                  <small className="pull-left" id="newPageNameCheck" />
+                <p className="mr-auto">
+                  <small id="newPageNameCheck" />
                 </p>
                 <input type="hidden" name="_csrf" value="RCs7uFdR-4nacCnqKfREe8VIlcYLP2J8xzpU" />
                 <input type="hidden" name="path" value="/user/sotarok/memo/2017/04/24" />

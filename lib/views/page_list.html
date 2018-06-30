@@ -96,24 +96,24 @@
     </li>
 
     {% if not page %}
-    <li class="nav-item pull-right close-button">
+    <li class="nav-item ml-auto close-button">
       <a class="nav-link" href="#" id="portal-form-close">
         <i class="fa fa-times"></i>
       </a>
     </li>
     {% else %}
-    <li class="nav-item dropdown pull-right">
+    <li class="nav-item ml-auto">
+      <a class="nav-link" href="#revision-history" data-toggle="tab">
+        <i class="fa fa-history"></i> History
+      </a>
+    </li>
+    <li class="nav-item dropdown">
       <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">
         <i class="fa fa-wrench"></i> <span class="caret"></span>
       </a>
       <ul class="dropdown-menu">
         <li><a href="#" data-target="#unportalize" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Unportalize') }}</a></li>
       </ul>
-    </li>
-    <li class="nav-item pull-right">
-      <a class="nav-link" href="#revision-history" data-toggle="tab">
-        <i class="fa fa-history"></i> History
-      </a>
     </li>
     {% endif %}
   </ul>
