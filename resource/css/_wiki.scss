@@ -101,6 +101,7 @@ div.body {
   a {
     text-decoration: underline;
     color: #38ad9e;
+    word-break: break-all;
 
     &:hover {
       text-decoration: none;
