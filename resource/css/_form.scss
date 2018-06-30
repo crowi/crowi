@@ -144,8 +144,8 @@ input:-moz-placeholder {
   color: #ccc;
 }
 
-@media (max-width: $screen-sm-max) { // {{{ less than tablet size
-
+// Smartphone and Tablet
+@include media-breakpoint-down(sm) {
   .content-main.on-edit {
     .form-group.form-submit-group {
       select.form-control {
@@ -154,11 +154,11 @@ input:-moz-placeholder {
       }
     }
   }
+}
 
-} // }}}
-
-@media (max-width: $screen-xs-max) { // {{{ less than smartphone size
+// Smartphone
+@include media-breakpoint-down(xs) {
   #edit-form-submit {
     float: right;
   }
-} // }}}
+}

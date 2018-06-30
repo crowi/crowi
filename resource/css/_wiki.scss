@@ -258,18 +258,8 @@ div.body {
   // }}}
 }
 
-
-@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) { // {{{ tablet size
-  .crowi.main-container .main .wiki {
-  }
-} // }}}
-
-@media (max-width: $screen-xs-max) { // {{{ iPhone size
-  .crowi.main-container .main .wiki {
-  }
-} // }}}
-
-@media (max-width: $screen-sm-max) { // {{{ tablet and iphone size
+// Smartphone and Tablet
+@include media-breakpoint-down(sm) {
   .crowi.main-container .main .wiki {
     img {
       max-width: 100%;

@@ -122,7 +122,7 @@
 }
 
 // Smartphone and Tablet
-@media (max-width: $screen-sm-max) {
+@include media-breakpoint-down(sm) {
   .search-top {
     margin-top: 4px 0 0 0;
     padding: 0;
@@ -160,7 +160,7 @@
 }
 
 // Smartphone
-@media (max-width: $screen-xs-max) {
+@include media-breakpoint-down(xs) {
   .search-top {
     .search-form {
       min-width: 40%;
