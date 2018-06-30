@@ -161,6 +161,9 @@
     transition: .3s ease;
     -webkit-transition: .3s ease;
 
+    @include media-breakpoint-down(sm) {
+      display: none;
+    }
 
     .page-meta {
       padding: 15px 15px 5px 15px;
