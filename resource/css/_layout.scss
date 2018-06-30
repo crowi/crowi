@@ -192,11 +192,9 @@
 
 } // }}}
 
-@media (max-width: $screen-sm-max) { // {{{
-} // }}}
-
-@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) { // {{{ tablet size
-  .crowi.main-container { // {{{
+// Tablet
+@include media-breakpoint-only(sm) {
+  .crowi.main-container {
     .main {
       article header {
         .bookmark-link {
@@ -213,10 +211,11 @@
       }
     }
   }
-} // }}}
+}
 
-@media (max-width: $screen-xs-max) { // {{{ iPhone size
-  .crowi.main-container { // {{{
+// Smartphone
+@include media-breakpoint-only(xs) {
+  .crowi.main-container {
     .main {
       article header {
         .bookmark-link {
