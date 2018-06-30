@@ -98,6 +98,10 @@
         text-decoration: none;
         cursor: pointer;
       }
+
+      @include media-breakpoint-down(sm) {
+        display: none;
+      }
     } // }}}
 
     .page-list {
