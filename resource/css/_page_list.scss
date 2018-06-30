@@ -23,6 +23,10 @@
   }
 
   .page-list-ul {
+    &:last-child {
+      margin-bottom: 0;
+    }
+
     padding-left: 0;
 
     > li {

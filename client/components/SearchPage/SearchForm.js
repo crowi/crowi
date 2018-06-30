@@ -37,7 +37,7 @@ export default class SearchForm extends React.Component {
       <form className="form form-group input-group" onSubmit={this.handleSubmit}>
         <input type="text" name="q" value={this.state.keyword} onChange={this.handleChange} className="form-control" />
         <span className="input-group-btn">
-          <button type="submit" className="btn btn-default">
+          <button type="submit" className="btn btn-light">
             <i className="search-top-icon fa fa-search" />
           </button>
         </span>

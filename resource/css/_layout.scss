@@ -25,17 +25,25 @@
       }
       .navbar-collapse {
         background: $crowiHeaderBackground;
+        align-items: center;
       }
 
-      > div > .navbar-nav li button {
-        margin: 10px;
-      }
-
-      > div > a ,
-      > div > ul > li > a {
+      .navbar-brand,
+      .navbar-nav > li > a {
         color: #ccc;
         &:hover {
           color: #aaa;
+        }
+      }
+
+      .navbar-nav {
+        align-items: center;
+        .nav-item > button {
+          margin: 0 $nav-link-padding-x;
+        }
+
+        .dropdown-toggle:after {
+          display: none;
         }
       }
 
@@ -49,17 +57,6 @@
           margin-top: 5px;
           padding: 10px;
           margin-right: 5px;
-        }
-      }
-
-      .navbar-toggle {
-        position: absolute;
-        top: 0;
-        right: 0;
-      }
-      .navbar-collapse.collapse.in {
-
-        .confidential {
         }
       }
 
