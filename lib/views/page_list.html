@@ -37,7 +37,7 @@
         <button
             data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
-            class="like-button btn btn-default btn-sm {% if page.isLiked(user) %}active{% endif %}"
+            class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
         ><i class="far fa-thumbs-up"></i></button>
       </div>
       {% endif %}
