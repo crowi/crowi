@@ -200,12 +200,12 @@
     {% endif  %}
 
     {# list view #}
-    <div class="active tab-pane fade page-list-container in" id="view-list">
+    <div class="tab-pane fade active show page-list-container in" id="view-list">
       {% include 'widget/page_list.html' with { pages: pages, pager: pager, viewConfig: viewConfig } %}
     </div>
 
     {# timeline view #}
-    <div class="tab-pane" id="view-timeline" data-shown=0>
+    <div class="tab-pane fade" id="view-timeline" data-shown=0>
       {% for page in pages %}
       <div class="timeline-body" id="id-{{ page.id }}">
         <h3 class="revision-path"><a href="{{ page.path }}">{{ page.path }}</a></h3>
