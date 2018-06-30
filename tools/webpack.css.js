@@ -34,7 +34,7 @@ const config = {
               loader: 'sass-loader',
               options: {
                 includePaths: [
-                  './node_modules/bootstrap-sass/assets/stylesheets',
+                  './node_modules/bootstrap/scss',
                   './node_modules/@fortawesome/fontawesome-free-webfonts/scss',
                   './node_modules/reveal.js/css',
                 ],
