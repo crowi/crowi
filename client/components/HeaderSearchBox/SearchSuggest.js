@@ -1,45 +1,42 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
+import { Card } from 'reactstrap'
 import ListView from 'components/PageList/ListView'
 
 export default class SearchSuggest extends React.Component {
-  render() {
-    if (!this.props.focused) {
-      return <div />
-    }
-
-    if (this.props.searching) {
+  renderBody() {
+    const { searching, searchError, searchedPages, searchingKeyword } = this.props
+    if (searching) {
       return (
-        <div className="search-suggest" id="search-suggest">
+        <div>
           <i className="searcing fa fa-circle-o-notch fa-spin fa-fw" /> Searching ...
         </div>
       )
     }
-
-    if (this.props.searchError !== null) {
+    if (searchError !== null) {
       return (
-        <div className="search-suggest" id="search-suggest">
+        <div>
           <i className="searcing fa fa-exclamation-triangle" /> Error on searching.
         </div>
       )
     }
+    if (searchedPages.length < 1 && searchingKeyword !== '') {
+      return <div>No results for &quot;{searchingKeyword}&quot;.</div>
+    }
+    return <ListView pages={searchedPages} />
+  }
 
-    if (this.props.searchedPages.length < 1) {
-      if (this.props.searchingKeyword !== '') {
-        return (
-          <div className="search-suggest" id="search-suggest">
-            No results for &quot;{this.props.searchingKeyword}&quot;.
-          </div>
-        )
-      }
+  render() {
+    const { focused, searchedPages, searchingKeyword } = this.props
+    const searched = searchedPages.length >= 1 || searchingKeyword !== ''
+    if (!focused || !searched) {
       return <div />
     }
-
     return (
-      <div className="search-suggest" id="search-suggest">
-        <ListView pages={this.props.searchedPages} />
-      </div>
+      <Card body className="search-suggest" id="search-suggest">
+        {this.renderBody()}
+      </Card>
     )
   }
 }
