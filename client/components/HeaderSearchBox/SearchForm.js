@@ -83,7 +83,7 @@ export default class SearchForm extends React.Component {
           onBlur={this.handleBlur}
           onChange={this.handleChange}
         />
-        <span className="input-group-btn">
+        <span className="input-group-append">
           <button type="submit" className="btn btn-light">
             <i className="search-top-icon fa fa-search" />
           </button>
