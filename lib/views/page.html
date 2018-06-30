@@ -85,7 +85,7 @@
   {% if not page %}
   <ul class="nav nav-tabs d-print-none">
     <li class="nav-item"><a class="nav-link">Create: {{ path }}</a></li>
-    <li class="nav-item dropdown pull-right">
+    <li class="nav-item dropdown ml-auto">
       <a class="nav-link" href="#" onclick="history.back();"><i class="fa fa-times"></i> {{ t('Cancel') }}</a>
     </li>
   </ul>
@@ -100,7 +100,7 @@
   {% if page.isDeleted() %}
   <div class="alert alert-danger alert-trash">
     <div>
-      <ul class="list-inline pull-right">
+      <ul class="list-inline float-right">
         <li>
           <form role="form" id="revert-delete-page-form" onsubmit="return false;">
             <input type="hidden" name="_csrf" value="{{ csrf() }}">
@@ -124,7 +124,7 @@
             </button>
           </form>
         </li>
-      </ul>{# /.pull-right #}
+      </ul>
       <i class="fa fa-trash-alt" aria-hidden="true"></i>
       This page is in the trash.<br>
       Deleted by <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-sm picture-rounded"> {{ page.lastUpdateUser.name }} at {{ page.updatedAt|datetz('Y-m-d H:i:s') }}
@@ -142,7 +142,12 @@
       <a class="nav-link {% if req.body.pageForm %}active{% endif %}" href="#edit-form" data-toggle="tab"><i class="fa fa-edit"></i> {{ t('Edit') }}</a>
     </li>
 
-    <li class="nav-item dropdown pull-right">
+    {% if page %}
+    <li class="nav-item ml-auto">
+      <a class="nav-link" href="#revision-history" data-toggle="tab"><i class="fa fa-history"></i> History</a>
+    </li>
+    {% endif %}
+    <li class="nav-item dropdown {% if not page %}ml-auto{% endif %}">
       <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">
         <i class="fa fa-wrench"></i> <span class="caret"></span>
       </a>
@@ -155,11 +160,6 @@
        {% endif %}
       </ul>
     </li>
-    {% if page %}
-    <li class="nav-item pull-right">
-      <a class="nav-link" href="#revision-history" data-toggle="tab"><i class="fa fa-history"></i> History</a>
-    </li>
-    {% endif %}
   </ul>
   {% endif %}
 
@@ -178,7 +178,7 @@
         <input type="hidden" name="_csrf" value="{{ csrf() }}">
         <input type="hidden" name="path" value="{{ page.path }}">
         <input type="hidden" name="page_id" value="{{ page._id.toString() }}">
-        <button type="submit" class="btn btn-default btn-sm pull-right">
+        <button type="submit" class="btn btn-default btn-sm float-right">
           <i class="fa fa-unlink" aria-hidden="true"></i>
           Unlink
         </button>
