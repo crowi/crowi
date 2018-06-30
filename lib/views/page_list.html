@@ -33,7 +33,7 @@
       <div class="flex-item-action">
         <span id="bookmark-button" data-csrftoken="{{ csrf() }}"></span>
       </div>
-      <div class="flex-item-action visible-xs visible-sm">
+      <div class="flex-item-action d-md-none">
         <button
             data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
