@@ -84,9 +84,9 @@
 
   {% if not page %}
   <ul class="nav nav-tabs d-print-none">
-    <li><a>Create: {{ path }}</a></li>
-    <li class="dropdown pull-right">
-      <a href="#" onclick="history.back();"><i class="fa fa-times"></i> {{ t('Cancel') }}</a>
+    <li class="nav-item"><a class="nav-link">Create: {{ path }}</a></li>
+    <li class="nav-item dropdown pull-right">
+      <a class="nav-link" href="#" onclick="history.back();"><i class="fa fa-times"></i> {{ t('Cancel') }}</a>
     </li>
   </ul>
   <div class="tab-content">
@@ -134,20 +134,16 @@
 
   {% if not page.isDeleted() %}
   <ul class="nav nav-tabs d-print-none">
-    <li class=" {% if not req.body.pageForm %}active{% endif %}" data-toggle="tooltip" {# data-title="あなたの 確認待ち です" title="" data-placement="bottom" data-trigger="manual" data-tooltip-stay #}>
-      <a href="#revision-body" data-toggle="tab">
-      <i class="fa fa-magic"></i>
-      {#
-        <span class="badge badge-danger" style=""> 承認待ち</span>
-      #}
-      </a>
+    <li class="nav-item" data-toggle="tooltip" {# data-title="あなたの 確認待ち です" title="" data-placement="bottom" data-trigger="manual" data-tooltip-stay #}>
+      <a class="nav-link {% if not req.body.pageForm %}active{% endif %}" href="#revision-body" data-toggle="tab"><i class="fa fa-magic"></i></a>
     </li>
 
-    <li {% if req.body.pageForm %}class="active"{% endif %}><a href="#edit-form" data-toggle="tab"><i class="fa fa-edit"></i> {{ t('Edit') }}</a></li>
+    <li class="nav-item">
+      <a class="nav-link {% if req.body.pageForm %}active{% endif %}" href="#edit-form" data-toggle="tab"><i class="fa fa-edit"></i> {{ t('Edit') }}</a>
+    </li>
 
-
-    <li class="dropdown pull-right">
-      <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+    <li class="nav-item dropdown pull-right">
+      <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">
         <i class="fa fa-wrench"></i> <span class="caret"></span>
       </a>
       <ul class="dropdown-menu">
@@ -160,7 +156,9 @@
       </ul>
     </li>
     {% if page %}
-    <li class="pull-right"><a href="#revision-history" data-toggle="tab"><i class="fa fa-history"></i> History</a></li>
+    <li class="nav-item pull-right">
+      <a class="nav-link" href="#revision-history" data-toggle="tab"><i class="fa fa-history"></i> History</a>
+    </li>
     {% endif %}
   </ul>
   {% endif %}
