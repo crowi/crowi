@@ -128,7 +128,32 @@ Rename page: Rename page
 New page name: New page name
 Current page name: Current page name
 Redirect: Redirect
+Page name: Page name
+Browser: Browser
+IP Address: IP Address
+Accessed: Accessed
+Author: Author
+Status: Status
+Shared Pages: Shared Pages
+Access Log: Access Log
+Required secret keyword: Secret keyword is required to show this page.
 Incorrect secret keyword: Incorrect secret keyword
+No one is accessing yet: No one is accessing yet.
+Delete shared link to this page?: Delete shared link to this page?
+No one can see this page if the link is deleted: Once the link is deleted, you will not be able to see this page from that link.
+share:
+  share_to_external: Share to external
+  watch_the_log: Watch the log
+  create_link: Create link
+  delete_link: Delete link
+  link_settings: Link settings
+  no_link_has_been_created_yet: No link has been created yet.
+  setting:
+    restrict_access: Restrict access
+    people_who_know_this_link: People who know this link
+    people_who_know_this_secret_keyword: People who know this secret keyword
+    secret_keyword: Secret keyword
+    save_settings: Save settings
 modal_rename:
   help:
     redirect: 'Redirect to new page if someone accesses <code>%s</code>'

@@ -1,26 +1,13 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import { translate } from 'react-i18next'
 import { Button } from 'react-bootstrap'
-import Icon from '../Common/Icon'
+import Icon from 'components/Common/Icon'
 import ShareBoxContent from './ShareBoxContent'
 import SettingModal from './SettingModal'
 import AccessLogModal from './AccessLogModal'
 
-const CreateButton = (isChanging, handleCreate) => (
-  <Button onClick={handleCreate} bsStyle="primary" bsSize="small" disabled={isChanging}>
-    <Icon name={isChanging ? 'spinner' : 'link'} spin={isChanging} />
-    リンクを作成
-  </Button>
-)
-
-const OpenAccessLogButton = handleOpen => (
-  <Button onClick={handleOpen} bsSize="small">
-    <Icon name="list-alt" />
-    ログを見る
-  </Button>
-)
-
-export default class ShareBox extends React.Component {
+class ShareBox extends React.Component {
   constructor(props) {
     super(props)
 
@@ -91,14 +78,36 @@ export default class ShareBox extends React.Component {
     this.setState({ showAccessLogModal: false })
   }
 
+  renderCreateButton(isChanging, handleCreate) {
+    const { t } = this.props
+    return (
+      <Button onClick={handleCreate} bsStyle="primary" bsSize="small" disabled={isChanging}>
+        <Icon name={isChanging ? 'spinner' : 'link'} spin={isChanging} />
+        {t('share.create_link')}
+      </Button>
+    )
+  }
+
+  renderOpenAccessLogButton(handleOpen) {
+    const { t } = this.props
+    return (
+      <Button onClick={handleOpen} bsSize="small">
+        <Icon name="list-alt" />
+        {t('share.watch_the_log')}
+      </Button>
+    )
+  }
+
   render() {
     const { share, isCreated, isChanging, showSettingModal, showAccessLogModal } = this.state
-    const { crowi, pageId } = this.props
+    const { t, crowi, pageId } = this.props
     return (
       <div className="share-box">
         <div className="share-box-header">
-          <h5>外部に共有</h5>
-          {isCreated ? OpenAccessLogButton(this.handleOpenAccessLogModal) : CreateButton(isChanging, this.createLink)}
+          <h5>{t('share.share_to_external')}</h5>
+          {isCreated
+            ? this.renderOpenAccessLogButton(this.handleOpenAccessLogModal)
+            : this.renderCreateButton(isChanging, this.createLink)}
         </div>
         <ShareBoxContent isCreated={isCreated} share={share} handleOpen={this.handleOpenSettingModal} />
         <SettingModal
@@ -123,8 +132,11 @@ export default class ShareBox extends React.Component {
 ShareBox.propTypes = {
   isCreated: PropTypes.bool,
   pageId: PropTypes.string,
+  t: PropTypes.func.isRequired,
   crowi: PropTypes.object.isRequired,
 }
 ShareBox.defaultProps = {
   isCreated: false,
 }
+
+export default translate()(ShareBox)

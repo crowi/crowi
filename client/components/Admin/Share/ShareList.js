@@ -1,10 +1,11 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import { translate } from 'react-i18next'
 import moment from 'moment'
 import { Table } from 'react-bootstrap'
 import Pagination from 'components/Common/Pagination'
 
-export default class ShareList extends React.Component {
+class ShareList extends React.Component {
   constructor(props) {
     super(props)
 
@@ -80,6 +81,7 @@ export default class ShareList extends React.Component {
   }
 
   render() {
+    const { t } = this.props
     const {
       pagination: { current, count },
     } = this.state
@@ -89,10 +91,10 @@ export default class ShareList extends React.Component {
           <thead>
             <tr>
               <th>#</th>
-              <th>ページ名</th>
-              <th>作成者</th>
-              <th>作成日時</th>
-              <th>ステータス</th>
+              <th>{t('Page name')}</th>
+              <th>{t('Author')}</th>
+              <th>{t('Created')}</th>
+              <th>{t('Status')}</th>
             </tr>
           </thead>
           {this.renderTableBody()}
@@ -104,6 +106,9 @@ export default class ShareList extends React.Component {
 }
 
 ShareList.propTypes = {
+  t: PropTypes.func.isRequired,
   pageId: PropTypes.string,
   crowi: PropTypes.object.isRequired,
 }
+
+export default translate()(ShareList)

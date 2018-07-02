@@ -1,10 +1,11 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import Icon from '../Common/Icon'
+import { translate } from 'react-i18next'
+import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import { Button, Col, ControlLabel, FormControl, FormGroup, Modal, Radio } from 'react-bootstrap'
 
-export default class SettingModal extends React.Component {
+class SettingModal extends React.Component {
   constructor(props) {
     super(props)
 
@@ -79,31 +80,31 @@ export default class SettingModal extends React.Component {
   }
 
   render() {
-    const { show, onHide, isChanging } = this.props
+    const { t, show, onHide, isChanging } = this.props
     const { restricted, secretKeyword, showConfirmModal } = this.state
     return (
       <Modal className="share-setting-modal" show={show} onHide={onHide}>
         <Modal.Header closeButton>
-          <Modal.Title>リンクの設定</Modal.Title>
+          <Modal.Title>{t('share.link_settings')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="form-horizontal">
             <FormGroup controlId="restricted">
               <Col componentClass={ControlLabel} sm={2}>
-                閲覧制限
+                {t('share.setting.restrict_access')}
               </Col>
               <Col sm={10}>
                 <Radio name="restricted" onClick={this.setRestricted(false)} defaultChecked={!restricted}>
-                  リンクを知っている人
+                  {t('share.setting.people_who_know_this_link')}
                 </Radio>
                 <Radio name="restricted" onClick={this.setRestricted(true)} defaultChecked={restricted}>
-                  秘密のキーワードを知っている人
+                  {t('share.setting.people_who_know_this_secret_keyword')}
                 </Radio>
                 {restricted && (
                   <FormControl
                     className="secret-keyword"
                     type="text"
-                    placeholder="秘密のキーワード"
+                    placeholder={t('share.setting.secret_keyword')}
                     onChange={this.setSecretKeyword}
                     defaultValue={secretKeyword}
                   />
@@ -116,10 +117,10 @@ export default class SettingModal extends React.Component {
         <Modal.Footer>
           <Button className="pull-left" onClick={this.handleOpen} bsStyle="danger" disabled={isChanging}>
             <Icon name={isChanging ? 'spinner' : 'unlink'} spin={isChanging} />
-            リンクを削除
+            {t('share.delete_link')}
           </Button>
           <Button onClick={this.handleSubmit} bsStyle="primary" disabled={!this.canSubmit()}>
-            設定を保存
+            {t('share.setting.save_settings')}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -133,8 +134,11 @@ SettingModal.propTypes = {
   onHide: PropTypes.func.isRequired,
   isChanging: PropTypes.bool,
   handleDelete: PropTypes.func,
+  t: PropTypes.func.isRequired,
   crowi: PropTypes.object.isRequired,
 }
 SettingModal.defaultProps = {
   show: false,
 }
+
+export default translate()(SettingModal)
