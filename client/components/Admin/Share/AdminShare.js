@@ -1,6 +1,5 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import moment from 'moment'
 import { Tabs, Tab } from 'react-bootstrap'
 import ShareList from './ShareList'
 import AccessLog from './AccessLog'

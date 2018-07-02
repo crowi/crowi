@@ -23,15 +23,17 @@ export default class SettingModal extends React.Component {
     this.handleDelete = this.handleDelete.bind(this)
   }
 
-  componentWillReceiveProps(nextProps) {
-    const { share = {} } = nextProps
+  componentDidUpdate() {
+    const { share = {} } = this.props
     const { id: shareId, secretKeyword = '' } = share
 
-    this.setState({
-      shareId,
-      secretKeyword,
-      restricted: !!secretKeyword,
-    })
+    if (shareId !== this.state.shareId) {
+      this.setState({
+        shareId,
+        secretKeyword,
+        restricted: !!secretKeyword,
+      })
+    }
   }
 
   setRestricted(value) {
@@ -126,8 +128,11 @@ export default class SettingModal extends React.Component {
 }
 
 SettingModal.propTypes = {
+  share: PropTypes.object,
   show: PropTypes.bool.isRequired,
   onHide: PropTypes.func.isRequired,
+  isChanging: PropTypes.bool,
+  handleDelete: PropTypes.func,
   crowi: PropTypes.object.isRequired,
 }
 SettingModal.defaultProps = {

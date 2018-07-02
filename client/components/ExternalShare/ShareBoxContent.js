@@ -55,6 +55,7 @@ export default class ShareBoxContent extends React.Component {
 }
 
 ShareBoxContent.propTypes = {
+  handleOpen: PropTypes.func,
   isCreated: PropTypes.bool,
   share: PropTypes.object,
 }
