@@ -3,76 +3,7 @@ import PropTypes from 'prop-types'
 import moment from 'moment'
 import platform from 'platform'
 import { Modal, Table, Alert } from 'react-bootstrap'
-
-const ShareInfo = (id, name, createdAt) => {
-  const date = moment(createdAt).format('llll')
-  return (
-    <div>
-      <h4>共有ID: {id}</h4>
-      <dl className="share-info">
-        <div>
-          <dt>作成者</dt>
-          <dd>
-            <a href={`/user/${name}`}>{name}</a>
-          </dd>
-        </div>
-        <div>
-          <dt>作成日</dt>
-          <dd>{date}</dd>
-        </div>
-      </dl>
-    </div>
-  )
-}
-
-const TableHeader = (
-  <thead>
-    <tr>
-      <th>#</th>
-      <th>ブラウザ</th>
-      <th>OS</th>
-      <th>IPアドレス</th>
-      <th>アクセス日時</th>
-    </tr>
-  </thead>
-)
-
-const TableBody = ({ tracking: { userAgent, remoteAddress }, createdAt }, i) => {
-  const index = i + 1
-  const info = platform.parse(userAgent)
-  const date = moment(createdAt).format('llll')
-  return (
-    <tr key={i}>
-      <td>{index}</td>
-      <td>{info.name}</td>
-      <td>{info.os.toString()}</td>
-      <td>{remoteAddress}</td>
-      <td>{date}</td>
-    </tr>
-  )
-}
-
-const AccessLogTable = (share, i) => {
-  const {
-    _id: id,
-    creator: { name },
-    createdAt,
-    accesses,
-  } = share
-  return (
-    <div key={i}>
-      {ShareInfo(id, name, createdAt)}
-      {accesses.length > 0 ? (
-        <Table bordered hover>
-          {TableHeader}
-          <tbody>{accesses.map(TableBody)}</tbody>
-        </Table>
-      ) : (
-        <Alert color="info">この共有リンクへのアクセスはありません。</Alert>
-      )}
-    </div>
-  )
-}
+import Pagination from 'components/Common/Pagination'
 
 export default class AccessLogModal extends React.Component {
   constructor(props) {
@@ -89,6 +20,85 @@ export default class AccessLogModal extends React.Component {
         limit: 20,
       },
     }
+
+    this.getPage = this.getPage.bind(this)
+    this.movePage = this.movePage.bind(this)
+  }
+
+  static renderShareInfo(id, name, createdAt) {
+    const date = moment(createdAt).format('llll')
+    return (
+      <div>
+        <h4>共有ID: {id}</h4>
+        <dl className="share-info">
+          <div>
+            <dt>作成者</dt>
+            <dd>
+              <a href={`/user/${name}`}>{name}</a>
+            </dd>
+          </div>
+          <div>
+            <dt>作成日</dt>
+            <dd>{date}</dd>
+          </div>
+        </dl>
+      </div>
+    )
+  }
+
+  static renderTableHeader() {
+    return (
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>ブラウザ</th>
+          <th>OS</th>
+          <th>IPアドレス</th>
+          <th>アクセス日時</th>
+        </tr>
+      </thead>
+    )
+  }
+
+  static renderTableBody(accesses, i) {
+    const {
+      tracking: { userAgent, remoteAddress },
+      createdAt,
+    } = accesses
+    const index = i + 1
+    const info = platform.parse(userAgent)
+    const date = moment(createdAt).format('llll')
+    return (
+      <tr key={i}>
+        <td>{index}</td>
+        <td>{info.name}</td>
+        <td>{info.os.toString()}</td>
+        <td>{remoteAddress}</td>
+        <td>{date}</td>
+      </tr>
+    )
+  }
+
+  static renderAccessLogTable(share, i) {
+    const {
+      _id: id,
+      creator: { name },
+      createdAt,
+      accesses,
+    } = share
+    return (
+      <div key={i}>
+        {AccessLogModal.renderShareInfo(id, name, createdAt)}
+        {accesses.length > 0 ? (
+          <Table bordered hover>
+            {AccessLogModal.renderTableHeader()}
+            <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
+          </Table>
+        ) : (
+          <Alert color="info">この共有リンクへのアクセスはありません。</Alert>
+        )}
+      </div>
+    )
   }
 
   getPage(pageId, options = {}) {
@@ -106,11 +116,8 @@ export default class AccessLogModal extends React.Component {
   }
 
   movePage(i) {
-    return e => {
-      e.preventDefault()
-      if (i !== this.state.pagination.current) {
-        this.getPage(this.state.pageId, { page: i })
-      }
+    if (i !== this.state.pagination.current) {
+      this.getPage(this.state.pageId, { page: i })
     }
   }
 
@@ -121,8 +128,8 @@ export default class AccessLogModal extends React.Component {
     }
   }
 
-  componentWillReceiveProps(nextProps) {
-    const { pageId = null } = nextProps
+  componentDidUpdate() {
+    const { pageId = null } = this.props
     if (pageId !== this.state.pageId) {
       this.getPage(pageId)
     }
@@ -157,16 +164,26 @@ export default class AccessLogModal extends React.Component {
 
   render() {
     const { show, onHide } = this.props
+    const {
+      pagination: { current, count },
+    } = this.state
     return (
       <Modal className="access-log-modal" show={show} onHide={onHide} bsSize="large">
         <Modal.Header closeButton>
           <Modal.Title id="contained-modal-title-lg">アクセスログ</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {this.state.shares.map(AccessLogTable)}
-          {this.renderPagination()}
+          {this.state.shares.map(AccessLogModal.renderAccessLogTable)}
+          <Pagination current={current} count={count} onClick={this.movePage} />
         </Modal.Body>
       </Modal>
     )
   }
+}
+
+AccessLogModal.propTypes = {
+  show: PropTypes.bool.isRequired,
+  onHide: PropTypes.func.isRequired,
+  pageId: PropTypes.string,
+  crowi: PropTypes.object.isRequired,
 }
