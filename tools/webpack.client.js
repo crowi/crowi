@@ -30,6 +30,18 @@ const config = {
   module: {
     rules: [
       {
+        test: /\.ya?ml$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'json-loader',
+          },
+          {
+            loader: 'yaml-loader',
+          },
+        ],
+      },
+      {
         test: /.jsx?$/,
         exclude: /node_modules/,
         use: [
