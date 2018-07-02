@@ -2,7 +2,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import moment from 'moment'
 import platform from 'platform'
-import { Modal, Table } from 'react-bootstrap'
+import { Modal, Table, Alert } from 'react-bootstrap'
 
 const ShareInfo = (id, name, createdAt) => {
   const date = moment(createdAt).format('llll')
@@ -62,10 +62,14 @@ const AccessLogTable = (share, i) => {
   return (
     <div key={i}>
       {ShareInfo(id, name, createdAt)}
-      <Table bordered hover>
-        {TableHeader}
-        <tbody>{accesses.map(TableBody)}</tbody>
-      </Table>
+      {accesses.length > 0 ? (
+        <Table bordered hover>
+          {TableHeader}
+          <tbody>{accesses.map(TableBody)}</tbody>
+        </Table>
+      ) : (
+        <Alert color="info">この共有リンクへのアクセスはありません。</Alert>
+      )}
     </div>
   )
 }
@@ -89,7 +93,7 @@ export default class AccessLogModal extends React.Component {
 
   getPage(pageId, options = {}) {
     const limit = this.state.pagination.limit
-    options = { ...options, limit, page_id: pageId }
+    options = { ...options, limit: 5, page_id: pageId }
     this.props.crowi
       .apiGet('/shares.list', options)
       .then(({ share: { docs: shares, page: current, pages: count } }) => {
@@ -99,6 +103,15 @@ export default class AccessLogModal extends React.Component {
       .catch(err => {
         console.log(err)
       })
+  }
+
+  movePage(i) {
+    return e => {
+      e.preventDefault()
+      if (i !== this.state.pagination.current) {
+        this.getPage(this.state.pageId, { page: i })
+      }
+    }
   }
 
   componentDidMount() {
@@ -115,6 +128,33 @@ export default class AccessLogModal extends React.Component {
     }
   }
 
+  renderPagination() {
+    const { current, count } = this.state.pagination
+    const range = [...Array(count).keys()]
+    const items = range.map((v, k) => {
+      const page = k + 1
+      const className = page === current ? 'active' : ''
+      return (
+        <li key={page} className={className}>
+          <a onClick={this.movePage(page)}>{page}</a>
+        </li>
+      )
+    })
+    return (
+      <nav>
+        <ul className="pagination">
+          <li className={current === 1 ? 'disabled' : ''}>
+            <a onClick={this.movePage(1)}>&laquo;</a>
+          </li>
+          {items}
+          <li className={current === count ? 'disabled' : ''}>
+            <a onClick={this.movePage(count)}>&raquo;</a>
+          </li>
+        </ul>
+      </nav>
+    )
+  }
+
   render() {
     const { show, onHide } = this.props
     return (
@@ -122,7 +162,10 @@ export default class AccessLogModal extends React.Component {
         <Modal.Header closeButton>
           <Modal.Title id="contained-modal-title-lg">アクセスログ</Modal.Title>
         </Modal.Header>
-        <Modal.Body>{this.state.shares.map(AccessLogTable)}</Modal.Body>
+        <Modal.Body>
+          {this.state.shares.map(AccessLogTable)}
+          {this.renderPagination()}
+        </Modal.Body>
       </Modal>
     )
   }
