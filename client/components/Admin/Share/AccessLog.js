@@ -61,7 +61,6 @@ export default class AccessLog extends React.Component {
           } = share
           const { userAgent, remoteAddress } = tracking
           const info = platform.parse(userAgent)
-          console.log(info)
           const date = moment(createdAt).format('L')
           return (
             <tr key={index}>
@@ -84,7 +83,7 @@ export default class AccessLog extends React.Component {
     } = this.state
     return (
       <div>
-        <Table bordered hover>
+        <Table bordered hover condensed>
           <thead>
             <tr>
               <th>#</th>
