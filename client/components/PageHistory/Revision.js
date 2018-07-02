@@ -1,9 +1,9 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import UserDate from '../Common/UserDate'
-import Icon from '../Common/Icon'
-import UserPicture from '../User/UserPicture'
+import UserDate from 'components/Common/UserDate'
+import Icon from 'components/Common/Icon'
+import UserPicture from 'components/User/UserPicture'
 
 export default class Revision extends React.Component {
   constructor(props) {

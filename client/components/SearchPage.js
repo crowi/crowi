@@ -113,6 +113,7 @@ export default class SearchPage extends React.Component {
 
 SearchPage.propTypes = {
   query: PropTypes.object,
+  crowi: PropTypes.object.isRequired,
 }
 SearchPage.defaultProps = {
   // pollInterval: 1000,
