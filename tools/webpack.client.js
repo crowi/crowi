@@ -47,6 +47,18 @@ const config = {
         ],
       },
       {
+        test: /\.ya?ml$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'json-loader',
+          },
+          {
+            loader: 'yaml-loader',
+          },
+        ],
+      },
+      {
         test: /.jsx?$/,
         exclude: /node_modules/,
         use: [
