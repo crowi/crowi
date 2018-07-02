@@ -90,7 +90,7 @@ export default class AccessLogModal extends React.Component {
       <div key={i}>
         {AccessLogModal.renderShareInfo(id, name, createdAt)}
         {accesses.length > 0 ? (
-          <Table bordered hover>
+          <Table bordered hover condensed>
             {AccessLogModal.renderTableHeader()}
             <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
           </Table>

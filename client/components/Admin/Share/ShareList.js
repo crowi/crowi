@@ -85,7 +85,7 @@ export default class ShareList extends React.Component {
     } = this.state
     return (
       <div>
-        <Table bordered hover>
+        <Table bordered hover condensed>
           <thead>
             <tr>
               <th>#</th>
