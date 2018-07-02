@@ -28,6 +28,7 @@ class SecretKeywordFormContainer extends React.Component {
   }
 
   static propTypes = {
+    t: PropTypes.func,
     pageId: PropTypes.string,
     crowi: PropTypes.object.isRequired,
   }
