@@ -1,11 +1,12 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Modal, Table, Alert } from 'react-bootstrap'
 import Pagination from 'components/Common/Pagination'
 
-export default class AccessLogModal extends React.Component {
+class AccessLogModal extends React.Component {
   constructor(props) {
     super(props)
 
@@ -23,22 +24,24 @@ export default class AccessLogModal extends React.Component {
 
     this.getPage = this.getPage.bind(this)
     this.movePage = this.movePage.bind(this)
+    this.renderAccessLogTable = this.renderAccessLogTable.bind(this)
   }
 
-  static renderShareInfo(id, name, createdAt) {
+  renderShareInfo(id, name, createdAt) {
+    const { t } = this.props
     const date = moment(createdAt).format('llll')
     return (
       <div>
         <h4>共有ID: {id}</h4>
         <dl className="share-info">
           <div>
-            <dt>作成者</dt>
+            <dt>{t('Author')}</dt>
             <dd>
               <a href={`/user/${name}`}>{name}</a>
             </dd>
           </div>
           <div>
-            <dt>作成日</dt>
+            <dt>{t('Created')}</dt>
             <dd>{date}</dd>
           </div>
         </dl>
@@ -46,15 +49,16 @@ export default class AccessLogModal extends React.Component {
     )
   }
 
-  static renderTableHeader() {
+  renderTableHeader() {
+    const { t } = this.props
     return (
       <thead>
         <tr>
           <th>#</th>
-          <th>ブラウザ</th>
+          <th>{t('Browser')}</th>
           <th>OS</th>
-          <th>IPアドレス</th>
-          <th>アクセス日時</th>
+          <th>{t('IP Address')}</th>
+          <th>{t('Accessed')}</th>
         </tr>
       </thead>
     )
@@ -79,7 +83,8 @@ export default class AccessLogModal extends React.Component {
     )
   }
 
-  static renderAccessLogTable(share, i) {
+  renderAccessLogTable(share, i) {
+    const { t } = this.props
     const {
       _id: id,
       creator: { name },
@@ -88,14 +93,14 @@ export default class AccessLogModal extends React.Component {
     } = share
     return (
       <div key={i}>
-        {AccessLogModal.renderShareInfo(id, name, createdAt)}
+        {this.renderShareInfo(id, name, createdAt)}
         {accesses.length > 0 ? (
           <Table bordered hover condensed>
-            {AccessLogModal.renderTableHeader()}
+            {this.renderTableHeader()}
             <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
           </Table>
         ) : (
-          <Alert color="info">この共有リンクへのアクセスはありません。</Alert>
+          <Alert color="info">{t('No one is accessing yet')}</Alert>
         )}
       </div>
     )
@@ -163,17 +168,17 @@ export default class AccessLogModal extends React.Component {
   }
 
   render() {
-    const { show, onHide } = this.props
+    const { t, show, onHide } = this.props
     const {
       pagination: { current, count },
     } = this.state
     return (
       <Modal className="access-log-modal" show={show} onHide={onHide} bsSize="large">
         <Modal.Header closeButton>
-          <Modal.Title id="contained-modal-title-lg">アクセスログ</Modal.Title>
+          <Modal.Title id="contained-modal-title-lg">{t('Access Log')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {this.state.shares.map(AccessLogModal.renderAccessLogTable)}
+          {this.state.shares.map(this.renderAccessLogTable)}
           <Pagination current={current} count={count} onClick={this.movePage} />
         </Modal.Body>
       </Modal>
@@ -185,5 +190,8 @@ AccessLogModal.propTypes = {
   show: PropTypes.bool.isRequired,
   onHide: PropTypes.func.isRequired,
   pageId: PropTypes.string,
+  t: PropTypes.func.isRequired,
   crowi: PropTypes.object.isRequired,
 }
+
+export default translate()(AccessLogModal)

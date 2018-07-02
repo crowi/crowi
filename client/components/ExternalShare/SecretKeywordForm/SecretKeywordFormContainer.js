@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Button, InputGroup, Col, FormControl, FormGroup, HelpBlock } from 'react-bootstrap'
 
-import Icon from '../../Common/Icon'
+import Icon from 'components/Common/Icon'
 
 class SecretKeywordFormContainer extends React.Component {
   constructor(props) {
@@ -85,10 +85,11 @@ class SecretKeywordFormContainer extends React.Component {
   }
 
   render() {
+    const { t } = this.props
     const { error } = this.state
     return (
       <Col lg={4} md={6} sm={8} xs={10}>
-        <h4 className="page-header">ページの閲覧には秘密のキーワードが必要です</h4>
+        <h4 className="page-header">{t('Required secret keyword')}</h4>
         <div>
           <FormGroup controlId="secretKeyword" validationState={error.status ? 'error' : null}>
             <InputGroup>

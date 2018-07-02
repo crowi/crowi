@@ -1,11 +1,11 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Table } from 'react-bootstrap'
 import Pagination from 'components/Common/Pagination'
-
-export default class AccessLog extends React.Component {
+class AccessLog extends React.Component {
   constructor(props) {
     super(props)
 
@@ -78,6 +78,7 @@ export default class AccessLog extends React.Component {
   }
 
   render() {
+    const { t } = this.props
     const {
       pagination: { current, count },
     } = this.state
@@ -87,11 +88,11 @@ export default class AccessLog extends React.Component {
           <thead>
             <tr>
               <th>#</th>
-              <th>ページ名</th>
-              <th>ブラウザ</th>
+              <th>{t('Page name')}</th>
+              <th>{t('Browser')}</th>
               <th>OS</th>
-              <th>IPアドレス</th>
-              <th>アクセス日時</th>
+              <th>{t('IP Address')}</th>
+              <th>{t('Accessed')}</th>
             </tr>
           </thead>
           {this.renderTableBody()}
@@ -103,6 +104,9 @@ export default class AccessLog extends React.Component {
 }
 
 AccessLog.propTypes = {
+  t: PropTypes.func.isRequired,
   pageId: PropTypes.string,
   crowi: PropTypes.object.isRequired,
 }
+
+export default translate()(AccessLog)

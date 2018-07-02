@@ -1,8 +1,9 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import { translate } from 'react-i18next'
 import { Button, InputGroup, FormControl } from 'react-bootstrap'
 
-export default class ShareBoxContent extends React.Component {
+class ShareBoxContent extends React.Component {
   constructor(props) {
     super(props)
 
@@ -25,7 +26,7 @@ export default class ShareBoxContent extends React.Component {
   }
 
   render() {
-    const { share, isCreated, handleOpen } = this.props
+    const { t, share, isCreated, handleOpen } = this.props
     if (isCreated) {
       const shareId = share.id
       const url = `${location.origin}/_share/${shareId}`
@@ -45,12 +46,12 @@ export default class ShareBoxContent extends React.Component {
             </InputGroup.Button>
           </InputGroup>
           <Button className="pull-right" onClick={handleOpen}>
-            リンクの設定
+            {t('share.link_settings')}
           </Button>
         </div>
       )
     }
-    return <div className="share-box-content">まだリンクは作成されていません</div>
+    return <div className="share-box-content">{t('share.no_link_has_been_created_yet')}</div>
   }
 }
 
@@ -58,8 +59,11 @@ ShareBoxContent.propTypes = {
   handleOpen: PropTypes.func,
   isCreated: PropTypes.bool,
   share: PropTypes.object,
+  t: PropTypes.func.isRequired,
 }
 ShareBoxContent.defaultProps = {
   isCreated: false,
   share: {},
 }
+
+export default translate()(ShareBoxContent)
