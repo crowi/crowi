@@ -1,8 +1,6 @@
 import $ from 'jquery'
 
 $(function() {
-  var UpdatePost = {}
-
   $('#slackNotificationForm').on('submit', function(e) {
     $.post('/_api/admin/notification.add', $(this).serialize(), function(res) {
       if (res.ok) {
@@ -84,7 +82,7 @@ $(function() {
         var $id = $form.attr('id')
         var $button = $('button', this)
         $button.attr('disabled', 'disabled')
-        var jqxhr = $.post($form.attr('action'), $form.serialize(), function(data) {
+        $.post($form.attr('action'), $form.serialize(), function(data) {
           if (data.status) {
             showMessage($id, '更新しました')
           } else {

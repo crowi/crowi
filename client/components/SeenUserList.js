@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import UserList from './SeenUserList/UserList'
 
 export default class SeenUserList extends React.Component {
@@ -40,4 +41,8 @@ export default class SeenUserList extends React.Component {
       </div>
     )
   }
+}
+
+SeenUserList.propTypes = {
+  crowi: PropTypes.object.isRequired,
 }
