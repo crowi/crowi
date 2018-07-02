@@ -2,6 +2,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import moment from 'moment'
 import { Table } from 'react-bootstrap'
+import Pagination from 'components/Common/Pagination'
 
 export default class ShareList extends React.Component {
   constructor(props) {
@@ -18,9 +19,9 @@ export default class ShareList extends React.Component {
       },
     }
 
+    this.getPage = this.getPage.bind(this)
     this.movePage = this.movePage.bind(this)
     this.renderTableBody = this.renderTableBody.bind(this)
-    this.renderPagination = this.renderPagination.bind(this)
   }
 
   getPage(options = {}) {
@@ -37,17 +38,14 @@ export default class ShareList extends React.Component {
       })
   }
 
-  componentDidMount() {
-    this.getPage()
+  movePage(i) {
+    if (i !== this.state.pagination.current) {
+      this.getPage({ page: i })
+    }
   }
 
-  movePage(i) {
-    return e => {
-      e.preventDefault()
-      if (i !== this.state.pagination.current) {
-        this.getPage({ page: i })
-      }
-    }
+  componentDidMount() {
+    this.getPage()
   }
 
   renderStatus(isActive) {
@@ -81,34 +79,10 @@ export default class ShareList extends React.Component {
     )
   }
 
-  renderPagination() {
-    const { current, count } = this.state.pagination
-    const range = [...Array(count).keys()]
-    const items = range.map((v, k) => {
-      const page = k + 1
-      const className = page === current ? 'active' : ''
-      return (
-        <li key={page} className={className}>
-          <a onClick={this.movePage(page)}>{page}</a>
-        </li>
-      )
-    })
-    return (
-      <nav>
-        <ul className="pagination">
-          <li className={current === 1 ? 'disabled' : ''}>
-            <a onClick={this.movePage(1)}>&laquo;</a>
-          </li>
-          {items}
-          <li className={current === count ? 'disabled' : ''}>
-            <a onClick={this.movePage(count)}>&raquo;</a>
-          </li>
-        </ul>
-      </nav>
-    )
-  }
-
   render() {
+    const {
+      pagination: { current, count },
+    } = this.state
     return (
       <div>
         <Table bordered hover>
@@ -123,8 +97,13 @@ export default class ShareList extends React.Component {
           </thead>
           {this.renderTableBody()}
         </Table>
-        {this.renderPagination()}
+        <Pagination current={current} count={count} onClick={this.movePage} />
       </div>
     )
   }
+}
+
+ShareList.propTypes = {
+  pageId: PropTypes.string,
+  crowi: PropTypes.object.isRequired,
 }
