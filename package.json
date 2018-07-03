@@ -128,6 +128,7 @@
     "eslint-plugin-promise": "^3.8.0",
     "eslint-plugin-react": "^7.9.1",
     "eslint-plugin-standard": "^3.1.0",
+    "faker": "^4.1.0",
     "flow-bin": "^0.65.0",
     "jshint": "~2.9.5",
     "mocha": "~5.2.0",
