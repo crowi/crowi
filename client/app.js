@@ -1,6 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 
+import i18n from './i18n'
+
 import Crowi from './util/Crowi'
 import CrowiRenderer from './util/CrowiRenderer'
 
@@ -17,6 +19,8 @@ import Backlink from './components/Backlink'
 if (!window) {
   window = {}
 }
+
+i18n()
 
 const mainContent = document.querySelector('#content-main')
 let pageId = null
