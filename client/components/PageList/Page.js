@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import UserPicture from '../User/UserPicture'
+import UserPicture from 'components/User/UserPicture'
 import PageListMeta from './PageListMeta'
 import PagePath from './PagePath'
 
@@ -29,6 +29,8 @@ export default class Page extends React.Component {
 Page.propTypes = {
   page: PropTypes.object.isRequired,
   linkTo: PropTypes.string,
+  excludePathString: PropTypes.string,
+  children: PropTypes.element,
 }
 
 Page.defaultProps = {
