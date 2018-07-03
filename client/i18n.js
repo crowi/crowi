@@ -20,7 +20,7 @@ export default () => {
     .use(reactI18nextModule)
     .init({
       fallbackLng: 'en',
-      debug: true,
+      debug: process.env.NODE_ENV === 'development',
       interpolation: { escapeValue: false },
       react: {
         wait: false,
