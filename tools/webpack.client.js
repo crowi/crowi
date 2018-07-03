@@ -33,20 +33,6 @@ const config = {
   module: {
     rules: [
       {
-        test: /\.js$/,
-        exclude: /node_modules/,
-        enforce: 'pre',
-        use: [
-          {
-            loader: 'eslint-loader',
-            options: {
-              fix: true,
-              failOnError: true,
-            },
-          },
-        ],
-      },
-      {
         test: /\.ya?ml$/,
         exclude: /node_modules/,
         use: [
