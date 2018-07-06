@@ -30,16 +30,14 @@ const config = {
   module: {
     rules: [
       {
-        test: /\.js$/,
+        test: /\.ya?ml$/,
         exclude: /node_modules/,
-        enforce: 'pre',
         use: [
           {
-            loader: 'eslint-loader',
-            options: {
-              fix: true,
-              failOnError: true,
-            },
+            loader: 'json-loader',
+          },
+          {
+            loader: 'yaml-loader',
           },
         ],
       },
