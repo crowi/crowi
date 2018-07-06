@@ -144,6 +144,10 @@
   //background: lighten($crowiHeaderBackground, 15%);
   background: $crowiHeaderBackground;
 
+  > .container-fluid > .row {
+    flex-direction: column;
+  }
+
   .installer-header {
     margin-top: 100px;
     text-align: center;
