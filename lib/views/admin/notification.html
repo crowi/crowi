@@ -72,7 +72,7 @@
       <div class="text-center">
         {% if hasSlackToken %}
         <p>Crowi and Slack is already <strong>connected</strong>. You can re-connect to refresh and overwirte the token with your Slack account.</p>
-        <a class="btn btn-default" href="{{ slackAuthUrl }}">
+        <a class="btn btn-secondary" href="{{ slackAuthUrl }}">
           <i class="fab fa-slack"></i> Reconnect to Slack
         </a>
         {% else %}
@@ -127,7 +127,7 @@
               <form class="admin-remove-updatepost">
                 <input type="hidden" name="id" value="{{ notif._id.toString() }}">
                 <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                <input type="submit" value="Delete" class="btn btn-default">
+                <input type="submit" value="Delete" class="btn btn-secondary">
               </form>
             </td>
           </tr>
