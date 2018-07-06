@@ -84,11 +84,11 @@ export default class SearchForm extends React.Component {
           onChange={this.handleChange}
         />
         <span className="input-group-append">
+          {formClear}
           <button type="submit" className="btn btn-light">
             <i className="search-top-icon fa fa-search" />
           </button>
         </span>
-        {formClear}
       </form>
     )
   }

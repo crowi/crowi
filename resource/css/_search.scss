@@ -31,14 +31,21 @@
       max-width: 400px;
     }
 
+    .input-group-append {
+      position: relative;
+      align-items: center;
+    }
+
     .search-top-clear {
+      display: inline-block;
       position: absolute;
-      right: 54px;
+      left: -30px;
       z-index: 10;
-      width: 22px;
-      height: 22px;
+      width: 30px;
+      height: 30px;
+      line-height: 30px;
+      text-align: center;
       color: #ccc;
-      padding: 8px;
     }
   }
 }
