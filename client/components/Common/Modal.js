@@ -35,7 +35,9 @@ export default class Modal extends React.Component {
                   <label htmlFor="newPageName">New page name</label>
                   <br />
                   <div className="input-group">
-                    <span className="input-group-addon">http://localhost:3000</span>
+                    <span className="input-group-prepend">
+                      <span className="input-group-text">http://localhost:3000</span>
+                    </span>
                     <input
                       type="text"
                       className="form-control"

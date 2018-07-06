@@ -23,11 +23,13 @@
       <div class="form-inline page-form-setting ml-auto" id="page-form-setting" data-slack-configured="{{ slackConfigured() }}">
         {% if slackConfigured() %}
         <span class="input-group extended-setting">
-          <span class="input-group-addon">
-            <label>
-              <i class="fab fa-slack"></i>
-              <input class="" type="checkbox" name="pageForm[notify][slack][on]" value="1">
-            </label>
+          <span class="input-group-prepend">
+            <span class="input-group-text">
+              <label>
+                <i class="fab fa-slack"></i>
+                <input class="" type="checkbox" name="pageForm[notify][slack][on]" value="1">
+              </label>
+            </span>
           </span>
           <input class="form-control" type="text" name="pageForm[notify][slack][channel]" value="{{ page.extended.slack|default('') }}" placeholder="slack-channel-name"
             id="page-form-slack-channel"
