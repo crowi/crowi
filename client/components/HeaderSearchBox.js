@@ -42,12 +42,15 @@ export default class SearchBox extends React.Component {
       searching: true,
     })
 
-    this.props.crowi
-      .apiGet('/search', { q: keyword })
-      .then(res => {
+    const promises = ['portal', 'public', 'user'].map(type =>
+      this.props.crowi.apiGet('/search', { q: keyword, type, limit: 10 }),
+    )
+
+    Promise.all(promises)
+      .then(([{ data: portalPages }, { data: publicPages }, { data: userPages }]) => {
         this.setState({
           searchingKeyword: keyword,
-          searchedPages: res.data,
+          searchedPages: { portalPages, publicPages, userPages },
           searching: false,
           searchError: null,
         })
