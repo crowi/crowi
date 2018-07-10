@@ -67,9 +67,25 @@
     margin-top: 16px;
   }
 
-  i {
-    width: 14px;
-    margin-right: 8px;
+  h5 {
+    display: flex;
+
+    > i {
+      width: 14px;
+      margin-right: 8px;
+    }
+
+    .title {
+      flex: 1;
+    }
+
+    .more {
+      text-align: center;
+
+      > i {
+        margin-left: 8px;
+      }
+    }
   }
 
   .page-list {

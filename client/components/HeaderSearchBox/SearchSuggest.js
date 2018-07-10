@@ -1,6 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
+import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
 
@@ -8,16 +9,26 @@ export default class SearchSuggest extends React.Component {
   constructor(props) {
     super(props)
 
+    this.buildSearchUrl = this.buildSearchUrl.bind(this)
     this.renderList = this.renderList.bind(this)
   }
 
-  renderList(title, icon, pages) {
+  buildSearchUrl(type) {
+    const q = this.props.searchingKeyword
+    const query = queryString.stringify({ q, type })
+    return `/_search?${query}`
+  }
+
+  renderList(title, icon, type, pages) {
     return (
       pages.length > 0 && (
         <div className="grouped-page-list">
           <h5>
             <Icon name={icon} regular />
-            <span>{title}</span>
+            <span className="title">{title}</span>
+            <a className="more text-muted" href={this.buildSearchUrl(type)}>
+              もっと見る<Icon name="caret-right" />
+            </a>
           </h5>
           <ListView pages={pages} />
         </div>
@@ -64,9 +75,9 @@ export default class SearchSuggest extends React.Component {
 
     return (
       <div className="search-suggest" id="search-suggest">
-        {this.renderList('Portal', 'circle', portalPages)}
-        {this.renderList('Public', 'file', publicPages)}
-        {this.renderList('User', 'user', userPages)}
+        {this.renderList('Portal', 'circle', 'portal', portalPages)}
+        {this.renderList('Public', 'file', 'public', publicPages)}
+        {this.renderList('User', 'user', 'user', userPages)}
       </div>
     )
   }
