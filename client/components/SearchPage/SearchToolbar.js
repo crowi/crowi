@@ -49,9 +49,11 @@ export default class SearchToolbar extends React.Component {
 SearchToolbar.propTypes = {
   keyword: PropTypes.string,
   type: PropTypes.string,
-  total: PropTypes.string,
+  total: PropTypes.number,
   changeType: PropTypes.func,
 }
 SearchToolbar.defaultProps = {
+  keyword: '',
   type: '',
+  total: 0,
 }

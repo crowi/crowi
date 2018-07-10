@@ -4,7 +4,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 
 import queryString from 'query-string'
-// import SearchForm from './SearchPage/SearchForm'
+import Emitter from '../emitter'
 import SearchToolbar from 'components/SearchPage/SearchToolbar'
 import SearchResult from './SearchPage/SearchResult'
 
@@ -25,6 +25,10 @@ export default class SearchPage extends React.Component {
     this.buildQuery = this.buildQuery.bind(this)
     this.changeURL = this.changeURL.bind(this)
     this.changeType = this.changeType.bind(this)
+
+    Emitter.on('search', ({ keyword: q = '' }) => {
+      this.search(this.buildQuery({ q }))
+    })
   }
 
   componentDidMount() {
@@ -54,8 +58,7 @@ export default class SearchPage extends React.Component {
   }
 
   changeType(type) {
-    const query = this.buildQuery({ type })
-    this.search(query)
+    this.search(this.buildQuery({ type }))
   }
 
   search(query) {
@@ -99,11 +102,6 @@ export default class SearchPage extends React.Component {
           total={this.state.searchResultMeta.total}
           changeType={this.changeType}
         />
-        {/* <div className="header-wrap">
-          <header>
-            <SearchForm onSearchFormChanged={this.search} keyword={this.state.searchingKeyword} />
-          </header>
-        </div> */}
 
         <SearchResult
           pages={this.state.searchedPages}
