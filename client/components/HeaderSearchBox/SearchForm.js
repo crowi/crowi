@@ -1,6 +1,8 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
+import Emitter from '../../emitter'
+
 // Header.SearchForm
 export default class SearchForm extends React.Component {
   constructor(props) {
@@ -11,6 +13,7 @@ export default class SearchForm extends React.Component {
       searchedKeyword: '',
     }
 
+    this.handleSubmit = this.handleSubmit.bind(this)
     this.handleChange = this.handleChange.bind(this)
     this.handleFocus = this.handleFocus.bind(this)
     this.handleBlur = this.handleBlur.bind(this)
@@ -27,9 +30,10 @@ export default class SearchForm extends React.Component {
   }
 
   search() {
-    if (this.state.searchedKeyword != this.state.keyword) {
-      this.props.onSearchFormChanged({ keyword: this.state.keyword })
-      this.setState({ searchedKeyword: this.state.keyword })
+    const { keyword, searchedKeyword } = this.state
+    if (keyword !== searchedKeyword) {
+      this.props.onSearchFormChanged({ keyword })
+      this.setState({ searchedKeyword: keyword })
     }
   }
 
@@ -67,11 +71,24 @@ export default class SearchForm extends React.Component {
     this.setState({ keyword })
   }
 
+  handleSubmit(e) {
+    const { keyword } = this.state
+    const { isSearchPage } = this.props
+    if (isSearchPage) {
+      e.preventDefault()
+      Emitter.emit('search', { keyword })
+    }
+  }
+
   render() {
     const formClear = this.getFormClearComponent()
 
     return (
-      <form action="/_search" className="search-form form-group input-group search-top-input-group">
+      <form
+        action="/_search"
+        className="search-form form-group input-group search-top-input-group"
+        onSubmit={this.handleSubmit}
+      >
         <input
           autoComplete="off"
           type="text"
@@ -97,6 +114,7 @@ export default class SearchForm extends React.Component {
 SearchForm.propTypes = {
   onSearchFormChanged: PropTypes.func.isRequired,
   isShown: PropTypes.func.isRequired,
+  isSearchPage: PropTypes.bool.isRequired,
   pollInterval: PropTypes.number,
 }
 SearchForm.defaultProps = {

@@ -11,6 +11,7 @@ export default class HeaderSearchBox extends React.Component {
     super(props)
 
     this.state = {
+      isSearchPage: location.pathname.startsWith('/_search'),
       searchingKeyword: '',
       searchedPages: {},
       searchError: null,
@@ -64,16 +65,19 @@ export default class HeaderSearchBox extends React.Component {
   }
 
   render() {
+    const { isSearchPage } = this.state
     return (
       <div className="search-box">
-        <SearchForm onSearchFormChanged={this.search} isShown={this.isShown} />
-        <SearchSuggest
-          searchingKeyword={this.state.searchingKeyword}
-          searchedPages={this.state.searchedPages}
-          searchError={this.state.searchError}
-          searching={this.state.searching}
-          focused={this.state.focused}
-        />
+        <SearchForm onSearchFormChanged={this.search} isShown={this.isShown} isSearchPage={isSearchPage} />
+        {!isSearchPage && (
+          <SearchSuggest
+            searchingKeyword={this.state.searchingKeyword}
+            searchedPages={this.state.searchedPages}
+            searchError={this.state.searchError}
+            searching={this.state.searching}
+            focused={this.state.focused}
+          />
+        )}
       </div>
     )
   }
