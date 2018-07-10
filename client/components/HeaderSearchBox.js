@@ -6,13 +6,13 @@ import PropTypes from 'prop-types'
 import SearchForm from './HeaderSearchBox/SearchForm'
 import SearchSuggest from './HeaderSearchBox/SearchSuggest'
 
-export default class SearchBox extends React.Component {
+export default class HeaderSearchBox extends React.Component {
   constructor(props) {
     super(props)
 
     this.state = {
       searchingKeyword: '',
-      searchedPages: [],
+      searchedPages: {},
       searchError: null,
       searching: false,
       focused: false,
@@ -79,10 +79,10 @@ export default class SearchBox extends React.Component {
   }
 }
 
-SearchBox.propTypes = {
+HeaderSearchBox.propTypes = {
   crowi: PropTypes.object.isRequired,
   // pollInterval: PropTypes.number,
 }
-SearchBox.defaultProps = {
+HeaderSearchBox.defaultProps = {
   // pollInterval: 1000,
 }

@@ -3,7 +3,9 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import SearchForm from './SearchPage/SearchForm'
+import queryString from 'query-string'
+// import SearchForm from './SearchPage/SearchForm'
+import SearchToolbar from 'components/SearchPage/SearchToolbar'
 import SearchResult from './SearchPage/SearchResult'
 
 export default class SearchPage extends React.Component {
@@ -13,52 +15,52 @@ export default class SearchPage extends React.Component {
     this.state = {
       location: location,
       searchingKeyword: this.props.query.q || '',
-      searchedKeyword: '',
+      searchingType: this.props.query.type || '',
       searchedPages: [],
       searchResultMeta: {},
       searchError: null,
     }
 
     this.search = this.search.bind(this)
+    this.buildQuery = this.buildQuery.bind(this)
     this.changeURL = this.changeURL.bind(this)
+    this.changeType = this.changeType.bind(this)
   }
 
   componentDidMount() {
-    const keyword = this.state.searchingKeyword
-    if (keyword !== '') {
-      this.search({ keyword })
+    if (this.state.searchingKeyword !== '') {
+      this.search(this.buildQuery())
     }
   }
 
-  static getQueryByLocation(location) {
-    let search = location.search || ''
-    let query = {}
-
-    search
-      .replace(/^\?/, '')
-      .split('&')
-      .forEach(function(element) {
-        let queryParts = element.split('=')
-        query[queryParts[0]] = decodeURIComponent(queryParts[1]).replace(/\+/g, ' ')
-      })
-
+  buildQuery(override) {
+    const { searchingKeyword: q = '', searchingType: type = '' } = this.state
+    const removeEmpty = query => Object.keys(query).forEach(k => !query[k] && delete query[k])
+    const query = { q, type, ...override }
+    removeEmpty(query)
     return query
   }
 
-  changeURL(keyword, refreshHash) {
+  changeURL({ q, type }, refreshHash) {
     let hash = location.hash || ''
     // TODO 整理する
-    if (refreshHash || this.state.searchedKeyword !== '') {
+    if (refreshHash || q !== '') {
       hash = ''
     }
+    const query = queryString.stringify({ q, type })
     if (window.history && window.history.pushState) {
-      window.history.pushState('', `Search - ${keyword}`, `/_search?q=${keyword}${hash}`)
+      window.history.pushState('', `Search - ${q}`, `/_search?${query}${hash}`)
     }
   }
 
-  search(data) {
-    const keyword = data.keyword
-    if (keyword === '') {
+  changeType(type) {
+    const query = this.buildQuery({ type })
+    this.search(query)
+  }
+
+  search(query) {
+    const { q = '', type = '' } = query
+    if (q === '') {
       this.setState({
         searchingKeyword: '',
         searchedPages: [],
@@ -69,17 +71,13 @@ export default class SearchPage extends React.Component {
       return true
     }
 
-    this.setState({
-      searchingKeyword: keyword,
-    })
-
     this.props.crowi
-      .apiGet('/search', { q: keyword })
+      .apiGet('/search', query)
       .then(res => {
-        this.changeURL(keyword)
-
+        this.changeURL(query)
         this.setState({
-          searchedKeyword: keyword,
+          searchingKeyword: q,
+          searchingType: type,
           searchedPages: res.data,
           searchResultMeta: res.meta,
         })
@@ -94,12 +92,18 @@ export default class SearchPage extends React.Component {
 
   render() {
     return (
-      <div>
-        <div className="header-wrap">
+      <div className="content-main">
+        <SearchToolbar
+          keyword={this.state.searchingKeyword}
+          type={this.state.searchingType}
+          total={this.state.searchResultMeta.total}
+          changeType={this.changeType}
+        />
+        {/* <div className="header-wrap">
           <header>
             <SearchForm onSearchFormChanged={this.search} keyword={this.state.searchingKeyword} />
           </header>
-        </div>
+        </div> */}
 
         <SearchResult
           pages={this.state.searchedPages}
@@ -117,6 +121,6 @@ SearchPage.propTypes = {
 }
 SearchPage.defaultProps = {
   // pollInterval: 1000,
-  query: SearchPage.getQueryByLocation(location || {}),
+  query: queryString.parse(location.search),
   searchError: null,
 }
