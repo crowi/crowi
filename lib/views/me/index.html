@@ -14,7 +14,7 @@
 <div class="content-main">
 
   <ul class="nav nav-tabs">
-    <li class="active"><a href="/me"><i class="fa fa-gears"></i> {{ t('User Information') }}</a></li>
+    <li class="active"><a href="/me"><i class="fa fa-cogs"></i> {{ t('User Information') }}</a></li>
     <li><a href="/me/password"><i class="fa fa-key"></i> {{ t('Password Settings') }}</a></li>
     <li><a href="/me/apiToken"><i class="fa fa-rocket"></i> {{ t('API Settings') }}</a></li>
   </ul>
@@ -73,17 +73,14 @@
           </p>
           {% endif %}
         </div>
-        <div class="form-group {% if not user.lang %}has-error{% endif %}">
-          <label for="userForm[lang]" class="col-sm-2 control-label">{{ t('Language') }}</label>
-          <div class="col-sm-4 radio">
-            <label><input type="radio" name="userForm[lang]" value="{{ consts.language.LANG_EN_US }}" {% if user.lang == consts.language.LANG_EN_US %}checked="checked"{% endif %}>{{ t('English') }}</label>
-            <label><input type="radio" name="userForm[lang]" value="{{ consts.language.LANG_JA }}" {% if user.lang == consts.language.LANG_JA %}checked="checked"{% endif %}>{{ t('Japanese') }}</label>
-          </div>
-          <div class="col-sm-offset-2 col-sm-10">
-          </div>
+      </div>
+      <div class="form-group {% if not user.lang %}has-error{% endif %}">
+        <label for="userForm[lang]" class="col-sm-2 control-label">{{ t('Language') }}</label>
+        <div class="col-sm-4">
+          <label class="radio-inline"><input type="radio" name="userForm[lang]" value="{{ consts.language.LANG_EN_US }}" {% if user.lang == consts.language.LANG_EN_US %}checked="checked"{% endif %}>{{ t('English') }}</label>
+          <label class="radio-inline"><input type="radio" name="userForm[lang]" value="{{ consts.language.LANG_JA }}" {% if user.lang == consts.language.LANG_JA %}checked="checked"{% endif %}>{{ t('Japanese') }}</label>
         </div>
       </div>
-
       <div class="form-group">
         <div class="col-sm-offset-2 col-sm-10">
           <button type="submit" class="btn btn-primary">{{ t('Update') }}</button>
@@ -134,51 +131,14 @@
         </div>
       </fieldset>
     </div>
-    <script>
-    $(function()
-    {
-      $("#pictureUploadForm input[name=userPicture]").on('change', function(){
-        var $form = $('#pictureUploadForm');
-        var fd = new FormData($form[0]);
-        if ($(this).val() == '') {
-          return false;
-        }
-
-        $('#pictureUploadFormProgress').html('<img src="/images/loading_s.gif"> アップロード中...');
-        $.ajax($form.attr("action"), {
-          type: 'post',
-          processData: false,
-          contentType: false,
-          data: fd,
-          dataType: 'json',
-          success: function(data){
-            if (data.status) {
-              $('#settingUserPicture').attr('src', data.url + '?time=' + (new Date()));
-              $('#pictureUploadFormMessage')
-                .addClass('alert alert-success')
-                .html('変更しました');
-            } else {
-              $('#pictureUploadFormMessage')
-                .addClass('alert alert-danger')
-                .html('変更中にエラーが発生しました。');
-            }
-            $('#pictureUploadFormProgress').html('');
-          }
-        });
-        return false;
-      });
-    });
-    </script>
 
   <div class="row">
     {% if googleLoginEnabled() %}
-
     <div class="col-sm-6"> {# Google Connect #}
-
       <div class="form-box">
         <form action="/me/auth/google" method="post" class="form-horizontal" role="form">
           <fieldset>
-            <legend><i class="fa fa-google-plus-square"></i> {{ t('Google Setting') }}</legend>
+            <legend><i class="fab fa-google-plus-square"></i> {{ t('Google Setting') }}</legend>
 
             {% set wmessage = req.flash('warningMessage.auth.google') %}
             {% if wmessage.length %}
@@ -206,7 +166,7 @@
 
             <div class="col-sm-12">
               <div class="text-center">
-                <input type="submit" name="connectGoogle" class="btn btn-google" value="Googleコネクト">
+                <input type="submit" name="connectGoogle" class="btn btn-google" value="{{ t('Google Connect') }}">
               </div>
               <p class="help-block">
                 {{ t('page_me.form_help.google_connect1') }}<br>
@@ -230,7 +190,66 @@
       </form>
     </div> {# /Google Connect #}
     {% endif %}
+  </div>
 
+
+  <div class="row">
+    {% if githubLoginEnabled() %}
+    <div class="col-sm-6"> {# GitHub Connect #}
+      <div class="form-box">
+        <form action="/me/auth/github" method="post" class="form-horizontal" role="form">
+          <fieldset>
+            <legend><i class="fab fa-github-square"></i> {{ t('GitHub Setting') }}</legend>
+
+            {% set wmessage = req.flash('warningMessage.auth.github') %}
+            {% if wmessage.length %}
+            <div class="alert alert-danger">
+              {{ wmessage }}
+            </div>
+            {% endif %}
+
+            <div class="form-group">
+            {% if user.githubId %}
+
+            <div class="col-sm-12">
+              <p>
+                {{ t('Connected') }}
+
+                <input type="submit" name="disconnectGitHub" class="btn btn-default" value="{{ t('Disconnect') }}">
+              </p>
+              <p class="help-block">
+                {{ t('page_me.form_help.github_disconnect1') }}<br>
+                {{ t('page_me.form_help.github_disconnect2') }}
+              </p>
+            </div>
+
+            {% else %}
+
+            <div class="col-sm-12">
+              <div class="text-center">
+                <input type="submit" name="connectGitHub" class="btn btn-github" value="{{ t('GitHub Connect') }}">
+              </div>
+              <p class="help-block">
+                {{ t('page_me.form_help.github_connect1') }}<br>
+              </p>
+              {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
+              <p class="help-block">
+                {{ t('page_register.form_help.email') }}
+              </p>
+              <ul>
+                {% for em in config.crowi['security:registrationWhiteList'] %}
+                <li><code>{{ em }}</code></li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+            </div>
+
+            {% endif %}
+          </div>
+        </fieldset>
+      </form>
+    </div> {# /GitHub Connect #}
+    {% endif %}
   </div>
 
   </div> {# end of .tab-contents #}

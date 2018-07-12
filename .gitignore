@@ -4,3 +4,5 @@ bower_components/
 public/js/*
 public/css/*
 public/uploads/*
+.env
+data

@@ -1,7 +1,21 @@
 {
   "presets": [
-    "env",
-    "es2015",
+    ["env", {
+      "targets": {
+        "browsers": ["last 2 versions"]
+      }
+    }],
+    "stage-2",
+    "flow",
     "react"
+  ],
+  "plugins": [
+    ["module-resolver", {
+      "root": ["."],
+      "alias": {
+        "locales": "./locales",
+        "components": "./client/components"
+      }
+    }]
   ]
 }

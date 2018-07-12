@@ -1,0 +1,66 @@
+version: '3'
+services:
+  crowi:
+    build:
+      context: .
+      args:
+        NODE_ENV: development
+    tty: true
+    environment:
+      DEBUG: "crowi:*"
+      MONGO_URI: mongodb://mongodb:27017/crowi
+      REDIS_URL: redis://redis:6379/crowi
+      ELASTICSEARCH_URI: elasticsearch:9200/
+      PLANTUML_URI: //localhost:8080
+      FILE_UPLOAD: local
+    volumes:
+      - ./:/crowi
+      - /crowi/node_modules
+    ports:
+      - 3000:3000
+    links:
+      - mongodb
+      - elasticsearch
+      - redis
+      - plantuml
+    command: bash -c "npm install && npm run dev"
+
+  mongodb:
+    image: mongo:3.6.3
+    volumes:
+      - ./data/mongodb:/data/db
+    restart: always
+    ports:
+      - 27017:27017
+
+  elasticsearch:
+    build:
+      context: ./elasticsearch
+    environment:
+      bootstrap.memory_lock: "true"
+      discovery.type: single-node
+      xpack.graph.enabled: "false"
+      xpack.ml.enabled: "false"
+      xpack.monitoring.enabled: "false"
+      xpack.security.enabled: "false"
+      xpack.watcher.enabled: "false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+
+  redis:
+    image: redis:4.0.8
+    restart: always
+    ports:
+      - 6379:6379
+
+  plantuml:
+    image: plantuml/plantuml-server:latest
+    restart: always
+    ports:
+      - 8080:8080

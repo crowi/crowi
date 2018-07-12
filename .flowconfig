@@ -1,0 +1,12 @@
+[ignore]
+
+[include]
+./client/**/*.js
+
+[libs]
+
+[lints]
+
+[options]
+
+[strict]
