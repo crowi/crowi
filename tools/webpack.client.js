@@ -53,6 +53,7 @@ const config = {
     ],
   },
   plugins: [
+    new webpack.EnvironmentPlugin(['NODE_ENV']),
     new webpack.optimize.CommonsChunkPlugin({
       name: 'bundled',
       minChunks: Infinity,
@@ -66,11 +67,6 @@ const config = {
 
 if (isProduction) {
   config.plugins.push(
-    new webpack.DefinePlugin({
-      'process.env': {
-        NODE_ENV: JSON.stringify('production'),
-      },
-    }),
     new webpack.optimize.UglifyJsPlugin({
       compress: {
         warnings: false,
