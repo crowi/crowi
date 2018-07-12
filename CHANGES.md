@@ -1,6 +1,33 @@
 CHANGES
 ========
 
+## 1.6.4
+
+- Fix: Can't unportalize in case (#286)
+- Fix: Handle error on search page (#276)
+- Fix: Clear session when failing google login (Thank you @chuganzy, #273)
+- Fix: Error on bulk operation for adding large amout of pages to search (#271)
+- Fix: Specify bonsai version for heroku.
+- Dev: Added docker-compose for development environment.
+
+## 1.6.3
+
+- Fix: Invalid MathJax setting
+- Fix: Check e-mail duplication (#257)
+- Updates: load ENV from `.env`
+- Improve: Use client date (Thanks @suzuki)
+- Improve: Slack module update and add link to post text
+- And some fixes. Thank you @okonomi @tkitsunai.
+
+## 1.6.2
+
+- Feature: Support PlantUML
+- Feature: Support MathJax
+- Fix: API authentication conflicts header of Basic Auth (#226 Thanks @Charo-IT)
+- Fix: Cannot bookmark Portal page
+- Fix: Highlight searched keyword on search result page
+- And some refactorings, bug fixes, internal fixes. (Thaon, @hideo54, @Tamason)
+
 ## 1.6.1
 
 - Feature: Non-image file uploads and its settings,

@@ -4,7 +4,10 @@
 // import bootstrap
 @import 'bootstrap';
 
-@import 'font-awesome';
+@import "fontawesome";
+@import "fa-brands";
+@import "fa-regular";
+@import "fa-solid";
 
 // crowi component
 @import 'layout';
@@ -191,6 +194,7 @@ footer {
 // }}}
 
 .dropdown-menu {
+   z-index: 10060;
   .dropdown-button {
     padding: 3px 20px;
   }
@@ -302,6 +306,10 @@ $btn-google-color: rgb(204,89,71);
 .btn-google {
   @include button-variant(lighten($btn-google-color, 50%), $btn-google-color, darken($btn-google-color, 20%));
 }
+$btn-github-color: rgb(68,68,68);
+.btn-github {
+  @include button-variant(lighten($btn-github-color, 50%), $btn-github-color, darken($btn-github-color, 20%));
+}
 
 
 input.searching {
@@ -344,8 +352,6 @@ input.searching {
 
 // notification
 .fk-notif {
-  display: none;
-
   bottom: 0;
   left: 0;
   width: 100%;
@@ -441,3 +447,9 @@ input.searching {
     border: 0;
   }
 }
+
+
+
+// import
+@import '../../node_modules/highlight.js/styles/tomorrow-night.css';
+@import '../../node_modules/diff2html/dist/diff2html.css';

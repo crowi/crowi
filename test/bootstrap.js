@@ -1,43 +1,44 @@
-'use strict';
+'use strict'
 
 var express = require('express')
-  , ROOT_DIR = __dirname + '/..'
-  , MODEL_DIR = __dirname + '/../lib/models'
-  , testDBUtil
-  ;
+var path = require('path')
+var ROOT_DIR = path.join(__dirname, './..')
+var MODEL_DIR = path.join(__dirname, './../lib/models')
+var testDBUtil
 
 testDBUtil = {
-  generateFixture: function (conn, model, fixture) {
+  generateFixture: function(conn, model, fixture) {
     if (conn.readyState == 0) {
-      return Promise.reject();
+      return Promise.reject(new Error())
     }
-    var m = conn.model(model);
+    var Model = conn.model(model)
 
     return new Promise(function(resolve, reject) {
-      var createdModels = [];
-      fixture.reduce(function(promise, entity) {
-        return promise.then(function() {
-          var newDoc = new m;
+      var createdModels = []
+      fixture
+        .reduce(function(promise, entity) {
+          return promise.then(function() {
+            var newDoc = new Model()
 
-          Object.keys(entity).forEach(function(k) {
-            newDoc[k] = entity[k];
-          });
-          return new Promise(function(r, rj) {
-            newDoc.save(function(err, data) {
+            Object.keys(entity).forEach(function(k) {
+              newDoc[k] = entity[k]
+            })
+            return new Promise(function(resolve, reject) {
+              newDoc.save(function(err, data) {
+                createdModels.push(data)
+                return resolve()
+              })
+            })
+          })
+        }, Promise.resolve())
+        .then(function() {
+          resolve(createdModels)
+        })
+    })
+  },
+}
 
-              createdModels.push(data);
-              return r();
-            });
-          });
-        });
-      }, Promise.resolve()).then(function() {
-        resolve(createdModels);
-      });
-    });
-  }
-};
-
-global.express = express;
-global.ROOT_DIR = ROOT_DIR;
-global.MODEL_DIR = MODEL_DIR;
-global.testDBUtil = testDBUtil;
+global.express = express
+global.ROOT_DIR = ROOT_DIR
+global.MODEL_DIR = MODEL_DIR
+global.testDBUtil = testDBUtil
