@@ -9,6 +9,7 @@ const extractSass = new ExtractTextPlugin({
 const config = {
   entry: {
     crowi: './resource/css/crowi.scss',
+    'crowi-reveal': './resource/css/crowi-reveal.scss',
   },
   output: {
     path: path.join(__dirname, '/../public/css'),
