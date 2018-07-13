@@ -99,9 +99,8 @@ export default class PageAttachment extends React.Component {
           onAttachmentDeleteClicked={this.onAttachmentDeleteClicked}
         />
         <DeleteAttachmentModal
-          show={showModal}
-          animation={false}
-          onHide={deleteModalClose}
+          isOpen={showModal}
+          toggle={deleteModalClose}
           attachmentToDelete={attachmentToDelete}
           inUse={deleteInUse}
           deleting={this.state.deleting}

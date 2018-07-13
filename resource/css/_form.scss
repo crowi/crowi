@@ -105,6 +105,18 @@
   }
 } // }}}
 
+.crowi.main-container .main .content-main.content-form {
+  h1, h2, h3, h4, h5, h6,
+  fieldset > legend {
+    &:not(.modal-title) {
+      padding-left: 0.5rem;
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid $border-color;
+    }
+  }
+}
+
 .crowi.main-container .main .page-list.content-main { // {{{ Edit Form of Page List
 
   .close-button {
