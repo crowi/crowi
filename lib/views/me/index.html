@@ -1,4 +1,4 @@
-{% extends '../layout/2column.html' %}
+{% extends '../layout/single.html' %}
 
 {% block html_title %}{{ t('User Settings') }} · {{ path }}{% endblock %}
 
@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main">
+<div class="content-main content-form">
 
   <ul class="nav nav-tabs">
     <li class="nav-item"><a class="nav-link active" href="/me"><i class="fa fa-cogs"></i> {{ t('User Information') }}</a></li>
@@ -50,20 +50,20 @@
     <form action="/me" method="post" class="form-horizontal" role="form">
       <fieldset>
         <legend>{{ t('Basic Info') }}</legend>
-      <div class="form-group">
-        <label for="userForm[name]" class="col-sm-2 control-label">{{ t('Name') }}</label>
+      <div class="form-group row">
+        <label for="name" class="offset-1 col-sm-2 control-label">{{ t('Name') }}</label>
         <div class="col-sm-4">
-          <input class="form-control" type="text" name="userForm[name]" value="{{ user.name }}" required>
+          <input id="name" class="form-control" type="text" name="userForm[name]" value="{{ user.name }}" required>
         </div>
       </div>
-      <div class="form-group {% if not user.email %}has-error{% endif %}">
-        <label for="userForm[email]" class="col-sm-2 control-label">{{ t('Email') }}</label>
+      <div class="form-group row {% if not user.email %}has-error{% endif %}">
+        <label for="email" class="offset-1 col-sm-2 control-label">{{ t('Email') }}</label>
         <div class="col-sm-4">
-          <input class="form-control" type="email" name="userForm[email]" value="{{ user.email }}" required>
+          <input id="email" class="form-control" type="email" name="userForm[email]" value="{{ user.email }}" required>
         </div>
-        <div class="col-sm-offset-2 col-sm-10">
+        <div class="offset-2 col-sm-10">
           {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
-          <p class="help-block">
+          <p class="form-text text-muted">
             {{ t('page_register.form_help.email') }}
           <ul>
             {% for em in config.crowi['security:registrationWhiteList'] %}
@@ -74,15 +74,21 @@
           {% endif %}
         </div>
       </div>
-      <div class="form-group {% if not user.lang %}has-error{% endif %}">
-        <label for="userForm[lang]" class="col-sm-2 control-label">{{ t('Language') }}</label>
+      <div class="form-group row {% if not user.lang %}has-error{% endif %}">
+        <label class="offset-1 col-sm-2 control-label">{{ t('Language') }}</label>
         <div class="col-sm-4">
-          <label class="radio-inline"><input type="radio" name="userForm[lang]" value="{{ consts.language.LANG_EN_US }}" {% if user.lang == consts.language.LANG_EN_US %}checked="checked"{% endif %}>{{ t('English') }}</label>
-          <label class="radio-inline"><input type="radio" name="userForm[lang]" value="{{ consts.language.LANG_JA }}" {% if user.lang == consts.language.LANG_JA %}checked="checked"{% endif %}>{{ t('Japanese') }}</label>
+          <div class="custom-control custom-radio custom-control-inline">
+            <input type="radio" id="lang-en" name="userForm[lang]" class="custom-control-input" value="{{ consts.language.LANG_EN_US }}" {% if user.lang == consts.language.LANG_EN_US %}checked="checked"{% endif %}>
+            <label class="custom-control-label" for="lang-en">{{ t('English') }}</label>
+          </div>
+          <div class="custom-control custom-radio custom-control-inline">
+            <input type="radio" id="lang-ja" name="userForm[lang]" class="custom-control-input" value="{{ consts.language.LANG_JA }}" {% if user.lang == consts.language.LANG_JA %}checked="checked"{% endif %}>
+            <label class="custom-control-label" for="lang-ja">{{ t('Japanese') }}</label>
+          </div>
         </div>
       </div>
-      <div class="form-group">
-        <div class="col-sm-offset-2 col-sm-10">
+      <div class="form-group row">
+        <div class="offset-3 col-sm-10">
           <button type="submit" class="btn btn-primary">{{ t('Update') }}</button>
         </div>
       </div>
@@ -93,12 +99,12 @@
   <div class="form-box">
     <fieldset>
       <legend>{{ t('Set Profile Image') }}</legend>
-        <div class="form-group">
-          <div id="pictureUploadFormMessage"></div>
-          <label for="" class="col-sm-3 control-label">
+        <div id="pictureUploadFormMessage"></div>
+        <div class="form-group row">
+          <label for="" class="offset-1 col-sm-2 control-label">
             {{ t('Current Image') }}
           </label>
-          <div class="col-sm-9">
+          <div class="col-sm-8">
             <p>
             <img src="{{ user|picture }}" width="64" id="settingUserPicture"><br>
             </p>
@@ -112,11 +118,11 @@
           </div>
         </div> {# /.form-group# #}
 
-        <div class="form-group">
-          <label for="" class="col-sm-3 control-label">
+        <div class="form-group row">
+          <label class="offset-1 col-sm-2 control-label">
             {{ t('Upload new image') }}
           </label>
-          <div class="col-sm-9">
+          <div class="col-sm-7">
             {% if isUploadable() %}
             <form action="/_api/me/picture/upload" id="pictureUploadForm" method="post" class="form-horizontal" role="form" enctype="multipart/form-data">
               <input name="userPicture" type="file" accept="image/*">
@@ -147,53 +153,44 @@
             </div>
             {% endif %}
 
-            <div class="form-group">
-            {% if user.googleId %}
-
-            <div class="col-sm-12">
-              <p>
-                {{ t('Connected') }}
-
-                <input type="submit" name="disconnectGoogle" class="btn btn-secondary" value="{{ t('Disconnect') }}">
-              </p>
-              <p class="help-block">
-                {{ t('page_me.form_help.google_disconnect1') }}<br>
-                {{ t('page_me.form_help.google_disconnect2') }}
-              </p>
-            </div>
-
-            {% else %}
-
-            <div class="col-sm-12">
-              <div class="text-center">
-                <input type="submit" name="connectGoogle" class="btn btn-google" value="{{ t('Google Connect') }}">
-              </div>
-              <p class="help-block">
-                {{ t('page_me.form_help.google_connect1') }}<br>
-              </p>
-              {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
-              <p class="help-block">
-                {{ t('page_register.form_help.email') }}<br>
-                {{ t('page_me.form_help.google_connect2') }}
-              </p>
-              <ul>
-                {% for em in config.crowi['security:registrationWhiteList'] %}
-                <li><code>{{ em }}</code></li>
-                {% endfor %}
-              </ul>
+            <div class="form-group row">
+              <div class="col-sm-12">
+              {% if user.googleId %}
+                  <p>
+                    {{ t('Connected') }}
+                    <input type="submit" name="disconnectGoogle" class="btn btn-secondary" value="{{ t('Disconnect') }}">
+                  </p>
+                  <p class="form-text text-muted">
+                    {{ t('page_me.form_help.google_disconnect1') }}<br>
+                    {{ t('page_me.form_help.google_disconnect2') }}
+                  </p>
+                </div>
+              {% else %}
+                <p class="text-center">
+                  <input type="submit" name="connectGoogle" class="btn btn-google" value="{{ t('Google Connect') }}">
+                </p>
+                <p class="form-text text-muted">
+                  {{ t('page_me.form_help.google_connect1') }}<br>
+                </p>
+                {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
+                <p class="form-text text-muted">
+                  {{ t('page_register.form_help.email') }}<br>
+                  {{ t('page_me.form_help.google_connect2') }}
+                </p>
+                <ul>
+                  {% for em in config.crowi['security:registrationWhiteList'] %}
+                  <li><code>{{ em }}</code></li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
               {% endif %}
+              </div>
             </div>
-
-            {% endif %}
-          </div>
-        </fieldset>
-      </form>
+          </fieldset>
+        </form>
+      </div>
     </div> {# /Google Connect #}
     {% endif %}
-  </div>
-
-
-  <div class="row">
     {% if githubLoginEnabled() %}
     <div class="col-sm-6"> {# GitHub Connect #}
       <div class="form-box">
@@ -208,46 +205,40 @@
             </div>
             {% endif %}
 
-            <div class="form-group">
-            {% if user.githubId %}
-
-            <div class="col-sm-12">
-              <p>
-                {{ t('Connected') }}
-
-                <input type="submit" name="disconnectGitHub" class="btn btn-secondary" value="{{ t('Disconnect') }}">
-              </p>
-              <p class="help-block">
-                {{ t('page_me.form_help.github_disconnect1') }}<br>
-                {{ t('page_me.form_help.github_disconnect2') }}
-              </p>
-            </div>
-
-            {% else %}
-
-            <div class="col-sm-12">
-              <div class="text-center">
-                <input type="submit" name="connectGitHub" class="btn btn-github" value="{{ t('GitHub Connect') }}">
-              </div>
-              <p class="help-block">
-                {{ t('page_me.form_help.github_connect1') }}<br>
-              </p>
-              {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
-              <p class="help-block">
-                {{ t('page_register.form_help.email') }}
-              </p>
-              <ul>
-                {% for em in config.crowi['security:registrationWhiteList'] %}
-                <li><code>{{ em }}</code></li>
-                {% endfor %}
-              </ul>
+            <div class="form-group row">
+              <div class="col-sm-12">
+              {% if user.githubId %}
+                <p>
+                  {{ t('Connected') }}
+                  <input type="submit" name="disconnectGitHub" class="btn btn-secondary" value="{{ t('Disconnect') }}">
+                </p>
+                <p class="form-text text-muted">
+                  {{ t('page_me.form_help.github_disconnect1') }}<br>
+                  {{ t('page_me.form_help.github_disconnect2') }}
+                </p>
+              {% else %}
+                <p class="text-center">
+                  <input type="submit" name="connectGitHub" class="btn btn-github" value="{{ t('GitHub Connect') }}">
+                </p>
+                <p class="form-text text-muted">
+                  {{ t('page_me.form_help.github_connect1') }}<br>
+                </p>
+                {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
+                <p class="form-text text-muted">
+                  {{ t('page_register.form_help.email') }}
+                </p>
+                <ul>
+                  {% for em in config.crowi['security:registrationWhiteList'] %}
+                  <li><code>{{ em }}</code></li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
               {% endif %}
+              </div>
             </div>
-
-            {% endif %}
-          </div>
-        </fieldset>
-      </form>
+          </fieldset>
+        </form>
+      </div>
     </div> {# /GitHub Connect #}
     {% endif %}
   </div>
@@ -263,7 +254,7 @@
         <label for="userNameForm[username]" class="col-sm-2 control-label">ユーザーID</label>
         <div class="col-sm-4">
           <input class="form-control" type="text" name="userNameForm[username]" value="{{ user.username }}" required>
-          <p class="help-block">すべてのマイページの</p>
+          <p class="form-text text-muted">すべてのマイページの</p>
         </div>
       </div>
 

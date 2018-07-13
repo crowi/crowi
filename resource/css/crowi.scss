@@ -20,6 +20,9 @@
 @import 'attachments';
 @import 'share';
 
+a:hover {
+  text-decoration: none;
+}
 
 ul {
   padding-left: 18px;
@@ -45,7 +48,7 @@ ul {
   margin-bottom: 0;
 }
 
-.help-block {
+.form-text {
   font-size: .9em;
 }
 
@@ -279,11 +282,11 @@ footer {
 }
 $btn-google-color: rgb(204,89,71);
 .btn-google {
-  @include button-variant(lighten($btn-google-color, 50%), $btn-google-color, darken($btn-google-color, 20%));
+  @include button-variant($btn-google-color, darken($btn-google-color, 20%));
 }
 $btn-github-color: rgb(68,68,68);
 .btn-github {
-  @include button-variant(lighten($btn-github-color, 50%), $btn-github-color, darken($btn-github-color, 20%));
+  @include button-variant($btn-github-color, darken($btn-github-color, 20%));
 }
 
 

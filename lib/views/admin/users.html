@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main">
+<div class="content-main content-form">
   {% set smessage = req.flash('successMessage') %}
   {% if smessage.length %}
   <div class="alert alert-success">
@@ -37,16 +37,28 @@
       </p>
       <form role="form" action="/admin/user/invite" method="post">
         <div id="inviteUserForm" class="collapse">
-          <div class="form-group">
-            <label for="inviteForm[emailList]">メールアドレス (複数行入力で複数人招待可能)</label>
-            <textarea class="form-control" name="inviteForm[emailList]" placeholder="例: user@crowi.wiki"></textarea>
+          <div class="form-group row">
+            <label for="emailList" class="col-3 col-form-label">メールアドレス</label>
+            <div class="col-8">
+              <textarea id="emailList" class="form-control" name="inviteForm[emailList]" placeholder="例: user@crowi.wiki"></textarea>
+              <p class="form-text text-muted">複数行入力で複数人招待可能</p>
+            </div>
           </div>
-          <div class="checkbox">
-            <label>
-              <input type="checkbox" name="inviteForm[sendEmail]" checked> 招待をメールで送信
-            </label>
+
+          <div class="form-group row">
+            <div class="offset-3 col-8">
+              <div class="custom-control custom-checkbox">
+                <input id="sendEmail" type="checkbox" class="custom-control-input" name="inviteForm[sendEmail]" checked>
+                <label class="custom-control-label" for="sendEmail">招待をメールで送信</label>
+              </div>
+            </div>
           </div>
-          <button type="submit" class="btn btn-primary">招待する</button>
+
+          <div class="form-group row">
+            <div class="offset-3 col-8">
+                <button type="submit" class="btn btn-primary">招待する</button>
+            </div>
+          </div>
         </div>
         <input type="hidden" name="_csrf" value="{{ csrf() }}">
       </form>

@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main">
+<div class="content-main content-form">
   <div class="row">
     <div class="col-md-3">
       {% include './widget/menu.html' with {current: 'search'} %}
@@ -39,9 +39,9 @@
       <form action="/admin/search/build" method="post" class="form-horizontal" role="form">
       <fieldset>
         <legend>Index Build</legend>
-        <div class="form-group">
-          <label for="" class="col-xs-3 control-label">Index Build</label>
-          <div class="col-xs-6">
+        <div class="form-group row">
+          <label for="" class="offset-1 col-3 control-label">Index Build</label>
+          <div class="col-8">
             <button type="submit" class="btn btn-primary">Build Now</button>
             <p class="help-block">
               Force rebuild index.<br>
