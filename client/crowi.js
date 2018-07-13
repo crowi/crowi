@@ -1,4 +1,3 @@
-/* jshint browser: true, jquery: true */
 /* Author: Sotaro KARASAWA <sotarok@crocos.co.jp>
 */
 
