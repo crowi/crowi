@@ -207,12 +207,11 @@
     {# timeline view #}
     <div class="tab-pane fade" id="view-timeline" data-shown=0>
       {% for page in pages %}
-      <div class="timeline-body" id="id-{{ page.id }}">
-        <h3 class="revision-path"><a href="{{ page.path }}">{{ page.path }}</a></h3>
-        <div class="revision-body wiki"></div>
+      <div class="timeline-body card" id="id-{{ page.id }}">
+        <h5 class="revision-path card-header"><a href="{{ page.path }}">{{ page.path }}</a></h5>
+        <div class="revision-body card-body wiki"></div>
         <script type="text/template">{{ page.revision.body }}</script>
       </div>
-      <hr>
       {% endfor %}
     </div>
   </div>
