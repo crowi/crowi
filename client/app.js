@@ -14,6 +14,7 @@ import PageAttachment from 'components/PageAttachment'
 import PageAlerts from 'components/PageAlerts'
 import SeenUserList from 'components/SeenUserList'
 import BookmarkButton from 'components/BookmarkButton'
+import RenameTree from 'components/RenameTree/RenameTree'
 
 if (!window) {
   window = {}
