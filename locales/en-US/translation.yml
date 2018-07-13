@@ -128,6 +128,13 @@ Rename page: Rename page
 New page name: New page name
 Current page name: Current page name
 Redirect: Redirect
+
+page_types:
+  all: All
+  portal: Portal
+  public: Public
+  user: User
+
 modal_rename:
   help:
     redirect: 'Redirect to new page if someone accesses <code>%s</code>'
@@ -142,3 +149,9 @@ modal_help:
     body1: Use sections and subsections to make it easier for your friends to read your pages.
   markdown:
     title: Markdown Rules
+
+search:
+  suggest:
+    more: more
+  toolbar:
+    results: '{{value}} results'
