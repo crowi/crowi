@@ -53,12 +53,16 @@ class ShareList extends React.Component {
     return <span className={className}>{text}</span>
   }
 
-  renderRecord({ index, path, username, date, isActive }) {
+  renderRecord({ index, path, username, name, date, isActive }) {
     return (
       <tr key={index}>
         <td>{index}</td>
-        <td>{path}</td>
-        <td>{username}</td>
+        <td>
+          <a href={path}>{path}</a>
+        </td>
+        <td>
+          <a href={`/user/${username}`}>{name}</a>
+        </td>
         <td>{date}</td>
         <td>{this.renderStatus(isActive)}</td>
       </tr>
@@ -70,11 +74,12 @@ class ShareList extends React.Component {
     const start = (current - 1) * limit + 1
     return (
       <tbody>
-        {this.state.shares.map(({ page: { path }, creator: { username }, status, createdAt }, i) =>
+        {this.state.shares.map(({ page: { path }, creator: { username, name }, status, createdAt }, i) =>
           this.renderRecord({
             index: start + i,
             path,
             username,
+            name,
             date: moment(createdAt).format('L'),
             isActive: status === 'active',
           }),

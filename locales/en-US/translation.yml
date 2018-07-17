@@ -175,3 +175,6 @@ modal_help:
     body1: Use sections and subsections to make it easier for your friends to read your pages.
   markdown:
     title: Markdown Rules
+modal_access_log:
+  error:
+    message: Failed to fetch access log data. Please try to reload the page.

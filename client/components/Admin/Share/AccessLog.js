@@ -47,30 +47,35 @@ class AccessLog extends React.Component {
     this.getPage()
   }
 
+  renderRecord({ index, path, info, remoteAddress, date }) {
+    return (
+      <tr key={index}>
+        <td>{index}</td>
+        <td>
+          <a href={path}>{path}</a>
+        </td>
+        <td>{info.name}</td>
+        <td>{info.os.toString()}</td>
+        <td>{remoteAddress}</td>
+        <td>{date}</td>
+      </tr>
+    )
+  }
+
   renderTableBody() {
     const { current, limit } = this.state.pagination
     const start = (current - 1) * limit + 1
     return (
       <tbody>
-        {this.state.accesses.map(({ share, tracking, createdAt }, i) => {
-          const index = start + i
-          const {
-            page: { path },
-          } = share
-          const { userAgent, remoteAddress } = tracking
-          const info = platform.parse(userAgent)
-          const date = moment(createdAt).format('L')
-          return (
-            <tr key={index}>
-              <td>{index}</td>
-              <td>{path}</td>
-              <td>{info.name}</td>
-              <td>{info.os.toString()}</td>
-              <td>{remoteAddress}</td>
-              <td>{date}</td>
-            </tr>
-          )
-        })}
+        {this.state.accesses.map(({ share: { page }, tracking: { userAgent, remoteAddress }, createdAt }, i) =>
+          this.renderRecord({
+            index: start + i,
+            path: page.path,
+            info: platform.parse(userAgent),
+            remoteAddress,
+            date: moment(createdAt).format('L'),
+          }),
+        )}
       </tbody>
     )
   }

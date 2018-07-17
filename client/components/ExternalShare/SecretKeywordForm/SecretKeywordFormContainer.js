@@ -45,23 +45,25 @@ class SecretKeywordFormContainer extends React.Component {
     this.setState({ error: { status: true, message: this.props.t('Incorrect secret keyword') } })
   }
 
-  checkSecretKeyword() {
+  async checkSecretKeyword() {
     const { secretKeyword } = this.state
     const shareId = $('#secret-keyword-form-container').data('share-id')
     const _csrf = $('#secret-keyword-form-container').data('csrftoken')
-    this.props.crowi
-      .apiPost('/shares/secretKeyword.check', { _csrf, share_id: shareId, secret_keyword: secretKeyword })
-      .then(({ hasAccessAuthority = false }) => {
-        if (hasAccessAuthority) {
-          this.setState({ error: { status: false } })
-          top.location.href = '/_share/' + shareId
-        } else {
-          this.handleError()
-        }
+    try {
+      const { hasAccessAuthority = false } = await this.props.crowi.apiPost('/shares/secretKeyword.check', {
+        _csrf,
+        share_id: shareId,
+        secret_keyword: secretKeyword,
       })
-      .catch(err => {
-        console.log(err)
-      })
+      if (hasAccessAuthority) {
+        this.setState({ error: { status: false } })
+        top.location.href = '/_share/' + shareId
+      } else {
+        this.handleError()
+      }
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   isEnterAndNotUsingIME(e) {
@@ -73,9 +75,9 @@ class SecretKeywordFormContainer extends React.Component {
     this.setState({ usingIME: false })
   }
 
-  handleKeyUp(e) {
+  async handleKeyUp(e) {
     if (this.isEnterAndNotUsingIME(e)) {
-      this.checkSecretKeyword()
+      await this.checkSecretKeyword()
     }
     this.setState({ usingIME: true })
   }
