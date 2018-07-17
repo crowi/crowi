@@ -55,12 +55,13 @@ const config = {
       },
     ],
   },
+  optimization: {
+    splitChunks: {
+      name: 'bundled',
+    },
+  },
   plugins: [
     new webpack.EnvironmentPlugin(['NODE_ENV']),
-    new webpack.optimize.CommonsChunkPlugin({
-      name: 'bundled',
-      minChunks: Infinity,
-    }),
     new webpack.ProvidePlugin({
       $: 'jquery',
       jQuery: 'jquery',
