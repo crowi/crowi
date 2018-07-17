@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 
 import i18n from './i18n'
+import moment from 'moment'
 
 import Crowi from './util/Crowi'
 import CrowiRenderer from './util/CrowiRenderer'
@@ -23,6 +24,8 @@ if (!window) {
 }
 
 i18n()
+
+moment.locale(navigator.userLanguage || navigator.language)
 
 const mainContent = document.querySelector('#content-main')
 let pageId = null
