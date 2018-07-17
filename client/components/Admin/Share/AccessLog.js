@@ -67,13 +67,13 @@ class AccessLog extends React.Component {
     const start = (current - 1) * limit + 1
     return (
       <tbody>
-        {this.state.accesses.map(({ share: { page }, tracking: { userAgent, remoteAddress }, createdAt }, i) =>
+        {this.state.accesses.map(({ share: { page }, tracking: { userAgent, remoteAddress }, lastAccessedAt }, i) =>
           this.renderRecord({
             index: start + i,
             path: page.path,
             info: platform.parse(userAgent),
             remoteAddress,
-            date: moment(createdAt).format('L'),
+            date: moment(lastAccessedAt).format('L'),
           }),
         )}
       </tbody>
@@ -100,7 +100,7 @@ class AccessLog extends React.Component {
               <th>{t('Browser')}</th>
               <th>OS</th>
               <th>{t('IP Address')}</th>
-              <th>{t('Accessed')}</th>
+              <th>{t('Last Accessed')}</th>
             </tr>
           </thead>
           {this.renderTableBody()}
