@@ -59,7 +59,7 @@ class AccessLogModal extends React.Component {
           <th>{t('Browser')}</th>
           <th>OS</th>
           <th>{t('IP Address')}</th>
-          <th>{t('Accessed')}</th>
+          <th>{t('Last Accessed')}</th>
         </tr>
       </thead>
     )
@@ -68,11 +68,11 @@ class AccessLogModal extends React.Component {
   static renderTableBody(accesses, i) {
     const {
       tracking: { userAgent, remoteAddress },
-      createdAt,
+      lastAccessedAt,
     } = accesses
     const index = i + 1
     const info = platform.parse(userAgent)
-    const date = moment(createdAt).format('llll')
+    const date = moment(lastAccessedAt).format('llll')
     return (
       <tr key={i}>
         <td>{index}</td>
