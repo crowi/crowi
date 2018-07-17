@@ -26,7 +26,7 @@ class SettingModal extends React.Component {
 
   componentDidUpdate() {
     const { share = {} } = this.props
-    const { id: shareId, secretKeyword = '' } = share
+    const { uuid: shareId, secretKeyword = '' } = share
 
     if (shareId !== this.state.shareId) {
       this.setState({

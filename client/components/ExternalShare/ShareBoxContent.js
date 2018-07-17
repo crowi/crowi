@@ -28,7 +28,7 @@ class ShareBoxContent extends React.Component {
   render() {
     const { t, share, isCreated, handleOpen } = this.props
     if (isCreated) {
-      const shareId = share.id
+      const shareId = share.uuid
       const url = `${location.origin}/_share/${shareId}`
       return (
         <div className="share-box-content">
