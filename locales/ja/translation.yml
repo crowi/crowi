@@ -133,7 +133,7 @@ Share ID: 共有ID
 Browser: ブラウザ
 IP Address: IP アドレス
 Accessed: アクセス日
-Author: 作成者
+Creator: 作成者
 Status: ステータス
 Shared Pages: 共有しているページ
 Access Log: アクセスログ
@@ -145,7 +145,7 @@ share_list:
     message: 共有ページ一覧の取得に失敗しました。 ブラウザをリロードしてみてください。
 Required secret keyword: ページの閲覧には秘密のキーワードが必要です
 Incorrect secret keyword: 秘密のパスワードが間違っています
-No one is accessing yet: まだ誰もアクセスしていません
+No one accessed yet: まだ誰もアクセスしていません
 Delete shared link to this page?: このページへの共有リンクを削除しますか？
 No one can see this page if the link is deleted: リンクが削除されると、そのリンクからこのページを見ることはできなくなります。
 share:

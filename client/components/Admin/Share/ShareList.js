@@ -95,7 +95,7 @@ class ShareList extends React.Component {
             <tr>
               <th>#</th>
               <th>{t('Page name')}</th>
-              <th>{t('Author')}</th>
+              <th>{t('Creator')}</th>
               <th>{t('Created')}</th>
               <th>{t('Status')}</th>
             </tr>
