@@ -28,30 +28,28 @@ class ShareBox extends React.Component {
     this.handleCloseAccessLogModal = this.handleCloseAccessLogModal.bind(this)
   }
 
-  componentDidMount() {
-    this.props.crowi
-      .apiGet('/shares.get', { page_id: this.props.pageId })
-      .then(({ share }) => {
-        this.setState({ isCreated: true, share })
-      })
-      .catch(err => {
-        console.error(err)
-      })
+  async componentDidMount() {
+    try {
+      const { share } = await this.props.crowi.apiGet('/shares.get', { page_id: this.props.pageId })
+      this.setState({ isCreated: true, share })
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error(err.message)
+      }
+    }
   }
 
   async updateLink(promise) {
     const { isCreated } = this.state
     this.setState({ isChanging: true })
-    return promise
-      .then(({ share }) => {
-        this.setState({ isCreated: !isCreated, share })
-      })
-      .catch(err => {
-        alert(err.message)
-      })
-      .finally(() => {
-        this.setState({ isChanging: false, showSettingModal: false })
-      })
+    try {
+      const { share } = await promise
+      this.setState({ isCreated: !isCreated, share })
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      this.setState({ isChanging: false, showSettingModal: false })
+    }
   }
 
   createLink() {
@@ -118,12 +116,14 @@ class ShareBox extends React.Component {
           share={share}
           crowi={crowi}
         />
-        <AccessLogModal
-          show={showAccessLogModal}
-          onHide={this.handleCloseAccessLogModal}
-          pageId={pageId}
-          crowi={crowi}
-        />
+        {showAccessLogModal && (
+          <AccessLogModal
+            show={showAccessLogModal}
+            onHide={this.handleCloseAccessLogModal}
+            pageId={pageId}
+            crowi={crowi}
+          />
+        )}
       </div>
     )
   }
