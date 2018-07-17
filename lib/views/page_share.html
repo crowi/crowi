@@ -29,7 +29,7 @@
 {% block content_main_before %}
 {% endblock %}
 
-{% if hasSecretPassword %}
+{% if hasSecretKeyword %}
 <div id="content-main" class="content-main"
   data-page-id="{% if page %}{{ page._id.toString() }}{% endif %}"
   data-page-revision-id="{% if revision %}{{ revision._id.toString() }}{% endif %}"
