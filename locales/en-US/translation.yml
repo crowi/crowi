@@ -133,7 +133,7 @@ Share ID: Share ID
 Browser: Browser
 IP Address: IP Address
 Accessed: Accessed
-Author: Author
+Creator: Creator
 Status: Status
 Shared Pages: Shared Pages
 Access Log: Access Log
@@ -145,7 +145,7 @@ share_list:
     message: Failed to fetch share page data. Please try to reload the page.
 Required secret keyword: Secret keyword is required to show this page.
 Incorrect secret keyword: Incorrect secret keyword
-No one is accessing yet: No one is accessing yet.
+No one accessed yet: No one accessed yet
 Delete shared link to this page?: Delete shared link to this page?
 No one can see this page if the link is deleted: Once the link is deleted, you will not be able to see this page from that link.
 share:

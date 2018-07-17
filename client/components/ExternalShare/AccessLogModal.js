@@ -35,7 +35,7 @@ class AccessLogModal extends React.Component {
         </h4>
         <dl className="share-info">
           <div>
-            <dt>{t('Author')}</dt>
+            <dt>{t('Creator')}</dt>
             <dd>
               <a href={`/user/${username}`}>{name}</a>
             </dd>
@@ -100,7 +100,7 @@ class AccessLogModal extends React.Component {
             <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
           </Table>
         ) : (
-          <Alert color="info">{t('No one is accessing yet')}</Alert>
+          <Alert color="info">{t('No one accessed yet')}</Alert>
         )}
       </div>
     )
