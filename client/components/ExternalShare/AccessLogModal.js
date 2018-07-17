@@ -18,6 +18,7 @@ class AccessLogModal extends React.Component {
         count: 0,
         limit: 20,
       },
+      error: false,
     }
 
     this.getPage = this.getPage.bind(this)
@@ -106,30 +107,24 @@ class AccessLogModal extends React.Component {
     )
   }
 
-  getPage(pageId, options = {}) {
+  async getPage(pageId, options = {}) {
     const limit = this.state.pagination.limit
-    options = { ...options, limit: 5, page_id: pageId }
-    this.props.crowi
-      .apiGet('/shares.list', options)
-      .then(({ share: { docs: shares, page: current, pages: count } }) => {
+    if (!this.state.error) {
+      try {
+        const { share } = await this.props.crowi.apiGet('/shares.list', { ...options, limit: 5, page_id: pageId })
+        const { docs: shares, page: current, pages: count } = share
         const pagination = { current, count, limit }
         this.setState({ pageId, shares, pagination })
-      })
-      .catch(err => {
+      } catch (err) {
         console.log(err)
-      })
+        this.setState({ error: true })
+      }
+    }
   }
 
   movePage(i) {
     if (i !== this.state.pagination.current) {
       this.getPage(this.state.pageId, { page: i })
-    }
-  }
-
-  componentDidMount() {
-    const { pageId = null } = this.props
-    if (pageId !== this.state.pageId) {
-      this.getPage(pageId)
     }
   }
 
@@ -171,6 +166,7 @@ class AccessLogModal extends React.Component {
     const { t, show, onHide } = this.props
     const {
       pagination: { current, count },
+      error,
     } = this.state
     return (
       <Modal className="access-log-modal" show={show} onHide={onHide} bsSize="large">
@@ -178,8 +174,16 @@ class AccessLogModal extends React.Component {
           <Modal.Title id="contained-modal-title-lg">{t('Access Log')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {this.state.shares.map(this.renderAccessLogTable)}
-          <Pagination current={current} count={count} onClick={this.movePage} />
+          {error ? (
+            <Alert bsStyle="danger">
+              <p>{t('modal_access_log.error.message')}</p>
+            </Alert>
+          ) : (
+            <div>
+              {this.state.shares.map(this.renderAccessLogTable)}
+              <Pagination current={current} count={count} onClick={this.movePage} />
+            </div>
+          )}
         </Modal.Body>
       </Modal>
     )
