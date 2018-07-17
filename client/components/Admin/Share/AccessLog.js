@@ -9,8 +9,6 @@ class AccessLog extends React.Component {
   constructor(props) {
     super(props)
 
-    moment.locale(navigator.userLanguage || navigator.language)
-
     this.state = {
       accesses: [],
       pagination: {

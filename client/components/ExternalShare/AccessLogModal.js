@@ -10,8 +10,6 @@ class AccessLogModal extends React.Component {
   constructor(props) {
     super(props)
 
-    moment.locale(navigator.userLanguage || navigator.language)
-
     this.state = {
       pageId: null,
       shares: [],
