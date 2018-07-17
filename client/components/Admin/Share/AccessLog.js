@@ -27,8 +27,8 @@ class AccessLog extends React.Component {
   async getPage(options = {}) {
     const limit = this.state.pagination.limit
     try {
-      const { access } = await this.props.crowi.apiGet('/accesses.list', { ...options, limit })
-      const { docs: accesses, page: current, pages: count } = access
+      const { shareAccess } = await this.props.crowi.apiGet('/shares/accesses.list', { ...options, limit })
+      const { docs: accesses, page: current, pages: count } = shareAccess
       const pagination = { current, count, limit }
       this.setState({ accesses, pagination })
     } catch (err) {
