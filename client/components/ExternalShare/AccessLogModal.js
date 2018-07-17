@@ -32,7 +32,9 @@ class AccessLogModal extends React.Component {
     const date = moment(createdAt).format('llll')
     return (
       <div>
-        <h4>共有ID: {id}</h4>
+        <h4>
+          {t('Share ID')}: {id}
+        </h4>
         <dl className="share-info">
           <div>
             <dt>{t('Author')}</dt>
