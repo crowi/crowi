@@ -2,7 +2,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
-import { Table } from 'react-bootstrap'
+import { Table, Alert } from 'react-bootstrap'
 import Pagination from 'components/Common/Pagination'
 
 class ShareList extends React.Component {
@@ -16,6 +16,7 @@ class ShareList extends React.Component {
         count: 0,
         limit: 20,
       },
+      error: false,
     }
 
     this.getPage = this.getPage.bind(this)
@@ -23,18 +24,17 @@ class ShareList extends React.Component {
     this.renderTableBody = this.renderTableBody.bind(this)
   }
 
-  getPage(options = {}) {
+  async getPage(options = {}) {
     const limit = this.state.pagination.limit
-    options = { ...options, limit }
-    this.props.crowi
-      .apiGet('/shares.list', options)
-      .then(({ share: { docs: shares, page: current, pages: count } }) => {
-        const pagination = { current, count, limit }
-        this.setState({ shares, pagination })
-      })
-      .catch(err => {
-        console.log(err)
-      })
+    try {
+      const { share } = await this.props.crowi.apiGet('/shares.list', { ...options, limit })
+      const { docs: shares, page: current, pages: count } = share
+      const pagination = { current, count, limit }
+      this.setState({ shares, pagination })
+    } catch (err) {
+      console.log(err)
+      this.setState({ error: true })
+    }
   }
 
   movePage(i) {
@@ -82,8 +82,13 @@ class ShareList extends React.Component {
     const { t } = this.props
     const {
       pagination: { current, count },
+      error,
     } = this.state
-    return (
+    return error ? (
+      <Alert bsStyle="danger">
+        <p>{t('share_list.error.message')}</p>
+      </Alert>
+    ) : (
       <div>
         <Table bordered hover condensed>
           <thead>

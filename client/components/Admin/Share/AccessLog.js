@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
-import { Table } from 'react-bootstrap'
+import { Table, Alert } from 'react-bootstrap'
 import Pagination from 'components/Common/Pagination'
 class AccessLog extends React.Component {
   constructor(props) {
@@ -16,6 +16,7 @@ class AccessLog extends React.Component {
         count: 0,
         limit: 20,
       },
+      error: false,
     }
 
     this.getPage = this.getPage.bind(this)
@@ -23,18 +24,17 @@ class AccessLog extends React.Component {
     this.renderTableBody = this.renderTableBody.bind(this)
   }
 
-  getPage(options = {}) {
+  async getPage(options = {}) {
     const limit = this.state.pagination.limit
-    options = { ...options, limit }
-    this.props.crowi
-      .apiGet('/accesses.list', options)
-      .then(({ access: { docs: accesses, page: current, pages: count } }) => {
-        const pagination = { current, count, limit }
-        this.setState({ accesses, pagination })
-      })
-      .catch(err => {
-        console.log(err)
-      })
+    try {
+      const { access } = await this.props.crowi.apiGet('/accesses.list', { ...options, limit })
+      const { docs: accesses, page: current, pages: count } = access
+      const pagination = { current, count, limit }
+      this.setState({ accesses, pagination })
+    } catch (err) {
+      console.log(err)
+      this.setState({ error: true })
+    }
   }
 
   movePage(i) {
@@ -79,8 +79,13 @@ class AccessLog extends React.Component {
     const { t } = this.props
     const {
       pagination: { current, count },
+      error,
     } = this.state
-    return (
+    return error ? (
+      <Alert bsStyle="danger">
+        <p>{t('access_log.error.message')}</p>
+      </Alert>
+    ) : (
       <div>
         <Table bordered hover condensed>
           <thead>

@@ -137,6 +137,12 @@ Author: Author
 Status: Status
 Shared Pages: Shared Pages
 Access Log: Access Log
+access_log:
+  error:
+    message: Failed to fetch access log data. Please try to reload the page.
+share_list:
+  error:
+    message: Failed to fetch share page data. Please try to reload the page.
 Required secret keyword: Secret keyword is required to show this page.
 Incorrect secret keyword: Incorrect secret keyword
 No one is accessing yet: No one is accessing yet.

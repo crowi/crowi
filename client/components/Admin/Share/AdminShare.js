@@ -15,7 +15,7 @@ class AdminShare extends React.Component {
   render() {
     const { t } = this.props
     return (
-      <Tabs defaultActiveKey={1} animation={false}>
+      <Tabs defaultActiveKey={1} animation={false} id="admin-share-tabs">
         <Tab eventKey={1} title={t('Shared Pages')}>
           <ShareList crowi={this.props.crowi} />
         </Tab>
