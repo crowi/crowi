@@ -137,6 +137,12 @@ Author: 作成者
 Status: ステータス
 Shared Pages: 共有しているページ
 Access Log: アクセスログ
+access_log:
+  error:
+    message: アクセスログの取得に失敗しました。 ブラウザをリロードしてみてください。
+share_list:
+  error:
+    message: 共有ページ一覧の取得に失敗しました。 ブラウザをリロードしてみてください。
 Required secret keyword: ページの閲覧には秘密のキーワードが必要です
 Incorrect secret keyword: 秘密のパスワードが間違っています
 No one is accessing yet: まだ誰もアクセスしていません
