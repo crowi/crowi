@@ -14,6 +14,11 @@ class SettingModal extends React.Component {
       secretKeyword: null,
       restricted: false,
       showConfirmModal: false,
+      result: {
+        show: false,
+        error: false,
+        message: '',
+      },
     }
 
     this.setRestricted = this.setRestricted.bind(this)
@@ -22,6 +27,7 @@ class SettingModal extends React.Component {
     this.handleOpen = this.handleOpen.bind(this)
     this.handleClose = this.handleClose.bind(this)
     this.handleDelete = this.handleDelete.bind(this)
+    this.renderResult = this.renderResult.bind(this)
   }
 
   componentDidUpdate() {
@@ -55,12 +61,18 @@ class SettingModal extends React.Component {
     return !!secretKeyword && secretKeyword.length > 0
   }
 
-  handleSubmit() {
+  async handleSubmit() {
     const { shareId, secretKeyword, restricted } = this.state
-    this.props.crowi.apiPost('/shares/secretKeyword.set', {
-      share_id: shareId,
-      secret_keyword: restricted ? secretKeyword : null,
-    })
+    try {
+      await this.props.crowi.apiPost('/shares/secretKeyword.set', {
+        share_id: shareId,
+        secret_keyword: restricted ? secretKeyword : null,
+      })
+      this.setState({ result: { show: true, error: false, message: this.props.t('share.setting.saved') } })
+      setTimeout(() => this.setState({ result: { show: false } }), 1000)
+    } catch (err) {
+      this.setState({ result: { show: true, error: true, message: this.props.t('share.setting.error.message') } })
+    }
   }
 
   handleOpen() {
@@ -77,6 +89,24 @@ class SettingModal extends React.Component {
     if (handleDelete) {
       handleDelete()
     }
+  }
+
+  renderResult() {
+    const {
+      result: { show, error, message },
+    } = this.state
+    return (
+      show && (
+        <div
+          style={{
+            display: 'inline-block',
+            marginRight: 20,
+          }}
+        >
+          <span className={error ? 'text-danger' : 'text-success'}>{message}</span>
+        </div>
+      )
+    )
   }
 
   render() {
@@ -119,6 +149,7 @@ class SettingModal extends React.Component {
             <Icon name={isChanging ? 'spinner' : 'unlink'} spin={isChanging} />
             {t('share.delete_link')}
           </Button>
+          {this.renderResult()}
           <Button onClick={this.handleSubmit} bsStyle="primary" disabled={!this.canSubmit()}>
             {t('share.setting.save_settings')}
           </Button>

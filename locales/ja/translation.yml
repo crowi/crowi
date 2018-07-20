@@ -161,6 +161,9 @@ share:
     people_who_know_this_secret_keyword: 秘密のキーワードを知っている人
     secret_keyword: 秘密のキーワード
     save_settings: 設定を保存
+    saved: Saved
+    error:
+      message: Failed to save
 modal_rename:
   help:
     redirect: 'チェックを入れると、<code>%s</code>にアクセスされた際に自動的に新しいページにジャンプします。'

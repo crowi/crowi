@@ -161,6 +161,9 @@ share:
     people_who_know_this_secret_keyword: People who know this secret keyword
     secret_keyword: Secret keyword
     save_settings: Save settings
+    saved: Saved
+    error:
+      message: Failed to save
 modal_rename:
   help:
     redirect: 'Redirect to new page if someone accesses <code>%s</code>'
