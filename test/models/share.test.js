@@ -14,7 +14,7 @@ describe('Share', () => {
   const Share = utils.models.Share
   const conn = utils.mongoose.connection
   let user
-  let page
+  let createdPages
 
   before(async () => {
     await User.remove({})
@@ -24,11 +24,10 @@ describe('Share', () => {
     user = createdUsers[0]
 
     await Page.remove({})
-    const createdPages = await testDBUtil.generateFixture(conn, 'Page', [
+    createdPages = await testDBUtil.generateFixture(conn, 'Page', [
       { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
       { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
     ])
-    page = createdPages[0]
 
     await Share.remove({})
   })
@@ -40,21 +39,24 @@ describe('Share', () => {
   describe('.create', () => {
     context('Create shares', () => {
       it('should be able to create only one active share per page', async () => {
-        await expect(Share.create(page._id, user)).to.be.eventually.an.instanceof(Share)
-        await expect(Share.create(page._id, user)).to.be.rejected
+        await expect(Share.create(createdPages[0]._id, user)).to.be.eventually.an.instanceof(Share)
+        await expect(Share.create(createdPages[0]._id, user)).to.be.rejected
       })
     })
   })
 
   describe('.delete', () => {
     context('Delete share', () => {
-      let share
+      let createdShares
       before(async () => {
-        share = await Share.create(page._id, user)
+        createdShares = [await Share.create(createdPages[0]._id, user), await Share.create(createdPages[1]._id, user)]
       })
 
       it('should inactivate share', async () => {
-        await expect(Share.delete(share)).to.eventually.have.property('status', Share.STATUS_INACTIVE)
+        const shareId = createdShares[0]._id
+        await expect(Share.deleteById(shareId)).to.eventually.have.property('status', Share.STATUS_INACTIVE)
+        const pageId = createdShares[1].page
+        await expect(Share.deleteByPageId(pageId)).to.eventually.have.property('status', Share.STATUS_INACTIVE)
       })
     })
   })
