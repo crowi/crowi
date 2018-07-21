@@ -7,6 +7,7 @@ const extractSass = new ExtractTextPlugin({
   filename: '[name].css',
 })
 const config = {
+  mode: process.env.NODE_ENV,
   entry: {
     crowi: './resource/css/crowi.scss',
     'crowi-reveal': './resource/css/crowi-reveal.scss',

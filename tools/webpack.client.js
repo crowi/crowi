@@ -5,6 +5,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin')
 const ROOT = path.join(__dirname, '/../')
 
 const config = {
+  mode: process.env.NODE_ENV,
   entry: {
     bundled: [
       'jquery',
