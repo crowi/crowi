@@ -111,7 +111,7 @@ class AccessLogModal extends React.Component {
     const limit = this.state.pagination.limit
     if (!this.state.error) {
       try {
-        const { share } = await this.props.crowi.apiGet('/shares.list', { ...options, limit: 5, page_id: pageId })
+        const { share } = await this.props.crowi.apiGet('/shares.list', { limit: 5, page_id: pageId, ...options })
         const { docs: shares, page: current, pages: count } = share
         const pagination = { current, count, limit }
         this.setState({ pageId, shares, pagination })
@@ -125,6 +125,13 @@ class AccessLogModal extends React.Component {
   movePage(i) {
     if (i !== this.state.pagination.current) {
       this.getPage(this.state.pageId, { page: i })
+    }
+  }
+
+  componentDidMount() {
+    const { pageId = null } = this.props
+    if (pageId !== this.state.pageId) {
+      this.getPage(pageId)
     }
   }
 
