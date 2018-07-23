@@ -73,7 +73,7 @@ class AccessLog extends React.Component {
             path: page.path,
             info: platform.parse(userAgent),
             remoteAddress,
-            date: moment(lastAccessedAt).format('L'),
+            date: moment(lastAccessedAt).format('llll'),
           }),
         )}
       </tbody>
