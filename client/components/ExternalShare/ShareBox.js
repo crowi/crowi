@@ -76,16 +76,6 @@ class ShareBox extends React.Component {
     this.setState({ showAccessLogModal: false })
   }
 
-  renderCreateButton(isChanging, handleCreate) {
-    const { t } = this.props
-    return (
-      <Button onClick={handleCreate} bsStyle="primary" bsSize="small" disabled={isChanging}>
-        <Icon name={isChanging ? 'spinner' : 'link'} spin={isChanging} />
-        {t('share.create_link')}
-      </Button>
-    )
-  }
-
   renderOpenAccessLogButton(handleOpen) {
     const { t } = this.props
     return (
@@ -103,11 +93,16 @@ class ShareBox extends React.Component {
       <div className="share-box">
         <div className="share-box-header">
           <h5>{t('share.share_to_external')}</h5>
-          {isCreated
-            ? this.renderOpenAccessLogButton(this.handleOpenAccessLogModal)
-            : this.renderCreateButton(isChanging, this.createLink)}
+          {this.renderOpenAccessLogButton(this.handleOpenAccessLogModal)}
         </div>
-        <ShareBoxContent crowi={crowi} isCreated={isCreated} share={share} handleOpen={this.handleOpenSettingModal} />
+        <ShareBoxContent
+          crowi={crowi}
+          isCreated={isCreated}
+          isChanging={isChanging}
+          share={share}
+          handleOpen={this.handleOpenSettingModal}
+          handleCreate={this.createLink}
+        />
         <SettingModal
           show={showSettingModal}
           onHide={this.handleCloseSettingModal}

@@ -179,5 +179,6 @@ modal_help:
   markdown:
     title: 記法
 modal_access_log:
+  no_access_log_is_exists_yet: まだアクセスログは存在しません。
   error:
     message: アクセスログの取得に失敗しました。 ブラウザをリロードしてみてください。

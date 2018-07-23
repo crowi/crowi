@@ -2,6 +2,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Button, InputGroup, FormControl } from 'react-bootstrap'
+import Icon from 'components/Common/Icon'
 
 class ShareBoxContent extends React.Component {
   constructor(props) {
@@ -26,7 +27,7 @@ class ShareBoxContent extends React.Component {
   }
 
   render() {
-    const { t, crowi, share, isCreated, handleOpen } = this.props
+    const { t, crowi, share, isCreated, isChanging, handleOpen, handleCreate } = this.props
     if (isCreated) {
       const shareId = share.uuid
       const url = `${crowi.location.origin}/_share/${shareId}`
@@ -51,13 +52,23 @@ class ShareBoxContent extends React.Component {
         </div>
       )
     }
-    return <div className="share-box-content">{t('share.no_link_has_been_created_yet')}</div>
+    return (
+      <div className="share-box-content">
+        <p>{t('share.no_link_has_been_created_yet')}</p>
+        <Button className="pull-right" onClick={handleCreate} bsStyle="primary" disabled={isChanging}>
+          <Icon name={isChanging ? 'spinner' : 'link'} spin={isChanging} />
+          {t('share.create_link')}
+        </Button>
+      </div>
+    )
   }
 }
 
 ShareBoxContent.propTypes = {
   handleOpen: PropTypes.func,
+  handleCreate: PropTypes.func,
   isCreated: PropTypes.bool,
+  isChanging: PropTypes.bool,
   share: PropTypes.object,
   crowi: PropTypes.object.isRequired,
   t: PropTypes.func.isRequired,
