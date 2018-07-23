@@ -80,7 +80,7 @@ class ShareList extends React.Component {
             path,
             username,
             name,
-            date: moment(createdAt).format('L'),
+            date: moment(createdAt).format('llll'),
             isActive: status === 'active',
           }),
         )}
