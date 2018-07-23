@@ -179,5 +179,6 @@ modal_help:
   markdown:
     title: Markdown Rules
 modal_access_log:
+  no_access_log_is_exists_yet: No access log is exists yet.
   error:
     message: Failed to fetch access log data. Please try to reload the page.

@@ -112,8 +112,8 @@ class AccessLogModal extends React.Component {
     if (!this.state.error) {
       try {
         const { share } = await this.props.crowi.apiGet('/shares.list', { limit: 5, page_id: pageId, ...options })
-        const { docs: shares, page: current, pages: count } = share
-        const pagination = { current, count, limit }
+        const { docs: shares, total, page: current, pages: count } = share
+        const pagination = { total, current, count, limit }
         this.setState({ pageId, shares, pagination })
       } catch (err) {
         console.log(err)
@@ -172,7 +172,7 @@ class AccessLogModal extends React.Component {
   render() {
     const { t, show, onHide } = this.props
     const {
-      pagination: { current, count },
+      pagination: { total, current, count },
       error,
     } = this.state
     return (
@@ -184,6 +184,10 @@ class AccessLogModal extends React.Component {
           {error ? (
             <Alert bsStyle="danger">
               <p>{t('modal_access_log.error.message')}</p>
+            </Alert>
+          ) : total === 0 ? (
+            <Alert bsStyle="info">
+              <p>{t('modal_access_log.no_access_log_is_exists_yet')}</p>
             </Alert>
           ) : (
             <div>
