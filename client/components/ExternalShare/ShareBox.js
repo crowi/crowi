@@ -107,7 +107,7 @@ class ShareBox extends React.Component {
             ? this.renderOpenAccessLogButton(this.handleOpenAccessLogModal)
             : this.renderCreateButton(isChanging, this.createLink)}
         </div>
-        <ShareBoxContent isCreated={isCreated} share={share} handleOpen={this.handleOpenSettingModal} />
+        <ShareBoxContent crowi={crowi} isCreated={isCreated} share={share} handleOpen={this.handleOpenSettingModal} />
         <SettingModal
           show={showSettingModal}
           onHide={this.handleCloseSettingModal}

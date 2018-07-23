@@ -26,10 +26,10 @@ class ShareBoxContent extends React.Component {
   }
 
   render() {
-    const { t, share, isCreated, handleOpen } = this.props
+    const { t, crowi, share, isCreated, handleOpen } = this.props
     if (isCreated) {
       const shareId = share.uuid
-      const url = `${location.origin}/_share/${shareId}`
+      const url = `${crowi.location.origin}/_share/${shareId}`
       return (
         <div className="share-box-content">
           <InputGroup>
@@ -59,6 +59,7 @@ ShareBoxContent.propTypes = {
   handleOpen: PropTypes.func,
   isCreated: PropTypes.bool,
   share: PropTypes.object,
+  crowi: PropTypes.object.isRequired,
   t: PropTypes.func.isRequired,
 }
 ShareBoxContent.defaultProps = {
