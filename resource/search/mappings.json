@@ -15,6 +15,14 @@
           "language":   "possessive_english"
         }
       },
+      "tokenizer": {
+        "ngram_tokenizer": {
+          "type": "ngram",
+          "min_gram": 2,
+          "max_gram": 3,
+          "token_chars": ["letter", "digit"]
+        }
+      },
       "analyzer": {
         "autocomplete": {
           "tokenizer":  "keyword",
@@ -24,7 +32,7 @@
           ]
         },
         "english": {
-          "tokenizer":  "standard",
+          "tokenizer":  "ngram_tokenizer",
           "filter": [
             "english_possessive_stemmer",
             "lowercase",
@@ -39,7 +47,7 @@
     "users": {
       "properties" : {
         "name": {
-          "type": "string",
+          "type": "text",
           "analyzer": "autocomplete",
           "include_in_all": false
         }
@@ -48,49 +56,49 @@
     "pages": {
       "properties" : {
         "path": {
-          "type": "string",
+          "type": "text",
           "copy_to": ["path_raw", "path_ja", "path_en"],
           "include_in_all": false,
-          "index": "not_analyzed"
+          "index": false
         },
         "path_raw": {
-          "type": "string",
+          "type": "text",
           "analyzer": "standard",
           "include_in_all": false
         },
         "path_ja": {
-          "type": "string",
+          "type": "text",
           "analyzer": "kuromoji",
           "include_in_all": false
         },
         "path_en": {
-          "type": "string",
+          "type": "text",
           "analyzer": "english",
           "include_in_all": false
         },
         "body": {
-          "type": "string",
+          "type": "text",
           "copy_to": ["body_raw", "body_ja", "body_en"],
           "include_in_all": false,
-          "index": "not_analyzed"
+          "index": false
         },
         "body_raw": {
-          "type": "string",
+          "type": "text",
           "analyzer": "standard",
           "include_in_all": false
         },
         "body_ja": {
-          "type": "string",
+          "type": "text",
           "analyzer": "kuromoji",
           "include_in_all": false
         },
         "body_en": {
-          "type": "string",
+          "type": "text",
           "analyzer": "english",
           "include_in_all": false
         },
         "username": {
-          "type": "string",
+          "type": "keyword",
           "include_in_all": false
         },
         "comment_count": {
