@@ -71,6 +71,7 @@ ShareBoxContent.propTypes = {
   isCreated: PropTypes.bool,
   isChanging: PropTypes.bool,
   share: PropTypes.object,
+  creationError: PropTypes.bool,
   crowi: PropTypes.object.isRequired,
   t: PropTypes.func.isRequired,
 }
