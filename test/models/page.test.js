@@ -376,9 +376,9 @@ describe('Page', () => {
       })
 
       describe('findChildrenByPath', () => {
-        it('should rename more than 50 pages', async () => {
-          const pages = Page.findChildrenByPath('/parent', user, {})
-          expect(pages.length).to.be.not.equal(treeSize)
+        it('should fetch a parent page and all children pages (more than 50 pages)', async () => {
+          const pages = await Page.findChildrenByPath('/parent', user, {})
+          expect(pages.length).to.be.equal(treeSize)
         })
       })
 
