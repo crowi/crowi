@@ -101,7 +101,7 @@ class AccessLogModal extends React.Component {
             <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
           </Table>
         ) : (
-          <Alert color="info">{t('No one accessed yet')}</Alert>
+          <Alert bsStyle="info">{t('No one accessed yet')}</Alert>
         )}
       </div>
     )
@@ -121,7 +121,6 @@ class AccessLogModal extends React.Component {
         const pagination = { total, current, count, limit }
         this.setState({ pageId, shares, pagination })
       } catch (err) {
-        console.log(err)
         this.setState({ error: true })
       }
     }

@@ -26,7 +26,7 @@ class SettingModal extends React.Component {
     this.handleSubmit = this.handleSubmit.bind(this)
     this.handleOpen = this.handleOpen.bind(this)
     this.handleClose = this.handleClose.bind(this)
-    this.handleDelete = this.handleDelete.bind(this)
+    this.handleCloseAll = this.handleCloseAll.bind(this)
     this.renderResult = this.renderResult.bind(this)
   }
 
@@ -83,12 +83,10 @@ class SettingModal extends React.Component {
     this.setState({ showConfirmModal: false })
   }
 
-  handleDelete() {
-    const { handleDelete } = this.props
+  handleCloseAll() {
+    const { onHide } = this.props
+    onHide()
     this.handleClose()
-    if (handleDelete) {
-      handleDelete()
-    }
   }
 
   renderResult() {
@@ -110,7 +108,7 @@ class SettingModal extends React.Component {
   }
 
   render() {
-    const { t, show, onHide, isChanging } = this.props
+    const { t, show, onHide, isChanging, handleDelete } = this.props
     const { restricted, secretKeyword, showConfirmModal } = this.state
     return (
       <Modal className="share-setting-modal" show={show} onHide={onHide}>
@@ -142,7 +140,12 @@ class SettingModal extends React.Component {
               </Col>
             </FormGroup>
           </div>
-          <DeleteConfirmModal show={showConfirmModal} onHide={this.handleClose} handleDelete={this.handleDelete} />
+          <DeleteConfirmModal
+            show={showConfirmModal}
+            onHide={this.handleClose}
+            handleClose={this.handleCloseAll}
+            handleDelete={handleDelete}
+          />
         </Modal.Body>
         <Modal.Footer>
           <Button className="pull-left" onClick={this.handleOpen} bsStyle="danger" disabled={isChanging}>

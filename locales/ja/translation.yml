@@ -164,6 +164,9 @@ share:
     saved: Saved
     error:
       message: Failed to save
+  error:
+    can_not_create: リンクを作成できませんでした。
+    can_not_delete: リンクを削除できませんでした。
 modal_rename:
   help:
     redirect: 'チェックを入れると、<code>%s</code>にアクセスされた際に自動的に新しいページにジャンプします。'

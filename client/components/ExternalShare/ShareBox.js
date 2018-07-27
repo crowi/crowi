@@ -17,6 +17,7 @@ class ShareBox extends React.Component {
       isCreated: props.isCreated,
       showSettingModal: false,
       showAccessLogModal: false,
+      creationError: false,
     }
 
     this.updateLink = this.updateLink.bind(this)
@@ -45,19 +46,26 @@ class ShareBox extends React.Component {
     try {
       const { share } = await promise
       this.setState({ isCreated: !isCreated, share })
+      return null
     } catch (err) {
-      alert(err.message)
+      return err
     } finally {
-      this.setState({ isChanging: false, showSettingModal: false })
+      this.setState({ isChanging: false })
     }
   }
 
-  createLink() {
-    this.updateLink(this.props.crowi.apiPost('/shares.create', { page_id: this.props.pageId }))
+  async createLink() {
+    const { crowi, pageId } = this.props
+    this.setState({ creationError: false })
+    const error = await this.updateLink(crowi.apiPost('/shares.create', { page_id: pageId }))
+    if (error !== null) {
+      this.setState({ creationError: true })
+    }
   }
 
-  deleteLink() {
-    this.updateLink(this.props.crowi.apiPost('/shares.delete', { page_id: this.props.pageId }))
+  async deleteLink() {
+    const { crowi, pageId } = this.props
+    return this.updateLink(crowi.apiPost('/shares.delete', { page_id: pageId }))
   }
 
   handleOpenSettingModal() {
@@ -87,7 +95,7 @@ class ShareBox extends React.Component {
   }
 
   render() {
-    const { share, isCreated, isChanging, showSettingModal, showAccessLogModal } = this.state
+    const { share, isCreated, isChanging, showSettingModal, showAccessLogModal, creationError } = this.state
     const { t, crowi, pageId } = this.props
     return (
       <div className="share-box">
@@ -102,6 +110,7 @@ class ShareBox extends React.Component {
           share={share}
           handleOpen={this.handleOpenSettingModal}
           handleCreate={this.createLink}
+          creationError={creationError}
         />
         <SettingModal
           show={showSettingModal}
