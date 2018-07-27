@@ -26,13 +26,13 @@ class AccessLogModal extends React.Component {
     this.renderAccessLogTable = this.renderAccessLogTable.bind(this)
   }
 
-  renderShareInfo(id, username, name, createdAt) {
+  renderShareInfo(uuid, username, name, createdAt) {
     const { t } = this.props
     const date = moment(createdAt).format('llll')
     return (
       <div>
         <h4>
-          {t('Share ID')}: {id}
+          {t('Share ID')}: <a href={`/_share/${uuid}`}>{uuid}</a>
         </h4>
         <dl className="share-info">
           <div>
@@ -87,14 +87,14 @@ class AccessLogModal extends React.Component {
   renderAccessLogTable(share, i) {
     const { t } = this.props
     const {
-      _id: id,
+      uuid,
       creator: { name, username },
       createdAt,
       accesses,
     } = share
     return (
       <div key={i}>
-        {this.renderShareInfo(id, username, name, createdAt)}
+        {this.renderShareInfo(uuid, username, name, createdAt)}
         {accesses.length > 0 ? (
           <Table bordered hover condensed>
             {this.renderTableHeader()}
