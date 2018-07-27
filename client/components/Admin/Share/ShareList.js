@@ -32,7 +32,6 @@ class ShareList extends React.Component {
       const pagination = { current, count, limit }
       this.setState({ shares, pagination })
     } catch (err) {
-      console.log(err)
       this.setState({ error: true })
     }
   }
