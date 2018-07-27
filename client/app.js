@@ -48,7 +48,7 @@ const crowi = new Crowi(
 )
 window.crowi = crowi
 crowi.setConfig(JSON.parse(document.getElementById('crowi-context-hydrate').textContent || '{}'))
-const isSharePage = !!$('#content-main').data('is-share-page')
+const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
 if (!isSharePage) {
   crowi.fetchUsers()
 }
