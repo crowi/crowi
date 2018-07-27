@@ -34,6 +34,7 @@
   data-page-id="{% if page %}{{ page._id.toString() }}{% endif %}"
   data-page-revision-id="{% if revision %}{{ revision._id.toString() }}{% endif %}"
   data-page-revision-created="{% if revision %}{{ revision.createdAt|datetz('U') }}{% endif %}"
+  data-is-share-page="1"
 >
   <div class="tab-content wiki-content">
     <script type="text/template" id="raw-text-original">{{ revision.body }}</script>
