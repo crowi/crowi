@@ -75,8 +75,8 @@ class RenameTree extends React.Component {
       }
     }
     const treeName = path => path.replace(/\\/g, '/').replace(/\/[^/]*\/?$/, '')
-    const getParents = (paths, path) => {
-      return paths
+    const getParents = (paths, path) =>
+      paths
         .filter(
           p =>
             path !== p &&
@@ -85,50 +85,42 @@ class RenameTree extends React.Component {
             !p.endsWith('/'),
         )
         .sort()
-    }
     Object.keys(pathMap)
       .sort()
-      .forEach(function(path, index, paths) {
-        tree = index === 0 ? generateRoot(path) : assignRecurcive(tree, getParents(paths, path), path)
-      })
+      .forEach(
+        (path, index, paths) =>
+          (tree = index === 0 ? generateRoot(path) : assignRecurcive(tree, getParents(paths, path), path)),
+      )
     return tree
   }
 
   renderTree(pathMap, errors) {
     const tree = this.convertPathMapToTree(pathMap)
 
-    const getErrors = function(path) {
-      return errors[pathMap[path]]
-    }
+    const getErrors = path => errors[pathMap[path]]
 
-    const renderRoot = function(tree) {
-      return Object.values(tree).map(renderNode)
-    }
+    const renderRoot = tree => Object.values(tree).map(renderNode)
 
-    const renderChanges = function(path) {
-      return (
-        <code className="changes">
-          <Icon name="arrow-right" /> {pathMap[path]}
-        </code>
-      )
-    }
+    const renderChanges = path => (
+      <code className="changes">
+        <Icon name="arrow-right" /> {pathMap[path]}
+      </code>
+    )
 
     const { t } = this.props
-    const renderNodeErrors = function(nodeErrors) {
-      const DottedLine = () => (
-        <div className="dotted-line">
-          <svg>
-            <line x1="0" x2="100%" y2="50%" y1="50%" />
-          </svg>
-        </div>
-      )
-      return (
-        <span className="errors">
-          <DottedLine />
-          {nodeErrors.map(e => t(e)).join(', ')}
-        </span>
-      )
-    }
+    const DottedLine = () => (
+      <div className="dotted-line">
+        <svg>
+          <line x1="0" x2="100%" y2="50%" y1="50%" />
+        </svg>
+      </div>
+    )
+    const renderNodeErrors = nodeErrors => (
+      <span className="errors">
+        <DottedLine />
+        {nodeErrors.map(e => t(e)).join(', ')}
+      </span>
+    )
 
     const renderNode = function({ path, name, children }) {
       const isRoot = name === path
