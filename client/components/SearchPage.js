@@ -12,10 +12,11 @@ export default class SearchPage extends React.Component {
   constructor(props) {
     super(props)
 
+    const { search = '' } = this.props.crowi.location
+    const { q = '', type = '' } = queryString.parse(search)
     this.state = {
-      location: location,
-      searchingKeyword: this.props.query.q || '',
-      searchingType: this.props.query.type || '',
+      searchingKeyword: q,
+      searchingType: type,
       searchedPages: [],
       searchResultMeta: {},
       searchError: null,
@@ -46,7 +47,7 @@ export default class SearchPage extends React.Component {
   }
 
   changeURL({ q, type }, refreshHash) {
-    let hash = location.hash || ''
+    let { hash = '' } = this.props.crowi.location
     // TODO 整理する
     if (refreshHash || q !== '') {
       hash = ''
@@ -114,11 +115,9 @@ export default class SearchPage extends React.Component {
 }
 
 SearchPage.propTypes = {
-  query: PropTypes.object,
   crowi: PropTypes.object.isRequired,
 }
 SearchPage.defaultProps = {
   // pollInterval: 1000,
-  query: queryString.parse(location.search),
   searchError: null,
 }

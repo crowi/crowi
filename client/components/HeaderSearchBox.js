@@ -10,8 +10,9 @@ export default class HeaderSearchBox extends React.Component {
   constructor(props) {
     super(props)
 
+    const { pathname = '' } = this.props.crowi.location
     this.state = {
-      isSearchPage: location.pathname.startsWith('/_search'),
+      isSearchPage: pathname.startsWith('/_search'),
       searchingKeyword: '',
       searchedPages: {},
       searchError: null,
