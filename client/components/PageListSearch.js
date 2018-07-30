@@ -127,7 +127,7 @@ export default class PageListSearch extends React.Component {
 
   render() {
     return (
-      <div>
+      <div className="content-main">
         <input
           type="hidden"
           name="q"
