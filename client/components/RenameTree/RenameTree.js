@@ -74,11 +74,16 @@ class RenameTree extends React.Component {
         },
       }
     }
+    const treeName = path => path.replace(/\\/g, '/').replace(/\/[^/]*\/?$/, '')
     const getParents = (paths, path) => {
       return paths
-        .filter(function(p) {
-          return path !== p && path.startsWith(RenameTree.removeTrailingSlash(p)) && !p.endsWith('/')
-        })
+        .filter(
+          p =>
+            path !== p &&
+            path.startsWith(RenameTree.removeTrailingSlash(p)) &&
+            treeName(p) !== treeName(path) &&
+            !p.endsWith('/'),
+        )
         .sort()
     }
     Object.keys(pathMap)
