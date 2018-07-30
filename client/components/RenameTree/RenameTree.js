@@ -208,6 +208,10 @@ class RenameTree extends React.Component {
     let newState = { renamable: false, error: error.message, removing: false }
     if (info && Object.keys(info).length > 0) {
       const { path_map: pathMap, errors } = info
+      const { newPath } = this.state
+      const path = RenameTree.getPath({ removeTrailingSlash: true })
+      // ${pathMap} has not ${path} key if location is PageList
+      pathMap[path] = newPath
       this.setState({ ...newState, pathMap, errors })
     } else {
       this.setState(newState)
