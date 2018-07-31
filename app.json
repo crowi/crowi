@@ -1,4 +1,5 @@
 {
+  "stack": "heroku-16",
   "name": "Crowi",
   "description": "The simple & powerful Wiki",
   "keywords": [
