@@ -182,6 +182,7 @@ $(function() {
   var currentUser = $('#content-main').data('current-user')
   var isSeen = $('#content-main').data('page-is-seen')
   var pagePath = $('#content-main').data('path')
+  var isSharePage = !!$('#content-main').data('is-share-page')
 
   Crowi.linkPath()
 
@@ -560,41 +561,48 @@ $(function() {
     }
 
     // get comments
-    var $pageCommentList = $('.page-comments-list')
-    var $pageCommentListNewer = $('#page-comments-list-newer')
-    var $pageCommentListCurrent = $('#page-comments-list-current')
-    var $pageCommentListOlder = $('#page-comments-list-older')
-    var hasNewer = false
-    var hasOlder = false
-    $.get('/_api/comments.get', { page_id: pageId }, function(res) {
-      if (res.ok) {
-        var comments = res.comments
-        $.each(comments, function(i, comment) {
-          var commentContent = createCommentHTML(comment.revision, comment.creator, comment.comment, comment.createdAt)
-          if (comment.revision == revisionId) {
-            $pageCommentListCurrent.append(commentContent)
-          } else {
-            if (Date.parse(comment.createdAt) / 1000 > revisionCreatedAt) {
-              $pageCommentListNewer.append(commentContent)
-              hasNewer = true
+    if (!isSharePage) {
+      var $pageCommentList = $('.page-comments-list')
+      var $pageCommentListNewer = $('#page-comments-list-newer')
+      var $pageCommentListCurrent = $('#page-comments-list-current')
+      var $pageCommentListOlder = $('#page-comments-list-older')
+      var hasNewer = false
+      var hasOlder = false
+      $.get('/_api/comments.get', { page_id: pageId }, function(res) {
+        if (res.ok) {
+          var comments = res.comments
+          $.each(comments, function(i, comment) {
+            var commentContent = createCommentHTML(
+              comment.revision,
+              comment.creator,
+              comment.comment,
+              comment.createdAt,
+            )
+            if (comment.revision == revisionId) {
+              $pageCommentListCurrent.append(commentContent)
             } else {
-              $pageCommentListOlder.append(commentContent)
-              hasOlder = true
+              if (Date.parse(comment.createdAt) / 1000 > revisionCreatedAt) {
+                $pageCommentListNewer.append(commentContent)
+                hasNewer = true
+              } else {
+                $pageCommentListOlder.append(commentContent)
+                hasOlder = true
+              }
             }
-          }
-        })
-      }
-    })
-      .fail(function(data) {})
-      .always(function() {
-        if (!hasNewer) {
-          $('.page-comments-list-toggle-newer').hide()
-        }
-        if (!hasOlder) {
-          $pageCommentListOlder.addClass('collapse')
-          $('.page-comments-list-toggle-older').hide()
+          })
         }
       })
+        .fail(function(data) {})
+        .always(function() {
+          if (!hasNewer) {
+            $('.page-comments-list-toggle-newer').hide()
+          }
+          if (!hasOlder) {
+            $pageCommentListOlder.addClass('collapse')
+            $('.page-comments-list-toggle-older').hide()
+          }
+        })
+    }
 
     // post comment event
     $('#page-comment-form').on('submit', function() {
@@ -685,7 +693,7 @@ $(function() {
       }
     }
 
-    if (!isSeen) {
+    if (!isSeen && !isSharePage) {
       $.post('/_api/pages.seen', { page_id: pageId }, function(res) {
         // ignore unless response has error
         if (res.ok && res.seenUser) {
@@ -729,6 +737,10 @@ $(function() {
   })
   $('a[data-toggle="tab"][href="#revision-body"]').on('show.bs.tab', function() {
     window.history.pushState('', '', location.href.replace(location.hash, ''))
+  })
+
+  $(document).on('click', '#external-share .dropdown-menu', function(e) {
+    e.stopPropagation()
   })
 })
 
