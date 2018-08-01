@@ -248,7 +248,7 @@ class RenameTree extends React.Component {
               </small>
             </p>
           )}
-          <Button type="submit" bsStyle="primary" onClick={this.handleSubmit} disabled={!renamable}>
+          <Button type="submit" bsStyle="primary" onClick={this.handleSubmit} disabled={!renamable || removing}>
             Rename!
           </Button>
         </Modal.Footer>
