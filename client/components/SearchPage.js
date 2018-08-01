@@ -12,8 +12,7 @@ export default class SearchPage extends React.Component {
   constructor(props) {
     super(props)
 
-    const { search = '' } = this.props.crowi.location
-    const { q = '', type = '' } = queryString.parse(search)
+    const { q = '', type = '' } = queryString.parse(this.props.crowi.location.search)
     this.state = {
       searchingKeyword: q,
       searchingType: type,
