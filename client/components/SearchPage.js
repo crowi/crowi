@@ -2,6 +2,7 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
+import queryString from 'query-string'
 
 import SearchForm from './SearchPage/SearchForm'
 import SearchResult from './SearchPage/SearchResult'
@@ -10,9 +11,11 @@ export default class SearchPage extends React.Component {
   constructor(props) {
     super(props)
 
+    const { q = '' } = queryString.parse(this.props.crowi.location)
+
     this.state = {
-      location: location,
-      searchingKeyword: this.props.query.q || '',
+      location: this.props.crowi.location,
+      searchingKeyword: q,
       searchedKeyword: '',
       searchedPages: [],
       searchResultMeta: {},
@@ -28,21 +31,6 @@ export default class SearchPage extends React.Component {
     if (keyword !== '') {
       this.search({ keyword })
     }
-  }
-
-  static getQueryByLocation(location) {
-    let search = location.search || ''
-    let query = {}
-
-    search
-      .replace(/^\?/, '')
-      .split('&')
-      .forEach(function(element) {
-        let queryParts = element.split('=')
-        query[queryParts[0]] = decodeURIComponent(queryParts[1]).replace(/\+/g, ' ')
-      })
-
-    return query
   }
 
   changeURL(keyword, refreshHash) {
@@ -112,11 +100,9 @@ export default class SearchPage extends React.Component {
 }
 
 SearchPage.propTypes = {
-  query: PropTypes.object,
   crowi: PropTypes.object.isRequired,
 }
 SearchPage.defaultProps = {
   // pollInterval: 1000,
-  query: SearchPage.getQueryByLocation(location || {}),
   searchError: null,
 }
