@@ -128,6 +128,45 @@ Rename page: Rename page
 New page name: New page name
 Current page name: Current page name
 Redirect: Redirect
+Page name: Page name
+Share ID: Share ID
+Browser: Browser
+IP Address: IP Address
+Last Accessed: Last Accessed
+Creator: Creator
+Status: Status
+Shared Pages: Shared Pages
+Access Log: Access Log
+access_log:
+  error:
+    message: Failed to fetch access log data. Please try to reload the page.
+share_list:
+  error:
+    message: Failed to fetch share page data. Please try to reload the page.
+Required secret keyword: Secret keyword is required to show this page.
+Incorrect secret keyword: Incorrect secret keyword
+No one accessed yet: No one accessed yet
+Delete shared link to this page?: Delete shared link to this page?
+No one can see this page if the link is deleted: Once the link is deleted, you will not be able to see this page from that link.
+share:
+  share_to_external: Share to external
+  watch_the_log: Watch the log
+  create_link: Create link
+  delete_link: Delete link
+  link_settings: Link settings
+  no_link_has_been_created_yet: No link has been created yet.
+  setting:
+    restrict_access: Restrict access
+    people_who_know_this_link: People who know this link
+    people_who_know_this_secret_keyword: People who know this secret keyword
+    secret_keyword: Secret keyword
+    save_settings: Save settings
+    saved: Saved
+    error:
+      message: Failed to save
+  error:
+    can_not_create: Can't create a link.
+    can_not_delete: Can't delete this link.
 
 page_types:
   all: All
@@ -149,6 +188,10 @@ modal_help:
     body1: Use sections and subsections to make it easier for your friends to read your pages.
   markdown:
     title: Markdown Rules
+modal_access_log:
+  no_access_log_is_exists_yet: No access log is exists yet.
+  error:
+    message: Failed to fetch access log data. Please try to reload the page.
 
 search:
   suggest:
