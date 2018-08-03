@@ -10,7 +10,7 @@ export default class PageListSearch extends React.Component {
     super(props)
 
     this.state = {
-      location: location,
+      location: this.props.crowi.location,
       tree: $('#search-listpage-input').data('path'),
       searchingKeyword: this.props.query.q || '',
       searchedKeyword: '',
