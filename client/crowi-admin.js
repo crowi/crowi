@@ -51,7 +51,7 @@ $(function() {
     return false
   })
 
-  $('#appSettingForm, #secSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(function() {
+  $('#appSettingForm, #secSettingForm, #authSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(function() {
     $(this).submit(function() {
       function showMessage(formId, msg, status) {
         $('#' + formId + ' .alert').remove()
