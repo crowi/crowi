@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 
 import i18n from './i18n'
+import moment from 'moment'
 
 import Crowi from './util/Crowi'
 import CrowiRenderer from './util/CrowiRenderer'
@@ -14,12 +15,17 @@ import PageAttachment from 'components/PageAttachment'
 import PageAlerts from 'components/PageAlerts'
 import SeenUserList from 'components/SeenUserList'
 import BookmarkButton from 'components/BookmarkButton'
+import ShareBox from 'components/ExternalShare/ShareBox'
+import SecretKeywordFormContainer from 'components/ExternalShare/SecretKeywordForm/SecretKeywordFormContainer'
+import AdminShare from 'components/Admin/Share/AdminShare'
 
 if (!window) {
   window = {}
 }
 
 i18n()
+
+moment.locale(navigator.userLanguage || navigator.language)
 
 const mainContent = document.querySelector('#content-main')
 let pageId = null
@@ -42,7 +48,10 @@ const crowi = new Crowi(
 )
 window.crowi = crowi
 crowi.setConfig(JSON.parse(document.getElementById('crowi-context-hydrate').textContent || '{}'))
-crowi.fetchUsers()
+const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
+if (!isSharePage) {
+  crowi.fetchUsers()
+}
 
 const crowiRenderer = new CrowiRenderer(crowi)
 window.crowiRenderer = crowiRenderer
@@ -58,6 +67,9 @@ const componentMappings = {
   // 'page-comment': <PageComment />,
   'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
+  'share-box': <ShareBox pageId={pageId} crowi={crowi} />,
+  'secret-keyword-form-container': <SecretKeywordFormContainer pageId={pageId} crowi={crowi} />,
+  'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
 }
 
 Object.keys(componentMappings).forEach(key => {

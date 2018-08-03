@@ -158,12 +158,12 @@ export default class Crowi {
   apiRequest(method, path, params) {
     return new Promise((resolve, reject) => {
       axios[method](`/_api${path}`, params)
-        .then(res => {
-          if (res.data.ok) {
-            resolve(res.data)
+        .then(({ data }) => {
+          if (data.ok) {
+            resolve(data)
           } else {
             // FIXME?
-            reject(new Error(res.error))
+            reject(new Error(data.error))
           }
         })
         .catch(res => {
