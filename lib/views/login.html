@@ -38,6 +38,8 @@
       </div>
       {% endif %}
     </div>
+
+    {% if !config.crowi['auth:disablePasswordAuth'] %}
     <form role="form" action="/login" method="post">
       <div class="input-group">
         <span class="input-group-addon"><i class="fa fa-envelope"></i></span>
@@ -54,6 +56,7 @@
     </form>
 
     <hr>
+    {% endif %}
 
     <div class="row">
       {% if googleLoginEnabled() %}
@@ -74,7 +77,7 @@
       {% endif %}
     </div>
 
-    {% if config.crowi['security:registrationMode'] != 'Closed' %}
+    {% if config.crowi['security:registrationMode'] != 'Closed' && !config.crowi['auth:disablePasswordAuth'] %}
     <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil-alt"></i> {{ t('page_login.sign_up_is_here') }}</a></p>
     {% endif %}
   </div>
