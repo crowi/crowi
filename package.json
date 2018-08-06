@@ -36,7 +36,7 @@
     "axios": "~0.16.2",
     "babel-cli": "~6.24.1",
     "babel-core": "~6.25.0",
-    "babel-loader": "~7.1.1",
+    "babel-loader": "~7.1.5",
     "babel-plugin-module-resolver": "^3.1.1",
     "babel-polyfill": "~6.23.0",
     "babel-preset-env": "~1.6.0",
@@ -67,8 +67,7 @@
     "express": "~4.15.2",
     "express-form": "~0.12.0",
     "express-session": "~1.15.4",
-    "extract-text-webpack-plugin": "~3.0.1",
-    "file-loader": "~1.1.5",
+    "file-loader": "^1.1.11",
     "googleapis": "=12.3.0",
     "highlight.js": "~9.12.0",
     "i18next": "~11.3.2",
@@ -79,6 +78,7 @@
     "inline-attachment": "~2.0.3",
     "jquery": "~3.3.1",
     "jquery.cookie": "~1.4.1",
+    "json-loader": "^0.5.7",
     "kerberos": "0.0.23",
     "marked": "~0.3.5",
     "method-override": "~2.3.1",
@@ -110,9 +110,7 @@
     "swig": "~1.4.0",
     "uuid": "^3.2.1",
     "vinyl-source-stream": "~1.1.0",
-    "webpack": "~3.6.0",
-    "webpack-merge": "~4.1.0",
-    "webpack-stream": "~4.0.0",
+    "webpack": "^4.16.1",
     "yaml-loader": "^0.5.0"
   },
   "devDependencies": {
@@ -132,6 +130,7 @@
     "eslint-plugin-promise": "^3.8.0",
     "eslint-plugin-react": "^7.9.1",
     "eslint-plugin-standard": "^3.1.0",
+    "extract-text-webpack-plugin": "^4.0.0-beta.0",
     "faker": "^4.1.0",
     "flow-bin": "^0.65.0",
     "mocha": "~5.2.0",
@@ -140,7 +139,8 @@
     "prettier": "^1.13.5",
     "proxyquire": "~1.8.0",
     "sinon": "~2.3.8",
-    "sinon-chai": "~2.12.0"
+    "sinon-chai": "~2.12.0",
+    "webpack-cli": "^3.0.8"
   },
   "license": "MIT",
   "scripts": {
