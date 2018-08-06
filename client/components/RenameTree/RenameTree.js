@@ -156,15 +156,22 @@ class RenameTree extends React.Component {
     this.setState({ newPath: e.target.value, timeoutId })
   }
 
+  normalizePathMap(pathMap, newPath) {
+    const path = RenameTree.getPath({ removeTrailingSlash: true })
+    const portalPath = `${path}/`
+    // ${pathMap} has not ${path} key if location is PageList
+    pathMap[path] = newPath
+    delete pathMap[portalPath]
+    return pathMap
+  }
+
   async checkTreeRenamable() {
     const { crowi } = this.props
     const { newPath } = this.state
     const path = RenameTree.getPath({ removeTrailingSlash: true })
     try {
       const data = await crowi.apiPost('/pages.checkTreeRenamable', { path, new_path: newPath })
-      const { path_map: pathMap } = data
-      // ${pathMap} has not ${path} key if location is PageList
-      pathMap[path] = newPath
+      const pathMap = this.normalizePathMap(data.path_map, newPath)
       this.setState({ pathMap, renamable: true, error: null })
     } catch (error) {
       this.handleError(error)
@@ -199,11 +206,9 @@ class RenameTree extends React.Component {
     const { info } = error
     let newState = { renamable: false, error: error.message, removing: false }
     if (info && Object.keys(info).length > 0) {
-      const { path_map: pathMap, errors } = info
+      const { errors } = info
       const { newPath } = this.state
-      const path = RenameTree.getPath({ removeTrailingSlash: true })
-      // ${pathMap} has not ${path} key if location is PageList
-      pathMap[path] = newPath
+      const pathMap = this.normalizePathMap(info.path_map, newPath)
       this.setState({ ...newState, pathMap, errors })
     } else {
       this.setState(newState)
