@@ -86,6 +86,10 @@ page_register:
     user_id: ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。
     invited_email: このメールアドレスで招待を受け取っています。
     invited_password: 現在、仮パスワードでログインしています。新しいパスワードを決定してください。
+  error:
+    unavailable_user_id: このユーザーIDは使用できません。
+    already_registered_email: このメールアドレスは既に使用されています。
+    unavailable_password_auth: 現在、パスワード認証は無効です。外部認証を用いて登録してください。
 page_me:
   form_help:
     profile_image1: 画像をアップロードをするための設定がされていません。

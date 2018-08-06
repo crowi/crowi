@@ -86,6 +86,10 @@ page_register:
     user_id: 'The URL of pages you create will contain your User ID. Your User ID can consist of letters, numbers, and some symbols.'
     invited_email: "You've invited with this email address."
     invited_password: Please change current temporary password.
+  error:
+    unavailable_user_id: This User ID is not available.
+    already_registered_email: This email address is already registered.
+    unavailable_password_auth: Password authentication is currently invalid. Please register using third-party authentication.
 page_me:
   form_help:
     profile_image1: Image upload settings not completed.
