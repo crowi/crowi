@@ -103,7 +103,9 @@
         <i class="fa fa-wrench"></i> <span class="caret"></span>
       </a>
       <ul class="dropdown-menu">
+        {% if !isTopPage() %}
         <li><a href="#" data-target="#renameTree" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Move pages under', path|path2name ) }}</a></li>
+        {% endif %}
         <li><a href="#" data-target="#unportalize" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Unportalize') }}</a></li>
       </ul>
     </li>
