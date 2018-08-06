@@ -2,11 +2,10 @@ const path = require('path')
 const webpack = require('webpack')
 const CopyWebpackPlugin = require('copy-webpack-plugin')
 
-const isProduction = process.env.NODE_ENV === 'production'
-
 const ROOT = path.join(__dirname, '/../')
 
 const config = {
+  mode: process.env.NODE_ENV,
   entry: {
     bundled: [
       'jquery',
@@ -55,12 +54,13 @@ const config = {
       },
     ],
   },
+  optimization: {
+    splitChunks: {
+      name: 'bundled',
+    },
+  },
   plugins: [
     new webpack.EnvironmentPlugin(['NODE_ENV']),
-    new webpack.optimize.CommonsChunkPlugin({
-      name: 'bundled',
-      minChunks: Infinity,
-    }),
     new webpack.ProvidePlugin({
       $: 'jquery',
       jQuery: 'jquery',
@@ -72,16 +72,6 @@ const config = {
       { from: path.join(ROOT, 'node_modules/reveal.js/plugin'), to: path.join(ROOT, 'public/js/reveal/plugin/') },
     ]),
   ],
-}
-
-if (isProduction) {
-  config.plugins.push(
-    new webpack.optimize.UglifyJsPlugin({
-      compress: {
-        warnings: false,
-      },
-    }),
-  )
 }
 
 module.exports = config
