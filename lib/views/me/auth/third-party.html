@@ -1,0 +1,63 @@
+{% extends '../../layout/single-nologin.html' %}
+
+{% block html_title %}{{ t('page_me_third_party_auth.enable_third_party_auth') }} · {% endblock %}
+
+{% block content_main %}
+
+<h1 class="login-page">
+  {% if config.crowi['app:title'] == 'Crowi' %}
+    <img src="/logo/135x32.png" alt="Crowi">
+  {% else %}
+    {{ config.crowi['app:title'] }}<br>
+    <img src="/logo/100x11_w.png" alt="powered by Crowi">
+  {% endif %}
+</h1>
+
+<div class="login-dialog-container col-md-5">
+
+<div class="login-dialog" id="login-dialog">
+
+  <div class="login-dialog-inner front">
+    <h2>{{ t('page_me_third_party_auth.enable_third_party_auth') }}</h2>
+
+    <div class="google-info github-info alert alert-info">
+      {{ t('page_me_third_party_auth.notice.third_party_auth_required') }}
+    </div>
+
+    <div class="row">
+      {% if googleLoginEnabled() && !user.googleId %}
+      <div class="col-md-6">
+          {% set wmessage = req.flash('warningMessage.auth.google') %}
+          {% if wmessage.length %}
+          <div class="alert alert-danger">
+            {{ wmessage }}
+          </div>
+          {% endif %}
+        <form action="/me/auth/google" method="post" role="form">
+          <button type="submit" class="btn btn-block btn-google" name="connectGoogle" value="1"><i class="fab fa-google-plus-square"></i> {{ t('page_login.sign_in_with', "Google") }}</button>
+          <input type="hidden" name="_csrf" value="{{ csrf() }}">
+        </form>
+      </div>
+      {% endif %}
+      {% if githubLoginEnabled() && !user.githubId %}
+      <div class="col-md-6">
+          {% set wmessage = req.flash('warningMessage.auth.github') %}
+          {% if wmessage.length %}
+          <div class="alert alert-danger">
+            {{ wmessage }}
+          </div>
+          {% endif %}
+        <form action="/me/auth/github" method="post" role="form">
+          <button type="submit" class="btn btn-block btn-github" name="connectGitHub" value="1"><i class="fab fa-github-square"></i> {{ t('page_login.sign_in_with', "GitHub") }}</button>
+          <input type="hidden" name="_csrf" value="{{ csrf() }}">
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+</div>
+
+{% endblock %}

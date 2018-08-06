@@ -103,6 +103,10 @@ page_me_apitoken:
     update_token1: API Token を更新すると、自動的に新しい Token が生成されます。
     update_token2: 現在の Token を利用している処理は動かなくなります。
   form_help: {}
+page_me_third_party_auth:
+  enable_third_party_auth: 外部認証の有効化
+  notice:
+    third_party_auth_required: 外部認証の有効化が必要です。利用を続けるために外部認証を設定してください。
 Password: パスワード
 Password Settings: パスワード設定
 Set new Password: パスワードを新規に設定

@@ -103,6 +103,10 @@ page_me_apitoken:
     update_token1: You can update to generate a new API Token.
     update_token2: You will need to update the API Token in any existing processes.
   form_help: {}
+page_me_third_party_auth:
+  enable_third_party_auth: Enable Third-Party Auth
+  notice:
+    third_party_auth_required: Activation of third-party authentication is required. Please set up authentication to continue using this wiki.
 Password: Password
 Password Settings: Password Settings
 Set new Password: Set new Password
