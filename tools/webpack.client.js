@@ -12,7 +12,7 @@ const config = {
       'bootstrap-sass',
       'inline-attachment/src/inline-attachment.js',
       'jquery.cookie',
-      './client/thirdparty-js/jquery.selection.js',
+      'jquery.selection.js',
       'babel-polyfill',
     ],
     app: path.join(ROOT, 'client/app.js'),
