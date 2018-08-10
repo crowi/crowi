@@ -55,9 +55,7 @@ const config = {
     ],
   },
   optimization: {
-    splitChunks: {
-      name: 'bundled',
-    },
+    runtimeChunk: 'single',
   },
   plugins: [
     new webpack.ProvidePlugin({
