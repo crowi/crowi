@@ -25,7 +25,7 @@ const config = {
     path: path.join(ROOT, 'public/js'),
     filename: '[name].js',
   },
-  devtool: 'inline-source-map',
+  devtool: 'source-map',
   resolve: {
     modules: ['./node_modules', './client/thirdparty-js'],
   },
