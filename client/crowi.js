@@ -1,13 +1,6 @@
 /* Author: Sotaro KARASAWA <sotarok@crocos.co.jp>
 */
 
-import $ from 'jquery'
-
-import 'bootstrap-sass'
-import 'jquery.cookie'
-// require('bootstrap-sass');
-// require('jquery.cookie');
-
 const Crowi = {}
 
 if (!window) {
