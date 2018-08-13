@@ -28,7 +28,7 @@ export default class HeaderSearchBox extends React.Component {
     this.setState({ focused: !!focused })
   }
 
-  search(data) {
+  async search(data) {
     const keyword = data.keyword
     if (keyword === '') {
       this.setState({
@@ -44,25 +44,22 @@ export default class HeaderSearchBox extends React.Component {
       searching: true,
     })
 
-    const promises = ['portal', 'public', 'user'].map(type =>
-      this.props.crowi.apiGet('/search', { q: keyword, type, limit: 10 }),
-    )
-
-    Promise.all(promises)
-      .then(([{ data: portalPages }, { data: publicPages }, { data: userPages }]) => {
-        this.setState({
-          searchingKeyword: keyword,
-          searchedPages: { portalPages, publicPages, userPages },
-          searching: false,
-          searchError: null,
-        })
+    try {
+      const [{ data: portalPages }, { data: publicPages }, { data: userPages }] = await Promise.all(
+        ['portal', 'public', 'user'].map(type => this.props.crowi.apiGet('/search', { q: keyword, type, limit: 10 })),
+      )
+      this.setState({
+        searchingKeyword: keyword,
+        searchedPages: { portalPages, publicPages, userPages },
+        searching: false,
+        searchError: null,
       })
-      .catch(err => {
-        this.setState({
-          searchError: err,
-          searching: false,
-        })
+    } catch (err) {
+      this.setState({
+        searchError: err,
+        searching: false,
       })
+    }
   }
 
   render() {

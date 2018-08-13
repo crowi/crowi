@@ -61,7 +61,7 @@ export default class SearchPage extends React.Component {
     this.search(this.buildQuery({ type }))
   }
 
-  search(query) {
+  async search(query) {
     const { q = '', type = '' } = query
     if (q === '') {
       this.setState({
@@ -74,23 +74,19 @@ export default class SearchPage extends React.Component {
       return true
     }
 
-    this.props.crowi
-      .apiGet('/search', query)
-      .then(res => {
-        this.changeURL(query)
-        this.setState({
-          searchingKeyword: q,
-          searchingType: type,
-          searchedPages: res.data,
-          searchResultMeta: res.meta,
-        })
+    try {
+      const { data, meta } = await this.props.crowi.apiGet('/search', query)
+      this.changeURL(query)
+      this.setState({
+        searchingKeyword: q,
+        searchingType: type,
+        searchedPages: data,
+        searchResultMeta: meta,
       })
-      .catch(err => {
-        // TODO error
-        this.setState({
-          searchError: err,
-        })
-      })
+    } catch (err) {
+      // TODO error
+      this.setState({ searchError: err })
+    }
   }
 
   render() {
