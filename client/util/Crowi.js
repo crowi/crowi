@@ -10,6 +10,7 @@ export default class Crowi {
     this.context = context
     this.config = {}
     this.csrfToken = context.csrfToken
+    this.setUser(context.user)
 
     this.window = window
     this.location = window.location || {}

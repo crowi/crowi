@@ -6,6 +6,7 @@ import moment from 'moment'
 
 import Crowi from './util/Crowi'
 import CrowiRenderer from './util/CrowiRenderer'
+import CrowiAuth from './util/CrowiAuth'
 
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'
@@ -52,6 +53,9 @@ if (!isSharePage) {
 
 const crowiRenderer = new CrowiRenderer(crowi)
 window.crowiRenderer = crowiRenderer
+
+const crowiAuth = new CrowiAuth(crowi)
+window.crowiAuth = crowiAuth
 
 const componentMappings = {
   'search-top': <HeaderSearchBox crowi={crowi} />,
