@@ -172,7 +172,7 @@ $(function() {
   var pageId = $('#content-main').data('page-id')
   var revisionId = $('#content-main').data('page-revision-id')
   var revisionCreatedAt = $('#content-main').data('page-revision-created')
-  var currentUser = $('#content-main').data('current-user')
+  var currentUser = crowi.getUser().id
   var isSeen = $('#content-main').data('page-is-seen')
   var pagePath = $('#content-main').data('path')
   var isSharePage = !!$('#content-main').data('is-share-page')
