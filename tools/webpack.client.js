@@ -12,7 +12,7 @@ const config = {
       'bootstrap-sass',
       'inline-attachment/src/inline-attachment.js',
       'jquery.cookie',
-      './client/thirdparty-js/jquery.selection.js',
+      'jquery.selection.js',
       'babel-polyfill',
     ],
     app: path.join(ROOT, 'client/app.js'),
@@ -20,12 +20,13 @@ const config = {
     presentation: path.join(ROOT, 'client/crowi-presentation.js'),
     form: path.join(ROOT, 'client/crowi-form.js'),
     admin: path.join(ROOT, 'client/crowi-admin.js'),
+    installer: path.join(ROOT, 'client/crowi-installer.js'),
   },
   output: {
     path: path.join(ROOT, 'public/js'),
     filename: '[name].js',
   },
-  devtool: 'inline-source-map',
+  devtool: 'source-map',
   resolve: {
     modules: ['./node_modules', './client/thirdparty-js'],
   },
@@ -55,12 +56,9 @@ const config = {
     ],
   },
   optimization: {
-    splitChunks: {
-      name: 'bundled',
-    },
+    runtimeChunk: 'single',
   },
   plugins: [
-    new webpack.EnvironmentPlugin(['NODE_ENV']),
     new webpack.ProvidePlugin({
       $: 'jquery',
       jQuery: 'jquery',
