@@ -1,6 +1,10 @@
 CHANGES
 ========
 
+## 1.6.5
+
+- Fix: Fix: Can't add page grant correctly with mongodb 3.6 (#325)
+
 ## 1.6.4
 
 - Fix: Can't unportalize in case (#286)
