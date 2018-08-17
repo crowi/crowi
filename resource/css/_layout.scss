@@ -224,17 +224,19 @@
 @include media-breakpoint-only(sm) {
   .crowi.main-container {
     .main {
-      article header {
-        .bookmark-link {
-          font-size: 1.3em;
-        }
-        h1 {
-          font-size: 1.4em;
-          margin-bottom: 0;
+      article  {
+        .header-wrap.sps--blw {
+          width: 100%;
         }
 
-        &.affix {
-          width: 100%;
+        header {
+          .bookmark-link {
+            font-size: 1.3em;
+          }
+          h1 {
+            font-size: 1.4em;
+            margin-bottom: 0;
+          }
         }
       }
     }
@@ -245,15 +247,8 @@
 @include media-breakpoint-only(xs) {
   .crowi.main-container {
     .main {
-      article header {
-        .bookmark-link {
-          font-size: 1em;
-        }
-        h1 {
-          font-size: 1.1em;
-        }
-
-        &.affix {
+      article {
+        .header-wrap.sps--blw {
           h1 {
             font-size: 1.1em;
           }
@@ -264,6 +259,15 @@
 
           p.stopper {
             right: 20px;
+          }
+        }
+
+        header {
+          .bookmark-link {
+            font-size: 1em;
+          }
+          h1 {
+            font-size: 1.1em;
           }
         }
       }

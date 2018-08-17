@@ -1,6 +1,8 @@
 /* Author: Sotaro KARASAWA <sotarok@crocos.co.jp>
 */
 
+import 'scrollpos-styler'
+
 const Crowi = {}
 
 if (!window) {
@@ -496,21 +498,11 @@ $(function() {
     }
 
     // header
-    var $header = $('#page-header')
-    if ($header.length > 0) {
-      var headerHeight = $header.outerHeight(true)
-      $('.header-wrap').css({ height: headerHeight + 16 + 'px' })
-      $header.affix({
-        offset: {
-          top: function() {
-            return headerHeight + 86 // (54 header + 16 header padding-top + 16 content padding-top)
-          },
-        },
-      })
-      $('[data-affix-disable]').on('click', function(e) {
-        var $elm = $($(this).data('affix-disable'))
-        $(window).off('.affix')
-        $elm.removeData('affix').removeClass('affix affix-top affix-bottom')
+    var $headerWrap = $('#page-header').parent()
+    if ($headerWrap.length > 0) {
+      $headerWrap.attr('data-sps-offset', $('.crowi-header').outerHeight())
+      $('.stopper').on('click', e => {
+        $headerWrap.removeClass('sps sps--abv sps--blw')
         return false
       })
     }
