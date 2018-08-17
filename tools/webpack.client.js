@@ -9,7 +9,7 @@ const config = {
   entry: {
     bundled: [
       'jquery',
-      'bootstrap',
+      'bootstrap/dist/js/bootstrap.bundle.min.js',
       'inline-attachment/src/inline-attachment.js',
       'jquery.cookie',
       'jquery.selection.js',
