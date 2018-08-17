@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
-import { Modal, Table, Alert } from 'react-bootstrap'
+import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 
 class AccessLogModal extends React.Component {
@@ -101,7 +101,7 @@ class AccessLogModal extends React.Component {
             <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
           </Table>
         ) : (
-          <Alert bsStyle="info">{t('No one accessed yet')}</Alert>
+          <Alert color="info">{t('No one accessed yet')}</Alert>
         )}
       </div>
     )
@@ -180,17 +180,15 @@ class AccessLogModal extends React.Component {
       error,
     } = this.state
     return (
-      <Modal className="access-log-modal" show={show} onHide={onHide} bsSize="large">
-        <Modal.Header closeButton>
-          <Modal.Title id="contained-modal-title-lg">{t('Access Log')}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
+      <Modal className="access-log-modal" isOpen={show} toggle={onHide} size="lg">
+        <ModalHeader id="contained-modal-title-lg">{t('Access Log')}</ModalHeader>
+        <ModalBody>
           {error ? (
-            <Alert bsStyle="danger">
+            <Alert color="danger">
               <p>{t('modal_access_log.error.message')}</p>
             </Alert>
           ) : total === 0 ? (
-            <Alert bsStyle="info">
+            <Alert color="info">
               <p>{t('modal_access_log.no_access_log_is_exists_yet')}</p>
             </Alert>
           ) : (
@@ -199,7 +197,7 @@ class AccessLogModal extends React.Component {
               <Pagination current={current} count={count} onClick={this.movePage} />
             </div>
           )}
-        </Modal.Body>
+        </ModalBody>
       </Modal>
     )
   }

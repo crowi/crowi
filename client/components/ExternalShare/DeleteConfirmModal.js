@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
-import { Button, Modal, Alert } from 'react-bootstrap'
+import { Button, Modal, ModalHeader, ModalBody, ModalFooter, Alert } from 'reactstrap'
 
 class DeleteConfirmModal extends React.Component {
   constructor(props) {
@@ -29,20 +29,18 @@ class DeleteConfirmModal extends React.Component {
     const { show, onHide, t } = this.props
     const { error } = this.state
     return (
-      <Modal show={show} onHide={onHide}>
-        <Modal.Header closeButton>
-          <Modal.Title>{t('Delete shared link to this page?')}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {error && <Alert bsStyle="danger">{t('share.error.can_not_delete')}</Alert>}
+      <Modal isOpen={show} toggle={onHide}>
+        <ModalHeader toggle={onHide}>{t('Delete shared link to this page?')}</ModalHeader>
+        <ModalBody>
+          {error && <Alert color="danger">{t('share.error.can_not_delete')}</Alert>}
           <p>{t('No one can see this page if the link is deleted')}</p>
-        </Modal.Body>
-        <Modal.Footer>
+        </ModalBody>
+        <ModalFooter>
           <Button onClick={onHide}>{t('Cancel')}</Button>
-          <Button onClick={this.handleDelete} bsStyle="danger">
+          <Button onClick={this.handleDelete} color="danger">
             {t('Delete')}
           </Button>
-        </Modal.Footer>
+        </ModalFooter>
       </Modal>
     )
   }
