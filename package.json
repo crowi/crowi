@@ -105,6 +105,7 @@
     "redis": "~2.6.5",
     "reveal.js": "~3.6.0",
     "sass-loader": "~6.0.6",
+    "scrollpos-styler": "^0.7.0",
     "socket.io": "~2.0.3",
     "socket.io-client": "~2.0.3",
     "sprintf": "~0.1.5",

@@ -8,12 +8,12 @@
 
     article {
       background: #fff;
-      height: calc(100vh - #{$crowiHeaderHeight});
+      min-height: calc(100vh - #{$crowiHeaderHeight});
       display: flex;
       flex-direction: column;
     }
 
-    article header {
+    article .header-wrap {
       background: #fff;
       width: 100%;
 
@@ -21,11 +21,16 @@
         display: none;
       }
 
-      &.affix {
-        width: 100%;
+      &.sps {
+        position: sticky;
+        top: 0;
+      }
+
+      &.sps--blw {
+        width: 100vw;
         top: 0;
         left: 0;
-        padding: 5px 20px;
+        padding: 8px 20px 8px;
         z-index: 1039;
         background: rgba(255, 255, 255, .9);
         box-shadow: 0 0px 2px #999;
@@ -37,21 +42,25 @@
         p.stopper {
           display: block;
           position: absolute;
-          bottom: -30px;
+          bottom: -32px;
+          width: 40px;
+          height: 32px;
+          line-height: 32px;
           right: 10px;
           background: #fff;
-          padding: 7px 14px;
           margin: 0;
           border: solid 1px #ccc;
           border-top: none;
           border-radius: 0 0 5px 5px;
           font-size: .8em;
+          text-align: center;
+          cursor: pointer;
         }
       }
 
     }
 
-    &.col-md-12 article header.affix {
+    &.col-md-12 article .header-wrap.sps--blw {
       width: 100%;
     }
 
@@ -280,7 +289,7 @@
     .main { // {{{
       width: 100%;
 
-      article header.affix {
+      article .header-wrap.sps--blw {
         width: 100%;
       }
     } // }}}
