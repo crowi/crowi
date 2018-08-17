@@ -64,16 +64,11 @@
 .search-result {
   .search-result-list {
     nav {
-      &.sps--blw {
-        top: 8px;
-        width: 33.33333%;
-        padding-right: 30px;
-        padding-bottom: 50px;
-        height: 100%;
-        overflow-y: scroll;
-      }
+      position: sticky;
+      top: 0;
+      max-height: 100vh;
+      overflow-y: scroll;
       .nav {
-
         > li {
           padding: 0px 11px 0 8px;
           &.active {

@@ -6,6 +6,18 @@ import SearchResultList from './SearchResultList'
 
 // Search.SearchResult
 export default class SearchResult extends React.Component {
+  constructor(props) {
+    super(props)
+
+    this.state = { active: null }
+  }
+
+  updateActivePage(pageId) {
+    if (this.state.active !== pageId) {
+      this.setState({ active: pageId })
+    }
+  }
+
   isNotSearchedYet() {
     return !this.props.searchResultMeta.took
   }
@@ -53,7 +65,14 @@ export default class SearchResult extends React.Component {
     const listView = this.props.pages.map(page => {
       const pageId = '#' + page._id
       return (
-        <Page page={page} linkTo={pageId} key={page._id} excludePathString={excludePathString}>
+        <Page
+          page={page}
+          linkTo={pageId}
+          key={page._id}
+          excludePathString={excludePathString}
+          isActive={this.state.active === page._id}
+          onClick={() => this.updateActivePage(page._id)}
+        >
           <div className="page-list-option">
             <a href={page.path}>
               <i className="fa fa-arrow-circle-right" />
@@ -63,11 +82,6 @@ export default class SearchResult extends React.Component {
       )
     })
 
-    // TODO あとでなんとかする
-    setTimeout(() => {
-      $('#search-result-list > nav').affix({ offset: { top: 120 } })
-    }, 1200)
-
     /*
     UI あとで考える
     <span className="search-result-meta">Found: {this.props.searchResultMeta.total} pages with "{this.props.searchingKeyword}"</span>
@@ -76,7 +90,7 @@ export default class SearchResult extends React.Component {
       <div className="content-main">
         <div className="search-result row" id="search-result">
           <div className="col-md-4 d-none d-md-block page-list search-result-list" id="search-result-list">
-            <nav data-spy="affix" data-offset-top="120">
+            <nav>
               <ul className="page-list-ul nav">{listView}</ul>
             </nav>
           </div>
