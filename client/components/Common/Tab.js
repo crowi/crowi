@@ -12,7 +12,6 @@ export default class Tab extends React.Component {
 
   toggle(tab) {
     return () => {
-      console.log(tab)
       if (this.state.active !== tab) {
         this.setState({ active: tab })
       }
