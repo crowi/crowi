@@ -8,6 +8,7 @@ export default class TabItem extends React.Component {
 }
 
 TabItem.propTypes = {
+  children: PropTypes.node.isRequired,
   title: PropTypes.string.isRequired,
 }
 
