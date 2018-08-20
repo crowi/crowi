@@ -116,7 +116,13 @@ div.body {
     background: #444;
     color: #f0f0f0;
     font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+    padding: 9.5px;
+    border-radius: 4px;
     word-wrap: break-word;
+
+    code {
+      background: transparent;
+    }
   }
 
   img {
@@ -167,7 +173,6 @@ div.body {
       background: #ccc;
       color: #333;
       font-size: .8em;
-
     }
   };
 
