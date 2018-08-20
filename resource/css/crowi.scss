@@ -28,6 +28,11 @@ ul {
   padding-left: 18px;
 }
 
+code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: lighten($pink, 40);
+}
 
 .meta {
   margin-top: 0;
