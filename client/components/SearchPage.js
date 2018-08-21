@@ -14,6 +14,7 @@ export default class SearchPage extends React.Component {
 
     const { q = '', type = '' } = queryString.parse(this.props.crowi.location.search)
     this.state = {
+      searching: false,
       searchingKeyword: q,
       searchingType: type,
       searchedPages: [],
@@ -74,6 +75,7 @@ export default class SearchPage extends React.Component {
       return true
     }
 
+    this.setState({ searching: true })
     try {
       const { data, meta } = await this.props.crowi.apiGet('/search', query)
       this.changeURL(query)
@@ -82,10 +84,11 @@ export default class SearchPage extends React.Component {
         searchingType: type,
         searchedPages: data,
         searchResultMeta: meta,
+        searching: false,
       })
     } catch (err) {
       // TODO error
-      this.setState({ searchError: err })
+      this.setState({ searchError: err, searching: false })
     }
   }
 
@@ -96,6 +99,7 @@ export default class SearchPage extends React.Component {
           keyword={this.state.searchingKeyword}
           type={this.state.searchingType}
           total={this.state.searchResultMeta.total}
+          searching={this.state.searching}
           changeType={this.changeType}
         />
         <SearchResult
