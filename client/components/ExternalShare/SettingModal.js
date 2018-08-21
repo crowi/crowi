@@ -140,12 +140,7 @@ class SettingModal extends React.Component {
               </Col>
             </FormGroup>
           </div>
-          <DeleteConfirmModal
-            show={showConfirmModal}
-            onHide={this.handleClose}
-            handleClose={this.handleCloseAll}
-            handleDelete={handleDelete}
-          />
+          <DeleteConfirmModal show={showConfirmModal} onHide={this.handleClose} handleClose={this.handleCloseAll} handleDelete={handleDelete} />
         </Modal.Body>
         <Modal.Footer>
           <Button className="pull-left" onClick={this.handleOpen} bsStyle="danger" disabled={isChanging}>
