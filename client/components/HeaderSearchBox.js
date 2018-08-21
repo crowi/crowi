@@ -2,6 +2,7 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
+import queryString from 'query-string'
 
 import SearchForm from './HeaderSearchBox/SearchForm'
 import SearchSuggest from './HeaderSearchBox/SearchSuggest'
@@ -10,10 +11,11 @@ export default class HeaderSearchBox extends React.Component {
   constructor(props) {
     super(props)
 
-    const { pathname = '' } = this.props.crowi.location
+    const { pathname = '', search: locationSearch } = this.props.crowi.location
+    const parsedKeyword = queryString.parse(locationSearch).q || ''
     this.state = {
       isSearchPage: pathname.startsWith('/_search'),
-      searchingKeyword: '',
+      searchingKeyword: parsedKeyword,
       searchedPages: {},
       searchError: null,
       searching: false,
@@ -66,7 +68,12 @@ export default class HeaderSearchBox extends React.Component {
     const { isSearchPage } = this.state
     return (
       <div className="search-box">
-        <SearchForm onSearchFormChanged={this.search} isShown={this.isShown} isSearchPage={isSearchPage} />
+        <SearchForm
+          onSearchFormChanged={this.search}
+          isShown={this.isShown}
+          isSearchPage={isSearchPage}
+          keyword={this.state.searchingKeyword}
+        />
         {!isSearchPage && (
           <SearchSuggest
             searchingKeyword={this.state.searchingKeyword}

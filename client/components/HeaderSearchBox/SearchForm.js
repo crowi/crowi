@@ -9,7 +9,7 @@ export default class SearchForm extends React.Component {
     super(props)
 
     this.state = {
-      keyword: '',
+      keyword: props.keyword,
       searchedKeyword: '',
     }
 
