@@ -25,8 +25,10 @@ class SearchToolbar extends React.Component {
       <div className="search-toolbar row">
         <div className="search-meta col-xs-4">
           <h3 className="search-keyword">{this.props.keyword}</h3>
-          <small className="text-muted">{this.props.searching && <Icon name="spinner" spin />  || t('search.toolbar.results', { value: this.props.total })}</small>
-
+          <small className="text-muted">
+            {(this.props.searching && <Icon name="spinner" spin />) ||
+              t('search.toolbar.results', { value: this.props.total })}
+          </small>
         </div>
         <nav className="search-navbar col-xs-8">
           <Nav bsClass="nav navbar-nav" activeKey={this.getActiveType()} onSelect={this.props.changeType}>
