@@ -116,6 +116,7 @@ SearchForm.propTypes = {
   isShown: PropTypes.func.isRequired,
   isSearchPage: PropTypes.bool.isRequired,
   pollInterval: PropTypes.number,
+  keyword: PropTypes.string,
 }
 SearchForm.defaultProps = {
   pollInterval: 1000,
