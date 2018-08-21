@@ -106,6 +106,7 @@
     "sass-loader": "~7.1.0",
     "socket.io": "~2.1.1",
     "socket.io-client": "~2.1.1",
+    "socket.io-redis": "^5.2.0",
     "sprintf": "~0.1.5",
     "style-loader": "~0.22.1",
     "swig": "~1.4.0",

@@ -60,7 +60,7 @@ or please write `.env`.
 * `PORT`: Server port. default: `3000`.
 * `NODE_ENV`: `production` OR `development`.
 * `MONGO_URI`: URI to connect to MongoDB. This parameter is also by `MONGOHQ_URL` OR `MONGOLAB_URI`.
-* `REDIS_URL`: URI to connect to Redis (to session store). This parameter is also by `REDISTOGO_URL`.
+* `REDIS_URL`: URI to connect to Redis (used for session store and socket.io). This parameter is also by `REDISTOGO_URL`.
 * `ELASTICSEARCH_URI`: URI to connect to Elasticearch.
 * `PASSWORD_SEED`: A password seed used by password hash generator.
 * `SECRET_TOKEN`: A secret key for verifying the integrity of signed cookies.
@@ -87,7 +87,7 @@ $ docker-compose -f docker-compose.development.yml up
 - Express restarts when a file changed
 - Gulp compiled assets automatically
 
-## When a trouble occured
+#### When a trouble occured
 
 Please try the following commands.
 
