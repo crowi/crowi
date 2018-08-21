@@ -89,11 +89,7 @@ export default class SearchPage extends React.Component {
           </header>
         </div>
 
-        <SearchResult
-          pages={this.state.searchedPages}
-          searchingKeyword={this.state.searchingKeyword}
-          searchResultMeta={this.state.searchResultMeta}
-        />
+        <SearchResult pages={this.state.searchedPages} searchingKeyword={this.state.searchingKeyword} searchResultMeta={this.state.searchResultMeta} />
       </div>
     )
   }
