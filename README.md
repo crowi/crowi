@@ -36,8 +36,8 @@ Dependencies
 -------------
 
 * Node.js (8.x)
-* MongoDB
-* Elasticsearch (optional) ([Doc is here](https://github.com/crowi/crowi/wiki/Configure-Search-Functions))
+* MongoDB (3.x)
+* Elasticsearch (6.3, optional) ([Doc is here](https://github.com/crowi/crowi/wiki/Configure-Search-Functions))
 * Redis (optional)
 * Amazon S3 (optional)
 * Google Project (optional)
