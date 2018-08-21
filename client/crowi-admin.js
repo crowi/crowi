@@ -1,5 +1,3 @@
-import $ from 'jquery'
-
 $(function() {
   $('#slackNotificationForm').on('submit', function(e) {
     $.post('/_api/admin/notification.add', $(this).serialize(), function(res) {
