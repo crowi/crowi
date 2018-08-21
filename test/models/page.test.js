@@ -395,7 +395,6 @@ describe('Page', () => {
       describe('findChildrenByPath', () => {
         it('should not contain other trees', async () => {
           const pages = await Page.findChildrenByPath('/car', user, {})
-          console.log('pages', pages)
           expect(pages).to.instanceof(Array)
           expect(pages.some(page => page.path === '/carrot')).to.be.equal(false)
         })
