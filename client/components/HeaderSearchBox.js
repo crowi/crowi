@@ -2,17 +2,21 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
+import queryString from 'query-string'
 
 import SearchForm from './HeaderSearchBox/SearchForm'
 import SearchSuggest from './HeaderSearchBox/SearchSuggest'
 
-export default class SearchBox extends React.Component {
+export default class HeaderSearchBox extends React.Component {
   constructor(props) {
     super(props)
 
+    const { pathname = '', search: locationSearch } = this.props.crowi.location
+    const parsedKeyword = queryString.parse(locationSearch).q || ''
     this.state = {
-      searchingKeyword: '',
-      searchedPages: [],
+      isSearchPage: pathname.startsWith('/_search'),
+      searchingKeyword: parsedKeyword,
+      searchedPages: {},
       searchError: null,
       searching: false,
       focused: false,
@@ -26,7 +30,7 @@ export default class SearchBox extends React.Component {
     this.setState({ focused: !!focused })
   }
 
-  search(data) {
+  async search(data) {
     const keyword = data.keyword
     if (keyword === '') {
       this.setState({
@@ -42,44 +46,52 @@ export default class SearchBox extends React.Component {
       searching: true,
     })
 
-    this.props.crowi
-      .apiGet('/search', { q: keyword })
-      .then(res => {
-        this.setState({
-          searchingKeyword: keyword,
-          searchedPages: res.data,
-          searching: false,
-          searchError: null,
-        })
+    try {
+      const [{ data: portalPages }, { data: publicPages }, { data: userPages }] = await Promise.all(
+        ['portal', 'public', 'user'].map(type => this.props.crowi.apiGet('/search', { q: keyword, type, limit: 10 })),
+      )
+      this.setState({
+        searchingKeyword: keyword,
+        searchedPages: { portalPages, publicPages, userPages },
+        searching: false,
+        searchError: null,
       })
-      .catch(err => {
-        this.setState({
-          searchError: err,
-          searching: false,
-        })
+    } catch (err) {
+      this.setState({
+        searchError: err,
+        searching: false,
       })
+    }
   }
 
   render() {
+    const { isSearchPage } = this.state
     return (
       <div className="search-box">
-        <SearchForm onSearchFormChanged={this.search} isShown={this.isShown} />
-        <SearchSuggest
-          searchingKeyword={this.state.searchingKeyword}
-          searchedPages={this.state.searchedPages}
-          searchError={this.state.searchError}
-          searching={this.state.searching}
-          focused={this.state.focused}
+        <SearchForm
+          onSearchFormChanged={this.search}
+          isShown={this.isShown}
+          isSearchPage={isSearchPage}
+          keyword={this.state.searchingKeyword}
         />
+        {!isSearchPage && (
+          <SearchSuggest
+            searchingKeyword={this.state.searchingKeyword}
+            searchedPages={this.state.searchedPages}
+            searchError={this.state.searchError}
+            searching={this.state.searching}
+            focused={this.state.focused}
+          />
+        )}
       </div>
     )
   }
 }
 
-SearchBox.propTypes = {
+HeaderSearchBox.propTypes = {
   crowi: PropTypes.object.isRequired,
   // pollInterval: PropTypes.number,
 }
-SearchBox.defaultProps = {
+HeaderSearchBox.defaultProps = {
   // pollInterval: 1000,
 }

@@ -3,16 +3,18 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
+import queryString from 'query-string'
 import SearchResult from './SearchPage/SearchResult'
 
 export default class PageListSearch extends React.Component {
   constructor(props) {
     super(props)
 
+    const { search = '' } = this.props.crowi.location
+    const { q = '' } = queryString.parse(search)
     this.state = {
-      location: this.props.crowi.location,
       tree: $('#search-listpage-input').data('path'),
-      searchingKeyword: this.props.query.q || '',
+      searchingKeyword: q,
       searchedKeyword: '',
       searchedPages: [],
       searchResultMeta: {},
@@ -54,21 +56,6 @@ export default class PageListSearch extends React.Component {
 
   componentWillUnmount() {}
 
-  static getQueryByLocation(location) {
-    let search = location.search || ''
-    let query = {}
-
-    search
-      .replace(/^\?/, '')
-      .split('&')
-      .forEach(function(element) {
-        let queryParts = element.split('=')
-        query[queryParts[0]] = decodeURIComponent(queryParts[1]).replace(/\+/g, ' ')
-      })
-
-    return query
-  }
-
   handleChange(event) {
     // this is not fired now because of force-data-bound by jQuery
     const keyword = event.target.value
@@ -90,7 +77,7 @@ export default class PageListSearch extends React.Component {
 
   changeURL(keyword, refreshHash) {
     const tree = this.state.tree
-    let hash = location.hash || ''
+    let { hash = '' } = this.props.crowi.location
     // TODO 整理する
     if (refreshHash || this.state.searchedKeyword !== '') {
       hash = ''
@@ -140,7 +127,7 @@ export default class PageListSearch extends React.Component {
 
   render() {
     return (
-      <div>
+      <div className="content-main">
         <input
           type="hidden"
           name="q"
@@ -162,9 +149,7 @@ export default class PageListSearch extends React.Component {
 
 PageListSearch.propTypes = {
   crowi: PropTypes.object.isRequired,
-  query: PropTypes.object,
 }
 PageListSearch.defaultProps = {
   // pollInterval: 1000,
-  query: PageListSearch.getQueryByLocation(location || {}),
 }
