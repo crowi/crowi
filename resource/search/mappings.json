@@ -50,37 +50,33 @@
       "properties" : {
         "path": {
           "type": "text",
-          "copy_to": ["path_raw", "path_ja", "path_en"],
-          "index": false
-        },
-        "path_raw": {
-          "type": "text",
-          "analyzer": "standard"
-        },
-        "path_ja": {
-          "type": "text",
-          "analyzer": "sudachi_analyzer"
-        },
-        "path_en": {
-          "type": "text",
-          "analyzer": "english"
+          "fields": {
+            "raw": {
+              "type": "text",
+              "analyzer": "keyword"
+            },
+            "ja": {
+              "type": "text",
+              "analyzer": "sudachi_analyzer"
+            },
+            "en": {
+              "type": "text",
+              "analyzer": "english"
+            }
+          }
         },
         "body": {
           "type": "text",
-          "copy_to": ["body_raw", "body_ja", "body_en"],
-          "index": false
-        },
-        "body_raw": {
-          "type": "text",
-          "analyzer": "standard"
-        },
-        "body_ja": {
-          "type": "text",
-          "analyzer": "sudachi_analyzer"
-        },
-        "body_en": {
-          "type": "text",
-          "analyzer": "english"
+          "fields": {
+            "ja": {
+              "type": "text",
+              "analyzer": "sudachi_analyzer"
+            },
+            "en": {
+              "type": "text",
+              "analyzer": "english"
+            }
+          }
         },
         "username": {
           "type": "keyword"
