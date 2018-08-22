@@ -143,11 +143,11 @@ export default class Crowi {
     return null
   }
 
-  apiGet(path, params) {
+  async apiGet(path, params) {
     return this.apiRequest('get', path, { params: params })
   }
 
-  apiPost(path, params) {
+  async apiPost(path, params) {
     if (!params._csrf) {
       params._csrf = this.csrfToken
     }
@@ -155,22 +155,20 @@ export default class Crowi {
     return this.apiRequest('post', path, params)
   }
 
-  apiRequest(method, path, params) {
-    return new Promise((resolve, reject) => {
-      axios[method](`/_api${path}`, params)
-        .then(({ data }) => {
-          if (data.ok) {
-            resolve(data)
-          } else {
-            // FIXME?
-            reject(new Error(data.error))
-          }
-        })
-        .catch(res => {
-          // FIXME?
-          reject(new Error('Error'))
-        })
+  async apiRequest(method, path, params) {
+    const createError = (message, info = {}) => {
+      let error = new Error(message)
+      error.info = info
+      return error
+    }
+    const { data } = await axios[method](`/_api${path}`, params).catch(function() {
+      throw createError('Error')
     })
+    const { ok, error, info } = data
+    if (ok) {
+      return data
+    }
+    throw createError(error, info)
   }
 
   static escape(html, encode) {
@@ -187,9 +185,7 @@ export default class Crowi {
       n = n.toLowerCase()
       if (n === 'colon') return ':'
       if (n.charAt(0) === '#') {
-        return n.charAt(1) === 'x'
-          ? String.fromCharCode(parseInt(n.substring(2), 16))
-          : String.fromCharCode(+n.substring(1))
+        return n.charAt(1) === 'x' ? String.fromCharCode(parseInt(n.substring(2), 16)) : String.fromCharCode(+n.substring(1))
       }
       return ''
     })

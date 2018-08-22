@@ -106,6 +106,9 @@
         <i class="fa fa-wrench"></i> <span class="caret"></span>
       </a>
       <div class="dropdown-menu dropdown-menu-right">
+        {% if !isTopPage() %}
+        <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Move pages under', path|path2name ) }}</a>
+        {% endif %}
         <a class="dropdown-item" href="#" data-target="#unportalize" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Unportalize') }}</a>
       </div>
     </li>
@@ -166,7 +169,18 @@
 <div class="page-list-container">
   <ul class="nav nav-tabs">
     <li class="nav-item"><a class="nav-link active" href="#view-list" data-toggle="tab">{{ t('List View') }}</a></li>
-    <li class="nav-item"><a class="nav-link" href="#view-timeline" data-toggle="tab">{{ t('Timeline View') }}</a></li>
+    <li class="nav-item"><a href="#view-timeline" data-toggle="tab">{{ t('Timeline View') }}</a></li>
+
+    {% if !isTopPage() and !isTrashPage() and !isUserPageList(path) %}
+      <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">
+          <i class="fa fa-wrench"></i> <span class="caret"></span>
+        </a>
+        <div class="dropdown-menu dropdown-menu-right">
+          <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Move pages under', path|path2name ) }}</a>
+        </div>
+      </li>
+    {% endif %}
   </ul>
 
   <div class="tab-content">
@@ -222,6 +236,9 @@
 
 
 {% block content_footer %}
+<div id="rename-tree">
+</div>
+
 <footer>
 
 </footer>

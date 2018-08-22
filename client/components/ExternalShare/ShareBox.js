@@ -120,14 +120,7 @@ class ShareBox extends React.Component {
           share={share}
           crowi={crowi}
         />
-        {showAccessLogModal && (
-          <AccessLogModal
-            show={showAccessLogModal}
-            onHide={this.handleCloseAccessLogModal}
-            pageId={pageId}
-            crowi={crowi}
-          />
-        )}
+        {showAccessLogModal && <AccessLogModal show={showAccessLogModal} onHide={this.handleCloseAccessLogModal} pageId={pageId} crowi={crowi} />}
       </div>
     )
   }
