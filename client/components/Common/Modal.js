@@ -36,13 +36,7 @@ export default class Modal extends React.Component {
                   <br />
                   <div className="input-group">
                     <span className="input-group-addon">http://localhost:3000</span>
-                    <input
-                      type="text"
-                      className="form-control"
-                      name="new_path"
-                      id="newPageName"
-                      value="/user/sotarok/memo/2017/04/24"
-                    />
+                    <input type="text" className="form-control" name="new_path" id="newPageName" value="/user/sotarok/memo/2017/04/24" />
                   </div>
                 </div>
                 <div className="checkbox">
