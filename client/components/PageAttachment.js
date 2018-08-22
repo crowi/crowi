@@ -93,11 +93,7 @@ export default class PageAttachment extends React.Component {
     return (
       <div>
         <p>Attachments</p>
-        <PageAttachmentList
-          attachments={this.state.attachments}
-          inUse={this.state.inUse}
-          onAttachmentDeleteClicked={this.onAttachmentDeleteClicked}
-        />
+        <PageAttachmentList attachments={this.state.attachments} inUse={this.state.inUse} onAttachmentDeleteClicked={this.onAttachmentDeleteClicked} />
         <DeleteAttachmentModal
           show={showModal}
           animation={false}
