@@ -84,11 +84,7 @@ export default class SearchForm extends React.Component {
     const formClear = this.getFormClearComponent()
 
     return (
-      <form
-        action="/_search"
-        className="search-form form-group input-group search-top-input-group"
-        onSubmit={this.handleSubmit}
-      >
+      <form action="/_search" className="search-form form-group input-group search-top-input-group" onSubmit={this.handleSubmit}>
         <input
           autoComplete="off"
           type="text"
