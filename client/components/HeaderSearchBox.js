@@ -68,12 +68,7 @@ export default class HeaderSearchBox extends React.Component {
     const { isSearchPage } = this.state
     return (
       <div className="search-box">
-        <SearchForm
-          onSearchFormChanged={this.search}
-          isShown={this.isShown}
-          isSearchPage={isSearchPage}
-          keyword={this.state.searchingKeyword}
-        />
+        <SearchForm onSearchFormChanged={this.search} isShown={this.isShown} isSearchPage={isSearchPage} keyword={this.state.searchingKeyword} />
         {!isSearchPage && (
           <SearchSuggest
             searchingKeyword={this.state.searchingKeyword}

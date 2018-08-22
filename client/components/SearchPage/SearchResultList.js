@@ -13,12 +13,7 @@ export default class SearchResultList extends React.Component {
             <a href={page.path}>{page.path}</a>
           </h2>
           <div className="wiki">
-            <PageBody
-              className="hige"
-              page={page}
-              pageBody={pageBody}
-              highlightKeywords={this.props.searchingKeyword}
-            />
+            <PageBody className="hige" page={page} pageBody={pageBody} highlightKeywords={this.props.searchingKeyword} />
           </div>
         </div>
       )
