@@ -1,0 +1,36 @@
+.tree {
+  padding-top: 8px;
+  > li {
+    list-style: none;
+  }
+}
+
+.leaf {
+  display: flex;
+  > .changes {
+    margin-left: 8px;
+  }
+  > .errors {
+    display: flex;
+    flex: 1;
+    color: #721c24;
+    > .dotted-line {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      height: 100%;
+      padding: 0 4px;
+      svg {
+        width: 100%;
+        height: 8px;
+        line {
+          stroke: #721c24;
+          stroke-width: 2px;
+          stroke-linecap: round;
+          stroke-dasharray: 0, 8;
+          stroke-dashoffset: 2px;
+        }
+      }
+    }
+  }
+}
