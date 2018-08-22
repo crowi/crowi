@@ -102,11 +102,7 @@ export default class SearchPage extends React.Component {
           searching={this.state.searching}
           changeType={this.changeType}
         />
-        <SearchResult
-          pages={this.state.searchedPages}
-          searchingKeyword={this.state.searchingKeyword}
-          searchResultMeta={this.state.searchResultMeta}
-        />
+        <SearchResult pages={this.state.searchedPages} searchingKeyword={this.state.searchingKeyword} searchResultMeta={this.state.searchResultMeta} />
       </div>
     )
   }

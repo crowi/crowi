@@ -34,14 +34,7 @@ class ShareBoxContent extends React.Component {
       return (
         <div className="share-box-content">
           <InputGroup>
-            <FormControl
-              bsClass="copy-link form-control"
-              type="text"
-              defaultValue={url}
-              readOnly
-              onClick={this.selectAction}
-              inputRef={this.createRef}
-            />
+            <FormControl bsClass="copy-link form-control" type="text" defaultValue={url} readOnly onClick={this.selectAction} inputRef={this.createRef} />
             <InputGroup.Button onClick={this.copyAction}>
               <Button>Copy</Button>
             </InputGroup.Button>
