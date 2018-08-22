@@ -82,9 +82,7 @@ export default class SearchResult extends React.Component {
           </div>
           <div className="col-md-8 search-result-content" id="search-result-content">
             <div className="search-result-meta">
-              <i className="fa fa-lightbulb-o" /> Found {this.props.searchResultMeta.total} pages with &quot;{
-                this.props.searchingKeyword
-              }&quot;
+              <i className="fa fa-lightbulb-o" /> Found {this.props.searchResultMeta.total} pages with &quot;{this.props.searchingKeyword}&quot;
             </div>
             <SearchResultList pages={this.props.pages} searchingKeyword={this.props.searchingKeyword} />
           </div>
