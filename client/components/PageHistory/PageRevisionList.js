@@ -22,11 +22,7 @@ export default class PageRevisionList extends React.Component {
 
       return (
         <div className="revision-hisory-outer" key={'revision-history-' + revisionId}>
-          <Revision
-            revision={revision}
-            onDiffOpenClicked={this.props.onDiffOpenClicked}
-            key={'revision-history-rev-' + revisionId}
-          />
+          <Revision revision={revision} onDiffOpenClicked={this.props.onDiffOpenClicked} key={'revision-history-rev-' + revisionId} />
           <RevisionDiff
             revisionDiffOpened={revisionDiffOpened}
             currentRevision={revision}

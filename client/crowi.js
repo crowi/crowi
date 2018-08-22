@@ -557,12 +557,7 @@ $(function() {
         if (res.ok) {
           var comments = res.comments
           $.each(comments, function(i, comment) {
-            var commentContent = createCommentHTML(
-              comment.revision,
-              comment.creator,
-              comment.comment,
-              comment.createdAt,
-            )
+            var commentContent = createCommentHTML(comment.revision, comment.creator, comment.comment, comment.createdAt)
             if (comment.revision == revisionId) {
               $pageCommentListCurrent.append(commentContent)
             } else {
@@ -598,9 +593,7 @@ $(function() {
         if (data.ok) {
           var comment = data.comment
 
-          $pageCommentList.prepend(
-            createCommentHTML(comment.revision, comment.creator, comment.comment, comment.createdAt),
-          )
+          $pageCommentList.prepend(createCommentHTML(comment.revision, comment.creator, comment.comment, comment.createdAt))
           $('#comment-form-comment').val('')
           $('#comment-form-message').text('')
         } else {

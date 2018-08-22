@@ -18,6 +18,7 @@ import BookmarkButton from 'components/BookmarkButton'
 import ShareBox from 'components/ExternalShare/ShareBox'
 import SecretKeywordFormContainer from 'components/ExternalShare/SecretKeywordForm/SecretKeywordFormContainer'
 import AdminShare from 'components/Admin/Share/AdminShare'
+import RenameTree from 'components/RenameTree/RenameTree'
 
 if (!window) {
   window = {}
@@ -62,6 +63,7 @@ const componentMappings = {
   'page-list-search': <PageListSearch crowi={crowi} />,
   'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
   'page-alerts': <PageAlerts pageId={pageId} crowi={crowi} />,
+  'rename-tree': <RenameTree pageId={pageId} crowi={crowi} />,
 
   // 'revision-history': <PageHistory pageId={pageId} />,
   // 'page-comment': <PageComment />,
