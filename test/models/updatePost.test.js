@@ -32,9 +32,7 @@ describe('UpdatePost', function() {
         expect(UpdatePost.getRegExpByPattern('/project/hoge/*')).to.deep.equal(/^\/project\/hoge\/.*/)
         expect(UpdatePost.getRegExpByPattern('/*/MTG/*')).to.deep.equal(/^\/.*\/MTG\/.*/)
         expect(UpdatePost.getRegExpByPattern('自己紹介')).to.deep.equal(/^\/.*自己紹介.*/)
-        expect(UpdatePost.getRegExpByPattern('/user/aoi/メモ/2016/02/10/xxx')).to.deep.equal(
-          /^\/user\/aoi\/メモ\/2016\/02\/10\/xxx/,
-        )
+        expect(UpdatePost.getRegExpByPattern('/user/aoi/メモ/2016/02/10/xxx')).to.deep.equal(/^\/user\/aoi\/メモ\/2016\/02\/10\/xxx/)
         done()
       })
     })
