@@ -127,6 +127,75 @@
   }
 }
 
+.search-toolbar {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 20px 12px;
+  margin: 0 15px 16px;
+  border-bottom: 1px solid $navbar-default-border;
+
+  .search-meta {
+    display: flex;
+    align-items: center;
+    padding: 0;
+    padding-right: 40px;
+    margin: 4px 0;
+
+    h3.search-keyword {
+      margin: 0;
+      padding-right: 10px;
+      flex: 1;
+      word-break: break-all;
+    }
+  }
+
+  .search-navbar {
+    display: flex;
+    flex-wrap: wrap;
+    position: relative;
+    align-items: center;
+    padding: 0;
+
+    .navbar-nav {
+      display: flex;
+      flex-wrap: wrap;
+      position: relative;
+      margin: 0;
+
+      > li {
+        white-space: nowrap;
+        margin: 4px 0;
+
+        &:not(:last-child) {
+          margin-right: 10px;
+        }
+
+        > a {
+          padding: 6px 20px;
+          border-radius: 20px;
+          border: 1px solid transparent;
+
+          i {
+            width: 14px;
+            margin-right: 8px;
+          }
+
+          &:hover {
+            background: transparent;
+            border-color: $navbar-default-link-active-bg;
+          }
+        }
+
+        &.active > a {
+          color: white;
+          border-color: $brand-primary;
+          background: $brand-primary;
+        }
+      }
+    }
+  }
+}
+
 // Smartphone and Tablet
 @media (max-width: $screen-sm-max) {
   .search-top {

@@ -55,3 +55,44 @@
     }
   }
 }
+
+.grouped-page-list {
+  &:first-child {
+    h5 {
+      margin-top: 0;
+    }
+  }
+
+  &:not(:first-child) {
+    margin-top: 16px;
+  }
+
+  h5 {
+    display: flex;
+
+    > i {
+      width: 14px;
+      margin-right: 8px;
+    }
+
+    .title {
+      flex: 1;
+    }
+
+    .more {
+      text-align: center;
+
+      > i {
+        margin-left: 8px;
+      }
+    }
+  }
+
+  .page-list {
+    margin-left: 22px;
+
+    .page-list-ul {
+      margin-bottom: 0;
+    }
+  }
+}
