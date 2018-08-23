@@ -5,8 +5,8 @@ import { Nav, NavItem } from 'react-bootstrap'
 import Icon from 'components/Common/Icon'
 
 class SearchToolbar extends React.Component {
-  constructor() {
-    super()
+  constructor(props) {
+    super(props)
 
     this.searchTypes = ['', 'portal', 'public', 'user']
 
