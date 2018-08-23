@@ -34,13 +34,7 @@ class ShareBoxContent extends React.Component {
       return (
         <div className="share-box-content">
           <InputGroup>
-            <Input
-              className="copy-link"
-              defaultValue={url}
-              readOnly
-              onClick={this.selectAction}
-              innerRef={this.createRef}
-            />
+            <Input className="copy-link" defaultValue={url} readOnly onClick={this.selectAction} innerRef={this.createRef} />
             <InputGroupAddon addonType="append">
               <Button onClick={this.copyAction}>Copy</Button>
             </InputGroupAddon>

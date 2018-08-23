@@ -3,19 +3,7 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
-import {
-  Button,
-  Container,
-  Row,
-  Col,
-  Label,
-  Input,
-  CustomInput,
-  Modal,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-} from 'reactstrap'
+import { Button, Container, Row, Col, Label, Input, CustomInput, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 
 class SettingModal extends React.Component {
   constructor(props) {
@@ -160,12 +148,7 @@ class SettingModal extends React.Component {
               </Col>
             </Row>
           </Container>
-          <DeleteConfirmModal
-            show={showConfirmModal}
-            onHide={this.handleClose}
-            handleClose={this.handleCloseAll}
-            handleDelete={handleDelete}
-          />
+          <DeleteConfirmModal show={showConfirmModal} onHide={this.handleClose} handleClose={this.handleCloseAll} handleDelete={handleDelete} />
         </ModalBody>
         <ModalFooter>
           <Button className="mr-auto" onClick={this.handleOpen} color="danger" disabled={isChanging}>
