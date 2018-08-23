@@ -205,3 +205,7 @@ search:
     more: もっと見る
   toolbar:
     results: '{{value}} 件'
+
+admin:
+  share:
+    enable_external_share: 'Wikiページの外部ユーザーへの共有を有効にする。'
