@@ -181,7 +181,7 @@ class AccessLogModal extends React.Component {
     } = this.state
     return (
       <Modal className="access-log-modal" isOpen={show} toggle={onHide} size="lg">
-        <ModalHeader id="contained-modal-title-lg">{t('Access Log')}</ModalHeader>
+        <ModalHeader>{t('Access Log')}</ModalHeader>
         <ModalBody>
           {error ? (
             <Alert color="danger">
