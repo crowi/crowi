@@ -24,9 +24,5 @@ describe('Search client', function() {
       expect(res.host).to.be.equal('https://user:pass@example.com:9200')
       expect(res.indexName).to.be.equal('crowi_search')
     })
-
-    it('should return host and indexName', () => {
-      expect(1).to.be.equal(1)
-    })
   })
 })
