@@ -168,6 +168,13 @@ share:
   error:
     can_not_create: リンクを作成できませんでした。
     can_not_delete: リンクを削除できませんでした。
+
+page_types:
+  all: すべて
+  portal: ポータル
+  public: パブリック
+  user: ユーザー
+
 Rename tree: 階層を移動する
 rename_tree:
   error:
@@ -192,3 +199,13 @@ modal_access_log:
   no_access_log_is_exists_yet: まだアクセスログは存在しません。
   error:
     message: アクセスログの取得に失敗しました。 ブラウザをリロードしてみてください。
+
+search:
+  suggest:
+    more: もっと見る
+  toolbar:
+    results: '{{value}} 件'
+
+admin:
+  share:
+    enable_external_share: 'Wikiページの外部ユーザーへの共有を有効にする。'
