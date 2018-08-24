@@ -82,24 +82,15 @@ export default class SearchResult extends React.Component {
       )
     })
 
-    /*
-    UI あとで考える
-    <span className="search-result-meta">Found: {this.props.searchResultMeta.total} pages with "{this.props.searchingKeyword}"</span>
-    */
     return (
-      <div className="content-main">
-        <div className="search-result row" id="search-result">
-          <div className="col-md-4 d-none d-md-block page-list search-result-list" id="search-result-list">
-            <nav>
-              <ul className="page-list-ul nav">{listView}</ul>
-            </nav>
-          </div>
-          <div className="col-md-8 search-result-content" id="search-result-content">
-            <div className="search-result-meta">
-              <i className="fa fa-lightbulb-o" /> Found {this.props.searchResultMeta.total} pages with &quot;{this.props.searchingKeyword}&quot;
-            </div>
-            <SearchResultList pages={this.props.pages} searchingKeyword={this.props.searchingKeyword} />
-          </div>
+      <div className="search-result row" id="search-result">
+        <div className="col-md-4 d-none d-md-block page-list search-result-list" id="search-result-list">
+          <nav>
+            <ul className="page-list-ul nav">{listView}</ul>
+          </nav>
+        </div>
+        <div className="col-md-8 search-result-content" id="search-result-content">
+          <SearchResultList pages={this.props.pages} searchingKeyword={this.props.searchingKeyword} />
         </div>
       </div>
     )
