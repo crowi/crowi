@@ -1,6 +1,10 @@
 CHANGES
 ========
 
+## 1.7.0
+
+- TBD
+
 ## 1.6.4
 
 - Fix: Can't unportalize in case (#286)
