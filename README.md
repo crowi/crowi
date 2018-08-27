@@ -85,7 +85,7 @@ $ docker-compose -f docker-compose.development.yml up
 ### Features
 
 - Express restarts when a file changed
-- Gulp compiled assets automatically
+- webpack compiled assets automatically
 
 #### When a trouble occured
 
