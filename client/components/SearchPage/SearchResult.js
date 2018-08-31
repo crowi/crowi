@@ -28,7 +28,7 @@ export default class SearchResult extends React.Component {
     // console.log(this.isError());
     if (this.isError()) {
       return (
-        <div className="content-main">
+        <div>
           <i className="searcing fa fa-exclamation-triangle" /> Error on searching.
         </div>
       )
@@ -44,7 +44,7 @@ export default class SearchResult extends React.Component {
         under = ` under "${this.props.tree}"`
       }
       return (
-        <div className="content-main">
+        <div>
           <i className="fa fa-meh" /> No page found with &quot;{this.props.searchingKeyword}&quot;{under}
         </div>
       )
