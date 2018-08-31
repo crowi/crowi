@@ -1,9 +1,9 @@
 CHANGES
 ========
 
-## 1.7.0
+## 1.6.5
 
-- TBD
+- Fix: Fix: Can't add page grant correctly with mongodb 3.6 (#325)
 
 ## 1.6.4
 
