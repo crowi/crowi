@@ -7,7 +7,7 @@ import SearchResultList from './SearchResultList'
 // Search.SearchResult
 export default class SearchResult extends React.Component {
   isNotSearchedYet() {
-    return !this.props.searchResultMeta.took
+    return this.props.searchResultMeta.took === undefined
   }
 
   isNotFound() {
