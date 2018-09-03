@@ -66,7 +66,9 @@ class SearchSuggest extends React.Component {
       if (this.props.searchingKeyword !== '') {
         return (
           <div className="search-suggest" id="search-suggest">
-            No results for &quot;{this.props.searchingKeyword}&quot;.
+            No results for &quot;
+            {this.props.searchingKeyword}
+            &quot;.
           </div>
         )
       }

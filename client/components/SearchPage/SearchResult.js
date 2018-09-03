@@ -45,7 +45,10 @@ export default class SearchResult extends React.Component {
       }
       return (
         <div className="content-main">
-          <i className="fa fa-meh" /> No page found with &quot;{this.props.searchingKeyword}&quot;{under}
+          <i className="fa fa-meh" /> No page found with &quot;
+          {this.props.searchingKeyword}
+          &quot;
+          {under}
         </div>
       )
     }
