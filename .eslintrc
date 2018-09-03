@@ -27,6 +27,12 @@
     "standard/no-callback-literal": "off"
   },
   "plugins": ["flowtype", "react", "prettier"],
+  "settings": {
+    "react": {
+      "version": "15.5",
+      "flowVersion": "0.65"
+    }
+  },
   "globals": {
     "ROOT_DIR": true,
     "MODEL_DIR": true,
