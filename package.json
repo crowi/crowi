@@ -50,7 +50,6 @@
     "aws-sdk": "~2.88.0",
     "axios": "~0.18.0",
     "babel-loader": "^8.0.2",
-    "babel-loader": "~7.1.5",
     "babel-plugin-module-resolver": "^3.1.1",
     "basic-auth-connect": "~1.0.0",
     "body-parser": "~1.18.3",
@@ -126,7 +125,7 @@
     "yaml-loader": "^0.5.0"
   },
   "devDependencies": {
-    "babel-eslint": "^8.2.3",
+    "babel-eslint": "^9.0.0",
     "chai": "~4.1.0",
     "chai-as-promised": "^7.1.1",
     "concurrently": "~3.5.1",
