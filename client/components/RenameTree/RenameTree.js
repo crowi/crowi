@@ -120,7 +120,7 @@ class RenameTree extends React.Component {
       return (
         <ul className="tree" key={path}>
           <li className="leaf">
-            {name} {isRoot && renderChanges(path)}
+            <a href={`${path}`}>{name}</a> {isRoot && renderChanges(path)}
             {hasNodeErrors && renderNodeErrors(nodeErrors)}
           </li>
           {hasChildren && <li>{renderRoot(children)}</li>}
