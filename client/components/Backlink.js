@@ -113,7 +113,7 @@ class Backlink extends React.Component {
 
 Backlink.propTypes = {
   crowi: PropTypes.object.isRequired,
-  pageId: PropTypes.string.isRequired,
+  pageId: PropTypes.string,
   limit: PropTypes.number,
   offset: PropTypes.number,
 }
