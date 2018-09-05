@@ -7,7 +7,14 @@ const ROOT = path.join(__dirname, '/../')
 const config = {
   mode: process.env.NODE_ENV,
   entry: {
-    bundled: ['jquery', 'bootstrap/dist/js/bootstrap.bundle.min.js', 'inline-attachment/src/inline-attachment.js', 'jquery.cookie', 'jquery.selection.js', '@babel/polyfill'],
+    bundled: [
+      'jquery',
+      'bootstrap/dist/js/bootstrap.bundle.min.js',
+      'inline-attachment/src/inline-attachment.js',
+      'jquery.cookie',
+      'jquery.selection.js',
+      '@babel/polyfill',
+    ],
     app: path.join(ROOT, 'client/app.js'),
     crowi: path.join(ROOT, 'client/crowi.js'),
     presentation: path.join(ROOT, 'client/crowi-presentation.js'),
