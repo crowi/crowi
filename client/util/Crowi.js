@@ -10,6 +10,7 @@ export default class Crowi {
     this.context = context
     this.config = {}
     this.csrfToken = context.csrfToken
+    this.setUser(context.user)
 
     this.window = window
     this.location = window.location || {}
@@ -20,9 +21,6 @@ export default class Crowi {
     this.apiGet = this.apiGet.bind(this)
     this.apiPost = this.apiPost.bind(this)
     this.apiRequest = this.apiRequest.bind(this)
-
-    // FIXME
-    this.me = context.me
 
     this.users = []
     this.userByName = {}
@@ -44,6 +42,15 @@ export default class Crowi {
 
   getConfig() {
     return this.config
+  }
+
+  setUser(user) {
+    const { id = '', name = '' } = user || {}
+    this.user = { id, name }
+  }
+
+  getUser() {
+    return this.user
   }
 
   getWebSocket() {

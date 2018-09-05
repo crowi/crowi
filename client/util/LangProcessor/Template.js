@@ -24,7 +24,7 @@ export default class Template {
 
   getUser() {
     // FIXME
-    const username = window.crowi.me || null
+    const username = window.crowi.getUser().name || null
 
     if (!username) {
       return ''
