@@ -150,12 +150,12 @@
   }
   // }}}
 
-  .page-attachments { // {{{
-    p {
-      font-weight: bold;
-    }
+  .page-meta-contents { // {{{
+    border-bottom: solid 1px #ccc;
+    margin-bottom: 16px;
 
-    ul {
+    .page-meta-title {
+      font-weight: bold;
     }
   } // }}}
 

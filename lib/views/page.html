@@ -254,15 +254,15 @@
 
 
 {% if page %}
-<div class="backlink-list meta" id="backlink-list"></div>
-
-<div class="page-attachments meta" id="page-attachment">
-</div>
 
 <div id="rename-tree">
 </div>
 
-<p class="page-meta meta">
+<div class="meta">
+  <div class="backlink-list" id="backlink-list"></div>
+  <div class="page-attachments" id="page-attachment"></div>
+
+  <div class="page-meta">
   Path: <span id="pagePath">{{ page.path }}</span><br>
   {# for BC #}
   {% if page.lastUpdateUser %}
@@ -272,7 +272,8 @@
   {% endif %}
   {# /for BC #}
   Created at {{ page.createdAt|datetz('Y-m-d H:i:s') }} by <img src="{{ page.creator|default(page.creator)|picture }}" class="picture picture-rounded"> {{ page.creator.name }}<br>
-</p>
+  </div>
+</div>
 {% endif %}
 
 {% endblock %}
