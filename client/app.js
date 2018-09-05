@@ -20,6 +20,7 @@ import ShareBox from 'components/ExternalShare/ShareBox'
 import SecretKeywordFormContainer from 'components/ExternalShare/SecretKeywordForm/SecretKeywordFormContainer'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import RenameTree from 'components/RenameTree/RenameTree'
+import Backlink from './components/Backlink'
 
 if (!window) {
   window = {}
@@ -67,6 +68,7 @@ const componentMappings = {
 
   // 'revision-history': <PageHistory pageId={pageId} />,
   // 'page-comment': <PageComment />,
+  'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
   'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
   'share-box': <ShareBox pageId={pageId} crowi={crowi} />,
