@@ -29,10 +29,10 @@ export default class Attachment extends React.Component {
 
     let fileInUse = ''
     if (this.props.inUse) {
-      fileInUse = <span className="attachment-in-use label label-info">In Use</span>
+      fileInUse = <span className="attachment-in-use badge badge-info">In Use</span>
     }
 
-    const fileType = <span className="attachment-filetype label label-default">{attachment.fileFormat}</span>
+    const fileType = <span className="attachment-filetype badge badge-secondary">{attachment.fileFormat}</span>
 
     return (
       <li>

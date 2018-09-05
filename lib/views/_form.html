@@ -15,19 +15,21 @@
     <input type="hidden" name="pageForm[path]" value="{{ path }}">
     <input type="hidden" name="pageForm[currentRevision]" value="{{ pageForm.currentRevision|default(page.revision._id.toString()) }}">
     <div class="form-submit-group form-group form-inline">
-      {#<button class="btn btn-default">
+      {#<button class="btn btn-secondary">
         <i class="fa fa-file-alt"></i>
         ファイルを追加 ...
       </button>#}
 
-      <div class="pull-right form-inline page-form-setting" id="page-form-setting" data-slack-configured="{{ slackConfigured() }}">
+      <div class="form-inline page-form-setting ml-auto" id="page-form-setting" data-slack-configured="{{ slackConfigured() }}">
         {% if slackConfigured() %}
-        <span class="input-group extended-setting">
-          <span class="input-group-addon">
-            <label>
-              <i class="fab fa-slack"></i>
-              <input class="" type="checkbox" name="pageForm[notify][slack][on]" value="1">
-            </label>
+        <span class="input-group extended-setting mr-2">
+          <span class="input-group-prepend">
+            <span class="input-group-text">
+              <label>
+                <i class="fab fa-slack mr-1"></i>
+                <input type="checkbox" name="pageForm[notify][slack][on]" value="1">
+              </label>
+            </span>
           </span>
           <input class="form-control" type="text" name="pageForm[notify][slack][channel]" value="{{ page.extended.slack|default('') }}" placeholder="slack-channel-name"
             id="page-form-slack-channel"
@@ -43,7 +45,7 @@
         {% if forceGrant %}
         <input type="hidden" name="pageForm[grant]" value="{{ forceGrant }}">
         {% else %}
-        <select name="pageForm[grant]" class="form-control">
+        <select name="pageForm[grant]" class="form-control mr-2">
           {% for grantId, grantLabel in consts.pageGrants %}
           <option value="{{ grantId }}" {% if pageForm.grant|default(page.grant) == grantId %}selected{% endif %}>{{ t(grantLabel) }}</option>
           {% endfor %}
@@ -54,7 +56,7 @@
       </div>
     </div>
   </form>
-  <div class="col-md-6 hidden-sm hidden-xs">
+  <div class="col-md-6 d-none d-md-block">
     <div id="preview-body" class="wiki preview-body">
     </div>
   </div>

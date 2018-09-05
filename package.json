@@ -1,6 +1,6 @@
 {
   "name": "crowi",
-  "version": "1.7.0",
+  "version": "1.8.0-dev",
   "description": "The simple & powerful Wiki",
   "tags": [
     "wiki",
@@ -12,7 +12,8 @@
   "contributors": [
     "Keisuke SATO <riaf@me.com> (http://riaf.jp)",
     "Shinya Yamaoka <contact@mail.libmacro.com>",
-    "Norio Suzuki <norio.suzuki@gmail.com>"
+    "Norio Suzuki <norio.suzuki@gmail.com>",
+    "Yutarop Kido <lightnet328@gmail.com>"
   ],
   "config": {
     "blanket": {
@@ -45,7 +46,7 @@
     "babel-preset-stage-2": "^6.24.1",
     "basic-auth-connect": "~1.0.0",
     "body-parser": "~1.18.3",
-    "bootstrap-sass": "~3.3.6",
+    "bootstrap": "^4.1.1",
     "cli": "~1.0.1",
     "colors": "^1.1.2",
     "commander": "~2.9.0",
@@ -98,13 +99,15 @@
     "plantuml-encoder": "~1.2.4",
     "platform": "^1.3.5",
     "query-string": "~6.1.0",
-    "react": "~15.5.0",
+    "react": "~16.4.2",
     "react-bootstrap": "~0.30.10",
-    "react-dom": "~15.5.0",
+    "react-dom": "~16.4.2",
     "react-i18next": "^7.6.1",
+    "reactstrap": "^6.4.0",
     "redis": "~2.6.5",
     "reveal.js": "~3.6.0",
     "sass-loader": "~7.1.0",
+    "scrollpos-styler": "^0.7.0",
     "socket.io": "~2.1.1",
     "socket.io-client": "~2.1.1",
     "socket.io-redis": "^5.2.0",

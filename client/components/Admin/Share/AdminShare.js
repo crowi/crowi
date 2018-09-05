@@ -1,7 +1,8 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
-import { Tabs, Tab } from 'react-bootstrap'
+import Tab from 'components/Common/Tab'
+import TabItem from 'components/Common/TabItem'
 import ShareList from './ShareList'
 import AccessLog from './AccessLog'
 
@@ -15,14 +16,14 @@ class AdminShare extends React.Component {
   render() {
     const { t } = this.props
     return (
-      <Tabs defaultActiveKey={1} animation={false} id="admin-share-tabs">
-        <Tab eventKey={1} title={t('Shared Pages')}>
+      <Tab id="admin-share-tabs">
+        <TabItem title={t('Shared Pages')}>
           <ShareList crowi={this.props.crowi} />
-        </Tab>
-        <Tab eventKey={2} title={t('Access Log')}>
+        </TabItem>
+        <TabItem title={t('Access Log')}>
           <AccessLog crowi={this.props.crowi} />
-        </Tab>
-      </Tabs>
+        </TabItem>
+      </Tab>
     )
   }
 }

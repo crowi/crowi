@@ -12,7 +12,7 @@
   {% if page %}
     <span id="bookmark-button" data-csrftoken="{{ csrf() }}"></span>
   {% endif %}
-    <div class="pull-left user-page-picture">
+    <div class="float-left user-page-picture">
       <img src="{{ pageUser|picture }}" class="picture picture-rounded">
     </div>
     <div class="user-page-meta">
@@ -30,15 +30,15 @@
 
   <div class="user-page-content">
     <ul class="nav nav-tabs user-page-content-menu">
-      <li class="active">
-        <a href="#user-bookmark-list" data-toggle="tab"><i class="fa fa-star"></i> Bookmarks</a>
+      <li class="nav-item">
+        <a class="nav-link active" href="#user-bookmark-list" data-toggle="tab"><i class="fa fa-star"></i> Bookmarks</a>
       </li>
-      <li>
-        <a href="#user-created-list" data-toggle="tab"><i class="fa fa-pencil-alt"></i> Recent Created</a>
+      <li class="nav-item">
+        <a class="nav-link" href="#user-created-list" data-toggle="tab"><i class="fa fa-pencil-alt"></i> Recent Created</a>
       </li>
       {% if user._id.toString() == pageUser._id.toString() %}
-      <li>
-        <a href="/me"><i class="fa fa-cogs"></i> Settings</a>
+      <li class="nav-item">
+        <a class="nav-link" href="/me"><i class="fa fa-cogs"></i> Settings</a>
       </li>
       {% endif %}
     </ul>

@@ -63,7 +63,7 @@ export default class SearchForm extends React.Component {
   }
 
   handleBlur(event) {
-    // this.props.isShown(false);
+    // this.props.isShown(false)
   }
 
   handleChange(event) {
@@ -96,12 +96,12 @@ export default class SearchForm extends React.Component {
           onBlur={this.handleBlur}
           onChange={this.handleChange}
         />
-        <span className="input-group-btn">
-          <button type="submit" className="btn btn-default">
+        <span className="input-group-append">
+          {formClear}
+          <button type="submit" className="btn btn-light">
             <i className="search-top-icon fa fa-search" />
           </button>
         </span>
-        {formClear}
       </form>
     )
   }
