@@ -50,6 +50,7 @@
       </div>
 
       <input type="hidden" name="_csrf" value="{{ csrf() }}">
+      <input type="hidden" name="continue" value="{{ continueUrl }}">
       <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('page_login.sign_in') }}">
     </form>
 
@@ -62,6 +63,7 @@
         <form role="form" action="/login/google" method="get">
           <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('page_login.sign_in') }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
+          <input type="hidden" name="continue" value="{{ continueUrl }}">
         </form>
       </div>
       {% endif %}
@@ -71,6 +73,7 @@
         <form role="form" action="/login/github" method="get">
           <button type="submit" class="btn btn-block btn-github"><i class="fab fa-github-square"></i> {{ t('page_login.sign_in') }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
+          <input type="hidden" name="continue" value="{{ continueUrl }}">
         </form>
       </div>
       {% endif %}
