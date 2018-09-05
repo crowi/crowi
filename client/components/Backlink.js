@@ -96,14 +96,14 @@ class Backlink extends React.Component {
     const lists = this.state.backLinks.map(backLink => this.createList(backLink))
 
     if (lists.length === 0) {
-      return <div className="backlink" />
+      return null
     }
 
     const readMore = this.createReadMore()
 
     return (
-      <div>
-        <p className="backlink-title">Backlinks</p>
+      <div className="page-meta-contents">
+        <p className="page-meta-title">Backlinks</p>
         <ul className="backlink-list">{lists}</ul>
         {readMore}
       </div>
