@@ -21,22 +21,33 @@
           "min_gram": 2,
           "max_gram": 3,
           "token_chars": ["letter", "digit"]
+        },
+        "sudachi_tokenizer": {
+          "type": "sudachi_tokenizer",
+          "mode": "search"
         }
       },
-      "english": {
-        "tokenizer":  "ngram_tokenizer",
-        "filter": [
-          "english_possessive_stemmer",
-          "lowercase",
-          "english_stop",
-          "english_stemmer"
-        ]
+      "analyzer": {
+        "english": {
+          "tokenizer": "ngram_tokenizer",
+          "filter": [
+            "english_possessive_stemmer",
+            "lowercase",
+            "english_stop",
+            "english_stemmer"
+          ]
+        },
+        "sudachi_analyzer": {
+          "filter": [],
+          "tokenizer": "sudachi_tokenizer",
+          "type": "custom"
+        }
       }
     }
   },
   "mappings": {
     "pages": {
-      "properties": {
+      "properties" : {
         "path": {
           "type": "text",
           "fields": {
@@ -46,7 +57,7 @@
             },
             "ja": {
               "type": "text",
-              "analyzer": "kuromoji"
+              "analyzer": "sudachi_analyzer"
             },
             "en": {
               "type": "text",
@@ -59,7 +70,7 @@
           "fields": {
             "ja": {
               "type": "text",
-              "analyzer": "kuromoji"
+              "analyzer": "sudachi_analyzer"
             },
             "en": {
               "type": "text",

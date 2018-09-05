@@ -4,7 +4,7 @@ Crowi - The Simple & Powerful Communication Tool Based on Wiki
 ================================================================
 
 
-[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.6.4)
+[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.0)
 
 [![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
 [![Join the chat at https://gitter.im/crowi/general](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/crowi/general)
@@ -35,9 +35,9 @@ Don't use `master` branch because it is unstable. Use released version except wh
 Dependencies
 -------------
 
-* Node.js (8.x)
+* Node.js 8.x
 * MongoDB
-* Elasticsearch (optional) ([Doc is here](https://github.com/crowi/crowi/wiki/Configure-Search-Functions))
+* Elasticsearch 6.x (optional) ([Doc is here](https://github.com/crowi/crowi/wiki/Configure-Search-Functions))
 * Redis (optional)
 * Amazon S3 (optional)
 * Google Project (optional)
@@ -85,7 +85,7 @@ $ docker-compose -f docker-compose.development.yml up
 ### Features
 
 - Express restarts when a file changed
-- Gulp compiled assets automatically
+- webpack compiled assets automatically
 
 #### When a trouble occured
 
