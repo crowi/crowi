@@ -129,13 +129,15 @@ export default class PageListSearch extends React.Component {
     return (
       <div>
         <input type="hidden" name="q" value={this.state.searchingKeyword} onChange={this.handleChange} className="form-control" />
-        <SearchResult
-          tree={this.state.tree}
-          pages={this.state.searchedPages}
-          searchingKeyword={this.state.searchingKeyword}
-          searchResultMeta={this.state.searchResultMeta}
-          searchError={this.state.searchError}
-        />
+        <div className="content-main">
+          <SearchResult
+            tree={this.state.tree}
+            pages={this.state.searchedPages}
+            searchingKeyword={this.state.searchingKeyword}
+            searchResultMeta={this.state.searchResultMeta}
+            searchError={this.state.searchError}
+          />
+        </div>
       </div>
     )
   }
