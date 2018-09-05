@@ -46,6 +46,19 @@
 
   {% if searchConfigured() %}
   <div class="search-top" role="search" id="search-top">
+    <div class="search-box"> {# placeholder for react #}
+      <form class="search-form input-group search-top-input-group">
+        <input
+            type="text"
+            placeholder="Search ... Page Title (Path) and Content"
+            class="search-top-input form-control" name="q" disabled="disabled">
+        <div class="input-group-append">
+          <button type="submit" class="btn btn-light">
+            <i class="search-top-icon fa fa-search"></i>
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
   {% endif %}
 
@@ -96,14 +109,14 @@
 <div class="container-fluid">
   <div class="row">
 
-  {% block layout_sidebar %}
-  {% endblock %} {# layout_sidebar #}
+    {% block layout_sidebar %}
+    {% endblock %} {# layout_sidebar #}
 
-  {% block layout_main %}
-  {% endblock %} {# layout_main #}
+    {% block layout_main %}
+    {% endblock %} {# layout_main #}
 
-{% block footer %}
-{% endblock %}
+    {% block footer %}
+    {% endblock %}
 
   </div> {# /.row #}
 </div> {# /.container-fluid #}

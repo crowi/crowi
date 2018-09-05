@@ -53,7 +53,7 @@ class SearchSuggest extends React.Component {
     if (searching) {
       return (
         <div>
-          <i className="searcing fa fa-circle-o-notch fa-spin fa-fw" /> Searching ...
+          <i className="searching fa fa-circle-o-notch fa-spin fa-fw" /> Searching ...
         </div>
       )
     }
