@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main">
+<div class="content-main content-form">
 
   {% set emessage = req.flash('errorMessage') %}
   {% if emessage.length %}
@@ -30,14 +30,14 @@
         <fieldset>
           <legend>外部共有設定</legend>
           <div class="form-group">
-            <div class="col-xs-offset-3 col-xs-6">
-              <input type="checkbox" name="settingForm[app:externalShare]" value="1" {% if isExternalShareEnabled() %}checked{% endif %}>
-              <label for="settingForm[app:externalShare]" class="">{{ t('admin.share.enable_external_share') }}</label>
+            <div class="offset-3 col-6">
+              <input type="checkbox" id="appExternalShare" name="settingForm[app:externalShare]" value="1" {% if isExternalShareEnabled() %}checked{% endif %}>
+              <label for="appExternalShare" class="">{{ t('admin.share.enable_external_share') }}</label>
             </div>
           </div>
 
           <div class="form-group">
-            <div class="col-xs-offset-3 col-xs-6">
+            <div class="offset-3 col-6">
               <input type="hidden" name="_csrf" value="{{ csrf() }}">
               <button type="submit" class="btn btn-primary">Save</button>
             </div>

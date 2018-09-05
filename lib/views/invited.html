@@ -47,7 +47,7 @@
 
       <label>{{ t('Email') }}</label>
       <div class="input-group">
-        <span class="input-group-addon"><i class="fa fa-envelope"></i></span>
+        <span class="input-group-prepend"><span class="input-group-text"><i class="fa fa-envelope"></i></span></span>
         <input type="text" class="form-control" disabled value="{{ user.email }}">
       </div>
       <p class="help-block">
@@ -56,7 +56,7 @@
 
       <label>{{ t('User ID') }}</label>
       <div class="input-group" id="input-group-username">
-        <span class="input-group-addon"><strong>@</strong></span>
+        <span class="input-group-prepend"><span class="input-group-text"><strong>@</strong></span></span>
         <input type="text" class="form-control" placeholder="{{ t('Example') }}: taroyama" name="invitedForm[username]" value="{{ req.body.invitedForm.username }}" required>
       </div>
       <p class="help-block">
@@ -66,13 +66,13 @@
 
       <label>{{ t('Name') }}</label>
       <div class="input-group">
-        <span class="input-group-addon"><i class="fa fa-user"></i></span>
+        <span class="input-group-prepend"><span class="input-group-text"><i class="fa fa-user"></i></span></span>
         <input type="text" class="form-control" placeholder="{{ t('Example') }}: {{ t('Taro Yamada') }}" name="invitedForm[name]" value="{{ req.body.invitedForm.name }}" required>
       </div>
 
       <label>{{ t('Password') }}</label>
       <div class="input-group">
-        <span class="input-group-addon"><i class="fa fa-key"></i></span>
+        <span class="input-group-prepend"><span class="input-group-text"><i class="fa fa-key"></i></span></span>
         <input type="password" class="form-control" placeholder="Password" name="invitedForm[password]" required>
       </div>
       <p class="help-block">

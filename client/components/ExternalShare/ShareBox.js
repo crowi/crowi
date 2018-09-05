@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
-import { Button } from 'react-bootstrap'
+import { Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 import ShareBoxContent from './ShareBoxContent'
 import SettingModal from './SettingModal'
@@ -87,7 +87,7 @@ class ShareBox extends React.Component {
   renderOpenAccessLogButton(handleOpen) {
     const { t } = this.props
     return (
-      <Button onClick={handleOpen} bsSize="small">
+      <Button onClick={handleOpen} outline color="secondary" size="sm">
         <Icon name="list-alt" />
         {t('share.watch_the_log')}
       </Button>

@@ -2,7 +2,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
-import { Table, Alert } from 'react-bootstrap'
+import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 
 class ShareList extends React.Component {
@@ -47,7 +47,7 @@ class ShareList extends React.Component {
   }
 
   renderStatus(isActive) {
-    const className = ['label', isActive ? 'label-success' : 'label-danger'].join(' ')
+    const className = ['badge', isActive ? 'badge-success' : 'badge-danger'].join(' ')
     const text = isActive ? 'Active' : 'Inactive'
     return <span className={className}>{text}</span>
   }
@@ -94,12 +94,12 @@ class ShareList extends React.Component {
       error,
     } = this.state
     return error ? (
-      <Alert bsStyle="danger">
+      <Alert color="danger">
         <p>{t('share_list.error.message')}</p>
       </Alert>
     ) : (
       <div>
-        <Table bordered hover condensed>
+        <Table bordered hover size="sm">
           <thead>
             <tr>
               <th>#</th>

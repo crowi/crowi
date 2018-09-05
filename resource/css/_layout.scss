@@ -1,68 +1,84 @@
 .crowi { // {{{
-  font-family: 'Open Sans', 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
-  h1, h2, h3, h4, h5, h6 {
-    font-weight: 500;
-  }
-
   &.main-container { // {{{
 
     .crowi-header { // {{{
       z-index: 1040;
       background: $crowiHeaderBackground;
       height: $crowiHeaderHeight;
-      border-radius: 0;
-      border: none;
-      margin-bottom: 0;
-
+      padding: 0;
       box-shadow: 0 3px 10px 0px rgba(0,0,0,.3);
+      flex-wrap: nowrap;
 
       .navbar-brand {
+        margin-left: 1rem;
         font-weight: bold;
         img {
           display: inline;
           margin-right: 8px;
         }
       }
+
+      .navbar-toggler {
+        border: 1px solid #ddd;
+        color: #ccc;
+        line-height: unset;
+        margin-right: 1rem;
+      }
+
       .navbar-collapse {
         background: $crowiHeaderBackground;
+        flex-grow: 0;
+
+        @include media-breakpoint-down(sm) {
+          position: absolute;
+          top: $crowiHeaderHeight;
+          width: 100vw;
+        }
       }
 
-      > div > .navbar-nav li button {
-        margin: 10px;
-      }
-
-      > div > a ,
-      > div > ul > li > a {
+      .navbar-brand,
+      .navbar-nav > li > a {
         color: #ccc;
         &:hover {
           color: #aaa;
         }
       }
 
-      .confidential {
-        a {
-          border: solid 2px #f00;
-          background: #fff;
-          color: #f00;
-          font-weight: bold;
-          height: 42px;
-          margin-top: 5px;
-          padding: 10px;
-          margin-right: 5px;
-        }
-      }
+      .navbar-nav {
+        padding-left: 1rem;
+        padding-right: 1rem;
 
-      .navbar-toggle {
-        position: absolute;
-        top: 0;
-        right: 0;
-      }
-      .navbar-collapse.collapse.in {
+        @include media-breakpoint-up(sm) {
+          align-items: center;
+
+          .nav-item > button {
+            margin: 0 $nav-link-padding-x;
+          }
+        }
+
+        .dropdown-toggle:after {
+          display: none;
+        }
 
         .confidential {
+          a {
+            display: inline-block;
+            border: solid 2px #f00;
+            background: #fff;
+            color: #f00;
+            font-weight: bold;
+            padding: 10px;
+
+            @include media-breakpoint-down(sm) {
+              margin-bottom: 1rem;
+            }
+
+            @include media-breakpoint-up(sm) {
+              margin-left: 1rem;
+            }
+          }
         }
       }
-
     } // }}}
 
     .main {
@@ -101,6 +117,10 @@
         text-decoration: none;
         cursor: pointer;
       }
+
+      @include media-breakpoint-down(sm) {
+        display: none;
+      }
     } // }}}
 
     .page-list {
@@ -115,13 +135,13 @@
   } // }}}
 } // }}}
 
-
-.crowi.single { // {{{
-} // }}}
-
 .crowi.single.nologin { // {{{
   //background: lighten($crowiHeaderBackground, 15%);
   background: $crowiHeaderBackground;
+
+  > .container-fluid > .row {
+    flex-direction: column;
+  }
 
   .installer-header {
     margin-top: 100px;
@@ -195,41 +215,35 @@
 
 } // }}}
 
-@media (max-width: $screen-sm-max) { // {{{
-} // }}}
-
-@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) { // {{{ tablet size
-  .crowi.main-container { // {{{
+// Tablet
+@include media-breakpoint-only(sm) {
+  .crowi.main-container {
     .main {
-      article header {
-        .bookmark-link {
-          font-size: 1.3em;
-        }
-        h1 {
-          font-size: 1.4em;
-          margin-bottom: 0;
+      article  {
+        .header-wrap.sps--blw {
+          width: 100%;
         }
 
-        &.affix {
-          width: 100%;
+        header {
+          .bookmark-link {
+            font-size: 1.3em;
+          }
+          h1 {
+            font-size: 1.4em;
+            margin-bottom: 0;
+          }
         }
       }
     }
   }
-} // }}}
+}
 
-@media (max-width: $screen-xs-max) { // {{{ iPhone size
-  .crowi.main-container { // {{{
+// Smartphone
+@include media-breakpoint-only(xs) {
+  .crowi.main-container {
     .main {
-      article header {
-        .bookmark-link {
-          font-size: 1em;
-        }
-        h1 {
-          font-size: 1.1em;
-        }
-
-        &.affix {
+      article {
+        .header-wrap.sps--blw {
           h1 {
             font-size: 1.1em;
           }
@@ -240,6 +254,15 @@
 
           p.stopper {
             right: 20px;
+          }
+        }
+
+        header {
+          .bookmark-link {
+            font-size: 1em;
+          }
+          h1 {
+            font-size: 1.1em;
           }
         }
       }

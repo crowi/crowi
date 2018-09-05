@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main">
+<div class="content-main content-form">
   {% set smessage = req.flash('successMessage') %}
   {% if smessage.length %}
   <div class="alert alert-success">
@@ -33,20 +33,32 @@
 
     <div class="col-md-9">
       <p>
-        <button  data-toggle="collapse" class="btn btn-default" href="#inviteUserForm">新規ユーザーの招待</button>
+        <button  data-toggle="collapse" class="btn btn-secondary" href="#inviteUserForm">新規ユーザーの招待</button>
       </p>
       <form role="form" action="/admin/user/invite" method="post">
         <div id="inviteUserForm" class="collapse">
-          <div class="form-group">
-            <label for="inviteForm[emailList]">メールアドレス (複数行入力で複数人招待可能)</label>
-            <textarea class="form-control" name="inviteForm[emailList]" placeholder="例: user@crowi.wiki"></textarea>
+          <div class="form-group row">
+            <label for="emailList" class="col-3 col-form-label">メールアドレス</label>
+            <div class="col-8">
+              <textarea id="emailList" class="form-control" name="inviteForm[emailList]" placeholder="例: user@crowi.wiki"></textarea>
+              <p class="form-text text-muted">複数行入力で複数人招待可能</p>
+            </div>
           </div>
-          <div class="checkbox">
-            <label>
-              <input type="checkbox" name="inviteForm[sendEmail]" checked> 招待をメールで送信
-            </label>
+
+          <div class="form-group row">
+            <div class="offset-3 col-8">
+              <div class="custom-control custom-checkbox">
+                <input id="sendEmail" type="checkbox" class="custom-control-input" name="inviteForm[sendEmail]" checked>
+                <label class="custom-control-label" for="sendEmail">招待をメールで送信</label>
+              </div>
+            </div>
           </div>
-          <button type="submit" class="btn btn-primary">招待する</button>
+
+          <div class="form-group row">
+            <div class="offset-3 col-8">
+                <button type="submit" class="btn btn-primary">招待する</button>
+            </div>
+          </div>
         </div>
         <input type="hidden" name="_csrf" value="{{ csrf() }}">
       </form>
@@ -58,8 +70,8 @@
           <div class="modal-content">
 
             <div class="modal-header">
-              <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
               <h4 class="modal-title">ユーザーを招待しました</h4>
+              <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
             </div>
 
             <div class="modal-body">
@@ -81,8 +93,8 @@
         <div class="modal-dialog">
           <div class="modal-content">
             <div class="modal-header">
-              <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
               <h4 class="modal-title">パスワードを新規発行しますか?</h4>
+              <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
             </div>
 
             <div class="modal-body">
@@ -112,8 +124,8 @@
           <div class="modal-content">
 
             <div class="modal-header">
-              <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
               <h4 class="modal-title">Password reset!</h4>
+              <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
             </div>
 
             <div class="modal-body">
@@ -151,11 +163,11 @@
           <tr>
             <td>
               <img src="{{ sUser|picture }}" class="picture picture-rounded" />
-              <span class="label {{ css.userStatus(sUser) }}">
+              <span class="badge {{ css.userStatus(sUser) }}">
                 {{ consts.userStatus[sUser.status] }}
               </span><br>
               {% if sUser.admin %}
-              <span class="label label-primary">
+              <span class="badge badge-primary">
                 Admin
               </span>
               {% endif %}
@@ -169,65 +181,61 @@
             <td>{{ sUser.lastLoginAt }}</td>
             <td>
               <div class="btn-group admin-user-menu">
-                <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+                <button type="button" class="btn btn-light dropdown-toggle" data-toggle="dropdown">
                   編集
                   <span class="caret"></span>
                 </button>
-                <ul class="dropdown-menu" role="menu">
-                  <li class="dropdown-header">編集メニュー</li>
-                  <li>
-                    <a href="">編集</a>
-
-                  </li>
+                <div class="dropdown-menu dropdown-menu-right" role="menu">
+                  <div class="dropdown-header">編集メニュー</div>
                   <li class="dropdown-button">
                     <a href="#"
                       data-user-id="{{ sUser._id.toString() }}"
                       data-user-email="{{ sUser.email }}"
                       data-target="#admin-password-reset-modal"
-                      data-toggle="modal" class="btn btn-block btn-default">
+                      data-toggle="modal" class="btn btn-secondary">
                       パスワードの再発行
                     </a>
                   </li>
-                  <li class="divider"></li>
+                  <div class="dropdown-divider"></div>
                   <li class="dropdown-header">ステータス</li>
                   <li class="dropdown-button">
-                  {% if sUser.status == 1 %}
-                  <form action="/admin/user/{{ sUser._id.toString() }}/activate" method="post">
-                    <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                    <button type="submit" class="btn btn-block btn-info">承認する</button>
-                  </form>
-                  {% endif  %}
-                  {% if sUser.status == 2 %}
+                    {% if sUser.status == 1 %}
+                    <form action="/admin/user/{{ sUser._id.toString() }}/activate" method="post">
+                      <input type="hidden" name="_csrf" value="{{ csrf() }}">
+                      <button type="submit" class="btn btn-info">承認する</button>
+                    </form>
+                    {% endif  %}
+                    {% if sUser.status == 2 %}
 
-                  <form action="/admin/user/{{ sUser._id.toString() }}/suspend" method="post">
-                    <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                    <button type="submit" class="btn btn-block btn-warning">アカウント停止</button>
-                  </form>
-                  {% endif  %}
-                  {% if sUser.status == 3 %}
-                  <form action="/admin/user/{{ sUser._id.toString() }}/activate" method="post">
-                    <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                    <button type="submit" class="btn btn-block btn-default">元に戻す</button>
-                  </form>
+                    <form action="/admin/user/{{ sUser._id.toString() }}/suspend" method="post">
+                      <input type="hidden" name="_csrf" value="{{ csrf() }}">
+                      <button type="submit" class="btn btn-warning">アカウント停止</button>
+                    </form>
+                    {% endif  %}
+                    {% if sUser.status == 3 %}
+                    <form action="/admin/user/{{ sUser._id.toString() }}/activate" method="post">
+                      <input type="hidden" name="_csrf" value="{{ csrf() }}">
+                      <button type="submit" class="btn btn-secondary">元に戻す</button>
+                    </form>
                   </li>
                   <li class="dropdown-button">
-                  {# label は同じだけど、こっちは論理削除 #}
-                  <form action="/admin/user/{{ sUser._id.toString() }}/remove" method="post">
-                    <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                    <button type="submit" class="btn btn-block btn-danger">削除する</button>
-                  </form>
-                  {% endif  %}
-                  {% if sUser.status == 5 %}
-                  {# label は同じだけど、こっちは物理削除 #}
-                  <form action="/admin/user/{{ sUser._id.toString() }}/removeCompletely" method="post">
-                    <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                    <button type="submit" class="btn btn-block btn-danger">削除する</button>
-                  </form>
-                  {% endif  %}
+                    {# label は同じだけど、こっちは論理削除 #}
+                    <form action="/admin/user/{{ sUser._id.toString() }}/remove" method="post">
+                      <input type="hidden" name="_csrf" value="{{ csrf() }}">
+                      <button type="submit" class="btn btn-danger">削除する</button>
+                    </form>
+                    {% endif  %}
+                    {% if sUser.status == 5 %}
+                    {# label は同じだけど、こっちは物理削除 #}
+                    <form action="/admin/user/{{ sUser._id.toString() }}/removeCompletely" method="post">
+                      <input type="hidden" name="_csrf" value="{{ csrf() }}">
+                      <button type="submit" class="btn btn-danger">削除する</button>
+                    </form>
+                    {% endif  %}
                   </li>
 
                   {% if sUser.status == 2 %} {# activated な人だけこのメニューを表示 #}
-                  <li class="divider"></li>
+                  <div class="dropdown-divider"></div>
                   <li class="dropdown-header">管理者メニュー</li>
 
                   <li class="dropdown-button">
@@ -235,7 +243,7 @@
                       {% if sUser.username != user.username %}
                       <form action="/admin/user/{{ sUser._id.toString() }}/removeFromAdmin" method="post">
                         <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                        <button type="submit" class="btn btn-block btn-danger">管理者からはずす</button>
+                        <button type="submit" class="btn btn-danger">管理者からはずす</button>
                       </form>
                       {% else %}
                       <p class="alert alert-danger">自分自身を管理者から外すことはできません</p>
@@ -243,7 +251,7 @@
                     {% else %}
                       <form action="/admin/user/{{ sUser._id.toString() }}/makeAdmin" method="post">
                         <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                        <button type="submit" class="btn btn-block btn-primary">管理者にする</button>
+                        <button type="submit" class="btn btn-primary">管理者にする</button>
                       </form>
                     {% endif %}
                   </li>
