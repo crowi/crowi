@@ -16,7 +16,7 @@
   </a>
   <span class="page-list-meta">
     {% if page.isPortal() %}
-      <span class="label label-info">PORTAL</span>
+      <span class="badge badge-info">PORTAL</span>
     {% endif  %}
 
     {% if page.commentCount > 0 %}
@@ -50,10 +50,10 @@
 {% if pager %}
 <ul class="pagination">
   {% if pager.prev !== null %}
-    <li class="prev"><a href="{{ path }}?offset={{ pager.prev }}"><i class="fa fa-arrow-left"></i> Prev</a></li>
+    <li class="page-item prev"><a class="page-link" href="{{ path }}?offset={{ pager.prev }}"><i class="fa fa-arrow-left"></i> Prev</a></li>
   {% endif %}
   {% if pager.next %}
-    <li class="next"><a href="{{ path }}?offset={{ pager.next }}">Next <i class="fa fa-arrow-right"></i></a></li>
+    <li class="page-item next"><a class="page-link" href="{{ path }}?offset={{ pager.next }}">Next <i class="fa fa-arrow-right"></i></a></li>
   {% endif %}
 </ul>
 {% endif %}

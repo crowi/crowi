@@ -1,8 +1,8 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import { Pagination, PaginationItem, PaginationLink } from 'reactstrap'
 
-// Pagination component of react-bootstrap did not work...
-export default class Pagination extends React.Component {
+export default class PaginationWrapper extends React.Component {
   onClick(i) {
     const { onClick } = this.props
     return e => {
@@ -21,30 +21,27 @@ export default class Pagination extends React.Component {
     const range = [...Array(count).keys()]
     const items = range.map((v, k) => {
       const page = k + 1
-      const className = page === current ? 'active' : ''
       return (
-        <li key={page} className={className}>
-          <a onClick={this.onClick(page)}>{page}</a>
-        </li>
+        <PaginationItem key={page} active={page === current}>
+          <PaginationLink onClick={this.onClick(page)}>{page}</PaginationLink>
+        </PaginationItem>
       )
     })
     return (
-      <nav>
-        <ul className="pagination">
-          <li className={current === 1 ? 'disabled' : ''}>
-            <a onClick={this.onClick(1)}>&laquo;</a>
-          </li>
-          {items}
-          <li className={current === count ? 'disabled' : ''}>
-            <a onClick={this.onClick(count)}>&raquo;</a>
-          </li>
-        </ul>
-      </nav>
+      <Pagination>
+        <PaginationItem disabled={current === 1}>
+          <PaginationLink previous onClick={this.onClick(1)} />
+        </PaginationItem>
+        {items}
+        <PaginationItem disabled={current === count}>
+          <PaginationLink next onClick={this.onClick(count)} />
+        </PaginationItem>
+      </Pagination>
     )
   }
 }
 
-Pagination.propTypes = {
+PaginationWrapper.propTypes = {
   current: PropTypes.number.isRequired,
   count: PropTypes.number.isRequired,
   onClick: PropTypes.func.isRequired,

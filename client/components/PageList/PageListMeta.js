@@ -17,7 +17,7 @@ export default class PageListMeta extends React.Component {
     // portal check
     let PortalLabel
     if (this.isPortalPath(page.path)) {
-      PortalLabel = <span className="label label-info">PORTAL</span>
+      PortalLabel = <span className="badge badge-info">PORTAL</span>
     }
 
     let CommentCount

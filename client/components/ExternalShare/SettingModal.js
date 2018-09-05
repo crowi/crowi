@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
-import { Button, Col, ControlLabel, FormControl, FormGroup, Modal, Radio } from 'react-bootstrap'
+import { Button, Container, Row, Col, Label, Input, CustomInput, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 
 class SettingModal extends React.Component {
   constructor(props) {
@@ -111,47 +111,55 @@ class SettingModal extends React.Component {
     const { t, show, onHide, isChanging, handleDelete } = this.props
     const { restricted, secretKeyword, showConfirmModal } = this.state
     return (
-      <Modal className="share-setting-modal" show={show} onHide={onHide}>
-        <Modal.Header closeButton>
-          <Modal.Title>{t('share.link_settings')}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <div className="form-horizontal">
-            <FormGroup controlId="restricted">
-              <Col componentClass={ControlLabel} sm={2}>
-                {t('share.setting.restrict_access')}
+      <Modal className="share-setting-modal" isOpen={show} toggle={onHide}>
+        <ModalHeader toggle={onHide}>{t('share.link_settings')}</ModalHeader>
+        <ModalBody>
+          <Container>
+            <Row>
+              <Col sm={2}>
+                <Label>{t('share.setting.restrict_access')}</Label>
               </Col>
               <Col sm={10}>
-                <Radio name="restricted" onClick={this.setRestricted(false)} defaultChecked={!restricted}>
-                  {t('share.setting.people_who_know_this_link')}
-                </Radio>
-                <Radio name="restricted" onClick={this.setRestricted(true)} defaultChecked={restricted}>
-                  {t('share.setting.people_who_know_this_secret_keyword')}
-                </Radio>
+                <CustomInput
+                  type="radio"
+                  id="not_restricted"
+                  name="restricted"
+                  onClick={this.setRestricted(false)}
+                  defaultChecked={!restricted}
+                  label={t('share.setting.people_who_know_this_link')}
+                />
+                {}
+                <CustomInput
+                  type="radio"
+                  id="restricted"
+                  name="restricted"
+                  onClick={this.setRestricted(true)}
+                  defaultChecked={restricted}
+                  label={t('share.setting.people_who_know_this_secret_keyword')}
+                />
                 {restricted && (
-                  <FormControl
+                  <Input
                     className="secret-keyword"
-                    type="text"
                     placeholder={t('share.setting.secret_keyword')}
                     onChange={this.setSecretKeyword}
                     defaultValue={secretKeyword}
                   />
                 )}
               </Col>
-            </FormGroup>
-          </div>
+            </Row>
+          </Container>
           <DeleteConfirmModal show={showConfirmModal} onHide={this.handleClose} handleClose={this.handleCloseAll} handleDelete={handleDelete} />
-        </Modal.Body>
-        <Modal.Footer>
-          <Button className="pull-left" onClick={this.handleOpen} bsStyle="danger" disabled={isChanging}>
+        </ModalBody>
+        <ModalFooter>
+          <Button className="mr-auto" onClick={this.handleOpen} color="danger" disabled={isChanging}>
             <Icon name={isChanging ? 'spinner' : 'unlink'} spin={isChanging} />
             {t('share.delete_link')}
           </Button>
           {this.renderResult()}
-          <Button onClick={this.handleSubmit} bsStyle="primary" disabled={!this.canSubmit()}>
+          <Button onClick={this.handleSubmit} color="primary" disabled={!this.canSubmit()}>
             {t('share.setting.save_settings')}
           </Button>
-        </Modal.Footer>
+        </ModalFooter>
       </Modal>
     )
   }

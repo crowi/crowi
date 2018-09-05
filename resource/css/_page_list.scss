@@ -1,18 +1,9 @@
 
 .crowi.main-container .main .content-main .timeline-body { // {{{
-  .revision-path {
-    margin-top: 1.6em;
-    margin-bottom: 0;
-    border: solid 2px #ddd;
-    border-bottom: none;
-    padding: 16px;
-    background: #ddd;
-  }
+  margin-top: 1.6em;
+
   .revision-body {
     font-size: 14px;
-    border: solid 2px #ddd;
-    padding: 16px;
-    background: #fdfdfd;
   }
 } // }}}
 
@@ -23,6 +14,11 @@
   }
 
   .page-list-ul {
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    flex-direction: column;
     padding-left: 0;
 
     > li {
@@ -67,7 +63,7 @@
     margin-top: 16px;
   }
 
-  h5 {
+  h6 {
     display: flex;
 
     > i {

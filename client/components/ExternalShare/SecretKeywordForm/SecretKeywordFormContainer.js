@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
-import { Button, InputGroup, Col, FormControl, FormGroup, HelpBlock } from 'react-bootstrap'
+import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGroup, FormFeedback } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
 
@@ -93,24 +93,26 @@ class SecretKeywordFormContainer extends React.Component {
       <Col lg={4} md={6} sm={8} xs={10}>
         <h4 className="page-header">{t('Required secret keyword')}</h4>
         <div>
-          <FormGroup controlId="secretKeyword" validationState={error.status ? 'error' : null}>
+          <FormGroup>
             <InputGroup>
-              <InputGroup.Addon>
-                <Icon name="key" />
-              </InputGroup.Addon>
-              <FormControl
-                type="text"
+              <InputGroupAddon addonType="prepend">
+                <InputGroupText>
+                  <Icon name="key" />
+                </InputGroupText>
+              </InputGroupAddon>
+              <Input
                 placeholder="Secret Keyword"
                 onChange={this.setSecretKeyword}
                 onKeyPress={this.handleKeyPress}
                 onKeyUp={this.handleKeyUp}
+                invalid={error.status}
               />
+              {error.status && <FormFeedback>{error.message}</FormFeedback>}
             </InputGroup>
-            {error.status && <HelpBlock>{error.message}</HelpBlock>}
           </FormGroup>
 
-          <FormGroup className="pull-right">
-            <Button onClick={this.handleSubmit} disabled={!this.canSubmit()}>
+          <FormGroup>
+            <Button className="d-block ml-auto" onClick={this.handleSubmit} disabled={!this.canSubmit()}>
               Submit
             </Button>
           </FormGroup>
