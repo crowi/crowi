@@ -31,7 +31,7 @@ class SearchSuggest extends React.Component {
     const { t } = this.props
     return (
       pages.length > 0 && (
-        <div className="grouped-page-list">
+        <div className="grouped-page-list" key={type}>
           <h6>
             <Icon name={icon} regular />
             <span className="title">{title}</span>
