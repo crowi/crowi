@@ -13,7 +13,7 @@
       <h1 class="title flex-item-title">
         <span id="revision-path">{{ path|insertSpaceToEachSlashes }}</span>
         {% if searchConfigured() && !isTopPage() && !isTrashPage() %}
-        <form class="input-group search-input-group d-none d-md-inline-flex" data-toggle="tooltip" data-placement="bottom" title="{{ path }} 以下から検索" id="search-listpage-form">
+        <form class="input-group search-input-group d-none d-md-inline-flex" data-toggle="tooltip" data-placement="bottom" title="Search pages under '{{ path }}'" id="search-listpage-form">
           <input type="text" class="search-listpage-input form-control" data-path="{{ path }}" id="search-listpage-input">
           <span class="input-group-append search-listpage-submit-group">
             <button type="submit" class="btn btn-outline-secondary" id="search-listpage-submit">
@@ -106,9 +106,6 @@
         <i class="fa fa-wrench"></i> <span class="caret"></span>
       </a>
       <div class="dropdown-menu dropdown-menu-right">
-        {% if !isTopPage() %}
-        <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Move pages under', path|path2name ) }}</a>
-        {% endif %}
         <a class="dropdown-item" href="#" data-target="#unportalize" data-toggle="modal"><i class="fa fa-share"></i> {{ t('Unportalize') }}</a>
       </div>
     </li>
