@@ -33,9 +33,7 @@
 
     .input-group-append {
       position: relative;
-      align-items: center;
     }
-
     .search-top-clear {
       display: inline-block;
       position: absolute;
@@ -43,6 +41,7 @@
       z-index: 10;
       width: 30px;
       height: 30px;
+      top: 4px;
       line-height: 30px;
       text-align: center;
       color: #ccc;
@@ -54,6 +53,10 @@
   position: absolute;
   width: 500px;
   box-shadow: $box-shadow-sm;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-top: -3px;
+  border-top: solid 1px #ccc;
 
   .searching {
     color: #666;
