@@ -1,32 +1,32 @@
 <ul class="pagination">
 
-  <li {% if pager.page == 1 %}class="disabled"{% endif %}>
-    <a href="{{ path }}?page={{ pager.previous|default(1) }}">&laquo;</a>
+  <li class="page-item{% if pager.page == 1 %} disabled{% endif %}">
+    <a class="page-link" href="{{ path }}?page={{ pager.previous|default(1) }}">&laquo;</a>
   </li>
   {% if pager.previousDots %}
     {% if pager.page !== 1 %}
-    <li>
-      <a href="{{ path }}?page=1">1</a>
+    <li class="page-item">
+      <a class="page-link" href="{{ path }}?page=1">1</a>
     </li>
     {% endif %}
-  <li><a href="#">...</a></li>
+  <li class="page-item"><a class="page-link" href="#">...</a></li>
   {% endif  %}
 
   {% for page in pager.pages %}
-  <li {% if pager.page == page %}class="active"{% endif %}>
-    <a href="{{ path }}?page={{ page }}">{{ page }}</a>
+  <li class="page-item {% if pager.page == page %}active{% endif %}">
+    <a class="page-link" href="{{ path }}?page={{ page }}">{{ page }}</a>
   </li>
   {% endfor %}
 
   {% if pager.nextDots %}
-  <li><a href="#">...</a></li>
+  <li class="page-item"><a class="page-link" href="#">...</a></li>
     {% if pager.page !== pager.pagesCount %}
-    <li>
-      <a href="{{ path }}?page={{ pager.pagesCount }}">{{ pager.pagesCount }}</a>
+    <li class="page-item">
+      <a class="page-link" href="{{ path }}?page={{ pager.pagesCount }}">{{ pager.pagesCount }}</a>
     </li>
     {% endif %}
   {% endif  %}
-  <li {% if pager.page == pager.pagesCount %}class="disabled"{% endif %}>
-    <a href="{{ path }}?page={{ pager.next|default(pager.pagesCount) }}">&raquo;</a>
+  <li class="page-item {% if pager.page == pager.pagesCount %}disabled{% endif %}">
+    <a class="page-link" href="{{ path }}?page={{ pager.next|default(pager.pagesCount) }}">&raquo;</a>
   </li>
 </ul>

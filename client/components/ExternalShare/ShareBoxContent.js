@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
-import { Button, InputGroup, FormControl, Alert } from 'react-bootstrap'
+import { Button, InputGroup, InputGroupAddon, Input, Alert } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 
 class ShareBoxContent extends React.Component {
@@ -34,12 +34,12 @@ class ShareBoxContent extends React.Component {
       return (
         <div className="share-box-content">
           <InputGroup>
-            <FormControl bsClass="copy-link form-control" type="text" defaultValue={url} readOnly onClick={this.selectAction} inputRef={this.createRef} />
-            <InputGroup.Button onClick={this.copyAction}>
-              <Button>Copy</Button>
-            </InputGroup.Button>
+            <Input className="copy-link" defaultValue={url} readOnly onClick={this.selectAction} innerRef={this.createRef} />
+            <InputGroupAddon addonType="append">
+              <Button onClick={this.copyAction}>Copy</Button>
+            </InputGroupAddon>
           </InputGroup>
-          <Button className="pull-right" onClick={handleOpen}>
+          <Button className="d-block ml-auto" onClick={handleOpen}>
             {t('share.link_settings')}
           </Button>
         </div>
@@ -47,9 +47,9 @@ class ShareBoxContent extends React.Component {
     }
     return (
       <div className="share-box-content">
-        {creationError && <Alert bsStyle="danger">{t('share.error.can_not_create')}</Alert>}
+        {creationError && <Alert color="danger">{t('share.error.can_not_create')}</Alert>}
         <p>{t('share.no_link_has_been_created_yet')}</p>
-        <Button className="pull-right" onClick={handleCreate} bsStyle="primary" disabled={isChanging}>
+        <Button className="d-block ml-auto" color="primary" onClick={handleCreate} disabled={isChanging}>
           <Icon name={isChanging ? 'spinner' : 'link'} spin={isChanging} />
           {t('share.create_link')}
         </Button>

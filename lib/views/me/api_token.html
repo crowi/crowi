@@ -1,4 +1,4 @@
-{% extends '../layout/2column.html' %}
+{% extends '../layout/single.html' %}
 
 
 {% block html_title %}{{ t('API Settings') }} · {{ path }}{% endblock %}
@@ -12,12 +12,12 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main">
+<div class="content-main content-form">
 
   <ul class="nav nav-tabs">
-    <li><a href="/me"><i class="fa fa-cogs"></i> {{ t('User Information') }}</a></li>
-    <li><a href="/me/password"><i class="fa fa-key"></i> {{ t('Password Setting') }}</a></li>
-    <li class="active"><a href="/me/apiToken"><i class="fa fa-rocket"></i> {{ t('API Settings') }}</a></li>
+    <li class="nav-item"><a class="nav-link" href="/me"><i class="fa fa-cogs"></i> {{ t('User Information') }}</a></li>
+    <li class="nav-item"><a class="nav-link" href="/me/password"><i class="fa fa-key"></i> {{ t('Password Settings') }}</a></li>
+    <li class="nav-item"><a class="nav-link active" href="/me/apiToken"><i class="fa fa-rocket"></i> {{ t('API Settings') }}</a></li>
   </ul>
 
   <div class="tab-content">
@@ -44,9 +44,9 @@
     <form action="/me/apiToken" method="post" class="form-horizontal" role="form">
     <fieldset>
       <legend>{{ t('API Token Settings') }}</legend>
-      <div class="form-group {% if not user.password %}has-error{% endif %}">
-        <label for="" class="col-xs-3 control-label">{{ t('Current API Token') }}</label>
-        <div class="col-xs-6">
+      <div class="form-group row {% if not user.password %}has-error{% endif %}">
+        <label for="" class="col-3 control-label">{{ t('Current API Token') }}</label>
+        <div class="col-6">
           {% if user.apiToken %}
             <input class="form-control" type="text" value="{{ user.apiToken }}">
           {% else %}
@@ -58,7 +58,7 @@
       </div>
 
       <div class="form-group">
-        <div class="col-xs-offset-3 col-xs-10">
+        <div class="offset-3 col-8">
 
           <p class="alert alert-warning">
             {{ t('page_me_apitoken.notice.update_token1') }}<br>

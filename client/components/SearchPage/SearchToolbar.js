@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
-import { Nav, NavItem } from 'react-bootstrap'
+import { Nav, NavItem, NavLink } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 
 class SearchToolbar extends React.Component {
@@ -11,6 +11,7 @@ class SearchToolbar extends React.Component {
     this.searchTypes = ['', 'portal', 'public', 'user']
 
     this.getActiveType = this.getActiveType.bind(this)
+    this.onClick = this.onClick.bind(this)
   }
 
   getActiveType() {
@@ -19,33 +20,47 @@ class SearchToolbar extends React.Component {
     return this.searchTypes.includes(type) ? type : defaultType
   }
 
+  onClick(type) {
+    const { changeType } = this.props
+    return () => changeType && changeType(type)
+  }
+
   render() {
+    const actionType = this.getActiveType()
     const { t } = this.props
     return (
       <div className="search-toolbar row">
-        <div className="search-meta col-xs-4">
+        <div className="search-meta col-4">
           <h3 className="search-keyword">{this.props.keyword}</h3>
           <small className="text-muted">
             {(this.props.searching && <Icon name="spinner" spin />) || t('search.toolbar.results', { value: this.props.total })}
           </small>
         </div>
-        <nav className="search-navbar col-xs-8">
-          <Nav bsClass="nav navbar-nav" activeKey={this.getActiveType()} onSelect={this.props.changeType}>
-            <NavItem eventKey={this.searchTypes[0]} href="#">
-              <Icon name="th" />
-              {t('page_types.all')}
+        <nav className="search-navbar col-8">
+          <Nav className="nav navbar-nav">
+            <NavItem active={actionType === this.searchTypes[0]} onClick={this.onClick(this.searchTypes[0])}>
+              <NavLink>
+                <Icon name="th" />
+                {t('page_types.all')}
+              </NavLink>
             </NavItem>
-            <NavItem eventKey={this.searchTypes[1]} href="#">
-              <Icon name="circle" regular />
-              {t('page_types.portal')}
+            <NavItem active={actionType === this.searchTypes[1]} onClick={this.onClick(this.searchTypes[1])}>
+              <NavLink>
+                <Icon name="circle" regular />
+                {t('page_types.portal')}
+              </NavLink>
             </NavItem>
-            <NavItem eventKey={this.searchTypes[2]} href="#">
-              <Icon name="file" regular />
-              {t('page_types.public')}
+            <NavItem active={actionType === this.searchTypes[2]} onClick={this.onClick(this.searchTypes[2])}>
+              <NavLink>
+                <Icon name="file" regular />
+                {t('page_types.public')}
+              </NavLink>
             </NavItem>
-            <NavItem eventKey={this.searchTypes[3]} href="#">
-              <Icon name="user" regular />
-              {t('page_types.user')}
+            <NavItem active={actionType === this.searchTypes[3]} onClick={this.onClick(this.searchTypes[3])}>
+              <NavLink>
+                <Icon name="user" regular />
+                {t('page_types.user')}
+              </NavLink>
             </NavItem>
           </Nav>
         </nav>
@@ -59,7 +74,7 @@ SearchToolbar.propTypes = {
   type: PropTypes.string,
   total: PropTypes.number,
   changeType: PropTypes.func,
-  searching: PropTypes.boolean,
+  searching: PropTypes.bool,
   t: PropTypes.func.isRequired,
 }
 SearchToolbar.defaultProps = {

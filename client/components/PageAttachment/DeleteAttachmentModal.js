@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { Button, Modal } from 'react-bootstrap'
+import { Button, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
 import User from 'components/User/User'
@@ -62,17 +62,15 @@ export default class DeleteAttachmentModal extends React.Component {
     let renderAttachment = this.renderByFileFormat(attachment)
 
     return (
-      <Modal {...props} className="attachment-delete-modal" bsSize="large" aria-labelledby="contained-modal-title-lg">
-        <Modal.Header closeButton>
-          <Modal.Title id="contained-modal-title-lg">Delete attachment?</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>{renderAttachment}</Modal.Body>
-        <Modal.Footer>
+      <Modal {...props} className="attachment-delete-modal modal-large">
+        <ModalHeader>Delete attachment?</ModalHeader>
+        <ModalBody>{renderAttachment}</ModalBody>
+        <ModalFooter>
           {deletingIndicator}
-          <Button onClick={this._onDeleteConfirm} bsStyle="danger" disabled={this.props.deleting}>
+          <Button onClick={this._onDeleteConfirm} color="danger" disabled={this.props.deleting}>
             Delete!
           </Button>
-        </Modal.Footer>
+        </ModalFooter>
       </Modal>
     )
   }
