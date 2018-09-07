@@ -21,6 +21,7 @@ import SecretKeywordFormContainer from 'components/ExternalShare/SecretKeywordFo
 import AdminShare from 'components/Admin/Share/AdminShare'
 import RenameTree from 'components/RenameTree/RenameTree'
 import Backlink from './components/Backlink'
+import PageLocale from './components/PageLocale/PageLocale'
 
 if (!window) {
   window = {}
@@ -74,6 +75,7 @@ const componentMappings = {
   'share-box': <ShareBox pageId={pageId} crowi={crowi} />,
   'secret-keyword-form-container': <SecretKeywordFormContainer pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
+  'page-locale': <PageLocale pageId={pageId} crowi={crowi} />,
 }
 
 Object.keys(componentMappings).forEach(key => {
