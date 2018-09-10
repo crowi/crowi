@@ -1,0 +1,66 @@
+{% extends '../layout/admin.html' %}
+
+{% block html_title %}ページの言語設定 · {{ path }}{% endblock %}
+
+{% block content_head %}
+<div class="header-wrap">
+  <header id="page-header">
+    <h1 class="title" id="">言語設定</h1>
+  </header>
+</div>
+{% endblock %}
+
+{% block content_main %}
+<div class="content-main content-form">
+  <div class="row">
+    <div class="col-md-3">
+      {% include './widget/menu.html' with {current: 'language'} %}
+    </div>
+    <div class="col-md-9">
+
+      {% set smessage = req.flash('successMessage') %}
+      {% if smessage.length %}
+      <div class="alert alert-success">
+        {% for e in smessage %}
+          {{ e }}<br>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% set emessage = req.flash('errorMessage') %}
+      {% if emessage.length %}
+      <div class="alert alert-danger">
+        {% for e in emessage %}
+        {{ e }}<br>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <form action="/admin/language/build" method="post" class="form-horizontal" role="form">
+      <fieldset>
+        <legend>Languages Build</legend>
+        <div class="form-group row">
+          <label for="" class="offset-1 col-3 control-label">Languages Build</label>
+          <div class="col-8">
+            <button type="submit" class="btn btn-primary">Build Now</button>
+            <p class="help-block">
+              Click "Build Now" to delete all page language settings and add language settings to all pages.<br>
+              This may take a while.
+            </p>
+          </div>
+          <div class="offset-4 col-8">
+            <button type="submit" class="btn btn-danger" name="delete" value="1">Delete All</button>
+          </div>
+        </div>
+      </fieldset>
+      <input type="hidden" name="_csrf" value="{{ csrf() }}">
+      </form>
+
+    </div>
+  </div>
+
+</div>
+{% endblock content_main %}
+
+{% block content_footer %}
+{% endblock content_footer %}
