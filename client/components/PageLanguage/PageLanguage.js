@@ -3,13 +3,13 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Input } from 'reactstrap'
 
-class PageLocale extends React.Component {
+class PageLanguage extends React.Component {
   constructor(props) {
     super(props)
 
     const languages = this.props.crowi.getLanguages()
     this.state = {
-      language: document.getElementById('page-locale').dataset.language,
+      language: document.getElementById('page-language').dataset.language,
       languages,
     }
 
@@ -48,12 +48,12 @@ class PageLocale extends React.Component {
   }
 }
 
-PageLocale.propTypes = {
+PageLanguage.propTypes = {
   crowi: PropTypes.object.isRequired,
   pageId: PropTypes.string,
   t: PropTypes.func.isRequired,
 }
 
-PageLocale.defaultProps = {}
+PageLanguage.defaultProps = {}
 
-export default translate()(PageLocale)
+export default translate()(PageLanguage)
