@@ -26,6 +26,7 @@ export default class Crowi {
     this.userByName = {}
     this.userById = {}
     this.draft = {}
+    this.languages = ['en', 'ja']
 
     this.recoverData()
 
@@ -33,7 +34,7 @@ export default class Crowi {
   }
 
   getContext() {
-    return context
+    return this.context
   }
 
   setConfig(config) {
@@ -148,6 +149,15 @@ export default class Crowi {
     }
 
     return null
+  }
+
+  getLanguages(reorder = true) {
+    const { userConfig = {} } = this.context
+    const { lang = '' } = userConfig
+    if (!reorder) {
+      return this.languages
+    }
+    return [...this.languages.filter(l => l === lang), ...this.languages.filter(l => l !== lang)]
   }
 
   async apiGet(path, params) {

@@ -5,13 +5,12 @@ import { reactI18nextModule } from 'react-i18next'
 import en from 'locales/en/translation.yml'
 import ja from 'locales/ja/translation.yml'
 
-export default () => {
+export default userConfig => {
   const lngDetector = new LngDetector()
   lngDetector.addDetector({
     name: 'userSetting',
     lookup(options) {
-      const { config = {} } = JSON.parse(document.getElementById('user-context-hydrate').textContent || '{}')
-      const { lang = null } = config
+      const { lang = null } = userConfig
       return lang
     },
     cacheUserLanguage(lng, options) {},

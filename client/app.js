@@ -27,7 +27,9 @@ if (!window) {
   window = {}
 }
 
-i18n()
+const { user = {}, config: userConfig = {} } = JSON.parse(document.getElementById('user-context-hydrate').textContent || '{}')
+
+i18n(userConfig)
 
 moment.locale(navigator.userLanguage || navigator.language)
 
@@ -42,10 +44,9 @@ if (mainContent !== null) {
   }
 }
 
-const { user = {} } = JSON.parse(document.getElementById('user-context-hydrate').textContent || '{}')
 const csrfToken = $('#content-main').data('csrftoken')
 // FIXME
-const crowi = new Crowi({ user, csrfToken }, window)
+const crowi = new Crowi({ user, userConfig, csrfToken }, window)
 window.crowi = crowi
 crowi.setConfig(JSON.parse(document.getElementById('crowi-context-hydrate').textContent || '{}'))
 const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
