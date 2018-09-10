@@ -209,3 +209,8 @@ search:
 admin:
   share:
     enable_external_share: 'Wikiページの外部ユーザーへの共有を有効にする。'
+
+languages:
+  all: すべての言語
+  en: 英語
+  ja: 日本語

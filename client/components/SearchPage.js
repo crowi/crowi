@@ -12,11 +12,12 @@ export default class SearchPage extends React.Component {
   constructor(props) {
     super(props)
 
-    const { q = '', type = '' } = queryString.parse(this.props.crowi.location.search)
+    const { q = '', type = '', language } = queryString.parse(this.props.crowi.location.search)
     this.state = {
       searching: false,
       searchingKeyword: q,
       searchingType: type,
+      searchingLanguage: language,
       searchedPages: [],
       searchResultMeta: {},
       searchError: null,
@@ -24,8 +25,8 @@ export default class SearchPage extends React.Component {
 
     this.search = this.search.bind(this)
     this.buildQuery = this.buildQuery.bind(this)
+    this.searchWithQuery = this.searchWithQuery.bind(this)
     this.changeURL = this.changeURL.bind(this)
-    this.changeType = this.changeType.bind(this)
 
     Emitter.on('search', ({ keyword: q = '' }) => {
       this.search(this.buildQuery({ q }))
@@ -39,31 +40,31 @@ export default class SearchPage extends React.Component {
   }
 
   buildQuery(override) {
-    const { searchingKeyword: q = '', searchingType: type = '' } = this.state
+    const { searchingKeyword: q = '', searchingType: type = '', searchingLanguage: language } = this.state
     const removeEmpty = query => Object.keys(query).forEach(k => !query[k] && delete query[k])
-    const query = { q, type, ...override }
+    const query = { q, type, language, ...override }
     removeEmpty(query)
     return query
   }
 
-  changeURL({ q, type }, refreshHash) {
+  changeURL({ q, type, language }, refreshHash) {
     let { hash = '' } = this.props.crowi.location
     // TODO 整理する
     if (refreshHash || q !== '') {
       hash = ''
     }
-    const query = queryString.stringify({ q, type })
+    const query = queryString.stringify({ q, type, language })
     if (window.history && window.history.pushState) {
       window.history.pushState('', `Search - ${q}`, `/_search?${query}${hash}`)
     }
   }
 
-  changeType(type) {
-    this.search(this.buildQuery({ type }))
+  searchWithQuery(query) {
+    this.search(this.buildQuery(query))
   }
 
   async search(query) {
-    const { q = '', type = '' } = query
+    const { q = '', type = '', language } = query
     if (q === '') {
       this.setState({
         searchingKeyword: '',
@@ -82,6 +83,7 @@ export default class SearchPage extends React.Component {
       this.setState({
         searchingKeyword: q,
         searchingType: type,
+        searchingLanguage: language,
         searchedPages: data,
         searchResultMeta: meta,
         searching: false,
@@ -96,11 +98,13 @@ export default class SearchPage extends React.Component {
     return (
       <div className="content-main">
         <SearchToolbar
+          crowi={crowi}
           keyword={this.state.searchingKeyword}
           type={this.state.searchingType}
+          language={this.state.searchingLanguage}
           total={this.state.searchResultMeta.total}
           searching={this.state.searching}
-          changeType={this.changeType}
+          search={this.searchWithQuery}
         />
         <SearchResult pages={this.state.searchedPages} searchingKeyword={this.state.searchingKeyword} searchResultMeta={this.state.searchResultMeta} />
       </div>

@@ -1,33 +1,46 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
-import { Nav, NavItem, NavLink } from 'reactstrap'
 import Icon from 'components/Common/Icon'
+import SearchTypeTabs from './SearchTypeTabs'
+import SearchLanguageDropdown from './SearchLanguageDropdown'
 
 class SearchToolbar extends React.Component {
   constructor(props) {
     super(props)
 
-    this.searchTypes = ['', 'portal', 'public', 'user']
+    this.state = {
+      query: {},
+    }
 
-    this.getActiveType = this.getActiveType.bind(this)
-    this.onClick = this.onClick.bind(this)
+    this.search = this.search.bind(this)
+    this.changeType = this.changeType.bind(this)
+    this.changeLanguage = this.changeLanguage.bind(this)
   }
 
-  getActiveType() {
-    const defaultType = this.searchTypes[0]
-    const { type } = this.props
-    return this.searchTypes.includes(type) ? type : defaultType
+  search(override) {
+    const { search } = this.props
+    const query = {
+      ...this.state.query,
+      ...override,
+    }
+    this.setState(query)
+    if (search) {
+      search(query)
+    }
   }
 
-  onClick(type) {
-    const { changeType } = this.props
-    return () => changeType && changeType(type)
+  changeType(type) {
+    this.search({ type })
+  }
+
+  changeLanguage(language) {
+    this.search({ language })
   }
 
   render() {
-    const actionType = this.getActiveType()
-    const { t } = this.props
+    const { changeType, changeLanguage } = this
+    const { crowi, t, type, language } = this.props
     return (
       <div className="search-toolbar row">
         <div className="search-meta col-4">
@@ -36,50 +49,27 @@ class SearchToolbar extends React.Component {
             {(this.props.searching && <Icon name="spinner" spin />) || t('search.toolbar.results', { value: this.props.total })}
           </small>
         </div>
-        <nav className="search-navbar col-8">
-          <Nav className="nav navbar-nav">
-            <NavItem active={actionType === this.searchTypes[0]} onClick={this.onClick(this.searchTypes[0])}>
-              <NavLink>
-                <Icon name="th" />
-                {t('page_types.all')}
-              </NavLink>
-            </NavItem>
-            <NavItem active={actionType === this.searchTypes[1]} onClick={this.onClick(this.searchTypes[1])}>
-              <NavLink>
-                <Icon name="circle" regular />
-                {t('page_types.portal')}
-              </NavLink>
-            </NavItem>
-            <NavItem active={actionType === this.searchTypes[2]} onClick={this.onClick(this.searchTypes[2])}>
-              <NavLink>
-                <Icon name="file" regular />
-                {t('page_types.public')}
-              </NavLink>
-            </NavItem>
-            <NavItem active={actionType === this.searchTypes[3]} onClick={this.onClick(this.searchTypes[3])}>
-              <NavLink>
-                <Icon name="user" regular />
-                {t('page_types.user')}
-              </NavLink>
-            </NavItem>
-          </Nav>
-        </nav>
+        <SearchTypeTabs type={type} changeType={changeType} />
+        <SearchLanguageDropdown crowi={crowi} language={language} changeLanguage={changeLanguage} />
       </div>
     )
   }
 }
 
 SearchToolbar.propTypes = {
+  crowi: PropTypes.object.isRequired,
   keyword: PropTypes.string,
+  language: PropTypes.string,
   type: PropTypes.string,
   total: PropTypes.number,
-  changeType: PropTypes.func,
+  search: PropTypes.func,
   searching: PropTypes.bool,
   t: PropTypes.func.isRequired,
 }
 SearchToolbar.defaultProps = {
   keyword: '',
   type: '',
+  language: '',
   searching: false,
   total: 0,
 }

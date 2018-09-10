@@ -209,3 +209,8 @@ search:
 admin:
   share:
     enable_external_share: 'Enable to share wiki pages to anonymouse users.'
+
+languages:
+  all: All languages
+  en: English
+  ja: Japanese

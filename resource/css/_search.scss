@@ -111,7 +111,7 @@
 
 .search-toolbar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   padding: 0 20px 12px;
   margin: 0 15px 16px;
   border-bottom: 1px solid $border-color;
@@ -131,12 +131,13 @@
     }
   }
 
-  .search-navbar {
+  .search-type-tabs {
     display: flex;
     flex-wrap: wrap;
     position: relative;
     align-items: center;
     padding: 0;
+    flex: 1;
 
     .navbar-nav {
       display: flex;
@@ -148,6 +149,8 @@
       > li {
         white-space: nowrap;
         margin: 4px 0;
+        user-select: none;
+        cursor: pointer;
 
         &:not(:last-child) {
           margin-right: 10px;
@@ -176,6 +179,11 @@
         }
       }
     }
+  }
+
+  .search-language-dropdown {
+    user-select: none;
+    cursor: pointer;
   }
 }
 
