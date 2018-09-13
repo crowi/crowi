@@ -6,3 +6,4 @@ public/css/*
 public/uploads/*
 .env
 data
+npm-debug.log
