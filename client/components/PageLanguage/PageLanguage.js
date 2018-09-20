@@ -13,11 +13,17 @@ class PageLanguage extends React.Component {
       languages,
     }
 
+    this.removeCodeBlock = this.removeCodeBlock.bind(this)
     this.updateLanguageField = this.updateLanguageField.bind(this)
   }
 
-  async updateLanguageField() {
-    const markdown = document.getElementById('form-body').value
+  removeCodeBlock(markdown) {
+    return markdown.replace(/```\w*\n[\s\S]*?\n```/g, '')
+  }
+
+  updateLanguageField() {
+    const formBody = document.getElementById('form-body').value
+    const markdown = this.removeCodeBlock(formBody)
     const japansese = markdown.match(/[\u30a0-\u30ff\u3040-\u309f\u3005-\u3006\u30e0-\u9fcf]+/g)
     const japaneseLength = japansese === null ? 0 : japansese.map(({ length }) => length).reduce((p, c) => p + c)
     const contentsLength = markdown.length
