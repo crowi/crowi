@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import moment from 'moment'
 
@@ -7,7 +7,7 @@ type Props = {
   dateTime: string,
   format?: string,
   className?: string,
-};
+}
 
 /**
  * UserDate
@@ -15,7 +15,7 @@ type Props = {
  * display date depends on user timezone of user settings
  */
 export default class UserDate extends React.Component {
-  props: Props;
+  props: Props
   render() {
     const dt = moment(this.props.dateTime).format(this.props.format)
 

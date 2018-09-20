@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import UserPicture from './UserPicture'
 
@@ -7,10 +7,10 @@ type Props = {
   user: Object,
   name: boolean,
   username: boolean,
-};
+}
 
 export default class User extends React.Component {
-  props: Props;
+  props: Props
   render() {
     const user = this.props.user
     const userLink = '/user/' + user.username

@@ -1,15 +1,15 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { Pagination, PaginationItem, PaginationLink } from 'reactstrap'
 
 type Props = {
   current: number,
   count: number,
   onClick: Function,
-};
+}
 
 export default class PaginationWrapper extends React.Component {
-  props: Props;
+  props: Props
   onClick(i) {
     const { onClick } = this.props
     return e => {

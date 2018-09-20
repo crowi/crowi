@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 type Props = {
   name: string,
@@ -7,10 +7,10 @@ type Props = {
   regular?: boolean,
   light?: boolean,
   spin?: boolean,
-};
+}
 
 export default class Icon extends React.Component {
-  props: Props;
+  props: Props
   render() {
     const name = this.props.name || null
     const isSpin = this.props.spin ? 'fa-spinner fa-pulse' : ''

@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
@@ -10,7 +10,7 @@ type Props = {
   t: Function,
   pageId?: string,
   crowi: Object,
-};
+}
 
 class AccessLog extends React.Component {
   constructor(props: Props) {
@@ -31,7 +31,7 @@ class AccessLog extends React.Component {
     this.renderTableBody = this.renderTableBody.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   async getPage(options = {}) {
     const limit = this.state.pagination.limit

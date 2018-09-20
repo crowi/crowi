@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import Icon from 'components/Common/Icon'
 import User from 'components/User/User'
@@ -8,7 +8,7 @@ type Props = {
   attachment: Object,
   inUse: boolean,
   onAttachmentDeleteClicked: Function,
-};
+}
 
 export default class Attachment extends React.Component {
   constructor(props: Props) {
@@ -17,7 +17,7 @@ export default class Attachment extends React.Component {
     this._onAttachmentDeleteClicked = this._onAttachmentDeleteClicked.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   iconNameByFormat(format) {
     if (format.match(/image\/.+/i)) {

@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, Alert } from 'reactstrap'
 
@@ -9,7 +9,7 @@ type Props = {
   handleDelete: Function,
   handleClose: Function,
   t: Function,
-};
+}
 
 class DeleteConfirmModal extends React.Component {
   constructor(props: Props) {
@@ -22,7 +22,7 @@ class DeleteConfirmModal extends React.Component {
     this.handleDelete = this.handleDelete.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   async handleDelete() {
     const { handleClose, handleDelete } = this.props

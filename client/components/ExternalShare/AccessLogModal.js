@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
@@ -12,7 +12,7 @@ type Props = {
   pageId?: string,
   t: Function,
   crowi: Object,
-};
+}
 
 class AccessLogModal extends React.Component {
   constructor(props: Props) {
@@ -35,7 +35,7 @@ class AccessLogModal extends React.Component {
     this.renderAccessLogTable = this.renderAccessLogTable.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   renderShareInfo(uuid, username, name, createdAt, isActive) {
     const { t } = this.props

@@ -1,12 +1,12 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import UserPicture from 'components/User/UserPicture'
 
-type Props = { users?: Array<any> };
+type Props = { users?: Array<any> }
 
 export default class UserList extends React.Component {
-  props: Props;
+  props: Props
   isSeenUserListShown() {
     const userCount = this.props.users.length
     if (userCount > 0 && userCount <= 10) {

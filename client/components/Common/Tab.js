@@ -1,11 +1,11 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { Nav, NavItem, NavLink, TabContent, TabPane } from 'reactstrap'
 
 type Props = {
   children: number | string | React.Element | Array<any>,
   active?: number,
-};
+}
 
 export default class Tab extends React.Component {
   constructor(props: Props) {
@@ -15,7 +15,7 @@ export default class Tab extends React.Component {
     this.state = { active }
   }
 
-  props: Props;
+  props: Props
 
   toggle(tab) {
     return () => {

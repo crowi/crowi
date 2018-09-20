@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import { Table, Alert } from 'reactstrap'
@@ -9,7 +9,7 @@ type Props = {
   t: Function,
   pageId?: string,
   crowi: Object,
-};
+}
 
 class ShareList extends React.Component {
   constructor(props: Props) {
@@ -30,7 +30,7 @@ class ShareList extends React.Component {
     this.renderTableBody = this.renderTableBody.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   async getPage(options = {}) {
     const limit = this.state.pagination.limit

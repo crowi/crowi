@@ -1,8 +1,8 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import UserList from './SeenUserList/UserList'
 
-type Props = { crowi: Object };
+type Props = { crowi: Object }
 
 export default class SeenUserList extends React.Component {
   constructor(props: Props) {
@@ -13,7 +13,7 @@ export default class SeenUserList extends React.Component {
     }
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     const seenUserIds = this.getSeenUserIds()

@@ -1,11 +1,11 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 type Props = {
   page: Object,
   highlightKeywords?: string,
   pageBody?: string,
-};
+}
 
 export default class PageBody extends React.Component {
   constructor(props: Props) {
@@ -16,7 +16,7 @@ export default class PageBody extends React.Component {
     this.getHighlightBody = this.getHighlightBody.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   getHighlightBody(body, keywords) {
     let returnBody = body

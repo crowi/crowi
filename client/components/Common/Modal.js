@@ -1,7 +1,7 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
-type Props = {};
+type Props = {}
 
 export default class Modal extends React.Component {
   constructor(props: Props) {
@@ -12,7 +12,7 @@ export default class Modal extends React.Component {
     }
   }
 
-  props: Props;
+  props: Props
 
   render() {
     if (!this.state.modalShown) {

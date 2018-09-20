@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, Input, Alert } from 'reactstrap'
 import Icon from 'components/Common/Icon'
@@ -13,7 +13,7 @@ type Props = {
   creationError?: boolean,
   crowi: Object,
   t: Function,
-};
+}
 
 class ShareBoxContent extends React.Component {
   constructor(props: Props) {
@@ -24,7 +24,7 @@ class ShareBoxContent extends React.Component {
     this.copyAction = this.copyAction.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   selectAction(e) {
     this.inputRef.select()

@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { Card } from 'reactstrap'
 import { translate } from 'react-i18next'
 import queryString from 'query-string'
@@ -13,7 +13,7 @@ type Props = {
   searchError?: Object,
   focused?: boolean,
   t: Function,
-};
+}
 
 class SearchSuggest extends React.Component {
   constructor(props: Props) {
@@ -23,7 +23,7 @@ class SearchSuggest extends React.Component {
     this.renderList = this.renderList.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   buildSearchUrl(type) {
     const q = this.props.searchingKeyword

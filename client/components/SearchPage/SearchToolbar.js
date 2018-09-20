@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import { Nav, NavItem, NavLink } from 'reactstrap'
 import Icon from 'components/Common/Icon'
@@ -11,7 +11,7 @@ type Props = {
   changeType?: Function,
   searching?: boolean,
   t: Function,
-};
+}
 
 class SearchToolbar extends React.Component {
   constructor(props: Props) {
@@ -23,7 +23,7 @@ class SearchToolbar extends React.Component {
     this.onClick = this.onClick.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   getActiveType() {
     const defaultType = this.searchTypes[0]

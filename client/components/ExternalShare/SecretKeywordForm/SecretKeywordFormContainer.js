@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGroup, FormFeedback } from 'reactstrap'
 
@@ -9,7 +9,7 @@ type Props = {
   t?: Function,
   pageId?: string,
   crowi: Object,
-};
+}
 
 class SecretKeywordFormContainer extends React.Component {
   constructor(props: Props) {
@@ -33,7 +33,7 @@ class SecretKeywordFormContainer extends React.Component {
     this.handleKeyUp = this.handleKeyUp.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   setSecretKeyword(e) {
     this.setState({ error: { status: false }, secretKeyword: e.target.value })

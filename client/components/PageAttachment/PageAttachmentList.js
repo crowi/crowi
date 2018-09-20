@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import Attachment from './Attachment'
 
@@ -7,10 +7,10 @@ type Props = {
   attachments?: Array<any>,
   inUse?: Object,
   onAttachmentDeleteClicked?: Function,
-};
+}
 
 export default class PageAttachmentList extends React.Component {
-  props: Props;
+  props: Props
   render() {
     if (this.props.attachments <= 0) {
       return null

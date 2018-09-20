@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import Emitter from '../../emitter'
 
@@ -9,7 +9,7 @@ type Props = {
   isSearchPage: boolean,
   pollInterval?: number,
   keyword?: string,
-};
+}
 
 // Header.SearchForm
 export default class SearchForm extends React.Component {
@@ -29,7 +29,7 @@ export default class SearchForm extends React.Component {
     this.ticker = null
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     this.ticker = setInterval(this.searchFieldTicker.bind(this), this.props.pollInterval)

@@ -1,9 +1,9 @@
 // @flow
-import React from 'react';
-type Props = { page: Object };
+import React from 'react'
+type Props = { page: Object }
 
 export default class PageListMeta extends React.Component {
-  props: Props;
+  props: Props
   isPortalPath(path) {
     if (path.match(/.*\/$/)) {
       return true

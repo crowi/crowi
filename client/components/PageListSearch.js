@@ -1,12 +1,12 @@
 // @flow
 // This is the root component for #page-list-search
 
-import React from 'react';
+import React from 'react'
 
 import queryString from 'query-string'
 import SearchResult from './SearchPage/SearchResult'
 
-type Props = { crowi: Object };
+type Props = { crowi: Object }
 
 export default class PageListSearch extends React.Component {
   constructor(props: Props) {
@@ -28,7 +28,7 @@ export default class PageListSearch extends React.Component {
     this.handleChange = this.handleChange.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     const $pageListSearchForm = $('#search-listpage-input')

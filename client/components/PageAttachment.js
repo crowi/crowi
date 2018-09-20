@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import PageAttachmentList from './PageAttachment/PageAttachmentList'
 import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal'
@@ -8,7 +8,7 @@ type Props = {
   pageId?: string,
   crowi: Object,
   pageContent?: string,
-};
+}
 
 export default class PageAttachment extends React.Component {
   constructor(props: Props) {
@@ -26,7 +26,7 @@ export default class PageAttachment extends React.Component {
     this.onAttachmentDeleteClickedConfirm = this.onAttachmentDeleteClickedConfirm.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     const pageId = this.props.pageId

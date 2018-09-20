@@ -1,12 +1,12 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import PageAlert from './PageAlerts/PageAlert'
 
 type Props = {
   pageId?: string,
   crowi: Object,
-};
+}
 
 export default class PageAlerts extends React.Component {
   constructor(props: Props) {
@@ -19,7 +19,7 @@ export default class PageAlerts extends React.Component {
     }
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     const socket = this.props.crowi.getWebSocket()

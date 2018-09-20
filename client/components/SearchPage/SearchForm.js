@@ -1,10 +1,10 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 type Props = {
   keyword?: string,
   onSearchFormChanged: Function,
-};
+}
 
 // Search.SearchForm
 export default class SearchForm extends React.Component {
@@ -20,7 +20,7 @@ export default class SearchForm extends React.Component {
     this.handleChange = this.handleChange.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   search() {
     if (this.state.searchedKeyword != this.state.keyword) {

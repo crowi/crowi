@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import { createPatch } from 'diff'
 import { Diff2Html } from 'diff2html'
@@ -8,10 +8,10 @@ type Props = {
   currentRevision: Object,
   previousRevision: Object,
   revisionDiffOpened: boolean,
-};
+}
 
 export default class RevisionDiff extends React.Component {
-  props: Props;
+  props: Props
   render() {
     const currentRevision = this.props.currentRevision
     const previousRevision = this.props.previousRevision

@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import UserPicture from 'components/User/UserPicture'
 import PageListMeta from './PageListMeta'
@@ -11,10 +11,10 @@ type Props = {
   excludePathString?: string,
   isActive?: boolean,
   children?: React.Element,
-};
+}
 
 export default class Page extends React.Component {
-  props: Props;
+  props: Props
   render() {
     const { page, linkTo, excludePathString, isActive, children, ...props } = this.props
     const link = linkTo === '' ? page.path : linkTo

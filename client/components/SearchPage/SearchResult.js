@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import Page from 'components/PageList/Page'
 import SearchResultList from './SearchResultList'
@@ -10,7 +10,7 @@ type Props = {
   searchingKeyword: string,
   searchResultMeta: Object,
   searchError?: Object,
-};
+}
 
 // Search.SearchResult
 export default class SearchResult extends React.Component {
@@ -20,7 +20,7 @@ export default class SearchResult extends React.Component {
     this.state = { active: null }
   }
 
-  props: Props;
+  props: Props
 
   updateActivePage(pageId) {
     if (this.state.active !== pageId) {

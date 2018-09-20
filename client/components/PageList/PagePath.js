@@ -1,13 +1,13 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 type Props = {
   page: Object,
   excludePathString?: string,
-};
+}
 
 export default class PagePath extends React.Component {
-  props: Props;
+  props: Props
   getShortPath(path) {
     let name = path.replace(/(\/)$/, '')
 

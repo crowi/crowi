@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import Icon from './Common/Icon'
 import PageRevisionList from './PageHistory/PageRevisionList'
@@ -7,7 +7,7 @@ import PageRevisionList from './PageHistory/PageRevisionList'
 type Props = {
   pageId?: string,
   crowi: Object,
-};
+}
 
 export default class PageHistory extends React.Component {
   constructor(props: Props) {
@@ -22,7 +22,7 @@ export default class PageHistory extends React.Component {
     this.onDiffOpenClicked = this.onDiffOpenClicked.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     const pageId = this.props.pageId

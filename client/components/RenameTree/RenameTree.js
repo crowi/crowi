@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGroupAddon, Input, Label } from 'reactstrap'
 import { translate } from 'react-i18next'
 import Icon from '../Common/Icon'
@@ -7,7 +7,7 @@ import Icon from '../Common/Icon'
 type Props = {
   crowi: Object,
   t: Function,
-};
+}
 
 class RenameTree extends React.Component {
   constructor(props: Props) {
@@ -37,7 +37,7 @@ class RenameTree extends React.Component {
     $("a[data-target='#renameTree']").click(this.handleShow)
   }
 
-  props: Props;
+  props: Props
 
   static getPath(options = { removeTrailingSlash: false }) {
     const { removeTrailingSlash } = options

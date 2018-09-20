@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import UserDate from 'components/Common/UserDate'
 import Icon from 'components/Common/Icon'
@@ -8,7 +8,7 @@ import UserPicture from 'components/User/UserPicture'
 type Props = {
   revision?: Object,
   onDiffOpenClicked: Function,
-};
+}
 
 export default class Revision extends React.Component {
   constructor(props: Props) {
@@ -17,7 +17,7 @@ export default class Revision extends React.Component {
     this._onDiffOpenClicked = this._onDiffOpenClicked.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {}
 

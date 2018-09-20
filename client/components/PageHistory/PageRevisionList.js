@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import Revision from './Revision'
 import RevisionDiff from './RevisionDiff'
@@ -8,10 +8,10 @@ type Props = {
   revisions?: Array<any>,
   diffOpened?: Object,
   onDiffOpenClicked: Function,
-};
+}
 
 export default class PageRevisionList extends React.Component {
-  props: Props;
+  props: Props
   render() {
     const revisions = this.props.revisions
     const revisionCount = this.props.revisions.length

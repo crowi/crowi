@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
@@ -13,7 +13,7 @@ type Props = {
   handleDelete?: Function,
   t: Function,
   crowi: Object,
-};
+}
 
 class SettingModal extends React.Component {
   constructor(props: Props) {
@@ -40,7 +40,7 @@ class SettingModal extends React.Component {
     this.renderResult = this.renderResult.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   componentDidUpdate() {
     const { share = {} } = this.props

@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
@@ -11,7 +11,7 @@ type Props = {
   deleteError?: string,
   attachmentToDelete?: Object,
   onAttachmentDeleteClickedConfirm?: Function,
-};
+}
 
 export default class DeleteAttachmentModal extends React.Component {
   constructor(props: Props) {
@@ -20,7 +20,7 @@ export default class DeleteAttachmentModal extends React.Component {
     this._onDeleteConfirm = this._onDeleteConfirm.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   _onDeleteConfirm() {
     this.props.onAttachmentDeleteClickedConfirm(this.props.attachmentToDelete)

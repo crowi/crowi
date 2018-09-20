@@ -1,12 +1,12 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import Icon from 'components/Common/Icon'
 
 type Props = {
   pageId?: string,
   crowi: Object,
-};
+}
 
 export default class BookmarkButton extends React.Component {
   constructor(props: Props) {
@@ -19,7 +19,7 @@ export default class BookmarkButton extends React.Component {
     this.handleClick = this.handleClick.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     this.props.crowi.apiGet('/bookmarks.get', { page_id: this.props.pageId }).then(res => {

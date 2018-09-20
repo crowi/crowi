@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 
 import UserPicture from './User/UserPicture'
 
@@ -8,7 +8,7 @@ type Props = {
   pageId?: string,
   limit?: number,
   offset?: number,
-};
+}
 
 class Backlink extends React.Component {
   constructor(props: Props) {
@@ -21,7 +21,7 @@ class Backlink extends React.Component {
     }
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     this.fetchBacklinks()

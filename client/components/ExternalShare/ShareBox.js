@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import { Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
@@ -12,7 +12,7 @@ type Props = {
   pageId?: string,
   t: Function,
   crowi: Object,
-};
+}
 
 class ShareBox extends React.Component {
   constructor(props: Props) {
@@ -36,7 +36,7 @@ class ShareBox extends React.Component {
     this.handleCloseAccessLogModal = this.handleCloseAccessLogModal.bind(this)
   }
 
-  props: Props;
+  props: Props
 
   async componentDidMount() {
     try {

@@ -1,14 +1,14 @@
 // @flow
 // This is the root component for #search-page
 
-import React from 'react';
+import React from 'react'
 
 import queryString from 'query-string'
 import Emitter from '../emitter'
 import SearchToolbar from 'components/SearchPage/SearchToolbar'
 import SearchResult from './SearchPage/SearchResult'
 
-type Props = { crowi: Object };
+type Props = { crowi: Object }
 
 export default class SearchPage extends React.Component {
   constructor(props: Props) {
@@ -34,7 +34,7 @@ export default class SearchPage extends React.Component {
     })
   }
 
-  props: Props;
+  props: Props
 
   componentDidMount() {
     if (this.state.searchingKeyword !== '') {

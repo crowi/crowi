@@ -1,5 +1,5 @@
 // @flow
-import React from 'react';
+import React from 'react'
 import { translate } from 'react-i18next'
 import Tab from 'components/Common/Tab'
 import TabItem from 'components/Common/TabItem'
@@ -9,7 +9,7 @@ import AccessLog from './AccessLog'
 type Props = {
   t: Function,
   crowi: Object,
-};
+}
 
 class AdminShare extends React.Component {
   constructor(props: Props) {
@@ -18,7 +18,7 @@ class AdminShare extends React.Component {
     this.state = {}
   }
 
-  props: Props;
+  props: Props
 
   render() {
     const { t } = this.props
