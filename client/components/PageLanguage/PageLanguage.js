@@ -10,6 +10,7 @@ class PageLanguage extends React.Component {
 
     const languages = this.props.crowi.getLanguages()
     const language = document.getElementById('page-language').dataset.language || this.detectLanguage()
+    const isEditPage = this.isEditPage()
     this.state = {
       rendered: false,
       language,
@@ -18,6 +19,7 @@ class PageLanguage extends React.Component {
         auto: true,
         awaiting: null,
       },
+      isEditPage,
       popoverOpen: false,
     }
 
@@ -26,6 +28,25 @@ class PageLanguage extends React.Component {
     this.toggle = this.toggle.bind(this)
     this.approve = this.approve.bind(this)
     this.reject = this.reject.bind(this)
+
+    this.observeMainContent()
+  }
+
+  isEditPage(element) {
+    element = element || document.getElementById('content-main')
+    return element.className.split(' ').includes('on-edit')
+  }
+
+  observeMainContent() {
+    const observer = new MutationObserver(mutations => {
+      const isEditPage = mutations.some(m => this.isEditPage(m.target))
+      if (isEditPage) {
+        this.onEnter()
+      } else {
+        this.onExit()
+      }
+    })
+    observer.observe(document.getElementById('content-main'), { attributes: true })
   }
 
   removeCodeBlock(markdown) {
@@ -49,7 +70,7 @@ class PageLanguage extends React.Component {
     } = this.state
     if (auto) {
       if (language !== this.state.language) {
-        this.setState({ detector: { awaiting: language } })
+        this.setState({ detector: { auto, awaiting: language } })
         this.show()
       } else {
         this.hide()
@@ -58,7 +79,16 @@ class PageLanguage extends React.Component {
   }
 
   onChange(e) {
-    this.setState({ language: e.target.value })
+    this.setState({ language: e.target.value, detector: { auto: false, awaiting: null } })
+  }
+
+  onEnter() {
+    this.setState({ isEditPage: true })
+    this.updateLanguageField()
+  }
+
+  onExit() {
+    this.setState({ isEditPage: false })
   }
 
   resolveLanguage(language) {
@@ -101,7 +131,7 @@ class PageLanguage extends React.Component {
 
   componentDidMount() {
     document.getElementById('form-body').addEventListener('input', throttle(1000, this.updateLanguageField))
-    setTimeout(this.updateLanguageField, 100)
+    setTimeout(this.updateLanguageField, 400)
   }
 
   render() {
@@ -109,10 +139,12 @@ class PageLanguage extends React.Component {
     const {
       language: languageCode,
       languages,
+      isEditPage,
       popoverOpen,
       detector: { awaiting: detected },
     } = this.state
     const languageName = code => t(`languages.${code}`)
+    const isOpen = isEditPage && popoverOpen
     return (
       <>
         <Input id="pageLanguage" className="mr-2" type="select" name="pageForm[language]" value={languageCode} onChange={this.onChange}>
@@ -122,31 +154,33 @@ class PageLanguage extends React.Component {
             </option>
           ))}
         </Input>
-        <Popover placement="top" isOpen={popoverOpen} target="pageLanguage" toggle={this.toggle}>
-          <PopoverHeader>{t('page_locale.detected_a_new_language')}</PopoverHeader>
-          <PopoverBody>
-            <Table className="mb-2" borderless>
-              <tbody>
-                <tr>
-                  <th scope="row">{t('page_locale.current_language')}</th>
-                  <td>{languageName(languageCode)}</td>
-                </tr>
-                <tr>
-                  <th scope="row">{t('page_locale.detected_language')}</th>
-                  <td>{languageName(detected)}</td>
-                </tr>
-              </tbody>
-            </Table>
-            <div className="d-flex justify-content-end">
-              <Button className="mr-2" color="secondary" size="sm" outline onClick={this.reject}>
-                {t('Cancel')}
-              </Button>
-              <Button color="primary" size="sm" onClick={this.approve}>
-                {t('Change')}
-              </Button>
-            </div>
-          </PopoverBody>
-        </Popover>
+        {isOpen && (
+          <Popover placement="top" isOpen={isOpen} target="pageLanguage" toggle={this.toggle}>
+            <PopoverHeader>{t('page_locale.detected_a_new_language')}</PopoverHeader>
+            <PopoverBody>
+              <Table className="mb-2" borderless>
+                <tbody>
+                  <tr>
+                    <th scope="row">{t('page_locale.current_language')}</th>
+                    <td>{languageName(languageCode)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">{t('page_locale.detected_language')}</th>
+                    <td>{languageName(detected)}</td>
+                  </tr>
+                </tbody>
+              </Table>
+              <div className="d-flex justify-content-end">
+                <Button className="mr-2" color="secondary" size="sm" outline onClick={this.reject}>
+                  {t('Cancel')}
+                </Button>
+                <Button color="primary" size="sm" onClick={this.approve}>
+                  {t('Change')}
+                </Button>
+              </div>
+            </PopoverBody>
+          </Popover>
+        )}
       </>
     )
   }
