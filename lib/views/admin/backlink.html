@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main">
+<div class="content-main content-form">
   <div class="row">
     <div class="col-md-3">
       {% include './widget/menu.html' with {current: 'backlink'} %}
@@ -39,11 +39,11 @@
       <form action="/admin/backlink/build" method="post" class="form-horizontal" role="form">
       <fieldset>
         <legend>Backlinks Build</legend>
-        <div class="form-group">
-          <label for="" class="col-xs-3 control-label">Backlinks Build</label>
-          <div class="col-xs-6">
+        <div class="form-group row">
+          <label for="" class="offset-1 col-3 control-label">Backlinks Build</label>
+          <div class="col-8">
             <button type="submit" class="btn btn-primary">Build Now</button>
-            <p class="help-block">
+            <p class="help-block mt-2">
               Force rebuild backlinks.<br>
               Click "Build Now" to delete all backlinks and create backlinks by all pages.<br>
               This may take a while.
