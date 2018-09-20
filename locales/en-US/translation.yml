@@ -9,6 +9,7 @@ Unlinked: Unlinked
 Seen by: Seen by
 Cancel: Cancel
 Create: Create
+Change: Change
 Admin: Admin
 New: New
 Update: Update
@@ -209,6 +210,11 @@ search:
 admin:
   share:
     enable_external_share: 'Enable to share wiki pages to anonymouse users.'
+
+page_locale:
+  detected_a_new_language: Detected a new language
+  current_language: Current language
+  detected_language: Detected language
 
 languages:
   all: All languages

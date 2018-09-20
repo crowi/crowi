@@ -9,6 +9,7 @@ Unlinked: リダイレクト削除
 Seen by: 見た人
 Cancel: キャンセル
 Create: 作成
+Change: 変更
 Admin: 管理
 New: 作成
 Update: 更新
@@ -209,6 +210,12 @@ search:
 admin:
   share:
     enable_external_share: 'Wikiページの外部ユーザーへの共有を有効にする。'
+
+page_locale:
+  detected_a_new_language: 新しい言語を検出しました
+  current_language: 現在の言語
+  detected_language: 検出された言語
+
 
 languages:
   all: すべての言語
