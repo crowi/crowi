@@ -8,7 +8,6 @@ import SearchForm from './HeaderSearchBox/SearchForm'
 import SearchSuggest from './HeaderSearchBox/SearchSuggest'
 
 type Props = {
-  // pollInterval: PropTypes.number,
   crowi: Object,
 }
 
@@ -88,8 +87,4 @@ export default class HeaderSearchBox extends React.Component {
       </div>
     )
   }
-}
-
-HeaderSearchBox.defaultProps = {
-  // pollInterval: 1000,
 }
