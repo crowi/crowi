@@ -9,5 +9,7 @@
 [lints]
 
 [options]
+module.name_mapper='^locales' ->'<PROJECT_ROOT>/locales'
+module.name_mapper='^components' ->'<PROJECT_ROOT>/client/components'
 
 [strict]
