@@ -1,9 +1,12 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import Icon from 'components/Common/Icon'
 
+type Props = { data?: Object };
+
 export default class PageAlert extends React.Component {
+  props: Props;
   render() {
     const user = this.props.data.user
     const message = <span>{user.name} edited this page.</span>
@@ -18,8 +21,4 @@ export default class PageAlert extends React.Component {
       </div>
     )
   }
-}
-
-PageAlert.propTypes = {
-  data: PropTypes.object,
 }

@@ -1,10 +1,17 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import UserPicture from './User/UserPicture'
 
+type Props = {
+  crowi: Object,
+  pageId?: string,
+  limit?: number,
+  offset?: number,
+};
+
 class Backlink extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -13,6 +20,8 @@ class Backlink extends React.Component {
       backLinks: [],
     }
   }
+
+  props: Props;
 
   componentDidMount() {
     this.fetchBacklinks()
@@ -109,13 +118,6 @@ class Backlink extends React.Component {
       </div>
     )
   }
-}
-
-Backlink.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  pageId: PropTypes.string,
-  limit: PropTypes.number,
-  offset: PropTypes.number,
 }
 
 Backlink.defaultProps = {

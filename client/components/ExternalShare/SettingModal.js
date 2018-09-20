@@ -1,12 +1,22 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import { Button, Container, Row, Col, Label, Input, CustomInput, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 
+type Props = {
+  share?: Object,
+  show: boolean,
+  onHide: Function,
+  isChanging?: boolean,
+  handleDelete?: Function,
+  t: Function,
+  crowi: Object,
+};
+
 class SettingModal extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -29,6 +39,8 @@ class SettingModal extends React.Component {
     this.handleCloseAll = this.handleCloseAll.bind(this)
     this.renderResult = this.renderResult.bind(this)
   }
+
+  props: Props;
 
   componentDidUpdate() {
     const { share = {} } = this.props
@@ -165,15 +177,6 @@ class SettingModal extends React.Component {
   }
 }
 
-SettingModal.propTypes = {
-  share: PropTypes.object,
-  show: PropTypes.bool.isRequired,
-  onHide: PropTypes.func.isRequired,
-  isChanging: PropTypes.bool,
-  handleDelete: PropTypes.func,
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
-}
 SettingModal.defaultProps = {
   show: false,
 }

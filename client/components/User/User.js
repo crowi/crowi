@@ -1,9 +1,16 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import UserPicture from './UserPicture'
 
+type Props = {
+  user: Object,
+  name: boolean,
+  username: boolean,
+};
+
 export default class User extends React.Component {
+  props: Props;
   render() {
     const user = this.props.user
     const userLink = '/user/' + user.username
@@ -22,12 +29,6 @@ export default class User extends React.Component {
       </span>
     )
   }
-}
-
-User.propTypes = {
-  user: PropTypes.object.isRequired,
-  name: PropTypes.bool.isRequired,
-  username: PropTypes.bool.isRequired,
 }
 
 User.defaultProps = {

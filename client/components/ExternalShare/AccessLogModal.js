@@ -1,13 +1,21 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 
+type Props = {
+  show: boolean,
+  onHide: Function,
+  pageId?: string,
+  t: Function,
+  crowi: Object,
+};
+
 class AccessLogModal extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -26,6 +34,8 @@ class AccessLogModal extends React.Component {
     this.movePage = this.movePage.bind(this)
     this.renderAccessLogTable = this.renderAccessLogTable.bind(this)
   }
+
+  props: Props;
 
   renderShareInfo(uuid, username, name, createdAt, isActive) {
     const { t } = this.props
@@ -213,14 +223,6 @@ class AccessLogModal extends React.Component {
       </Modal>
     )
   }
-}
-
-AccessLogModal.propTypes = {
-  show: PropTypes.bool.isRequired,
-  onHide: PropTypes.func.isRequired,
-  pageId: PropTypes.string,
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
 }
 
 export default translate()(AccessLogModal)

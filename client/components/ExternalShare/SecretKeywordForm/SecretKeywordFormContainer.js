@@ -1,12 +1,18 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGroup, FormFeedback } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
 
+type Props = {
+  t?: Function,
+  pageId?: string,
+  crowi: Object,
+};
+
 class SecretKeywordFormContainer extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -27,11 +33,7 @@ class SecretKeywordFormContainer extends React.Component {
     this.handleKeyUp = this.handleKeyUp.bind(this)
   }
 
-  static propTypes = {
-    t: PropTypes.func,
-    pageId: PropTypes.string,
-    crowi: PropTypes.object.isRequired,
-  }
+  props: Props;
 
   setSecretKeyword(e) {
     this.setState({ error: { status: false }, secretKeyword: e.target.value })

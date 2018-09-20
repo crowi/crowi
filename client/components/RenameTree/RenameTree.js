@@ -1,11 +1,16 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGroupAddon, Input, Label } from 'reactstrap'
 import { translate } from 'react-i18next'
 import Icon from '../Common/Icon'
 
+type Props = {
+  crowi: Object,
+  t: Function,
+};
+
 class RenameTree extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.renderTree = this.renderTree.bind(this)
@@ -31,6 +36,8 @@ class RenameTree extends React.Component {
     // TODO: DropdownのReact化の際に消す？
     $("a[data-target='#renameTree']").click(this.handleShow)
   }
+
+  props: Props;
 
   static getPath(options = { removeTrailingSlash: false }) {
     const { removeTrailingSlash } = options
@@ -246,11 +253,6 @@ class RenameTree extends React.Component {
       </Modal>
     )
   }
-}
-
-RenameTree.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  t: PropTypes.func.isRequired,
 }
 
 export default translate()(RenameTree)

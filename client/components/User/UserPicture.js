@@ -1,8 +1,14 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
+
+type Props = {
+  user: Object,
+  size?: string,
+};
 
 // TODO UserComponent?
 export default class UserPicture extends React.Component {
+  props: Props;
   getUserPicture(user) {
     // from swig.setFilter('picture', function(user)
 
@@ -27,11 +33,6 @@ export default class UserPicture extends React.Component {
 
     return <img src={this.getUserPicture(user)} alt={user.username} className={this.getClassName()} />
   }
-}
-
-UserPicture.propTypes = {
-  user: PropTypes.object.isRequired,
-  size: PropTypes.string,
 }
 
 UserPicture.defaultProps = {

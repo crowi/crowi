@@ -1,14 +1,21 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { Nav, NavItem, NavLink, TabContent, TabPane } from 'reactstrap'
 
+type Props = {
+  children: number | string | React.Element | Array<any>,
+  active?: number,
+};
+
 export default class Tab extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     const { active } = props
     this.state = { active }
   }
+
+  props: Props;
 
   toggle(tab) {
     return () => {
@@ -55,11 +62,6 @@ export default class Tab extends React.Component {
       </div>
     )
   }
-}
-
-Tab.propTypes = {
-  children: PropTypes.node.isRequired,
-  active: PropTypes.number,
 }
 
 Tab.defaultProps = {

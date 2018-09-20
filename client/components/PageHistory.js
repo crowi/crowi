@@ -1,11 +1,16 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import Icon from './Common/Icon'
 import PageRevisionList from './PageHistory/PageRevisionList'
 
+type Props = {
+  pageId?: string,
+  crowi: Object,
+};
+
 export default class PageHistory extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -16,6 +21,8 @@ export default class PageHistory extends React.Component {
     this.getPreviousRevision = this.getPreviousRevision.bind(this)
     this.onDiffOpenClicked = this.onDiffOpenClicked.bind(this)
   }
+
+  props: Props;
 
   componentDidMount() {
     const pageId = this.props.pageId
@@ -133,9 +140,4 @@ export default class PageHistory extends React.Component {
       </div>
     )
   }
-}
-
-PageHistory.propTypes = {
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
 }

@@ -1,13 +1,15 @@
+// @flow
 // This is the root component for #page-list-search
 
-import React from 'react'
-import PropTypes from 'prop-types'
+import React from 'react';
 
 import queryString from 'query-string'
 import SearchResult from './SearchPage/SearchResult'
 
+type Props = { crowi: Object };
+
 export default class PageListSearch extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     const { search = '' } = this.props.crowi.location
@@ -25,6 +27,8 @@ export default class PageListSearch extends React.Component {
     this.search = this.search.bind(this)
     this.handleChange = this.handleChange.bind(this)
   }
+
+  props: Props;
 
   componentDidMount() {
     const $pageListSearchForm = $('#search-listpage-input')
@@ -143,9 +147,6 @@ export default class PageListSearch extends React.Component {
   }
 }
 
-PageListSearch.propTypes = {
-  crowi: PropTypes.object.isRequired,
-}
 PageListSearch.defaultProps = {
   // pollInterval: 1000,
 }

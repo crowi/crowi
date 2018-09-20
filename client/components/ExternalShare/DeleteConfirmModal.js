@@ -1,10 +1,18 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, Alert } from 'reactstrap'
 
+type Props = {
+  show: boolean,
+  onHide: Function,
+  handleDelete: Function,
+  handleClose: Function,
+  t: Function,
+};
+
 class DeleteConfirmModal extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -13,6 +21,8 @@ class DeleteConfirmModal extends React.Component {
 
     this.handleDelete = this.handleDelete.bind(this)
   }
+
+  props: Props;
 
   async handleDelete() {
     const { handleClose, handleDelete } = this.props
@@ -46,13 +56,6 @@ class DeleteConfirmModal extends React.Component {
   }
 }
 
-DeleteConfirmModal.propTypes = {
-  show: PropTypes.bool.isRequired,
-  onHide: PropTypes.func.isRequired,
-  handleDelete: PropTypes.func.isRequired,
-  handleClose: PropTypes.func.isRequired,
-  t: PropTypes.func.isRequired,
-}
 DeleteConfirmModal.defaultProps = {
   show: false,
 }

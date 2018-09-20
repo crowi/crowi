@@ -1,15 +1,23 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import Icon from 'components/Common/Icon'
 import User from 'components/User/User'
 
+type Props = {
+  attachment: Object,
+  inUse: boolean,
+  onAttachmentDeleteClicked: Function,
+};
+
 export default class Attachment extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this._onAttachmentDeleteClicked = this._onAttachmentDeleteClicked.bind(this)
   }
+
+  props: Props;
 
   iconNameByFormat(format) {
     if (format.match(/image\/.+/i)) {
@@ -51,12 +59,6 @@ export default class Attachment extends React.Component {
       </li>
     )
   }
-}
-
-Attachment.propTypes = {
-  attachment: PropTypes.object.isRequired,
-  inUse: PropTypes.bool.isRequired,
-  onAttachmentDeleteClicked: PropTypes.func.isRequired,
 }
 
 Attachment.defaultProps = {}

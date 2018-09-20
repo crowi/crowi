@@ -1,13 +1,18 @@
-import React from 'react'
+// @flow
+import React from 'react';
+
+type Props = {};
 
 export default class Modal extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
       modalShown: false,
     }
   }
+
+  props: Props;
 
   render() {
     if (!this.state.modalShown) {

@@ -1,15 +1,16 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
+
+type Props = {
+  children: number | string | React.Element | Array<any>,
+  title: string,
+};
 
 export default class TabItem extends React.Component {
+  props: Props;
   render() {
     return this.props.children
   }
-}
-
-TabItem.propTypes = {
-  children: PropTypes.node.isRequired,
-  title: PropTypes.string.isRequired,
 }
 
 TabItem.defaultProps = {

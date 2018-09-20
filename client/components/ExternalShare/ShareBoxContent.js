@@ -1,17 +1,30 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, Input, Alert } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 
+type Props = {
+  handleOpen?: Function,
+  handleCreate?: Function,
+  isCreated?: boolean,
+  isChanging?: boolean,
+  share?: Object,
+  creationError?: boolean,
+  crowi: Object,
+  t: Function,
+};
+
 class ShareBoxContent extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.selectAction = this.selectAction.bind(this)
     this.createRef = this.createRef.bind(this)
     this.copyAction = this.copyAction.bind(this)
   }
+
+  props: Props;
 
   selectAction(e) {
     this.inputRef.select()
@@ -58,16 +71,6 @@ class ShareBoxContent extends React.Component {
   }
 }
 
-ShareBoxContent.propTypes = {
-  handleOpen: PropTypes.func,
-  handleCreate: PropTypes.func,
-  isCreated: PropTypes.bool,
-  isChanging: PropTypes.bool,
-  share: PropTypes.object,
-  creationError: PropTypes.bool,
-  crowi: PropTypes.object.isRequired,
-  t: PropTypes.func.isRequired,
-}
 ShareBoxContent.defaultProps = {
   isCreated: false,
   share: {},

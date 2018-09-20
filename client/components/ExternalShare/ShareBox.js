@@ -1,5 +1,5 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import { Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
@@ -7,8 +7,15 @@ import ShareBoxContent from './ShareBoxContent'
 import SettingModal from './SettingModal'
 import AccessLogModal from './AccessLogModal'
 
+type Props = {
+  isCreated?: boolean,
+  pageId?: string,
+  t: Function,
+  crowi: Object,
+};
+
 class ShareBox extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -28,6 +35,8 @@ class ShareBox extends React.Component {
     this.handleOpenAccessLogModal = this.handleOpenAccessLogModal.bind(this)
     this.handleCloseAccessLogModal = this.handleCloseAccessLogModal.bind(this)
   }
+
+  props: Props;
 
   async componentDidMount() {
     try {
@@ -126,12 +135,6 @@ class ShareBox extends React.Component {
   }
 }
 
-ShareBox.propTypes = {
-  isCreated: PropTypes.bool,
-  pageId: PropTypes.string,
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
-}
 ShareBox.defaultProps = {
   isCreated: false,
 }

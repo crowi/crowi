@@ -1,11 +1,17 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import PageAttachmentList from './PageAttachment/PageAttachmentList'
 import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal'
 
+type Props = {
+  pageId?: string,
+  crowi: Object,
+  pageContent?: string,
+};
+
 export default class PageAttachment extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -19,6 +25,8 @@ export default class PageAttachment extends React.Component {
     this.onAttachmentDeleteClicked = this.onAttachmentDeleteClicked.bind(this)
     this.onAttachmentDeleteClickedConfirm = this.onAttachmentDeleteClickedConfirm.bind(this)
   }
+
+  props: Props;
 
   componentDidMount() {
     const pageId = this.props.pageId
@@ -110,10 +118,4 @@ export default class PageAttachment extends React.Component {
       </div>
     )
   }
-}
-
-PageAttachment.propTypes = {
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
-  pageContent: PropTypes.string,
 }

@@ -1,18 +1,29 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { Card } from 'reactstrap'
 import { translate } from 'react-i18next'
 import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
 
+type Props = {
+  searchedPages: Object,
+  searchingKeyword: string,
+  searching: boolean,
+  searchError?: Object,
+  focused?: boolean,
+  t: Function,
+};
+
 class SearchSuggest extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.buildSearchUrl = this.buildSearchUrl.bind(this)
     this.renderList = this.renderList.bind(this)
   }
+
+  props: Props;
 
   buildSearchUrl(type) {
     const q = this.props.searchingKeyword
@@ -88,15 +99,6 @@ class SearchSuggest extends React.Component {
       </Card>
     )
   }
-}
-
-SearchSuggest.propTypes = {
-  searchedPages: PropTypes.object.isRequired,
-  searchingKeyword: PropTypes.string.isRequired,
-  searching: PropTypes.bool.isRequired,
-  searchError: PropTypes.object,
-  focused: PropTypes.bool,
-  t: PropTypes.func.isRequired,
 }
 
 SearchSuggest.defaultProps = {

@@ -1,17 +1,24 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import Tab from 'components/Common/Tab'
 import TabItem from 'components/Common/TabItem'
 import ShareList from './ShareList'
 import AccessLog from './AccessLog'
 
+type Props = {
+  t: Function,
+  crowi: Object,
+};
+
 class AdminShare extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {}
   }
+
+  props: Props;
 
   render() {
     const { t } = this.props
@@ -26,11 +33,6 @@ class AdminShare extends React.Component {
       </Tab>
     )
   }
-}
-
-AdminShare.propTypes = {
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
 }
 
 export default translate()(AdminShare)

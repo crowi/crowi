@@ -1,7 +1,13 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
+
+type Props = {
+  page: Object,
+  excludePathString?: string,
+};
 
 export default class PagePath extends React.Component {
+  props: Props;
   getShortPath(path) {
     let name = path.replace(/(\/)$/, '')
 
@@ -38,11 +44,6 @@ export default class PagePath extends React.Component {
       </span>
     )
   }
-}
-
-PagePath.propTypes = {
-  page: PropTypes.object.isRequired,
-  excludePathString: PropTypes.string,
 }
 
 PagePath.defaultProps = {

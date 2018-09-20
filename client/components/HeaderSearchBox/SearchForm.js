@@ -1,11 +1,19 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import Emitter from '../../emitter'
 
+type Props = {
+  onSearchFormChanged: Function,
+  isShown: Function,
+  isSearchPage: boolean,
+  pollInterval?: number,
+  keyword?: string,
+};
+
 // Header.SearchForm
 export default class SearchForm extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -20,6 +28,8 @@ export default class SearchForm extends React.Component {
     this.clearForm = this.clearForm.bind(this)
     this.ticker = null
   }
+
+  props: Props;
 
   componentDidMount() {
     this.ticker = setInterval(this.searchFieldTicker.bind(this), this.props.pollInterval)
@@ -107,13 +117,6 @@ export default class SearchForm extends React.Component {
   }
 }
 
-SearchForm.propTypes = {
-  onSearchFormChanged: PropTypes.func.isRequired,
-  isShown: PropTypes.func.isRequired,
-  isSearchPage: PropTypes.bool.isRequired,
-  pollInterval: PropTypes.number,
-  keyword: PropTypes.string,
-}
 SearchForm.defaultProps = {
   pollInterval: 1000,
 }

@@ -1,10 +1,15 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import PageAlert from './PageAlerts/PageAlert'
 
+type Props = {
+  pageId?: string,
+  crowi: Object,
+};
+
 export default class PageAlerts extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -13,6 +18,8 @@ export default class PageAlerts extends React.Component {
       data: {},
     }
   }
+
+  props: Props;
 
   componentDidMount() {
     const socket = this.props.crowi.getWebSocket()
@@ -40,9 +47,4 @@ export default class PageAlerts extends React.Component {
 
     return <PageAlert {...this.state} />
   }
-}
-
-PageAlerts.propTypes = {
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
 }

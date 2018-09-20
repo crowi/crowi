@@ -1,12 +1,18 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 
+type Props = {
+  t: Function,
+  pageId?: string,
+  crowi: Object,
+};
+
 class ShareList extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
@@ -23,6 +29,8 @@ class ShareList extends React.Component {
     this.movePage = this.movePage.bind(this)
     this.renderTableBody = this.renderTableBody.bind(this)
   }
+
+  props: Props;
 
   async getPage(options = {}) {
     const limit = this.state.pagination.limit
@@ -115,12 +123,6 @@ class ShareList extends React.Component {
       </div>
     )
   }
-}
-
-ShareList.propTypes = {
-  t: PropTypes.func.isRequired,
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
 }
 
 export default translate()(ShareList)

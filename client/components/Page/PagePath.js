@@ -1,7 +1,9 @@
+// @flow
 import React from 'react'
-import PropTypes from 'prop-types'
+type Props = { page: Object }
 
 export default class PagePath extends React.Component {
+  props: Props
   // Original Crowi.linkPath
   /*
   Crowi.linkPath = function(revisionPath) {
@@ -54,10 +56,6 @@ export default class PagePath extends React.Component {
       </span>
     )
   }
-}
-
-PagePath.propTypes = {
-  page: PropTypes.object.isRequired,
 }
 
 PagePath.defaultProps = {

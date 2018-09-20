@@ -1,14 +1,22 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
+
+type Props = {
+  page: Object,
+  highlightKeywords?: string,
+  pageBody?: string,
+};
 
 export default class PageBody extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.crowiRenderer = window.crowiRenderer // FIXME
     this.getMarkupHTML = this.getMarkupHTML.bind(this)
     this.getHighlightBody = this.getHighlightBody.bind(this)
   }
+
+  props: Props;
 
   getHighlightBody(body, keywords) {
     let returnBody = body
@@ -48,12 +56,6 @@ export default class PageBody extends React.Component {
 
     return <div className="content" dangerouslySetInnerHTML={parsedBody} />
   }
-}
-
-PageBody.propTypes = {
-  page: PropTypes.object.isRequired,
-  highlightKeywords: PropTypes.string,
-  pageBody: PropTypes.string,
 }
 
 PageBody.defaultProps = {

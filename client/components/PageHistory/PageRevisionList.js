@@ -1,10 +1,17 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import Revision from './Revision'
 import RevisionDiff from './RevisionDiff'
 
+type Props = {
+  revisions?: Array<any>,
+  diffOpened?: Object,
+  onDiffOpenClicked: Function,
+};
+
 export default class PageRevisionList extends React.Component {
+  props: Props;
   render() {
     const revisions = this.props.revisions
     const revisionCount = this.props.revisions.length
@@ -35,10 +42,4 @@ export default class PageRevisionList extends React.Component {
 
     return <div className="revision-history-list">{revisionList}</div>
   }
-}
-
-PageRevisionList.propTypes = {
-  revisions: PropTypes.array,
-  diffOpened: PropTypes.object,
-  onDiffOpenClicked: PropTypes.func.isRequired,
 }

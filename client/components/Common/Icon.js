@@ -1,7 +1,16 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
+
+type Props = {
+  name: string,
+  solid?: boolean,
+  regular?: boolean,
+  light?: boolean,
+  spin?: boolean,
+};
 
 export default class Icon extends React.Component {
+  props: Props;
   render() {
     const name = this.props.name || null
     const isSpin = this.props.spin ? 'fa-spinner fa-pulse' : ''
@@ -14,15 +23,6 @@ export default class Icon extends React.Component {
 
     return <i className={`fa${type} fa-${name} ${isSpin}`} />
   }
-}
-
-// TODO: support size and so far
-Icon.propTypes = {
-  name: PropTypes.string.isRequired,
-  solid: PropTypes.bool,
-  regular: PropTypes.bool,
-  light: PropTypes.bool,
-  spin: PropTypes.bool,
 }
 
 Icon.defaltProps = {

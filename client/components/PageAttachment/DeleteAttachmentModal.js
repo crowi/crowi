@@ -1,16 +1,26 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
 import User from 'components/User/User'
 
+type Props = {
+  inUse?: boolean,
+  deleting?: boolean,
+  deleteError?: string,
+  attachmentToDelete?: Object,
+  onAttachmentDeleteClickedConfirm?: Function,
+};
+
 export default class DeleteAttachmentModal extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this._onDeleteConfirm = this._onDeleteConfirm.bind(this)
   }
+
+  props: Props;
 
   _onDeleteConfirm() {
     this.props.onAttachmentDeleteClickedConfirm(this.props.attachmentToDelete)
@@ -74,12 +84,4 @@ export default class DeleteAttachmentModal extends React.Component {
       </Modal>
     )
   }
-}
-
-DeleteAttachmentModal.propTypes = {
-  inUse: PropTypes.bool,
-  deleting: PropTypes.bool,
-  deleteError: PropTypes.string,
-  attachmentToDelete: PropTypes.object,
-  onAttachmentDeleteClickedConfirm: PropTypes.func,
 }

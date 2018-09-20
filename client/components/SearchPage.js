@@ -1,15 +1,17 @@
+// @flow
 // This is the root component for #search-page
 
-import React from 'react'
-import PropTypes from 'prop-types'
+import React from 'react';
 
 import queryString from 'query-string'
 import Emitter from '../emitter'
 import SearchToolbar from 'components/SearchPage/SearchToolbar'
 import SearchResult from './SearchPage/SearchResult'
 
+type Props = { crowi: Object };
+
 export default class SearchPage extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     const { q = '', type = '' } = queryString.parse(this.props.crowi.location.search)
@@ -31,6 +33,8 @@ export default class SearchPage extends React.Component {
       this.search(this.buildQuery({ q }))
     })
   }
+
+  props: Props;
 
   componentDidMount() {
     if (this.state.searchingKeyword !== '') {
@@ -108,9 +112,6 @@ export default class SearchPage extends React.Component {
   }
 }
 
-SearchPage.propTypes = {
-  crowi: PropTypes.object.isRequired,
-}
 SearchPage.defaultProps = {
   // pollInterval: 1000,
   searchError: null,

@@ -1,7 +1,9 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
+type Props = { page: Object };
 
 export default class PageListMeta extends React.Component {
+  props: Props;
   isPortalPath(path) {
     if (path.match(/.*\/$/)) {
       return true
@@ -48,10 +50,6 @@ export default class PageListMeta extends React.Component {
       </span>
     )
   }
-}
-
-PageListMeta.propTypes = {
-  page: PropTypes.object.isRequired,
 }
 
 PageListMeta.defaultProps = {

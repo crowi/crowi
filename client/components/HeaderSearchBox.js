@@ -1,14 +1,17 @@
+// @flow
 // This is the root component for #search-top
 
-import React from 'react'
-import PropTypes from 'prop-types'
+import React from 'react';
 import queryString from 'query-string'
 
 import SearchForm from './HeaderSearchBox/SearchForm'
 import SearchSuggest from './HeaderSearchBox/SearchSuggest'
 
+type Props = { // pollInterval: PropTypes.number,
+crowi: Object };
+
 export default class HeaderSearchBox extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     const { pathname = '', search: locationSearch } = this.props.crowi.location
@@ -25,6 +28,8 @@ export default class HeaderSearchBox extends React.Component {
     this.search = this.search.bind(this)
     this.isShown = this.isShown.bind(this)
   }
+
+  props: Props;
 
   isShown(focused) {
     this.setState({ focused: !!focused })
@@ -83,10 +88,6 @@ export default class HeaderSearchBox extends React.Component {
   }
 }
 
-HeaderSearchBox.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  // pollInterval: PropTypes.number,
-}
 HeaderSearchBox.defaultProps = {
   // pollInterval: 1000,
 }

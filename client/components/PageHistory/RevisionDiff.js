@@ -1,10 +1,17 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import { createPatch } from 'diff'
 import { Diff2Html } from 'diff2html'
 
+type Props = {
+  currentRevision: Object,
+  previousRevision: Object,
+  revisionDiffOpened: boolean,
+};
+
 export default class RevisionDiff extends React.Component {
+  props: Props;
   render() {
     const currentRevision = this.props.currentRevision
     const previousRevision = this.props.previousRevision
@@ -25,10 +32,4 @@ export default class RevisionDiff extends React.Component {
     const diffView = { __html: diffViewHTML }
     return <div className="revision-history-diff" dangerouslySetInnerHTML={diffView} />
   }
-}
-
-RevisionDiff.propTypes = {
-  currentRevision: PropTypes.object.isRequired,
-  previousRevision: PropTypes.object.isRequired,
-  revisionDiffOpened: PropTypes.bool.isRequired,
 }

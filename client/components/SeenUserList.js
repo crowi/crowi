@@ -1,15 +1,19 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import UserList from './SeenUserList/UserList'
 
+type Props = { crowi: Object };
+
 export default class SeenUserList extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {
       seenUsers: [],
     }
   }
+
+  props: Props;
 
   componentDidMount() {
     const seenUserIds = this.getSeenUserIds()
@@ -41,8 +45,4 @@ export default class SeenUserList extends React.Component {
       </div>
     )
   }
-}
-
-SeenUserList.propTypes = {
-  crowi: PropTypes.object.isRequired,
 }

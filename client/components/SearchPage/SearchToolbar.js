@@ -1,11 +1,20 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 import { translate } from 'react-i18next'
 import { Nav, NavItem, NavLink } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 
+type Props = {
+  keyword?: string,
+  type?: string,
+  total?: number,
+  changeType?: Function,
+  searching?: boolean,
+  t: Function,
+};
+
 class SearchToolbar extends React.Component {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.searchTypes = ['', 'portal', 'public', 'user']
@@ -13,6 +22,8 @@ class SearchToolbar extends React.Component {
     this.getActiveType = this.getActiveType.bind(this)
     this.onClick = this.onClick.bind(this)
   }
+
+  props: Props;
 
   getActiveType() {
     const defaultType = this.searchTypes[0]
@@ -69,14 +80,6 @@ class SearchToolbar extends React.Component {
   }
 }
 
-SearchToolbar.propTypes = {
-  keyword: PropTypes.string,
-  type: PropTypes.string,
-  total: PropTypes.number,
-  changeType: PropTypes.func,
-  searching: PropTypes.bool,
-  t: PropTypes.func.isRequired,
-}
 SearchToolbar.defaultProps = {
   keyword: '',
   type: '',

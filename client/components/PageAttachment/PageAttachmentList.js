@@ -1,9 +1,16 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import Attachment from './Attachment'
 
+type Props = {
+  attachments?: Array<any>,
+  inUse?: Object,
+  onAttachmentDeleteClicked?: Function,
+};
+
 export default class PageAttachmentList extends React.Component {
+  props: Props;
   render() {
     if (this.props.attachments <= 0) {
       return null
@@ -22,10 +29,4 @@ export default class PageAttachmentList extends React.Component {
 
     return <ul>{attachmentList}</ul>
   }
-}
-
-PageAttachmentList.propTypes = {
-  attachments: PropTypes.array,
-  inUse: PropTypes.object,
-  onAttachmentDeleteClicked: PropTypes.func,
 }

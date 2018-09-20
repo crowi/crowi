@@ -1,9 +1,15 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+// @flow
+import React from 'react';
 
 import PageBody from 'components/Page/PageBody.js'
 
+type Props = {
+  pages: Array<any>,
+  searchingKeyword: string,
+};
+
 export default class SearchResultList extends React.Component {
+  props: Props;
   render() {
     const resultList = this.props.pages.map(page => {
       const pageBody = page.revision.body
@@ -21,11 +27,6 @@ export default class SearchResultList extends React.Component {
 
     return <div>{resultList}</div>
   }
-}
-
-SearchResultList.propTypes = {
-  pages: PropTypes.array.isRequired,
-  searchingKeyword: PropTypes.string.isRequired,
 }
 
 SearchResultList.defaultProps = {
