@@ -2,6 +2,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Input } from 'reactstrap'
+import { throttle } from 'throttle-debounce'
 
 class PageLanguage extends React.Component {
   constructor(props) {
@@ -15,6 +16,7 @@ class PageLanguage extends React.Component {
 
     this.removeCodeBlock = this.removeCodeBlock.bind(this)
     this.updateLanguageField = this.updateLanguageField.bind(this)
+    this.onChange = this.onChange.bind(this)
   }
 
   removeCodeBlock(markdown) {
@@ -31,10 +33,15 @@ class PageLanguage extends React.Component {
     if (language !== this.state.language) {
       this.setState({ language })
     }
+    console.log(language)
+  }
+
+  onChange(e) {
+    this.setState({ language: e.target.value })
   }
 
   componentDidMount() {
-    document.getElementById('form-body').addEventListener('change', this.updateLanguageField)
+    document.getElementById('form-body').addEventListener('input', throttle(1000, this.updateLanguageField))
     this.updateLanguageField()
   }
 
@@ -43,7 +50,7 @@ class PageLanguage extends React.Component {
     const { language: languageCode, languages } = this.state
     const languageName = code => t(`languages.${code}`)
     return (
-      <Input className="mr-2" type="select" name="pageForm[language]" defaultValue={languageCode}>
+      <Input className="mr-2" type="select" name="pageForm[language" value={languageCode} onChange={this.onChange}>
         {languages.map(code => (
           <option key={code} value={code}>
             {languageName(code)}

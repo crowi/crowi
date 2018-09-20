@@ -122,6 +122,7 @@
     "sprintf": "~0.1.5",
     "style-loader": "~0.22.1",
     "swig": "~1.4.0",
+    "throttle-debounce": "^2.0.1",
     "uuid": "^3.2.1",
     "webpack": "^4.16.1",
     "webpack-cli": "^3.1.0",
