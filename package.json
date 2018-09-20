@@ -144,7 +144,7 @@
     "eslint-plugin-react": "^7.11.1",
     "eslint-plugin-standard": "^4.0.0",
     "faker": "^4.1.0",
-    "flow-bin": "^0.65.0",
+    "flow-bin": "^0.81.0",
     "mocha": "~5.2.0",
     "nodemon": "^1.17.2",
     "onchange": "^4.0.0",
