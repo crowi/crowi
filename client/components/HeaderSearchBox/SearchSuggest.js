@@ -15,15 +15,13 @@ type Props = {
   t: Function,
 }
 
-class SearchSuggest extends React.Component {
+class SearchSuggest extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
     this.buildSearchUrl = this.buildSearchUrl.bind(this)
     this.renderList = this.renderList.bind(this)
   }
-
-  props: Props
 
   buildSearchUrl(type) {
     const q = this.props.searchingKeyword

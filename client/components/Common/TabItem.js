@@ -6,13 +6,12 @@ type Props = {
   title: string,
 }
 
-export default class TabItem extends React.Component {
-  props: Props
+export default class TabItem extends React.Component<Props> {
+  static defaultProps = {
+    title: '',
+  }
+
   render() {
     return this.props.children
   }
-}
-
-TabItem.defaultProps = {
-  title: '',
 }

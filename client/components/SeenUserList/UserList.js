@@ -5,8 +5,11 @@ import UserPicture from 'components/User/UserPicture'
 
 type Props = { users?: Array<any> }
 
-export default class UserList extends React.Component {
-  props: Props
+export default class UserList extends React.Component<Props> {
+  static defaultProps = {
+    users: [],
+  }
+
   isSeenUserListShown() {
     const userCount = this.props.users.length
     if (userCount > 0 && userCount <= 10) {
@@ -31,8 +34,4 @@ export default class UserList extends React.Component {
 
     return <p className="seen-user-list">{users}</p>
   }
-}
-
-UserList.defaultProps = {
-  users: [],
 }

@@ -8,8 +8,12 @@ type Props = {
   searchingKeyword: string,
 }
 
-export default class SearchResultList extends React.Component {
-  props: Props
+export default class SearchResultList extends React.Component<Props> {
+  static defaultProps = {
+    pages: [],
+    searchingKeyword: '',
+  }
+
   render() {
     const resultList = this.props.pages.map(page => {
       const pageBody = page.revision.body
@@ -27,9 +31,4 @@ export default class SearchResultList extends React.Component {
 
     return <div>{resultList}</div>
   }
-}
-
-SearchResultList.defaultProps = {
-  pages: [],
-  searchingKeyword: '',
 }

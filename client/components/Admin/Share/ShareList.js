@@ -11,7 +11,7 @@ type Props = {
   crowi: Object,
 }
 
-class ShareList extends React.Component {
+class ShareList extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -29,8 +29,6 @@ class ShareList extends React.Component {
     this.movePage = this.movePage.bind(this)
     this.renderTableBody = this.renderTableBody.bind(this)
   }
-
-  props: Props
 
   async getPage(options = {}) {
     const limit = this.state.pagination.limit

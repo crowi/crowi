@@ -9,8 +9,14 @@ type Props = {
   spin?: boolean,
 }
 
-export default class Icon extends React.Component {
-  props: Props
+export default class Icon extends React.Component<Props> {
+  static defaltProps = {
+    spin: false,
+    solid: false,
+    regular: false,
+    light: false,
+  }
+
   render() {
     const name = this.props.name || null
     const isSpin = this.props.spin ? 'fa-spinner fa-pulse' : ''
@@ -23,11 +29,4 @@ export default class Icon extends React.Component {
 
     return <i className={`fa${type} fa-${name} ${isSpin}`} />
   }
-}
-
-Icon.defaltProps = {
-  spin: false,
-  solid: false,
-  regular: false,
-  light: false,
 }

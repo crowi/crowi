@@ -7,7 +7,7 @@ type Props = {
   pageBody?: string,
 }
 
-export default class PageBody extends React.Component {
+export default class PageBody extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -15,8 +15,6 @@ export default class PageBody extends React.Component {
     this.getMarkupHTML = this.getMarkupHTML.bind(this)
     this.getHighlightBody = this.getHighlightBody.bind(this)
   }
-
-  props: Props
 
   getHighlightBody(body, keywords) {
     let returnBody = body

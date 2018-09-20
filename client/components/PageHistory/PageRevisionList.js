@@ -10,8 +10,7 @@ type Props = {
   onDiffOpenClicked: Function,
 }
 
-export default class PageRevisionList extends React.Component {
-  props: Props
+export default class PageRevisionList extends React.Component<Props> {
   render() {
     const revisions = this.props.revisions
     const revisionCount = this.props.revisions.length

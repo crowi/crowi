@@ -8,7 +8,7 @@ import SearchResult from './SearchPage/SearchResult'
 
 type Props = { crowi: Object }
 
-export default class PageListSearch extends React.Component {
+export default class PageListSearch extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -27,8 +27,6 @@ export default class PageListSearch extends React.Component {
     this.search = this.search.bind(this)
     this.handleChange = this.handleChange.bind(this)
   }
-
-  props: Props
 
   componentDidMount() {
     const $pageListSearchForm = $('#search-listpage-input')
@@ -145,8 +143,4 @@ export default class PageListSearch extends React.Component {
       </div>
     )
   }
-}
-
-PageListSearch.defaultProps = {
-  // pollInterval: 1000,
 }

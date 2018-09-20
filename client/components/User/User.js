@@ -9,8 +9,12 @@ type Props = {
   username: boolean,
 }
 
-export default class User extends React.Component {
-  props: Props
+export default class User extends React.Component<Props> {
+  static defaultProps = {
+    name: false,
+    username: false,
+  }
+
   render() {
     const user = this.props.user
     const userLink = '/user/' + user.username
@@ -29,9 +33,4 @@ export default class User extends React.Component {
       </span>
     )
   }
-}
-
-User.defaultProps = {
-  name: false,
-  username: false,
 }

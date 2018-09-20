@@ -13,7 +13,14 @@ type Props = {
   t: Function,
 }
 
-class SearchToolbar extends React.Component {
+class SearchToolbar extends React.Component<Props> {
+  static defaultProps = {
+    keyword: '',
+    type: '',
+    searching: false,
+    total: 0,
+  }
+
   constructor(props: Props) {
     super(props)
 
@@ -22,8 +29,6 @@ class SearchToolbar extends React.Component {
     this.getActiveType = this.getActiveType.bind(this)
     this.onClick = this.onClick.bind(this)
   }
-
-  props: Props
 
   getActiveType() {
     const defaultType = this.searchTypes[0]
@@ -78,13 +83,6 @@ class SearchToolbar extends React.Component {
       </div>
     )
   }
-}
-
-SearchToolbar.defaultProps = {
-  keyword: '',
-  type: '',
-  searching: false,
-  total: 0,
 }
 
 export default translate()(SearchToolbar)

@@ -11,7 +11,7 @@ type Props = {
   crowi: Object,
 }
 
-export default class HeaderSearchBox extends React.Component {
+export default class HeaderSearchBox extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -29,8 +29,6 @@ export default class HeaderSearchBox extends React.Component {
     this.search = this.search.bind(this)
     this.isShown = this.isShown.bind(this)
   }
-
-  props: Props
 
   isShown(focused) {
     this.setState({ focused: !!focused })

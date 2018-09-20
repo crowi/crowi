@@ -7,8 +7,12 @@ type Props = {
 }
 
 // TODO UserComponent?
-export default class UserPicture extends React.Component {
-  props: Props
+export default class UserPicture extends React.Component<Props> {
+  static defaultProps = {
+    user: {},
+    size: null,
+  }
+
   getUserPicture(user) {
     // from swig.setFilter('picture', function(user)
 
@@ -33,9 +37,4 @@ export default class UserPicture extends React.Component {
 
     return <img src={this.getUserPicture(user)} alt={user.username} className={this.getClassName()} />
   }
-}
-
-UserPicture.defaultProps = {
-  user: {},
-  size: null,
 }

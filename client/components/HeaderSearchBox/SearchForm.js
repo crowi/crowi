@@ -12,7 +12,7 @@ type Props = {
 }
 
 // Header.SearchForm
-export default class SearchForm extends React.Component {
+export default class SearchForm extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -28,8 +28,6 @@ export default class SearchForm extends React.Component {
     this.clearForm = this.clearForm.bind(this)
     this.ticker = null
   }
-
-  props: Props
 
   componentDidMount() {
     this.ticker = setInterval(this.searchFieldTicker.bind(this), this.props.pollInterval)

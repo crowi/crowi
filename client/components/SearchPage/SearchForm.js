@@ -7,7 +7,7 @@ type Props = {
 }
 
 // Search.SearchForm
-export default class SearchForm extends React.Component {
+export default class SearchForm extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -52,5 +52,3 @@ export default class SearchForm extends React.Component {
     )
   }
 }
-
-SearchForm.defaultProps = {}

@@ -8,7 +8,7 @@ type Props = {
   crowi: Object,
 }
 
-export default class BookmarkButton extends React.Component {
+export default class BookmarkButton extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -18,8 +18,6 @@ export default class BookmarkButton extends React.Component {
 
     this.handleClick = this.handleClick.bind(this)
   }
-
-  props: Props
 
   componentDidMount() {
     this.props.crowi.apiGet('/bookmarks.get', { page_id: this.props.pageId }).then(res => {

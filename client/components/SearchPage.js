@@ -10,7 +10,11 @@ import SearchResult from './SearchPage/SearchResult'
 
 type Props = { crowi: Object }
 
-export default class SearchPage extends React.Component {
+export default class SearchPage extends React.Component<Props> {
+  static defaultProps = {
+    searchError: null,
+  }
+
   constructor(props: Props) {
     super(props)
 
@@ -33,8 +37,6 @@ export default class SearchPage extends React.Component {
       this.search(this.buildQuery({ q }))
     })
   }
-
-  props: Props
 
   componentDidMount() {
     if (this.state.searchingKeyword !== '') {
@@ -110,9 +112,4 @@ export default class SearchPage extends React.Component {
       </div>
     )
   }
-}
-
-SearchPage.defaultProps = {
-  // pollInterval: 1000,
-  searchError: null,
 }

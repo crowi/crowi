@@ -4,7 +4,7 @@ import UserList from './SeenUserList/UserList'
 
 type Props = { crowi: Object }
 
-export default class SeenUserList extends React.Component {
+export default class SeenUserList extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -12,8 +12,6 @@ export default class SeenUserList extends React.Component {
       seenUsers: [],
     }
   }
-
-  props: Props
 
   componentDidMount() {
     const seenUserIds = this.getSeenUserIds()

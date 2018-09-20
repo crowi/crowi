@@ -14,7 +14,11 @@ type Props = {
   crowi: Object,
 }
 
-class ShareBox extends React.Component {
+class ShareBox extends React.Component<Props> {
+  static defaultProps = {
+    isCreated: false,
+  }
+
   constructor(props: Props) {
     super(props)
 
@@ -133,10 +137,6 @@ class ShareBox extends React.Component {
       </div>
     )
   }
-}
-
-ShareBox.defaultProps = {
-  isCreated: false,
 }
 
 export default translate()(ShareBox)

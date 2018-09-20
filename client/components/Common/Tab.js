@@ -7,15 +7,17 @@ type Props = {
   active?: number,
 }
 
-export default class Tab extends React.Component {
+export default class Tab extends React.Component<Props> {
+  static defaultProps = {
+    active: 1,
+  }
+
   constructor(props: Props) {
     super(props)
 
     const { active } = props
     this.state = { active }
   }
-
-  props: Props
 
   toggle(tab) {
     return () => {
@@ -62,8 +64,4 @@ export default class Tab extends React.Component {
       </div>
     )
   }
-}
-
-Tab.defaultProps = {
-  active: 1,
 }

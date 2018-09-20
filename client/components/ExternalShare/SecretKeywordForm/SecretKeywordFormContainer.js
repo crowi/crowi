@@ -11,7 +11,7 @@ type Props = {
   crowi: Object,
 }
 
-class SecretKeywordFormContainer extends React.Component {
+class SecretKeywordFormContainer extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -32,8 +32,6 @@ class SecretKeywordFormContainer extends React.Component {
     this.handleSubmit = this.handleSubmit.bind(this)
     this.handleKeyUp = this.handleKeyUp.bind(this)
   }
-
-  props: Props
 
   setSecretKeyword(e) {
     this.setState({ error: { status: false }, secretKeyword: e.target.value })

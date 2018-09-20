@@ -13,14 +13,20 @@ type Props = {
 }
 
 // Search.SearchResult
-export default class SearchResult extends React.Component {
+export default class SearchResult extends React.Component<Props> {
+  static defaultProps = {
+    tree: '',
+    pages: [],
+    searchingKeyword: '',
+    searchResultMeta: {},
+    searchError: null,
+  }
+
   constructor(props: Props) {
     super(props)
 
     this.state = { active: null }
   }
-
-  props: Props
 
   updateActivePage(pageId) {
     if (this.state.active !== pageId) {
@@ -105,12 +111,4 @@ export default class SearchResult extends React.Component {
       </div>
     )
   }
-}
-
-SearchResult.defaultProps = {
-  tree: '',
-  pages: [],
-  searchingKeyword: '',
-  searchResultMeta: {},
-  searchError: null,
 }

@@ -3,7 +3,7 @@ import React from 'react'
 
 type Props = {}
 
-export default class Modal extends React.Component {
+export default class Modal extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -11,8 +11,6 @@ export default class Modal extends React.Component {
       modalShown: false,
     }
   }
-
-  props: Props
 
   render() {
     if (!this.state.modalShown) {

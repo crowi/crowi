@@ -14,7 +14,7 @@ type Props = {
   crowi: Object,
 }
 
-class AccessLogModal extends React.Component {
+class AccessLogModal extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -34,8 +34,6 @@ class AccessLogModal extends React.Component {
     this.movePage = this.movePage.bind(this)
     this.renderAccessLogTable = this.renderAccessLogTable.bind(this)
   }
-
-  props: Props
 
   renderShareInfo(uuid, username, name, createdAt, isActive) {
     const { t } = this.props

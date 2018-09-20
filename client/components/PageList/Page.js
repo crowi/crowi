@@ -13,8 +13,14 @@ type Props = {
   children?: React.Element,
 }
 
-export default class Page extends React.Component {
-  props: Props
+export default class Page extends React.Component<Props> {
+  static defaultProps = {
+    page: {},
+    linkTo: '',
+    excludePathString: '',
+    isActive: false,
+  }
+
   render() {
     const { page, linkTo, excludePathString, isActive, children, ...props } = this.props
     const link = linkTo === '' ? page.path : linkTo
@@ -30,11 +36,4 @@ export default class Page extends React.Component {
       </li>
     )
   }
-}
-
-Page.defaultProps = {
-  page: {},
-  linkTo: '',
-  excludePathString: '',
-  isActive: false,
 }

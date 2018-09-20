@@ -8,7 +8,7 @@ type Props = {
   crowi: Object,
 }
 
-export default class PageAlerts extends React.Component {
+export default class PageAlerts extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -18,8 +18,6 @@ export default class PageAlerts extends React.Component {
       data: {},
     }
   }
-
-  props: Props
 
   componentDidMount() {
     const socket = this.props.crowi.getWebSocket()

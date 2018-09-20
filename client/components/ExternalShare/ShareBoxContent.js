@@ -15,7 +15,7 @@ type Props = {
   t: Function,
 }
 
-class ShareBoxContent extends React.Component {
+class ShareBoxContent extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -23,8 +23,6 @@ class ShareBoxContent extends React.Component {
     this.createRef = this.createRef.bind(this)
     this.copyAction = this.copyAction.bind(this)
   }
-
-  props: Props
 
   selectAction(e) {
     this.inputRef.select()

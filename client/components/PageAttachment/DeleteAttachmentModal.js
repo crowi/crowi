@@ -13,14 +13,12 @@ type Props = {
   onAttachmentDeleteClickedConfirm?: Function,
 }
 
-export default class DeleteAttachmentModal extends React.Component {
+export default class DeleteAttachmentModal extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
     this._onDeleteConfirm = this._onDeleteConfirm.bind(this)
   }
-
-  props: Props
 
   _onDeleteConfirm() {
     this.props.onAttachmentDeleteClickedConfirm(this.props.attachmentToDelete)

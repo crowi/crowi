@@ -11,7 +11,7 @@ type Props = {
   t: Function,
 }
 
-class DeleteConfirmModal extends React.Component {
+class DeleteConfirmModal extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -21,8 +21,6 @@ class DeleteConfirmModal extends React.Component {
 
     this.handleDelete = this.handleDelete.bind(this)
   }
-
-  props: Props
 
   async handleDelete() {
     const { handleClose, handleDelete } = this.props

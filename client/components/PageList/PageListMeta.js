@@ -2,8 +2,11 @@
 import React from 'react'
 type Props = { page: Object }
 
-export default class PageListMeta extends React.Component {
-  props: Props
+export default class PageListMeta extends React.Component<Props> {
+  static defaultProps = {
+    page: {},
+  }
+
   isPortalPath(path) {
     if (path.match(/.*\/$/)) {
       return true
@@ -50,8 +53,4 @@ export default class PageListMeta extends React.Component {
       </span>
     )
   }
-}
-
-PageListMeta.defaultProps = {
-  page: {},
 }

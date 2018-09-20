@@ -6,8 +6,12 @@ type Props = {
   excludePathString?: string,
 }
 
-export default class PagePath extends React.Component {
-  props: Props
+export default class PagePath extends React.Component<Props> {
+  static defaultProps = {
+    page: {},
+    excludePathString: '',
+  }
+
   getShortPath(path) {
     let name = path.replace(/(\/)$/, '')
 
@@ -44,9 +48,4 @@ export default class PagePath extends React.Component {
       </span>
     )
   }
-}
-
-PagePath.defaultProps = {
-  page: {},
-  excludePathString: '',
 }

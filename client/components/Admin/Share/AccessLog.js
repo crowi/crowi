@@ -12,7 +12,7 @@ type Props = {
   crowi: Object,
 }
 
-class AccessLog extends React.Component {
+class AccessLog extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -30,8 +30,6 @@ class AccessLog extends React.Component {
     this.movePage = this.movePage.bind(this)
     this.renderTableBody = this.renderTableBody.bind(this)
   }
-
-  props: Props
 
   async getPage(options = {}) {
     const limit = this.state.pagination.limit

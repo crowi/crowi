@@ -10,7 +10,7 @@ type Props = {
   pageContent?: string,
 }
 
-export default class PageAttachment extends React.Component {
+export default class PageAttachment extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -25,8 +25,6 @@ export default class PageAttachment extends React.Component {
     this.onAttachmentDeleteClicked = this.onAttachmentDeleteClicked.bind(this)
     this.onAttachmentDeleteClickedConfirm = this.onAttachmentDeleteClickedConfirm.bind(this)
   }
-
-  props: Props
 
   componentDidMount() {
     const pageId = this.props.pageId

@@ -9,7 +9,7 @@ type Props = {
   crowi: Object,
 }
 
-export default class PageHistory extends React.Component {
+export default class PageHistory extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -21,8 +21,6 @@ export default class PageHistory extends React.Component {
     this.getPreviousRevision = this.getPreviousRevision.bind(this)
     this.onDiffOpenClicked = this.onDiffOpenClicked.bind(this)
   }
-
-  props: Props
 
   componentDidMount() {
     const pageId = this.props.pageId

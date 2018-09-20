@@ -10,14 +10,12 @@ type Props = {
   onAttachmentDeleteClicked: Function,
 }
 
-export default class Attachment extends React.Component {
+export default class Attachment extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
     this._onAttachmentDeleteClicked = this._onAttachmentDeleteClicked.bind(this)
   }
-
-  props: Props
 
   iconNameByFormat(format) {
     if (format.match(/image\/.+/i)) {
@@ -60,5 +58,3 @@ export default class Attachment extends React.Component {
     )
   }
 }
-
-Attachment.defaultProps = {}

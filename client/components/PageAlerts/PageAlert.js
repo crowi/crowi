@@ -5,8 +5,7 @@ import Icon from 'components/Common/Icon'
 
 type Props = { data?: Object }
 
-export default class PageAlert extends React.Component {
-  props: Props
+export default class PageAlert extends React.Component<Props> {
   render() {
     const user = this.props.data.user
     const message = <span>{user.name} edited this page.</span>

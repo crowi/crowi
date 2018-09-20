@@ -10,14 +10,12 @@ type Props = {
   onDiffOpenClicked: Function,
 }
 
-export default class Revision extends React.Component {
+export default class Revision extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
     this._onDiffOpenClicked = this._onDiffOpenClicked.bind(this)
   }
-
-  props: Props
 
   componentDidMount() {}
 

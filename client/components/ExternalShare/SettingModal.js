@@ -15,7 +15,11 @@ type Props = {
   crowi: Object,
 }
 
-class SettingModal extends React.Component {
+class SettingModal extends React.Component<Props> {
+  static defaultProps = {
+    show: false,
+  }
+
   constructor(props: Props) {
     super(props)
 
@@ -39,8 +43,6 @@ class SettingModal extends React.Component {
     this.handleCloseAll = this.handleCloseAll.bind(this)
     this.renderResult = this.renderResult.bind(this)
   }
-
-  props: Props
 
   componentDidUpdate() {
     const { share = {} } = this.props
@@ -175,10 +177,6 @@ class SettingModal extends React.Component {
       </Modal>
     )
   }
-}
-
-SettingModal.defaultProps = {
-  show: false,
 }
 
 export default translate()(SettingModal)

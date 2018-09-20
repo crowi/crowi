@@ -8,8 +8,7 @@ type Props = {
   onClick: Function,
 }
 
-export default class PaginationWrapper extends React.Component {
-  props: Props
+export default class PaginationWrapper extends React.Component<Props> {
   onClick(i) {
     const { onClick } = this.props
     return e => {

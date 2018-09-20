@@ -10,7 +10,13 @@ type Props = {
   offset?: number,
 }
 
-class Backlink extends React.Component {
+class Backlink extends React.Component<Props> {
+  static defaultProps = {
+    pageId: null,
+    limit: 5,
+    offset: 0,
+  }
+
   constructor(props: Props) {
     super(props)
 
@@ -20,8 +26,6 @@ class Backlink extends React.Component {
       backLinks: [],
     }
   }
-
-  props: Props
 
   componentDidMount() {
     this.fetchBacklinks()
@@ -118,12 +122,6 @@ class Backlink extends React.Component {
       </div>
     )
   }
-}
-
-Backlink.defaultProps = {
-  pageId: null,
-  limit: 5,
-  offset: 0,
 }
 
 export default Backlink

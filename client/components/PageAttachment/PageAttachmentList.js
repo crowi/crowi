@@ -9,8 +9,7 @@ type Props = {
   onAttachmentDeleteClicked?: Function,
 }
 
-export default class PageAttachmentList extends React.Component {
-  props: Props
+export default class PageAttachmentList extends React.Component<Props> {
   render() {
     if (this.props.attachments <= 0) {
       return null

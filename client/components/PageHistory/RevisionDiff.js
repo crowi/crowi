@@ -10,8 +10,7 @@ type Props = {
   revisionDiffOpened: boolean,
 }
 
-export default class RevisionDiff extends React.Component {
-  props: Props
+export default class RevisionDiff extends React.Component<Props> {
   render() {
     const currentRevision = this.props.currentRevision
     const previousRevision = this.props.previousRevision

@@ -9,7 +9,7 @@ type Props = {
   t: Function,
 }
 
-class RenameTree extends React.Component {
+class RenameTree extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 
@@ -36,8 +36,6 @@ class RenameTree extends React.Component {
     // TODO: DropdownのReact化の際に消す？
     $("a[data-target='#renameTree']").click(this.handleShow)
   }
-
-  props: Props
 
   static getPath(options = { removeTrailingSlash: false }) {
     const { removeTrailingSlash } = options
