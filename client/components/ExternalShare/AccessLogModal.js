@@ -118,7 +118,7 @@ class AccessLogModal extends React.Component<Props, State> {
       <div key={i}>
         {this.renderShareInfo(uuid, username, name, createdAt, status === 'active')}
         {accesses.length > 0 ? (
-          <Table bordered hover condensed>
+          <Table bordered hover size="sm">
             {this.renderTableHeader()}
             <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
           </Table>
