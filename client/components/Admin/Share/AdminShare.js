@@ -12,12 +12,6 @@ type Props = {
 }
 
 class AdminShare extends React.Component<Props> {
-  constructor(props: Props) {
-    super(props)
-
-    this.state = {}
-  }
-
   render() {
     const { t } = this.props
     return (

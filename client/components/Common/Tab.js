@@ -1,13 +1,18 @@
 // @flow
 import React from 'react'
+import type { Node } from 'react'
 import { Nav, NavItem, NavLink, TabContent, TabPane } from 'reactstrap'
 
 type Props = {
-  children: number | string | React.Element | Array<any>,
+  children: Node,
   active?: number,
 }
 
-export default class Tab extends React.Component<Props> {
+type State = {
+  active?: number,
+}
+
+export default class Tab extends React.Component<Props, State> {
   static defaultProps = {
     active: 1,
   }
@@ -19,7 +24,7 @@ export default class Tab extends React.Component<Props> {
     this.state = { active }
   }
 
-  toggle(tab) {
+  toggle(tab: number) {
     return () => {
       if (this.state.active !== tab) {
         this.setState({ active: tab })

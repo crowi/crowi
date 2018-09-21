@@ -21,27 +21,21 @@ class SearchToolbar extends React.Component<Props> {
     total: 0,
   }
 
-  constructor(props: Props) {
-    super(props)
+  static searchTypes = ['', 'portal', 'public', 'user']
 
-    this.searchTypes = ['', 'portal', 'public', 'user']
-
-    this.getActiveType = this.getActiveType.bind(this)
-    this.onClick = this.onClick.bind(this)
-  }
-
-  getActiveType() {
-    const defaultType = this.searchTypes[0]
+  getActiveType = () => {
+    const defaultType = SearchToolbar.searchTypes[0]
     const { type } = this.props
-    return this.searchTypes.includes(type) ? type : defaultType
+    return SearchToolbar.searchTypes.includes(type) ? type : defaultType
   }
 
-  onClick(type) {
+  onClick = type => {
     const { changeType } = this.props
     return () => changeType && changeType(type)
   }
 
   render() {
+    const { searchTypes } = SearchToolbar
     const actionType = this.getActiveType()
     const { t } = this.props
     return (
@@ -54,25 +48,25 @@ class SearchToolbar extends React.Component<Props> {
         </div>
         <nav className="search-navbar col-8">
           <Nav className="nav navbar-nav">
-            <NavItem active={actionType === this.searchTypes[0]} onClick={this.onClick(this.searchTypes[0])}>
+            <NavItem active={actionType === searchTypes[0]} onClick={this.onClick(searchTypes[0])}>
               <NavLink>
                 <Icon name="th" />
                 {t('page_types.all')}
               </NavLink>
             </NavItem>
-            <NavItem active={actionType === this.searchTypes[1]} onClick={this.onClick(this.searchTypes[1])}>
+            <NavItem active={actionType === searchTypes[1]} onClick={this.onClick(searchTypes[1])}>
               <NavLink>
                 <Icon name="circle" regular />
                 {t('page_types.portal')}
               </NavLink>
             </NavItem>
-            <NavItem active={actionType === this.searchTypes[2]} onClick={this.onClick(this.searchTypes[2])}>
+            <NavItem active={actionType === searchTypes[2]} onClick={this.onClick(searchTypes[2])}>
               <NavLink>
                 <Icon name="file" regular />
                 {t('page_types.public')}
               </NavLink>
             </NavItem>
-            <NavItem active={actionType === this.searchTypes[3]} onClick={this.onClick(this.searchTypes[3])}>
+            <NavItem active={actionType === searchTypes[3]} onClick={this.onClick(searchTypes[3])}>
               <NavLink>
                 <Icon name="user" regular />
                 {t('page_types.user')}

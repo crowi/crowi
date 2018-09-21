@@ -9,11 +9,15 @@ type Props = {
   pages: Array<any>,
   searchingKeyword: string,
   searchResultMeta: Object,
-  searchError?: Object,
+  searchError: ?Error,
+}
+
+type State = {
+  active: ?string,
 }
 
 // Search.SearchResult
-export default class SearchResult extends React.Component<Props> {
+export default class SearchResult extends React.Component<Props, State> {
   static defaultProps = {
     tree: '',
     pages: [],
@@ -28,7 +32,7 @@ export default class SearchResult extends React.Component<Props> {
     this.state = { active: null }
   }
 
-  updateActivePage(pageId) {
+  updateActivePage(pageId: string) {
     if (this.state.active !== pageId) {
       this.setState({ active: pageId })
     }

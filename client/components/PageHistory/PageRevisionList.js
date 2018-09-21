@@ -5,8 +5,8 @@ import Revision from './Revision'
 import RevisionDiff from './RevisionDiff'
 
 type Props = {
-  revisions?: Array<any>,
-  diffOpened?: Object,
+  revisions: Array<Object>,
+  diffOpened: Object,
   onDiffOpenClicked: Function,
 }
 

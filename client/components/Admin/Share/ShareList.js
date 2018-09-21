@@ -11,7 +11,13 @@ type Props = {
   crowi: Object,
 }
 
-class ShareList extends React.Component<Props> {
+type State = {
+  shares: Array<Object>,
+  pagination: Object,
+  error: boolean,
+}
+
+class ShareList extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -24,13 +30,9 @@ class ShareList extends React.Component<Props> {
       },
       error: false,
     }
-
-    this.getPage = this.getPage.bind(this)
-    this.movePage = this.movePage.bind(this)
-    this.renderTableBody = this.renderTableBody.bind(this)
   }
 
-  async getPage(options = {}) {
+  getPage = async (options = {}) => {
     const limit = this.state.pagination.limit
     try {
       const { share } = await this.props.crowi.apiGet('/shares.list', { ...options, limit })
@@ -42,7 +44,7 @@ class ShareList extends React.Component<Props> {
     }
   }
 
-  movePage(i) {
+  movePage = i => {
     if (i !== this.state.pagination.current) {
       this.getPage({ page: i })
     }
@@ -74,7 +76,7 @@ class ShareList extends React.Component<Props> {
     )
   }
 
-  renderTableBody() {
+  renderTableBody = () => {
     const { current, limit } = this.state.pagination
     const start = (current - 1) * limit + 1
     return (

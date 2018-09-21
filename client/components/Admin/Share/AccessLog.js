@@ -12,7 +12,13 @@ type Props = {
   crowi: Object,
 }
 
-class AccessLog extends React.Component<Props> {
+type State = {
+  accesses: Array<Object>,
+  pagination: Object,
+  error: boolean,
+}
+
+class AccessLog extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -25,13 +31,9 @@ class AccessLog extends React.Component<Props> {
       },
       error: false,
     }
-
-    this.getPage = this.getPage.bind(this)
-    this.movePage = this.movePage.bind(this)
-    this.renderTableBody = this.renderTableBody.bind(this)
   }
 
-  async getPage(options = {}) {
+  getPage = async (options = {}) => {
     const limit = this.state.pagination.limit
     try {
       const { shareAccess } = await this.props.crowi.apiGet('/shares/accesses.list', { ...options, limit })
@@ -43,7 +45,7 @@ class AccessLog extends React.Component<Props> {
     }
   }
 
-  movePage(i) {
+  movePage = i => {
     if (i !== this.state.pagination.current) {
       this.getPage({ page: i })
     }
@@ -68,7 +70,7 @@ class AccessLog extends React.Component<Props> {
     )
   }
 
-  renderTableBody() {
+  renderTableBody = () => {
     const { current, limit } = this.state.pagination
     const start = (current - 1) * limit + 1
     return (

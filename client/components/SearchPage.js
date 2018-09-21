@@ -10,7 +10,16 @@ import SearchResult from './SearchPage/SearchResult'
 
 type Props = { crowi: Object }
 
-export default class SearchPage extends React.Component<Props> {
+type State = {
+  searching: boolean,
+  searchingKeyword: string,
+  searchingType: string,
+  searchedPages: Array<Object>,
+  searchResultMeta: Object,
+  searchError: ?Error,
+}
+
+export default class SearchPage extends React.Component<Props, State> {
   static defaultProps = {
     searchError: null,
   }
@@ -21,17 +30,12 @@ export default class SearchPage extends React.Component<Props> {
     const { q = '', type = '' } = queryString.parse(this.props.crowi.location.search)
     this.state = {
       searching: false,
-      searchingKeyword: q,
-      searchingType: type,
+      searchingKeyword: String(q),
+      searchingType: String(type),
       searchedPages: [],
       searchResultMeta: {},
       searchError: null,
     }
-
-    this.search = this.search.bind(this)
-    this.buildQuery = this.buildQuery.bind(this)
-    this.changeURL = this.changeURL.bind(this)
-    this.changeType = this.changeType.bind(this)
 
     Emitter.on('search', ({ keyword: q = '' }) => {
       this.search(this.buildQuery({ q }))
@@ -44,7 +48,7 @@ export default class SearchPage extends React.Component<Props> {
     }
   }
 
-  buildQuery(override) {
+  buildQuery = (override: Object = {}) => {
     const { searchingKeyword: q = '', searchingType: type = '' } = this.state
     const removeEmpty = query => Object.keys(query).forEach(k => !query[k] && delete query[k])
     const query = { q, type, ...override }
@@ -52,7 +56,7 @@ export default class SearchPage extends React.Component<Props> {
     return query
   }
 
-  changeURL({ q, type }, refreshHash) {
+  changeURL = ({ q, type }: { q: string, type: string }, refreshHash: boolean = false) => {
     let { hash = '' } = this.props.crowi.location
     // TODO 整理する
     if (refreshHash || q !== '') {
@@ -64,11 +68,11 @@ export default class SearchPage extends React.Component<Props> {
     }
   }
 
-  changeType(type) {
+  changeType = (type: string) => {
     this.search(this.buildQuery({ type }))
   }
 
-  async search(query) {
+  search = async (query: Object) => {
     const { q = '', type = '' } = query
     if (q === '') {
       this.setState({

@@ -8,15 +8,17 @@ type Props = {
   crowi: Object,
 }
 
-export default class BookmarkButton extends React.Component<Props> {
+type State = {
+  bookmarked: boolean,
+}
+
+export default class BookmarkButton extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
     this.state = {
       bookmarked: false,
     }
-
-    this.handleClick = this.handleClick.bind(this)
   }
 
   componentDidMount() {
@@ -27,7 +29,7 @@ export default class BookmarkButton extends React.Component<Props> {
     })
   }
 
-  handleClick(event) {
+  handleClick = (event: Event) => {
     event.preventDefault()
 
     const pageId = this.props.pageId

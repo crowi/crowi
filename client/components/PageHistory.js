@@ -9,7 +9,12 @@ type Props = {
   crowi: Object,
 }
 
-export default class PageHistory extends React.Component<Props> {
+type State = {
+  revisions: Array<Object>,
+  diffOpened: Object,
+}
+
+export default class PageHistory extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -17,9 +22,6 @@ export default class PageHistory extends React.Component<Props> {
       revisions: [],
       diffOpened: {},
     }
-
-    this.getPreviousRevision = this.getPreviousRevision.bind(this)
-    this.onDiffOpenClicked = this.onDiffOpenClicked.bind(this)
   }
 
   componentDidMount() {
@@ -69,7 +71,7 @@ export default class PageHistory extends React.Component<Props> {
       })
   }
 
-  getPreviousRevision(currentRevision) {
+  getPreviousRevision = (currentRevision: Object): Object => {
     let cursor = null
     for (let revision of this.state.revisions) {
       if (cursor && cursor._id == currentRevision._id) {
@@ -80,10 +82,10 @@ export default class PageHistory extends React.Component<Props> {
       cursor = revision
     }
 
-    return cursor
+    return cursor || {}
   }
 
-  onDiffOpenClicked(revision) {
+  onDiffOpenClicked = (revision: Object) => {
     const diffOpened = this.state.diffOpened
     const revisionId = revision._id
 
@@ -100,7 +102,7 @@ export default class PageHistory extends React.Component<Props> {
     this.fetchPageRevisionBody(this.getPreviousRevision(revision))
   }
 
-  fetchPageRevisionBody(revision) {
+  fetchPageRevisionBody(revision: Object) {
     if (revision.body) {
       return
     }
@@ -129,12 +131,7 @@ export default class PageHistory extends React.Component<Props> {
         <h1>
           <Icon name="history" /> History
         </h1>
-        <PageRevisionList
-          revisions={this.state.revisions}
-          diffOpened={this.state.diffOpened}
-          getPreviousRevision={this.getPreviousRevision}
-          onDiffOpenClicked={this.onDiffOpenClicked}
-        />
+        <PageRevisionList revisions={this.state.revisions} diffOpened={this.state.diffOpened} onDiffOpenClicked={this.onDiffOpenClicked} />
       </div>
     )
   }

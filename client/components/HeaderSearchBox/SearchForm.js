@@ -11,8 +11,19 @@ type Props = {
   keyword?: string,
 }
 
+type State = {
+  keyword: ?string,
+  searchedKeyword: ?string,
+}
+
 // Header.SearchForm
-export default class SearchForm extends React.Component<Props> {
+export default class SearchForm extends React.Component<Props, State> {
+  static defaultProps = {
+    pollInterval: 1000,
+  }
+
+  ticker: ?IntervalID
+
   constructor(props: Props) {
     super(props)
 
@@ -21,20 +32,17 @@ export default class SearchForm extends React.Component<Props> {
       searchedKeyword: '',
     }
 
-    this.handleSubmit = this.handleSubmit.bind(this)
-    this.handleChange = this.handleChange.bind(this)
-    this.handleFocus = this.handleFocus.bind(this)
-    this.handleBlur = this.handleBlur.bind(this)
-    this.clearForm = this.clearForm.bind(this)
     this.ticker = null
   }
 
   componentDidMount() {
-    this.ticker = setInterval(this.searchFieldTicker.bind(this), this.props.pollInterval)
+    this.ticker = setInterval(this.searchFieldTicker, this.props.pollInterval)
   }
 
   componentWillUnmount() {
-    clearInterval(this.ticker)
+    if (this.ticker) {
+      clearInterval(this.ticker)
+    }
   }
 
   search() {
@@ -57,29 +65,29 @@ export default class SearchForm extends React.Component<Props> {
     }
   }
 
-  clearForm() {
+  clearForm = () => {
     this.setState({ keyword: '' })
     this.search()
   }
 
-  searchFieldTicker() {
+  searchFieldTicker = () => {
     this.search()
   }
 
-  handleFocus(event) {
+  handleFocus = (event: Event) => {
     this.props.isShown(true)
   }
 
-  handleBlur(event) {
+  handleBlur = (event: Event) => {
     // this.props.isShown(false)
   }
 
-  handleChange(event) {
+  handleChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     const keyword = event.target.value
     this.setState({ keyword })
   }
 
-  handleSubmit(e) {
+  handleSubmit = (e: Event) => {
     const { keyword } = this.state
     const { isSearchPage } = this.props
     if (isSearchPage) {
@@ -113,8 +121,4 @@ export default class SearchForm extends React.Component<Props> {
       </form>
     )
   }
-}
-
-SearchForm.defaultProps = {
-  pollInterval: 1000,
 }

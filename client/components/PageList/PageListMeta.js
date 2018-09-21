@@ -7,7 +7,7 @@ export default class PageListMeta extends React.Component<Props> {
     page: {},
   }
 
-  isPortalPath(path) {
+  isPortalPath(path: string) {
     if (path.match(/.*\/$/)) {
       return true
     }

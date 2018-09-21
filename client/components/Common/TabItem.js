@@ -1,8 +1,9 @@
 // @flow
 import React from 'react'
+import type { Node } from 'react'
 
 type Props = {
-  children: number | string | React.Element | Array<any>,
+  children: Node,
   title: string,
 }
 

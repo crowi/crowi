@@ -6,6 +6,10 @@ import Page from './Page'
 type Props = { pages: Array<any> }
 
 export default class ListView extends React.Component<Props> {
+  static defaultProps = {
+    pages: [],
+  }
+
   render() {
     const listView = this.props.pages.map(page => {
       return <Page page={page} key={'page-list:list-view:' + page._id} />
@@ -17,8 +21,4 @@ export default class ListView extends React.Component<Props> {
       </div>
     )
   }
-}
-
-ListView.defaultProps = {
-  pages: [],
 }

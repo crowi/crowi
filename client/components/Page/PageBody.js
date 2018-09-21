@@ -8,15 +8,20 @@ type Props = {
 }
 
 export default class PageBody extends React.Component<Props> {
+  static defaultProps = {
+    page: {},
+    pageBody: '',
+  }
+
+  crowiRenderer: Function
+
   constructor(props: Props) {
     super(props)
 
     this.crowiRenderer = window.crowiRenderer // FIXME
-    this.getMarkupHTML = this.getMarkupHTML.bind(this)
-    this.getHighlightBody = this.getHighlightBody.bind(this)
   }
 
-  getHighlightBody(body, keywords) {
+  getHighlightBody = (body: string, keywords: string) => {
     let returnBody = body
 
     keywords
@@ -34,7 +39,7 @@ export default class PageBody extends React.Component<Props> {
     return returnBody
   }
 
-  getMarkupHTML() {
+  getMarkupHTML = () => {
     let body = this.props.pageBody
     if (body === '') {
       body = this.props.page.revision.body
@@ -54,9 +59,4 @@ export default class PageBody extends React.Component<Props> {
 
     return <div className="content" dangerouslySetInnerHTML={parsedBody} />
   }
-}
-
-PageBody.defaultProps = {
-  page: {},
-  pageBody: '',
 }

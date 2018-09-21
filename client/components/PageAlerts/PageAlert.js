@@ -7,7 +7,8 @@ type Props = { data?: Object }
 
 export default class PageAlert extends React.Component<Props> {
   render() {
-    const user = this.props.data.user
+    const { data = {} } = this.props
+    const { user = {} } = data
     const message = <span>{user.name} edited this page.</span>
 
     // TODO: PageAlert.Message etc.

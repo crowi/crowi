@@ -2,13 +2,21 @@
 // This is the root component for #page-list-search
 
 import React from 'react'
-
 import queryString from 'query-string'
 import SearchResult from './SearchPage/SearchResult'
 
 type Props = { crowi: Object }
 
-export default class PageListSearch extends React.Component<Props> {
+type State = {
+  tree: string,
+  searchingKeyword: string,
+  searchedKeyword: string,
+  searchedPages: Array<Object>,
+  searchResultMeta: Object,
+  searchError: ?Error,
+}
+
+export default class PageListSearch extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -16,16 +24,12 @@ export default class PageListSearch extends React.Component<Props> {
     const { q = '' } = queryString.parse(search)
     this.state = {
       tree: $('#search-listpage-input').data('path'),
-      searchingKeyword: q,
+      searchingKeyword: String(q),
       searchedKeyword: '',
       searchedPages: [],
       searchResultMeta: {},
       searchError: null,
     }
-
-    this.changeURL = this.changeURL.bind(this)
-    this.search = this.search.bind(this)
-    this.handleChange = this.handleChange.bind(this)
   }
 
   componentDidMount() {
@@ -56,9 +60,7 @@ export default class PageListSearch extends React.Component<Props> {
     })
   }
 
-  componentWillUnmount() {}
-
-  handleChange(event) {
+  handleChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     // this is not fired now because of force-data-bound by jQuery
     const keyword = event.target.value
     this.setState({ searchedKeyword: keyword })
@@ -77,7 +79,7 @@ export default class PageListSearch extends React.Component<Props> {
     $('.main-container').addClass('aside-hidden')
   }
 
-  changeURL(keyword, refreshHash) {
+  changeURL = (keyword: string, refreshHash: boolean = false) => {
     const tree = this.state.tree
     let { hash = '' } = this.props.crowi.location
     // TODO 整理する
@@ -89,7 +91,7 @@ export default class PageListSearch extends React.Component<Props> {
     }
   }
 
-  search(data) {
+  search = (data: Object) => {
     const keyword = data.keyword || ''
     const tree = this.state.tree
 

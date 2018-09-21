@@ -3,7 +3,7 @@ import React from 'react'
 
 type Props = {
   user: Object,
-  size?: string,
+  size?: ?string,
 }
 
 // TODO UserComponent?
@@ -13,7 +13,7 @@ export default class UserPicture extends React.Component<Props> {
     size: null,
   }
 
-  getUserPicture(user) {
+  getUserPicture(user: Object) {
     // from swig.setFilter('picture', function(user)
 
     if (user.image && user.image != '/images/userpicture.png') {

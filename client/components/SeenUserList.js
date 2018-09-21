@@ -4,7 +4,11 @@ import UserList from './SeenUserList/UserList'
 
 type Props = { crowi: Object }
 
-export default class SeenUserList extends React.Component<Props> {
+type State = {
+  seenUsers: Array<Object>,
+}
+
+export default class SeenUserList extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

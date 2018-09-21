@@ -11,18 +11,24 @@ type Props = {
   t: Function,
 }
 
-class DeleteConfirmModal extends React.Component<Props> {
+type State = {
+  error: boolean,
+}
+
+class DeleteConfirmModal extends React.Component<Props, State> {
+  static defaultProps = {
+    show: false,
+  }
+
   constructor(props: Props) {
     super(props)
 
     this.state = {
       error: false,
     }
-
-    this.handleDelete = this.handleDelete.bind(this)
   }
 
-  async handleDelete() {
+  handleDelete = async () => {
     const { handleClose, handleDelete } = this.props
     this.setState({ error: false })
     const error = await handleDelete()
@@ -52,10 +58,6 @@ class DeleteConfirmModal extends React.Component<Props> {
       </Modal>
     )
   }
-}
-
-DeleteConfirmModal.defaultProps = {
-  show: false,
 }
 
 export default translate()(DeleteConfirmModal)

@@ -4,18 +4,19 @@ import React from 'react'
 import Attachment from './Attachment'
 
 type Props = {
-  attachments?: Array<any>,
-  inUse?: Object,
-  onAttachmentDeleteClicked?: Function,
+  attachments?: Array<Object>,
+  inUse: Object,
+  onAttachmentDeleteClicked: Function,
 }
 
 export default class PageAttachmentList extends React.Component<Props> {
   render() {
-    if (this.props.attachments <= 0) {
+    const { attachments = [] } = this.props
+    if (attachments.length === 0) {
       return null
     }
 
-    const attachmentList = this.props.attachments.map((attachment, idx) => {
+    const attachmentList = attachments.map((attachment, idx) => {
       return (
         <Attachment
           key={'page:attachment:' + attachment._id}

@@ -8,7 +8,13 @@ type Props = {
   crowi: Object,
 }
 
-export default class PageAlerts extends React.Component<Props> {
+type State = {
+  alertAppeared: boolean,
+  message: string,
+  data: Object,
+}
+
+export default class PageAlerts extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

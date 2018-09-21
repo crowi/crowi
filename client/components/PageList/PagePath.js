@@ -3,7 +3,7 @@ import React from 'react'
 
 type Props = {
   page: Object,
-  excludePathString?: string,
+  excludePathString: string,
 }
 
 export default class PagePath extends React.Component<Props> {
@@ -12,7 +12,7 @@ export default class PagePath extends React.Component<Props> {
     excludePathString: '',
   }
 
-  getShortPath(path) {
+  getShortPath(path: string) {
     let name = path.replace(/(\/)$/, '')
 
     // /.../hoge/YYYY/MM/DD 形式のページ

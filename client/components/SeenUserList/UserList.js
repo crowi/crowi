@@ -3,7 +3,7 @@ import React from 'react'
 
 import UserPicture from 'components/User/UserPicture'
 
-type Props = { users?: Array<any> }
+type Props = { users: Array<any> }
 
 export default class UserList extends React.Component<Props> {
   static defaultProps = {

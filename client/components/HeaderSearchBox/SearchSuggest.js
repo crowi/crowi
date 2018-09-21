@@ -1,5 +1,6 @@
 // @flow
 import React from 'react'
+import type { Node } from 'react'
 import { Card } from 'reactstrap'
 import { translate } from 'react-i18next'
 import queryString from 'query-string'
@@ -10,20 +11,21 @@ type Props = {
   searchedPages: Object,
   searchingKeyword: string,
   searching: boolean,
-  searchError?: Object,
+  searchError?: ?Error,
   focused?: boolean,
   t: Function,
 }
 
 class SearchSuggest extends React.Component<Props> {
-  constructor(props: Props) {
-    super(props)
-
-    this.buildSearchUrl = this.buildSearchUrl.bind(this)
-    this.renderList = this.renderList.bind(this)
+  static defaultProps = {
+    searchedPages: {},
+    searchingKeyword: '',
+    searchError: null,
+    searching: false,
+    focused: false,
   }
 
-  buildSearchUrl(type) {
+  buildSearchUrl = type => {
     const q = this.props.searchingKeyword
     const query = queryString.stringify({ q, type })
     return `/_search?${query}`
@@ -31,12 +33,12 @@ class SearchSuggest extends React.Component<Props> {
 
   getNumberOfResults() {
     const { searchedPages } = this.props
-    const groupedPages = Object.values(searchedPages)
+    const groupedPages: Array<any> = Object.values(searchedPages)
     const sum = array => array.reduce((p, c) => p + c, 0)
     return sum(groupedPages.map((r = []) => r.length))
   }
 
-  renderList(title, icon, type, pages) {
+  renderList = (title, icon, type, pages) => {
     const { t } = this.props
     return (
       pages.length > 0 && (
@@ -97,14 +99,6 @@ class SearchSuggest extends React.Component<Props> {
       </Card>
     )
   }
-}
-
-SearchSuggest.defaultProps = {
-  searchedPages: {},
-  searchingKeyword: '',
-  searchError: null,
-  searching: false,
-  focused: false,
 }
 
 export default translate()(SearchSuggest)

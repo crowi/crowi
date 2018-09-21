@@ -14,7 +14,15 @@ type Props = {
   crowi: Object,
 }
 
-class AccessLogModal extends React.Component<Props> {
+type State = {
+  requesting: boolean,
+  pageId: ?string,
+  shares: Array<Object>,
+  pagination: Object,
+  error: boolean,
+}
+
+class AccessLogModal extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -29,10 +37,6 @@ class AccessLogModal extends React.Component<Props> {
       },
       error: false,
     }
-
-    this.getPage = this.getPage.bind(this)
-    this.movePage = this.movePage.bind(this)
-    this.renderAccessLogTable = this.renderAccessLogTable.bind(this)
   }
 
   renderShareInfo(uuid, username, name, createdAt, isActive) {
@@ -101,7 +105,7 @@ class AccessLogModal extends React.Component<Props> {
     )
   }
 
-  renderAccessLogTable(share, i) {
+  renderAccessLogTable = (share, i) => {
     const { t } = this.props
     const {
       uuid,
@@ -125,7 +129,7 @@ class AccessLogModal extends React.Component<Props> {
     )
   }
 
-  async getPage(pageId, options = {}) {
+  getPage = async (pageId, options = {}) => {
     const limit = this.state.pagination.limit
     if (!this.state.error && !this.state.requesting) {
       this.setState({ requesting: true })
@@ -146,21 +150,21 @@ class AccessLogModal extends React.Component<Props> {
     }
   }
 
-  movePage(i) {
+  movePage = i => {
     if (i !== this.state.pagination.current) {
       this.getPage(this.state.pageId, { page: i })
     }
   }
 
   componentDidMount() {
-    const { pageId = null } = this.props
+    const pageId = String(this.props.pageId)
     if (pageId !== this.state.pageId) {
       this.getPage(pageId)
     }
   }
 
   componentDidUpdate() {
-    const { pageId = null } = this.props
+    const pageId = String(this.props.pageId)
     if (pageId !== this.state.pageId) {
       this.getPage(pageId)
     }

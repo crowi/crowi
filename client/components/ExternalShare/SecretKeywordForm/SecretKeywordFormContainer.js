@@ -6,12 +6,18 @@ import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGr
 import Icon from 'components/Common/Icon'
 
 type Props = {
-  t?: Function,
+  t: Function,
   pageId?: string,
   crowi: Object,
 }
 
-class SecretKeywordFormContainer extends React.Component<Props> {
+type State = {
+  secretKeyword: string,
+  error: Object,
+  usingIME: boolean,
+}
+
+class SecretKeywordFormContainer extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -23,29 +29,21 @@ class SecretKeywordFormContainer extends React.Component<Props> {
       },
       usingIME: true,
     }
-
-    this.setSecretKeyword = this.setSecretKeyword.bind(this)
-    this.canSubmit = this.canSubmit.bind(this)
-    this.handleError = this.handleError.bind(this)
-    this.checkSecretKeyword = this.checkSecretKeyword.bind(this)
-    this.handleKeyPress = this.handleKeyPress.bind(this)
-    this.handleSubmit = this.handleSubmit.bind(this)
-    this.handleKeyUp = this.handleKeyUp.bind(this)
   }
 
-  setSecretKeyword(e) {
+  setSecretKeyword = e => {
     this.setState({ error: { status: false }, secretKeyword: e.target.value })
   }
 
-  canSubmit() {
+  canSubmit = () => {
     return this.state.secretKeyword.length > 0
   }
 
-  handleError() {
+  handleError = () => {
     this.setState({ error: { status: true, message: this.props.t('Incorrect secret keyword') } })
   }
 
-  async checkSecretKeyword() {
+  checkSecretKeyword = async () => {
     const { secretKeyword } = this.state
     const shareId = $('#secret-keyword-form-container').data('share-id')
     const _csrf = $('#secret-keyword-form-container').data('csrftoken')
@@ -70,19 +68,19 @@ class SecretKeywordFormContainer extends React.Component<Props> {
     return e.keyCode == 13 && !this.state.usingIME
   }
 
-  handleKeyPress(e) {
+  handleKeyPress = e => {
     // `onKeyPress` event is not triggered if using IME.
     this.setState({ usingIME: false })
   }
 
-  async handleKeyUp(e) {
+  handleKeyUp = async e => {
     if (this.isEnterAndNotUsingIME(e)) {
       await this.checkSecretKeyword()
     }
     this.setState({ usingIME: true })
   }
 
-  handleSubmit(e) {
+  handleSubmit = e => {
     this.checkSecretKeyword()
   }
 

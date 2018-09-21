@@ -1,6 +1,6 @@
 // @flow
 import React from 'react'
-
+import type { Node } from 'react'
 import UserPicture from 'components/User/UserPicture'
 import PageListMeta from './PageListMeta'
 import PagePath from './PagePath'
@@ -10,7 +10,7 @@ type Props = {
   linkTo?: string,
   excludePathString?: string,
   isActive?: boolean,
-  children?: React.Element,
+  children?: Node,
 }
 
 export default class Page extends React.Component<Props> {

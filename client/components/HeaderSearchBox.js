@@ -11,7 +11,16 @@ type Props = {
   crowi: Object,
 }
 
-export default class HeaderSearchBox extends React.Component<Props> {
+type State = {
+  isSearchPage: boolean,
+  searchingKeyword: string,
+  searchedPages: Object,
+  searchError: ?Error,
+  searching: boolean,
+  focused: boolean,
+}
+
+export default class HeaderSearchBox extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -19,27 +28,24 @@ export default class HeaderSearchBox extends React.Component<Props> {
     const parsedKeyword = queryString.parse(locationSearch).q || ''
     this.state = {
       isSearchPage: pathname.startsWith('/_search'),
-      searchingKeyword: parsedKeyword,
+      searchingKeyword: String(parsedKeyword),
       searchedPages: {},
       searchError: null,
       searching: false,
       focused: false,
     }
-
-    this.search = this.search.bind(this)
-    this.isShown = this.isShown.bind(this)
   }
 
-  isShown(focused) {
+  isShown = (focused: boolean) => {
     this.setState({ focused: !!focused })
   }
 
-  async search(data) {
+  search = async (data: Object) => {
     const keyword = data.keyword
     if (keyword === '') {
       this.setState({
         searchingKeyword: '',
-        searchedPages: [],
+        searchedPages: {},
       })
 
       return true

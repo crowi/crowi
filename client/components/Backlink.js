@@ -10,7 +10,13 @@ type Props = {
   offset?: number,
 }
 
-class Backlink extends React.Component<Props> {
+type State = {
+  currentOffset: number,
+  hasNext: boolean,
+  backLinks: Array<Object>,
+}
+
+class Backlink extends React.Component<Props, State> {
   static defaultProps = {
     pageId: null,
     limit: 5,
@@ -71,12 +77,12 @@ class Backlink extends React.Component<Props> {
       })
   }
 
-  handleReadMore(e) {
+  handleReadMore(e: Event) {
     e.preventDefault()
     this.fetchBacklinks()
   }
 
-  createList(backlink) {
+  createList(backlink: Object) {
     const path = backlink.fromPage.path
     const user = backlink.fromRevision.author
 

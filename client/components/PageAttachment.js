@@ -10,7 +10,15 @@ type Props = {
   pageContent?: string,
 }
 
-export default class PageAttachment extends React.Component<Props> {
+type State = {
+  attachments: Array<Object>,
+  inUse: Object,
+  attachmentToDelete: ?Object,
+  deleting: boolean,
+  deleteError: string,
+}
+
+export default class PageAttachment extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -21,9 +29,6 @@ export default class PageAttachment extends React.Component<Props> {
       deleting: false,
       deleteError: '',
     }
-
-    this.onAttachmentDeleteClicked = this.onAttachmentDeleteClicked.bind(this)
-    this.onAttachmentDeleteClickedConfirm = this.onAttachmentDeleteClickedConfirm.bind(this)
   }
 
   componentDidMount() {
@@ -48,20 +53,21 @@ export default class PageAttachment extends React.Component<Props> {
     })
   }
 
-  checkIfFileInUse(attachment) {
-    if (this.props.pageContent.match(attachment.url)) {
+  checkIfFileInUse(attachment: Object) {
+    const { pageContent = '' } = this.props
+    if (pageContent.match(attachment.url)) {
       return true
     }
     return false
   }
 
-  onAttachmentDeleteClicked(attachment) {
+  onAttachmentDeleteClicked = (attachment: Object) => {
     this.setState({
       attachmentToDelete: attachment,
     })
   }
 
-  onAttachmentDeleteClickedConfirm(attachment) {
+  onAttachmentDeleteClickedConfirm = (attachment: Object) => {
     const attachmentId = attachment._id
     this.setState({
       deleting: true,
@@ -92,7 +98,7 @@ export default class PageAttachment extends React.Component<Props> {
     let showModal = attachmentToDelete !== null
 
     let deleteInUse = null
-    if (attachmentToDelete !== null) {
+    if (attachmentToDelete) {
       deleteInUse = this.state.inUse[attachmentToDelete._id] || false
     }
 

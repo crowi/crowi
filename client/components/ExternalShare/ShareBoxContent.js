@@ -9,30 +9,29 @@ type Props = {
   handleCreate?: Function,
   isCreated?: boolean,
   isChanging?: boolean,
-  share?: Object,
+  share: Object,
   creationError?: boolean,
   crowi: Object,
   t: Function,
 }
 
 class ShareBoxContent extends React.Component<Props> {
-  constructor(props: Props) {
-    super(props)
-
-    this.selectAction = this.selectAction.bind(this)
-    this.createRef = this.createRef.bind(this)
-    this.copyAction = this.copyAction.bind(this)
+  static defaultProps = {
+    isCreated: false,
+    share: {},
   }
 
-  selectAction(e) {
+  inputRef: HTMLInputElement
+
+  selectAction = e => {
     this.inputRef.select()
   }
 
-  createRef(node) {
+  createRef = (node: HTMLInputElement) => {
     this.inputRef = node
   }
 
-  copyAction(e) {
+  copyAction = e => {
     this.inputRef.select()
     document.execCommand('copy')
   }
@@ -67,11 +66,6 @@ class ShareBoxContent extends React.Component<Props> {
       </div>
     )
   }
-}
-
-ShareBoxContent.defaultProps = {
-  isCreated: false,
-  share: {},
 }
 
 export default translate()(ShareBoxContent)

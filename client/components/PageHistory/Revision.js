@@ -6,20 +6,12 @@ import Icon from 'components/Common/Icon'
 import UserPicture from 'components/User/UserPicture'
 
 type Props = {
-  revision?: Object,
+  revision: Object,
   onDiffOpenClicked: Function,
 }
 
 export default class Revision extends React.Component<Props> {
-  constructor(props: Props) {
-    super(props)
-
-    this._onDiffOpenClicked = this._onDiffOpenClicked.bind(this)
-  }
-
-  componentDidMount() {}
-
-  _onDiffOpenClicked() {
+  _onDiffOpenClicked = () => {
     this.props.onDiffOpenClicked(this.props.revision)
   }
 

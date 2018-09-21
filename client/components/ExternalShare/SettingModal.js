@@ -10,12 +10,20 @@ type Props = {
   show: boolean,
   onHide: Function,
   isChanging?: boolean,
-  handleDelete?: Function,
+  handleDelete: Function,
   t: Function,
   crowi: Object,
 }
 
-class SettingModal extends React.Component<Props> {
+type State = {
+  shareId: ?number,
+  secretKeyword: ?string,
+  restricted: boolean,
+  showConfirmModal: boolean,
+  result: Object,
+}
+
+class SettingModal extends React.Component<Props, State> {
   static defaultProps = {
     show: false,
   }
@@ -34,14 +42,6 @@ class SettingModal extends React.Component<Props> {
         message: '',
       },
     }
-
-    this.setRestricted = this.setRestricted.bind(this)
-    this.setSecretKeyword = this.setSecretKeyword.bind(this)
-    this.handleSubmit = this.handleSubmit.bind(this)
-    this.handleOpen = this.handleOpen.bind(this)
-    this.handleClose = this.handleClose.bind(this)
-    this.handleCloseAll = this.handleCloseAll.bind(this)
-    this.renderResult = this.renderResult.bind(this)
   }
 
   componentDidUpdate() {
@@ -57,13 +57,13 @@ class SettingModal extends React.Component<Props> {
     }
   }
 
-  setRestricted(value) {
+  setRestricted = value => {
     return () => {
       this.setState({ restricted: value })
     }
   }
 
-  setSecretKeyword(e) {
+  setSecretKeyword = e => {
     this.setState({ secretKeyword: e.target.value })
   }
 
@@ -75,7 +75,7 @@ class SettingModal extends React.Component<Props> {
     return !!secretKeyword && secretKeyword.length > 0
   }
 
-  async handleSubmit() {
+  handleSubmit = async () => {
     const { shareId, secretKeyword, restricted } = this.state
     try {
       await this.props.crowi.apiPost('/shares/secretKeyword.set', {
@@ -89,21 +89,21 @@ class SettingModal extends React.Component<Props> {
     }
   }
 
-  handleOpen() {
+  handleOpen = () => {
     this.setState({ showConfirmModal: true })
   }
 
-  handleClose() {
+  handleClose = () => {
     this.setState({ showConfirmModal: false })
   }
 
-  handleCloseAll() {
+  handleCloseAll = () => {
     const { onHide } = this.props
     onHide()
     this.handleClose()
   }
 
-  renderResult() {
+  renderResult = () => {
     const {
       result: { show, error, message },
     } = this.state

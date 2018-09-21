@@ -3,7 +3,11 @@ import React from 'react'
 
 type Props = {}
 
-export default class Modal extends React.Component<Props> {
+type State = {
+  modalShown: boolean,
+}
+
+export default class Modal extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

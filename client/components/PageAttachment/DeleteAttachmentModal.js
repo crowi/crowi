@@ -6,25 +6,21 @@ import Icon from 'components/Common/Icon'
 import User from 'components/User/User'
 
 type Props = {
-  inUse?: boolean,
+  inUse: ?boolean,
   deleting?: boolean,
   deleteError?: string,
-  attachmentToDelete?: Object,
+  attachmentToDelete: ?Object,
   onAttachmentDeleteClickedConfirm?: Function,
 }
 
 export default class DeleteAttachmentModal extends React.Component<Props> {
-  constructor(props: Props) {
-    super(props)
-
-    this._onDeleteConfirm = this._onDeleteConfirm.bind(this)
+  _onDeleteConfirm = () => {
+    if (this.props.onAttachmentDeleteClickedConfirm) {
+      this.props.onAttachmentDeleteClickedConfirm(this.props.attachmentToDelete)
+    }
   }
 
-  _onDeleteConfirm() {
-    this.props.onAttachmentDeleteClickedConfirm(this.props.attachmentToDelete)
-  }
-
-  renderByFileFormat(attachment) {
+  renderByFileFormat(attachment: Object) {
     if (attachment.fileFormat.match(/image\/.+/i)) {
       return (
         <p className="attachment-delete-image">
@@ -48,7 +44,7 @@ export default class DeleteAttachmentModal extends React.Component<Props> {
 
   render() {
     const attachment = this.props.attachmentToDelete
-    if (attachment === null) {
+    if (attachment === undefined || attachment === null) {
       return null
     }
 

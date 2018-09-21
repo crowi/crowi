@@ -1,5 +1,6 @@
 // @flow
 import React from 'react'
+import type { Node } from 'react'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGroupAddon, Input, Label } from 'reactstrap'
 import { translate } from 'react-i18next'
 import Icon from '../Common/Icon'
@@ -9,18 +10,28 @@ type Props = {
   t: Function,
 }
 
-class RenameTree extends React.Component<Props> {
+type State = {
+  show: boolean,
+  newPath: string,
+  pathMap: Object,
+  error: ?string,
+  errors: Object,
+  renamable: boolean,
+  removing: boolean,
+  timeoutId: ?TimeoutID,
+}
+
+type TreeNode = {
+  path: string,
+  name: string,
+  children: { [string]: TreeNode },
+}
+
+type Tree = { [string]: TreeNode }
+
+class RenameTree extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
-
-    this.renderTree = this.renderTree.bind(this)
-    this.handleShow = this.handleShow.bind(this)
-    this.handleClose = this.handleClose.bind(this)
-    this.handleChange = this.handleChange.bind(this)
-    this.handleSubmit = this.handleSubmit.bind(this)
-    this.handleError = this.handleError.bind(this)
-    this.convertPathMapToTree = this.convertPathMapToTree.bind(this)
-    this.checkTreeRenamable = this.checkTreeRenamable.bind(this)
 
     this.state = {
       show: false,
@@ -37,7 +48,7 @@ class RenameTree extends React.Component<Props> {
     $("a[data-target='#renameTree']").click(this.handleShow)
   }
 
-  static getPath(options = { removeTrailingSlash: false }) {
+  static getPath(options = { removeTrailingSlash: false }): string {
     const { removeTrailingSlash } = options
     let path
     path = decodeURIComponent(location.pathname)
@@ -55,7 +66,7 @@ class RenameTree extends React.Component<Props> {
     return string.endsWith('/') ? string.substring(0, string.length - 1) : string
   }
 
-  convertPathMapToTree(pathMap) {
+  convertPathMapToTree = (pathMap): Tree => {
     let tree = {}
     const generateNode = (path, name, children = {}) => ({
       [path]: { path, name, children },
@@ -88,12 +99,12 @@ class RenameTree extends React.Component<Props> {
     return tree
   }
 
-  renderTree(pathMap, errors) {
+  renderTree = (pathMap, errors) => {
     const tree = this.convertPathMapToTree(pathMap)
 
     const getErrors = path => errors[pathMap[path]]
 
-    const renderRoot = tree => Object.values(tree).map(renderNode)
+    const renderRoot = (tree: Tree) => Object.keys(tree).map(key => renderNode(tree[key]))
 
     const renderChanges = path => (
       <code className="changes">
@@ -116,7 +127,7 @@ class RenameTree extends React.Component<Props> {
       </span>
     )
 
-    const renderNode = function({ path, name, children }) {
+    const renderNode = function({ path, name, children }: TreeNode): Node {
       const isRoot = name === path
       const isEmpty = o => Object.keys(o).length === 0
       const nodeErrors = getErrors(path)
@@ -136,16 +147,18 @@ class RenameTree extends React.Component<Props> {
     return renderRoot(tree)
   }
 
-  handleClose() {
+  handleClose = () => {
     this.setState({ show: false })
   }
 
-  handleShow() {
+  handleShow = () => {
     this.setState({ show: true })
   }
 
-  handleChange(e) {
-    clearTimeout(this.state.timeoutId)
+  handleChange = e => {
+    if (this.state.timeoutId) {
+      clearTimeout(this.state.timeoutId)
+    }
     const timeoutId = setTimeout(() => this.checkTreeRenamable(), 600)
     this.setState({ newPath: e.target.value, timeoutId })
   }
@@ -159,7 +172,7 @@ class RenameTree extends React.Component<Props> {
     return pathMap
   }
 
-  async checkTreeRenamable() {
+  checkTreeRenamable = async () => {
     const { crowi } = this.props
     const { newPath } = this.state
     const path = RenameTree.getPath({ removeTrailingSlash: true })
@@ -172,7 +185,7 @@ class RenameTree extends React.Component<Props> {
     }
   }
 
-  async handleSubmit() {
+  handleSubmit = async () => {
     const { crowi } = this.props
     const { newPath } = this.state
     const path = RenameTree.getPath({ removeTrailingSlash: true })
@@ -196,7 +209,7 @@ class RenameTree extends React.Component<Props> {
     }
   }
 
-  handleError(error) {
+  handleError = error => {
     const { info } = error
     let newState = { renamable: false, error: error.message, removing: false }
     if (info && Object.keys(info).length > 0) {

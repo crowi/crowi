@@ -11,13 +11,7 @@ type Props = {
 }
 
 export default class Attachment extends React.Component<Props> {
-  constructor(props: Props) {
-    super(props)
-
-    this._onAttachmentDeleteClicked = this._onAttachmentDeleteClicked.bind(this)
-  }
-
-  iconNameByFormat(format) {
+  iconNameByFormat(format: string) {
     if (format.match(/image\/.+/i)) {
       return 'file-image'
     }
@@ -25,7 +19,7 @@ export default class Attachment extends React.Component<Props> {
     return 'file'
   }
 
-  _onAttachmentDeleteClicked(event) {
+  _onAttachmentDeleteClicked = (event: Event) => {
     this.props.onAttachmentDeleteClicked(this.props.attachment)
   }
 

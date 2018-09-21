@@ -14,7 +14,16 @@ type Props = {
   crowi: Object,
 }
 
-class ShareBox extends React.Component<Props> {
+type State = {
+  share: Object,
+  isChanging: boolean,
+  isCreated?: boolean,
+  showSettingModal: boolean,
+  showAccessLogModal: boolean,
+  creationError: boolean,
+}
+
+class ShareBox extends React.Component<Props, State> {
   static defaultProps = {
     isCreated: false,
   }
@@ -30,17 +39,7 @@ class ShareBox extends React.Component<Props> {
       showAccessLogModal: false,
       creationError: false,
     }
-
-    this.updateLink = this.updateLink.bind(this)
-    this.createLink = this.createLink.bind(this)
-    this.deleteLink = this.deleteLink.bind(this)
-    this.handleOpenSettingModal = this.handleOpenSettingModal.bind(this)
-    this.handleCloseSettingModal = this.handleCloseSettingModal.bind(this)
-    this.handleOpenAccessLogModal = this.handleOpenAccessLogModal.bind(this)
-    this.handleCloseAccessLogModal = this.handleCloseAccessLogModal.bind(this)
   }
-
-  props: Props
 
   async componentDidMount() {
     try {
@@ -53,7 +52,7 @@ class ShareBox extends React.Component<Props> {
     }
   }
 
-  async updateLink(promise) {
+  updateLink = async promise => {
     const { isCreated } = this.state
     this.setState({ isChanging: true })
     try {
@@ -67,7 +66,7 @@ class ShareBox extends React.Component<Props> {
     }
   }
 
-  async createLink() {
+  createLink = async () => {
     const { crowi, pageId } = this.props
     this.setState({ creationError: false })
     const error = await this.updateLink(crowi.apiPost('/shares.create', { page_id: pageId }))
@@ -76,24 +75,24 @@ class ShareBox extends React.Component<Props> {
     }
   }
 
-  async deleteLink() {
+  deleteLink = async () => {
     const { crowi, pageId } = this.props
     return this.updateLink(crowi.apiPost('/shares.delete', { page_id: pageId }))
   }
 
-  handleOpenSettingModal() {
+  handleOpenSettingModal = () => {
     this.setState({ showSettingModal: true })
   }
 
-  handleCloseSettingModal() {
+  handleCloseSettingModal = () => {
     this.setState({ showSettingModal: false })
   }
 
-  handleOpenAccessLogModal() {
+  handleOpenAccessLogModal = () => {
     this.setState({ showAccessLogModal: true })
   }
 
-  handleCloseAccessLogModal() {
+  handleCloseAccessLogModal = () => {
     this.setState({ showAccessLogModal: false })
   }
 

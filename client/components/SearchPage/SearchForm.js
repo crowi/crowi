@@ -6,8 +6,13 @@ type Props = {
   onSearchFormChanged: Function,
 }
 
+type State = {
+  keyword: ?string,
+  searchedKeyword: ?string,
+}
+
 // Search.SearchForm
-export default class SearchForm extends React.Component<Props> {
+export default class SearchForm extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -15,26 +20,22 @@ export default class SearchForm extends React.Component<Props> {
       keyword: this.props.keyword,
       searchedKeyword: this.props.keyword,
     }
-
-    this.handleSubmit = this.handleSubmit.bind(this)
-    this.handleChange = this.handleChange.bind(this)
   }
 
-  props: Props
-
   search() {
-    if (this.state.searchedKeyword != this.state.keyword) {
-      this.props.onSearchFormChanged({ keyword: this.state.keyword })
-      this.setState({ searchedKeyword: this.state.keyword })
+    const { searchedKeyword, keyword } = this.state
+    if (searchedKeyword != keyword) {
+      this.props.onSearchFormChanged({ keyword })
+      this.setState({ searchedKeyword: keyword })
     }
   }
 
-  handleSubmit(event) {
+  handleSubmit = (event: Event) => {
     event.preventDefault()
-    this.search({ keyword: this.state.keyword })
+    this.search()
   }
 
-  handleChange(event) {
+  handleChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     const keyword = event.target.value
     this.setState({ keyword })
   }

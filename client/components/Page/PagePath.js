@@ -44,7 +44,7 @@ export default class PagePath extends React.Component<Props> {
     page: {},
   }
 
-  linkPath(path) {
+  linkPath(path: string) {
     return path
   }
 
