@@ -1,6 +1,11 @@
 CHANGES
 ========
 
+## 1.7.1
+
+- Fix error when loading all pages caused by sort option.
+
+
 ## 1.7.0
 
 - Feature: GitHub Authentication (#282)
