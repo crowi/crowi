@@ -1,7 +1,7 @@
 CHANGES
 ========
 
-## 1.7.1
+## 1.7.2
 
 - Fix error when loading all pages caused by sort option.
 
