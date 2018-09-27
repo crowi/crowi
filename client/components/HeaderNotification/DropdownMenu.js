@@ -27,7 +27,7 @@ export default class DropdownMenu extends React.Component {
     }
 
     return (
-      <ul className="dropdown-menu">
+      <ul className="dropdown-menu dropdown-menu-right">
         <li className="notification-arrow" />
         {listView}
         <li>
