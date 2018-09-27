@@ -1,5 +1,5 @@
 import React from 'react'
-
+import PropTypes from 'prop-types'
 import NotificationContent from '../NotificationContent'
 import PagePath from '../../PageList/PagePath'
 
@@ -37,8 +37,8 @@ export default class PageLikeNotification extends React.Component {
 }
 
 PageLikeNotification.propTypes = {
-  notification: React.PropTypes.object.isRequired,
-  onClick: React.PropTypes.func.isRequired,
+  notification: PropTypes.object.isRequired,
+  onClick: PropTypes.func.isRequired,
 }
 
 PageLikeNotification.defaultProps = {}

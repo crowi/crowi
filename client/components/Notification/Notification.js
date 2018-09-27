@@ -1,5 +1,5 @@
 import React from 'react'
-
+import PropTypes from 'prop-types'
 import Icon from '../Common/Icon'
 import UserDate from '../Common/UserDate'
 import UserPicture from '../User/UserPicture'
@@ -63,8 +63,8 @@ export default class Notification extends React.Component {
 }
 
 Notification.propTypes = {
-  notification: React.PropTypes.object.isRequired,
-  onClickHandler: React.PropTypes.func.isRequired,
+  notification: PropTypes.object.isRequired,
+  onClickHandler: PropTypes.func.isRequired,
 }
 
 Notification.defaultProps = {}
