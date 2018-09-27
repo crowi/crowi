@@ -22,7 +22,7 @@ export default class HeaderNotification extends React.Component {
   }
 
   initializeSocket() {
-    this.props.crowi.getSocket().on('notification updated', data => {
+    this.props.crowi.getWebSocket().on('notification updated', data => {
       if (this.props.me === data.status.user) {
         this.fetchList()
         this.fetchStatus()
@@ -98,12 +98,12 @@ export default class HeaderNotification extends React.Component {
   render() {
     let badge = ''
     if (this.state.count > 0) {
-      badge = <span className="badge badge-danger notification-badge">{this.state.count}</span>
+      badge = <span className="badge badge-pill badge-danger notification-badge">{this.state.count}</span>
     }
 
     return (
       <div className="notification-wrapper">
-        <a href="#" id="notif-opener" className="dropdown-toggle" data-toggle="dropdown" onClick={this.handleOnClick.bind(this)}>
+        <a href="#" id="notif-opener" className="nav-link dropdown-toggle" data-toggle="dropdown" onClick={this.handleOnClick.bind(this)}>
           <Icon name="bell" /> {badge}
         </a>
         <DropdownMenu
