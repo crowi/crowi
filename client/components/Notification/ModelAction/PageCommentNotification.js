@@ -1,5 +1,5 @@
 import React from 'react'
-
+import PropTypes from 'prop-types'
 import NotificationContent from '../NotificationContent'
 import PagePath from '../../PageList/PagePath'
 

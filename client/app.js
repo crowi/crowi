@@ -21,6 +21,8 @@ import SecretKeywordFormContainer from 'components/ExternalShare/SecretKeywordFo
 import AdminShare from 'components/Admin/Share/AdminShare'
 import RenameTree from 'components/RenameTree/RenameTree'
 import Backlink from './components/Backlink'
+import NotificationPage from 'components/NotificationPage'
+import HeaderNotification from 'components/HeaderNotification'
 
 if (!window) {
   window = {}
@@ -58,6 +60,7 @@ window.crowiRenderer = crowiRenderer
 const crowiAuth = new CrowiAuth(crowi)
 window.crowiAuth = crowiAuth
 
+const me = $('body').data('me')
 const componentMappings = {
   'search-top': <HeaderSearchBox crowi={crowi} />,
   'search-page': <SearchPage crowi={crowi} />,
@@ -65,6 +68,8 @@ const componentMappings = {
   'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
   'page-alerts': <PageAlerts pageId={pageId} crowi={crowi} />,
   'rename-tree': <RenameTree pageId={pageId} crowi={crowi} />,
+  'header-notification': <HeaderNotification me={me} crowi={crowi} />,
+  'notification-page': <NotificationPage crowi={crowi} />,
 
   // 'revision-history': <PageHistory pageId={pageId} />,
   // 'page-comment': <PageComment />,
