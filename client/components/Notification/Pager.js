@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 
 export default class Pager extends React.Component {
   constructor(props) {
@@ -45,10 +46,10 @@ export default class Pager extends React.Component {
 }
 
 Pager.propTypes = {
-  hasPrev: React.PropTypes.bool.isRequired,
-  hasNext: React.PropTypes.bool.isRequired,
-  handlePrevClick: React.PropTypes.func.isRequired,
-  handleNextClick: React.PropTypes.func.isRequired,
+  hasPrev: PropTypes.bool.isRequired,
+  hasNext: PropTypes.bool.isRequired,
+  handlePrevClick: PropTypes.func.isRequired,
+  handleNextClick: PropTypes.func.isRequired,
 }
 Pager.defaultProps = {
   hasPrev: false,

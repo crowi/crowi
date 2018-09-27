@@ -37,8 +37,8 @@ export default class PageCommentNotification extends React.Component {
 }
 
 PageCommentNotification.propTypes = {
-  notification: React.PropTypes.object.isRequired,
-  onClick: React.PropTypes.func.isRequired,
+  notification: PropTypes.object.isRequired,
+  onClick: PropTypes.func.isRequired,
 }
 
 PageCommentNotification.defaultProps = {}

@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import Notification from './Notification'
 import NullNotification from './NullNotification'
 import Icon from '../Common/Icon'
@@ -26,8 +27,8 @@ export default class ListView extends React.Component {
 }
 
 ListView.propTypes = {
-  notifications: React.PropTypes.array.isRequired,
-  notificationClickHandler: React.PropTypes.func.isRequired,
+  notifications: PropTypes.array.isRequired,
+  notificationClickHandler: PropTypes.func.isRequired,
 }
 
 ListView.defaultProps = {}
