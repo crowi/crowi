@@ -31,7 +31,9 @@ export default class Crowi {
 
     this.recoverData()
 
-    this.socket = io()
+    this.socket = io({
+      transports: ['websocket'],
+    })
   }
 
   getContext() {
