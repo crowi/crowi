@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { Button, Modal, FormGroup, ControlLabel, FormControl, InputGroup } from 'react-bootstrap'
+import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGroupAddon, Input, Label } from 'reactstrap'
 import { translate } from 'react-i18next'
 import Icon from '../Common/Icon'
 
@@ -120,7 +120,7 @@ class RenameTree extends React.Component {
       return (
         <ul className="tree" key={path}>
           <li className="leaf">
-            {name} {isRoot && renderChanges(path)}
+            <a href={`${path}`}>{name}</a> {isRoot && renderChanges(path)}
             {hasNodeErrors && renderNodeErrors(nodeErrors)}
           </li>
           {hasChildren && <li>{renderRoot(children)}</li>}
@@ -208,44 +208,41 @@ class RenameTree extends React.Component {
     const { show, newPath, pathMap, error, errors, renamable, removing } = this.state
     const { t } = this.props
     return (
-      <Modal show={show} onHide={this.handleClose}>
-        <Modal.Header closeButton>
-          <Modal.Title id="contained-modal-title-lg">{t('Rename tree')}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <FormGroup>
-            <ControlLabel>{t('Current page name')}</ControlLabel>
+      <Modal isOpen={show} toggle={this.handleClose} size="lg">
+        <ModalHeader toggle={this.handleClose}>{t('Rename tree')}</ModalHeader>
+        <ModalBody>
+          <div className="mb-2">
+            <span className="mr-2">{t('Current page name')}</span>
             <code>{RenameTree.getPath()}</code>
-          </FormGroup>
-          <FormGroup>
-            <ControlLabel>{t('New page name')}</ControlLabel>
+          </div>
+          <InputGroup>
+            <Label for="newPath">{t('New page name')}</Label>
             <InputGroup>
-              <InputGroup.Addon>{location.origin}</InputGroup.Addon>
-              <FormControl name="new_path" value={newPath} onChange={this.handleChange} />
+              <InputGroupAddon addonType="prepend">{location.origin}</InputGroupAddon>
+              <Input id="newPath" name="new_path" defaultValue={newPath} onChange={this.handleChange} />
             </InputGroup>
-          </FormGroup>
+          </InputGroup>
           <div>{this.renderTree(pathMap, errors)}</div>
-        </Modal.Body>
-
-        <Modal.Footer>
+        </ModalBody>
+        <ModalFooter>
           {error && (
             <p>
-              <small className="pull-left alert-danger">
+              <small className="mr-auto alert-danger">
                 <Icon name="times-circle" /> {t(error)}
               </small>
             </p>
           )}
           {removing && (
             <p>
-              <small className="pull-left">
+              <small className="mr-auto">
                 <img src="/images/loading_s.gif" /> Page tree moved! Redirecting to new location.
               </small>
             </p>
           )}
-          <Button type="submit" bsStyle="primary" onClick={this.handleSubmit} disabled={!renamable || removing}>
+          <Button type="submit" color="primary" onClick={this.handleSubmit} disabled={!renamable || removing}>
             Rename!
           </Button>
-        </Modal.Footer>
+        </ModalFooter>
       </Modal>
     )
   }

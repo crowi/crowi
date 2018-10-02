@@ -1,13 +1,14 @@
 {% if not current %}
   {% set current = 'index' %}
 {% endif  %}
-<ul class="nav nav-pills nav-stacked">
-  <li class="{% if current == 'index'%}active{% endif %}"><a href="/admin"><i class="fa fa-cube"></i> Wiki管理トップ</a></li>
-  <li class="{% if current == 'app'%}active{% endif %}"><a href="/admin/app"><i class="fa fa-cogs"></i> アプリ設定</a></li>
-  <li class="{% if current == 'notification'%}active{% endif %}"><a href="/admin/notification"><i class="fa fa-bell"></i> 通知設定</a></li>
-  <li class="{% if current == 'user'%}active{% endif %}"><a href="/admin/users"><i class="fa fa-users"></i> ユーザー管理</a></li>
+<div class="nav nav-pills flex-column">
+  <a class="nav-link {% if current == 'index'%}active{% endif %}" href="/admin"><i class="fa fa-cube"></i> Wiki管理トップ</a>
+  <a class="nav-link {% if current == 'app'%}active{% endif %}" href="/admin/app"><i class="fa fa-cogs"></i> アプリ設定</a>
+  <a class="nav-link {% if current == 'notification'%}active{% endif %}" href="/admin/notification"><i class="fa fa-bell"></i> 通知設定</a>
+  <a class="nav-link {% if current == 'user'%}active{% endif %}" href="/admin/users"><i class="fa fa-users"></i> ユーザー管理</a>
   {% if searchConfigured() %}
-  <li class="{% if current == 'search'%}active{% endif %}"><a href="/admin/search"><i class="fa fa-search"></i> 検索管理</a></li>
+  <a class="nav-link {% if current == 'search'%}active{% endif %}" href="/admin/search"><i class="fa fa-search"></i> 検索管理</a>
   {% endif %}
-  <li class="{% if current == 'share'%}active{% endif %}"><a href="/admin/share"><i class="fa fa-lock"></i> 外部共有管理</a></li>
-</ul>
+  <a class="nav-link {% if current == 'share'%}active{% endif %}" href="/admin/share"><i class="fa fa-lock"></i> 外部共有管理</a>
+  <a class="nav-link {% if current == 'backlink'%}active{% endif %}" href="/admin/backlink"><i class="fa fa-anchor"></i> バックリンク管理</a>
+</div>

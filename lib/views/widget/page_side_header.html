@@ -25,27 +25,28 @@
   </div>
 
   <div class="like-box">
-    <dl class="dl-horizontal">
-      <dt>
-        <i class="far fa-thumbs-up"></i> {{ t('Like!') }}
-      </dt>
-      <dd>
-        <p class="liker-count">
-        <span id="like-count">{{ page.liker.length }}</span>
-        <button
-          data-csrftoken="{{ csrf() }}"
-          data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
-          class="like-button btn btn-default btn-sm {% if page.isLiked(user) %}active{% endif %}"
-          ><i class="far fa-thumbs-up"></i> {{ t('Like!') }}</button>
-        </p>
-        <p id="liker-list" class="liker-list" data-likers="{{ page.liker|default([])|join(',') }}">
-        </p>
-      </dd>
-
-      <dt><i class="fa fa-paw"></i> {{ t('Seen by') }}</dt>
-      <dd>
-        <div id="seen-user-list" data-seen-users="{{ page.seenUsers|default([])|join(',') }}"></div>
-      </dd>
+    <dl>
+      <div class="row">
+        <dt class="col"><i class="far fa-thumbs-up"></i> {{ t('Like!') }}</dt>
+        <dd class="col">
+          <p class="liker-count">
+          <span id="like-count">{{ page.liker.length }}</span>
+          <button
+            data-csrftoken="{{ csrf() }}"
+            data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
+            class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
+            ><i class="far fa-thumbs-up"></i> {{ t('Like!') }}</button>
+          </p>
+          <p id="liker-list" class="liker-list" data-likers="{{ page.liker|default([])|join(',') }}">
+          </p>
+        </dd>
+      </div>
+      <div class="row">
+        <dt class="col"><i class="fa fa-paw"></i> {{ t('Seen by') }}</dt>
+        <dd class="col">
+          <div id="seen-user-list" data-seen-users="{{ page.seenUsers|default([])|join(',') }}"></div>
+        </dd>
+      </div>
     </dl>
   </div>
 </div>

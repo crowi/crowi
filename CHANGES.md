@@ -1,6 +1,26 @@
 CHANGES
 ========
 
+## 1.7.0
+
+- Feature: GitHub Authentication (#282)
+- Feature: Rename a page hierarchy (#301)
+- Feature: Share pages externally (#313, #334)
+- Feature: Group search results by page type (#312)
+- Improve: Support pagination on the search api (Thank you @hirakiuc, #293)
+- Improve: Support bearer token (Thank you @hirakiuc, #299)
+- Fix: Can't add page grant correctly with mongodb 3.6 (#326)
+- Updates: Elasticsearch v6 (#336)
+- Updates: FontAwesome v5 (#288)
+- API Changes:
+    - Add `bookmarks.list` (Thank you @hirakiuc, #296)
+- Dev: Introduce Prettier and ESLint instead of JSHint (#297)
+- And some document updates, package updates. Thank you @onsd @inductor.
+
+## 1.6.5
+
+- Fix: Can't add page grant correctly with mongodb 3.6 (#325)
+
 ## 1.6.4
 
 - Fix: Can't unportalize in case (#286)

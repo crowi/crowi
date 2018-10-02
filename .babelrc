@@ -1,15 +1,23 @@
 {
   "presets": [
-    ["env", {
+    ["@babel/env", {
       "targets": {
         "browsers": ["last 2 versions"]
       }
     }],
-    "stage-2",
-    "flow",
-    "react"
+    "@babel/flow",
+    "@babel/react"
   ],
   "plugins": [
+    "@babel/syntax-dynamic-import",
+    "@babel/syntax-import-meta",
+    ["@babel/proposal-class-properties", { "loose": false }],
+    "@babel/proposal-json-strings",
+    ["@babel/proposal-decorators", { "legacy": true }],
+    "@babel/proposal-function-sent",
+    "@babel/proposal-export-namespace-from",
+    "@babel/proposal-numeric-separator",
+    "@babel/proposal-throw-expressions",
     ["module-resolver", {
       "root": ["."],
       "alias": {

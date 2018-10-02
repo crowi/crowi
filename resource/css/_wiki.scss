@@ -101,6 +101,7 @@ div.body {
   a {
     text-decoration: underline;
     color: #38ad9e;
+    word-break: break-all;
 
     &:hover {
       text-decoration: none;
@@ -115,7 +116,13 @@ div.body {
     background: #444;
     color: #f0f0f0;
     font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+    padding: 9.5px;
+    border-radius: 4px;
     word-wrap: break-word;
+
+    code {
+      background: transparent;
+    }
   }
 
   img {
@@ -166,7 +173,6 @@ div.body {
       background: #ccc;
       color: #333;
       font-size: .8em;
-
     }
   };
 
@@ -195,7 +201,7 @@ div.body {
   // {{{ table (copied from bootstrap .table
   table {
     width: 100%;
-    margin-bottom: $line-height-computed;
+    margin-bottom: 20px;
     // Cells
     > thead,
     > tbody,
@@ -258,18 +264,8 @@ div.body {
   // }}}
 }
 
-
-@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) { // {{{ tablet size
-  .crowi.main-container .main .wiki {
-  }
-} // }}}
-
-@media (max-width: $screen-xs-max) { // {{{ iPhone size
-  .crowi.main-container .main .wiki {
-  }
-} // }}}
-
-@media (max-width: $screen-sm-max) { // {{{ tablet and iphone size
+// Smartphone and Tablet
+@include media-breakpoint-down(sm) {
   .crowi.main-container .main .wiki {
     img {
       max-width: 100%;

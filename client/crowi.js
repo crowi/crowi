@@ -1,6 +1,8 @@
 /* Author: Sotaro KARASAWA <sotarok@crocos.co.jp>
 */
 
+import 'scrollpos-styler'
+
 const Crowi = {}
 
 if (!window) {
@@ -172,7 +174,7 @@ $(function() {
   var pageId = $('#content-main').data('page-id')
   var revisionId = $('#content-main').data('page-revision-id')
   var revisionCreatedAt = $('#content-main').data('page-revision-created')
-  var currentUser = $('#content-main').data('current-user')
+  var currentUser = crowi.getUser().id
   var isSeen = $('#content-main').data('page-is-seen')
   var pagePath = $('#content-main').data('path')
   var isSharePage = !!$('#content-main').data('is-share-page')
@@ -339,7 +341,7 @@ $(function() {
   })
 
   $('#create-portal-button').on('click', function(e) {
-    $('.portal').removeClass('hide')
+    $('.portal').removeClass('d-none')
     $('.content-main').addClass('on-edit')
     $('.portal a[data-toggle="tab"][href="#edit-form"]').tab('show')
 
@@ -354,7 +356,7 @@ $(function() {
     }
   })
   $('#portal-form-close').on('click', function(e) {
-    $('.portal').addClass('hide')
+    $('.portal').addClass('d-none')
     $('.content-main').removeClass('on-edit')
 
     return false
@@ -496,21 +498,11 @@ $(function() {
     }
 
     // header
-    var $header = $('#page-header')
-    if ($header.length > 0) {
-      var headerHeight = $header.outerHeight(true)
-      $('.header-wrap').css({ height: headerHeight + 16 + 'px' })
-      $header.affix({
-        offset: {
-          top: function() {
-            return headerHeight + 86 // (54 header + 16 header padding-top + 16 content padding-top)
-          },
-        },
-      })
-      $('[data-affix-disable]').on('click', function(e) {
-        var $elm = $($(this).data('affix-disable'))
-        $(window).off('.affix')
-        $elm.removeData('affix').removeClass('affix affix-top affix-bottom')
+    var $headerWrap = $('#page-header').parent()
+    if ($headerWrap.length > 0) {
+      $headerWrap.attr('data-sps-offset', $('.crowi-header').outerHeight())
+      $('.stopper').on('click', e => {
+        $headerWrap.removeClass('sps sps--abv sps--blw')
         return false
       })
     }
@@ -521,13 +513,13 @@ $(function() {
       var $commentImage = $('<img class="picture picture-rounded">').attr('src', Crowi.userPicture(creator))
       var $commentCreator = $('<div class="page-comment-creator">').text(creator.username)
 
-      var $commentRevision = $('<a class="page-comment-revision label">')
+      var $commentRevision = $('<a class="page-comment-revision badge">')
         .attr('href', '?revision=' + revision)
         .text(revision.substr(0, 8))
       if (revision !== revisionId) {
-        $commentRevision.addClass('label-default')
+        $commentRevision.addClass('badge-secondary')
       } else {
-        $commentRevision.addClass('label-primary')
+        $commentRevision.addClass('badge-primary')
       }
 
       var $commentMeta = $('<div class="page-comment-meta">')

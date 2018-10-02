@@ -3,8 +3,9 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
-import { Table, Alert } from 'react-bootstrap'
+import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
+
 class AccessLog extends React.Component {
   constructor(props) {
     super(props)
@@ -86,12 +87,12 @@ class AccessLog extends React.Component {
       error,
     } = this.state
     return error ? (
-      <Alert bsStyle="danger">
+      <Alert color="danger">
         <p>{t('access_log.error.message')}</p>
       </Alert>
     ) : (
       <div>
-        <Table bordered hover condensed>
+        <Table bordered hover size="sm">
           <thead>
             <tr>
               <th>#</th>

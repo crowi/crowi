@@ -63,7 +63,7 @@ export default class SearchForm extends React.Component {
   }
 
   handleBlur(event) {
-    // this.props.isShown(false);
+    // this.props.isShown(false)
   }
 
   handleChange(event) {
@@ -84,7 +84,7 @@ export default class SearchForm extends React.Component {
     const formClear = this.getFormClearComponent()
 
     return (
-      <form action="/_search" className="search-form form-group input-group search-top-input-group" onSubmit={this.handleSubmit}>
+      <form action="/_search" className="search-form input-group search-top-input-group" onSubmit={this.handleSubmit}>
         <input
           autoComplete="off"
           type="text"
@@ -96,12 +96,12 @@ export default class SearchForm extends React.Component {
           onBlur={this.handleBlur}
           onChange={this.handleChange}
         />
-        <span className="input-group-btn">
-          <button type="submit" className="btn btn-default">
+        <div className="input-group-append">
+          {formClear}
+          <button type="submit" className="btn btn-light">
             <i className="search-top-icon fa fa-search" />
           </button>
-        </span>
-        {formClear}
+        </div>
       </form>
     )
   }
