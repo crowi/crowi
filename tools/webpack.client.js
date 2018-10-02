@@ -7,7 +7,14 @@ const ROOT = path.join(__dirname, '/../')
 const config = {
   mode: process.env.NODE_ENV,
   entry: {
-    bundled: ['jquery', 'bootstrap-sass', 'inline-attachment/src/inline-attachment.js', 'jquery.cookie', 'jquery.selection.js', 'babel-polyfill'],
+    bundled: [
+      'jquery',
+      'bootstrap/dist/js/bootstrap.bundle.min.js',
+      'inline-attachment/src/inline-attachment.js',
+      'jquery.cookie',
+      'jquery.selection.js',
+      '@babel/polyfill',
+    ],
     app: path.join(ROOT, 'client/app.js'),
     crowi: path.join(ROOT, 'client/crowi.js'),
     presentation: path.join(ROOT, 'client/crowi-presentation.js'),
@@ -58,6 +65,7 @@ const config = {
     }),
     new CopyWebpackPlugin([
       { from: path.join(ROOT, 'node_modules/reveal.js/css'), to: path.join(ROOT, 'public/css/reveal/css') },
+      { from: path.join(ROOT, 'node_modules/reveal.js/lib/font'), to: path.join(ROOT, 'public/css/reveal/lib/font') },
       { from: path.join(ROOT, 'node_modules/reveal.js/lib/css'), to: path.join(ROOT, 'public/js/reveal/lib/css') },
       { from: path.join(ROOT, 'node_modules/reveal.js/lib/js'), to: path.join(ROOT, 'public/js/reveal/lib/js') },
       { from: path.join(ROOT, 'node_modules/reveal.js/plugin'), to: path.join(ROOT, 'public/js/reveal/plugin/') },

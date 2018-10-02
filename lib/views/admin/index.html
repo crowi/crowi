@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main">
+<div class="content-main content-form">
 
   {% set emessage = req.flash('errorMessage') %}
   {% if emessage.length %}
@@ -29,6 +29,21 @@
       この画面はWiki管理者のみがアクセスできる画面です。<br>
       「ユーザー管理」から「管理者にする」ボタンを使ってユーザーをWiki管理者に任命することができます。
       </p>
+
+      <h2>Information</h2>
+      <dl class="dl-horizontal">
+          <dt>Crowi Version</dt>
+          <dd>{{ crowiVersion }}</dd>
+          <dt>Search</dt>
+          <dd>
+            {% if searchConfigured() %}
+            {# TODO: multiple nodes #}
+            Configured: {{ searchInfo.host }}{{ searchInfo.indexName }}, <strong>{{ searchInfo.esVersion }}</strong>
+            {% else %}
+            Not available.
+            {% endif %}
+          </dd>
+      </dl>
     </div>
   </div>
 

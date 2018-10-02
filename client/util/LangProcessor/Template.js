@@ -24,7 +24,7 @@ export default class Template {
 
   getUser() {
     // FIXME
-    const username = window.crowi.me || null
+    const username = window.crowi.getUser().name || null
 
     if (!username) {
       return ''
@@ -57,7 +57,7 @@ export default class Template {
     code = this.parseTemplateString(code)
     return `
     <div class="page-template-builder">
-    <button class="template-create-button btn btn-default" data-template="${templateId}" data-path="${pageName}"><i class="fa fa-pencil-alt"></i> ${pageName}</button>
+    <button class="template-create-button btn btn-secondary" data-template="${templateId}" data-path="${pageName}"><i class="fa fa-pencil-alt"></i> ${pageName}</button>
       <pre><code id="${templateId}" class="lang-${lang}">${code}\n</code></pre></div>\n`
   }
 }

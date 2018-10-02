@@ -8,9 +8,12 @@
 
     article {
       background: #fff;
+      min-height: calc(100vh - #{$crowiHeaderHeight});
+      display: flex;
+      flex-direction: column;
     }
 
-    article header {
+    article .header-wrap {
       background: #fff;
       width: 100%;
 
@@ -18,11 +21,16 @@
         display: none;
       }
 
-      &.affix {
-        width: 100%;
+      &.sps {
+        position: sticky;
+        top: 0;
+      }
+
+      &.sps--blw {
+        width: 100vw;
         top: 0;
         left: 0;
-        padding: 5px 20px;
+        padding: 8px 20px 8px;
         z-index: 1039;
         background: rgba(255, 255, 255, .9);
         box-shadow: 0 0px 2px #999;
@@ -34,21 +42,25 @@
         p.stopper {
           display: block;
           position: absolute;
-          bottom: -30px;
+          bottom: -32px;
+          width: 40px;
+          height: 32px;
+          line-height: 32px;
           right: 10px;
           background: #fff;
-          padding: 7px 14px;
           margin: 0;
           border: solid 1px #ccc;
           border-top: none;
           border-radius: 0 0 5px 5px;
           font-size: .8em;
+          text-align: center;
+          cursor: pointer;
         }
       }
 
     }
 
-    &.col-md-12 article header.affix {
+    &.col-md-12 article .header-wrap.sps--blw {
       width: 100%;
     }
 
@@ -97,6 +109,8 @@
     }
 
     .content-main {
+      flex: 1;
+
       .tab-content {
         margin-top: 30px;
       }
@@ -136,12 +150,12 @@
   }
   // }}}
 
-  .page-attachments { // {{{
-    p {
-      font-weight: bold;
-    }
+  .page-meta-contents { // {{{
+    border-bottom: solid 1px #ccc;
+    margin-bottom: 16px;
 
-    ul {
+    .page-meta-title {
+      font-weight: bold;
     }
   } // }}}
 
@@ -161,6 +175,9 @@
     transition: .3s ease;
     -webkit-transition: .3s ease;
 
+    @include media-breakpoint-down(sm) {
+      display: none;
+    }
 
     .page-meta {
       padding: 15px 15px 5px 15px;
@@ -187,7 +204,7 @@
       .like-box {
         padding-bottom: 0;
 
-        .dl-horizontal {
+        dl {
           margin-bottom: 0;
 
           dt, dd {
@@ -199,7 +216,6 @@
             width: 80px;
           }
           dd {
-            margin-left: 90px;
             text-align: right;
           }
         }
@@ -234,7 +250,7 @@
         li {
           margin-bottom: 2px;
 
-          .input-group-addon {
+          .input-group-text {
             padding: 5px 6px;
           }
         }
@@ -273,7 +289,7 @@
     .main { // {{{
       width: 100%;
 
-      article header.affix {
+      article .header-wrap.sps--blw {
         width: 100%;
       }
     } // }}}

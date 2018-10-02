@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
-import { Modal, Table, Alert } from 'react-bootstrap'
+import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 
 class AccessLogModal extends React.Component {
@@ -11,6 +11,7 @@ class AccessLogModal extends React.Component {
     super(props)
 
     this.state = {
+      requesting: false,
       pageId: null,
       shares: [],
       pagination: {
@@ -26,13 +27,21 @@ class AccessLogModal extends React.Component {
     this.renderAccessLogTable = this.renderAccessLogTable.bind(this)
   }
 
-  renderShareInfo(uuid, username, name, createdAt) {
+  renderShareInfo(uuid, username, name, createdAt, isActive) {
     const { t } = this.props
     const date = moment(createdAt).format('llll')
     return (
       <div>
         <h4>
-          {t('Share ID')}: <a href={`/_share/${uuid}`}>{uuid}</a>
+          {(isActive && (
+            <span>
+              {t('Share ID')}: <a href={`/_share/${uuid}`}>{uuid}</a> <span className="label label-success">Active</span>
+            </span>
+          )) || (
+            <span>
+              {t('Share ID')}: {uuid} <span className="label label-danger">Inactive</span>
+            </span>
+          )}
         </h4>
         <dl className="share-info">
           <div>
@@ -91,17 +100,18 @@ class AccessLogModal extends React.Component {
       creator: { name, username },
       createdAt,
       accesses,
+      status,
     } = share
     return (
       <div key={i}>
-        {this.renderShareInfo(uuid, username, name, createdAt)}
+        {this.renderShareInfo(uuid, username, name, createdAt, status === 'active')}
         {accesses.length > 0 ? (
           <Table bordered hover condensed>
             {this.renderTableHeader()}
             <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
           </Table>
         ) : (
-          <Alert bsStyle="info">{t('No one accessed yet')}</Alert>
+          <Alert color="info">{t('No one accessed yet')}</Alert>
         )}
       </div>
     )
@@ -109,7 +119,9 @@ class AccessLogModal extends React.Component {
 
   async getPage(pageId, options = {}) {
     const limit = this.state.pagination.limit
-    if (!this.state.error) {
+    if (!this.state.error && !this.state.requesting) {
+      this.setState({ requesting: true })
+
       try {
         const { share } = await this.props.crowi.apiGet('/shares.list', {
           limit: 5,
@@ -119,9 +131,9 @@ class AccessLogModal extends React.Component {
         })
         const { docs: shares, total, page: current, pages: count } = share
         const pagination = { total, current, count, limit }
-        this.setState({ pageId, shares, pagination })
+        this.setState({ pageId, shares, pagination, requesting: false })
       } catch (err) {
-        this.setState({ error: true })
+        this.setState({ error: true, requesting: false })
       }
     }
   }
@@ -180,17 +192,15 @@ class AccessLogModal extends React.Component {
       error,
     } = this.state
     return (
-      <Modal className="access-log-modal" show={show} onHide={onHide} bsSize="large">
-        <Modal.Header closeButton>
-          <Modal.Title id="contained-modal-title-lg">{t('Access Log')}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
+      <Modal className="access-log-modal" isOpen={show} toggle={onHide} size="lg">
+        <ModalHeader>{t('Access Log')}</ModalHeader>
+        <ModalBody>
           {error ? (
-            <Alert bsStyle="danger">
+            <Alert color="danger">
               <p>{t('modal_access_log.error.message')}</p>
             </Alert>
           ) : total === 0 ? (
-            <Alert bsStyle="info">
+            <Alert color="info">
               <p>{t('modal_access_log.no_access_log_is_exists_yet')}</p>
             </Alert>
           ) : (
@@ -199,7 +209,7 @@ class AccessLogModal extends React.Component {
               <Pagination current={current} count={count} onClick={this.movePage} />
             </div>
           )}
-        </Modal.Body>
+        </ModalBody>
       </Modal>
     )
   }

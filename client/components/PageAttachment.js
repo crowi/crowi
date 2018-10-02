@@ -81,7 +81,7 @@ export default class PageAttachment extends React.Component {
   }
 
   render() {
-    const attachmentToDelete = this.state.attachmentToDelete
+    const { attachmentToDelete, attachments } = this.state
     let deleteModalClose = () => this.setState({ attachmentToDelete: null })
     let showModal = attachmentToDelete !== null
 
@@ -90,14 +90,17 @@ export default class PageAttachment extends React.Component {
       deleteInUse = this.state.inUse[attachmentToDelete._id] || false
     }
 
+    if (!attachments || attachments.length <= 0) {
+      return null
+    }
+
     return (
-      <div>
-        <p>Attachments</p>
-        <PageAttachmentList attachments={this.state.attachments} inUse={this.state.inUse} onAttachmentDeleteClicked={this.onAttachmentDeleteClicked} />
+      <div className="page-meta-contents">
+        <p className="page-meta-title">Attachments</p>
+        <PageAttachmentList attachments={attachments} inUse={this.state.inUse} onAttachmentDeleteClicked={this.onAttachmentDeleteClicked} />
         <DeleteAttachmentModal
-          show={showModal}
-          animation={false}
-          onHide={deleteModalClose}
+          isOpen={showModal}
+          toggle={deleteModalClose}
           attachmentToDelete={attachmentToDelete}
           inUse={deleteInUse}
           deleting={this.state.deleting}

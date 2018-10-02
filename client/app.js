@@ -6,6 +6,7 @@ import moment from 'moment'
 
 import Crowi from './util/Crowi'
 import CrowiRenderer from './util/CrowiRenderer'
+import CrowiAuth from './util/CrowiAuth'
 
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'
@@ -19,6 +20,7 @@ import ShareBox from 'components/ExternalShare/ShareBox'
 import SecretKeywordFormContainer from 'components/ExternalShare/SecretKeywordForm/SecretKeywordFormContainer'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import RenameTree from 'components/RenameTree/RenameTree'
+import Backlink from './components/Backlink'
 
 if (!window) {
   window = {}
@@ -39,14 +41,10 @@ if (mainContent !== null) {
   }
 }
 
+const { user = {} } = JSON.parse(document.getElementById('user-context-hydrate').textContent || '{}')
+const csrfToken = $('#content-main').data('csrftoken')
 // FIXME
-const crowi = new Crowi(
-  {
-    me: $('#content-main').data('current-username'),
-    csrfToken: $('#content-main').data('csrftoken'),
-  },
-  window,
-)
+const crowi = new Crowi({ user, csrfToken }, window)
 window.crowi = crowi
 crowi.setConfig(JSON.parse(document.getElementById('crowi-context-hydrate').textContent || '{}'))
 const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
@@ -56,6 +54,9 @@ if (!isSharePage) {
 
 const crowiRenderer = new CrowiRenderer(crowi)
 window.crowiRenderer = crowiRenderer
+
+const crowiAuth = new CrowiAuth(crowi)
+window.crowiAuth = crowiAuth
 
 const componentMappings = {
   'search-top': <HeaderSearchBox crowi={crowi} />,
@@ -67,6 +68,7 @@ const componentMappings = {
 
   // 'revision-history': <PageHistory pageId={pageId} />,
   // 'page-comment': <PageComment />,
+  'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
   'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
   'share-box': <ShareBox pageId={pageId} crowi={crowi} />,

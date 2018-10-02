@@ -6,6 +6,9 @@ var fs = require('fs')
 var models = {}
 var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
 
+// Want fix...
+crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
+
 mongoose.Promise = global.Promise
 
 before('Create database connection and clean up', function(done) {

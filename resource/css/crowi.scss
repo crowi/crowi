@@ -1,8 +1,5 @@
-// import crowi variable
-@import 'utilities';
-
-// import bootstrap
-@import 'bootstrap';
+@import 'theme';
+@import 'bootstrap.scss';
 
 @import "fontawesome";
 @import "fa-brands";
@@ -15,20 +12,28 @@
 @import 'page_list';
 @import 'form';
 @import 'wiki';
-@import 'admin';
 @import 'comment';
 @import 'user';
 @import 'portal';
 @import 'search';
+@import 'backlink';
 @import 'attachments';
 @import 'share';
 @import 'tree';
 
+a:hover {
+  text-decoration: none;
+}
 
 ul {
   padding-left: 18px;
 }
 
+code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: lighten($pink, 40);
+}
 
 .meta {
   margin-top: 0;
@@ -49,7 +54,7 @@ ul {
   margin-bottom: 0;
 }
 
-.help-block {
+.form-text {
   font-size: .9em;
 }
 
@@ -119,41 +124,48 @@ footer {
 
     form {
 
-      input.form-control {
+      input {
         border: none;
-        box-shadow: none;
-        border-bottom: dotted 1px #444;
+        border-bottom: 1px dotted gray("800");
         border-radius: 0;
-        padding: 6px;
-        height: 34px;
-        font-weight: bold;
-        background: #f0f0f0;
+        padding-right: 6px;
+        padding-left: 6px;
+        background: gray("100");
 
         &:focus {
-          background: #ddd;
+          background: gray("200");
         }
       }
 
-      .page-name-addons {
-        position: absolute;
-        top: 7px;
-        left: 27px;
+      .page-today-form {
+        display: flex;
+        align-items: center;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+
+        .page-today-input1 {
+          width: 60px;
+        }
+
+        .page-today-input2 {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .page-today-prefix,
+        .page-today-suffix {
+          padding: 6px;
+        }
       }
-      .page-today-prefix {
-        display: inline-block;
-      }
-      .page-today-input1 {
-        width: 60px;
-        padding-left: 2px;
-        padding-right: 2px;
-        display: inline-block;
-      }
-      .page-today-suffix {
-        display: inline-block;
-      }
-      .page-today-input2 {
-        width: 100%;
-        display: inline-block;
+
+      .page-under-tree-form {
+        display: flex;
+        align-items: center;
+
+        > input {
+          flex: 1;
+          margin-right: 0.5rem;
+        }
       }
     }
   }
@@ -171,28 +183,6 @@ footer {
 .popular-page-low {
   color: #ab7c7c;
 }
-
-
-// {{{ add badge variation
-.badge-default {
-  @include label-variant($label-default-bg);
-}
-.badge-primary {
-  @include label-variant($label-primary-bg);
-}
-.badge-success {
-  @include label-variant($label-success-bg);
-}
-.badge-info {
-  @include label-variant($label-info-bg);
-}
-.badge-warning {
-  @include label-variant($label-warning-bg);
-}
-.badge-danger {
-  @include label-variant($label-danger-bg);
-}
-// }}}
 
 .dropdown-menu {
    z-index: 10060;
@@ -305,11 +295,11 @@ footer {
 }
 $btn-google-color: rgb(204,89,71);
 .btn-google {
-  @include button-variant(lighten($btn-google-color, 50%), $btn-google-color, darken($btn-google-color, 20%));
+  @include button-variant($btn-google-color, darken($btn-google-color, 20%));
 }
 $btn-github-color: rgb(68,68,68);
 .btn-github {
-  @include button-variant(lighten($btn-github-color, 50%), $btn-github-color, darken($btn-github-color, 20%));
+  @include button-variant($btn-github-color, darken($btn-github-color, 20%));
 }
 
 
