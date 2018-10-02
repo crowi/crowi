@@ -135,8 +135,9 @@
       <h2>ユーザー一覧</h2>
 
       <form method="get" class="form-group input-group col-xs-6">
+        {# q だと事故る (検索欄に入ってしまう) ので、uq にしてます #}
         <input autoComplete="off" type="text" class="form-control" placeholder="Search ... User ID, Name and Email"
-          name="q" />
+          name="uq" value="{{ uq }}" />
         <span class="input-group-btn">
           <button type="submit" class="btn btn-default">
             <i class="search-top-icon fa fa-search"></i>
