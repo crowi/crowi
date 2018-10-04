@@ -167,7 +167,7 @@
     "prod:client": "NODE_ENV=production webpack --bail --colors --display-error-details --config tools/webpack.config.js",
     "webpack": "webpack",
     "watch": "onchange \"**/*.js\" -e \"bin\" -e \"client/thirdparty-js\" -e \"node_modules\" -e \"public\" -f add -f change -- eslint --fix \"{{changed}}\"",
-    "postinstall": "npm run build"
+    "postinstall": "sh -c '[ \"$SKIP_POSTINSTALL\" != \"\"  ] || npm run build'"
   },
   "env": {
     "NODE_ENV": "production"
