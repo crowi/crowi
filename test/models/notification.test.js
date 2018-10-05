@@ -45,7 +45,7 @@ describe('Notification', function() {
             expect(notification.target.toString()).to.be.equal(target_id.toString())
             expect(notification.action).to.be.equal('COMMENT')
             expect(notification.isRead).to.be.equal(false)
-            expect(notification.actionUsersCount).to.be.equal(3)
+            expect(notification.activities).to.be.length(3)
           })
           .catch(function(err) {
             throw new Error(err)

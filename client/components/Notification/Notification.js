@@ -15,7 +15,8 @@ export default class Notification extends React.Component {
 
   getActionUsers() {
     const notification = this.props.notification
-    const latestUsers = notification.latestActionUsers.map(user => {
+    const latestActionUsers = notification.actionUsers.slice(0, 3)
+    const latestUsers = latestActionUsers.map(user => {
       return '@' + user.username
     })
 
@@ -23,8 +24,8 @@ export default class Notification extends React.Component {
     const latestUsersCount = latestUsers.length
     if (latestUsersCount === 1) {
       actionedUsers = latestUsers[0]
-    } else if (notification.actionUsersCount >= 4) {
-      actionedUsers = latestUsers.slice(0, 2).join(', ') + ` and ${notification.actionUsersCount - 2} others`
+    } else if (notification.actionUsers.length >= 4) {
+      actionedUsers = latestUsers.slice(0, 2).join(', ') + ` and ${notification.actionUsers.length - 2} others`
     } else {
       actionedUsers = latestUsers.join(', ')
     }
@@ -33,7 +34,7 @@ export default class Notification extends React.Component {
   }
 
   getUserImage() {
-    const latestActionUsers = this.props.notification.latestActionUsers
+    const latestActionUsers = this.props.notification.actionUsers.slice(0, 3)
 
     if (latestActionUsers.length < 1) {
       // what is this case?
@@ -47,13 +48,17 @@ export default class Notification extends React.Component {
     let cmp = ''
     const notification = this.props.notification
     const componentName = `${notification.targetModel}:${notification.action}`
+    const props = {
+      actionUsers: this.getActionUsers(),
+      ...this.props,
+    }
 
     switch (componentName) {
       case 'Page:COMMENT':
-        cmp = <PageCommentNotification {...this.props} onClick={this.onClickHandler.bind(this)} />
+        cmp = <PageCommentNotification {...props} onClick={this.onClickHandler.bind(this)} />
         break
       case 'Page:LIKE':
-        cmp = <PageLikeNotification {...this.props} onClick={this.onClickHandler.bind(this)} />
+        cmp = <PageLikeNotification {...props} onClick={this.onClickHandler.bind(this)} />
         break
       default:
     }
