@@ -23,6 +23,7 @@ import RenameTree from 'components/RenameTree/RenameTree'
 import Backlink from './components/Backlink'
 import NotificationPage from 'components/NotificationPage'
 import HeaderNotification from 'components/HeaderNotification'
+import WatchButton from 'components/Notification/WatchButton'
 
 if (!window) {
   window = {}
@@ -79,6 +80,7 @@ const componentMappings = {
   'share-box': <ShareBox pageId={pageId} crowi={crowi} />,
   'secret-keyword-form-container': <SecretKeywordFormContainer pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
+  'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
 }
 
 Object.keys(componentMappings).forEach(key => {
