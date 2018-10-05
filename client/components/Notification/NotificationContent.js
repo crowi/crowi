@@ -6,14 +6,14 @@ import UserPicture from '../User/UserPicture'
 
 export default class NotificationContent extends React.Component {
   getUserImage() {
-    const latestActionUsers = this.props.notification.latestActionUsers
+    const actionUsers = this.props.notification.actionUsers
 
-    if (latestActionUsers.length < 1) {
+    if (actionUsers.length < 1) {
       // what is this case?
       return ''
     }
 
-    return <UserPicture user={latestActionUsers[0]} />
+    return <UserPicture user={actionUsers[0]} />
   }
 
   render() {
