@@ -3,16 +3,19 @@ import PropTypes from 'prop-types'
 
 export default class Icon extends React.Component {
   render() {
-    const name = this.props.name || null
-    const isSpin = this.props.spin ? 'fa-spinner fa-pulse' : ''
-    const { solid: s, regular: r, light: l } = this.props
+    const { name, spin, solid, regular, light, className: c, ...props } = this.props
+    const { solid: s, regular: r, light: l } = { solid, regular, light }
+
+    const isSpin = spin ? 'fa-spinner fa-pulse' : ''
     const type = s ? 's' : r ? 'r' : l ? 'l' : ''
+
+    const className = [`fa${type}`, `fa-${name}`, isSpin, c].filter(Boolean).join(' ')
 
     if (!name) {
       return ''
     }
 
-    return <i className={`fa${type} fa-${name} ${isSpin}`} />
+    return <i className={className} {...props} />
   }
 }
 
@@ -23,6 +26,7 @@ Icon.propTypes = {
   regular: PropTypes.bool,
   light: PropTypes.bool,
   spin: PropTypes.bool,
+  className: PropTypes.string,
 }
 
 Icon.defaltProps = {
