@@ -150,11 +150,11 @@ export default class Crowi {
     return null
   }
 
-  async apiGet(path, params) {
-    return this.apiRequest('get', path, { params: params })
+  async apiGet(path, params = {}) {
+    return this.apiRequest('get', path, { params })
   }
 
-  async apiPost(path, params) {
+  async apiPost(path, params = {}) {
     if (!params._csrf) {
       params._csrf = this.csrfToken
     }
