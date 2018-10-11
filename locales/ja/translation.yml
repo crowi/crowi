@@ -169,6 +169,7 @@ share:
     can_not_create: リンクを作成できませんでした。
     can_not_delete: リンクを削除できませんでした。
 
+page_type: ページの種類
 page_types:
   all: すべて
   portal: ポータル
