@@ -1,7 +1,7 @@
 // This is the root component for #notification-page
 
 import React from 'react'
-import Crowi from '../util/Crowi'
+import PropTypes from 'prop-types'
 import ListView from './Notification/ListView'
 import Pager from './Notification/Pager'
 
@@ -24,35 +24,31 @@ export default class NotificationPage extends React.Component {
     this.getNotifications()
   }
 
-  handleNotificationOnClick(notification) {
-    this.props.crowi
-      .apiPost('/notification.read', { id: notification._id })
-      .then(res => {
-        // jump to target page
-        window.location.href = notification.target.path
-      })
-      .catch(err => {
-        // TODO: error handling
-      })
+  async handleNotificationOnClick(notification) {
+    try {
+      await this.props.crowi.apiPost('/notification.open', { id: notification._id })
+      // jump to target page
+      window.location.href = notification.target.path
+    } catch (err) {
+      // TODO: error handling
+    }
   }
 
-  getNotifications() {
-    this.props.crowi
-      .apiGet('/notification.list', {
+  async getNotifications() {
+    try {
+      const { notifications, hasPrev, hasNext } = await this.props.crowi.apiGet('/notification.list', {
         limit: this.limit,
         offset: this.offset,
       })
-      .then(res => {
-        return this.setState({
-          notifications: res.notifications,
-          loaded: true,
-          hasPrev: res.hasPrev,
-          hasNext: res.hasNext,
-        })
+      this.setState({
+        notifications,
+        loaded: true,
+        hasPrev,
+        hasNext,
       })
-      .catch(err => {
-        // TODO error handling
-      })
+    } catch (err) {
+      // TODO error handling
+    }
   }
 
   handleNextClick() {
@@ -89,5 +85,7 @@ export default class NotificationPage extends React.Component {
   }
 }
 
-NotificationPage.propTypes = {}
+NotificationPage.propTypes = {
+  crowi: PropTypes.object.isRequired,
+}
 NotificationPage.defaultProps = {}
