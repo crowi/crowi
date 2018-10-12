@@ -23,26 +23,26 @@ describe('Notification', function() {
   describe('.upsertByActivity', function() {
     context('valid parameters', function() {
       it('should create', function() {
-        var user_id_1 = mongoose.Types.ObjectId()
-        var user_id_2 = mongoose.Types.ObjectId()
-        var user_id_3 = mongoose.Types.ObjectId()
+        var userId1 = mongoose.Types.ObjectId()
+        var userId2 = mongoose.Types.ObjectId()
+        var userId3 = mongoose.Types.ObjectId()
 
-        var target_id = mongoose.Types.ObjectId()
+        var targetId = mongoose.Types.ObjectId()
 
-        var sameActivityUsers = [user_id_1, user_id_2, user_id_3]
+        var sameActivityUsers = [userId1, userId2, userId3]
 
         var activity = {
-          user: user_id_1,
+          user: userId1,
           targetModel: 'Page',
-          target: target_id,
+          target: targetId,
           action: 'COMMENT',
         }
 
-        return Notification.upsertByActivity(user_id_1, sameActivityUsers, activity)
+        return Notification.upsertByActivity(userId1, sameActivityUsers, activity)
           .then(function(notification) {
-            expect(notification.user.toString()).to.be.equal(user_id_1.toString())
+            expect(notification.user.toString()).to.be.equal(userId1.toString())
             expect(notification.targetModel).to.be.equal('Page')
-            expect(notification.target.toString()).to.be.equal(target_id.toString())
+            expect(notification.target.toString()).to.be.equal(targetId.toString())
             expect(notification.action).to.be.equal('COMMENT')
             expect(notification.isRead).to.be.equal(false)
             expect(notification.activities).to.be.length(3)
@@ -55,22 +55,22 @@ describe('Notification', function() {
 
     context('invalid parameters', function() {
       it('should create', function() {
-        var user_id_1 = mongoose.Types.ObjectId()
-        var user_id_2 = mongoose.Types.ObjectId()
-        var user_id_3 = mongoose.Types.ObjectId()
+        var userId1 = mongoose.Types.ObjectId()
+        var userId2 = mongoose.Types.ObjectId()
+        var userId3 = mongoose.Types.ObjectId()
 
-        var target_id = mongoose.Types.ObjectId()
+        var targetId = mongoose.Types.ObjectId()
 
-        var sameActivityUsers = [user_id_1, user_id_2, user_id_3]
+        var sameActivityUsers = [userId1, userId2, userId3]
 
         var activity = {
-          user: user_id_1,
+          user: userId1,
           targetModel: 'Page2', // invalid
-          target: target_id,
+          target: targetId,
           action: 'COMMENT',
         }
 
-        return Notification.upsertByActivity(user_id_1, sameActivityUsers, activity).then(
+        return Notification.upsertByActivity(userId1, sameActivityUsers, activity).then(
           function(notification) {
             throw new Error('validation not work')
           },

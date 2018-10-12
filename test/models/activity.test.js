@@ -16,20 +16,20 @@ describe('Activity', function() {
   describe('.createByParameters', function() {
     context('correct parameters', function() {
       it('should create', function() {
-        var user_id = mongoose.Types.ObjectId()
-        var target_id = mongoose.Types.ObjectId()
+        var userId = mongoose.Types.ObjectId()
+        var targetId = mongoose.Types.ObjectId()
 
         var parameters = {
-          user: user_id,
+          user: userId,
           targetModel: 'Page',
-          target: target_id,
+          target: targetId,
           action: 'COMMENT',
         }
 
         return Activity.createByParameters(parameters).then(
           function(activity) {
-            expect(activity.user).to.be.equal(user_id)
-            expect(activity.target).to.be.equal(target_id)
+            expect(activity.user).to.be.equal(userId)
+            expect(activity.target).to.be.equal(targetId)
             expect(activity.targetModel).to.be.equal('Page')
             expect(activity.action).to.be.equal('COMMENT')
           },
@@ -42,13 +42,13 @@ describe('Activity', function() {
 
     context('invalid parameters', function() {
       it('should not create', function() {
-        var user_id = mongoose.Types.ObjectId()
-        var target_id = mongoose.Types.ObjectId()
+        var userId = mongoose.Types.ObjectId()
+        var targetId = mongoose.Types.ObjectId()
 
         var parameters = {
-          user: user_id,
+          user: userId,
           targetModel: 'Page2', // validation error
-          target: target_id,
+          target: targetId,
           action: 'COMMENT',
         }
 

@@ -41,6 +41,7 @@ export default class NotificationContent extends React.Component {
 }
 
 NotificationContent.propTypes = {
+  children: PropTypes.node.isRequired,
   notification: PropTypes.object.isRequired,
   icon: PropTypes.string,
   onClick: PropTypes.func.isRequired,

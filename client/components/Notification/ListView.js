@@ -27,6 +27,7 @@ export default class ListView extends React.Component {
 }
 
 ListView.propTypes = {
+  loaded: PropTypes.bool.isRequired,
   notifications: PropTypes.array.isRequired,
   notificationClickHandler: PropTypes.func.isRequired,
 }
