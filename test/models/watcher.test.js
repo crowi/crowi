@@ -18,7 +18,6 @@ describe('Watcher', function() {
 
         try {
           const watcher = await Watcher.upsertWatcher(userId, 'Page', targetId, Watcher.STATUS_WATCH)
-          console.log(watcher)
           expect(watcher.user.toString()).to.be.equal(userId.toString())
           expect(watcher.targetModel).to.be.equal('Page')
           expect(watcher.target.toString()).to.be.equal(targetId.toString())
