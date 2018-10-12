@@ -252,14 +252,11 @@ $(function() {
   })
 
   // rename
-  $('#renamePage').on('shown.bs.modal', function(e) {
-    $('#newPageName').focus()
-  })
-  $('#renamePageForm, #unportalize-form').submit(function(e) {
+  const rename = data =>
     $.ajax({
       type: 'POST',
       url: '/_api/pages.rename',
-      data: $(this).serialize(),
+      data,
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
@@ -278,7 +275,12 @@ $(function() {
         }, 1000)
       }
     })
-
+  $('#renamePage').on('shown.bs.modal', function(e) {
+    $('#newPageName').focus()
+  })
+  $('#renamePageForm, #unportalize-form, #portalize-form').submit(function(e) {
+    rename($(this).serialize())
+    e.preventDefault()
     return false
   })
 
