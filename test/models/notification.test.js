@@ -44,7 +44,7 @@ describe('Notification', function() {
             expect(notification.targetModel).to.be.equal('Page')
             expect(notification.target.toString()).to.be.equal(targetId.toString())
             expect(notification.action).to.be.equal('COMMENT')
-            expect(notification.isRead).to.be.equal(false)
+            expect(notification.status).to.be.equal(Notification.STATUS_UNREAD)
             expect(notification.activities).to.be.length(3)
           })
           .catch(function(err) {
