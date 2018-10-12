@@ -22,7 +22,6 @@ Last updated: Updated
 Share: Share
 Share Link: Share Link
 Markdown Link: Markdown Link
-Portalize: Portalize
 Unportalize: Unportalize
 View this version: View this version
 View diff: View diff
@@ -210,3 +209,9 @@ search:
 admin:
   share:
     enable_external_share: 'Enable to share wiki pages to anonymouse users.'
+
+Portalize: Portalize
+portalize:
+  make_this_page_portal: 'Make this page a portal.'
+  this_page: 'This page'
+  changed_page: 'Changed page'
