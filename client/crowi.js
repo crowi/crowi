@@ -279,7 +279,7 @@ $(function() {
     $('#newPageName').focus()
   })
   $('#renamePageForm, #unportalize-form, #portalize-form').submit(function(e) {
-    rename($(this).serialize(), $(this).find('#newPageNameCheck'))
+    rename($(this).serialize(), $(this).find('.new-page-name-check'))
     e.preventDefault()
     return false
   })
