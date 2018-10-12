@@ -57,7 +57,7 @@ class WatchButton extends React.Component {
         }
 
     return (
-      <Button outline onClick={this.watch}>
+      <Button outline size="sm" onClick={this.watch}>
         <Icon className="mr-1" name={icon} />
         {text}
       </Button>
