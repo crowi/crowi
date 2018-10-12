@@ -252,7 +252,7 @@ $(function() {
   })
 
   // rename
-  const rename = data =>
+  const rename = (data, newPageNameCheck) =>
     $.ajax({
       type: 'POST',
       url: '/_api/pages.rename',
@@ -260,15 +260,15 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        $('#newPageNameCheck').html('<i class="fa fa-times-circle"></i> ' + res.error)
-        $('#newPageNameCheck').addClass('alert-danger')
+        newPageNameCheck.html('<i class="fa fa-times-circle"></i> ' + res.error)
+        newPageNameCheck.addClass('alert-danger')
       } else {
         var page = res.page
 
-        $('#newPageNameCheck').removeClass('alert-danger')
+        newPageNameCheck.removeClass('alert-danger')
         // $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> 移動しました。移動先にジャンプします。');
         // fix
-        $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.')
+        newPageNameCheck.html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.')
 
         setTimeout(function() {
           top.location.href = page.path + '?redirectFrom=' + pagePath
@@ -279,7 +279,7 @@ $(function() {
     $('#newPageName').focus()
   })
   $('#renamePageForm, #unportalize-form, #portalize-form').submit(function(e) {
-    rename($(this).serialize())
+    rename($(this).serialize(), $(this).find('#newPageNameCheck'))
     e.preventDefault()
     return false
   })

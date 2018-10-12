@@ -7,18 +7,18 @@
 
         <div class="modal-header">
           <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-          <h4 class="modal-title">ポータル化</h4>
+          <h4 class="modal-title">{{ t('Portalize') }}</h4>
         </div>
         <div class="modal-body">
           <ul>
-            <li>このページをポータル化します。</li>
+            <li>{{ t('portalize.make_this_page_portal') }}</li>
           </ul>
           <div class="form-group">
             <p>
-              <label for="">このページ</label><br><code>{{ page.path }}</code>
+              <label for="">{{ t('portalize.this_page') }}</label><br><code>{{ page.path }}</code>
             </p>
             <p>
-              <label for="">ポータル化されたページ</label><br><code>{{ portalizedPath }}</code>
+              <label for="">{{ t('portalize.changed_page') }}</label><br><code>{{ portalizedPath }}</code>
             </p>
           </div>
         </div>
