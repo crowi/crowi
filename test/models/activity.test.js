@@ -1,25 +1,26 @@
-var chai = require('chai')
+const chai = require('chai')
 
-var expect = chai.expect
+const expect = chai.expect
 
-var sinon = require('sinon')
+const sinon = require('sinon')
 
-var sinonChai = require('sinon-chai')
+const sinonChai = require('sinon-chai')
 
-var utils = require('../utils.js')
+const utils = require('../utils.js')
 chai.use(sinonChai)
 
 describe('Activity', function() {
-  var Activity = utils.models.Activity
-  var mongoose = utils.mongoose
+  const Activity = utils.models.Activity
+  const mongoose = utils.mongoose
+  const ObjectId = mongoose.Types.ObjectId
 
   describe('.createByParameters', function() {
     context('correct parameters', function() {
       it('should create', function() {
-        var userId = mongoose.Types.ObjectId()
-        var targetId = mongoose.Types.ObjectId()
+        const userId = ObjectId()
+        const targetId = ObjectId()
 
-        var parameters = {
+        const parameters = {
           user: userId,
           targetModel: 'Page',
           target: targetId,
@@ -42,10 +43,10 @@ describe('Activity', function() {
 
     context('invalid parameters', function() {
       it('should not create', function() {
-        var userId = mongoose.Types.ObjectId()
-        var targetId = mongoose.Types.ObjectId()
+        const userId = ObjectId()
+        const targetId = ObjectId()
 
-        var parameters = {
+        const parameters = {
           user: userId,
           targetModel: 'Page2', // validation error
           target: targetId,
@@ -60,6 +61,23 @@ describe('Activity', function() {
             expect(err.message).to.be.equal('Activity validation failed')
           },
         )
+      })
+    })
+  })
+
+  describe('.removeByParameters', () => {
+    context('correct parameters', () => {
+      const user = ObjectId()
+      const target = ObjectId()
+      const parameters = { user, targetModel: 'Page', target, action: 'COMMENT' }
+
+      before(async () => {
+        await Activity.createByParameters(parameters)
+      })
+
+      it('should remove', async () => {
+        const { result } = await Activity.removeByParameters(parameters)
+        expect(result).to.deep.equal({ n: 1, ok: 1 })
       })
     })
   })
