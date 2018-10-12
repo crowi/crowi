@@ -18,12 +18,12 @@ describe('NotificationStatus', function() {
   describe('.upsertByNotification', function() {
     context('valid parameters', function() {
       it('should create', function() {
-        var user_id_1 = mongoose.Types.ObjectId()
+        var userId1 = mongoose.Types.ObjectId()
         var count = 3
 
-        return NotificationStatus.upsertByNotification(user_id_1, count)
+        return NotificationStatus.upsertByNotification(userId1, count)
           .then(function(notificationStatus) {
-            expect(notificationStatus.user.toString()).to.be.equal(user_id_1.toString())
+            expect(notificationStatus.user.toString()).to.be.equal(userId1.toString())
             expect(notificationStatus.count).to.be.equal(3)
             expect(notificationStatus.isRead).to.be.equal(false)
           })

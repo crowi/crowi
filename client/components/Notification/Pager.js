@@ -2,10 +2,6 @@ import React from 'react'
 import PropTypes from 'prop-types'
 
 export default class Pager extends React.Component {
-  constructor(props) {
-    super(props)
-  }
-
   handleOnPrevClick(e) {
     e.preventDefault()
     this.props.handlePrevClick()
