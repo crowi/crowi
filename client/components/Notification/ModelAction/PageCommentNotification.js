@@ -1,8 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import NotificationContent from '../NotificationContent'
-import PagePath from '../../PageList/PagePath'
-
+import PagePath from 'components/PageList/PagePath'
 export default class PageCommentNotification extends React.Component {
   render() {
     const notification = this.props.notification

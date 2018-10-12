@@ -31,7 +31,8 @@ export default class NotificationContent extends React.Component {
           <div className="notification-box-message">
             <div className="notification-box-text">{this.props.children}</div>
             <div className="notification-box-time">
-              <Icon name={this.props.icon} /> <UserDate dateTime={notification.createdAt} format="fromNow" />
+              <Icon name={this.props.icon} regular />
+              <UserDate className="ml-1" dateTime={notification.createdAt} format="fromNow" />
             </div>
           </div>
         </div>
