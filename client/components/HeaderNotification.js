@@ -1,5 +1,5 @@
 import React from 'react'
-
+import PropTypes from 'prop-types'
 import DropdownMenu from './HeaderNotification/DropdownMenu'
 import Icon from './Common/Icon'
 
@@ -8,10 +8,10 @@ export default class HeaderNotification extends React.Component {
     super(props)
 
     this.state = {
-      count: '',
+      count: 0,
       loaded: false,
       notifications: [],
-      isRead: true,
+      isOpened: true,
     }
   }
 
@@ -23,59 +23,41 @@ export default class HeaderNotification extends React.Component {
 
   initializeSocket() {
     this.props.crowi.getWebSocket().on('notification updated', data => {
-      if (this.props.me === data.status.user) {
+      if (this.props.me === data.user) {
         this.fetchList()
         this.fetchStatus()
       }
     })
   }
 
-  fetchStatus() {
-    this.props.crowi
-      .apiGet('/notification.status')
-      .then(res => {
-        if (res.status !== null) {
-          if (res.status.isRead === false && res.status.count > 0) {
-            this.setState({
-              count: res.status.count,
-              isRead: res.status.isRead,
-            })
-          }
-        }
-      })
-      .catch(err => {
-        // TODO: error handling
-      })
+  async fetchStatus() {
+    try {
+      const { count = null } = await this.props.crowi.apiGet('/notification.status')
+      if (count !== null && count !== this.state.count) {
+        this.setState({ count })
+      }
+    } catch (err) {
+      // TODO: error handling
+    }
   }
 
-  updateStatus() {
-    this.props.crowi
-      .apiPost('/notification.status_read')
-      .then(res => {
-        this.setState({
-          count: '',
-          isRead: true,
-        })
-      })
-      .catch(err => {
-        // TODO: error handling
-      })
+  async updateStatus() {
+    try {
+      await this.props.crowi.apiPost('/notification.read')
+      this.setState({ count: 0 })
+    } catch (err) {
+      // TODO: error handling
+    }
   }
 
-  fetchList() {
+  async fetchList() {
     const limit = 6
-
-    this.props.crowi
-      .apiGet('/notification.list', { limit: limit })
-      .then(res => {
-        this.setState({
-          loaded: true,
-          notifications: res.notifications,
-        })
-      })
-      .catch(err => {
-        // TODO: error handling
-      })
+    try {
+      const { notifications } = await this.props.crowi.apiGet('/notification.list', { limit })
+      this.setState({ loaded: true, notifications })
+    } catch (err) {
+      // TODO: error handling
+    }
   }
 
   handleOnClick(e) {
@@ -83,16 +65,14 @@ export default class HeaderNotification extends React.Component {
     this.updateStatus()
   }
 
-  handleNotificationOnClick(notification) {
-    this.props.crowi
-      .apiPost('/notification.read', { id: notification._id })
-      .then(res => {
-        // jump to target page
-        window.location.href = notification.target.path
-      })
-      .catch(err => {
-        // TODO: error handling
-      })
+  async handleNotificationOnClick(notification) {
+    try {
+      await this.props.crowi.apiPost('/notification.open', { id: notification._id })
+      // jump to target page
+      window.location.href = notification.target.path
+    } catch (err) {
+      // TODO: error handling
+    }
   }
 
   render() {
@@ -116,6 +96,9 @@ export default class HeaderNotification extends React.Component {
   }
 }
 
-HeaderNotification.propTypes = {}
+HeaderNotification.propTypes = {
+  crowi: PropTypes.object.isRequired,
+  me: PropTypes.string.isRequired,
+}
 
 HeaderNotification.defaltProps = {}

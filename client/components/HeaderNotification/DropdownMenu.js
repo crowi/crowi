@@ -5,10 +5,6 @@ import NullNotification from '../Notification/NullNotification'
 import Icon from '../Common/Icon'
 
 export default class DropdownMenu extends React.Component {
-  constructor(props) {
-    super(props)
-  }
-
   render() {
     let listView
 
@@ -41,6 +37,7 @@ export default class DropdownMenu extends React.Component {
 }
 
 DropdownMenu.propTypes = {
+  loaded: PropTypes.bool.isRequired,
   notifications: PropTypes.array.isRequired,
   notificationClickHandler: PropTypes.func.isRequired,
 }

@@ -20,7 +20,7 @@ export default class NotificationContent extends React.Component {
     const notification = this.props.notification
 
     let boxClass = 'notification-box'
-    if (notification.isRead === false) {
+    if (notification.status !== 'OPENED') {
       boxClass += ' notification-unread'
     }
 

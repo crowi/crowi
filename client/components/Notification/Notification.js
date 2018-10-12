@@ -1,9 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import Icon from '../Common/Icon'
-import UserDate from '../Common/UserDate'
 import UserPicture from '../User/UserPicture'
-import PagePath from '../PageList/PagePath'
 
 import PageCommentNotification from './ModelAction/PageCommentNotification'
 import PageLikeNotification from './ModelAction/PageLikeNotification'
