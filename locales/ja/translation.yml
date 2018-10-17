@@ -209,3 +209,9 @@ search:
 admin:
   share:
     enable_external_share: 'Wikiページの外部ユーザーへの共有を有効にする。'
+
+Portalize: ポータル化
+portalize:
+  make_this_page_portal: 'このページをポータルにします。'
+  this_page: 'このページ'
+  changed_page: '変更後のページ'
