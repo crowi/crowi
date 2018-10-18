@@ -1,5 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import { Dropdown, DropdownToggle } from 'reactstrap'
 import DropdownMenu from './HeaderNotification/DropdownMenu'
 import Icon from './Common/Icon'
 
@@ -11,7 +12,7 @@ export default class HeaderNotification extends React.Component {
       count: 0,
       loaded: false,
       notifications: [],
-      isOpened: true,
+      open: false,
     }
   }
 
@@ -60,9 +61,12 @@ export default class HeaderNotification extends React.Component {
     }
   }
 
-  handleOnClick(e) {
-    e.preventDefault(e)
-    this.updateStatus()
+  toggle() {
+    const { open, count } = this.state
+    if (!open && count > 0) {
+      this.updateStatus()
+    }
+    this.setState({ open: !open })
   }
 
   async handleNotificationOnClick(notification) {
@@ -76,22 +80,20 @@ export default class HeaderNotification extends React.Component {
   }
 
   render() {
+    const { count, open, loaded, notifications } = this.state
+
     let badge = ''
-    if (this.state.count > 0) {
-      badge = <span className="badge badge-pill badge-danger notification-badge">{this.state.count}</span>
+    if (count > 0) {
+      badge = <span className="badge badge-pill badge-danger notification-badge">{count}</span>
     }
 
     return (
-      <div className="notification-wrapper">
-        <a href="#" id="notif-opener" className="nav-link dropdown-toggle" data-toggle="dropdown" onClick={this.handleOnClick.bind(this)}>
+      <Dropdown className="notification-wrapper" isOpen={open} toggle={this.toggle.bind(this)}>
+        <DropdownToggle tag="a" className="nav-link">
           <Icon name="bell" /> {badge}
-        </a>
-        <DropdownMenu
-          loaded={this.state.loaded}
-          notifications={this.state.notifications}
-          notificationClickHandler={this.handleNotificationOnClick.bind(this)}
-        />
-      </div>
+        </DropdownToggle>
+        <DropdownMenu loaded={loaded} notifications={notifications} notificationClickHandler={this.handleNotificationOnClick.bind(this)} />
+      </Dropdown>
     )
   }
 }

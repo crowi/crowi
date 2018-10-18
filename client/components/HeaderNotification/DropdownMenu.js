@@ -3,6 +3,7 @@ import PropTypes from 'prop-types'
 import Notification from '../Notification/Notification'
 import NullNotification from '../Notification/NullNotification'
 import Icon from '../Common/Icon'
+import { DropdownMenu as Menu } from 'reactstrap'
 
 export default class DropdownMenu extends React.Component {
   render() {
@@ -23,7 +24,7 @@ export default class DropdownMenu extends React.Component {
     }
 
     return (
-      <ul className="dropdown-menu dropdown-menu-right">
+      <Menu tag="ul" right>
         <li className="notification-arrow" />
         {listView}
         <li>
@@ -31,7 +32,7 @@ export default class DropdownMenu extends React.Component {
             See All
           </a>
         </li>
-      </ul>
+      </Menu>
     )
   }
 }
