@@ -33,9 +33,12 @@ class WatchButton extends React.Component {
     const { watching } = this.state
     this.setState({ isChanging: true, creationError: false })
     try {
-      const { ok } = await crowi.apiPost('/pages.watch', { page_id: pageId, status: !watching })
+      const {
+        ok,
+        watcher: { status },
+      } = await crowi.apiPost('/pages.watch', { page_id: pageId, status: !watching })
       if (ok) {
-        this.setState({ watching: !watching })
+        this.setState({ watching: status === 'WATCH' })
       }
     } catch (err) {
       this.setState({ creationError: true })
