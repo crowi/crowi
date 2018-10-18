@@ -1,12 +1,8 @@
-var chai = require('chai')
-
-var expect = chai.expect
-
-var sinon = require('sinon')
-
-var sinonChai = require('sinon-chai')
-
-var utils = require('../utils.js')
+const chai = require('chai')
+const expect = chai.expect
+const sinon = require('sinon')
+const sinonChai = require('sinon-chai')
+const utils = require('../utils.js')
 chai.use(sinonChai)
 
 describe('Notification', function() {
@@ -26,27 +22,16 @@ describe('Notification', function() {
       it('should create', function() {
         const userId1 = ObjectId()
         const userId2 = ObjectId()
-        const userId3 = ObjectId()
-
         const targetId = ObjectId()
-
-        const sameActivityUsers = [userId1, userId2, userId3]
-
-        const activity = {
-          user: userId1,
-          targetModel: 'Page',
-          target: targetId,
-          action: 'COMMENT',
-        }
-
-        return Notification.upsertByActivity(userId1, sameActivityUsers, activity)
+        const activity = { _id: ObjectId(), user: userId1, targetModel: 'Page', target: targetId, action: 'COMMENT' }
+        return Notification.upsertByActivity(userId2, activity)
           .then(function(notification) {
-            expect(notification.user.toString()).to.be.equal(userId1.toString())
+            expect(notification.user.toString()).to.be.equal(userId2.toString())
             expect(notification.targetModel).to.be.equal('Page')
             expect(notification.target.toString()).to.be.equal(targetId.toString())
             expect(notification.action).to.be.equal('COMMENT')
             expect(notification.status).to.be.equal(Notification.STATUS_UNREAD)
-            expect(notification.activities).to.be.length(3)
+            expect(notification.activities).to.be.length(1)
           })
           .catch(function(err) {
             throw new Error(err)
@@ -56,22 +41,15 @@ describe('Notification', function() {
 
     context('invalid parameters', function() {
       it('should create', function() {
-        const userId1 = ObjectId()
-        const userId2 = ObjectId()
-        const userId3 = ObjectId()
-
-        const targetId = ObjectId()
-
-        const sameActivityUsers = [userId1, userId2, userId3]
-
+        const user = ObjectId()
         const activity = {
-          user: userId1,
+          user: ObjectId(),
           targetModel: 'Page2', // invalid
-          target: targetId,
+          target: ObjectId(),
           action: 'COMMENT',
         }
 
-        return Notification.upsertByActivity(userId1, sameActivityUsers, activity).then(
+        return Notification.upsertByActivity(user, activity).then(
           function(notification) {
             throw new Error('validation not work')
           },
@@ -79,6 +57,31 @@ describe('Notification', function() {
             expect(err.message === 'Notification validation failed')
           },
         )
+      })
+    })
+
+    context('A week later', () => {
+      const user = ObjectId()
+      const target = ObjectId()
+
+      beforeEach(async () => {
+        await Notification.remove({})
+        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' }
+        await Notification.upsertByActivity(user, activity, new Date(2018, 10, 10).getTime())
+      })
+
+      it('is 1', async () => {
+        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' }
+        await Notification.upsertByActivity(user, activity, new Date(2018, 10, 16).getTime())
+        const count = await Notification.count({})
+        expect(count).to.be.equal(1)
+      })
+
+      it('is 2', async () => {
+        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' }
+        await Notification.upsertByActivity(user, activity, new Date(2018, 10, 17).getTime())
+        const count = await Notification.count({})
+        expect(count).to.be.equal(2)
       })
     })
   })
@@ -90,10 +93,8 @@ describe('Notification', function() {
 
       before(async () => {
         await Notification.remove({})
-        const target = ObjectId()
-        const sameActivityUsers = [ObjectId(), ObjectId()]
-        const activity = { user, targetModel: 'Page', target, action: 'COMMENT' }
-        const notification = await Notification.upsertByActivity(user, sameActivityUsers, activity)
+        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
+        const notification = await Notification.upsertByActivity(user, activity)
         notificationId = notification._id
       })
 
@@ -111,10 +112,8 @@ describe('Notification', function() {
 
       before(async () => {
         await Notification.remove({})
-        const target = ObjectId()
-        const sameActivityUsers = [ObjectId(), ObjectId()]
-        const activity = { user, targetModel: 'Page', target, action: 'COMMENT' }
-        const notification = await Notification.upsertByActivity(user, sameActivityUsers, activity)
+        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
+        const notification = await Notification.upsertByActivity(user, activity)
         notificationId = notification._id
       })
 
@@ -141,10 +140,8 @@ describe('Notification', function() {
 
     context('after created', () => {
       before(async () => {
-        const target = ObjectId()
-        const sameActivityUsers = [ObjectId(), ObjectId()]
-        const activity = { user, targetModel: 'Page', target, action: 'COMMENT' }
-        await Notification.upsertByActivity(user, sameActivityUsers, activity)
+        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
+        await Notification.upsertByActivity(user, activity)
       })
 
       it('is count correctly', async () => {
