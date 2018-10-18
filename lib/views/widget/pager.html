@@ -1,7 +1,7 @@
 <ul class="pagination">
 
   <li {% if pager.page == 1 %}class="disabled"{% endif %}>
-    <a href="{{ path }}?page={{ pager.previous|default(1) }}">&laquo;</a>
+    <a href="{{ path }}?page={{ pager.previous|default(1) }}{% if qs %}&{{qs}}{% endif %}">&laquo;</a>
   </li>
   {% if pager.previousDots %}
     {% if pager.page !== 1 %}
@@ -14,7 +14,7 @@
 
   {% for page in pager.pages %}
   <li {% if pager.page == page %}class="active"{% endif %}>
-    <a href="{{ path }}?page={{ page }}">{{ page }}</a>
+    <a href="{{ path }}?page={{ page }}{% if qs %}&{{qs}}{% endif %}">{{ page }}</a>
   </li>
   {% endfor %}
 
@@ -22,11 +22,11 @@
   <li><a href="#">...</a></li>
     {% if pager.page !== pager.pagesCount %}
     <li>
-      <a href="{{ path }}?page={{ pager.pagesCount }}">{{ pager.pagesCount }}</a>
+      <a href="{{ path }}?page={{ pager.pagesCount }}{% if qs %}&{{qs}}{% endif %}">{{ pager.pagesCount }}</a>
     </li>
     {% endif %}
   {% endif  %}
   <li {% if pager.page == pager.pagesCount %}class="disabled"{% endif %}>
-    <a href="{{ path }}?page={{ pager.next|default(pager.pagesCount) }}">&raquo;</a>
+    <a href="{{ path }}?page={{ pager.next|default(pager.pagesCount) }}{% if qs %}&{{qs}}{% endif %}">&raquo;</a>
   </li>
 </ul>
