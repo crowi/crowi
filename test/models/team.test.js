@@ -4,6 +4,8 @@ const sinonChai = require('sinon-chai')
 const utils = require('../utils.js')
 chai.use(sinonChai)
 
+const { ObjectId } = require('mongoose').Schema.Types
+
 describe('Page', () => {
   const { User, Team } = utils.models
   const conn = utils.mongoose.connection
@@ -24,7 +26,8 @@ describe('Page', () => {
 
   beforeEach(async () => {
     const t = new Team({
-      handle: 'anon'
+      handle: 'anon',
+      users: []
     })
     team = await t.save()
   })
