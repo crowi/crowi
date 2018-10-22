@@ -5,6 +5,7 @@ const utils = require('../utils.js')
 chai.use(sinonChai)
 
 const crypto = require('crypto')
+const { ValidateTeamError } = utils.errors
 
 describe('Page', () => {
   const { User, Team } = utils.models
@@ -36,7 +37,7 @@ describe('Page', () => {
     await Team.remove({})
   })
 
-  it('#addUser, #deleteUser', async () => {
+  it('.addUser, .deleteUser', async () => {
       const team = await createTeam()
 
       const team1 = await team.addUser(...users)
@@ -65,5 +66,12 @@ describe('Page', () => {
     expect(teams_1).lengthOf(2)
     // ここらへんの assert うまいことできんかな
     expect(teams_1.map(team => team._id.toString())).that.does.not.include(team_0.toString())
+  })
+
+  it('#findOneByHandle', async () => {
+    const actualTeam = await createTeam()
+
+    const team = await Team.findOneByHandle(actualTeam.handle)
+    expect(team._id.toString()).to.be.equal(actualTeam._id.toString())
   })
 })

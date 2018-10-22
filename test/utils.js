@@ -66,4 +66,5 @@ crowi.models = models
 module.exports = {
   models: models,
   mongoose: mongoose,
+  errors: require(ROOT_DIR + '/lib/errors')
 }
