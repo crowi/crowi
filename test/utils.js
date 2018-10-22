@@ -66,5 +66,5 @@ crowi.models = models
 module.exports = {
   models: models,
   mongoose: mongoose,
-  errors: crowi.errors
+  errors: crowi.errors,
 }
