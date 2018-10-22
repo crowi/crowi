@@ -20,7 +20,7 @@ describe('Page', () => {
   }
 
   const createPage = () => {
-    const user = users[Math.floor(Math.random()*users.length)]
+    const user = users[Math.floor(Math.random() * users.length)]
     const p = new Page({
       path: `/random/${crypto.randomBytes(16)}`,
       grant: Page.GRANT_PUBLIC,
@@ -47,9 +47,9 @@ describe('Page', () => {
       Team.remove({}),
       Page.remove({
         creator: {
-          $in: users.map(user => user._id)
-        }
-      })
+          $in: users.map(user => user._id),
+        },
+      }),
     ])
   })
 
