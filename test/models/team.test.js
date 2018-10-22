@@ -74,4 +74,17 @@ describe('Page', () => {
     const team = await Team.findOneByHandle(actualTeam.handle)
     expect(team._id.toString()).to.be.equal(actualTeam._id.toString())
   })
+
+  describe('.save', () => {
+    it('when invalid "handle" given', async () => {
+      const team = new Team({
+        handle: '$ggg^'
+      })
+      const e = await team.save().catch(e => e)
+
+      expect(e).to.be.instanceOf(Error)
+      expect(e.errors.handle).to.be.instanceOf(Error)
+      expect(e.errors.handle.message).to.include('handle must be') // custom message
+    })
+  })
 })
