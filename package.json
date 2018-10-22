@@ -162,7 +162,7 @@
     "flow": "flow",
     "format": "eslint --fix \"**/*.js\"",
     "lint": "eslint \"**/*.js\"",
-    "test": "mocha -r test/bootstrap.js --globals chai --reporter dot test/**/*.test.js --timeout 10000",
+    "test": "mocha -r test/bootstrap.js --globals chai --reporter dot test/**/*.test.js --timeout 10000 --exit",
     "build": "npm run prod:client",
     "prod:client": "NODE_ENV=production webpack --bail --colors --display-error-details --config tools/webpack.config.js",
     "webpack": "webpack",
