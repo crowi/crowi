@@ -57,27 +57,41 @@ describe('Page', () => {
    * class methods
    */
 
-  it('#findByUser', async () => {
-    await createTeam(...users)
-    const team0 = await createTeam(users[0])
-    const team1 = await createTeam(users[1])
+  describe('#findByUser', () => {
+    it('Find teams by user collectly', async () => {
+      await createTeam(...users)
+      const team0 = await createTeam(users[0])
+      const team1 = await createTeam(users[1])
 
-    const teamsRelatedTo0 = await Team.findByUser(users[0])
-    expect(teamsRelatedTo0).lengthOf(2)
-    // ここらへんの assert うまいことできんかな
-    expect(teamsRelatedTo0.map(team => team._id.toString())).that.does.not.include(team1.toString())
+      const teamsRelatedTo0 = await Team.findByUser(users[0])
+      expect(teamsRelatedTo0).lengthOf(2)
+      // ここらへんの assert うまいことできんかな
+      expect(teamsRelatedTo0.map(team => team._id.toString())).that.does.not.include(team1.toString())
 
-    const teamsRelatedTo1 = await Team.findByUser(users[1])
-    expect(teamsRelatedTo1).lengthOf(2)
-    // ここらへんの assert うまいことできんかな
-    expect(teamsRelatedTo1.map(team => team._id.toString())).that.does.not.include(team0.toString())
+      const teamsRelatedTo1 = await Team.findByUser(users[1])
+      expect(teamsRelatedTo1).lengthOf(2)
+      // ここらへんの assert うまいことできんかな
+      expect(teamsRelatedTo1.map(team => team._id.toString())).that.does.not.include(team0.toString())
+    })
+
+    it('When missing arguments', async () => {
+      expect(await Team.findByUser().catch(e => e)).to.instanceOf(TypeError)
+    })
   })
 
-  it('#findByHandle', async () => {
-    const actualTeam = await createTeam()
 
-    const team = await Team.findByHandle(actualTeam.handle)
-    expect(team._id.toString()).to.be.equal(actualTeam._id.toString())
+
+  describe('#findByHandle', () => {
+    it('Find the team by handle collectly', async () => {
+      const actualTeam = await createTeam()
+
+      const team = await Team.findByHandle(actualTeam.handle)
+      expect(team._id.toString()).to.be.equal(actualTeam._id.toString())
+    })
+
+    it('When missing arguments', async () => {
+      expect(await Team.findByHandle().catch(e => e)).to.instanceOf(TypeError)
+    })
   })
 
   /**
@@ -85,19 +99,48 @@ describe('Page', () => {
    */
 
   // I don't test #addUser and #deleteUser because I will test instance methods that shorthanded its
-  it('.addUser, .deleteUser', async () => {
-    const team = await createTeam()
+  describe('.addUser', async () => {
+    it('Add users collectly', async () => {
+      const team = await createTeam()
 
-    const team1 = await team.addUser(...users)
-    expect(team1.users).lengthOf(2)
+      expect(team.users).lengthOf(0)
 
-    const team2 = await team1.deleteUser(users[0])
-    expect(team2.users).lengthOf(1)
-    const team3 = await team1.deleteUser(users[0])
-    expect(team3.users).lengthOf(1)
+      const team1 = await team.addUser(...users)
+      expect(team1.users).lengthOf(2)
 
-    const team4 = await team1.deleteUser(users[1])
-    expect(team4.users).lengthOf(0)
+      // add same users, no affection
+      const team2 = await team.addUser(...users)
+      expect(team2.users).lengthOf(2)
+    })
+
+    it('When missing arguments', async () => {
+      const team = await createTeam()
+      expect(await team.addUser().catch(e => e)).to.instanceOf(TypeError)
+    })
+  })
+
+  describe('.deleteUser', async () => {
+    it('Delete users collectly', async () => {
+      const team = await createTeam()
+  
+      const team1 = await team.addUser(...users)
+      expect(team1.users).lengthOf(2)
+  
+      const team2 = await team1.deleteUser(users[0])
+      expect(team2.users).lengthOf(1)
+
+      // remove same users, no affection
+      const team3 = await team1.deleteUser(users[0])
+      expect(team3.users).lengthOf(1)
+  
+      const team4 = await team1.deleteUser(users[1])
+      expect(team4.users).lengthOf(0)
+    })
+
+    it('When missing arguments', async () => {
+      const team = await createTeam()
+      expect(await team.deleteUser().catch(e => e)).to.instanceOf(TypeError)
+    })
   })
 
   describe('.save', () => {
@@ -123,12 +166,24 @@ describe('Page', () => {
     })
   })
 
+  describe('.ownPage', () => {
+    it('When missing arguments', async () => {
+      const team = await createTeam()
+      expect(await team.ownPage().catch(e => e)).to.instanceOf(TypeError)
+    })
+  })
+
   describe('.disownPage', () => {
     it('Operation must be failed when you run disownPage to non owned page', async () => {
       const [team, team2, page] = await Promise.all([createTeam(), createTeam(), createPage()])
       await team2.ownPage(page)
 
       expect(await team.disownPage(page).catch(e => e)).to.instanceof(utils.errors.PermissionError)
+    })
+
+    it('When missing arguments', async () => {
+      const team = await createTeam()
+      expect(await team.disownPage().catch(e => e)).to.instanceOf(TypeError)
     })
   })
 
