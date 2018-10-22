@@ -36,20 +36,9 @@ describe('Page', () => {
     await Team.remove({})
   })
 
-  it('.addUser, .deleteUser', async () => {
-    const team = await createTeam()
-
-    const team1 = await team.addUser(...users)
-    expect(team1.users).lengthOf(2)
-
-    const team2 = await team1.deleteUser(users[0])
-    expect(team2.users).lengthOf(1)
-    const team3 = await team1.deleteUser(users[0])
-    expect(team3.users).lengthOf(1)
-
-    const team4 = await team1.deleteUser(users[1])
-    expect(team4.users).lengthOf(0)
-  })
+  /**
+   * class methods
+   */
 
   it('#findByUser', async () => {
     await createTeam(...users)
@@ -72,6 +61,25 @@ describe('Page', () => {
 
     const team = await Team.findOneByHandle(actualTeam.handle)
     expect(team._id.toString()).to.be.equal(actualTeam._id.toString())
+  })
+
+  /**
+   * instance methods
+   */
+
+  it('.addUser, .deleteUser', async () => {
+    const team = await createTeam()
+
+    const team1 = await team.addUser(...users)
+    expect(team1.users).lengthOf(2)
+
+    const team2 = await team1.deleteUser(users[0])
+    expect(team2.users).lengthOf(1)
+    const team3 = await team1.deleteUser(users[0])
+    expect(team3.users).lengthOf(1)
+
+    const team4 = await team1.deleteUser(users[1])
+    expect(team4.users).lengthOf(0)
   })
 
   describe('.save', () => {
