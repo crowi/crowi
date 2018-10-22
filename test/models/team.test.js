@@ -113,24 +113,24 @@ describe('Page', () => {
     })
   })
 
-  describe('.getOwnedPages, .ownPage, .disownPage', () => {
+  describe('.getPagesOwned, .ownPage, .disownPage', () => {
     it('when no pages owned by team', async () => {
       const team = await createTeam()
 
-      const pages = await team.getOwnedPages()
+      const pages = await team.getPagesOwned()
 
       expect(pages).lengthOf(0)
     })
 
     it('when own some pages and disown some pages', async () => {
       const [team, page] = await Promise.all([createTeam(), createPage()])
-      expect(await team.getOwnedPages()).lengthOf(0)
+      expect(await team.getPagesOwned()).lengthOf(0)
 
       await team.ownPage(page)
-      expect(await team.getOwnedPages()).lengthOf(1)
+      expect(await team.getPagesOwned()).lengthOf(1)
 
       await team.disownPage(page)
-      expect(await team.getOwnedPages()).lengthOf(0)
+      expect(await team.getPagesOwned()).lengthOf(0)
     })
   })
 })
