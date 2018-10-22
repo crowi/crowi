@@ -19,6 +19,17 @@ describe('Page', () => {
     return t.save()
   }
 
+  const createPage = () => {
+    const user = users[Math.floor(Math.random()*users.length)]
+    const p = new Page({
+      path: `/random/${crypto.randomBytes(16)}`,
+      grant: Page.GRANT_PUBLIC,
+      grantedUsers: [user._id],
+      creator: user._id,
+    })
+    return p.save()
+  }
+
   before(async () => {
     const userFixture = [
       { name: 'Anon 3', username: 'anonymous3', email: 'anonymous3@example.com' },
@@ -32,7 +43,14 @@ describe('Page', () => {
   })
 
   afterEach(async () => {
-    await Team.remove({})
+    await Promise.all([
+      Team.remove({}),
+      Page.remove({
+        creator: {
+          $in: users.map(user => user._id)
+        }
+      })
+    ])
   })
 
   /**
@@ -102,6 +120,17 @@ describe('Page', () => {
       const pages = await team.getOwnedPages()
 
       expect(pages).lengthOf(0)
+    })
+
+    it('when own some pages and disown some pages', async () => {
+      const [team, page] = await Promise.all([createTeam(), createPage()])
+      expect(await team.getOwnedPages()).lengthOf(0)
+
+      await team.ownPage(page)
+      expect(await team.getOwnedPages()).lengthOf(1)
+
+      await team.disownPage(page)
+      expect(await team.getOwnedPages()).lengthOf(0)
     })
   })
 })
