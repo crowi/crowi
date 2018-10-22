@@ -5,7 +5,6 @@ const utils = require('../utils.js')
 chai.use(sinonChai)
 
 const crypto = require('crypto')
-const { ValidateTeamError } = utils.errors
 
 describe('Page', () => {
   const { User, Team } = utils.models
