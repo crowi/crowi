@@ -73,10 +73,10 @@ describe('Page', () => {
     expect(teamsRelatedTo1.map(team => team._id.toString())).that.does.not.include(team0.toString())
   })
 
-  it('#findOneByHandle', async () => {
+  it('#findByHandle', async () => {
     const actualTeam = await createTeam()
 
-    const team = await Team.findOneByHandle(actualTeam.handle)
+    const team = await Team.findByHandle(actualTeam.handle)
     expect(team._id.toString()).to.be.equal(actualTeam._id.toString())
   })
 
@@ -113,7 +113,7 @@ describe('Page', () => {
     })
   })
 
-  describe('.getPagesOwned, .ownPage, .disownPage', () => {
+  describe('.getPagesOwned', () => {
     it('when no pages owned by team', async () => {
       const team = await createTeam()
 
@@ -121,8 +121,19 @@ describe('Page', () => {
 
       expect(pages).lengthOf(0)
     })
+  })
 
-    it('when own some pages and disown some pages', async () => {
+  describe('.disownPage', () => {
+    it('Operation must be failed when you run disownPage to non owned page', async () => {
+      const [team, team2, page] = await Promise.all([createTeam(), createTeam(), createPage()])
+      await team2.ownPage(page)
+
+      expect(await team.disownPage(page).catch(e => e)).to.instanceof(utils.errors.PermissionError)
+    })
+  })
+
+  describe('.getPagesOwned, .ownPage, .disownPage', () => {
+    it('own and disown some pages', async () => {
       const [team, page] = await Promise.all([createTeam(), createPage()])
       expect(await team.getPagesOwned()).lengthOf(0)
 
