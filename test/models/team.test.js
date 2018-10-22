@@ -7,10 +7,9 @@ chai.use(sinonChai)
 const crypto = require('crypto')
 
 describe('Page', () => {
-  const { User, Team } = utils.models
+  const { User, Team, Page } = utils.models
   const conn = utils.mongoose.connection
   let users = []
-  let team = null
 
   const createTeam = (...users) => {
     const t = new Team({
@@ -67,6 +66,7 @@ describe('Page', () => {
    * instance methods
    */
 
+  // I don't test #addUser and #deleteUser because I will test instance methods that shorthanded its
   it('.addUser, .deleteUser', async () => {
     const team = await createTeam()
 
@@ -92,6 +92,16 @@ describe('Page', () => {
       expect(e).to.be.instanceOf(Error)
       expect(e.errors.handle).to.be.instanceOf(Error)
       expect(e.errors.handle.message).to.include('handle must be') // custom message
+    })
+  })
+
+  describe('.getOwnedPages, .ownPage, .disownPage', () => {
+    it('when no pages owned by team', async () => {
+      const team = await createTeam()
+
+      const pages = await team.getOwnedPages()
+
+      expect(pages).lengthOf(0)
     })
   })
 })
