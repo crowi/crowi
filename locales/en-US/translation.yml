@@ -169,6 +169,7 @@ share:
     can_not_create: Can't create a link.
     can_not_delete: Can't delete this link.
 
+page_type: Page type
 page_types:
   all: All
   portal: Portal
