@@ -79,8 +79,6 @@ describe('Page', () => {
     })
   })
 
-
-
   describe('#findByHandle', () => {
     it('Find the team by handle collectly', async () => {
       const actualTeam = await createTeam()
@@ -122,17 +120,17 @@ describe('Page', () => {
   describe('.deleteUser', async () => {
     it('Delete users collectly', async () => {
       const team = await createTeam()
-  
+
       const team1 = await team.addUser(...users)
       expect(team1.users).lengthOf(2)
-  
+
       const team2 = await team1.deleteUser(users[0])
       expect(team2.users).lengthOf(1)
 
       // remove same users, no affection
       const team3 = await team1.deleteUser(users[0])
       expect(team3.users).lengthOf(1)
-  
+
       const team4 = await team1.deleteUser(users[1])
       expect(team4.users).lengthOf(0)
     })
