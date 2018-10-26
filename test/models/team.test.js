@@ -6,9 +6,12 @@ chai.use(require('sinon-chai'))
 chai.use(require('chai-as-promised'))
 
 const utils = require('../utils.js')
-const { User, Team, Page } = utils.models
+const { mongoose } = utils
 
 describe('Page', () => {
+  // models will be accessable after global 'before' hook runned (on util.js)
+  let User, Team, Page, PageOwner
+
   const conn = utils.mongoose.connection
   let users = []
 
@@ -31,6 +34,11 @@ describe('Page', () => {
   }
 
   before(async () => {
+    User = mongoose.model('User')
+    Team = mongoose.model('Team')
+    Page = mongoose.model('Page')
+    PageOwner = mongoose.model('PageOwner')
+
     const userFixture = [
       { name: 'Anon 3', username: 'anonymous3', email: 'anonymous3@example.com' },
       { name: 'Anon 4', username: 'anonymous4', email: 'anonymous4@example.com' },
