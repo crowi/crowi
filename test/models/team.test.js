@@ -1,6 +1,7 @@
 const crypto = require('crypto')
 
-const chai = ({ expect } = require('chai'))
+const chai = require('chai')
+const { expect } = chai
 
 chai.use(require('sinon-chai'))
 chai.use(require('chai-as-promised'))
