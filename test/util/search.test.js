@@ -1,10 +1,4 @@
-var chai = require('chai')
-var expect = chai.expect
-var sinon = require('sinon')
-var sinonChai = require('sinon-chai')
-var utils = require('../utils.js')
-chai.use(sinonChai)
-
+const utils = require('../utils.js')
 const path = require('path')
 
 describe('Search client', () => {
@@ -17,12 +11,12 @@ describe('Search client', () => {
       let res
 
       res = searcher.parseUri('http://127.0.0.1:19200/crowi')
-      expect(res.host).to.be.equal('http://127.0.0.1:19200')
-      expect(res.indexName).to.be.equal('crowi')
+      expect(res.host).toBe('http://127.0.0.1:19200')
+      expect(res.indexName).toBe('crowi')
 
       res = searcher.parseUri('https://user:pass@example.com:9200/crowi_search')
-      expect(res.host).to.be.equal('https://user:pass@example.com:9200')
-      expect(res.indexName).to.be.equal('crowi_search')
+      expect(res.host).toBe('https://user:pass@example.com:9200')
+      expect(res.indexName).toBe('crowi_search')
     })
   })
 })

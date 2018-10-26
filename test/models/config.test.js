@@ -1,9 +1,4 @@
-var chai = require('chai')
-var expect = chai.expect
-var sinon = require('sinon')
-var sinonChai = require('sinon-chai')
-var utils = require('../utils.js')
-chai.use(sinonChai)
+const utils = require('../utils.js')
 
 describe('Config model test', () => {
   var Page = utils.models.Page
@@ -31,31 +26,22 @@ describe('Config model test', () => {
 
   describe('.CONSTANTS', () => {
     test('Config has constants', () => {
-      expect(Config.SECURITY_REGISTRATION_MODE_OPEN).to.have.string('Open')
-      expect(Config.SECURITY_REGISTRATION_MODE_RESTRICTED).to.have.string('Resricted')
-      expect(Config.SECURITY_REGISTRATION_MODE_CLOSED).to.have.string('Closed')
+      expect(Config.SECURITY_REGISTRATION_MODE_OPEN).toBe('Open')
+      expect(Config.SECURITY_REGISTRATION_MODE_RESTRICTED).toBe('Resricted')
+      expect(Config.SECURITY_REGISTRATION_MODE_CLOSED).toBe('Closed')
     })
   })
 
   describe('.loadAllConfig', () => {
     test('Get config array', done => {
       Config.loadAllConfig(function(err, config) {
-        expect(config.crowi).to.be.an('Object')
-        expect(config.crowi)
-          .to.have.property('test:test')
-          .and.equal('crowi test value')
-        expect(config.crowi)
-          .to.have.property('test:test2')
-          .and.equal(11111)
-        expect(config.crowi)
-          .to.have.property('test:test3')
-          .and.to.be.instanceof(Array)
-          .and.deep.equal([1, 2, 3, 4, 5])
+        expect(config.crowi).toBeInstanceOf(Object)
+        expect(config.crowi).toHaveProperty('test:test', 'crowi test value')
+        expect(config.crowi).toHaveProperty('test:test2', 11111)
+        expect(config.crowi).toHaveProperty('test:test3', [1, 2, 3, 4, 5])
 
-        expect(config.plugin)
-          .to.be.an('Object')
-          .and.have.property('other:config')
-          .and.equal('this is data')
+        expect(config.plugin).toBeInstanceOf(Object)
+        expect(config.plugin).toHaveProperty('other:config', 'this is data')
 
         done()
       })

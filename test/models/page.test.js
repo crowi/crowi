@@ -1,9 +1,4 @@
-var chai = require('chai')
-var expect = chai.expect
-var sinon = require('sinon')
-var sinonChai = require('sinon-chai')
-var utils = require('../utils.js')
-chai.use(sinonChai)
+const utils = require('../utils.js')
 
 describe('Page', () => {
   var Page = utils.models.Page
@@ -76,8 +71,8 @@ describe('Page', () => {
     describe('with a public page', () => {
       test('should return true', done => {
         Page.findOne({ path: '/grant/public' }, (err, page) => {
-          expect(err).to.be.null
-          expect(page.isPublic()).to.be.equal(true)
+          expect(err).toBeNull()
+          expect(page.isPublic()).toBe(true)
           done()
         })
       })
@@ -86,8 +81,8 @@ describe('Page', () => {
       describe('with a ' + grant + ' page', () => {
         test('should return false', done => {
           Page.findOne({ path: '/grant/' + grant }, (err, page) => {
-            expect(err).to.be.null
-            expect(page.isPublic()).to.be.equal(false)
+            expect(err).toBeNull()
+            expect(page.isPublic()).toBe(false)
             done()
           })
         })
@@ -97,72 +92,72 @@ describe('Page', () => {
 
   describe('.getDeletedPageName', () => {
     test('should return trash page name', () => {
-      expect(Page.getDeletedPageName('/hoge')).to.be.equal('/trash/hoge')
-      expect(Page.getDeletedPageName('hoge')).to.be.equal('/trash/hoge')
+      expect(Page.getDeletedPageName('/hoge')).toBe('/trash/hoge')
+      expect(Page.getDeletedPageName('hoge')).toBe('/trash/hoge')
     })
   })
   describe('.getRevertDeletedPageName', () => {
     test('should return reverted trash page name', () => {
-      expect(Page.getRevertDeletedPageName('/hoge')).to.be.equal('/hoge')
-      expect(Page.getRevertDeletedPageName('/trash/hoge')).to.be.equal('/hoge')
-      expect(Page.getRevertDeletedPageName('/trash/hoge/trash')).to.be.equal('/hoge/trash')
+      expect(Page.getRevertDeletedPageName('/hoge')).toBe('/hoge')
+      expect(Page.getRevertDeletedPageName('/trash/hoge')).toBe('/hoge')
+      expect(Page.getRevertDeletedPageName('/trash/hoge/trash')).toBe('/hoge/trash')
     })
   })
 
   describe('.isDeletableName', () => {
     test('should decide deletable or not', () => {
-      expect(Page.isDeletableName('/hoge')).to.be.true
-      expect(Page.isDeletableName('/user/xxx')).to.be.false
-      expect(Page.isDeletableName('/user/xxx123')).to.be.false
-      expect(Page.isDeletableName('/user/xxx/')).to.be.true
-      expect(Page.isDeletableName('/user/xxx/hoge')).to.be.true
+      expect(Page.isDeletableName('/hoge')).toBe(true)
+      expect(Page.isDeletableName('/user/xxx')).toBe(false)
+      expect(Page.isDeletableName('/user/xxx123')).toBe(false)
+      expect(Page.isDeletableName('/user/xxx/')).toBe(true)
+      expect(Page.isDeletableName('/user/xxx/hoge')).toBe(true)
     })
   })
 
   describe('.isCreatableName', () => {
     test('should decide creatable or not', () => {
-      expect(Page.isCreatableName('/hoge')).to.be.true
+      expect(Page.isCreatableName('/hoge')).toBe(true)
 
       // edge cases
-      expect(Page.isCreatableName('/me')).to.be.false
-      expect(Page.isCreatableName('/me/')).to.be.false
-      expect(Page.isCreatableName('/me/x')).to.be.false
-      expect(Page.isCreatableName('/meeting')).to.be.true
-      expect(Page.isCreatableName('/meeting/x')).to.be.true
+      expect(Page.isCreatableName('/me')).toBe(false)
+      expect(Page.isCreatableName('/me/')).toBe(false)
+      expect(Page.isCreatableName('/me/x')).toBe(false)
+      expect(Page.isCreatableName('/meeting')).toBe(true)
+      expect(Page.isCreatableName('/meeting/x')).toBe(true)
 
       // end with "edit"
-      expect(Page.isCreatableName('/meeting/edit')).to.be.false
+      expect(Page.isCreatableName('/meeting/edit')).toBe(false)
 
       // under score
-      expect(Page.isCreatableName('/_')).to.be.false
-      expect(Page.isCreatableName('/_r/x')).to.be.false
-      expect(Page.isCreatableName('/_api')).to.be.false
-      expect(Page.isCreatableName('/_apix')).to.be.false
-      expect(Page.isCreatableName('/_api/x')).to.be.false
+      expect(Page.isCreatableName('/_')).toBe(false)
+      expect(Page.isCreatableName('/_r/x')).toBe(false)
+      expect(Page.isCreatableName('/_api')).toBe(false)
+      expect(Page.isCreatableName('/_apix')).toBe(false)
+      expect(Page.isCreatableName('/_api/x')).toBe(false)
 
-      expect(Page.isCreatableName('/hoge/xx.md')).to.be.false
+      expect(Page.isCreatableName('/hoge/xx.md')).toBe(false)
 
       // start with https?
-      expect(Page.isCreatableName('/http://demo.crowi.wiki/user/sotarok/hoge')).to.be.false
-      expect(Page.isCreatableName('/https://demo.crowi.wiki/user/sotarok/hoge')).to.be.false
-      expect(Page.isCreatableName('http://demo.crowi.wiki/user/sotarok/hoge')).to.be.false
-      expect(Page.isCreatableName('https://demo.crowi.wiki/user/sotarok/hoge')).to.be.false
+      expect(Page.isCreatableName('/http://demo.crowi.wiki/user/sotarok/hoge')).toBe(false)
+      expect(Page.isCreatableName('/https://demo.crowi.wiki/user/sotarok/hoge')).toBe(false)
+      expect(Page.isCreatableName('http://demo.crowi.wiki/user/sotarok/hoge')).toBe(false)
+      expect(Page.isCreatableName('https://demo.crowi.wiki/user/sotarok/hoge')).toBe(false)
 
-      expect(Page.isCreatableName('/ the / path / with / space')).to.be.false
+      expect(Page.isCreatableName('/ the / path / with / space')).toBe(false)
 
       var forbidden = ['installer', 'register', 'login', 'logout', 'admin', 'files', 'trash', 'paste', 'comments']
       for (var i = 0; i < forbidden.length; i++) {
         var pn = forbidden[i]
-        expect(Page.isCreatableName('/' + pn + '')).to.be.false
-        expect(Page.isCreatableName('/' + pn + '/')).to.be.false
-        expect(Page.isCreatableName('/' + pn + '/abc')).to.be.false
+        expect(Page.isCreatableName('/' + pn + '')).toBe(false)
+        expect(Page.isCreatableName('/' + pn + '/')).toBe(false)
+        expect(Page.isCreatableName('/' + pn + '/abc')).toBe(false)
       }
 
       var forbidden = ['bookmarks', 'comments', 'activities', 'pages', 'recent-create', 'recent-edit']
       for (var i = 0; i < forbidden.length; i++) {
         var pn = forbidden[i]
-        expect(Page.isCreatableName('/user/aoi/' + pn)).to.be.false
-        expect(Page.isCreatableName('/user/aoi/x/' + pn)).to.be.true
+        expect(Page.isCreatableName('/user/aoi/' + pn)).toBe(false)
+        expect(Page.isCreatableName('/user/aoi/x/' + pn)).toBe(true)
       }
     })
   })
@@ -176,7 +171,7 @@ describe('Page', () => {
           }
 
           Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
-            expect(page.isCreator(user)).to.be.equal(true)
+            expect(page.isCreator(user)).toBe(true)
             done()
           })
         })
@@ -191,7 +186,7 @@ describe('Page', () => {
           }
 
           Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
-            expect(page.isCreator(user)).to.be.equal(false)
+            expect(page.isCreator(user)).toBe(false)
             done()
           })
         })
@@ -212,7 +207,7 @@ describe('Page', () => {
               done(err)
             }
 
-            expect(page.isGrantedFor(user)).to.be.equal(true)
+            expect(page.isGrantedFor(user)).toBe(true)
             done()
           })
         })
@@ -231,7 +226,7 @@ describe('Page', () => {
               done(err)
             }
 
-            expect(page.isGrantedFor(user)).to.be.equal(true)
+            expect(page.isGrantedFor(user)).toBe(true)
             done()
           })
         })
@@ -250,7 +245,7 @@ describe('Page', () => {
               done(err)
             }
 
-            expect(page.isGrantedFor(user)).to.be.equal(false)
+            expect(page.isGrantedFor(user)).toBe(false)
             done()
           })
         })
@@ -262,8 +257,8 @@ describe('Page', () => {
     describe('Slack Channel.', () => {
       test('should be empty', done => {
         Page.findOne({ path: '/page/for/extended' }, (err, page) => {
-          expect(page.extended.hoge).to.be.equal(1)
-          expect(page.getSlackChannel()).to.be.equal('')
+          expect(page.extended.hoge).toBe(1)
+          expect(page.getSlackChannel()).toBe('')
           done()
         })
       })
@@ -272,8 +267,8 @@ describe('Page', () => {
         Page.findOne({ path: '/page/for/extended' }, (err, page) => {
           page.updateSlackChannel('slack-channel1').then(data => {
             Page.findOne({ path: '/page/for/extended' }, (err, page) => {
-              expect(page.extended.hoge).to.be.equal(1)
-              expect(page.getSlackChannel()).to.be.equal('slack-channel1')
+              expect(page.extended.hoge).toBe(1)
+              expect(page.getSlackChannel()).toBe('slack-channel1')
               done()
             })
           })
@@ -285,12 +280,12 @@ describe('Page', () => {
   describe('Normalize path', () => {
     describe('Normalize', () => {
       test('should start with slash', done => {
-        expect(Page.normalizePath('hoge/fuga')).to.equal('/hoge/fuga')
+        expect(Page.normalizePath('hoge/fuga')).toBe('/hoge/fuga')
         done()
       })
 
       test('should trim spaces of slash', done => {
-        expect(Page.normalizePath('/ hoge / fuga')).to.equal('/hoge/fuga')
+        expect(Page.normalizePath('/ hoge / fuga')).toBe('/hoge/fuga')
         done()
       })
     })
@@ -301,7 +296,7 @@ describe('Page', () => {
       test('should find page', done => {
         const pageToFind = createdPages[0]
         Page.findPageById(pageToFind._id).then(pageData => {
-          expect(pageData.path).to.equal(pageToFind.path)
+          expect(pageData.path).toBe(pageToFind.path)
           done()
         })
       })
@@ -312,7 +307,7 @@ describe('Page', () => {
         const pageToFind = createdPages[0]
         const grantedUser = createdUsers[0]
         Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser).then(pageData => {
-          expect(pageData.path).to.equal(pageToFind.path)
+          expect(pageData.path).toBe(pageToFind.path)
           done()
         })
       })
@@ -325,7 +320,7 @@ describe('Page', () => {
             done(new Error())
           })
           .catch(err => {
-            expect(err).to.instanceof(Error)
+            expect(err).toBeInstanceOf(Error)
             done()
           })
       })
@@ -358,7 +353,7 @@ describe('Page', () => {
           const paths = await Page.findChildrenByPath('/jp/hoge', user, {})
           const pathMap = Page.getPathMap(paths, 'jp', 'us')
           const [error] = await Page.checkPagesRenamable(Object.values(pathMap), user)
-          expect(error).to.be.equal(true)
+          expect(error).toBe(true)
         })
       })
 
@@ -378,7 +373,7 @@ describe('Page', () => {
       describe('findChildrenByPath', () => {
         test('should fetch a parent page and all children pages (more than 50 pages)', async () => {
           const pages = await Page.findChildrenByPath('/parent', user, {})
-          expect(pages.length).to.be.equal(treeSize)
+          expect(pages).toHaveLength(treeSize)
         })
       })
 
@@ -395,8 +390,8 @@ describe('Page', () => {
       describe('findChildrenByPath', () => {
         test('should not contain other trees', async () => {
           const pages = await Page.findChildrenByPath('/car', user, {})
-          expect(pages).to.instanceof(Array)
-          expect(pages.some(page => page.path === '/carrot')).to.be.equal(false)
+          expect(pages).toBeInstanceOf(Array)
+          expect(pages.some(page => page.path === '/carrot')).toBe(false)
         })
       })
 
