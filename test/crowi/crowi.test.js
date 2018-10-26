@@ -2,30 +2,29 @@ var chai = require('chai')
 var expect = chai.expect
 var sinon = require('sinon')
 var sinonChai = require('sinon-chai')
-var proxyquire = require('proxyquire')
 var path = require('path')
 chai.use(sinonChai)
 
-describe('Test for Crowi application context', function() {
+describe('Test for Crowi application context', () => {
   var Crowi = require('../../lib/crowi')
   var mongoose = require('mongoose')
 
-  describe('construction', function() {
-    it('initialize crowi context', function() {
+  describe('construction', () => {
+    test('initialize crowi context', () => {
       var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       expect(crowi).to.be.instanceof(Crowi)
       expect(crowi.version).to.equal(require('../../package.json').version)
       expect(crowi.env).to.be.an('Object')
     })
 
-    it('config getter, setter', function() {
+    test('config getter, setter', () => {
       var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       expect(crowi.getConfig()).to.deep.equals({})
       crowi.setConfig({ test: 1 })
       expect(crowi.getConfig()).to.deep.equals({ test: 1 })
     })
 
-    it('model getter, setter', function() {
+    test('model getter, setter', () => {
       var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       // set
       crowi.model('hoge', { fuga: 1 })
@@ -33,11 +32,11 @@ describe('Test for Crowi application context', function() {
     })
   })
 
-  describe('.setupDatabase', function() {
-    before(function() {
+  describe('.setupDatabase', () => {
+    beforeAll(function() {
       mongoose.disconnect() // avoid error of Trying to open unclosed connection
     })
-    it('setup completed', function(done) {
+    test('setup completed', done => {
       var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       // set
       var p = crowi.setupDatabase()

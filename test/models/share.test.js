@@ -16,7 +16,7 @@ describe('Share', () => {
   let user
   let createdPages
 
-  before(async () => {
+  beforeAll(async () => {
     await User.remove({})
     const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
       { name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() },
@@ -37,8 +37,8 @@ describe('Share', () => {
   })
 
   describe('.create', () => {
-    context('Create shares', () => {
-      it('should be able to create only one active share per page', async () => {
+    describe('Create shares', () => {
+      test('should be able to create only one active share per page', async () => {
         await expect(Share.create(createdPages[0]._id, user)).to.be.eventually.an.instanceof(Share)
         await expect(Share.create(createdPages[0]._id, user)).to.be.rejected
       })
@@ -46,13 +46,13 @@ describe('Share', () => {
   })
 
   describe('.delete', () => {
-    context('Delete share', () => {
+    describe('Delete share', () => {
       let createdShares
-      before(async () => {
+      beforeAll(async () => {
         createdShares = [await Share.create(createdPages[0]._id, user), await Share.create(createdPages[1]._id, user)]
       })
 
-      it('should inactivate share', async () => {
+      test('should inactivate share', async () => {
         const shareId = createdShares[0]._id
         await expect(Share.deleteById(shareId)).to.eventually.have.property('status', Share.STATUS_INACTIVE)
         const pageId = createdShares[1].page

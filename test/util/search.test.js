@@ -7,13 +7,13 @@ chai.use(sinonChai)
 
 const path = require('path')
 
-describe('Search client', function() {
+describe('Search client', () => {
   const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
   const searcherUri = 'http://127.0.0.1:19200/crowi'
   const searcher = new (require(path.join(crowi.libDir, 'util', 'search')))(crowi, searcherUri)
 
-  context('SearchClient.parseUri', () => {
-    it('should return host and indexName', () => {
+  describe('SearchClient.parseUri', () => {
+    test('should return host and indexName', () => {
       let res
 
       res = searcher.parseUri('http://127.0.0.1:19200/crowi')

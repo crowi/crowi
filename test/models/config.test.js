@@ -5,13 +5,13 @@ var sinonChai = require('sinon-chai')
 var utils = require('../utils.js')
 chai.use(sinonChai)
 
-describe('Config model test', function() {
+describe('Config model test', () => {
   var Page = utils.models.Page
   var Config = utils.models.Config
   var User = utils.models.User
   var conn = utils.mongoose.connection
 
-  before(function(done) {
+  beforeAll(function(done) {
     var fixture = [
       { ns: 'crowi', key: 'test:test', value: JSON.stringify('crowi test value') },
       { ns: 'crowi', key: 'test:test2', value: JSON.stringify(11111) },
@@ -29,16 +29,16 @@ describe('Config model test', function() {
       })
   })
 
-  describe('.CONSTANTS', function() {
-    it('Config has constants', function() {
+  describe('.CONSTANTS', () => {
+    test('Config has constants', () => {
       expect(Config.SECURITY_REGISTRATION_MODE_OPEN).to.have.string('Open')
       expect(Config.SECURITY_REGISTRATION_MODE_RESTRICTED).to.have.string('Resricted')
       expect(Config.SECURITY_REGISTRATION_MODE_CLOSED).to.have.string('Closed')
     })
   })
 
-  describe('.loadAllConfig', function() {
-    it('Get config array', function(done) {
+  describe('.loadAllConfig', () => {
+    test('Get config array', done => {
       Config.loadAllConfig(function(err, config) {
         expect(config.crowi).to.be.an('Object')
         expect(config.crowi)
