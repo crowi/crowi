@@ -1,10 +1,5 @@
-const chai = require('chai')
-const expect = chai.expect
-const sinon = require('sinon')
-const sinonChai = require('sinon-chai')
 const faker = require('faker')
 const utils = require('../utils.js')
-chai.use(sinonChai)
 
 describe('Backlink', () => {
   const Backlink = utils.models.Backlink
@@ -41,7 +36,7 @@ describe('Backlink', () => {
     })
 
     test('should have all backlinks', async () => {
-      expect(await Backlink.createByAllPages()).to.have.lengthOf(3)
+      expect(await Backlink.createByAllPages()).toHaveLength(3)
     })
   })
 })

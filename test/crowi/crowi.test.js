@@ -1,34 +1,29 @@
-var chai = require('chai')
-var expect = chai.expect
-var sinon = require('sinon')
-var sinonChai = require('sinon-chai')
-var path = require('path')
-chai.use(sinonChai)
+const path = require('path')
 
 describe('Test for Crowi application context', () => {
-  var Crowi = require('../../lib/crowi')
+  const Crowi = require('../../lib/crowi')
   var mongoose = require('mongoose')
 
   describe('construction', () => {
     test('initialize crowi context', () => {
       var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
-      expect(crowi).to.be.instanceof(Crowi)
-      expect(crowi.version).to.equal(require('../../package.json').version)
-      expect(crowi.env).to.be.an('Object')
+      expect(crowi).toBeInstanceOf(Crowi)
+      expect(crowi.version).toBe(require('../../package.json').version)
+      expect(typeof crowi.env).toBe('object')
     })
 
     test('config getter, setter', () => {
       var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
-      expect(crowi.getConfig()).to.deep.equals({})
+      expect(crowi.getConfig()).toEqual({})
       crowi.setConfig({ test: 1 })
-      expect(crowi.getConfig()).to.deep.equals({ test: 1 })
+      expect(crowi.getConfig()).toEqual({ test: 1 })
     })
 
     test('model getter, setter', () => {
       var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       // set
       crowi.model('hoge', { fuga: 1 })
-      expect(crowi.model('hoge')).to.deep.equals({ fuga: 1 })
+      expect(crowi.model('hoge')).toEqual({ fuga: 1 })
     })
   })
 
@@ -40,9 +35,9 @@ describe('Test for Crowi application context', () => {
       var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       // set
       var p = crowi.setupDatabase()
-      expect(p).to.instanceof(Promise)
+      expect(p).toBeInstanceOf(Promise)
       p.then(function() {
-        expect(mongoose.connection.readyState).to.equals(1)
+        expect(mongoose.connection.readyState).toBe(1)
         done()
       }).catch(function(err) {
         // console.log('readyState', mongoose.connection.readyState);
@@ -50,7 +45,7 @@ describe('Test for Crowi application context', () => {
           // alreaady connected
           // throught
         } else {
-          expect(mongoose.connection.readyState).to.equals(0)
+          expect(mongoose.connection.readyState).toBe(0)
         }
         done()
       })
