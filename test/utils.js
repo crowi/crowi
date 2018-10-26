@@ -11,7 +11,7 @@ crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
 
 mongoose.Promise = global.Promise
 
-before('Create database connection and clean up', function(done) {
+beforeAll(function(done) {
   if (!mongoUri) {
     return done()
   }
@@ -40,7 +40,7 @@ before('Create database connection and clean up', function(done) {
   }
 })
 
-after('Close database connection', function(done) {
+afterAll(function(done) {
   if (!mongoUri) {
     return done()
   }

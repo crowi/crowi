@@ -5,18 +5,18 @@ var sinonChai = require('sinon-chai')
 var utils = require('../utils.js')
 chai.use(sinonChai)
 
-describe('Url test', function() {
+describe('Url test', () => {
   var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
   // crowi.config.crowi['app:url'] = 'http://localhost:3000';
 
   // console.log(crowi.config);
-  beforeEach(function() {
+  beforeEach(() => {
     crowi.config = {}
     crowi.config.crowi = {}
     crowi.config.crowi['app:url'] = 'http://localhost:3000'
   })
 
-  it('detectInternalLink', function() {
+  test('detectInternalLink', () => {
     var linkDetector = require(crowi.libDir + '/util/linkDetector')(crowi)
 
     var text = 'aaaaaaaa '
