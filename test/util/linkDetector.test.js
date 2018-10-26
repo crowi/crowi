@@ -1,7 +1,7 @@
 const utils = require('../utils.js')
 
 describe('Url test', () => {
-  var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
+  const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
   // crowi.config.crowi['app:url'] = 'http://localhost:3000';
 
   // console.log(crowi.config);
@@ -12,9 +12,9 @@ describe('Url test', () => {
   })
 
   test('detectInternalLink', () => {
-    var linkDetector = require(crowi.libDir + '/util/linkDetector')(crowi)
+    const linkDetector = require(crowi.libDir + '/util/linkDetector')(crowi)
 
-    var text = 'aaaaaaaa '
+    let text = 'aaaaaaaa '
     text += '[/user/suzuki/memo/2017/01/22/aaa](http://localhost:3000/58842b9ccf3556baedce2762)'
     text += ' bbbbb '
     text += '[/user/suzuki/memo/2017/01/22/bbb](http://localhost:3000/58842b9ccf3556baedce2763)'
@@ -29,7 +29,7 @@ describe('Url test', () => {
     text += 'ee '
     text += '[/user/suzuki/memo/2017/05/06/eee]'
 
-    var results = linkDetector.search(text)
+    const results = linkDetector.search(text)
 
     expect(results).toHaveProperty('objectIds')
     expect(results.objectIds).toHaveLength(2)

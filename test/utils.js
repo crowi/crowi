@@ -1,10 +1,10 @@
 'use strict'
 
-var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || null
-var mongoose = require('mongoose')
-var fs = require('fs')
-var models = {}
-var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
+const mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || null
+const mongoose = require('mongoose')
+const fs = require('fs')
+const models = {}
+const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
 
 // Want fix...
 crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
@@ -52,11 +52,11 @@ afterAll(function(done) {
 // Setup Models
 fs.readdirSync(MODEL_DIR).forEach(function(file) {
   if (file.match(/^(\w+)\.js$/)) {
-    var name = RegExp.$1
+    const name = RegExp.$1
     if (name === 'index') {
       return
     }
-    var modelName = name.charAt(0).toUpperCase() + name.slice(1)
+    const modelName = name.charAt(0).toUpperCase() + name.slice(1)
     models[modelName] = require(MODEL_DIR + '/' + file)(crowi)
   }
 })

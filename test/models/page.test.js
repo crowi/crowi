@@ -1,16 +1,16 @@
 const utils = require('../utils.js')
 
 describe('Page', () => {
-  var Page = utils.models.Page
-  var User = utils.models.User
-  var conn = utils.mongoose.connection
-  var createdPages
-  var createdUsers
+  const Page = utils.models.Page
+  const User = utils.models.User
+  const conn = utils.mongoose.connection
+  let createdPages
+  let createdUsers
 
   beforeAll(done => {
     Promise.resolve()
       .then(() => {
-        var userFixture = [
+        const userFixture = [
           { name: 'Anon 0', username: 'anonymous0', email: 'anonymous0@example.com' },
           { name: 'Anon 1', username: 'anonymous1', email: 'anonymous1@example.com' },
         ]
@@ -19,9 +19,9 @@ describe('Page', () => {
       })
       .then(testUsers => {
         createdUsers = testUsers
-        var testUser0 = testUsers[0]
+        const testUser0 = testUsers[0]
 
-        var fixture = [
+        const fixture = [
           {
             path: '/user/anonymous/memo',
             grant: Page.GRANT_RESTRICTED,
@@ -145,17 +145,18 @@ describe('Page', () => {
 
       expect(Page.isCreatableName('/ the / path / with / space')).toBe(false)
 
-      var forbidden = ['installer', 'register', 'login', 'logout', 'admin', 'files', 'trash', 'paste', 'comments']
+      let forbidden = []
+      forbidden = ['installer', 'register', 'login', 'logout', 'admin', 'files', 'trash', 'paste', 'comments']
       for (var i = 0; i < forbidden.length; i++) {
-        var pn = forbidden[i]
+        const pn = forbidden[i]
         expect(Page.isCreatableName('/' + pn + '')).toBe(false)
         expect(Page.isCreatableName('/' + pn + '/')).toBe(false)
         expect(Page.isCreatableName('/' + pn + '/abc')).toBe(false)
       }
 
-      var forbidden = ['bookmarks', 'comments', 'activities', 'pages', 'recent-create', 'recent-edit']
+      forbidden = ['bookmarks', 'comments', 'activities', 'pages', 'recent-create', 'recent-edit']
       for (var i = 0; i < forbidden.length; i++) {
-        var pn = forbidden[i]
+        const pn = forbidden[i]
         expect(Page.isCreatableName('/user/aoi/' + pn)).toBe(false)
         expect(Page.isCreatableName('/user/aoi/x/' + pn)).toBe(true)
       }

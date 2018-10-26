@@ -1,8 +1,8 @@
 const utils = require('../utils.js')
 
 describe('UpdatePost', () => {
-  var UpdatePost = utils.models.UpdatePost
-  var conn = utils.mongoose.connection
+  const UpdatePost = utils.models.UpdatePost
+  const conn = utils.mongoose.connection
 
   describe('.createPrefixesByPathPattern', () => {
     describe('with a path', () => {
