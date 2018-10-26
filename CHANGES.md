@@ -1,6 +1,12 @@
 CHANGES
 ========
 
+## 1.7.4
+
+- Improve: Add portalize button to menu (#368)
+- Fix: Broken layout on extra small devices (#366)
+- Fix: Can't access files on shared pages if it isn't set secret keyword (#370)
+
 ## 1.7.3
 
 - Improve: Search users on `/admin/users` page (#360)
