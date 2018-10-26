@@ -1,13 +1,14 @@
-const chai = require('chai')
-const expect = chai.expect
-const sinonChai = require('sinon-chai')
-const utils = require('../utils.js')
-chai.use(sinonChai)
-
 const crypto = require('crypto')
 
+const chai = ({ expect } = require('chai'))
+
+chai.use(require('sinon-chai'))
+chai.use(require('chai-as-promised'))
+
+const utils = require('../utils.js')
+const { User, Team, Page } = utils.models
+
 describe('Page', () => {
-  const { User, Team, Page } = utils.models
   const conn = utils.mongoose.connection
   let users = []
 
@@ -18,7 +19,6 @@ describe('Page', () => {
     })
     return t.save()
   }
-
   const createPage = () => {
     const user = users[Math.floor(Math.random() * users.length)]
     const p = new Page({
@@ -75,7 +75,7 @@ describe('Page', () => {
     })
 
     it('When missing arguments', async () => {
-      expect(await Team.findByUser().catch(e => e)).to.instanceOf(TypeError)
+      await expect(Team.findByUser()).to.eventually.be.rejectedWith(TypeError)
     })
   })
 
@@ -88,7 +88,7 @@ describe('Page', () => {
     })
 
     it('When missing arguments', async () => {
-      expect(await Team.findByHandle().catch(e => e)).to.instanceOf(TypeError)
+      await expect(Team.findByHandle()).to.eventually.be.rejectedWith(TypeError)
     })
   })
 
@@ -113,7 +113,7 @@ describe('Page', () => {
 
     it('When missing arguments', async () => {
       const team = await createTeam()
-      expect(await team.addUser().catch(e => e)).to.instanceOf(TypeError)
+      await expect(team.addUser()).to.eventually.be.rejectedWith(TypeError)
     })
   })
 
@@ -137,7 +137,7 @@ describe('Page', () => {
 
     it('When missing arguments', async () => {
       const team = await createTeam()
-      expect(await team.deleteUser().catch(e => e)).to.instanceOf(TypeError)
+      await expect(team.deleteUser()).to.eventually.be.rejectedWith(TypeError)
     })
   })
 
@@ -146,11 +146,11 @@ describe('Page', () => {
       const team = new Team({
         handle: '$ggg^',
       })
-      const e = await team.save().catch(e => e)
 
-      expect(e).to.be.instanceOf(Error)
-      expect(e.errors.handle).to.be.instanceOf(Error)
-      expect(e.errors.handle.message).to.include('handle must be') // custom message
+      await expect(team.save())
+        .to.eventually.be.rejected // be rejected
+        .have.nested.property('errors.handle.message') // mongoose's ValidationError
+        .include('handle must be')
     })
   })
 
@@ -167,7 +167,7 @@ describe('Page', () => {
   describe('.ownPage', () => {
     it('When missing arguments', async () => {
       const team = await createTeam()
-      expect(await team.ownPage().catch(e => e)).to.instanceOf(TypeError)
+      await expect(team.ownPage()).to.eventually.be.rejectedWith(TypeError)
     })
   })
 
@@ -176,12 +176,12 @@ describe('Page', () => {
       const [team, team2, page] = await Promise.all([createTeam(), createTeam(), createPage()])
       await team2.ownPage(page)
 
-      expect(await team.disownPage(page).catch(e => e)).to.instanceof(utils.errors.PermissionError)
+      await expect(team.disownPage(page)).to.eventually.be.rejectedWith(utils.errors.PermissionError)
     })
 
     it('When missing arguments', async () => {
       const team = await createTeam()
-      expect(await team.disownPage().catch(e => e)).to.instanceOf(TypeError)
+      await expect(team.disownPage()).to.eventually.be.rejectedWith(TypeError)
     })
   })
 
