@@ -1,9 +1,9 @@
 const utils = require('../utils.js')
 
 describe('User', () => {
-  var Page = utils.models.Page
-  var User = utils.models.User
-  var conn = utils.mongoose.connection
+  const Page = utils.models.Page
+  const User = utils.models.User
+  const conn = utils.mongoose.connection
 
   describe('Create and Find.', () => {
     describe('The user', () => {

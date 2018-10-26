@@ -1,13 +1,13 @@
 const utils = require('../utils.js')
 
 describe('Config model test', () => {
-  var Page = utils.models.Page
-  var Config = utils.models.Config
-  var User = utils.models.User
-  var conn = utils.mongoose.connection
+  const Page = utils.models.Page
+  const Config = utils.models.Config
+  const User = utils.models.User
+  const conn = utils.mongoose.connection
 
   beforeAll(function(done) {
-    var fixture = [
+    const fixture = [
       { ns: 'crowi', key: 'test:test', value: JSON.stringify('crowi test value') },
       { ns: 'crowi', key: 'test:test2', value: JSON.stringify(11111) },
       { ns: 'crowi', key: 'test:test3', value: JSON.stringify([1, 2, 3, 4, 5]) },

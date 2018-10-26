@@ -2,25 +2,25 @@ const path = require('path')
 
 describe('Test for Crowi application context', () => {
   const Crowi = require('../../lib/crowi')
-  var mongoose = require('mongoose')
+  const mongoose = require('mongoose')
 
   describe('construction', () => {
     test('initialize crowi context', () => {
-      var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
+      const crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       expect(crowi).toBeInstanceOf(Crowi)
       expect(crowi.version).toBe(require('../../package.json').version)
       expect(typeof crowi.env).toBe('object')
     })
 
     test('config getter, setter', () => {
-      var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
+      const crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       expect(crowi.getConfig()).toEqual({})
       crowi.setConfig({ test: 1 })
       expect(crowi.getConfig()).toEqual({ test: 1 })
     })
 
     test('model getter, setter', () => {
-      var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
+      const crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       // set
       crowi.model('hoge', { fuga: 1 })
       expect(crowi.model('hoge')).toEqual({ fuga: 1 })
@@ -32,9 +32,9 @@ describe('Test for Crowi application context', () => {
       mongoose.disconnect() // avoid error of Trying to open unclosed connection
     })
     test('setup completed', done => {
-      var crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
+      const crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
       // set
-      var p = crowi.setupDatabase()
+      const p = crowi.setupDatabase()
       expect(p).toBeInstanceOf(Promise)
       p.then(function() {
         expect(mongoose.connection.readyState).toBe(1)
