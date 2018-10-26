@@ -1,6 +1,6 @@
 'use strict'
 
-var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || null
+var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || 'mongodb://localhost/crowi'
 var mongoose = require('mongoose')
 var fs = require('fs')
 var models = {}
@@ -15,29 +15,16 @@ before('Create database connection and clean up', function(done) {
   if (!mongoUri) {
     return done()
   }
+const { MongoClient } = require('mongodb')
 
-  mongoose.connect(mongoUri)
+mongoose.Promise = global.Promise
 
-  function clearDB() {
-    for (var i in mongoose.connection.collections) {
-      mongoose.connection.collections[i].remove(function() {})
-    }
-    return done()
-  }
+before('Drop database before all tests', async function() {
+  const db = await MongoClient.connect(mongoUri)
+  await db.dropDatabase()
+  db.close()
 
-  if (mongoose.connection.readyState === 0) {
-    mongoose.connect(
-      mongoUri,
-      function(err) {
-        if (err) {
-          throw err
-        }
-        return clearDB()
-      },
-    )
-  } else {
-    return clearDB()
-  }
+  await mongoose.connect(mongoUri)
 })
 
 after('Close database connection', function(done) {

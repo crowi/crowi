@@ -38,12 +38,6 @@ const createUser = () => {
 }
 
 describe('PageOwner', () => {
-  before(async () => {
-    const PageOwner = mongoose.model('PageOwner')
-    await PageOwner.collection.drop()
-    await PageOwner.ensureIndexes()
-  })
-
   it('MongoDB must prevent duplicate creation', async () => {
     const user = await createUser()
     const page = await createPage(user)
