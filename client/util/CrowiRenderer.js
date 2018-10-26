@@ -33,21 +33,19 @@ export default class CrowiRenderer {
   }
 
   preProcess(markdown, dom) {
-    for (let i = 0; i < this.preProcessors.length; i++) {
-      if (!this.preProcessors[i].process) {
-        continue
+    for (let processor of this.preProcessors) {
+      if (processor.process) {
+        markdown = processor.process(markdown, dom)
       }
-      markdown = this.preProcessors[i].process(markdown, dom)
     }
     return markdown
   }
 
   postProcess(html, dom) {
-    for (let i = 0; i < this.postProcessors.length; i++) {
-      if (!this.postProcessors[i].process) {
-        continue
+    for (let processor of this.postProcessors) {
+      if (!processor.process) {
+        html = processor.process(html, dom)
       }
-      html = this.postProcessors[i].process(html, dom)
     }
 
     return html
