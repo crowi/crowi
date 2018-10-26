@@ -163,6 +163,7 @@
     "format": "eslint --fix \"**/*.js\"",
     "lint": "eslint \"**/*.js\"",
     "test": "jest",
+    "coverage": "jest coverage",
     "build": "npm run prod:client",
     "prod:client": "NODE_ENV=production webpack --bail --colors --display-error-details --config tools/webpack.config.js",
     "webpack": "webpack",
