@@ -11,42 +11,17 @@ crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
 
 mongoose.Promise = global.Promise
 
-beforeAll(function(done) {
-  if (!mongoUri) {
-    return done()
-  }
-
-  mongoose.connect(mongoUri)
-
-  function clearDB() {
-    for (var i in mongoose.connection.collections) {
-      mongoose.connection.collections[i].remove(function() {})
-    }
-    return done()
-  }
-
-  if (mongoose.connection.readyState === 0) {
-    mongoose.connect(
-      mongoUri,
-      function(err) {
-        if (err) {
-          throw err
-        }
-        return clearDB()
-      },
-    )
-  } else {
-    return clearDB()
+beforeAll(async () => {
+  if (mongoUri) {
+    await mongoose.connect(mongoUri)
+    await mongoose.connection.db.dropDatabase()
   }
 })
 
-afterAll(function(done) {
-  if (!mongoUri) {
-    return done()
+afterAll(async () => {
+  if (mongoUri) {
+    await mongoose.disconnect()
   }
-
-  mongoose.disconnect()
-  return done()
 })
 
 // Setup Models
