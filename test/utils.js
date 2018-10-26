@@ -2,8 +2,8 @@
 
 const mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || null
 const mongoose = require('mongoose')
-const fs = require('fs')
-const models = {}
+const models = require(MODEL_DIR)
+const Config = require(MODEL_DIR + '/config')
 const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
 
 // Want fix...
@@ -25,17 +25,10 @@ afterAll(async () => {
 })
 
 // Setup Models
-fs.readdirSync(MODEL_DIR).forEach(function(file) {
-  if (file.match(/^(\w+)\.js$/)) {
-    const name = RegExp.$1
-    if (name === 'index') {
-      return
-    }
-    const modelName = name.charAt(0).toUpperCase() + name.slice(1)
-    models[modelName] = require(MODEL_DIR + '/' + file)(crowi)
-  }
-})
-
+models.Config = Config
+for (let [modelName, model] of Object.entries(models)) {
+  models[modelName] = model(crowi)
+}
 crowi.models = models
 
 // create dummy Socket.IO server
@@ -48,6 +41,6 @@ crowi.getIo = function() {
 }
 
 module.exports = {
-  models: models,
-  mongoose: mongoose,
+  models,
+  mongoose,
 }
