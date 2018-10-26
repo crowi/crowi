@@ -6,34 +6,12 @@ const ROOT_DIR = path.join(__dirname, './..')
 const MODEL_DIR = path.join(__dirname, './../lib/models')
 
 const testDBUtil = {
-  generateFixture: function(conn, model, fixture) {
-    if (conn.readyState == 0) {
-      return Promise.reject(new Error())
+  async generateFixture(conn, model, fixture) {
+    if (conn.readyState === 0) {
+      throw new Error()
     }
     const Model = conn.model(model)
-
-    return new Promise(function(resolve, reject) {
-      var createdModels = []
-      fixture
-        .reduce(function(promise, entity) {
-          return promise.then(function() {
-            const newDoc = new Model()
-
-            Object.keys(entity).forEach(function(k) {
-              newDoc[k] = entity[k]
-            })
-            return new Promise(function(resolve, reject) {
-              newDoc.save(function(err, data) {
-                createdModels.push(data)
-                return resolve()
-              })
-            })
-          })
-        }, Promise.resolve())
-        .then(function() {
-          resolve(createdModels)
-        })
-    })
+    return Promise.all(fixture.map(entity => new Model(entity).save()))
   },
 }
 
