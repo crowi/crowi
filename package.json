@@ -128,7 +128,9 @@
     "yaml-loader": "^0.5.0"
   },
   "devDependencies": {
+    "babel-core": "^7.0.0-bridge.0",
     "babel-eslint": "^9.0.0",
+    "babel-jest": "^23.6.0",
     "chai": "~4.1.0",
     "chai-as-promised": "^7.1.1",
     "concurrently": "~3.5.1",
@@ -152,6 +154,7 @@
     "onchange": "^4.0.0",
     "prettier": "^1.13.5",
     "proxyquire": "~1.8.0",
+    "regenerator-runtime": "^0.12.1",
     "sinon": "~2.3.8",
     "sinon-chai": "~2.12.0"
   },
