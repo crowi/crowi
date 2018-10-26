@@ -12,7 +12,13 @@
   <header id="page-header">
     <p class="stopper"><i class="fa fa-chevron-up"></i></p>
 
-
+    <p>This page owned by <ul>
+      {% for owner in page.owners %}
+        {% for user in owner.team.users %}
+          <li><img src="{{ user|picture }}" class="picture picture-rounded"> {{ user.name }}</li>
+        {% endfor %}
+      {% endfor %}
+    </ul></p>
     <div class="flex-title-line">
       <h1 class="title flex-item-title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
       {% if page %}
