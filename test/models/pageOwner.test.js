@@ -6,10 +6,10 @@ const chai = ({ expect } = require('chai'))
 chai.use(require('sinon-chai'))
 chai.use(require('chai-as-promised'))
 
-const { mongoose } = require('../utils.js')
+const { models } = require('../utils.js')
+const { Team, Page, User, PageOwner } = models
 
 const createTeam = (...users) => {
-  const Team = mongoose.model('Team')
   const t = new Team({
     handle: crypto.randomBytes(16).toString('hex'),
     users,
@@ -17,7 +17,6 @@ const createTeam = (...users) => {
   return t.save()
 }
 const createPage = user => {
-  const Page = mongoose.model('Page')
   const p = new Page({
     path: `/random/${crypto.randomBytes(16)}`,
     grant: Page.GRANT_PUBLIC,
@@ -27,7 +26,6 @@ const createPage = user => {
   return p.save()
 }
 const createUser = () => {
-  const User = mongoose.model('User')
   const r = crypto.randomBytes(16).toString('hex')
   const u = new User({
     name: r,
@@ -44,8 +42,6 @@ describe('PageOwner', () => {
     const team = await createTeam()
 
     await team.ownPage(page)
-
-    const PageOwner = mongoose.model('PageOwner')
 
     // ownPage uses findAndUpdate & $setOnInsert, on the theory this situation will not be happened
     const po = new PageOwner({
