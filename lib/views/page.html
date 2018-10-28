@@ -12,16 +12,27 @@
   <header id="page-header">
     <p class="stopper"><i class="fa fa-chevron-up"></i></p>
 
-    <p>This page owned by <ul>
-      {% for owner in page.owners %}
-        {% for user in owner.team.users %}
-          <li><img src="{{ user|picture }}" class="picture picture-rounded"> {{ user.name }}</li>
-        {% endfor %}
-      {% endfor %}
-    </ul></p>
     <div class="flex-title-line">
       <h1 class="title flex-item-title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
-      {% if page %}
+
+      {% if page.owners %}
+      <div class='owners'>
+        {% for owner in page.owners %}
+          <div class='owner-team' data-team-id='{{owner.team.id}}'>
+          {% for user in owner.team.users %}
+            <img src="{{ user|picture }}" title="{{ user.name }}">
+            <img src="{{ user|picture }}" title="{{ user.name }}">
+          {% endfor %}
+          </div>
+          <div class='owner-team' data-team-id='{{owner.team.id}}'>
+          {% for user in owner.team.users %}
+            <img src="{{ user|picture }}" title="{{ user.name }}">
+            <img src="{{ user|picture }}" title="{{ user.name }}">
+          {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      {% endif %}
 
       {% if isExternalShareEnabled() %}
         <div id="external-share" class="flex-item-action dropdown">
@@ -35,6 +46,7 @@
           </ul>
         </div>
       {% endif %}
+
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
@@ -49,7 +61,6 @@
             class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
         ><i class="far fa-thumbs-up"></i></button>
       </div>
-      {% endif %}
     </div>
   </header>
   {% else %}

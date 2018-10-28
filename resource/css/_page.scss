@@ -73,6 +73,37 @@
         }
       }
 
+      .owners {
+        display: flex;
+        align-items: center;
+        margin: 0 10px;
+
+        p {
+          font-size: 16px;
+          margin: 0 4px 0 0;
+        }
+
+        .owner-team {
+          padding-left: 18px;
+          display: flex;
+          align-items: center;
+
+          img {
+            margin: 0 0 0 -18px;
+  
+            height: 32px;
+            width: 32px;
+  
+            background-color: #fff;
+  
+            border-radius: 50%;
+            border-color: #fff; // bootstrap info color
+            border-width: 2px;
+            border-style: solid;
+          }
+        }
+      }
+
       .flex-title-line {
         display: -webkit-flex;
         display: flex;
