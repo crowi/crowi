@@ -128,17 +128,14 @@
 }
 
 .search-toolbar {
-  display: flex;
-  align-items: flex-end;
   padding: 0 20px 12px;
-  margin: 0 15px 16px;
+  margin: 0 0 16px;
   border-bottom: 1px solid $navbar-default-border;
 
   .search-meta {
     display: flex;
     align-items: center;
     padding: 0;
-    padding-right: 40px;
     margin: 4px 0;
 
     h3.search-keyword {
@@ -150,10 +147,7 @@
   }
 
   .search-navbar {
-    display: flex;
-    flex-wrap: wrap;
     position: relative;
-    align-items: center;
     padding: 0;
 
     .navbar-nav {
@@ -175,11 +169,6 @@
           border-radius: 20px;
           border: 1px solid transparent;
 
-          i {
-            width: 14px;
-            margin-right: 8px;
-          }
-
           &:hover {
             background: transparent;
             border-color: $navbar-default-link-active-bg;
@@ -192,6 +181,27 @@
           background: $brand-primary;
         }
       }
+    }
+  }
+
+  .dropdown-menu,
+  .navbar-nav {
+    i {
+      width: 14px;
+      margin-right: 8px;
+    }
+  }
+}
+
+@media (min-width: $screen-md-min) {
+  .search-toolbar {
+    display: flex;
+    align-items: flex-end;
+    margin-right: 15px;
+    margin-left: 15px;
+
+    .search-meta {
+      padding-right: 40px;
     }
   }
 }
