@@ -4,7 +4,6 @@ import marked from 'marked'
 import hljs from 'highlight.js'
 
 import SectionFixer from './PreProcessor/SectionFixer'
-import BlockquoteFixer from './PreProcessor/BlockquoteFixer'
 import PageLinker from './PreProcessor/PageLinker'
 import ImageExpander from './PreProcessor/ImageExpander'
 
@@ -19,7 +18,7 @@ export default class CrowiRenderer {
   constructor(crowi) {
     this.crowi = crowi
 
-    this.preProcessors = [new SectionFixer(crowi), new BlockquoteFixer(crowi), new PageLinker(crowi), new ImageExpander(crowi)]
+    this.preProcessors = [new SectionFixer(crowi), new PageLinker(crowi), new ImageExpander(crowi)]
     this.postProcessors = [new Emoji(crowi), new Mathjax(crowi)]
 
     this.langProcessors = {
