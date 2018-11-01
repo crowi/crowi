@@ -56,7 +56,7 @@ export default class CrowiRenderer {
 
   postProcess(html, dom) {
     for (let processor of this.postProcessors) {
-      if (!processor.process) {
+      if (processor.process) {
         html = processor.process(html, dom)
       }
     }
