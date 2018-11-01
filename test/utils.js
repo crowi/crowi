@@ -1,6 +1,5 @@
 'use strict'
 
-const mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || null
 const mongoose = require('mongoose')
 const models = require(MODEL_DIR)
 const Config = require(MODEL_DIR + '/config')
@@ -11,15 +10,17 @@ crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
 
 mongoose.Promise = global.Promise
 
+const { __MONGO_URI__: MONGO_URI } = global
+
 beforeAll(async () => {
-  if (mongoUri) {
-    await mongoose.connect(mongoUri)
-    await mongoose.connection.db.dropDatabase()
+  if (MONGO_URI) {
+    await mongoose.connect(MONGO_URI)
+    await mongoose.connection.dropDatabase()
   }
 })
 
 afterAll(async () => {
-  if (mongoUri) {
+  if (MONGO_URI) {
     await mongoose.disconnect()
   }
 })

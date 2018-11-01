@@ -16,6 +16,7 @@ services:
     volumes:
       - ./:/crowi
       - /crowi/node_modules
+      - /root/.mongo-binaries
     ports:
       - 3000:3000
     links:
