@@ -1,6 +1,9 @@
 export default class ImageExpander {
   replaceText(text) {
-    return text.replace(/\s(https?:\/\/[\S]+\.(jpg|jpeg|gif|png))/g, ' <a href="$1"><img src="$1" class="auto-expanded-image"></a>')
+    const replacer = '<a href="$1"><img src="$1" class="auto-expanded-image"></a>'
+    text = text.replace(/^(https?:\/\/[\S]+\.(jpg|jpeg|gif|png))/g, replacer)
+    text = text.replace(/\s(https?:\/\/[\S]+\.(jpg|jpeg|gif|png))/g, ' ' + replacer)
+    return text
   }
 
   process(tokens) {
