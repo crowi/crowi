@@ -5,13 +5,24 @@ export default class SectionFixer {
 
   process(tokens) {
     const { links } = tokens
+    let level = 0
     tokens = tokens.map(token => {
       const { type, text = '' } = token
       if (token) {
         switch (type) {
           case 'paragraph':
-            const [isHeading, hashes, heading] = this.extractHeading(text) || [null, null, null]
-            return isHeading ? { ...token, type: 'heading', depth: hashes.length, text: heading } : token
+            const [matches, hashes, heading] = this.extractHeading(text) || [null, null, null]
+            const isHeading = matches && hashes.length <= 6
+            if (level === 0 && isHeading) {
+              return { ...token, type: 'heading', depth: hashes.length, text: heading }
+            }
+            break
+          case 'blockquote_start':
+            level++
+            break
+          case 'blockquote_end':
+            level--
+            break
         }
       }
       return token

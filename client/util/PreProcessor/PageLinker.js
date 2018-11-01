@@ -1,8 +1,13 @@
 export default class PageLinker {
   replaceText(text) {
+    const replacer = '<a href="$1">$1</a>'
+    // ページ間リンク: [] でかこまれてて / から始まる
+    text = text.replace(/^\[(\/[^\]]+?)\](?!\()/g, replacer)
+    text = text.replace(/\s\[(\/[^\]]+?)\](?!\()/g, ' ' + replacer)
+    // ページ間リンク: <> でかこまれてて / から始まり、 / が2個以上
+    text = text.replace(/^<((\/[^>]+?){2,})>/g, replacer)
+    text = text.replace(/\s<((\/[^>]+?){2,})>/g, ' ' + replacer)
     return text
-      .replace(/\s\[(\/[^\]]+?)\](?!\()/g, ' <a href="$1">$1</a>') // ページ間リンク: [] でかこまれてて / から始まる
-      .replace(/\s<((\/[^>]+?){2,})>/g, ' <a href="$1">$1</a>') // ページ間リンク: <> でかこまれてて / から始まり、 / が2個以上
   }
 
   process(tokens) {
