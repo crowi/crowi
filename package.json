@@ -147,6 +147,7 @@
     "faker": "^4.1.0",
     "flow-bin": "^0.65.0",
     "jest": "^23.6.0",
+    "mongodb-memory-server": "^2.6.2",
     "nodemon": "^1.17.2",
     "onchange": "^4.0.0",
     "prettier": "^1.13.5",

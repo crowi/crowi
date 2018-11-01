@@ -86,7 +86,18 @@ module.exports = {
   // preset: null,
 
   // Run tests from one or more projects
-  // projects: null,
+  projects: [
+    {
+      displayName: 'server',
+      setupTestFrameworkScriptFile: './test/bootstrap.js',
+      testEnvironment: './test/mongo-environment.js',
+      testMatch: ['<rootDir>/test/**/*.test.js'],
+    },
+    {
+      displayName: 'client',
+      testMatch: ['<rootDir>/client/**/*.test.js'],
+    },
+  ],
 
   // Use this configuration option to add custom reporters to Jest
   // reporters: undefined,
@@ -118,7 +129,7 @@ module.exports = {
   setupFiles: ['./node_modules/regenerator-runtime/runtime'],
 
   // The path to a module that runs some code to configure or set up the testing framework before each test
-  setupTestFrameworkScriptFile: './test/bootstrap.js',
+  // setupTestFrameworkScriptFile: null,
 
   // A list of paths to snapshot serializer modules Jest should use for snapshot testing
   // snapshotSerializers: [],
