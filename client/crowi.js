@@ -2,6 +2,7 @@
 */
 
 import 'scrollpos-styler'
+import MentionPopovers from './MentionPopovers'
 
 const Crowi = {}
 
@@ -707,6 +708,8 @@ $(function() {
         $b.toggleClass('overlay-on')
       })
   } // end if pageId
+
+  MentionPopovers.init('.wiki .mention', '#mention-popper-template')
 
   // hash handling
   $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {

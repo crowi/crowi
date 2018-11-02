@@ -1,0 +1,53 @@
+.popper-container {
+  z-index: 2000;
+
+  &[data-state='visible'] {
+    & > .popper {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0px);
+    }
+  }
+  &[data-state='hidden'] {
+    & > .popper {
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+    }
+  }
+
+  > .popper {
+    display: flex;
+    margin-top: 10px;
+    border: $card-border-width solid $card-border-color;
+    @include border-radius($card-border-radius);
+    background: $card-bg;
+    transition: all cubic-bezier(0.165, 0.84, 0.44, 1) 0.2s;
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+  }
+}
+  
+.mention-popper {
+  a {
+    display: block;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+  }
+
+  img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+  }
+
+  .name {
+    color: $gray-900;
+    line-height: 32px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-left: 0.6rem;
+  }
+}
