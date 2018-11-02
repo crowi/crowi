@@ -730,6 +730,9 @@ $(function() {
   $(document).on('click', '#external-share .dropdown-menu', function(e) {
     e.stopPropagation()
   })
+  $(document).on('click', '#pageowner-setting .dropdown-menu', function(e) {
+    e.stopPropagation()
+  })
 })
 
 Crowi.findHashFromUrl = function(url) {
