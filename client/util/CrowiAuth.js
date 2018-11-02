@@ -44,8 +44,12 @@ export default class CrowiAuth {
   }
 
   onLogin() {
-    const { continue: continueUrl = '/' } = queryString.parse(this.location.search)
-    top.location.href = continueUrl
+    const { continue: continueUrl } = queryString.parse(this.location.search)
+    if (continueUrl) {
+      top.location.href = continueUrl
+    } else {
+      this.location.reload()
+    }
   }
 
   onLogout() {
