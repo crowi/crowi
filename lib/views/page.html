@@ -43,10 +43,8 @@
         ><i class="far fa-thumbs-up"></i></button>
       </div>
     </div>
-  </header>
-  {% else %}
-  {# trash/* #}
-  <header id="page-header">
+    {% else %}
+    {# trash/* #}
     <div class="flex-title-line">
       <h1 class="title flex-item-title">{{ path|insertSpaceToEachSlashes }}</h1>
       <div class="flex-item-action">
@@ -57,21 +55,22 @@
         </span>
       </div>
     </div>
-  </header>
-  {% endif %}
+    {% endif %}
 
-  {% if page.owners %}
-  <div class='owners'>
-    <p>This page is <b>owned</b> by</p>
-    {% for owner in page.owners %}
-      <div class='owner-team' data-team-id='{{owner.team.id}}'>
-      {% for user in owner.team.users %}
-        <img src="{{ user|picture }}" title="{{ user.name }}">
+    {% if page.owners %}
+    <div class='owners'>
+      <p>This page is <b>owned</b> by</p>
+      {% for owner in page.owners %}
+        <div class='owner-team' data-team-id='{{owner.team.id}}'>
+        {% for user in owner.team.users %}
+          <img src="{{ user|picture }}" title="{{ user.name }}">
+        {% endfor %}
+        </div>
       {% endfor %}
-      </div>
-    {% endfor %}
-  </div>
-  {% endif %}
+    </div>
+    {% endif %}
+  </header>
+
 </div>
 
 {% block content_head_after %}
