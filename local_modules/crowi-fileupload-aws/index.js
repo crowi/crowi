@@ -148,7 +148,7 @@ module.exports = function(crowi) {
       var stats = fs.statSync(filePath)
 
       if (!stats.isFile()) {
-        debug('Cache file not found or the file is not a regular fil.')
+        debug('Cache file not found or the file is not a regular file.')
         return true
       }
 
@@ -158,7 +158,7 @@ module.exports = function(crowi) {
       }
     } catch (e) {
       // no such file or directory
-      debug('Stats error', e)
+      debug('Stats error:', filePath)
       return true
     }
 
