@@ -5,6 +5,7 @@ import hljs from 'highlight.js'
 
 import SectionFixer from './PreProcessor/SectionFixer'
 import PageLinker from './PreProcessor/PageLinker'
+import UserLinker from './PreProcessor/UserLinker'
 import ImageExpander from './PreProcessor/ImageExpander'
 
 import Emoji from './PostProcessor/Emoji'
@@ -18,7 +19,7 @@ export default class CrowiRenderer {
   constructor(crowi) {
     this.crowi = crowi
 
-    this.preProcessors = [new SectionFixer(crowi), new PageLinker(crowi), new ImageExpander(crowi)]
+    this.preProcessors = [new SectionFixer(crowi), new PageLinker(crowi), new UserLinker(crowi), new ImageExpander(crowi)]
     this.postProcessors = [new Emoji(crowi), new Mathjax(crowi)]
 
     this.langProcessors = {
