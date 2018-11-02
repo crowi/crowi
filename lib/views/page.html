@@ -15,25 +15,6 @@
     <div class="flex-title-line">
       <h1 class="title flex-item-title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
 
-      {% if page.owners %}
-      <div class='owners'>
-        {% for owner in page.owners %}
-          <div class='owner-team' data-team-id='{{owner.team.id}}'>
-          {% for user in owner.team.users %}
-            <img src="{{ user|picture }}" title="{{ user.name }}">
-            <img src="{{ user|picture }}" title="{{ user.name }}">
-          {% endfor %}
-          </div>
-          <div class='owner-team' data-team-id='{{owner.team.id}}'>
-          {% for user in owner.team.users %}
-            <img src="{{ user|picture }}" title="{{ user.name }}">
-            <img src="{{ user|picture }}" title="{{ user.name }}">
-          {% endfor %}
-          </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-
       {% if isExternalShareEnabled() %}
         <div id="external-share" class="flex-item-action dropdown">
           <button class="btn btn-outline-secondary" data-toggle="dropdown">
@@ -77,6 +58,19 @@
       </div>
     </div>
   </header>
+  {% endif %}
+
+  {% if page.owners %}
+  <div class='owners'>
+    <p>This page is <b>owned</b> by</p>
+    {% for owner in page.owners %}
+      <div class='owner-team' data-team-id='{{owner.team.id}}'>
+      {% for user in owner.team.users %}
+        <img src="{{ user|picture }}" title="{{ user.name }}">
+      {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
   {% endif %}
 </div>
 
