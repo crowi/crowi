@@ -1,17 +1,25 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import CreateTeam from 'components/CreateTeam'
+// import CreateTeam from 'components/CreateTeam'
 
-import { FormGroup, InputGroup, HelpBlock, FormControl, Button, Badge, Label } from 'react-bootstrap'
+import { FormGroup, HelpBlock, Button, ControlLabel, Label } from 'react-bootstrap'
 
 export default class PageOwnerBox extends React.Component {
   constructor() {
     super()
 
+    this.teamInputRef = null
     this.state = {
       value: null,
     }
+
+    this.handleRemove = this.handleRemove.bind(this)
+  }
+
+  handleRemove(event) {
+    event.preventDefault()
+    event.stopPropagation()
   }
 
   render() {
@@ -21,39 +29,26 @@ export default class PageOwnerBox extends React.Component {
 
         <form>
           <FormGroup className="fg w-100">
-            <div className="teams">
-              <Label className="team" bsStyle="primary">
-                <div className="icons">
-                  <img src="/uploads/user/5bd3061a00ddf42a47165039.png" title="aaaa" />
-                  <img src="/images/userpicture.png" title="Aoi Miyazaki" />
-                </div>
-                <span className="name">Team1</span>
-              </Label>
-              <Label className="team" bsStyle="primary">
-                <div className="icons">
-                  <img src="/uploads/user/5bd3061a00ddf42a47165039.png" title="aaaa" />
-                  <img src="/images/userpicture.png" title="Aoi Miyazaki" />
-                </div>
-                <span className="name">Team1</span>
-              </Label>
-              <Label className="team" bsStyle="primary">
-                <div className="icons">
-                  <img src="/uploads/user/5bd3061a00ddf42a47165039.png" title="aaaa" />
-                  <img src="/images/userpicture.png" title="Aoi Miyazaki" />
-                </div>
-                <span className="name">Team1</span>
-              </Label>
+            <ControlLabel className="w-100">Owners</ControlLabel>
+            <div className="teams form-control" onClick={() => this.teamInputRef.focus()}>
+              {['Unreal', 'Real', 'Incorp', 'Dev', 'Product', 'Wiki', 'Affairs'].sort().map(name => (
+                <Label className="team" bsStyle="primary" key={name} onClick={this.handleRemove}>
+                  <div className="icons">
+                    <img src="/uploads/user/5bd3061a00ddf42a47165039.png" title="aaaa" />
+                    <img src="/images/userpicture.png" title="Aoi Miyazaki" />
+                  </div>
+                  <span className="name">{name}</span>
+                </Label>
+              ))}
+              <input
+                ref={ref => {
+                  this.teamInputRef = ref
+                }}
+              />
             </div>
-            <InputGroup className="w-100">
-              <FormControl type="text" value={this.state.value} placeholder="Enter handle of team" />
-              <InputGroup.Button>
-                <Button>+</Button>
-              </InputGroup.Button>
-            </InputGroup>
-            <HelpBlock className="mg-no">Create Team</HelpBlock>
-
+            <HelpBlock>Create Team</HelpBlock> {/* TODO: show this on completion */}
             <Button
-              className="pull-right"
+              className="pull-right save"
               onClick={() => {
                 alert('do stuff')
               }}
