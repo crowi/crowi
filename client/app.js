@@ -51,6 +51,7 @@ crowi.setConfig(JSON.parse(document.getElementById('crowi-context-hydrate').text
 const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
 if (!isSharePage) {
   crowi.fetchUsers()
+  crowi.fetchTeams()
 }
 
 const crowiRenderer = new CrowiRenderer(crowi)
