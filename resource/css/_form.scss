@@ -34,7 +34,7 @@
         .col-md-6 {
           height: 100%;
         }
-        form {
+        #page-form {
           padding: 0;
           border-right: solid 1px #ccc;
           &::after {
@@ -103,6 +103,74 @@
     background: rgba(255,255,255,.8);
     border-top: solid 1px #ccc;
     margin-bottom: 0;
+  }
+
+  .pageowner-setting-box {
+    padding: 16px;
+    width: 30rem;
+    display: flex;
+    flex-direction: column;
+
+    .w-100 {
+      width: 100%
+    }
+
+    & > form > .fg {
+      & > *:not(.mg-no) {
+        margin-top: 16px;
+      }
+    }
+
+    .teams {
+      display: flex;
+      overflow: scroll;
+
+      & > .team {
+        display: flex;
+        align-items: center;
+
+        &:after {
+          content: '\00D7';
+          margin-left: 8px;
+          font-size: 1.3rem;
+          right: 4px;
+        }
+        &:not(:last-child) {
+          margin-right: 8px;
+        }
+
+        & > :not(:first-child) {
+          margin-left: 8px;
+        }
+
+        & > .icons {
+          $img-size: 20px;
+          margin: 2px 0;
+
+          & > img {
+            width: $img-size;
+            height: $img-size;
+            border-radius: 50%;
+            border-color: #fff;
+            border-width: 2px;
+            border-style: solid;
+  
+            &:not(:first-child) {
+              margin-left: -($img-size/2);
+            }
+          }
+        }
+
+        & > span {
+          font-size: 1.3rem;
+          font-weight: normal;
+        }
+        & > .badge > .close {
+          opacity: 1;
+          color: #fff;
+        }
+      }
+    }
   }
 } // }}}
 
