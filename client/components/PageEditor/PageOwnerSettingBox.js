@@ -6,8 +6,8 @@ import PropTypes from 'prop-types'
 import { FormGroup, HelpBlock, Button, ControlLabel, Label } from 'react-bootstrap'
 
 export default class PageOwnerBox extends React.Component {
-  constructor() {
-    super()
+  constructor(props) {
+    super(props)
 
     this.teamInputRef = null
     this.state = {
@@ -15,6 +15,8 @@ export default class PageOwnerBox extends React.Component {
     }
 
     this.handleRemove = this.handleRemove.bind(this)
+
+    console.dir(this.props.crowi.teams)
   }
 
   handleRemove(event) {
