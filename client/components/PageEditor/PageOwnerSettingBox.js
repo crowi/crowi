@@ -34,15 +34,17 @@ export default class PageOwnerBox extends React.Component {
           <FormGroup className="fg w-100">
             <ControlLabel className="w-100">Owners</ControlLabel>
             <div className="teams form-control" onClick={() => this.teamInputRef.focus()}>
-              {['Unreal', 'Real', 'Incorp', 'Dev', 'Product', 'Wiki', 'Affairs'].sort().map(name => (
-                <Label className="team" bsStyle="primary" key={name} onClick={this.handleRemove}>
-                  <div className="icons">
-                    <img src="/uploads/user/5bd3061a00ddf42a47165039.png" title="aaaa" />
-                    <img src="/images/userpicture.png" title="Aoi Miyazaki" />
-                  </div>
-                  <span className="name">{name}</span>
-                </Label>
-              ))}
+              {this.props.currentPageOwners.map(owner => {
+                const { team } = owner
+                return (
+                  <Label className="team" bsStyle="primary" key={team._id} onClick={this.handleRemove}>
+                    <div className="icons">
+                      {team.users.map(user => <img src={user.image || '/images/userpicture.png'} title={user.name} key={user._id} />)}
+                    </div>
+                    <span className="name">{team.name || team.handle}</span>
+                  </Label>
+                )
+              })}
               <input
                 ref={ref => {
                   this.teamInputRef = ref
