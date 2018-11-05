@@ -34,11 +34,16 @@ moment.locale(navigator.userLanguage || navigator.language)
 const mainContent = document.querySelector('#content-main')
 let pageId = null
 let pageContent = null
+let pageOwners = null
 if (mainContent !== null) {
   pageId = mainContent.attributes['data-page-id'].value
   const rawText = document.getElementById('raw-text-original')
   if (rawText) {
     pageContent = rawText.innerHTML
+  }
+  const pageOwnersData = document.getElementById('page-owners-data')
+  if (pageOwnersData) {
+    pageOwners = JSON.parse(pageOwnersData.innerText)
   }
 }
 
@@ -77,7 +82,7 @@ const componentMappings = {
   'secret-keyword-form-container': <SecretKeywordFormContainer pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
 
-  'pageowner-setting-box': <PageOwnerSettingBox pageId={pageId} crowi={crowi} />,
+  'pageowner-setting-box': <PageOwnerSettingBox pageId={pageId} crowi={crowi} pageOwners={pageOwners} />,
 }
 
 Object.keys(componentMappings).forEach(key => {

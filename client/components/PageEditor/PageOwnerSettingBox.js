@@ -17,6 +17,7 @@ export default class PageOwnerBox extends React.Component {
     this.handleRemove = this.handleRemove.bind(this)
 
     console.dir(this.props.crowi.teams)
+    console.dir(this.props.pageOwners)
   }
 
   handleRemove(event) {
@@ -67,4 +68,5 @@ export default class PageOwnerBox extends React.Component {
 PageOwnerBox.PropTypes = {
   crowi: PropTypes.object.isRequired,
   pageId: PropTypes.string.isRequired,
+  pageOwners: PropTypes.object.isRequired,
 }
