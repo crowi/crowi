@@ -85,8 +85,11 @@ export default class PageOwnerBox extends React.Component {
     if (!value) return [] // prevent empty
 
     const calculated = this.crowi.teams.filter(team => {
+      if (team._id in this.state.teams) return false
+
       if (team.handle.includes(value)) return true
       if ('name' in team && team.name.includes(value)) return true
+
       return false
     })
     return calculated
