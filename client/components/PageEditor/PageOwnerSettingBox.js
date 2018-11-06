@@ -46,17 +46,15 @@ export default class PageOwnerBox extends React.Component {
     this.handleAdd = this.handleAdd.bind(this)
     this.handleInput = this.handleInput.bind(this)
     this.save = this.save.bind(this)
-
-    console.dir(this.props.crowi.teams)
-    console.dir(this.props.currentPageOwners)
   }
 
   handleAdd(teamId) {
     this.setState(state => {
-      const { teams } = state
-
-      teams[teamId] = this.crowi.teams[teamId]
-
+      const teams = {
+        ...state.teams,
+        [teamId]: this.crowi.teamById[teamId],
+      }
+      console.dir(teams)
       return {
         teams,
       }
@@ -80,15 +78,11 @@ export default class PageOwnerBox extends React.Component {
     this.setState({
       value: value || null,
     })
-    // TODO: make this be called by render
-    const calculated = this.calculateSuggestion(value)
-    console.dir(calculated)
   }
 
-  calculateSuggestion(value) {
-    // TODO: get value from state
-    // 今は handleInput から呼んでいて、どうも setState が効力を発揮する前らしい
-    if (!value) return false // prevent empty
+  calculateSuggestion() {
+    const value = this.state.value
+    if (!value) return [] // prevent empty
 
     const calculated = this.crowi.teams.filter(team => {
       if (team.handle.includes(value)) return true
@@ -122,10 +116,12 @@ export default class PageOwnerBox extends React.Component {
       console.error(errors)
     }
 
+    this.teamInputRef.value = ''
     this.setState({
       teamsWillOwn: {},
       teamsWillDisown: {},
       saveDisabled: false,
+      value: '',
     })
   }
 
@@ -134,7 +130,13 @@ export default class PageOwnerBox extends React.Component {
       <div className="pageowner-setting-box">
         <h4>Add owners to this page</h4>
 
-        <form>
+        <form
+          onSubmit={event => {
+            event.preventDefault()
+            event.stopPropagation()
+            this.save(event)
+          }}
+        >
           <FormGroup className="fg w-100">
             <ControlLabel className="w-100">Owners</ControlLabel>
             <div className="teams form-control" onClick={() => this.teamInputRef.focus()}>
@@ -150,10 +152,7 @@ export default class PageOwnerBox extends React.Component {
                       this.handleRemove(team._id)
                     }}
                   >
-                    <div className="icons">
-                      {team.users.map(user => <img src={user.image || '/images/userpicture.png'} title={user.name} key={user._id} />)}
-                    </div>
-                    <span className="name">{team.name || team.handle}</span>
+                    <span className="name">#{team.handle}</span>
                   </Label>
                 )
               })}
@@ -162,10 +161,21 @@ export default class PageOwnerBox extends React.Component {
                   this.teamInputRef = ref
                 }}
                 onChange={this.handleInput}
+                onKeyPress={event => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    const calculated = this.calculateSuggestion()
+                    if (calculated.length > 0) {
+                      this.handleAdd(calculated[0]._id)
+                      event.target.value = ''
+                    }
+                  }
+                }}
               />
             </div>
             <HelpBlock>Create Team</HelpBlock> {/* TODO: show this on completion */}
-            <Button className="pull-right save" onClick={this.save.bind(this)} disabled={this.state.saveDisabled}>
+            <Button type="submit" className="pull-right save" disabled={this.state.saveDisabled}>
               Save
             </Button>
           </FormGroup>
