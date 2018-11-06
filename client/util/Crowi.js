@@ -121,9 +121,6 @@ export default class Crowi {
       .then(data => {
         const { teams } = data
 
-        this.teams = teams
-        this.localStorage.teams = JSON.stringify(teams)
-
         const teamByHandle = {}
         const teamById = {}
         teams.forEach(team => {
@@ -131,12 +128,20 @@ export default class Crowi {
           teamById[team._id] = team
         })
 
+        // Freeze objects to prevent changes by util user.
+        // When cache expired, these objects will not be reused. I think there is no problem.
+        Object.freeze(teams)
+        Object.freeze(teamByHandle)
+        Object.freeze(teamById)
+
+        // save
+        this.teams = teams
         this.teamByHandle = teamByHandle
-        this.localStorage.teamByHandle = JSON.stringify(teamByHandle)
-
         this.teamById = teamById
-        this.localStorage.teamById = JSON.stringify(teamById)
 
+        this.localStorage.teams = JSON.stringify(teams)
+        this.localStorage.teamByHandle = JSON.stringify(teamByHandle)
+        this.localStorage.teamById = JSON.stringify(teamById)
         this.localStorage.lastTeamFetched = new Date()
       })
       .catch(err => {
