@@ -1,20 +1,42 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import { Modal } from 'react-bootstrap'
+import { Modal, ModalHeader, ModalBody, ModalFooter, Form, FormGroup, Button, Label, Input } from 'reactstrap'
 
 export default class CreateTeam extends React.Component {
   constructor(props) {
     super(props)
-
-    this.onModalCloseClicked = this.props.onModalCloseClicked
     this.crowi = this.props.crowi
   }
 
   render() {
     return (
-      <Modal>
-        <div>Hoge</div>
+      <Modal isOpen={this.props.isOpen} toggle={this.props.toggle} className="create-team">
+        <Form>
+          <ModalHeader>Create Team</ModalHeader>
+          <ModalBody>
+            <FormGroup>
+              <Label>Name</Label>
+              <Input />
+            </FormGroup>
+            <FormGroup>
+              <Label>Handle</Label>
+              <Input />
+            </FormGroup>
+            <FormGroup>
+              <Label>Users</Label>
+              <Input />
+            </FormGroup>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="primary" onClick={this.props.toggle}>
+              Create
+            </Button>
+            <Button color="secondary" onClick={this.props.toggle}>
+              Cancel
+            </Button>
+          </ModalFooter>
+        </Form>
       </Modal>
     )
   }
@@ -22,5 +44,6 @@ export default class CreateTeam extends React.Component {
 
 CreateTeam.propTypes = {
   crowi: PropTypes.object.isRequired,
-  onModalCloseClicked: PropTypes.func.isRequired,
+  isOpen: PropTypes.bool.isRequired,
+  toggle: PropTypes.func.isRequired,
 }

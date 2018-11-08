@@ -4,6 +4,7 @@ import PropTypes from 'prop-types'
 // import CreateTeam from 'components/CreateTeam'
 
 import { Form, FormGroup, FormText, Button, Badge, Label } from 'reactstrap'
+import CreateTeam from 'components/CreateTeam'
 
 class Team {
   constructor(id, crowi) {
@@ -39,6 +40,8 @@ export default class PageOwnerBox extends React.Component {
       teams: { ...this.currentPageOwnerTeams },
 
       saveDisabled: false,
+
+      createTeamModalOpened: false,
     }
 
     // handlers
@@ -46,6 +49,7 @@ export default class PageOwnerBox extends React.Component {
     this.handleAdd = this.handleAdd.bind(this)
     this.handleInput = this.handleInput.bind(this)
     this.save = this.save.bind(this)
+    this.toggleCreateTeamModal = this.toggleCreateTeamModal.bind(this)
   }
 
   handleAdd(teamId) {
@@ -78,6 +82,12 @@ export default class PageOwnerBox extends React.Component {
     this.setState({
       value: value || null,
     })
+  }
+
+  toggleCreateTeamModal() {
+    this.setState(state => ({
+      createTeamModalOpened: !state.createTeamModalOpened,
+    }))
   }
 
   calculateSuggestion() {
@@ -178,7 +188,11 @@ export default class PageOwnerBox extends React.Component {
               />
             </div>
           </FormGroup>
-          <FormText>Create Team</FormText> {/* TODO: show this on completion */}
+          {/* TODO: show below create-team on completion */}
+          <FormText className="ft-create-team float-right">
+            <a onClick={this.toggleCreateTeamModal}>Create Team</a>
+          </FormText>
+          <CreateTeam isOpen={this.state.createTeamModalOpened} toggle={this.toggleCreateTeamModal} crowi={this.crowi} />
           <FormGroup className="fg-save">
             <Button type="submit" className="save float-right" disabled={this.state.saveDisabled}>
               Save

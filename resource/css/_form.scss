@@ -161,8 +161,14 @@
     }
 
     & > form > .fg-save {
-      & .save {
+      & > .save {
         margin-top: 16px;
+      }
+    }
+
+    & > form > .ft-create-team {
+      & > a {
+        padding: 0;
       }
     }
   }
