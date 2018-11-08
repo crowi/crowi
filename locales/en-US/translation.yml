@@ -101,6 +101,7 @@ page_me:
     github_connect1: 'With GitHub Connect, you can sign in with your GitHub Account.'
     github_disconnect1: 'If you disconnect your GitHub account, you will be unable to sign in using GitHub Authentication'
     github_disconnect2: 'After disconnecting your GitHub account, you can sign in normally using your email and password'
+  can_not_disconnect: You can not disconnect because one or more third-party authentication settings are required.
 page_me_apitoken:
   notice:
     apitoken_issued: API Token is not issued.
