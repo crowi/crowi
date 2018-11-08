@@ -5,17 +5,10 @@ var mongoose = require('mongoose')
 var fs = require('fs')
 var models = {}
 var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
+const { MongoClient } = require('mongodb')
 
 // Want fix...
 crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
-
-mongoose.Promise = global.Promise
-
-before('Create database connection and clean up', function(done) {
-  if (!mongoUri) {
-    return done()
-  }
-const { MongoClient } = require('mongodb')
 
 mongoose.Promise = global.Promise
 
