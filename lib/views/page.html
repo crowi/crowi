@@ -8,10 +8,10 @@
 {% endblock %}
 
 <div class="header-wrap sps sps--abv">
-  {% if not page.isDeleted() %}
   <header id="page-header">
     <p class="stopper"><i class="fa fa-chevron-up"></i></p>
 
+    {% if not page.isDeleted() %}
     <div class="flex-title-line">
       <h1 class="title flex-item-title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
 
