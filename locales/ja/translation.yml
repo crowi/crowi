@@ -101,6 +101,7 @@ page_me:
     github_connect1: GitHubコネクトをすると、GitHubアカウントでログイン可能になります。
     github_disconnect1: 接続を解除すると、GitHubでログインができなくなります。
     github_disconnect2: 解除後はメールアドレスとパスワードでログインすることができます。
+  can_not_disconnect: 1つ以上の外部認証設定が必要なため、接続を解除できません。
 page_me_apitoken:
   notice:
     apitoken_issued: API Token が設定されていません。

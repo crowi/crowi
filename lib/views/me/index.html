@@ -156,12 +156,17 @@
               <p>
                 {{ t('Connected') }}
 
-                <input type="submit" name="disconnectGoogle" class="btn btn-default" value="{{ t('Disconnect') }}">
+                <input type="submit" name="disconnectGoogle" class="btn btn-default" value="{{ t('Disconnect') }}" {% if !user.canDisconnectThirdPartyId() %}disabled{% endif %}>
               </p>
               <p class="help-block">
                 {{ t('page_me.form_help.google_disconnect1') }}<br>
                 {{ t('page_me.form_help.google_disconnect2') }}
               </p>
+              {% if !user.canDisconnectThirdPartyId() %}
+              <p class="help-block">
+                {{ t('page_me.can_not_disconnect') }}
+              </p>
+              {% endif %}
             </div>
 
             {% else %}
@@ -217,12 +222,17 @@
               <p>
                 {{ t('Connected') }}
 
-                <input type="submit" name="disconnectGitHub" class="btn btn-default" value="{{ t('Disconnect') }}">
+                <input type="submit" name="disconnectGitHub" class="btn btn-default" value="{{ t('Disconnect') }}" {% if !user.canDisconnectThirdPartyId() %}disabled{% endif %}>
               </p>
               <p class="help-block">
                 {{ t('page_me.form_help.github_disconnect1') }}<br>
                 {{ t('page_me.form_help.github_disconnect2') }}
               </p>
+              {% if !user.canDisconnectThirdPartyId() %}
+              <p class="help-block">
+                {{ t('page_me.can_not_disconnect') }}
+              </p>
+              {% endif %}
             </div>
 
             {% else %}
