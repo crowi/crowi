@@ -26,7 +26,7 @@
 
     <div class="row">
       {% if googleLoginEnabled() && !user.googleId %}
-      <div class="col-md-6">
+      <div class="col-lg-6">
           {% set wmessage = req.flash('warningMessage.auth.google') %}
           {% if wmessage.length %}
           <div class="alert alert-danger">
@@ -40,7 +40,7 @@
       </div>
       {% endif %}
       {% if githubLoginEnabled() && !user.githubId %}
-      <div class="col-md-6">
+      <div class="col-lg-6">
           {% set wmessage = req.flash('warningMessage.auth.github') %}
           {% if wmessage.length %}
           <div class="alert alert-danger">

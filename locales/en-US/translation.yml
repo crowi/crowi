@@ -66,19 +66,19 @@ Sign out: Logout
 page_login:
   sign_in: Sign in
   sign_up_is_here: Sign up
-  sign_in_with: 'Sign in with %s Account'
+  sign_in_with: 'Sign in with %s'
 page_register:
   example: Example
   taro_yamada: James Bond
   sign_up: Sign up
-  sign_up_with: 'Sign up with %s Account'
+  sign_up_with: 'Sign up with %s'
   sign_in_is_here: Sign in
   note:
     invited: 'Tell me a bit about you :)'
   notice:
     restricted: Admin approval required.
     restricted_defail: "Once the admin approves your sign up, you'll be able to access this wiki."
-    register_with_this: 'Sign up with this %s Account.'
+    register_with_this: 'Sign up with this %s.'
     social_account_continue: 'Enter your user ID, name and password to continue.'
   form_help:
     email: You must have email address which listed below to sign up to this wiki.
