@@ -107,84 +107,65 @@
 
   .pageowner-setting-box {
     padding: 16px;
-    width: 60rem;
-    display: flex;
-    flex-direction: column;
+    width: 40em;
 
-    .w-100 {
-      width: 100%
-    }
+    .fc {
+      padding: 0;
 
-    & > form > .fg {
-      & .save {
-        margin-top: 16px;
-      }
-
-      & > .teams {
-        display: flex;
-        height: auto;
-        flex-wrap: wrap;
-  
-        padding-top: 0; // Originally, 6px, came from 'form-control'
-        & > * {
-          margin-top: 6px;
+      & > .row > .col {
+        & .save {
+          margin-top: 16px;
         }
   
-        & > .team {
+        & > .teams {
           display: flex;
-          align-items: center;
-  
-          &:after {
-            content: '\00D7';
-            margin-left: 8px;
-            font-size: 1.3rem;
-            right: 4px;
-          }
-          &:not(:last-child) {
-            margin-right: 8px;
-          }
-  
-          & > :not(:first-child) {
-            margin-left: 6px;
-          }
-  
-          & > .icons {
-            $img-size: 18px;
-            margin: 2px 0;
-  
-            & > img {
-              width: $img-size;
-              height: $img-size;
-              border-radius: 50%;
-              border-color: #fff;
-              border-width: 2px;
-              border-style: solid;
+          height: auto;
+          flex-wrap: wrap;
     
-              &:not(:first-child) {
-                margin-left: -($img-size/5*3);
-              }
+          padding-top: 0; // Originally, 6px, came from 'form-control'
+          & > * {
+            margin-top: 6px;
+          }
+    
+          & > .team {
+            display: flex;
+            align-items: center;
+            max-width: 100%;
+    
+            &:after {
+              content: '\00D7';
+              margin-left: 8px;
+              font-size: 0.9rem;
+              right: 4px;
+            }
+            &:not(:last-child) {
+              margin-right: 8px;
+            }
+    
+            & > span {
+              padding: 2px 0;
+              max-width: 100%;
+              font-size: 0.9rem;
+              font-weight: normal;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+    
+            & > .badge > .close {
+              opacity: 1;
+              color: #fff;
             }
           }
-  
-          & > span {
-            font-size: 1.3rem;
-            font-weight: normal;
+    
+          & > input {
+            flex-grow: 1;
+            font-size: 0.9rem;
+            border: none;
+            outline: 0;
           }
-  
-          & > .badge > .close {
-            opacity: 1;
-            color: #fff;
-          }
-        }
-  
-        & > input {
-          flex-grow: 1;
-          font-size: 1.5rem;
-          border: none;
-          outline: 0;
         }
       }
-    }
+    } 
   }
 } // }}}
 
