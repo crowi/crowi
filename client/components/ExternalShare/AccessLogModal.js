@@ -35,11 +35,11 @@ class AccessLogModal extends React.Component {
         <h4>
           {(isActive && (
             <span>
-              {t('Share ID')}: <a href={`/_share/${uuid}`}>{uuid}</a> <span className="label label-success">Active</span>
+              {t('Share ID')}: <a href={`/_share/${uuid}`}>{uuid}</a> <span className="badge badge-success">Active</span>
             </span>
           )) || (
             <span>
-              {t('Share ID')}: {uuid} <span className="label label-danger">Inactive</span>
+              {t('Share ID')}: {uuid} <span className="badge badge-danger">Inactive</span>
             </span>
           )}
         </h4>

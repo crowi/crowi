@@ -1,14 +1,36 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
-import { Nav, NavItem, NavLink } from 'reactstrap'
 import Icon from 'components/Common/Icon'
+import SearchTypeNav from 'components/SearchPage/SearchTypeNav/SearchTypeNav'
 
 class SearchToolbar extends React.Component {
   constructor(props) {
     super(props)
 
-    this.searchTypes = ['', 'portal', 'public', 'user']
+    const { t } = this.props
+    this.searchTypes = [
+      {
+        key: '',
+        icon: <Icon name="th" />,
+        name: t('page_types.all'),
+      },
+      {
+        key: 'portal',
+        icon: <Icon name="circle" regular />,
+        name: t('page_types.portal'),
+      },
+      {
+        key: 'public',
+        icon: <Icon name="file" regular />,
+        name: t('page_types.public'),
+      },
+      {
+        key: 'user',
+        icon: <Icon name="user" regular />,
+        name: t('page_types.user'),
+      },
+    ]
 
     this.getActiveType = this.getActiveType.bind(this)
     this.onClick = this.onClick.bind(this)
@@ -16,8 +38,9 @@ class SearchToolbar extends React.Component {
 
   getActiveType() {
     const defaultType = this.searchTypes[0]
-    const { type } = this.props
-    return this.searchTypes.includes(type) ? type : defaultType
+    const searchTypes = this.searchTypes.reduce((object, { key, icon, name }) => ({ ...object, [key]: { key, icon, name } }), {})
+    const { type: searchType } = this.props
+    return searchType in searchTypes ? searchTypes[searchType] : defaultType
   }
 
   onClick(type) {
@@ -26,43 +49,18 @@ class SearchToolbar extends React.Component {
   }
 
   render() {
-    const actionType = this.getActiveType()
-    const { t } = this.props
+    const { t, changeType } = this.props
+    const activeType = this.getActiveType()
     return (
       <div className="search-toolbar row">
-        <div className="search-meta col-4">
+        <div className="search-meta col-md-4">
           <h3 className="search-keyword">{this.props.keyword}</h3>
           <small className="text-muted">
             {(this.props.searching && <Icon name="spinner" spin />) || t('search.toolbar.results', { value: this.props.total })}
           </small>
         </div>
-        <nav className="search-navbar col-8">
-          <Nav className="nav navbar-nav">
-            <NavItem active={actionType === this.searchTypes[0]} onClick={this.onClick(this.searchTypes[0])}>
-              <NavLink>
-                <Icon name="th" />
-                {t('page_types.all')}
-              </NavLink>
-            </NavItem>
-            <NavItem active={actionType === this.searchTypes[1]} onClick={this.onClick(this.searchTypes[1])}>
-              <NavLink>
-                <Icon name="circle" regular />
-                {t('page_types.portal')}
-              </NavLink>
-            </NavItem>
-            <NavItem active={actionType === this.searchTypes[2]} onClick={this.onClick(this.searchTypes[2])}>
-              <NavLink>
-                <Icon name="file" regular />
-                {t('page_types.public')}
-              </NavLink>
-            </NavItem>
-            <NavItem active={actionType === this.searchTypes[3]} onClick={this.onClick(this.searchTypes[3])}>
-              <NavLink>
-                <Icon name="user" regular />
-                {t('page_types.user')}
-              </NavLink>
-            </NavItem>
-          </Nav>
+        <nav className="search-navbar col-md-8">
+          <SearchTypeNav searchTypes={this.searchTypes} activeType={activeType} changeType={changeType} />
         </nav>
       </div>
     )
