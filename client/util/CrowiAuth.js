@@ -3,6 +3,7 @@ import queryString from 'query-string'
 export default class CrowiAuth {
   constructor(crowi) {
     this.crowi = crowi
+    this.window = crowi.window
     this.location = crowi.location
     this.localStorage = crowi.localStorage
 
@@ -18,7 +19,7 @@ export default class CrowiAuth {
   }
 
   subscribeStorage() {
-    window.addEventListener('storage', this.onStorage)
+    this.window.addEventListener('storage', this.onStorage)
   }
 
   shouldUpdate() {
