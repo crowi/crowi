@@ -80,10 +80,10 @@ $(function() {
       var $button = $('button', this)
       $button.attr('disabled', 'disabled')
       $.post($form.attr('action'), $form.serialize(), function(data) {
-        if (data.status) {
+        if (data.ok) {
           showMessage($id, 'Updated')
         } else {
-          showMessage($id, data.message, 'danger')
+          showMessage($id, data.error, 'danger')
         }
       })
         .fail(function() {
