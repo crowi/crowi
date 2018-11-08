@@ -1,6 +1,23 @@
 CHANGES
 ========
 
+## 1.7.4
+
+- Improve: Add portalize button to menu (#368)
+- Fix: Broken layout on extra small devices (#366)
+- Fix: Can't access files on shared pages if it isn't set secret keyword (#370)
+
+## 1.7.3
+
+- Improve: Search users on `/admin/users` page (#360)
+- Changes: Use only websocket transport (#355)
+- Fix: Disable resize of editor textarea (#358)
+- Fix: Can't rename tree under certain conditions (#362)
+
+## 1.7.2
+
+- Fix error when loading all pages caused by sort option.
+
 ## 1.7.0
 
 - Feature: GitHub Authentication (#282)
