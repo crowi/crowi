@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 
 // import CreateTeam from 'components/CreateTeam'
 
-import { Container, Row, Col, Form, FormGroup, FormText, Button, Badge, Label } from 'reactstrap'
+import { Form, FormGroup, FormText, Button, Badge, Label } from 'reactstrap'
 
 class Team {
   constructor(id, crowi) {
@@ -140,65 +140,49 @@ export default class PageOwnerBox extends React.Component {
             this.save(event)
           }}
         >
-          <FormGroup>
-            <Container className="fc">
-              <Row>
-                <Col>
-                  <Label className="float-left">Owners</Label>
-                </Col>
-              </Row>
-              <Row>
-                <Col>
-                  <div className="teams form-control" onClick={() => this.teamInputRef.focus()}>
-                    {Object.values(this.state.teams).map(team => {
-                      return (
-                        <Badge
-                          className="team"
-                          color="primary"
-                          key={team._id}
-                          onClick={event => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            this.handleRemove(team._id)
-                          }}
-                        >
-                          <span className="name">#{team.handle}</span>
-                        </Badge>
-                      )
-                    })}
-                    <input
-                      ref={ref => {
-                        this.teamInputRef = ref
-                      }}
-                      onChange={this.handleInput}
-                      onKeyPress={event => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          const calculated = this.calculateSuggestion()
-                          if (calculated.length > 0) {
-                            this.handleAdd(calculated[0]._id)
-                            event.target.value = ''
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                </Col>
-              </Row>
-              <Row>
-                <Col>
-                  <FormText>Create Team</FormText> {/* TODO: show this on completion */}
-                </Col>
-              </Row>
-              <Row>
-                <Col>
-                  <Button type="submit" className="save float-right" disabled={this.state.saveDisabled}>
-                    Save
-                  </Button>
-                </Col>
-              </Row>
-            </Container>
+          <FormGroup className="fg-owners">
+            <Label className="float-left">Owners</Label>
+            <div className="teams form-control w-100" onClick={() => this.teamInputRef.focus()}>
+              {Object.values(this.state.teams).map(team => {
+                return (
+                  <Badge
+                    className="team"
+                    color="primary"
+                    key={team._id}
+                    onClick={event => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      this.handleRemove(team._id)
+                    }}
+                  >
+                    <span className="name">#{team.handle}</span>
+                  </Badge>
+                )
+              })}
+              <input
+                ref={ref => {
+                  this.teamInputRef = ref
+                }}
+                onChange={this.handleInput}
+                onKeyPress={event => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    const calculated = this.calculateSuggestion()
+                    if (calculated.length > 0) {
+                      this.handleAdd(calculated[0]._id)
+                      event.target.value = ''
+                    }
+                  }
+                }}
+              />
+            </div>
+          </FormGroup>
+          <FormText>Create Team</FormText> {/* TODO: show this on completion */}
+          <FormGroup className="fg-save">
+            <Button type="submit" className="save float-right" disabled={this.state.saveDisabled}>
+              Save
+            </Button>
           </FormGroup>
         </Form>
       </div>
