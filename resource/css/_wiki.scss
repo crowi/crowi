@@ -94,8 +94,20 @@ div.body {
     font-weight: normal;
     margin-bottom: 9px;
   }
+
+  // Imported from bootstrap3
+  // Ref: https://github.com/twbs/bootstrap/blob/v3.3.7/dist/css/bootstrap.css#L1477-L1487
   blockquote {
-    font-size: .9em;
+    padding: 10px 20px;
+    margin: 0 0 20px;
+    font-size: 0.9em;
+    border-left: 5px solid #eeeeee;
+
+    p, ul, ol {
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
   }
 
   a {
