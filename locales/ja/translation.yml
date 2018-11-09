@@ -171,6 +171,7 @@ share:
     can_not_create: リンクを作成できませんでした。
     can_not_delete: リンクを削除できませんでした。
 
+page_type: ページの種類
 page_types:
   all: すべて
   portal: ポータル
@@ -211,3 +212,9 @@ search:
 admin:
   share:
     enable_external_share: 'Wikiページの外部ユーザーへの共有を有効にする。'
+
+Portalize: ポータル化
+portalize:
+  make_this_page_portal: 'このページをポータルにします。'
+  this_page: 'このページ'
+  changed_page: '変更後のページ'
