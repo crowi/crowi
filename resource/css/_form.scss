@@ -145,17 +145,12 @@
             overflow: hidden;
             text-overflow: ellipsis;
           }
-  
-          & > .badge > .close {
-            opacity: 1;
-            color: #fff;
-          }
         }
   
-        & > input {
+        & > input, & > input:focus {
           flex-grow: 1;
           border: none;
-          outline: 0;
+          outline: none;
         }
       }
     }

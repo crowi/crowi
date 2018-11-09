@@ -13,10 +13,12 @@ class Team {
   }
 
   ownPage(pageId) {
+    // TBD: URL は変わるはず
     return this._crowi.apiPost('/teams/ownPage', { id: this._id, page: pageId })
   }
 
   disownPage(pageId) {
+    // TBD: URL は変わるはず
     return this._crowi.apiPost('/teams/disownPage', { id: this._id, page: pageId })
   }
 }
@@ -192,7 +194,7 @@ export default class PageOwnerBox extends React.Component {
           <FormText className="ft-create-team float-right">
             <a onClick={this.toggleCreateTeamModal}>Create Team</a>
           </FormText>
-          <CreateTeam isOpen={this.state.createTeamModalOpened} toggle={this.toggleCreateTeamModal} crowi={this.crowi} />
+          {this.state.createTeamModalOpened && <CreateTeam toggle={this.toggleCreateTeamModal} crowi={this.crowi} />}
           <FormGroup className="fg-save">
             <Button type="submit" className="save float-right" disabled={this.state.saveDisabled}>
               Save
