@@ -1,10 +1,9 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-// import CreateTeam from 'components/CreateTeam'
-
-import { Form, FormGroup, FormText, Button, Badge, Label } from 'reactstrap'
+import { Form, FormGroup, FormText, Button, Label } from 'reactstrap'
 import CreateTeam from 'components/CreateTeam'
+import FGInputAndHint from 'components/Common/FGInputAndHint'
 
 class Team {
   constructor(id, crowi) {
@@ -34,10 +33,7 @@ export default class PageOwnerBox extends React.Component {
       return result
     }, {})
 
-    this.teamInputRef = null
-
     this.state = {
-      value: null,
       // delete と add しかしないはずだからこれで問題が起きないはず。。。
       teams: { ...this.currentPageOwnerTeams },
 
@@ -49,9 +45,9 @@ export default class PageOwnerBox extends React.Component {
     // handlers
     this.handleRemove = this.handleRemove.bind(this)
     this.handleAdd = this.handleAdd.bind(this)
-    this.handleInput = this.handleInput.bind(this)
     this.save = this.save.bind(this)
     this.toggleCreateTeamModal = this.toggleCreateTeamModal.bind(this)
+    this.hinter = this.hinter.bind(this)
   }
 
   handleAdd(teamId) {
@@ -60,7 +56,6 @@ export default class PageOwnerBox extends React.Component {
         ...state.teams,
         [teamId]: this.crowi.teamById[teamId],
       }
-      console.dir(teams)
       return {
         teams,
       }
@@ -79,21 +74,13 @@ export default class PageOwnerBox extends React.Component {
     })
   }
 
-  handleInput(event) {
-    const value = event.target.value
-    this.setState({
-      value: value || null,
-    })
-  }
-
   toggleCreateTeamModal() {
     this.setState(state => ({
       createTeamModalOpened: !state.createTeamModalOpened,
     }))
   }
 
-  calculateSuggestion() {
-    const value = this.state.value
+  calculateSuggestion(value) {
     if (!value) return [] // prevent empty
 
     const calculated = this.crowi.teams.filter(team => {
@@ -107,6 +94,14 @@ export default class PageOwnerBox extends React.Component {
     return calculated
   }
 
+  hinter(input) {
+    const teams = this.calculateSuggestion(input)
+    return teams.map(team => [team._id, <span key={team._id}>#{team.handle}</span>]).reduce((t, [k, v]) => {
+      t[k] = v
+      return t
+    }, {})
+  }
+
   async save() {
     this.setState({
       saveDisabled: true,
@@ -116,9 +111,6 @@ export default class PageOwnerBox extends React.Component {
     const teamsWillOwn = Object.values(this.state.teams).filter(team => !(team._id in this.currentPageOwnerTeams))
 
     const errors = []
-
-    console.dir(teamsWillDisown)
-    console.dir(teamsWillOwn)
 
     await Promise.all(
       [
@@ -131,7 +123,6 @@ export default class PageOwnerBox extends React.Component {
       console.error(errors)
     }
 
-    this.teamInputRef.value = ''
     this.setState({
       teamsWillOwn: {},
       teamsWillDisown: {},
@@ -152,51 +143,28 @@ export default class PageOwnerBox extends React.Component {
             this.save(event)
           }}
         >
-          <FormGroup className="fg-owners">
-            <Label className="float-left">Owners</Label>
-            <div className="teams form-control w-100" onClick={() => this.teamInputRef.focus()}>
-              {Object.values(this.state.teams).map(team => {
-                return (
-                  <Badge
-                    className="team"
-                    color="primary"
-                    key={team._id}
-                    onClick={event => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      this.handleRemove(team._id)
-                    }}
-                  >
-                    <span className="name">#{team.handle}</span>
-                  </Badge>
-                )
-              })}
-              <input
-                ref={ref => {
-                  this.teamInputRef = ref
-                }}
-                onChange={this.handleInput}
-                onKeyPress={event => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    const calculated = this.calculateSuggestion()
-                    if (calculated.length > 0) {
-                      this.handleAdd(calculated[0]._id)
-                      event.target.value = ''
-                    }
-                  }
-                }}
-              />
-            </div>
+          <FormGroup>
+            <Label className="justify-content-start flex-grow-1">Owners</Label>
+            <FormText>
+              <a className="p-0" onClick={this.toggleCreateTeamModal}>
+                Create Team
+              </a>
+            </FormText>
+            <FGInputAndHint
+              handleAdd={this.handleAdd}
+              handleRemove={this.handleRemove}
+              chosen={Object.values(this.state.teams)
+                .map(v => [v._id, `#${v.handle}`])
+                .reduce((t, [k, v]) => {
+                  t[k] = v
+                  return t
+                }, {})}
+              hinter={this.hinter}
+            />
           </FormGroup>
-          {/* TODO: show below create-team on completion */}
-          <FormText className="ft-create-team float-right">
-            <a onClick={this.toggleCreateTeamModal}>Create Team</a>
-          </FormText>
           {this.state.createTeamModalOpened && <CreateTeam toggle={this.toggleCreateTeamModal} crowi={this.crowi} />}
-          <FormGroup className="fg-save">
-            <Button type="submit" className="save float-right" disabled={this.state.saveDisabled}>
+          <FormGroup className="fg-save justify-content-end">
+            <Button type="submit" className="save" disabled={this.state.saveDisabled}>
               Save
             </Button>
           </FormGroup>

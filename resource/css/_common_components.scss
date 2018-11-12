@@ -1,0 +1,90 @@
+.fg-input-w-hint {
+  $font-size: 0.9rem;
+  font-size: $font-size;
+
+  & > .input {
+    display: flex;
+    height: auto;
+    flex-wrap: wrap;
+    padding-top: 0; // Originally, 6px, came from 'form-control'
+
+    &.w-hint {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    &:focus-within { // bootstrap only has :focus style
+      border-color: #7faaaf;
+    }
+
+    & > * {
+      margin-top: 6px;
+    }
+
+    & > .badge {
+      display: flex;
+      align-items: center;
+      max-width: 100%;
+  
+      &:after {
+        content: '\00D7';
+        margin-left: 8px;
+        right: 4px;
+      }
+      &:not(:last-child) {
+        margin-right: 8px;
+      }
+  
+      & > span {
+        padding: 2px 0;
+        max-width: 100%;
+        font-size: $font-size; // override 75%
+        font-weight: normal;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+  
+    & > input, & > input:focus {
+      flex-grow: 1;
+      border: none;
+      outline: none;
+    }
+  }
+
+  & > .hint {
+    height: 0; // 浮かせる
+
+    & > ul {
+      max-height: 150px;
+      overflow: scroll;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+
+        & > li {
+        background-color: #fff;
+
+        border: solid #ced4da;
+        border-width: 0px 1px 1px;
+        &:last-child {
+          border-bottom-right-radius: 0.25rem;
+          border-bottom-left-radius: 0.25rem;
+        }
+
+        outline: none;
+
+        & > a {
+          padding: 6px;
+          display: block;
+          color: #212529;
+          z-index: 2000;
+
+          &:focus, &:hover {
+            background-color: #f8f9fa;
+          }
+        }
+      }
+    }
+  }
+}

@@ -109,53 +109,9 @@
     padding: 16px;
     width: 40em;
 
-    & > form > .fg-owners {
-      $fg-owners-font-size: 0.9rem;
-      font-size: $fg-owners-font-size;
-
-      & > .teams {
-        display: flex;
-        height: auto;
-        flex-wrap: wrap;
-  
-        padding-top: 0; // Originally, 6px, came from 'form-control'
-        & > * {
-          margin-top: 6px;
-        }
-  
-        & > .team {
-          display: flex;
-          align-items: center;
-          max-width: 100%;
-  
-          &:after {
-            content: '\00D7';
-            margin-left: 8px;
-            right: 4px;
-          }
-          &:not(:last-child) {
-            margin-right: 8px;
-          }
-  
-          & > span {
-            padding: 2px 0;
-            max-width: 100%;
-            font-size: $fg-owners-font-size; // override 75%
-            font-weight: normal;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-        }
-  
-        & > input, & > input:focus {
-          flex-grow: 1;
-          border: none;
-          outline: none;
-        }
-      }
-    }
-
     & > form > .fg-save {
+      position: static !important;
+
       & > .save {
         margin-top: 16px;
       }

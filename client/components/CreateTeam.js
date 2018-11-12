@@ -1,14 +1,14 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import { Modal, ModalHeader, ModalBody, ModalFooter, Badge, Form, FormText, FormGroup, Button, Label, Input } from 'reactstrap'
+import { Modal, ModalHeader, ModalBody, ModalFooter, Form, FormText, FormGroup, Button, Label, Input } from 'reactstrap'
+
+import FGInputAndHint from 'components/Common/FGInputAndHint'
 
 export default class CreateTeam extends React.Component {
   constructor(props) {
     super(props)
     this.crowi = this.props.crowi
-
-    this.userInputRef = null
 
     this.state = {
       name: null,
@@ -16,11 +16,10 @@ export default class CreateTeam extends React.Component {
       users: {},
 
       // input
-      userInputValue: '',
       actionDisabled: false,
     }
 
-    const bindTargets = ['handleInputChange', 'create', 'calculateSuggestion', 'handleAdd', 'handleRemove']
+    const bindTargets = ['handleInputChange', 'create', 'calculateSuggestion', 'handleAdd', 'handleRemove', 'userHinter']
     bindTargets.forEach(name => {
       this[name] = this[name].bind(this)
     })
@@ -50,8 +49,7 @@ export default class CreateTeam extends React.Component {
     })
   }
 
-  calculateSuggestion() {
-    const value = this.state.userInputValue
+  calculateSuggestion(value) {
     if (!value) return [] // prevent empty
 
     const calculated = this.crowi.users.filter(user => {
@@ -63,10 +61,15 @@ export default class CreateTeam extends React.Component {
       return false
     })
 
-    console.dir(this.crowi.users)
-    console.dir(calculated)
-
     return calculated
+  }
+
+  userHinter(input) {
+    const users = this.calculateSuggestion(input)
+    return users.map(user => [user._id, <span key={user._id}>@{user.username}</span>]).reduce((t, [k, v]) => {
+      t[k] = v
+      return t
+    }, {})
   }
 
   async create() {
@@ -105,46 +108,20 @@ export default class CreateTeam extends React.Component {
               <FormText className="float-right">{`eg. "Corporate"`}</FormText>
               <Input onChange={ev => this.handleInputChange('handle', ev)} />
             </FormGroup>
-            <FormGroup onClick={() => this.userInputRef.focus()}>
+            <FormGroup>
               <Label>Users</Label>
-              <div className="users form-control w-100">
-                {Object.values(this.state.users).map(user => {
-                  return (
-                    <Badge
-                      className="user"
-                      color="primary"
-                      key={user._id}
-                      onClick={event => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        this.handleRemove(user._id)
-                      }}
-                    >
-                      <span className="username">@{user.username}</span>
-                    </Badge>
-                  )
-                })}
-                <input
-                  ref={ref => {
-                    this.userInputRef = ref
-                  }}
-                  onChange={ev => this.handleInputChange('userInputValue', ev)}
-                  onKeyPress={event => {
-                    /* この処理は暫定で、サジェストができたらそっちで選ばせる */
-                    if (event.key !== 'Enter') return
-
-                    event.preventDefault()
-                    event.stopPropagation()
-                    console.log('aaa')
-                    const calculated = this.calculateSuggestion()
-                    console.dir(calculated)
-
-                    if (calculated.length === 0) return
-                    this.handleAdd(calculated[0]._id)
-                    event.target.value = ''
-                  }}
-                />
-              </div>
+              <FGInputAndHint
+                handleAdd={this.handleAdd}
+                handleRemove={this.handleRemove}
+                chosen={Object.values(this.state.users)
+                  .map(v => [v._id, `@${v.username}`])
+                  .reduce((o, [k, v]) => {
+                    o[k] = v
+                    return o
+                  }, {})}
+                hinter={this.userHinter}
+                disabled={this.actionDisabled}
+              />
             </FormGroup>
           </ModalBody>
           <ModalFooter>
