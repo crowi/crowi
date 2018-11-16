@@ -1,0 +1,137 @@
+
+.notification-list {
+  .notification-list-ul {
+    margin: 0;
+    padding: 0;
+
+    .notification-list-li {
+      list-style-type: none;
+    }
+  }
+}
+
+.notification-box {
+  border-bottom: 0.5px solid #ccc;
+  background-color: #fff;
+  cursor: pointer;
+  padding: 0.5em 1em;
+
+  // Flexbox
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+
+  // Flexbox for Safari
+  display: -webkit-flex;
+  -webkit-flex-direction: row;
+  -webkit-align-items: center;
+
+  .notification-box-image {
+    img {
+      margin-right: 16px;
+    }
+  }
+
+  .notification-box-message {
+
+    .notification-box-text {
+    }
+
+    .notification-box-time {
+      padding-top: 0.3em;
+      font-size: small;
+    }
+  }
+}
+
+.notification-box:hover {
+  background-color: #eee;
+}
+
+.notification-read {
+
+}
+.notification-unread {
+  background-color: #f0f4f3;
+}
+
+
+.navbar-nav > .header-notification {
+  > div.notification-wrapper {
+    > a {
+      line-height: 20px;
+      position: relative;
+      display: block;
+      color: #ccc;
+    }
+
+    &.open {
+      > a, > a:focus {
+        background: inherit;
+        color: #fff;
+      }
+    }
+
+    .notification-badge {
+      position: absolute;
+      display: block;
+      top: 0px;
+      right: 0px;
+      font-size: 9px;
+      padding: 4px;
+      background-color: rgba(255, 37, 31, 0.8)
+    }
+
+    .dropdown-menu {
+      width: 400px;
+      font-size: small;
+      top: 90%;
+
+      .notification-arrow {
+        background: #fff;
+        width: 10px;
+        height: 10px;
+        position: absolute;
+        right: 10px;
+        top: -4px;
+        transform: rotate(45deg);
+        border-radius: 2px;
+      }
+
+      .notification-loader {
+        padding: 8px 0;
+        text-align: center;
+      }
+      .notification-see-all {
+        display: block;
+        text-align: center;
+      }
+    }
+  }
+}
+
+// Pager
+.notification-pager {
+  // Flexbox
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+
+  // Flexbox for Safari
+  display: -webkit-flex !important;
+  -webkit-flex-direction: row;
+  -webkit-align-items: center;
+
+  margin: 10px 0;
+
+  .pager {
+    width: 50%;
+    margin: 0;
+    text-align: center;
+    font-size: small;
+  }
+  .pager-prev {
+  }
+  .padding-next {
+  }
+}

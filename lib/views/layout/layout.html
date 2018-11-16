@@ -81,6 +81,13 @@
           <i class="fa fa-pencil-alt"></i> {{ t('New') }}
         </button>
       </li>
+      <li id="header-notification" class="nav-item header-notification">
+        <div class="notification-wrapper">
+          <a href="#">
+            <i class="fa fa-bell"></i>
+          </a>
+        </div>
+      </li>
       <li id="login-user" class="nav-item">
         <a href="/user/{{ user.username }}" id="link-mypage" class="nav-link">
           <img src="{{ user|picture }}" class="picture picture-rounded" width="25" /> {{ user.name }}
