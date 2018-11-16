@@ -7,3 +7,4 @@ public/uploads/*
 .env
 data
 npm-debug.log
+coverage

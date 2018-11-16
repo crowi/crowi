@@ -1,10 +1,5 @@
-const chai = require('chai')
-const expect = chai.expect
-const sinon = require('sinon')
-const sinonChai = require('sinon-chai')
 const faker = require('faker')
 const utils = require('../utils.js')
-chai.use(sinonChai)
 
 describe('Backlink', () => {
   const Backlink = utils.models.Backlink
@@ -14,7 +9,7 @@ describe('Backlink', () => {
   const appUrl = 'http://localhost:3000'
   let user
 
-  before(async () => {
+  beforeAll(async () => {
     const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
       { name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() },
     ])
@@ -22,7 +17,7 @@ describe('Backlink', () => {
   })
 
   describe('.createByAllPages', () => {
-    before(async () => {
+    beforeAll(async () => {
       await Page.remove({})
       await Revision.remove({})
       const createPath = () => '/' + faker.lorem.slug()
@@ -40,8 +35,8 @@ describe('Backlink', () => {
       await Backlink.remove({})
     })
 
-    it('should have all backlinks', async () => {
-      expect(await Backlink.createByAllPages()).to.have.lengthOf(3)
+    test('should have all backlinks', async () => {
+      expect(await Backlink.createByAllPages()).toHaveLength(3)
     })
   })
 })

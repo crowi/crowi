@@ -1,25 +1,20 @@
-var chai = require('chai')
-var expect = chai.expect
-var sinon = require('sinon')
-var sinonChai = require('sinon-chai')
-var utils = require('../utils.js')
-chai.use(sinonChai)
+const utils = require('../utils.js')
 
-describe('Url test', function() {
-  var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
+describe('Url test', () => {
+  const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
   // crowi.config.crowi['app:url'] = 'http://localhost:3000';
 
   // console.log(crowi.config);
-  beforeEach(function() {
+  beforeEach(() => {
     crowi.config = {}
     crowi.config.crowi = {}
     crowi.config.crowi['app:url'] = 'http://localhost:3000'
   })
 
-  it('detectInternalLink', function() {
-    var linkDetector = require(crowi.libDir + '/util/linkDetector')(crowi)
+  test('detectInternalLink', () => {
+    const linkDetector = require(crowi.libDir + '/util/linkDetector')(crowi)
 
-    var text = 'aaaaaaaa '
+    let text = 'aaaaaaaa '
     text += '[/user/suzuki/memo/2017/01/22/aaa](http://localhost:3000/58842b9ccf3556baedce2762)'
     text += ' bbbbb '
     text += '[/user/suzuki/memo/2017/01/22/bbb](http://localhost:3000/58842b9ccf3556baedce2763)'
@@ -34,18 +29,21 @@ describe('Url test', function() {
     text += 'ee '
     text += '[/user/suzuki/memo/2017/05/06/eee]'
 
-    var results = linkDetector.search(text)
+    const results = linkDetector.search(text)
 
-    expect(results).to.have.property('objectIds')
-    expect(results.objectIds).to.have.length(2)
-    expect(results.objectIds).to.contain('58842b9ccf3556baedce2762')
-    expect(results.objectIds).to.contain('58842b9ccf3556baedce2763')
+    expect(results).toHaveProperty('objectIds')
+    expect(results.objectIds).toHaveLength(2)
+    expect(results.objectIds).toEqual(expect.arrayContaining(['58842b9ccf3556baedce2762', '58842b9ccf3556baedce2763']))
 
-    expect(results).to.have.property('paths')
-    expect(results.paths).to.have.length(4)
-    expect(results.paths).to.contain('/user/suzuki/memo/2017/01/22/ccc')
-    expect(results.paths).to.contain('/user/suzuki/メモ/2017/01/31/ddd')
-    expect(results.paths).to.contain('/user/suzuki/メモ/2017/02/01/ddd')
-    expect(results.paths).to.contain('/user/suzuki/memo/2017/05/06/eee')
+    expect(results).toHaveProperty('paths')
+    expect(results.paths).toHaveLength(4)
+    expect(results.paths).toEqual(
+      expect.arrayContaining([
+        '/user/suzuki/memo/2017/01/22/ccc',
+        '/user/suzuki/メモ/2017/01/31/ddd',
+        '/user/suzuki/メモ/2017/02/01/ddd',
+        '/user/suzuki/memo/2017/05/06/eee',
+      ]),
+    )
   })
 })

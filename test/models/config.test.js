@@ -1,18 +1,13 @@
-var chai = require('chai')
-var expect = chai.expect
-var sinon = require('sinon')
-var sinonChai = require('sinon-chai')
-var utils = require('../utils.js')
-chai.use(sinonChai)
+const utils = require('../utils.js')
 
-describe('Config model test', function() {
-  var Page = utils.models.Page
-  var Config = utils.models.Config
-  var User = utils.models.User
-  var conn = utils.mongoose.connection
+describe('Config model test', () => {
+  const Page = utils.models.Page
+  const Config = utils.models.Config
+  const User = utils.models.User
+  const conn = utils.mongoose.connection
 
-  before(function(done) {
-    var fixture = [
+  beforeAll(function(done) {
+    const fixture = [
       { ns: 'crowi', key: 'test:test', value: JSON.stringify('crowi test value') },
       { ns: 'crowi', key: 'test:test2', value: JSON.stringify(11111) },
       { ns: 'crowi', key: 'test:test3', value: JSON.stringify([1, 2, 3, 4, 5]) },
@@ -29,33 +24,24 @@ describe('Config model test', function() {
       })
   })
 
-  describe('.CONSTANTS', function() {
-    it('Config has constants', function() {
-      expect(Config.SECURITY_REGISTRATION_MODE_OPEN).to.have.string('Open')
-      expect(Config.SECURITY_REGISTRATION_MODE_RESTRICTED).to.have.string('Resricted')
-      expect(Config.SECURITY_REGISTRATION_MODE_CLOSED).to.have.string('Closed')
+  describe('.CONSTANTS', () => {
+    test('Config has constants', () => {
+      expect(Config.SECURITY_REGISTRATION_MODE_OPEN).toBe('Open')
+      expect(Config.SECURITY_REGISTRATION_MODE_RESTRICTED).toBe('Resricted')
+      expect(Config.SECURITY_REGISTRATION_MODE_CLOSED).toBe('Closed')
     })
   })
 
-  describe('.loadAllConfig', function() {
-    it('Get config array', function(done) {
+  describe('.loadAllConfig', () => {
+    test('Get config array', done => {
       Config.loadAllConfig(function(err, config) {
-        expect(config.crowi).to.be.an('Object')
-        expect(config.crowi)
-          .to.have.property('test:test')
-          .and.equal('crowi test value')
-        expect(config.crowi)
-          .to.have.property('test:test2')
-          .and.equal(11111)
-        expect(config.crowi)
-          .to.have.property('test:test3')
-          .and.to.be.instanceof(Array)
-          .and.deep.equal([1, 2, 3, 4, 5])
+        expect(config.crowi).toBeInstanceOf(Object)
+        expect(config.crowi).toHaveProperty('test:test', 'crowi test value')
+        expect(config.crowi).toHaveProperty('test:test2', 11111)
+        expect(config.crowi).toHaveProperty('test:test3', [1, 2, 3, 4, 5])
 
-        expect(config.plugin)
-          .to.be.an('Object')
-          .and.have.property('other:config')
-          .and.equal('this is data')
+        expect(config.plugin).toBeInstanceOf(Object)
+        expect(config.plugin).toHaveProperty('other:config', 'this is data')
 
         done()
       })
