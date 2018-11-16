@@ -1,7 +1,6 @@
-const faker = require('faker')
 const utils = require('../utils.js')
 
-describe('Activity', function() {
+describe('Activity', () => {
   const Activity = utils.models.Activity
   const User = utils.models.User
   const Page = utils.models.Page

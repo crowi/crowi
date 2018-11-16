@@ -1,6 +1,6 @@
 const utils = require('../utils.js')
 
-describe('Notification', function() {
+describe('Notification', () => {
   const Comment = utils.models.Comment
   const Notification = utils.models.Notification
   const Page = utils.models.Page
@@ -12,9 +12,9 @@ describe('Notification', function() {
 
   const data = {}
 
-  describe('.upsertByActivity', function() {
-    describe('valid parameters', function() {
-      it('should create', function() {
+  describe('.upsertByActivity', () => {
+    describe('valid parameters', () => {
+      it('should create', () => {
         const userId1 = ObjectId()
         const userId2 = ObjectId()
         const userId3 = ObjectId()
@@ -45,8 +45,8 @@ describe('Notification', function() {
       })
     })
 
-    describe('invalid parameters', function() {
-      it('should create', function() {
+    describe('invalid parameters', () => {
+      it('should create', () => {
         const userId1 = ObjectId()
         const userId2 = ObjectId()
         const userId3 = ObjectId()
