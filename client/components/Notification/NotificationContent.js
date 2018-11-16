@@ -24,6 +24,9 @@ export default class NotificationContent extends React.Component {
       boxClass += ' notification-unread'
     }
 
+    const isString = value => typeof value === 'string' || value instanceof String
+    const IconComponent = isString(this.props.icon) ? <Icon name={this.props.icon} regular /> : this.props.icon
+
     return (
       <li className="notification-list-li">
         <div className={boxClass} onClick={this.props.onClick}>
@@ -31,7 +34,7 @@ export default class NotificationContent extends React.Component {
           <div className="notification-box-message">
             <div className="notification-box-text">{this.props.children}</div>
             <div className="notification-box-time">
-              <Icon name={this.props.icon} regular />
+              {IconComponent}
               <UserDate className="ml-1" dateTime={notification.createdAt} format="fromNow" />
             </div>
           </div>
@@ -44,7 +47,7 @@ export default class NotificationContent extends React.Component {
 NotificationContent.propTypes = {
   children: PropTypes.node.isRequired,
   notification: PropTypes.object.isRequired,
-  icon: PropTypes.string,
+  icon: PropTypes.node,
   onClick: PropTypes.func.isRequired,
 }
 

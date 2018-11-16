@@ -4,6 +4,7 @@ import UserPicture from '../User/UserPicture'
 
 import PageCommentNotification from './ModelAction/PageCommentNotification'
 import PageLikeNotification from './ModelAction/PageLikeNotification'
+import PageMentionNotification from './ModelAction/PageMentionNotification'
 
 export default class Notification extends React.Component {
   onClickHandler() {
@@ -56,6 +57,9 @@ export default class Notification extends React.Component {
         break
       case 'Page:LIKE':
         cmp = <PageLikeNotification {...props} onClick={this.onClickHandler.bind(this)} />
+        break
+      case 'Page:MENTION':
+        cmp = <PageMentionNotification {...props} onClick={this.onClickHandler.bind(this)} />
         break
       default:
     }
