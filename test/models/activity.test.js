@@ -1,3 +1,4 @@
+const faker = require('faker')
 const utils = require('../utils.js')
 
 describe('Activity', () => {
