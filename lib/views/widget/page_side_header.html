@@ -42,6 +42,13 @@
         </dd>
       </div>
       <div class="row">
+        <dt class="col"><i class="fa fa-bell"></i> {{ t('Notification') }}</dt>
+        <dd class="col">
+          <div id="watch-button"></div>
+          <p></p>
+        </dd>
+      </div>
+      <div class="row">
         <dt class="col"><i class="fa fa-paw"></i> {{ t('Seen by') }}</dt>
         <dd class="col">
           <div id="seen-user-list" data-seen-users="{{ page.seenUsers|default([])|join(',') }}"></div>
