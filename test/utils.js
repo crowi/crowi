@@ -1,43 +1,23 @@
 'use strict'
 
-var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || null
+var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || 'mongodb://localhost/crowi'
 var mongoose = require('mongoose')
 var fs = require('fs')
 var models = {}
 var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
+const { MongoClient } = require('mongodb')
 
 // Want fix...
 crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
 
 mongoose.Promise = global.Promise
 
-before('Create database connection and clean up', function(done) {
-  if (!mongoUri) {
-    return done()
-  }
+before('Drop database before all tests', async function() {
+  const db = await MongoClient.connect(mongoUri)
+  await db.dropDatabase()
+  db.close()
 
-  mongoose.connect(mongoUri)
-
-  function clearDB() {
-    for (var i in mongoose.connection.collections) {
-      mongoose.connection.collections[i].remove(function() {})
-    }
-    return done()
-  }
-
-  if (mongoose.connection.readyState === 0) {
-    mongoose.connect(
-      mongoUri,
-      function(err) {
-        if (err) {
-          throw err
-        }
-        return clearDB()
-      },
-    )
-  } else {
-    return clearDB()
-  }
+  await mongoose.connect(mongoUri)
 })
 
 after('Close database connection', function(done) {
@@ -75,4 +55,5 @@ crowi.getIo = function() {
 module.exports = {
   models: models,
   mongoose: mongoose,
+  errors: crowi.errors,
 }
