@@ -1,15 +1,5 @@
-const chai = require('chai')
-
-const expect = chai.expect
-
-const sinon = require('sinon')
-
-const sinonChai = require('sinon-chai')
-
 const faker = require('faker')
-
 const utils = require('../utils.js')
-chai.use(sinonChai)
 
 describe('Activity', function() {
   const Activity = utils.models.Activity
@@ -22,7 +12,7 @@ describe('Activity', function() {
   const ObjectId = mongoose.Types.ObjectId
 
   describe('.createByParameters', function() {
-    context('correct parameters', function() {
+    describe('correct parameters', function() {
       it('should create', function() {
         const userId = ObjectId()
         const targetId = ObjectId()
@@ -36,10 +26,10 @@ describe('Activity', function() {
 
         return Activity.createByParameters(parameters).then(
           function(activity) {
-            expect(activity.user).to.be.equal(userId)
-            expect(activity.target).to.be.equal(targetId)
-            expect(activity.targetModel).to.be.equal('Page')
-            expect(activity.action).to.be.equal('COMMENT')
+            expect(activity.user).toBe(userId)
+            expect(activity.target).toBe(targetId)
+            expect(activity.targetModel).toBe('Page')
+            expect(activity.action).toBe('COMMENT')
           },
           function(err) {
             throw new Error(err)
@@ -48,7 +38,7 @@ describe('Activity', function() {
       })
     })
 
-    context('invalid parameters', function() {
+    describe('invalid parameters', function() {
       it('should not create', function() {
         const userId = ObjectId()
         const targetId = ObjectId()
@@ -65,7 +55,7 @@ describe('Activity', function() {
             throw new Error('not fulfilled')
           },
           function(err) {
-            expect(err.message).to.be.equal('Activity validation failed')
+            expect(err.message).toBe('Activity validation failed')
           },
         )
       })
@@ -73,18 +63,18 @@ describe('Activity', function() {
   })
 
   describe('.removeByParameters', () => {
-    context('correct parameters', () => {
+    describe('correct parameters', () => {
       const user = ObjectId()
       const target = ObjectId()
       const parameters = { user, targetModel: 'Page', target, action: 'COMMENT' }
 
-      before(async () => {
+      beforeAll(async () => {
         await Activity.createByParameters(parameters)
       })
 
       it('should remove', async () => {
         const { result } = await Activity.removeByParameters(parameters)
-        expect(result).to.deep.equal({ n: 1, ok: 1 })
+        expect(result).toEqual({ n: 1, ok: 1 })
       })
     })
   })
@@ -94,7 +84,7 @@ describe('Activity', function() {
     const pageId = ObjectId()
     const activityId = ObjectId()
 
-    before(async () => {
+    beforeAll(async () => {
       await Promise.all([User, Page, Comment, Watcher, Activity].map(model => model.remove({})))
 
       const users = [
@@ -114,24 +104,24 @@ describe('Activity', function() {
       await Promise.all([Watcher, Activity].map(model => model.remove({})))
     })
 
-    context('Action User and Suspended User', () => {
+    describe('Action User and Suspended User', () => {
       let notificationUsers
-      before(async () => {
+      beforeAll(async () => {
         const activity = await Activity.createByParameters({ user: userIds[0], target: pageId, targetModel: 'Page', action: 'COMMENT' })
         notificationUsers = (await activity.getNotificationTargetUsers()).map(String)
       })
 
       it('is not contain action user', () => {
-        expect(notificationUsers).to.not.include(String(userIds[0]))
+        expect(notificationUsers).not.toContain(String(userIds[0]))
       })
 
       it('is not contain suspended user', () => {
-        expect(notificationUsers).to.not.include(String(userIds[2]))
+        expect(notificationUsers).not.toContain(String(userIds[2]))
       })
     })
 
-    context('Watch', () => {
-      before(async () => {
+    describe('Watch', () => {
+      beforeAll(async () => {
         await Watcher.watchByPageId(userIds[1], pageId, Watcher.STATUS_WATCH)
       })
 
@@ -139,12 +129,12 @@ describe('Activity', function() {
         const activity = await Activity.createByParameters({ user: userIds[0], target: pageId, targetModel: 'Page', action: 'COMMENT' })
         const notificationUsers = (await activity.getNotificationTargetUsers()).map(String)
 
-        expect(notificationUsers).to.include(String(userIds[1]))
+        expect(notificationUsers).toContain(String(userIds[1]))
       })
     })
 
-    context('Ignore', () => {
-      before(async () => {
+    describe('Ignore', () => {
+      beforeAll(async () => {
         await Watcher.watchByPageId(userIds[1], pageId, Watcher.STATUS_IGNORE)
       })
 
@@ -152,7 +142,7 @@ describe('Activity', function() {
         const activity = await Activity.createByParameters({ user: userIds[0], target: pageId, targetModel: 'Page', action: 'COMMENT' })
         const notificationUsers = (await activity.getNotificationTargetUsers()).map(String)
 
-        expect(notificationUsers).to.not.include(String(userIds[1]))
+        expect(notificationUsers).not.toContain(String(userIds[1]))
       })
     })
   })

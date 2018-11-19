@@ -4,6 +4,7 @@
     "standard",
     "plugin:flowtype/recommended",
     "plugin:react/recommended",
+    "plugin:jest/recommended",
     "prettier",
     "prettier/standard",
     "prettier/flowtype",
@@ -13,7 +14,6 @@
     "browser": true,
     "node": true,
     "es6": true,
-    "mocha": true,
     "jquery": true
   },
   "rules": {
@@ -26,7 +26,7 @@
     "react/prefer-stateless-function": "off",
     "standard/no-callback-literal": "off"
   },
-  "plugins": ["flowtype", "react", "prettier"],
+  "plugins": ["flowtype", "react", "prettier", "jest"],
   "settings": {
     "react": {
       "version": "15.5",
@@ -34,6 +34,7 @@
     }
   },
   "globals": {
+    "jest/globals": true,
     "ROOT_DIR": true,
     "MODEL_DIR": true,
     "testDBUtil": true,
