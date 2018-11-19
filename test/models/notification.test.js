@@ -55,7 +55,7 @@ describe('Notification', function() {
       })
     })
 
-    context('A week later', () => {
+    describe('A week later', () => {
       const user = ObjectId()
       const target = ObjectId()
 
@@ -69,14 +69,14 @@ describe('Notification', function() {
         const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' }
         await Notification.upsertByActivity(user, activity, new Date(2018, 10, 16).getTime())
         const count = await Notification.count({})
-        expect(count).to.be.equal(1)
+        expect(count).toBe(1)
       })
 
       it('is 2', async () => {
         const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' }
         await Notification.upsertByActivity(user, activity, new Date(2018, 10, 17).getTime())
         const count = await Notification.count({})
-        expect(count).to.be.equal(2)
+        expect(count).toBe(2)
       })
     })
   })
