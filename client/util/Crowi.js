@@ -35,7 +35,7 @@ export default class Crowi {
   }
 
   getContext() {
-    return context
+    return this.context
   }
 
   setConfig(config) {
