@@ -107,15 +107,19 @@
     {% endif %}
 
     {% if issuerName %}
-    <div class="google-info github-info alert alert-info">
-      {% if socialImage %}
-      <p class="text-center">
-        <img src="{{ socialImage }}" class="picture picture-rounded picture-lg">
-      </p>
-      {% endif %}
-      <code>{{ socialEmail }}</code> {{ t('page_register.notice.register_with_this', issuerName) }}<br>
-      {{ t('page_register.notice.social_account_continue') }}
-    </div>
+      <div class="user-card">
+        <div class="user-card-image">
+          <img src="{% if socialImage %}{{ socialImage }}{% else %}/images/userpicture.png{% endif %}" class="picture picture-rounded picture-lg">
+        </div>
+        <div class="user-card-body">
+          <h4>{{ socialName }}</h4>
+          <code>{{ socialEmail }}</code>
+        </div>
+      </div>
+      <div class="alert alert-info">
+        <p>{{ t('page_register.notice.register_with_this', issuerName) }}<p>
+        <p>{{ t('page_register.notice.social_account_continue') }}</p>
+      </div>
     {% endif %}
 
     <div id="register-form-errors">
