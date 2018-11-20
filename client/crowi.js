@@ -1,5 +1,5 @@
 /* Author: Sotaro KARASAWA <sotarok@crocos.co.jp>
-*/
+ */
 
 const Crowi = {}
 
