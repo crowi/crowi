@@ -108,6 +108,42 @@
       }
     }
 
+    .owners {
+      display: flex;
+      align-items: center;
+      overflow-x: scroll;
+      margin-top: 5px;
+      margin-bottom: 0;
+      border-bottom: solid 1px #ccc;
+
+      p {
+        font-size: 16px;
+        margin: 0 4px 0 0;
+        white-space: nowrap;
+      }
+
+      .owner-team {
+        padding-left: 14px;
+        display: flex;
+        align-items: center;
+
+        img {
+
+          margin: 0 0 0 -14px;
+
+          height: 32px;
+          width: 32px;
+
+          background-color: #fff;
+
+          border-radius: 50%;
+          border-color: #fff;
+          border-width: 2px;
+          border-style: solid;
+        }
+      }
+    }
+
     .content-main {
       flex: 1;
 

@@ -34,7 +34,7 @@
         .col-md-6 {
           height: 100%;
         }
-        form {
+        #page-form {
           padding: 0;
           border-right: solid 1px #ccc;
           &::after {
@@ -104,6 +104,25 @@
     background: rgba(255,255,255,.8);
     border-top: solid 1px #ccc;
     margin-bottom: 0;
+  }
+
+  .pageowner-setting-box {
+    padding: 16px;
+    width: 40em;
+
+    & > form > .fg-save {
+      position: static !important;
+
+      & > .save {
+        margin-top: 16px;
+      }
+    }
+
+    & > form > .ft-create-team {
+      & > a {
+        padding: 0;
+      }
+    }
   }
 } // }}}
 

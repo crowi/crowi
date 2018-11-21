@@ -25,6 +25,7 @@ import HeaderNotification from 'components/HeaderNotification'
 import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
+import PageOwnerSettingBox from 'components/PageEditor/PageOwnerSettingBox'
 
 if (!window) {
   window = {}
@@ -37,11 +38,16 @@ moment.locale(navigator.userLanguage || navigator.language)
 const mainContent = document.querySelector('#content-main')
 let pageId = null
 let pageContent = null
+let currentPageOwners = null
 if (mainContent !== null) {
   pageId = mainContent.attributes['data-page-id'].value
   const rawText = document.getElementById('raw-text-original')
   if (rawText) {
     pageContent = rawText.innerHTML
+  }
+  const currentPageOwnersData = document.getElementById('current-page-owners-data')
+  if (currentPageOwnersData) {
+    currentPageOwners = JSON.parse(currentPageOwnersData.innerText)
   }
 }
 
@@ -54,6 +60,7 @@ crowi.setConfig(JSON.parse(document.getElementById('crowi-context-hydrate').text
 const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
 if (!isSharePage) {
   crowi.fetchUsers()
+  crowi.fetchTeams()
 }
 
 const crowiRenderer = new CrowiRenderer(crowi)
@@ -83,6 +90,8 @@ const componentMappings = {
   'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
   'admin-rebuild-search': <AdminRebuildSearch crowi={crowi} />,
+
+  'pageowner-setting-box': <PageOwnerSettingBox pageId={pageId} crowi={crowi} currentPageOwners={currentPageOwners} />,
 }
 
 Object.keys(componentMappings).forEach(key => {

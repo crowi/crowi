@@ -18,6 +18,7 @@ export default class Crowi {
     this.localStorage = window.localStorage || {}
 
     this.fetchUsers = this.fetchUsers.bind(this)
+    this.fetchTeams = this.fetchTeams.bind(this)
     this.apiGet = this.apiGet.bind(this)
     this.apiPost = this.apiPost.bind(this)
     this.apiRequest = this.apiRequest.bind(this)
@@ -25,6 +26,11 @@ export default class Crowi {
     this.users = []
     this.userByName = {}
     this.userById = {}
+
+    this.teams = []
+    this.teamByHandle = {}
+    this.teamById = {}
+
     this.draft = {}
 
     this.recoverData()
@@ -60,7 +66,7 @@ export default class Crowi {
   }
 
   recoverData() {
-    const keys = ['userByName', 'userById', 'users', 'draft']
+    const keys = ['userByName', 'userById', 'users', 'draft', 'teams', 'teamByHandle', 'teamById']
 
     keys.forEach(key => {
       if (this.localStorage[key]) {
@@ -76,7 +82,7 @@ export default class Crowi {
   fetchUsers() {
     const interval = 1000 * 60 * 15 // 15min
     const currentTime = new Date()
-    if (this.localStorage.lastFetched && interval > currentTime - new Date(this.localStorage.lastFetched)) {
+    if (this.localStorage.lastUserFetched && interval > currentTime - new Date(this.localStorage.lastUserFetched)) {
       return
     }
 
@@ -98,10 +104,50 @@ export default class Crowi {
         this.userById = userById
         this.localStorage.userById = JSON.stringify(userById)
 
-        this.localStorage.lastFetched = new Date()
+        this.localStorage.lastUserFetched = new Date()
       })
       .catch(err => {
-        this.localStorage.removeItem('lastFetched')
+        this.localStorage.removeItem('lastUserFetched')
+        // ignore errors
+      })
+  }
+
+  fetchTeams() {
+    const interval = 1000 * 60 * 15 // 15min
+    const currentTime = new Date()
+    if (this.localStorage.lastTeamFetched && interval > currentTime - new Date(this.localStorage.lastTeamFetched)) {
+      return
+    }
+
+    this.apiGet('/teams.list', {})
+      .then(data => {
+        const { teams } = data
+
+        const teamByHandle = {}
+        const teamById = {}
+        teams.forEach(team => {
+          teamByHandle[team.handle] = team
+          teamById[team._id] = team
+        })
+
+        // Freeze objects to prevent changes by util user.
+        // When cache expired, these objects will not be reused. I think there is no problem.
+        Object.freeze(teams)
+        Object.freeze(teamByHandle)
+        Object.freeze(teamById)
+
+        // save
+        this.teams = teams
+        this.teamByHandle = teamByHandle
+        this.teamById = teamById
+
+        this.localStorage.teams = JSON.stringify(teams)
+        this.localStorage.teamByHandle = JSON.stringify(teamByHandle)
+        this.localStorage.teamById = JSON.stringify(teamById)
+        this.localStorage.lastTeamFetched = new Date()
+      })
+      .catch(err => {
+        this.localStorage.removeItem('lastTeamFetched')
         // ignore errors
       })
   }

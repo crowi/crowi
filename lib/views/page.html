@@ -8,14 +8,12 @@
 {% endblock %}
 
 <div class="header-wrap sps sps--abv">
-  {% if not page.isDeleted() %}
   <header id="page-header">
     <p class="stopper"><i class="fa fa-chevron-up"></i></p>
 
-
+    {% if not page.isDeleted() %}
     <div class="flex-title-line">
       <h1 class="title flex-item-title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
-      {% if page %}
 
       {% if isExternalShareEnabled() %}
         <div id="external-share" class="flex-item-action dropdown">
@@ -29,6 +27,7 @@
           </ul>
         </div>
       {% endif %}
+
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
@@ -43,12 +42,9 @@
             class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
         ><i class="far fa-thumbs-up"></i></button>
       </div>
-      {% endif %}
     </div>
-  </header>
-  {% else %}
-  {# trash/* #}
-  <header id="page-header">
+    {% else %}
+    {# trash/* #}
     <div class="flex-title-line">
       <h1 class="title flex-item-title">{{ path|insertSpaceToEachSlashes }}</h1>
       <div class="flex-item-action">
@@ -59,8 +55,22 @@
         </span>
       </div>
     </div>
+    {% endif %}
+
+    {% if page.owners && page.owners.length > 0 %}
+    <div class='owners'>
+      <p>This page is <b>owned</b> by</p>
+      {% for owner in page.owners %}
+        <div class='owner-team' data-team-id='{{owner.team.id}}'>
+        {% for user in owner.team.users %}
+          <img src="{{ user|picture }}" title="{{ user.name }}">
+        {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </header>
-  {% endif %}
+
 </div>
 
 {% block content_head_after %}
@@ -216,6 +226,7 @@
   </div>
 #}
     <script type="text/template" id="raw-text-original">{{ revision.body }}</script>
+    <script type="application/json" id="current-page-owners-data">{{ JSON.stringify(page.owners) }}</script>
 
     {# formatted text #}
     <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
