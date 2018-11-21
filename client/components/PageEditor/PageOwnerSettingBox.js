@@ -12,13 +12,11 @@ class Team {
   }
 
   ownPage(pageId) {
-    // TBD: URL は変わるはず
-    return this._crowi.apiPost('/teams/ownPage', { id: this._id, page: pageId })
+    return this._crowi.apiPost('/teams.ownPage', { id: this._id, page: pageId })
   }
 
   disownPage(pageId) {
-    // TBD: URL は変わるはず
-    return this._crowi.apiPost('/teams/disownPage', { id: this._id, page: pageId })
+    return this._crowi.apiPost('/teams.disownPage', { id: this._id, page: pageId })
   }
 }
 
