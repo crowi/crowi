@@ -17,10 +17,10 @@ describe('Team', () => {
     })
     return t.save()
   }
-  const createPage = () => {
+  const createPage = (path = `/random/${crypto.randomBytes(16)}`) => {
     const user = users[Math.floor(Math.random() * users.length)]
     const p = new Page({
-      path: `/random/${crypto.randomBytes(16)}`,
+      path,
       grant: Page.GRANT_PUBLIC,
       grantedUsers: [user._id],
       creator: user._id,
@@ -172,6 +172,11 @@ describe('Team', () => {
       const team = await createTeam()
       await expect(team.ownPage()).rejects.toThrow(TypeError)
     })
+
+    it('Operation must be failed when you try to own userpage', async () => {
+      const [team, page] = await Promise.all([createTeam(), createPage('/user/dummy')])
+      await expect(team.ownPage(page)).rejects.toThrow(utils.errors.PreconditionError)
+    })
   })
 
   describe('.disownPage', () => {
@@ -179,7 +184,7 @@ describe('Team', () => {
       const [team, team2, page] = await Promise.all([createTeam(), createTeam(), createPage()])
       await team2.ownPage(page)
 
-      await expect(team.disownPage(page)).rejects.toThrow(utils.errors.PermissionError)
+      await expect(team.disownPage(page)).rejects.toThrow(utils.errors.PreconditionError)
     })
 
     it('When missing arguments', async () => {
