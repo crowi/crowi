@@ -43,8 +43,6 @@ describe('PageOwner', () => {
       page,
       team,
     })
-    await expect(po.save())
-      .rejects
-      .toThrow('duplicate key error')
+    await expect(po.save()).rejects.toThrow('duplicate key error')
   })
 })

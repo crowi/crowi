@@ -149,9 +149,11 @@ describe('Team', () => {
         .rejects // be rejected
         .toHaveProperty('errors.handle') // mongoose's ValidationError have detail for each field
 
-      await expect(team.save().catch(e => { throw e.errors.handle }))
-        .rejects
-        .toThrow('handle must be')
+      await expect(
+        team.save().catch(e => {
+          throw e.errors.handle
+        }),
+      ).rejects.toThrow('handle must be')
     })
   })
 
