@@ -21,13 +21,13 @@
       </button>#}
 
       <div class="form-inline page-form-setting ml-auto" id="page-form-setting" data-slack-configured="{{ slackConfigured() }}">
-        {% if page %}
+        {% if page && !isUserPage(path) %}
         <div class="btn-group dropup dropdown" id="pageowner-setting">
           <button type="button" class="btn btn-secondary dropdown-toggle mr-2" data-toggle="dropdown">
             <i class="fa fa-users"></i> Owners
           </button>
           <ul class="dropdown-menu dropdown-menu-right">
-            <li id="pageowner-setting-box"></li> 
+            <li id="pageowner-setting-box"></li>
           </ul>
         </div>
         {% endif %}
