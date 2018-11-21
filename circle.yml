@@ -19,6 +19,7 @@ jobs:
       - restore_cache:
           keys:
             - node_modules_{{ checksum "package-lock.json" }}
+            - mongo_binaries_{{ checksum "test/mongo-environment.js" }}
       - run: npm install
       - save_cache:
           key: node_modules_{{ checksum "package-lock.json" }}
@@ -27,6 +28,10 @@ jobs:
       - run: npm run build
       - run: npm run lint
       - run: npm run test
+      - save_cache:
+          key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
+          paths:
+            - /root/.mongo-binaries
 notify:
   webhooks:
     - url: https://webhooks.gitter.im/e/5a035388e3274b621d20

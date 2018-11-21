@@ -1,15 +1,9 @@
 const crypto = require('crypto')
 
-const chai = require('chai')
-const { expect } = chai
-
-chai.use(require('sinon-chai'))
-chai.use(require('chai-as-promised'))
-
 const utils = require('../utils.js')
 const { mongoose } = utils
 
-describe('Page', () => {
+describe('Team', () => {
   // models will be accessable after global 'before' hook runned (on util.js)
   const { User, Team, Page, PageOwner } = utils.models
 
@@ -34,7 +28,7 @@ describe('Page', () => {
     return p.save()
   }
 
-  before(async () => {
+  beforeAll(async () => {
     const userFixture = [
       { name: 'Anon 3', username: 'anonymous3', email: 'anonymous3@example.com' },
       { name: 'Anon 4', username: 'anonymous4', email: 'anonymous4@example.com' },
@@ -42,7 +36,7 @@ describe('Page', () => {
     users = await testDBUtil.generateFixture(conn, 'User', userFixture)
   })
 
-  after(async () => {
+  afterAll(async () => {
     await User.remove({})
   })
 
@@ -68,18 +62,18 @@ describe('Page', () => {
       const team1 = await createTeam(users[1])
 
       const teamsRelatedTo0 = await Team.findByUser(users[0])
-      expect(teamsRelatedTo0).lengthOf(2)
+      expect(teamsRelatedTo0).toHaveLength(2)
       // ここらへんの assert うまいことできんかな
-      expect(teamsRelatedTo0.map(team => team._id.toString())).that.does.not.include(team1.toString())
+      expect(teamsRelatedTo0.map(team => team._id.toString())).toEqual(expect.not.arrayContaining([team1._id.toString()]))
 
       const teamsRelatedTo1 = await Team.findByUser(users[1])
-      expect(teamsRelatedTo1).lengthOf(2)
+      expect(teamsRelatedTo1).toHaveLength(2)
       // ここらへんの assert うまいことできんかな
-      expect(teamsRelatedTo1.map(team => team._id.toString())).that.does.not.include(team0.toString())
+      expect(teamsRelatedTo1.map(team => team._id.toString())).toEqual(expect.not.arrayContaining([team0._id.toString()]))
     })
 
     it('When missing arguments', async () => {
-      await expect(Team.findByUser()).to.eventually.be.rejectedWith(TypeError)
+      await expect(Team.findByUser()).rejects.toThrow(TypeError)
     })
   })
 
@@ -88,11 +82,11 @@ describe('Page', () => {
       const actualTeam = await createTeam()
 
       const team = await Team.findByHandle(actualTeam.handle)
-      expect(team._id.toString()).to.be.equal(actualTeam._id.toString())
+      expect(team._id.toString()).toBe(actualTeam._id.toString())
     })
 
     it('When missing arguments', async () => {
-      await expect(Team.findByHandle()).to.eventually.be.rejectedWith(TypeError)
+      await expect(Team.findByHandle()).rejects.toThrow(TypeError)
     })
   })
 
@@ -105,19 +99,19 @@ describe('Page', () => {
     it('Add users collectly', async () => {
       const team = await createTeam()
 
-      expect(team.users).lengthOf(0)
+      expect(team.users).toHaveLength(0)
 
       const team1 = await team.addUser(...users)
-      expect(team1.users).lengthOf(2)
+      expect(team1.users).toHaveLength(2)
 
       // add same users, no affection
       const team2 = await team.addUser(...users)
-      expect(team2.users).lengthOf(2)
+      expect(team2.users).toHaveLength(2)
     })
 
     it('When missing arguments', async () => {
       const team = await createTeam()
-      await expect(team.addUser()).to.eventually.be.rejectedWith(TypeError)
+      await expect(team.addUser()).rejects.toThrow(TypeError)
     })
   })
 
@@ -126,22 +120,22 @@ describe('Page', () => {
       const team = await createTeam()
 
       const team1 = await team.addUser(...users)
-      expect(team1.users).lengthOf(2)
+      expect(team1.users).toHaveLength(2)
 
       const team2 = await team1.deleteUser(users[0])
-      expect(team2.users).lengthOf(1)
+      expect(team2.users).toHaveLength(1)
 
       // remove same users, no affection
       const team3 = await team1.deleteUser(users[0])
-      expect(team3.users).lengthOf(1)
+      expect(team3.users).toHaveLength(1)
 
       const team4 = await team1.deleteUser(users[1])
-      expect(team4.users).lengthOf(0)
+      expect(team4.users).toHaveLength(0)
     })
 
     it('When missing arguments', async () => {
       const team = await createTeam()
-      await expect(team.deleteUser()).to.eventually.be.rejectedWith(TypeError)
+      await expect(team.deleteUser()).rejects.toThrow(TypeError)
     })
   })
 
@@ -152,9 +146,12 @@ describe('Page', () => {
       })
 
       await expect(team.save())
-        .to.eventually.be.rejected // be rejected
-        .have.nested.property('errors.handle.message') // mongoose's ValidationError
-        .include('handle must be')
+        .rejects // be rejected
+        .toHaveProperty('errors.handle') // mongoose's ValidationError have detail for each field
+
+      await expect(team.save().catch(e => { throw e.errors.handle }))
+        .rejects
+        .toThrow('handle must be')
     })
   })
 
@@ -164,14 +161,14 @@ describe('Page', () => {
 
       const pages = await team.getPagesOwned()
 
-      expect(pages).lengthOf(0)
+      expect(pages).toHaveLength(0)
     })
   })
 
   describe('.ownPage', () => {
     it('When missing arguments', async () => {
       const team = await createTeam()
-      await expect(team.ownPage()).to.eventually.be.rejectedWith(TypeError)
+      await expect(team.ownPage()).rejects.toThrow(TypeError)
     })
   })
 
@@ -180,29 +177,29 @@ describe('Page', () => {
       const [team, team2, page] = await Promise.all([createTeam(), createTeam(), createPage()])
       await team2.ownPage(page)
 
-      await expect(team.disownPage(page)).to.eventually.be.rejectedWith(utils.errors.PermissionError)
+      await expect(team.disownPage(page)).rejects.toThrow(utils.errors.PermissionError)
     })
 
     it('When missing arguments', async () => {
       const team = await createTeam()
-      await expect(team.disownPage()).to.eventually.be.rejectedWith(TypeError)
+      await expect(team.disownPage()).rejects.toThrow(TypeError)
     })
   })
 
   describe('.getPagesOwned, .ownPage, .disownPage', () => {
     it('own and disown some pages', async () => {
       const [team, page] = await Promise.all([createTeam(), createPage()])
-      expect(await team.getPagesOwned()).lengthOf(0)
+      expect(await team.getPagesOwned()).toHaveLength(0)
 
-      await expect(team.ownPage(page)).to.eventually.be.true
-      expect(await team.getPagesOwned()).lengthOf(1)
+      await expect(team.ownPage(page)).resolves.toBe(true)
+      expect(await team.getPagesOwned()).toHaveLength(1)
 
       // no effect on same things
-      await expect(team.ownPage(page)).to.eventually.be.true
-      expect(await team.getPagesOwned()).lengthOf(1)
+      await expect(team.ownPage(page)).resolves.toBe(true)
+      expect(await team.getPagesOwned()).toHaveLength(1)
 
-      await expect(team.disownPage(page)).to.eventually.be.true
-      expect(await team.getPagesOwned()).lengthOf(0)
+      await expect(team.disownPage(page)).resolves.toBe(true)
+      expect(await team.getPagesOwned()).toHaveLength(0)
     })
   })
 })

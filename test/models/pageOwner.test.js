@@ -1,12 +1,6 @@
 const crypto = require('crypto')
 const mongodb = require('mongodb')
 
-const chai = require('chai')
-const { expect } = chai
-
-chai.use(require('sinon-chai'))
-chai.use(require('chai-as-promised'))
-
 const { models } = require('../utils.js')
 const { Team, Page, User, PageOwner } = models
 
@@ -50,8 +44,7 @@ describe('PageOwner', () => {
       team,
     })
     await expect(po.save())
-      .to.eventually.rejectedWith(mongodb.MongoError)
-      .have.property('message')
-      .include('duplicate key error')
+      .rejects
+      .toThrow('duplicate key error')
   })
 })

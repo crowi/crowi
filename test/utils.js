@@ -1,46 +1,35 @@
 'use strict'
 
-var mongoUri = process.env.MONGOLAB_URI || process.env.MONGOHQ_URL || process.env.MONGO_URI || 'mongodb://localhost/crowi'
-var mongoose = require('mongoose')
-var fs = require('fs')
-var models = {}
-var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
-const { MongoClient } = require('mongodb')
+const mongoose = require('mongoose')
+const models = require(MODEL_DIR)
+const Config = require(MODEL_DIR + '/config')
+const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
 
 // Want fix...
 crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
 
 mongoose.Promise = global.Promise
 
-before('Drop database before all tests', async function() {
-  const db = await MongoClient.connect(mongoUri)
-  await db.dropDatabase()
-  db.close()
+const { __MONGO_URI__: MONGO_URI } = global
 
-  await mongoose.connect(mongoUri)
+beforeAll(async () => {
+  if (MONGO_URI) {
+    await mongoose.connect(MONGO_URI)
+    await mongoose.connection.dropDatabase()
+  }
 })
 
-after('Close database connection', function(done) {
-  if (!mongoUri) {
-    return done()
+afterAll(async () => {
+  if (MONGO_URI) {
+    await mongoose.disconnect()
   }
-
-  mongoose.disconnect()
-  return done()
 })
 
 // Setup Models
-fs.readdirSync(MODEL_DIR).forEach(function(file) {
-  if (file.match(/^(\w+)\.js$/)) {
-    var name = RegExp.$1
-    if (name === 'index') {
-      return
-    }
-    var modelName = name.charAt(0).toUpperCase() + name.slice(1)
-    models[modelName] = require(MODEL_DIR + '/' + file)(crowi)
-  }
-})
-
+models.Config = Config
+for (let [modelName, model] of Object.entries(models)) {
+  models[modelName] = model(crowi)
+}
 crowi.models = models
 
 // create dummy Socket.IO server
@@ -53,7 +42,7 @@ crowi.getIo = function() {
 }
 
 module.exports = {
-  models: models,
-  mongoose: mongoose,
+  models,
+  mongoose,
   errors: crowi.errors,
 }
