@@ -67,6 +67,9 @@ page_login:
   sign_in: Sign in
   sign_up_is_here: Sign up
   sign_in_with: 'Sign in with %s'
+  notice:
+    email_is_used: There is an account of '{{ email }}' not connected to {{ issuer }}.
+    login_to_connect: You can connect it account with {{ isssuer }} to login.
 page_register:
   example: Example
   taro_yamada: James Bond
