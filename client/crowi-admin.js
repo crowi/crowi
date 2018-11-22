@@ -51,6 +51,68 @@ $(function() {
     return false
   })
 
+  const closePanel = () => {
+    const $tr = $('#admin-users-table #target')
+    if ($tr.length) {
+      const $email = $tr.find('.email')
+      const $emailInput = $email.find('input')
+      const $editPanel = $('#admin-users-table #edit-panel')
+      const $padding = $('#admin-users-table .padding')
+      $editPanel.on('animationend', () => {
+        $tr.attr('id', '')
+        $email.empty().text($emailInput.attr('initial'))
+
+        $editPanel.remove()
+        $padding.remove()
+      })
+      $editPanel.addClass('contract')
+    }
+  }
+
+  const openPanel = $tr => {
+    const $email = $tr.find('.email')
+    const $emailInput = $('<input>', { type: 'text', class: 'form-control', value: $email.text(), initial: $email.text() })
+
+    const $editPanel = {}
+    $editPanel.container = $('<tr>', { id: 'edit-panel' })
+    $editPanel.td = $('<td>', { colspan: 7 })
+    $editPanel.div = $('<div>')
+    $editPanel.update = $('<button>', { type: 'submit', class: 'update btn btn-primary btn-sm' }).text('Update')
+    $editPanel.cancel = $('<button>', { type: 'button', class: 'cancel btn btn-default btn-sm' }).text('Cancel')
+    const $padding = $('<tr>', { class: 'padding' })
+
+    $tr.attr('id', 'target')
+    $email.empty().append($emailInput)
+    $editPanel.div.append([$editPanel.cancel, $editPanel.update])
+    $editPanel.container.append($editPanel.td.append($editPanel.div))
+    $tr.after($editPanel.container)
+    $tr.after($padding)
+
+    $editPanel.cancel.on('click', () => closePanel())
+    $editPanel.update.on('click', async () => {
+      const id = $tr.data('user-id')
+      const email = $emailInput.val()
+      const csrf = $('#admin-users-table').data('csrf')
+      const body = { user_id: id, email, _csrf: csrf }
+
+      const { ok } = await crowi.apiPost('/admin/users.updateEmail', body)
+      if (ok) {
+        // TODO Fix
+        location.reload()
+      }
+    })
+  }
+
+  $('#admin-users-table .edit-button').on('click', function() {
+    const $tr = $(this).closest('tr')
+    if ($tr.attr('id') === 'target') {
+      return
+    }
+
+    closePanel()
+    openPanel($tr)
+  })
+
   $('#appSettingForm, #secSettingForm, #authSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(function() {
     $(this).submit(function() {
       function showMessage(formId, msg, status) {
