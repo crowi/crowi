@@ -15,7 +15,7 @@
 
 <div class="login-dialog-container flip-container col-md-5">
 
-<div class="login-dialog flipper {% if req.query.register or req.body.registerForm or isRegistering or googleId or githubId %}to-flip{% endif %}" id="login-dialog">
+<div class="login-dialog flipper {% if req.body.registerForm or isRegistering %}to-flip{% endif %}" id="login-dialog">
 
   <div class="login-dialog-inner front">
     <h2>{{ t('page_login.sign_in') }}</h2>
@@ -39,11 +39,27 @@
       {% endif %}
     </div>
 
-    {% if !config.crowi['auth:disablePasswordAuth'] %}
+    {% if toConnect %}
+      <div class="user-card">
+        <div class="user-card-image">
+          <img src="{{ targetUser|picture }}" class="picture picture-rounded picture-lg">
+        </div>
+        <div class="user-card-body">
+          <h4>{{ targetUser.name }}</h4>
+          <code>{{ targetUser.email }}</code>
+        </div>
+      </div>
+      <div class="alert alert-info">
+        <p>{{ t('page_login.notice.email_is_used', { email: socialEmail, issuer: issuerName }) }}<p>
+        <p>{{ t('page_login.notice.login_to_connect', { issuer: issuerName }) }}<p>
+      </div>
+    {% endif %}
+
+    {% if toConnect || !config.crowi['auth:disablePasswordAuth'] %}
     <form role="form" action="/login" method="post">
       <div class="input-group">
         <span class="input-group-addon"><i class="fa fa-envelope"></i></span>
-        <input type="text" class="form-control" placeholder="E-mail" name="loginForm[email]">
+        <input type="text" class="form-control" placeholder="E-mail" name="loginForm[email]" {% if toConnect %}value="{{ socialEmail }}" readonly{% endif %}>
       </div>
 
       <div class="input-group">
@@ -53,13 +69,16 @@
 
       <input type="hidden" name="_csrf" value="{{ csrf() }}">
       <input type="hidden" name="continue" value="{{ continueUrl }}">
+      {% if toConnect %}
+        <input type="hidden" name="toConnect" value="1">
+      {% endif %}
       <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('page_login.sign_in') }}">
     </form>
-
-    <hr>
     {% endif %}
 
     {% if config.crowi['auth:disablePasswordAuth'] && config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
+    <hr>
+
     <p class="help-block">
       {{ t('page_register.form_help.email') }}
     </p>
@@ -69,6 +88,10 @@
       {% endfor %}
     </ul>
 
+    {% endif %}
+
+    {% if not toConnect %}
+    {% if !config.crowi['auth:disablePasswordAuth'] %}
     <hr>
     {% endif %}
 
@@ -88,6 +111,7 @@
         </form>
       {% endif %}
     </div>
+    {% endif %}
 
     {% if config.crowi['security:registrationMode'] != 'Closed' && !config.crowi['auth:disablePasswordAuth'] %}
     <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil-alt"></i> {{ t('page_login.sign_up_is_here') }}</a></p>

@@ -67,6 +67,9 @@ page_login:
   sign_in: ログイン
   sign_up_is_here: 新規登録はこちら
   sign_in_with: '%s でログイン'
+  notice:
+    email_is_used: "このメールアドレス({{ email }})は既に使用されていますが、{{ issuer }}と接続されていません。"
+    login_to_connect: ログインすることで{{ issuer }}のアカウントと接続することができます。
 page_register:
   example: 例
   taro_yamada: 山田 太郎
