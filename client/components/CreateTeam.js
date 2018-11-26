@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import { Modal, ModalHeader, ModalBody, ModalFooter, Form, FormText, FormGroup, Button, Label, Input } from 'reactstrap'
+import { Modal, ModalHeader, ModalBody, ModalFooter, Form, FormText, FormGroup, Button, Label, Input, Alert } from 'reactstrap'
 
 import FGInputAndHint from 'components/Common/FGInputAndHint'
 
@@ -17,6 +17,8 @@ export default class CreateTeam extends React.Component {
 
       // input
       actionDisabled: false,
+
+      error: null,
     }
 
     const bindTargets = ['handleInputChange', 'create', 'calculateSuggestion', 'handleAdd', 'handleRemove', 'userHinter']
@@ -80,15 +82,20 @@ export default class CreateTeam extends React.Component {
     const { name, handle, users } = this.state
     const userids = Object.keys(users)
 
-    await this.crowi.apiPost('/teams.create', {
-      name,
-      handle,
-      userids,
-    })
-
-    // ライフサイクルが終わることを期待している
-    this.props.toggle()
-
+    try {
+      await this.crowi.apiPost('/teams.create', {
+        name,
+        handle,
+        userids,
+      })
+      // Close dialog if success
+      this.props.toggle()
+    } catch (e) {
+      this.setState({
+        actionDisabled: false,
+        error: e.message,
+      })
+    }
     // TODO: ここでキャッシュ期間をリセットする
   }
 
@@ -98,6 +105,7 @@ export default class CreateTeam extends React.Component {
         <Form>
           <ModalHeader>Create Team</ModalHeader>
           <ModalBody>
+            {this.state.error && <Alert color="danger">{this.state.error}</Alert>}
             <FormGroup>
               <Label>Name</Label>
               <FormText className="float-right">{`eg. "Corporate Team"`}</FormText>

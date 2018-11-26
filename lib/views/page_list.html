@@ -123,6 +123,7 @@
     </div>
 
     <script type="text/template" id="raw-text-original">{{ page.revision.body }}</script>
+    <script type="application/json" id="current-page-owners-data">{{ JSON.stringify(page.owners) }}</script>
 
     <div class="tab-pane edit-form portal-form {% if req.body.pageForm %}active{% endif %}" id="edit-form">
       {% include '_form.html' with {forceGrant: 1} %}

@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import { Form, FormGroup, FormText, Button, Label } from 'reactstrap'
+import { Form, FormGroup, FormText, Button, Label, Alert } from 'reactstrap'
 import CreateTeam from 'components/CreateTeam'
 import FGInputAndHint from 'components/Common/FGInputAndHint'
 
@@ -38,6 +38,7 @@ export default class PageOwnerBox extends React.Component {
       saveDisabled: false,
 
       createTeamModalOpened: false,
+      error: null,
     }
 
     // handlers
@@ -117,11 +118,14 @@ export default class PageOwnerBox extends React.Component {
       ].map(promise => promise.catch(e => errors.push(e))),
     )
 
+    let error = null
+
     if (!errors) {
-      console.error(errors)
+      error = errors.map(error => error.message).join(', ')
     }
 
     this.setState({
+      error,
       teamsWillOwn: {},
       teamsWillDisown: {},
       saveDisabled: false,
@@ -133,6 +137,8 @@ export default class PageOwnerBox extends React.Component {
     return (
       <div className="pageowner-setting-box">
         <h4>Add owners to this page</h4>
+
+        {this.state.error && <Alert color="danger">{this.state.error}</Alert>}
 
         <Form
           onSubmit={event => {

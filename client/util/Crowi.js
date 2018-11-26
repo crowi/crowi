@@ -199,7 +199,7 @@ export default class Crowi {
   }
 
   async apiGet(path, params = {}) {
-    return this.apiRequest('get', path, { params })
+    return this.apiRequest('get', path, params)
   }
 
   async apiPost(path, params = {}) {
@@ -207,21 +207,29 @@ export default class Crowi {
       params._csrf = this.csrfToken
     }
 
-    return this.apiRequest('post', path, params)
+    return this.apiRequest('post', path, null, params)
   }
 
-  async apiRequest(method, path, params) {
+  async apiRequest(method, path, params = {}, data = {}) {
     const createError = (message, info = {}) => {
       let error = new Error(message)
       error.info = info
       return error
     }
-    const { data } = await axios[method](`/_api${path}`, params).catch(function() {
-      throw createError('Error')
-    })
-    const { ok, error, info } = data
+    const { data: responseData } = await axios
+      .request({
+        params,
+        data,
+        method,
+        url: `/_api${path}`,
+        validateStatus: status => status < 500,
+      })
+      .catch(function() {
+        throw createError('Error')
+      })
+    const { ok, error, info } = responseData
     if (ok) {
-      return data
+      return responseData
     }
     throw createError(error, info)
   }
