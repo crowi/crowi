@@ -218,7 +218,8 @@ portalize:
 
 Unportalize: &unportalize Unportalize
 unportalize:
+  title: *unportalize
   make_this_page_normal: Return this page to a normal page.
   this_page: 'This page'
   unportalized_page: 'Unportalized page'
-  title: *unportalize
+  alert_toppage: This page will move to a special page because this is top page portal.
