@@ -158,7 +158,7 @@ module.exports = function(crowi) {
       }
     } catch (e) {
       // no such file or directory
-      debug('Stats error:', filePath)
+      debug('No cache', e.message)
       return true
     }
 
