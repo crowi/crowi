@@ -74,6 +74,11 @@
 </div>
 
 {% else %}
+
+  <div class="alert alert-danger">
+    This page placed under user page, but no such user exists: {{ path }}
+  </div>
+
   {% parent %}
 {% endif %}
 
