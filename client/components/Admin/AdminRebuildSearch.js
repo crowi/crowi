@@ -40,7 +40,7 @@ export default class AdminRebuildSearch extends React.Component {
     if (isCompleted) {
       return (
         <div className="progress">
-          <div className="progress-bar progress-bar-striped" width="100%" />
+          <div className="progress-bar progress-bar-striped" style={{ width: `100%` }} />
         </div>
       )
     }
@@ -48,7 +48,7 @@ export default class AdminRebuildSearch extends React.Component {
     return (
       <div className="progress">
         <div
-          className="progress-bar progress-bar-striped progress-bar-animated"
+          className="progress-bar progress-bar-striped progress-bar-animated active"
           role="progressbar"
           aria-valuemin="0"
           aria-valuenow={current}
