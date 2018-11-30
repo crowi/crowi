@@ -55,7 +55,7 @@ export default class AdminRebuildSearch extends React.Component {
           aria-valuemax={total}
           style={{ width: `${(current / total) * 100}%` }}
         >
-          {current}/{total}
+          {current}/{total} ({skip} skips)
         </div>
       </div>
     )
