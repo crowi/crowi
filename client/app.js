@@ -17,8 +17,9 @@ import SeenUserList from 'components/SeenUserList'
 import BookmarkButton from 'components/BookmarkButton'
 import ShareBox from 'components/ExternalShare/ShareBox'
 import SecretKeywordFormContainer from 'components/ExternalShare/SecretKeywordForm/SecretKeywordFormContainer'
-import AdminShare from 'components/Admin/Share/AdminShare'
 import RenameTree from 'components/RenameTree/RenameTree'
+import AdminShare from 'components/Admin/Share/AdminShare'
+import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
 
 if (!window) {
   window = {}
@@ -72,6 +73,7 @@ const componentMappings = {
   'share-box': <ShareBox pageId={pageId} crowi={crowi} />,
   'secret-keyword-form-container': <SecretKeywordFormContainer pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
+  'admin-rebuild-search': <AdminRebuildSearch crowi={crowi} />,
 }
 
 Object.keys(componentMappings).forEach(key => {
