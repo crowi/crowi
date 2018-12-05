@@ -49,7 +49,7 @@
         <label for="" class="col-3 control-label">{{ t('Current API Token') }}</label>
         <div class="col-6">
           {% if user.apiToken %}
-            <input class="form-control" type="text" value="{{ user.apiToken }}">
+            <input class="form-control" type="text" value="{{ user.apiToken }}" readonly>
           {% else %}
           <p class="form-control-static">
             {{ t('page_me_apitoken.notice.apitoken_issued') }}
