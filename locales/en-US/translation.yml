@@ -25,7 +25,6 @@ Last updated: Updated
 Share: Share
 Share Link: Share Link
 Markdown Link: Markdown Link
-Unportalize: Unportalize
 View this version: View this version
 View diff: View diff
 User ID: User ID
@@ -219,3 +218,11 @@ portalize:
   make_this_page_portal: 'Make this page a portal.'
   this_page: 'This page'
   changed_page: 'Changed page'
+
+Unportalize: &unportalize Unportalize
+unportalize:
+  title: *unportalize
+  make_this_page_normal: Return this page to a normal page.
+  this_page: 'This page'
+  unportalized_page: 'Unportalized page'
+  alert_toppage: This page will move to a special page because this is top page portal.

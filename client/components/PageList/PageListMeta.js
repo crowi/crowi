@@ -1,6 +1,8 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
+import Icon from 'components/Common/Icon'
+
 export default class PageListMeta extends React.Component {
   isPortalPath(path) {
     if (path.match(/.*\/$/)) {
@@ -10,41 +12,63 @@ export default class PageListMeta extends React.Component {
     return false
   }
 
+  bookmarkHighlightClass(count) {
+    if (count > 20) {
+      // TODO: dynamic??
+      return 'page-list-bookmarkCount-amazing'
+    }
+    if (count > 10) {
+      return 'page-list-bookmarkCount-high'
+    }
+
+    // else
+    return ''
+  }
+
   render() {
     // TODO isPortal()
     const page = this.props.page
 
     // portal check
-    let PortalLabel
+    let portalLabel
     if (this.isPortalPath(page.path)) {
-      PortalLabel = <span className="badge badge-info">PORTAL</span>
+      portalLabel = <span className="badge badge-info">PORTAL</span>
     }
 
-    let CommentCount
+    let commentCount
     if (page.commentCount > 0) {
-      CommentCount = (
+      commentCount = (
         <span>
-          <i className="fa fa-comment" />
+          <Icon name="comment" />
           {page.commentCount}
         </span>
       )
     }
 
-    let LikerCount
+    let likerCount
     if (page.liker.length > 0) {
-      LikerCount = (
+      likerCount = (
         <span>
-          <i className="fa fa-thumbs-up" />
+          <Icon name="thumbs-up" />
           {page.liker.length}
+        </span>
+      )
+    }
+
+    let bookmarkCount
+    if (page.bookmarkCount && page.bookmarkCount > 0) {
+      const bookmarkHighlightClass = this.bookmarkHighlightClass(page.bookmarkCount)
+      bookmarkCount = (
+        <span className={`page-list-bookmarkCount ${bookmarkHighlightClass}`}>
+          <Icon name="star" />
+          {page.bookmarkCount}
         </span>
       )
     }
 
     return (
       <span className="page-list-meta">
-        {PortalLabel}
-        {CommentCount}
-        {LikerCount}
+        {portalLabel} {commentCount} {likerCount} {bookmarkCount}
       </span>
     )
   }
