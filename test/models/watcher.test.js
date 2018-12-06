@@ -1,9 +1,11 @@
 const utils = require('../utils.js')
+const ActivityDefine = require('../../lib/util/activityDefine')()
 
 describe('Watcher', () => {
   const Watcher = utils.models.Watcher
   const mongoose = utils.mongoose
   const ObjectId = mongoose.Types.ObjectId
+  const { ACTIONS } = ActivityDefine
 
   describe('.upsertWatcher', () => {
     test('should create', async () => {
@@ -19,6 +21,22 @@ describe('Watcher', () => {
       } catch (err) {
         throw new Error(err)
       }
+    })
+  })
+
+  describe('.getWatcherBrokerDocument', () => {
+    it('COMMENT', () => {
+      const target = ObjectId()
+      expect(Watcher.getWatcherBrokerDocument({ action: ACTIONS.COMMENT, target })).toBe(target)
+    })
+
+    it('LIKE', () => {
+      const event = ObjectId()
+      expect(Watcher.getWatcherBrokerDocument({ action: ACTIONS.LIKE, event })).toBe(event)
+    })
+
+    it('MENTION', () => {
+      expect(Watcher.getWatcherBrokerDocument({ action: ACTIONS.MENTION })).toBe(null)
     })
   })
 })

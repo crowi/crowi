@@ -84,7 +84,7 @@ describe('Activity', () => {
     const pageId = ObjectId()
 
     beforeAll(async () => {
-      await Promise.all([User, Page, Comment, Watcher, Activity].map(model => model.remove({})))
+      await Promise.all([User, Page, Comment, Watcher].map(model => model.remove({})))
 
       const users = [
         { _id: userIds[0], email: faker.internet.email(), status: User.STATUS_ACTIVE },
@@ -94,9 +94,13 @@ describe('Activity', () => {
       const pages = [{ _id: pageId, path: `/${faker.lorem.word()}`, grant: Page.GRANT_PUBLIC, creator: userIds[0] }]
       const comments = userIds.map(userId => ({ page: pageId, creator: userId, comment: faker.lorem.word() }))
 
-      await testDBUtil.generateFixture(conn, 'User', users)
-      await testDBUtil.generateFixture(conn, 'Page', pages)
-      await testDBUtil.generateFixture(conn, 'Comment', comments)
+      await Promise.all([
+        testDBUtil.generateFixture(conn, 'User', users),
+        testDBUtil.generateFixture(conn, 'Page', pages),
+        testDBUtil.generateFixture(conn, 'Comment', comments),
+      ])
+
+      await Activity.remove({})
     })
 
     afterEach(async () => {
