@@ -403,16 +403,21 @@ describe('Page', () => {
           page = await Page.create('/test', '# test', createdUsers[0], {})
         })
 
-        test('lifetime can be empty', async () => {
-          await expect(page.updateLifetime()).resolves
+        test('lifetime can be null', async () => {
           await expect(page.updateLifetime(null)).resolves
         })
 
+        test('lifetime can not be empty', async () => {
+          await expect(page.updateLifetime([])).rejects.toThrow()
+          await expect(page.updateLifetime()).rejects.toThrow()
+        })
+
         test('lifetime must not include any fields without approved', () =>
-          expect(page.updateLifetime({
-            test: 123
-          })).rejects.toThrow()
-        )
+          expect(
+            page.updateLifetime({
+              test: 123,
+            }),
+          ).rejects.toThrow())
       })
 
       afterEach(async () => Page.remove({}))
