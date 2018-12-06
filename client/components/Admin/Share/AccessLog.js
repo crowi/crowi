@@ -50,9 +50,7 @@ class AccessLog extends React.Component {
     return (
       <tr key={index}>
         <td>{index}</td>
-        <td>
-          <a href={path}>{path}</a>
-        </td>
+        <td>{path ? <a href={path}>{path}</a> : '(Deleted)'}</td>
         <td>{info.name}</td>
         <td>{info.os.toString()}</td>
         <td>{remoteAddress}</td>
