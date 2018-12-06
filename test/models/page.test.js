@@ -412,12 +412,23 @@ describe('Page', () => {
           await expect(page.updateLifetime()).rejects.toThrow()
         })
 
-        test('lifetime must not include any fields without approved', () =>
+        test('lifetime must not include any fields without approved', () => {
           expect(
             page.updateLifetime({
               test: 123,
             }),
-          ).rejects.toThrow())
+          ).rejects.toThrow('"test" is not allowed')
+        })
+
+        test(`can't set lifetime when there are no owner for target page`, () => {
+          return expect(
+            page.updateLifetime({
+              days: 123,
+            }),
+          ).rejects.toThrow(`can't set lifetime`)
+        })
+
+        // no successful complicated case because owner...
       })
 
       afterEach(async () => Page.remove({}))
