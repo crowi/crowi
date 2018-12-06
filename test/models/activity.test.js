@@ -82,7 +82,6 @@ describe('Activity', () => {
   describe('Target users', () => {
     const userIds = [ObjectId(), ObjectId(), ObjectId()]
     const pageId = ObjectId()
-    const activityId = ObjectId()
 
     beforeAll(async () => {
       await Promise.all([User, Page, Comment, Watcher, Activity].map(model => model.remove({})))

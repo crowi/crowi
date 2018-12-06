@@ -1,16 +1,9 @@
-
+const utils = require('../utils.js')
 
 describe('Notification', () => {
-  const Comment = utils.models.Comment
   const Notification = utils.models.Notification
-  const Page = utils.models.Page
-  const User = utils.models.User
-  const Activity = utils.models.Activity
   const mongoose = utils.mongoose
   const ObjectId = mongoose.Types.ObjectId
-  const conn = utils.mongoose.connection
-
-  const data = {}
 
   describe('.upsertByActivity', () => {
     describe('valid parameters', () => {
@@ -20,7 +13,7 @@ describe('Notification', () => {
         const targetId = ObjectId()
         const activity = { _id: ObjectId(), user: userId1, targetModel: 'Page', target: targetId, action: 'COMMENT' }
         return Notification.upsertByActivity(userId2, activity)
-          .then(function(notification) {
+          .then(notification => {
             expect(notification.user.toString()).toBe(userId2.toString())
             expect(notification.targetModel).toBe('Page')
             expect(notification.target.toString()).toBe(targetId.toString())
@@ -28,32 +21,15 @@ describe('Notification', () => {
             expect(notification.status).toBe(Notification.STATUS_UNREAD)
             expect(notification.activities).toHaveLength(1)
           })
-          .catch(function(err) {
+          .catch(err => {
             throw new Error(err)
           })
       })
     })
 
-    describe('invalid parameters', function() {
-      it('should create', function() {
-        const userId1 = ObjectId()
-        const userId2 = ObjectId()
-        const userId3 = ObjectId()
-
-        const targetId = ObjectId()
-
-        const sameActivityUsers = [userId1, userId2, userId3]
-
     describe('invalid parameters', () => {
       it('should create', () => {
-        const userId1 = ObjectId()
-        const userId2 = ObjectId()
-        const userId3 = ObjectId()
-
-        const targetId = ObjectId()
-
-        const sameActivityUsers = [userId1, userId2, userId3]
-
+        const user = ObjectId()
         const activity = {
           user: ObjectId(),
           targetModel: 'Page2', // invalid
@@ -61,14 +37,13 @@ describe('Notification', () => {
           action: 'COMMENT',
         }
 
-        return Notification.upsertByActivity(user, activity).then(
-          function(notification) {
+        return Notification.upsertByActivity(user, activity)
+          .then(() => {
             throw new Error('validation not work')
-          },
-          function(err) {
+          })
+          .catch(err => {
             expect(err.message).toBe('Validation failed')
-          },
-        )
+          })
       })
     })
 
@@ -99,40 +74,36 @@ describe('Notification', () => {
   })
 
   describe('.read', () => {
-    describe('read', () => {
-      const user = ObjectId()
-      let notificationId
+    const user = ObjectId()
+    let notificationId
 
-      beforeAll(async () => {
-        await Notification.remove({})
-        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
-        const notification = await Notification.upsertByActivity(user, activity)
-        notificationId = notification._id
-      })
+    beforeAll(async () => {
+      await Notification.remove({})
+      const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
+      const notification = await Notification.upsertByActivity(user, activity)
+      notificationId = notification._id
+    })
 
-      it('status is changed correctly', async () => {
-        const result = await Notification.read(user)
-        expect(result).toEqual({ n: 1, nModified: 1, ok: 1 })
-      })
+    it('status is changed correctly', async () => {
+      const result = await Notification.read(user)
+      expect(result).toEqual({ n: 1, nModified: 1, ok: 1 })
     })
   })
 
   describe('.open', () => {
-    describe('open', () => {
-      const user = ObjectId()
-      let notificationId
+    const user = ObjectId()
+    let notificationId
 
-      beforeAll(async () => {
-        await Notification.remove({})
-        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
-        const notification = await Notification.upsertByActivity(user, activity)
-        notificationId = notification._id
-      })
+    beforeAll(async () => {
+      await Notification.remove({})
+      const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
+      const notification = await Notification.upsertByActivity(user, activity)
+      notificationId = notification._id
+    })
 
-      it('status is changed correctly', async () => {
-        const notification = await Notification.open({ _id: user }, notificationId)
-        expect(notification.status).toBe(Notification.STATUS_OPENED)
-      })
+    it('status is changed correctly', async () => {
+      const notification = await Notification.open({ _id: user }, notificationId)
+      expect(notification.status).toBe(Notification.STATUS_OPENED)
     })
   })
 
