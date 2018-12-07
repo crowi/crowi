@@ -52,6 +52,19 @@
   }
 }
 
+.page-list-meta {
+  .page-list-bookmarkCount {
+
+    &.page-list-bookmarkCount-amazing {
+      font-weight: bold;
+      color: #e6b422;
+    }
+    &.page-list-bookmarkCount-high {
+      color: #e6b422;
+    }
+  }
+}
+
 .grouped-page-list {
   &:first-child {
     h5 {
