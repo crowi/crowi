@@ -128,6 +128,7 @@
     "yaml-loader": "^0.5.0"
   },
   "devDependencies": {
+    "@babel/preset-typescript": "^7.1.0",
     "babel-core": "^7.0.0-bridge.0",
     "babel-eslint": "^9.0.0",
     "babel-jest": "^23.6.0",
@@ -146,6 +147,7 @@
     "eslint-plugin-standard": "^4.0.0",
     "faker": "^4.1.0",
     "flow-bin": "^0.65.0",
+    "fork-ts-checker-webpack-plugin": "^0.5.0",
     "jest": "^23.6.0",
     "mongodb-memory-server": "^2.6.2",
     "nodemon": "^1.17.2",
@@ -158,18 +160,18 @@
   "license": "MIT",
   "scripts": {
     "start": "node app.js",
-    "dev": "concurrently --kill-others \"npm run dev:server\" \"npm run dev:client\" \"npm run watch\" ",
-    "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon --watch ./lib/ --watch ./locales/ --ext 'js,json' --exec node app.js",
+    "dev": "concurrently --kill-others 'npm run dev:server' 'npm run dev:client' 'npm run watch'",
+    "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon --watch ./lib/ --watch ./locales/ --ext 'ts,tsx,js,jsx,json' --exec node app.js",
     "dev:client": "NODE_ENV=development webpack --progress --profile --colors --display-error-details --watch --config tools/webpack.config.js",
     "flow": "flow",
-    "format": "eslint --fix \"**/*.js\"",
-    "lint": "eslint \"**/*.js\"",
+    "format": "eslint --fix '**/*.{ts,tsx,js,jsx}'",
+    "lint": "eslint '**/*.{ts,tsx,js,jsx}'",
     "test": "DEBUG= jest",
     "coverage": "DEBUG= jest --coverage",
     "build": "npm run prod:client",
     "prod:client": "NODE_ENV=production webpack --bail --colors --display-error-details --config tools/webpack.config.js",
     "webpack": "webpack",
-    "watch": "onchange \"**/*.js\" -e \"bin\" -e \"client/thirdparty-js\" -e \"node_modules\" -e \"public\" -f add -f change -- eslint --fix \"{{changed}}\"",
+    "watch": "onchange '**/*.{ts,tsx,js,jsx}' -e 'bin' -e 'client/thirdparty-js' -e 'node_modules' -e 'public' -f add -f change -- eslint --fix '{{changed}}'",
     "postinstall": "sh -c '[ \"$SKIP_POSTINSTALL\" != \"\"  ] || npm run build'"
   },
   "env": {
