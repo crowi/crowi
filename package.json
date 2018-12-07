@@ -152,7 +152,8 @@
     "onchange": "^4.0.0",
     "prettier": "^1.13.5",
     "proxyquire": "~1.8.0",
-    "regenerator-runtime": "^0.12.1"
+    "regenerator-runtime": "^0.12.1",
+    "typescript": "^3.2.2"
   },
   "license": "MIT",
   "scripts": {
