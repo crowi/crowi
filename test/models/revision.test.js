@@ -62,6 +62,23 @@ describe('Revision', () => {
 
         expect(m.diff(revision.expirationAt)).toBe(0)
       })
+
+      test('when expirationAt configuration found, take over than page.lifetime', async () => {
+        let page = await createPage(user)
+
+        await team.ownPage(page)
+        page = await page.populate('owners').execPopulate()
+
+        page = await page.updateLifetime({ days: 5 })
+
+        const expirationAt = moment()
+          .add({ days: 100 })
+          .endOf('day')
+          .toDate()
+        const revision = Revision.prepareRevision(page, '# body', user, { expirationAt })
+
+        expect(revision.expirationAt).toBe(expirationAt)
+      })
     })
   })
 })
