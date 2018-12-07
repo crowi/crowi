@@ -157,16 +157,6 @@ describe('Team', () => {
     })
   })
 
-  describe('.getPagesOwned', () => {
-    it('when no pages owned by team', async () => {
-      const team = await createTeam()
-
-      const pages = await team.getPagesOwned()
-
-      expect(pages).toHaveLength(0)
-    })
-  })
-
   describe('.ownPage', () => {
     it('When missing arguments', async () => {
       const team = await createTeam()
@@ -196,17 +186,17 @@ describe('Team', () => {
   describe('.getPagesOwned, .ownPage, .disownPage', () => {
     it('own and disown some pages', async () => {
       const [team, page] = await Promise.all([createTeam(), createPage()])
-      expect(await team.getPagesOwned()).toHaveLength(0)
+      expect(await PageOwner.findByTeam(team)).toHaveLength(0)
 
       await expect(team.ownPage(page)).resolves.toBe(true)
-      expect(await team.getPagesOwned()).toHaveLength(1)
+      expect(await PageOwner.findByTeam(team)).toHaveLength(1)
 
       // no effect on same things
       await expect(team.ownPage(page)).resolves.toBe(true)
-      expect(await team.getPagesOwned()).toHaveLength(1)
+      expect(await PageOwner.findByTeam(team)).toHaveLength(1)
 
       await expect(team.disownPage(page)).resolves.toBe(true)
-      expect(await team.getPagesOwned()).toHaveLength(0)
+      expect(await PageOwner.findByTeam(team)).toHaveLength(0)
     })
   })
 })
