@@ -5,7 +5,7 @@ const { mongoose } = utils
 
 describe('Team', () => {
   // models will be accessable after global 'before' hook runned (on util.js)
-  const { User, Team, Page, PageOwner } = utils.models
+  const { User, Team, Page } = utils.models
 
   const conn = utils.mongoose.connection
   let users = []
@@ -16,16 +16,6 @@ describe('Team', () => {
       users,
     })
     return t.save()
-  }
-  const createPage = (path = `/random/${crypto.randomBytes(16)}`) => {
-    const user = users[Math.floor(Math.random() * users.length)]
-    const p = new Page({
-      path,
-      grant: Page.GRANT_PUBLIC,
-      grantedUsers: [user._id],
-      creator: user._id,
-    })
-    return p.save()
   }
 
   beforeAll(async () => {
@@ -154,49 +144,6 @@ describe('Team', () => {
           throw e.errors.handle
         }),
       ).rejects.toThrow('handle must be')
-    })
-  })
-
-  describe('.ownPage', () => {
-    it('When missing arguments', async () => {
-      const team = await createTeam()
-      await expect(team.ownPage()).rejects.toThrow(TypeError)
-    })
-
-    it('Operation must be failed when you try to own userpage', async () => {
-      const [team, page] = await Promise.all([createTeam(), createPage('/user/dummy')])
-      await expect(team.ownPage(page)).rejects.toThrow(utils.errors.PreconditionError)
-    })
-  })
-
-  describe('.disownPage', () => {
-    it('Operation must be failed when you run disownPage to non owned page', async () => {
-      const [team, team2, page] = await Promise.all([createTeam(), createTeam(), createPage()])
-      await team2.ownPage(page)
-
-      await expect(team.disownPage(page)).rejects.toThrow(utils.errors.PreconditionError)
-    })
-
-    it('When missing arguments', async () => {
-      const team = await createTeam()
-      await expect(team.disownPage()).rejects.toThrow(TypeError)
-    })
-  })
-
-  describe('.getPagesOwned, .ownPage, .disownPage', () => {
-    it('own and disown some pages', async () => {
-      const [team, page] = await Promise.all([createTeam(), createPage()])
-      expect(await PageOwner.findByTeam(team)).toHaveLength(0)
-
-      await expect(team.ownPage(page)).resolves.toBe(true)
-      expect(await PageOwner.findByTeam(team)).toHaveLength(1)
-
-      // no effect on same things
-      await expect(team.ownPage(page)).resolves.toBe(true)
-      expect(await PageOwner.findByTeam(team)).toHaveLength(1)
-
-      await expect(team.disownPage(page)).resolves.toBe(true)
-      expect(await PageOwner.findByTeam(team)).toHaveLength(0)
     })
   })
 })

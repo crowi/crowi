@@ -1,7 +1,7 @@
 const crypto = require('crypto')
 const mongodb = require('mongodb')
 
-const { models } = require('../utils.js')
+const { models, errors } = require('../utils.js')
 const { Team, Page, User, PageOwner } = models
 
 const createTeam = (...users) => {
@@ -11,9 +11,9 @@ const createTeam = (...users) => {
   })
   return t.save()
 }
-const createPage = user => {
+const createPage = ({ path = `/random/${crypto.randomBytes(16)}`, user } = {}) => {
   const p = new Page({
-    path: `/random/${crypto.randomBytes(16)}`,
+    path,
     grant: Page.GRANT_PUBLIC,
     grantedUsers: [user._id],
     creator: user._id,
@@ -33,7 +33,7 @@ const createUser = () => {
 describe('PageOwner', () => {
   it('MongoDB must prevent duplicate creation', async () => {
     const user = await createUser()
-    const page = await createPage(user)
+    const page = await createPage({ user })
     const team = await createTeam()
 
     await team.ownPage(page)
@@ -44,5 +44,39 @@ describe('PageOwner', () => {
       team,
     })
     await expect(po.save()).rejects.toThrow('duplicate key error')
+  })
+
+  describe('activate', () => {
+    it('When missing arguments', async () => {
+      const team = await createTeam()
+      await expect(PageOwner.activate({ team })).rejects.toThrow(TypeError)
+    })
+
+    it('Operation must be failed when you try to own userpage', async () => {
+      const user = await createUser()
+      const [team, page] = await Promise.all([createTeam(), createPage({ path: '/user/dummy', user })])
+      await expect(PageOwner.activate({ team, page })).rejects.toThrow(errors.PreconditionError)
+    })
+  })
+
+  describe('activate & deactivate, findByPageAndTeam', () => {
+    it('own and disown some pages', async () => {
+      const user = await createUser()
+      const [team, page] = await Promise.all([createTeam(), createPage({ user })])
+      expect(await PageOwner.findByTeam(team)).toHaveLength(0)
+
+      await expect(PageOwner.activate({ team, page })).resolves.toBeTruthy()
+      expect(await PageOwner.findByTeam(team)).toHaveLength(1)
+
+      // no effect on same things
+      await expect(PageOwner.activate({ team, page })).resolves.toBeTruthy()
+      expect(await PageOwner.findByTeam(team)).toHaveLength(1)
+
+      const po = await PageOwner.findByPageAndTeam({ team, page })
+
+      const deactivatedPO = await po.deactivate()
+      await expect(deactivatedPO.isActive).toBe(false)
+      expect(await PageOwner.findByTeam(team)).toHaveLength(0)
+    })
   })
 })

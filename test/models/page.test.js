@@ -431,6 +431,8 @@ describe('Page', () => {
         // no successful complicated case because owner...
       })
 
+      describe('updatePage', () => {})
+
       afterEach(async () => Page.remove({}))
     })
   })
