@@ -47,29 +47,11 @@ describe('Revision', () => {
         expect(revision.expirationAt).toBe(null)
       })
 
-      test('calc collectly from given page.lifetime', async () => {
+      test('when expirationAt configuration found', async () => {
         let page = await createPage(user)
 
         await team.ownPage(page)
         page = await page.populate('owners').execPopulate()
-
-        page = await page.updateLifetime({ days: 5 })
-
-        const m = moment()
-          .add(page.lifetime)
-          .endOf('day')
-        const revision = Revision.prepareRevision(page, '# body', user, {})
-
-        expect(m.diff(revision.expirationAt)).toBe(0)
-      })
-
-      test('when expirationAt configuration found, take over than page.lifetime', async () => {
-        let page = await createPage(user)
-
-        await team.ownPage(page)
-        page = await page.populate('owners').execPopulate()
-
-        page = await page.updateLifetime({ days: 5 })
 
         const expirationAt = moment()
           .add({ days: 100 })
