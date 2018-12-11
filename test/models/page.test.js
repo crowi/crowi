@@ -1,8 +1,7 @@
 const utils = require('../utils.js')
 
 describe('Page', () => {
-  const Page = utils.models.Page
-  const User = utils.models.User
+  const { Page, User, PageOwner, Team } = utils.models
   const conn = utils.mongoose.connection
   let createdPages
   let createdUsers
@@ -431,7 +430,58 @@ describe('Page', () => {
         // no successful complicated case because owner...
       })
 
-      describe('updatePage', () => {})
+      describe('#calculateRevisionExpirationAt', () => {
+        const moment = require('moment')
+        const { ObjectId } = utils.mongoose.Schema.Types
+
+        const prebuiltOption = {}
+
+        beforeAll(async () => {
+          const page = await Page.create('/test', '# test', createdUsers[0], {})
+          const team = await new Team({ handle: '12345', users: createdUsers }).save()
+          await PageOwner.activate({ team, page })
+          prebuiltOption.pageId = page._id
+          prebuiltOption.userId = createdUsers[Math.floor(Math.random() * createdUsers.length)]
+        })
+
+        test('collectly calculated with lifetime only', async () => {
+          const lifetime = { days: 3 }
+          const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime })
+          expect(
+            moment()
+              .add(lifetime)
+              .endOf('day')
+              .diff(t),
+          ).toBe(0)
+        })
+
+        test('If revision given, it has higher priority than lifetime.', async () => {
+          const lifetime = { days: 3 }
+          const revision = {
+            expirationAt: moment()
+              .add({ day: 1 })
+              .toDate(),
+          } // fake
+          const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision })
+          expect(t).toBe(revision.expirationAt)
+        })
+
+        test('If bodyConfirmed and revision & lifetime given, skip to use revision and use lifetime to calculate', async () => {
+          const lifetime = { days: 3 }
+          const revision = {
+            expirationAt: moment()
+              .add({ day: 1 })
+              .toDate(),
+          } // fake
+          const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision, bodyConfirmed: true })
+          expect(
+            moment()
+              .add(lifetime)
+              .endOf('day')
+              .diff(t),
+          ).toBe(0)
+        })
+      })
 
       afterEach(async () => Page.remove({}))
     })
