@@ -2,7 +2,7 @@ const moment = require('moment')
 const crypto = require('crypto')
 
 const {
-  models: { Team, Page, User, Revision },
+  models: { Team, Page, User, Revision, PageOwner },
 } = require('../utils')
 
 const createTeam = (...users) => {
@@ -50,7 +50,7 @@ describe('Revision', () => {
       test('when expirationAt configuration found', async () => {
         let page = await createPage(user)
 
-        await team.ownPage(page)
+        await PageOwner.activate({ team, page })
         page = await page.populate('owners').execPopulate()
 
         const expirationAt = moment()
