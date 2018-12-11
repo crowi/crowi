@@ -41,7 +41,7 @@ describe('Team', () => {
 
   afterEach(async () => {
     await Promise.all([
-      Team.remove({}),
+      ...createdUsers.map(u => Team.findByUser(u).remove()),
       Page.remove({
         creator: {
           $in: createdUsers.map(user => user._id),

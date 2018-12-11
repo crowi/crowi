@@ -395,95 +395,123 @@ describe('Page', () => {
         })
       })
 
-      describe('.updateLifetime', () => {
-        let page
-
-        beforeAll(async () => {
-          page = await Page.create('/test', '# test', createdUsers[0], {})
-        })
-
-        test('lifetime can be null', async () => {
-          await expect(page.updateLifetime(null)).resolves
-        })
-
-        test('lifetime can not be empty', async () => {
-          await expect(page.updateLifetime([])).rejects.toThrow()
-          await expect(page.updateLifetime()).rejects.toThrow()
-        })
-
-        test('lifetime must not include any fields without approved', () => {
-          expect(
-            page.updateLifetime({
-              test: 123,
-            }),
-          ).rejects.toThrow('"test" is not allowed')
-        })
-
-        test(`can't set lifetime when there are no owner for target page`, () => {
-          return expect(
-            page.updateLifetime({
-              days: 123,
-            }),
-          ).rejects.toThrow(`can't set lifetime`)
-        })
-
-        // no successful complicated case because owner...
-      })
-
-      describe('#calculateRevisionExpirationAt', () => {
-        const moment = require('moment')
-        const { ObjectId } = utils.mongoose.Schema.Types
-
-        const prebuiltOption = {}
-
-        beforeAll(async () => {
-          const page = await Page.create('/test', '# test', createdUsers[0], {})
-          const team = await new Team({ handle: '12345', users: createdUsers }).save()
-          await PageOwner.activate({ team, page })
-          prebuiltOption.pageId = page._id
-          prebuiltOption.userId = createdUsers[Math.floor(Math.random() * createdUsers.length)]
-        })
-
-        test('collectly calculated with lifetime only', async () => {
-          const lifetime = { days: 3 }
-          const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime })
-          expect(
-            moment()
-              .add(lifetime)
-              .endOf('day')
-              .diff(t),
-          ).toBe(0)
-        })
-
-        test('If revision given, it has higher priority than lifetime.', async () => {
-          const lifetime = { days: 3 }
-          const revision = {
-            expirationAt: moment()
-              .add({ day: 1 })
-              .toDate(),
-          } // fake
-          const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision })
-          expect(t).toBe(revision.expirationAt)
-        })
-
-        test('If bodyConfirmed and revision & lifetime given, skip to use revision and use lifetime to calculate', async () => {
-          const lifetime = { days: 3 }
-          const revision = {
-            expirationAt: moment()
-              .add({ day: 1 })
-              .toDate(),
-          } // fake
-          const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision, bodyConfirmed: true })
-          expect(
-            moment()
-              .add(lifetime)
-              .endOf('day')
-              .diff(t),
-          ).toBe(0)
-        })
-      })
-
       afterEach(async () => Page.remove({}))
+    })
+  })
+
+  describe('.updateLifetime', () => {
+    const crypto = require('crypto')
+    let page
+
+    beforeAll(async () => {
+      page = await Page.create(`/random/${crypto.randomBytes(16)}`, '# test', createdUsers[0], {})
+    })
+
+    test('lifetime must not be empty', async () => {
+      await expect(page.updateLifetime([], createdUsers[0])).rejects.toThrow()
+      await expect(page.updateLifetime(undefined, createdUsers[0])).rejects.toThrow()
+    })
+
+    test('lifetime must not include any fields without approved', async () => {
+      await expect(
+        page.updateLifetime(
+          {
+            test: 123,
+          },
+          createdUsers[1],
+        ),
+      ).rejects.toThrow('"test" is not allowed')
+    })
+
+    test(`can't set lifetime when there are no owner for target page`, async () => {
+      await expect(
+        page.updateLifetime(
+          {
+            days: 123,
+          },
+          createdUsers[1],
+        ),
+      ).rejects.toThrow(`can't set lifetime`)
+    })
+
+    test('call with valid lifetime: null', async () => {
+      const user = createdUsers[0]
+
+      const page = await Page.create(`/random/${crypto.randomBytes(16)}`, '# test', user, {})
+      const team = await new Team({ handle: crypto.randomBytes(16).toString('hex'), users: [user] }).save()
+      await PageOwner.activate({ team, page })
+
+      await expect(page.updateLifetime(null, createdUsers[0])).resolves.toBeTruthy()
+    })
+
+    test('call with valid lifetime: object', async () => {
+      const user = createdUsers[0]
+
+      const page = await Page.create(`/random/${crypto.randomBytes(16)}`, '# test', user, {})
+      const team = await new Team({ handle: crypto.randomBytes(16).toString('hex'), users: [user] }).save()
+      await PageOwner.activate({ team, page })
+
+      await expect(
+        page.updateLifetime(
+          {
+            days: 123,
+          },
+          user,
+        ),
+      ).resolves.toBeTruthy()
+    })
+  })
+
+  describe('#calculateRevisionExpirationAt', () => {
+    const moment = require('moment')
+    const crypto = require('crypto')
+
+    const prebuiltOption = {}
+
+    beforeAll(async () => {
+      const page = await Page.create(`/test/${crypto.randomBytes(16)}`, '# test', createdUsers[0], {})
+      const team = await new Team({ handle: crypto.randomBytes(16).toString('hex'), users: createdUsers }).save()
+      await PageOwner.activate({ team, page })
+      prebuiltOption.pageId = page._id
+      prebuiltOption.userId = createdUsers[Math.floor(Math.random() * createdUsers.length)]
+    })
+
+    test('collectly calculated with lifetime only', async () => {
+      const lifetime = { days: 3 }
+      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime })
+      expect(
+        moment()
+          .add(lifetime)
+          .endOf('day')
+          .diff(t),
+      ).toBe(0)
+    })
+
+    test('If revision given, it has higher priority than lifetime.', async () => {
+      const lifetime = { days: 3 }
+      const revision = {
+        expirationAt: moment()
+          .add({ day: 1 })
+          .toDate(),
+      } // fake
+      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision })
+      expect(t).toBe(revision.expirationAt)
+    })
+
+    test('If bodyConfirmed and revision & lifetime given, skip to use revision and use lifetime to calculate', async () => {
+      const lifetime = { days: 3 }
+      const revision = {
+        expirationAt: moment()
+          .add({ day: 1 })
+          .toDate(),
+      } // fake
+      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision, bodyConfirmed: true })
+      expect(
+        moment()
+          .add(lifetime)
+          .endOf('day')
+          .diff(t),
+      ).toBe(0)
     })
   })
 })
