@@ -1,5 +1,4 @@
 const crypto = require('crypto')
-const mongodb = require('mongodb')
 
 const { models, errors } = require('../utils.js')
 const { Team, Page, User, PageOwner } = models
@@ -36,7 +35,7 @@ describe('PageOwner', () => {
     const page = await createPage({ user })
     const team = await createTeam()
 
-    await team.ownPage(page)
+    await PageOwner.activate({ team, page })
 
     // ownPage uses findAndUpdate & $setOnInsert, on the theory this situation will not be happened
     const po = new PageOwner({
@@ -72,9 +71,7 @@ describe('PageOwner', () => {
       await expect(PageOwner.activate({ team, page })).resolves.toBeTruthy()
       expect(await PageOwner.findByTeam(team)).toHaveLength(1)
 
-      const po = await PageOwner.findByPageAndTeam({ team, page })
-
-      const deactivatedPO = await po.deactivate()
+      const deactivatedPO = await PageOwner.deactivate({ team, page })
       await expect(deactivatedPO.isActive).toBe(false)
       expect(await PageOwner.findByTeam(team)).toHaveLength(0)
     })
