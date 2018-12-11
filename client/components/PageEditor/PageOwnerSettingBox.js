@@ -5,18 +5,17 @@ import { Form, FormGroup, FormText, Button, Label, Alert } from 'reactstrap'
 import CreateTeam from 'components/CreateTeam'
 import FGInputAndHint from 'components/Common/FGInputAndHint'
 
-class Team {
-  constructor(id, crowi) {
-    this._id = id
+class PageOwner {
+  constructor(crowi) {
     this._crowi = crowi
   }
 
-  ownPage(pageId) {
-    return this._crowi.apiPost('/teams.ownPage', { id: this._id, page: pageId })
+  activate(teamId, pageId) {
+    return this._crowi.apiPost('/page_owner.activate', { team: teamId, page: pageId })
   }
 
-  disownPage(pageId) {
-    return this._crowi.apiPost('/teams.disownPage', { id: this._id, page: pageId })
+  deactivate(teamId, pageId) {
+    return this._crowi.apiPost('/page_owner.deactivate', { team: teamId, page: pageId })
   }
 }
 
@@ -26,14 +25,15 @@ export default class PageOwnerBox extends React.Component {
 
     this.crowi = this.props.crowi
     this.pageId = this.props.pageId
-    this.currentPageOwnerTeams = this.props.currentPageOwners.map(owner => owner.team).reduce((result, team) => {
+    const currentPageOwnerTeams = this.props.currentPageOwners.map(owner => owner.team).reduce((result, team) => {
       result[team._id] = team
       return result
     }, {})
 
     this.state = {
       // delete と add しかしないはずだからこれで問題が起きないはず。。。
-      teams: { ...this.currentPageOwnerTeams },
+      previousTeams: { ...currentPageOwnerTeams },
+      teams: { ...currentPageOwnerTeams },
 
       saveDisabled: false,
 
@@ -106,16 +106,16 @@ export default class PageOwnerBox extends React.Component {
       saveDisabled: true,
     })
 
-    const teamsWillDisown = Object.values(this.currentPageOwnerTeams).filter(team => !(team._id in this.state.teams))
-    const teamsWillOwn = Object.values(this.state.teams).filter(team => !(team._id in this.currentPageOwnerTeams))
+    const teamsWillActivated = Object.values(this.state.teams).filter(team => !(team._id in this.state.previousTeams))
+    const teamsWillDeactivated = Object.values(this.state.previousTeams).filter(team => !(team._id in this.state.teams))
 
     const errors = []
 
+    const po = new PageOwner(this.crowi)
     await Promise.all(
-      [
-        ...teamsWillOwn.map(id => new Team(id, this.crowi)).map(team => team.ownPage(this.pageId)),
-        ...teamsWillDisown.map(id => new Team(id, this.crowi)).map(team => team.disownPage(this.pageId)),
-      ].map(promise => promise.catch(e => errors.push(e))),
+      [...teamsWillActivated.map(team => po.activate(team._id, this.pageId)), ...teamsWillDeactivated.map(team => po.deactivate(team._id, this.pageId))].map(
+        promise => promise.catch(e => errors.push(e)),
+      ),
     )
 
     let error = null
@@ -124,13 +124,11 @@ export default class PageOwnerBox extends React.Component {
       error = errors.map(error => error.message).join(', ')
     }
 
-    this.setState({
+    this.setState(state => ({
       error,
-      teamsWillOwn: {},
-      teamsWillDisown: {},
       saveDisabled: false,
-      value: '',
-    })
+      previousTeams: { ...state.teams },
+    }))
   }
 
   render() {
