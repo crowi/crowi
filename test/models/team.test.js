@@ -7,7 +7,7 @@ describe('Team', () => {
   // models will be accessable after global 'before' hook runned (on util.js)
   const { User, Team, Page } = utils.models
 
-  const conn = utils.mongoose.connection
+  const conn = mongoose.connection
   let users = []
 
   const createTeam = (...users) => {
