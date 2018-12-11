@@ -62,8 +62,8 @@ describe('Team', () => {
       expect(teamsRelatedTo1.map(team => team._id.toString())).toEqual(expect.not.arrayContaining([team0._id.toString()]))
     })
 
-    it('When missing arguments', async () => {
-      await expect(Team.findByUser()).rejects.toThrow(TypeError)
+    it('When missing arguments', () => {
+      expect(() => Team.findByUser()).toThrow(TypeError)
     })
   })
 
@@ -75,8 +75,8 @@ describe('Team', () => {
       expect(team._id.toString()).toBe(actualTeam._id.toString())
     })
 
-    it('When missing arguments', async () => {
-      await expect(Team.findByHandle()).rejects.toThrow(TypeError)
+    it('When missing arguments', () => {
+      expect(() => Team.findByHandle()).toThrow(TypeError)
     })
   })
 
