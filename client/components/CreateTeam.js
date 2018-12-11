@@ -77,6 +77,7 @@ export default class CreateTeam extends React.Component {
   async create() {
     this.setState({
       actionDisabled: true,
+      error: null,
     })
 
     const { name, handle, users } = this.state
