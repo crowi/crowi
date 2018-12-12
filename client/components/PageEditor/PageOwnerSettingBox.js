@@ -11,11 +11,11 @@ class PageOwner {
   }
 
   activate(teamId, pageId) {
-    return this._crowi.apiPost('/page_owner.activate', { team: teamId, page: pageId })
+    return this._crowi.apiPost('/page_owners.activate', { team: teamId, page: pageId })
   }
 
   deactivate(teamId, pageId) {
-    return this._crowi.apiPost('/page_owner.deactivate', { team: teamId, page: pageId })
+    return this._crowi.apiPost('/page_owners.deactivate', { team: teamId, page: pageId })
   }
 }
 
