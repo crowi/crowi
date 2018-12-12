@@ -441,7 +441,9 @@ describe('Page', () => {
       const team = await new Team({ handle: crypto.randomBytes(16).toString('hex'), users: [user] }).save()
       await PageOwner.activate({ team, page })
 
-      await expect(page.updateLifetime(null, createdUsers[0])).resolves.toBeTruthy()
+      const updatedPage = await page.updateLifetime(null, createdUsers[0])
+      await expect(updatedPage).toBeTruthy()
+      await expect(updatedPage.lifetime).toBe(null)
     })
 
     test('call with valid lifetime: object', async () => {
@@ -451,14 +453,14 @@ describe('Page', () => {
       const team = await new Team({ handle: crypto.randomBytes(16).toString('hex'), users: [user] }).save()
       await PageOwner.activate({ team, page })
 
-      await expect(
-        page.updateLifetime(
-          {
-            days: 123,
-          },
-          user,
-        ),
-      ).resolves.toBeTruthy()
+      const updatedPage = await page.updateLifetime(
+        {
+          days: 123,
+        },
+        user,
+      )
+      await expect(updatedPage).toBeTruthy()
+      await expect(updatedPage.lifetime).toEqual({ days: 123 })
     })
   })
 
