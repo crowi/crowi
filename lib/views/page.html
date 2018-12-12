@@ -230,6 +230,12 @@
 
     {# formatted text #}
     <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
+      {% if page.revision.expirationAt && page.revision.expirationAt.getTime() < Date.now() %}
+      <div class="alert alert-warning mt-0" role="alert">
+        This document has been expired at {{page.revision.expirationAt.toLocaleDateString()}}
+      </div>
+      {% endif %}
+
       <div class="revision-toc" id="revision-toc">
         <a data-toggle="collapse" data-parent="#revision-toc" href="#revision-toc-content" class="revision-toc-head collapsed">{{ t('Table of Contents') }}</a>
 
