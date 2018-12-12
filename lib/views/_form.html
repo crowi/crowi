@@ -62,8 +62,22 @@
           {% endfor %}
         </select>
         {% endif %}
+
+        <span class="input-group">
+          {% if page.revision.expirationAt && isOwner(user, page) %}
+          <span class="input-group-prepend">
+            <span class="input-group-text" data-toggle="popover" data-placement="top" data-trigger="hover" data-content="Confirm content">
+              <label>
+                <i class="fas fa-calendar-check mr-1"></i>
+                <input type="checkbox" name="pageForm[bodyConfirmed]" value="true">
+              </label>
+            </span>
+          </span>
+          {% endif %}
+          <input type="submit" class="form-control btn btn-primary" id="edit-form-submit" value="{{ t('Update Page') }}" />
+        </span>
+
         <input type="hidden" id="edit-form-csrf" name="_csrf" value="{{ csrf() }}">
-        <input type="submit" class="btn btn-primary" id="edit-form-submit" value="{{ t('Update Page') }}" />
       </div>
     </div>
   </form>
