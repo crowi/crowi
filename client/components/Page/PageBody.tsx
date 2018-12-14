@@ -1,7 +1,18 @@
 import React from 'react'
-import PropTypes from 'prop-types'
+import CrowiRenderer from 'client/util/CrowiRenderer'
+import { Page } from 'client/types/crowi'
 
-export default class PageBody extends React.Component {
+interface Props {
+  page: Page
+  highlightKeywords: string
+  pageBody: string
+}
+
+export default class PageBody extends React.Component<Props> {
+  static defaultProps = { page: {}, pageBody: '' }
+
+  crowiRenderer: CrowiRenderer
+
   constructor(props) {
     super(props)
 
@@ -48,15 +59,4 @@ export default class PageBody extends React.Component {
 
     return <div className="content" dangerouslySetInnerHTML={parsedBody} />
   }
-}
-
-PageBody.propTypes = {
-  page: PropTypes.object.isRequired,
-  highlightKeywords: PropTypes.string,
-  pageBody: PropTypes.string,
-}
-
-PageBody.defaultProps = {
-  page: {},
-  pageBody: '',
 }

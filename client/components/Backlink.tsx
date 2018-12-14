@@ -1,9 +1,28 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import UserPicture from './User/UserPicture'
+import Crowi from 'client/util/Crowi'
+import { Backlink as BacklinkType } from 'client/types/crowi'
 
-class Backlink extends React.Component {
+interface Props {
+  crowi: Crowi
+  pageId: string | null
+  limit: number
+  offset: number
+}
+
+interface State {
+  currentOffset: number
+  hasNext: boolean
+  backLinks: BacklinkType[]
+}
+
+class Backlink extends React.Component<Props, State> {
+  static defaultProps = {
+    pageId: null,
+    limit: 5,
+    offset: 0,
+  }
+
   constructor(props) {
     super(props)
 
@@ -33,7 +52,7 @@ class Backlink extends React.Component {
           if (response.data.length > this.props.limit) {
             hasNext = true
           }
-          const appendBacklinks = response.data.slice(0, this.props.limit)
+          const appendBacklinks: BacklinkType[] = response.data.slice(0, this.props.limit)
 
           let backLinks = this.state.backLinks
           let i = 0
@@ -109,19 +128,6 @@ class Backlink extends React.Component {
       </div>
     )
   }
-}
-
-Backlink.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  pageId: PropTypes.string,
-  limit: PropTypes.number,
-  offset: PropTypes.number,
-}
-
-Backlink.defaultProps = {
-  pageId: null,
-  limit: 5,
-  offset: 0,
 }
 
 export default Backlink

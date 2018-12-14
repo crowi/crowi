@@ -1,5 +1,11 @@
+import Crowi from '../Crowi'
+
 export default class Tsv2Table {
-  constructor(crowi, option) {
+  option: {
+    header?: boolean
+  }
+
+  constructor(crowi: Crowi, option = {}) {
     if (!option) {
       option = {}
     }
@@ -7,7 +13,8 @@ export default class Tsv2Table {
 
     this.option.header = this.option.header || false
   }
-  getCols(codeLines) {
+
+  getCols(codeLines): number {
     let max = 0
 
     for (let i = 0; i < codeLines; i++) {
@@ -34,7 +41,7 @@ export default class Tsv2Table {
     })
 
     if (headers.length < option.cols) {
-      headers.concat(new Array(option.cols - headers.length))
+      headers.concat(...new Array(option.cols - headers.length))
     }
 
     return `<tr>
@@ -62,10 +69,10 @@ export default class Tsv2Table {
   }
 
   process(code) {
-    let option = {}
     const codeLines = code.split(/\n|\r/)
+    const cols = this.getCols(codeLines)
 
-    option.cols = this.getCols(codeLines)
+    const option = { cols }
 
     let header = ''
     if (this.option.header) {

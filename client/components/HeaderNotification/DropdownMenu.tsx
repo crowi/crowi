@@ -1,11 +1,17 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import Notification from '../Notification/Notification'
 import NullNotification from '../Notification/NullNotification'
 import Icon from '../Common/Icon'
 import { DropdownMenu as Menu } from 'reactstrap'
+import { Notification as NotificationType } from 'client/types/crowi'
 
-export default class DropdownMenu extends React.Component {
+interface Props {
+  loaded: boolean
+  notifications: NotificationType[]
+  notificationClickHandler: Function
+}
+
+export default class DropdownMenu extends React.Component<Props> {
   render() {
     let listView
 
@@ -36,11 +42,3 @@ export default class DropdownMenu extends React.Component {
     )
   }
 }
-
-DropdownMenu.propTypes = {
-  loaded: PropTypes.bool.isRequired,
-  notifications: PropTypes.array.isRequired,
-  notificationClickHandler: PropTypes.func.isRequired,
-}
-
-DropdownMenu.defaultProps = {}

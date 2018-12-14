@@ -1,9 +1,15 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import SearchTypeButtons from 'components/SearchPage/SearchTypeNav/SearchTypeButtons'
 import SearchTypeDropdown from 'components/SearchPage/SearchTypeNav/SearchTypeDropdown'
+import { SearchType } from 'components/SearchPage/SearchToolbar'
 
-class SearchTypeNav extends React.Component {
+interface Props {
+  searchTypes: SearchType[]
+  activeType: SearchType
+  changeType: Function
+}
+
+class SearchTypeNav extends React.Component<Props> {
   render() {
     return (
       <div>
@@ -13,12 +19,5 @@ class SearchTypeNav extends React.Component {
     )
   }
 }
-
-SearchTypeNav.propTypes = {
-  searchTypes: PropTypes.array.isRequired,
-  activeType: PropTypes.object.isRequired,
-  changeType: PropTypes.func.isRequired,
-}
-SearchTypeNav.defaultProps = {}
 
 export default SearchTypeNav

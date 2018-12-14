@@ -1,7 +1,12 @@
+import Crowi from './Crowi'
 import queryString from 'query-string'
 
 export default class CrowiAuth {
-  constructor(crowi) {
+  crowi: Crowi
+  location: Crowi['location']
+  localStorage: Crowi['localStorage']
+
+  constructor(crowi: Crowi) {
     this.crowi = crowi
     this.location = crowi.location
     this.localStorage = crowi.localStorage
@@ -12,8 +17,8 @@ export default class CrowiAuth {
     this.updateState()
   }
 
-  isAuthenticated() {
-    const { id, name } = this.crowi.getUser()
+  isAuthenticated(): boolean {
+    const { id = '', name = '' } = this.crowi.getUser() || {}
     return !!(id && name)
   }
 
@@ -21,13 +26,13 @@ export default class CrowiAuth {
     window.addEventListener('storage', this.onStorage)
   }
 
-  shouldUpdate() {
-    return this.isAuthenticated() !== this.localStorage.getItem('authenticated')
+  shouldUpdate(): boolean {
+    return String(this.isAuthenticated()) !== this.localStorage.getItem('authenticated')
   }
 
   updateState() {
     if (this.shouldUpdate()) {
-      this.localStorage.setItem('authenticated', this.isAuthenticated())
+      this.localStorage.setItem('authenticated', String(this.isAuthenticated()))
     }
   }
 
@@ -45,7 +50,7 @@ export default class CrowiAuth {
 
   onLogin() {
     const { continue: continueUrl = '/' } = queryString.parse(this.location.search)
-    top.location.href = continueUrl
+    top.location.href = typeof continueUrl === 'string' ? continueUrl : '/'
   }
 
   onLogout() {

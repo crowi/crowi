@@ -1,7 +1,14 @@
 import React from 'react'
-import PropTypes from 'prop-types'
+import { Page } from 'client/types/crowi'
 
-export default class PagePath extends React.Component {
+interface Props {
+  page: Page
+  excludePathString: string
+}
+
+export default class PagePath extends React.Component<Props> {
+  static defaultProps = { page: {}, excludePathString: '' }
+
   getShortPath(path) {
     let name = path.replace(/(\/)$/, '')
 
@@ -38,14 +45,4 @@ export default class PagePath extends React.Component {
       </span>
     )
   }
-}
-
-PagePath.propTypes = {
-  page: PropTypes.object.isRequired,
-  excludePathString: PropTypes.string,
-}
-
-PagePath.defaultProps = {
-  page: {},
-  excludePathString: '',
 }

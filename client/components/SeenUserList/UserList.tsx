@@ -1,9 +1,16 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import UserPicture from 'components/User/UserPicture'
+import { User } from 'client/types/crowi'
 
-export default class UserList extends React.Component {
+interface Props {
+  users: User[]
+}
+
+export default class UserList extends React.Component<Props> {
+  static defaultProps = {
+    users: [],
+  }
+
   isSeenUserListShown() {
     const userCount = this.props.users.length
     if (userCount > 0 && userCount <= 10) {
@@ -28,12 +35,4 @@ export default class UserList extends React.Component {
 
     return <p className="seen-user-list">{users}</p>
   }
-}
-
-UserList.propTypes = {
-  users: PropTypes.array,
-}
-
-UserList.defaultProps = {
-  users: [],
 }

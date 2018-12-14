@@ -1,11 +1,25 @@
 // This is the root component for #notification-page
 
 import React from 'react'
-import PropTypes from 'prop-types'
 import ListView from './Notification/ListView'
 import Pager from './Notification/Pager'
+import Crowi from 'client/util/Crowi'
 
-export default class NotificationPage extends React.Component {
+interface Props {
+  crowi: Crowi
+}
+
+interface State {
+  notifications: []
+  loaded: boolean
+  hasPrev: boolean
+  hasNext: boolean
+}
+
+export default class NotificationPage extends React.Component<Props, State> {
+  limit: number
+  offset: number
+
   constructor(props) {
     super(props)
 
@@ -84,8 +98,3 @@ export default class NotificationPage extends React.Component {
     )
   }
 }
-
-NotificationPage.propTypes = {
-  crowi: PropTypes.object.isRequired,
-}
-NotificationPage.defaultProps = {}

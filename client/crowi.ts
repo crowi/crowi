@@ -3,178 +3,197 @@
 
 import 'scrollpos-styler'
 
-const Crowi = {}
-
-if (!window) {
-  window = {}
-}
-window.Crowi = Crowi
-
-const crowi = window.crowi
-
-Crowi.createErrorView = function(msg) {
-  $('#main').prepend($('<p class="alert-message error">' + msg + '</p>'))
-}
-
-Crowi.linkPath = function(revisionPath) {
-  var $revisionPath = revisionPath || '#revision-path'
-  var $title = $($revisionPath)
-  var pathData = $('#content-main').data('path')
-
-  if (!pathData) {
-    return
+export default class Crowi {
+  static createErrorView = (msg: string) => {
+    $('#main').prepend($('<p class="alert-message error">' + msg + '</p>'))
   }
 
-  var realPath = pathData.trim()
-  if (realPath.substr(-1, 1) == '/') {
-    realPath = realPath.substr(0, realPath.length - 1)
-  }
+  static linkPath = (revisionPath?: string) => {
+    var $revisionPath = revisionPath || '#revision-path'
+    var $title = $($revisionPath)
+    var pathData = $('#content-main').data('path')
 
-  var path = ''
-  var pathHtml = ''
-  var splittedPath = realPath.split(/\//)
-  splittedPath.shift()
-  splittedPath.forEach(function(sub) {
-    path += '/'
-    pathHtml += ' <a href="' + Crowi.escape(path) + '">/</a> '
-    if (sub) {
-      path += sub
-      pathHtml += '<a href="' + Crowi.escape(path) + '">' + Crowi.escape(sub) + '</a>'
-    }
-  })
-  if (path.substr(-1, 1) != '/') {
-    path += '/'
-    pathHtml += ' <a href="' + Crowi.escape(path) + '" class="last-path">/</a>'
-  }
-  $title.html(pathHtml)
-}
-
-Crowi.correctHeaders = function(contentId) {
-  // h1 ~ h6 の id 名を補正する
-  var $content = $(contentId || '#revision-body-content')
-  var i = 0
-  $('h1,h2,h3,h4,h5,h6', $content).each(function(idx, elm) {
-    var id = 'head' + i++
-    $(this).attr('id', id)
-    $(this).addClass('revision-head')
-    $(this).append('<span class="revision-head-link"><a href="#' + id + '"><i class="fa fa-link"></i></a></span>')
-  })
-}
-
-Crowi.revisionToc = function(contentId, tocId) {
-  var $content = $(contentId || '#revision-body-content')
-  var $tocId = $(tocId || '#revision-toc')
-
-  var $tocContent = $('<div id="revision-toc-content" class="revision-toc-content collapse"></div>')
-  $tocId.append($tocContent)
-
-  $('h1', $content).each(function(idx, elm) {
-    var id = $(this).attr('id')
-    var title = $(this).text()
-    var selector = '#' + id + ' ~ h2:not(#' + id + ' ~ h1 ~ h2)'
-
-    var $toc = $('<ul></ul>')
-    var $tocLi = $('<li><a href="#' + id + '">' + title + '</a></li>')
-
-    $tocContent.append($toc)
-    $toc.append($tocLi)
-
-    $(selector).each(function() {
-      var id2 = $(this).attr('id')
-      var title2 = $(this).text()
-      var selector2 = '#' + id2 + ' ~ h3:not(#' + id2 + ' ~ h2 ~ h3)'
-
-      var $toc2 = $('<ul></ul>')
-      var $tocLi2 = $('<li><a href="#' + id2 + '">' + title2 + '</a></li>')
-
-      $tocLi.append($toc2)
-      $toc2.append($tocLi2)
-
-      $(selector2).each(function() {
-        var id3 = $(this).attr('id')
-        var title3 = $(this).text()
-
-        var $toc3 = $('<ul></ul>')
-        var $tocLi3 = $('<li><a href="#' + id3 + '">' + title3 + '</a></li>')
-
-        $tocLi2.append($toc3)
-        $toc3.append($tocLi3)
-      })
-    })
-  })
-}
-
-Crowi.escape = function(s) {
-  s = s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/'/g, '&#39;')
-    .replace(/"/g, '&quot;')
-  return s
-}
-Crowi.unescape = function(s) {
-  s = s
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-  return s
-}
-
-// original: middleware.swigFilter
-Crowi.userPicture = function(user) {
-  if (!user) {
-    return '/images/userpicture.png'
-  }
-
-  if (user.image && user.image != '/images/userpicture.png') {
-    return user.image
-  } else {
-    return '/images/userpicture.png'
-  }
-}
-
-Crowi.modifyScrollTop = function() {
-  var offset = 10
-
-  var hash = window.location.hash
-  if (hash === '') {
-    return
-  }
-
-  var pageHeader = document.querySelector('#page-header')
-  if (!pageHeader) {
-    return
-  }
-  var pageHeaderRect = pageHeader.getBoundingClientRect()
-
-  var sectionHeader = document.querySelector(hash)
-  if (sectionHeader === null) {
-    return
-  }
-
-  var timeout = 0
-  if (window.scrollY === 0) {
-    timeout = 200
-  }
-  setTimeout(function() {
-    var sectionHeaderRect = sectionHeader.getBoundingClientRect()
-    if (sectionHeaderRect.top >= pageHeaderRect.bottom) {
+    if (!pathData) {
       return
     }
 
-    window.scrollTo(0, window.scrollY - pageHeaderRect.height - offset)
-  }, timeout)
+    var realPath = pathData.trim()
+    if (realPath.substr(-1, 1) == '/') {
+      realPath = realPath.substr(0, realPath.length - 1)
+    }
+
+    var path = ''
+    var pathHtml = ''
+    var splittedPath = realPath.split(/\//)
+    splittedPath.shift()
+    splittedPath.forEach((sub: string) => {
+      path += '/'
+      pathHtml += ' <a href="' + Crowi.escape(path) + '">/</a> '
+      if (sub) {
+        path += sub
+        pathHtml += '<a href="' + Crowi.escape(path) + '">' + Crowi.escape(sub) + '</a>'
+      }
+    })
+    if (path.substr(-1, 1) != '/') {
+      path += '/'
+      pathHtml += ' <a href="' + Crowi.escape(path) + '" class="last-path">/</a>'
+    }
+    $title.html(pathHtml)
+  }
+
+  static correctHeaders = (contentId: string) => {
+    // h1 ~ h6 の id 名を補正する
+    var $content = $(contentId || '#revision-body-content')
+    var i = 0
+    $('h1,h2,h3,h4,h5,h6', $content).each(function() {
+      var id = 'head' + i++
+      $(this).attr('id', id)
+      $(this).addClass('revision-head')
+      $(this).append('<span class="revision-head-link"><a href="#' + id + '"><i class="fa fa-link"></i></a></span>')
+    })
+  }
+
+  static revisionToc = (contentId, tocId) => {
+    var $content = $(contentId || '#revision-body-content')
+    var $tocId = $(tocId || '#revision-toc')
+
+    var $tocContent = $('<div id="revision-toc-content" class="revision-toc-content collapse"></div>')
+    $tocId.append($tocContent)
+
+    $('h1', $content).each(function() {
+      var id = $(this).attr('id')
+      var title = $(this).text()
+      var selector = '#' + id + ' ~ h2:not(#' + id + ' ~ h1 ~ h2)'
+
+      var $toc = $('<ul></ul>')
+      var $tocLi = $('<li><a href="#' + id + '">' + title + '</a></li>')
+
+      $tocContent.append($toc)
+      $toc.append($tocLi)
+
+      $(selector).each(function() {
+        var id2 = $(this).attr('id')
+        var title2 = $(this).text()
+        var selector2 = '#' + id2 + ' ~ h3:not(#' + id2 + ' ~ h2 ~ h3)'
+
+        var $toc2 = $('<ul></ul>')
+        var $tocLi2 = $('<li><a href="#' + id2 + '">' + title2 + '</a></li>')
+
+        $tocLi.append($toc2)
+        $toc2.append($tocLi2)
+
+        $(selector2).each(function() {
+          var id3 = $(this).attr('id')
+          var title3 = $(this).text()
+
+          var $toc3 = $('<ul></ul>')
+          var $tocLi3 = $('<li><a href="#' + id3 + '">' + title3 + '</a></li>')
+
+          $tocLi2.append($toc3)
+          $toc3.append($tocLi3)
+        })
+      })
+    })
+  }
+
+  static escape = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/'/g, '&#39;')
+      .replace(/"/g, '&quot;')
+
+  static unescape = (s: string) =>
+    s
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+
+  // original: middleware.swigFilter
+  static userPicture = user => {
+    if (!user) {
+      return '/images/userpicture.png'
+    }
+
+    if (user.image && user.image != '/images/userpicture.png') {
+      return user.image
+    }
+
+    return '/images/userpicture.png'
+  }
+
+  static modifyScrollTop = () => {
+    var offset = 10
+
+    var hash = window.location.hash
+    if (hash === '') {
+      return
+    }
+
+    var pageHeader = document.querySelector('#page-header')
+    if (!pageHeader) {
+      return
+    }
+    var pageHeaderRect = pageHeader.getBoundingClientRect()
+
+    var sectionHeader = document.querySelector(hash)
+    if (sectionHeader === null) {
+      return
+    }
+
+    var timeout = 0
+    if (window.scrollY === 0) {
+      timeout = 200
+    }
+    setTimeout(() => {
+      if (!sectionHeader) return
+      var sectionHeaderRect = sectionHeader.getBoundingClientRect()
+      if (sectionHeaderRect.top >= pageHeaderRect.bottom) {
+        return
+      }
+
+      window.scrollTo(0, window.scrollY - pageHeaderRect.height - offset)
+    }, timeout)
+  }
+
+  static findHashFromUrl = url => {
+    var match
+    if ((match = url.match(/#(.+)$/))) {
+      return '#' + match[1]
+    }
+
+    return ''
+  }
+
+  static unhighlightSelectedSection = hash => {
+    if (!hash || hash == '' || !hash.match(/^#head.+/)) {
+      // とりあえず head* だけ (検索結果ページで副作用出た
+      return true
+    }
+    $(hash).removeClass('highlighted')
+  }
+
+  static highlightSelectedSection = hash => {
+    if (!hash || hash == '' || !hash.match(/^#head.+/)) {
+      // とりあえず head* だけ (検索結果ページで副作用出た
+      return true
+    }
+    $(hash).addClass('highlighted')
+  }
 }
 
 $(function() {
+  const crowi = window.crowi
+  const crowiRenderer = window.crowiRenderer
+
   var pageId = $('#content-main').data('page-id')
   var revisionId = $('#content-main').data('page-revision-id')
   var revisionCreatedAt = $('#content-main').data('page-revision-created')
-  var currentUser = crowi.getUser().id
+  var currentUser = (crowi.getUser() || {}).id
   var isSeen = $('#content-main').data('page-is-seen')
   var pagePath = $('#content-main').data('path')
   var isSharePage = !!$('#content-main').data('is-share-page')
@@ -214,16 +233,7 @@ $(function() {
     $('#create-page-today .page-today-suffix').text('/' + dateString + '/')
     $('#create-page-today .page-today-input2').data('prefix', '/' + dateString + '/')
 
-    var input2Width = $('#create-page-today .col-xs-10').outerWidth()
-    var newWidth =
-      input2Width -
-      $('#create-page-today .page-today-prefix').outerWidth() -
-      $('#create-page-today .page-today-input1').outerWidth() -
-      $('#create-page-today .page-today-suffix').outerWidth() -
-      42
-    $('#create-page-today .form-control.page-today-input2')
-      .css({ width: newWidth })
-      .focus()
+    $('#create-page-today .form-control.page-today-input2').focus()
   })
 
   $('#create-page-today').submit(function(e) {
@@ -242,7 +252,7 @@ $(function() {
   })
 
   $('#create-page-under-tree').submit(function(e) {
-    var name = $('input', this).val()
+    var name = String($('input', this).val())
     if (!name.match(/^\//)) {
       name = '/' + name
     }
@@ -368,7 +378,7 @@ $(function() {
   $('.page-list-link').each(function() {
     var $link = $(this)
     var path = $link.data('path')
-    var shortPath = $link.attr('data-short-path')
+    var shortPath = $link.attr('data-short-path') || ''
 
     var escape = function(s) {
       return s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
@@ -394,7 +404,7 @@ $(function() {
         var parsedHTML = crowiRenderer.render(markdown, $revisionBody.get(0))
         $revisionBody.html(parsedHTML)
 
-        $('.template-create-button', revisionBody).on('click', function() {
+        $('.template-create-button', $revisionBody).on('click', function() {
           var path = $(this).data('path')
           var templateId = $(this).data('template')
           var template = $('#' + templateId).html()
@@ -448,13 +458,14 @@ $(function() {
   // moved from view /me/index.html
   $('#pictureUploadForm input[name=userPicture]').on('change', function() {
     var $form = $('#pictureUploadForm')
-    var fd = new FormData($form[0])
+    var formElement = <HTMLFormElement>$form[0]
+    var fd = new FormData(formElement)
     if ($(this).val() == '') {
       return false
     }
 
     $('#pictureUploadFormProgress').html('<img src="/images/loading_s.gif"> Uploading ...')
-    $.ajax($form.attr('action'), {
+    $.ajax(<string>$form.attr('action'), {
       type: 'post',
       processData: false,
       contentType: false,
@@ -502,7 +513,8 @@ $(function() {
     // header
     var $headerWrap = $('#page-header').parent()
     if ($headerWrap.length > 0) {
-      $headerWrap.attr('data-sps-offset', $('.crowi-header').outerHeight())
+      var headerHeight = $('.crowi-header').outerHeight() || 0
+      $headerWrap.attr('data-sps-offset', headerHeight)
       $('.stopper').on('click', e => {
         $headerWrap.removeClass('sps sps--abv sps--blw')
         return false
@@ -724,32 +736,9 @@ $(function() {
   })
 })
 
-Crowi.findHashFromUrl = function(url) {
-  var match
-  if ((match = url.match(/#(.+)$/))) {
-    return '#' + match[1]
-  }
-
-  return ''
-}
-
-Crowi.unhighlightSelectedSection = function(hash) {
-  if (!hash || hash == '' || !hash.match(/^#head.+/)) {
-    // とりあえず head* だけ (検索結果ページで副作用出た
-    return true
-  }
-  $(hash).removeClass('highlighted')
-}
-
-Crowi.highlightSelectedSection = function(hash) {
-  if (!hash || hash == '' || !hash.match(/^#head.+/)) {
-    // とりあえず head* だけ (検索結果ページで副作用出た
-    return true
-  }
-  $(hash).addClass('highlighted')
-}
-
 window.addEventListener('load', function(e) {
+  const crowi = window.crowi
+
   // hash on page
   if (location.hash) {
     if (location.hash == '#edit-form') {

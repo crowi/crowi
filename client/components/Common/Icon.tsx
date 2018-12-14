@@ -1,7 +1,18 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 
-export default class Icon extends React.Component {
+// TODO: support size and so far
+interface Props {
+  name: string
+  solid?: boolean
+  regular?: boolean
+  light?: boolean
+  spin?: boolean
+  className?: string
+}
+
+export default class Icon extends React.Component<Props> {
+  static defaultProps = { spin: false, solid: false, regular: false, light: false }
+
   render() {
     const { name, spin, solid, regular, light, className: c, ...props } = this.props
     const { solid: s, regular: r, light: l } = { solid, regular, light }
@@ -17,21 +28,4 @@ export default class Icon extends React.Component {
 
     return <i className={className} {...props} />
   }
-}
-
-// TODO: support size and so far
-Icon.propTypes = {
-  name: PropTypes.string.isRequired,
-  solid: PropTypes.bool,
-  regular: PropTypes.bool,
-  light: PropTypes.bool,
-  spin: PropTypes.bool,
-  className: PropTypes.string,
-}
-
-Icon.defaltProps = {
-  spin: false,
-  solid: false,
-  regular: false,
-  light: false,
 }

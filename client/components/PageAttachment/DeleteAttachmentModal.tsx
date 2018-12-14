@@ -1,11 +1,22 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
 import User from 'components/User/User'
 
-export default class DeleteAttachmentModal extends React.Component {
+import { Attachment } from 'client/types/crowi'
+
+interface Props {
+  inUse: boolean
+  isOpen: boolean
+  toggle: Function
+  deleting: boolean
+  deleteError: string
+  attachmentToDelete: Attachment | null
+  onAttachmentDeleteClickedConfirm: Function
+}
+
+export default class DeleteAttachmentModal extends React.Component<Props> {
   constructor(props) {
     super(props)
 
@@ -44,18 +55,13 @@ export default class DeleteAttachmentModal extends React.Component {
       return null
     }
 
-    const props = Object.assign({}, this.props)
-    delete props.onAttachmentDeleteClickedConfirm
-    delete props.attachmentToDelete
-    delete props.inUse
-    delete props.deleting
-    delete props.deleteError
+    const { onAttachmentDeleteClickedConfirm, attachmentToDelete, inUse, deleting, deleteError, ...props } = this.props
 
-    let deletingIndicator = ''
-    if (this.props.deleting) {
+    let deletingIndicator: JSX.Element | string = ''
+    if (deleting) {
       deletingIndicator = <Icon name="spinner" spin />
     }
-    if (this.props.deleteError) {
+    if (deleteError) {
       deletingIndicator = <p>{this.props.deleteError}</p>
     }
 
@@ -74,12 +80,4 @@ export default class DeleteAttachmentModal extends React.Component {
       </Modal>
     )
   }
-}
-
-DeleteAttachmentModal.propTypes = {
-  inUse: PropTypes.bool,
-  deleting: PropTypes.bool,
-  deleteError: PropTypes.string,
-  attachmentToDelete: PropTypes.object,
-  onAttachmentDeleteClickedConfirm: PropTypes.func,
 }

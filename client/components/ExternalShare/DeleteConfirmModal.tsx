@@ -1,9 +1,22 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, Alert } from 'reactstrap'
 
-class DeleteConfirmModal extends React.Component {
+interface Props {
+  show: boolean
+  onHide: Function
+  handleDelete: Function
+  handleClose: Function
+  t: Function
+}
+
+interface State {
+  error: boolean
+}
+
+class DeleteConfirmModal extends React.Component<Props, State> {
+  static defaultProps = { show: false }
+
   constructor(props) {
     super(props)
 
@@ -44,17 +57,6 @@ class DeleteConfirmModal extends React.Component {
       </Modal>
     )
   }
-}
-
-DeleteConfirmModal.propTypes = {
-  show: PropTypes.bool.isRequired,
-  onHide: PropTypes.func.isRequired,
-  handleDelete: PropTypes.func.isRequired,
-  handleClose: PropTypes.func.isRequired,
-  t: PropTypes.func.isRequired,
-}
-DeleteConfirmModal.defaultProps = {
-  show: false,
 }
 
 export default translate()(DeleteConfirmModal)

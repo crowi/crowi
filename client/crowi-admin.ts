@@ -23,7 +23,7 @@ $(function() {
   $('#createdUserModal').modal('show')
 
   $('#admin-password-reset-modal').on('show.bs.modal', function(button) {
-    var data = $(button.relatedTarget)
+    var data = $((<any>button).relatedTarget)
     var userId = data.data('user-id')
     var email = data.data('user-email')
 
@@ -53,7 +53,7 @@ $(function() {
 
   $('#appSettingForm, #secSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(function() {
     $(this).submit(function() {
-      function showMessage(formId, msg, status) {
+      function showMessage(formId, msg, status = '') {
         $('#' + formId + ' .alert').remove()
 
         if (!status) {
@@ -79,7 +79,9 @@ $(function() {
       var $id = $form.attr('id')
       var $button = $('button', this)
       $button.attr('disabled', 'disabled')
-      $.post($form.attr('action'), $form.serialize(), function(data) {
+      const action = $form.attr('action')
+      if (!action) return false
+      $.post(action, $form.serialize(), function(data) {
         if (data.status) {
           showMessage($id, 'Updated')
         } else {

@@ -1,11 +1,17 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import UserPicture from '../User/UserPicture'
 
 import PageCommentNotification from './ModelAction/PageCommentNotification'
 import PageLikeNotification from './ModelAction/PageLikeNotification'
 
-export default class Notification extends React.Component {
+import { Notification as NotificationType } from 'client/types/crowi'
+
+interface Props {
+  notification: NotificationType
+  onClickHandler: Function
+}
+
+export default class Notification extends React.Component<Props> {
   onClickHandler() {
     this.props.onClickHandler(this.props.notification)
   }
@@ -42,7 +48,6 @@ export default class Notification extends React.Component {
   }
 
   render() {
-    let cmp = ''
     const notification = this.props.notification
     const componentName = `${notification.targetModel}:${notification.action}`
     const props = {
@@ -52,21 +57,12 @@ export default class Notification extends React.Component {
 
     switch (componentName) {
       case 'Page:COMMENT':
-        cmp = <PageCommentNotification {...props} onClick={this.onClickHandler.bind(this)} />
-        break
+        return <PageCommentNotification {...props} onClick={this.onClickHandler.bind(this)} />
       case 'Page:LIKE':
-        cmp = <PageLikeNotification {...props} onClick={this.onClickHandler.bind(this)} />
-        break
+        return <PageLikeNotification {...props} onClick={this.onClickHandler.bind(this)} />
       default:
     }
 
-    return cmp
+    return ''
   }
 }
-
-Notification.propTypes = {
-  notification: PropTypes.object.isRequired,
-  onClickHandler: PropTypes.func.isRequired,
-}
-
-Notification.defaultProps = {}

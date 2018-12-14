@@ -1,4 +1,8 @@
 $(function() {
+  const crowi = window.crowi
+  const crowiRenderer = window.crowiRenderer
+  const inlineAttachment = window.inlineAttachment
+
   var pageId = $('#content-main').data('page-id')
   var pagePath = $('#content-main').data('path')
 
@@ -60,7 +64,8 @@ $(function() {
   function renderPreview() {
     var content = $('#form-body').val()
     var previewBody = $('#preview-body')
-    var parsedHTML = crowiRenderer.render(content, previewBody.get(0))
+    var previewBodyElement = <HTMLDivElement>previewBody[0]
+    var parsedHTML = crowiRenderer.render(content, previewBodyElement)
     previewBody.html(parsedHTML)
   }
 
@@ -83,7 +88,7 @@ $(function() {
     }
   })
   $('#form-body').on('keyup change', function(e) {
-    var content = $('#form-body').val()
+    var content = <string>$('#form-body').val()
     if (originalContent != content) {
       isFormChanged = true
       crowi.saveDraft(pagePath, content)
@@ -100,7 +105,7 @@ $(function() {
 
   // This is a temporary implementation until porting to React.
   var insertText = function(start, end, newText, mode) {
-    var editor = document.querySelector('#form-body')
+    var editor = <HTMLTextAreaElement>document.querySelector('#form-body')
     mode = mode || 'after'
 
     switch (mode) {
@@ -134,7 +139,7 @@ $(function() {
   var getCurrentLine = function(event) {
     var $target = $(event.target)
 
-    var text = $target.val()
+    var text = <string>$target.val()
     var pos = $target.selection('getPos')
     if (text === null || pos.start !== pos.end) {
       return null
@@ -158,9 +163,10 @@ $(function() {
   var getPrevLine = function(event) {
     var $target = $(event.target)
     var currentLine = getCurrentLine(event)
-    var text = $target.val().slice(0, currentLine.start)
-    var startPos = text.lastIndexOf('\n', currentLine.start - 2) + 1
-    var endPos = currentLine.start
+    var start = currentLine ? currentLine.start : 0
+    var text = (<string>$target.val()).slice(0, start)
+    var startPos = text.lastIndexOf('\n', start - 2) + 1
+    var endPos = start
 
     return {
       text: text.slice(startPos, endPos),
@@ -174,7 +180,7 @@ $(function() {
 
     var $target = $(event.target)
     var currentLine = getCurrentLine(event)
-    var text = $target.val()
+    var text = <string>$target.val()
     var pos = $target.selection('getPos')
 
     // When the user presses CTRL + TAB, it is a case to control the tab of the browser
@@ -279,8 +285,8 @@ $(function() {
         return
       }
       event.preventDefault()
-      var row = []
-      var cellbarMatch = currentLine.text.match(/\|/g)
+      var row: string[] = []
+      var cellbarMatch = <RegExpMatchArray>currentLine.text.match(/\|/g)
       for (var i = 0; i < cellbarMatch.length; i++) {
         row.push('|')
       }
@@ -379,11 +385,14 @@ $(function() {
     return true
   }
 
-  document.getElementById('form-body').addEventListener('paste', function(event) {
-    if (handlePasteEvent(event)) {
-      event.preventDefault()
-    }
-  })
+  const formBody = document.getElementById('form-body')
+  if (formBody) {
+    formBody.addEventListener('paste', function(event) {
+      if (handlePasteEvent(event)) {
+        event.preventDefault()
+      }
+    })
+  }
 
   var unbindInlineAttachment = function($form) {
     $form.unbind('.inlineattach')
@@ -427,7 +436,7 @@ $(function() {
   if ($inputForm.length > 0) {
     var csrfToken = $('form.uploadable input#edit-form-csrf').val()
     var pageId = $('#content-main').data('page-id') || 0
-    var attachmentOption = {
+    var attachmentOption: any = {
       uploadUrl: '/_api/attachments.add',
       extraParams: {
         path: location.pathname,
@@ -440,7 +449,7 @@ $(function() {
 
     // if files upload is set
     var config = crowi.getConfig()
-    if (config.upload.file) {
+    if (config.upload && config.upload.file) {
       attachmentOption.allowedTypes = '*'
     }
 
@@ -507,8 +516,8 @@ $(function() {
       return top
     }
 
-    var editor = document.querySelector('#form-body')
-    var preview = document.querySelector('#preview-body')
+    var editor = <HTMLTextAreaElement>document.querySelector('#form-body')
+    var preview = <HTMLDivElement>document.querySelector('#preview-body')
 
     editor.addEventListener('scroll', function(event) {
       var rate = getScrollRate(this)

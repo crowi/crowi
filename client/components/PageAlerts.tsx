@@ -1,9 +1,22 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import PageAlert from './PageAlerts/PageAlert'
+import Crowi from 'client/util/Crowi'
+import { User } from 'client/types/crowi'
 
-export default class PageAlerts extends React.Component {
+interface Props {
+  pageId: string | null
+  crowi: Crowi
+}
+
+interface State {
+  alertAppeared: boolean
+  message: string
+  data: {
+    user?: User
+  }
+}
+
+export default class PageAlerts extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -18,10 +31,11 @@ export default class PageAlerts extends React.Component {
     const socket = this.props.crowi.getWebSocket()
 
     socket.on('page edited', data => {
-      const user = data.user
-      const crowi = this.props.crowi
+      const target = data.user
+      const { pageId, crowi } = this.props
+      const user = crowi.getUser() || {}
 
-      if (user.username != crowi.getUser().name && this.props.pageId == data.page._id) {
+      if (target.username != user.name && pageId == data.page._id) {
         this.setState({
           alertAppeared: true,
           message: 'edit',
@@ -40,9 +54,4 @@ export default class PageAlerts extends React.Component {
 
     return <PageAlert {...this.state} />
   }
-}
-
-PageAlerts.propTypes = {
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
 }

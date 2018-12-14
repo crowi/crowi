@@ -1,6 +1,10 @@
 import React from 'react'
 
-export default class Modal extends React.Component {
+interface State {
+  modalShown: boolean
+}
+
+export default class Modal extends React.Component<{}, State> {
   constructor(props) {
     super(props)
 
@@ -15,7 +19,7 @@ export default class Modal extends React.Component {
     }
 
     return (
-      <div className="modal in" id="renamePage" style="display: block;">
+      <div className="modal in" id="renamePage" style={{ display: 'block' }}>
         <div className="modal-dialog">
           <div className="modal-content">
             <form role="form" id="renamePageForm" onSubmit={() => false}>
@@ -36,7 +40,7 @@ export default class Modal extends React.Component {
                   <br />
                   <div className="input-group">
                     <span className="input-group-prepend">
-                      <span className="input-group-text">http://localhost:3000</span>
+                      <span className="input-group-text">{'http://localhost:3000'}</span>
                     </span>
                     <input type="text" className="form-control" name="new_path" id="newPageName" value="/user/sotarok/memo/2017/04/24" />
                   </div>

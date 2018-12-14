@@ -1,10 +1,33 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import SearchTypeNav from 'components/SearchPage/SearchTypeNav/SearchTypeNav'
 
-class SearchToolbar extends React.Component {
+interface Props {
+  keyword: string
+  type: string
+  total: number
+  changeType: Function
+  searching: boolean
+  t: Function
+}
+
+export interface SearchType {
+  key: string
+  icon: JSX.Element
+  name: string
+}
+
+class SearchToolbar extends React.Component<Props> {
+  static defaultProps = {
+    keyword: '',
+    type: '',
+    searching: false,
+    total: 0,
+  }
+
+  searchTypes: SearchType[]
+
   constructor(props) {
     super(props)
 
@@ -65,21 +88,6 @@ class SearchToolbar extends React.Component {
       </div>
     )
   }
-}
-
-SearchToolbar.propTypes = {
-  keyword: PropTypes.string,
-  type: PropTypes.string,
-  total: PropTypes.number,
-  changeType: PropTypes.func,
-  searching: PropTypes.bool,
-  t: PropTypes.func.isRequired,
-}
-SearchToolbar.defaultProps = {
-  keyword: '',
-  type: '',
-  searching: false,
-  total: 0,
 }
 
 export default translate()(SearchToolbar)

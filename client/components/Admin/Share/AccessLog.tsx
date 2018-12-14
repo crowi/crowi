@@ -1,12 +1,28 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
+import Crowi from 'client/util/Crowi'
+import { ShareAccess } from 'client/types/crowi'
 
-class AccessLog extends React.Component {
+interface Props {
+  t: Function
+  crowi: Crowi
+}
+
+interface State {
+  accesses: ShareAccess[]
+  pagination: {
+    current: number
+    count: number
+    limit: number
+  }
+  error: boolean
+}
+
+class AccessLog extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -109,12 +125,6 @@ class AccessLog extends React.Component {
       </div>
     )
   }
-}
-
-AccessLog.propTypes = {
-  t: PropTypes.func.isRequired,
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
 }
 
 export default translate()(AccessLog)

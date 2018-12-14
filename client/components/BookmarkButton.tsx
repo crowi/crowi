@@ -1,9 +1,17 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Icon from 'components/Common/Icon'
+import Crowi from 'client/util/Crowi'
 
-export default class BookmarkButton extends React.Component {
+interface Props {
+  crowi: Crowi
+  pageId: string | null
+}
+
+interface State {
+  bookmarked: boolean
+}
+
+export default class BookmarkButton extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -55,9 +63,4 @@ export default class BookmarkButton extends React.Component {
       </a>
     )
   }
-}
-
-BookmarkButton.propTypes = {
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
 }

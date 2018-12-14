@@ -1,8 +1,17 @@
 import React from 'react'
-import PropTypes from 'prop-types'
+
+interface Props {
+  keyword: string
+  onSearchFormChanged: Function
+}
+
+interface State {
+  keyword: string
+  searchedKeyword: string
+}
 
 // Search.SearchForm
-export default class SearchForm extends React.Component {
+export default class SearchForm extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -16,15 +25,16 @@ export default class SearchForm extends React.Component {
   }
 
   search() {
-    if (this.state.searchedKeyword != this.state.keyword) {
-      this.props.onSearchFormChanged({ keyword: this.state.keyword })
-      this.setState({ searchedKeyword: this.state.keyword })
+    const { searchedKeyword, keyword } = this.state
+    if (searchedKeyword != keyword) {
+      this.props.onSearchFormChanged({ keyword })
+      this.setState({ searchedKeyword: keyword })
     }
   }
 
   handleSubmit(event) {
     event.preventDefault()
-    this.search({ keyword: this.state.keyword })
+    this.search()
   }
 
   handleChange(event) {
@@ -45,9 +55,3 @@ export default class SearchForm extends React.Component {
     )
   }
 }
-
-SearchForm.propTypes = {
-  keyword: PropTypes.string,
-  onSearchFormChanged: PropTypes.func.isRequired,
-}
-SearchForm.defaultProps = {}

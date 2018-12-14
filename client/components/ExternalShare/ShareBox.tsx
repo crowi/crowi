@@ -1,18 +1,37 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 import ShareBoxContent from './ShareBoxContent'
 import SettingModal from './SettingModal'
 import AccessLogModal from './AccessLogModal'
+import Crowi from 'client/util/Crowi'
+import { Share } from 'client/types/crowi'
 
-class ShareBox extends React.Component {
+interface Props {
+  isCreated?: boolean
+  pageId: string | null
+  t: Function
+  crowi: Crowi
+}
+
+interface State {
+  share: Share | null
+  isChanging: boolean
+  isCreated: boolean
+  showSettingModal: boolean
+  showAccessLogModal: boolean
+  creationError: boolean
+}
+
+class ShareBox extends React.Component<Props, State> {
+  static defaultProps = { isCreated: false }
+
   constructor(props) {
     super(props)
 
     this.state = {
-      share: {},
+      share: null,
       isChanging: false,
       isCreated: props.isCreated,
       showSettingModal: false,
@@ -124,16 +143,6 @@ class ShareBox extends React.Component {
       </div>
     )
   }
-}
-
-ShareBox.propTypes = {
-  isCreated: PropTypes.bool,
-  pageId: PropTypes.string,
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
-}
-ShareBox.defaultProps = {
-  isCreated: false,
 }
 
 export default translate()(ShareBox)

@@ -1,8 +1,20 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { Nav, NavItem, NavLink, TabContent, TabPane } from 'reactstrap'
+import TabItem from 'client/components/Common/TabItem'
 
-export default class Tab extends React.Component {
+interface Props {
+  id?: string
+  children: React.ReactElement<TabItem>[]
+  active: number
+}
+
+interface State {
+  active: number
+}
+
+export default class Tab extends React.Component<Props, State> {
+  static defaultProps = { active: 1 }
+
   constructor(props) {
     super(props)
 
@@ -19,10 +31,11 @@ export default class Tab extends React.Component {
   }
 
   getTabTitles() {
-    return React.Children.map(this.props.children, child => {
-      const { title = '' } = child.props
-      return React.isValidElement(child) ? title : false
-    }).filter(title => title !== false)
+    type TabItemElement = React.ReactElement<TabItem>
+    type T = string | false
+    return React.Children.map<T, TabItemElement>(this.props.children, child => (React.isValidElement(child) ? child.props.props.title : false)).filter(
+      title => title !== false,
+    )
   }
 
   renderNavItems() {
@@ -55,13 +68,4 @@ export default class Tab extends React.Component {
       </div>
     )
   }
-}
-
-Tab.propTypes = {
-  children: PropTypes.node.isRequired,
-  active: PropTypes.number,
-}
-
-Tab.defaultProps = {
-  active: 1,
 }

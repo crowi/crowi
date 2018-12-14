@@ -1,7 +1,18 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 
-export default class Pager extends React.Component {
+interface Props {
+  hasPrev: boolean
+  hasNext: boolean
+  handlePrevClick: Function
+  handleNextClick: Function
+}
+
+export default class Pager extends React.Component<Props> {
+  static defaultProps = {
+    hasPrev: false,
+    hasNext: false,
+  }
+
   handleOnPrevClick(e) {
     e.preventDefault()
     this.props.handlePrevClick()
@@ -39,15 +50,4 @@ export default class Pager extends React.Component {
       </div>
     )
   }
-}
-
-Pager.propTypes = {
-  hasPrev: PropTypes.bool.isRequired,
-  hasNext: PropTypes.bool.isRequired,
-  handlePrevClick: PropTypes.func.isRequired,
-  handleNextClick: PropTypes.func.isRequired,
-}
-Pager.defaultProps = {
-  hasPrev: false,
-  hasNext: false,
 }

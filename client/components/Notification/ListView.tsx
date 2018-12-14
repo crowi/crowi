@@ -1,10 +1,16 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import Notification from './Notification'
 import NullNotification from './NullNotification'
 import Icon from '../Common/Icon'
+import { Notification as NotificationType } from 'client/types/crowi'
 
-export default class ListView extends React.Component {
+interface Props {
+  loaded: boolean
+  notifications: NotificationType[]
+  notificationClickHandler: Function
+}
+
+export default class ListView extends React.Component<Props> {
   render() {
     let listView
 
@@ -25,11 +31,3 @@ export default class ListView extends React.Component {
     )
   }
 }
-
-ListView.propTypes = {
-  loaded: PropTypes.bool.isRequired,
-  notifications: PropTypes.array.isRequired,
-  notificationClickHandler: PropTypes.func.isRequired,
-}
-
-ListView.defaultProps = {}

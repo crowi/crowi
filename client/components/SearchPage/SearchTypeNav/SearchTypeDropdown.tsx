@@ -1,9 +1,20 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Dropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap'
+import { SearchType } from 'components/SearchPage/SearchToolbar'
 
-class SearchTypeDropdown extends React.Component {
+interface Props {
+  t: Function
+  searchTypes: SearchType[]
+  activeType: SearchType
+  changeType: Function
+}
+
+interface State {
+  open: boolean
+}
+
+class SearchTypeDropdown extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -35,13 +46,5 @@ class SearchTypeDropdown extends React.Component {
     )
   }
 }
-
-SearchTypeDropdown.propTypes = {
-  t: PropTypes.func.isRequired,
-  searchTypes: PropTypes.array.isRequired,
-  activeType: PropTypes.object.isRequired,
-  changeType: PropTypes.func.isRequired,
-}
-SearchTypeDropdown.defaultProps = {}
 
 export default translate()(SearchTypeDropdown)

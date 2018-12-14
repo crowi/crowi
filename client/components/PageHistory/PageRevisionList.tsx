@@ -1,10 +1,15 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Revision from './Revision'
 import RevisionDiff from './RevisionDiff'
+import { Revision as RevisionType } from 'client/types/crowi'
 
-export default class PageRevisionList extends React.Component {
+interface Props {
+  revisions: RevisionType[]
+  diffOpened: { [id: string]: boolean }
+  onDiffOpenClicked: Function
+}
+
+export default class PageRevisionList extends React.Component<Props> {
   render() {
     const revisions = this.props.revisions
     const revisionCount = this.props.revisions.length
@@ -35,10 +40,4 @@ export default class PageRevisionList extends React.Component {
 
     return <div className="revision-history-list">{revisionList}</div>
   }
-}
-
-PageRevisionList.propTypes = {
-  revisions: PropTypes.array,
-  diffOpened: PropTypes.object,
-  onDiffOpenClicked: PropTypes.func.isRequired,
 }

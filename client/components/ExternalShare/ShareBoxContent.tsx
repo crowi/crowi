@@ -1,10 +1,26 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, Input, Alert } from 'reactstrap'
 import Icon from 'components/Common/Icon'
+import Crowi from 'client/util/Crowi'
+import { Share } from 'client/types/crowi'
 
-class ShareBoxContent extends React.Component {
+interface Props {
+  handleOpen?: Function
+  handleCreate?: Function
+  isCreated?: boolean
+  isChanging?: boolean
+  share: Share | null
+  creationError?: boolean
+  crowi: Crowi
+  t: Function
+}
+
+class ShareBoxContent extends React.Component<Props> {
+  static defaultProps = { isCreated: false }
+
+  inputRef?: HTMLInputElement
+
   constructor(props) {
     super(props)
 
@@ -13,22 +29,26 @@ class ShareBoxContent extends React.Component {
     this.copyAction = this.copyAction.bind(this)
   }
 
-  selectAction(e) {
-    this.inputRef.select()
+  selectAction() {
+    if (this.inputRef) {
+      this.inputRef.select()
+    }
   }
 
   createRef(node) {
     this.inputRef = node
   }
 
-  copyAction(e) {
-    this.inputRef.select()
-    document.execCommand('copy')
+  copyAction() {
+    if (this.inputRef) {
+      this.inputRef.select()
+      document.execCommand('copy')
+    }
   }
 
   render() {
     const { t, crowi, share, isCreated, isChanging, handleOpen, handleCreate, creationError } = this.props
-    if (isCreated) {
+    if (isCreated && share) {
       const shareId = share.uuid
       const url = `${crowi.location.origin}/_share/${shareId}`
       return (
@@ -56,21 +76,6 @@ class ShareBoxContent extends React.Component {
       </div>
     )
   }
-}
-
-ShareBoxContent.propTypes = {
-  handleOpen: PropTypes.func,
-  handleCreate: PropTypes.func,
-  isCreated: PropTypes.bool,
-  isChanging: PropTypes.bool,
-  share: PropTypes.object,
-  creationError: PropTypes.bool,
-  crowi: PropTypes.object.isRequired,
-  t: PropTypes.func.isRequired,
-}
-ShareBoxContent.defaultProps = {
-  isCreated: false,
-  share: {},
 }
 
 export default translate()(ShareBoxContent)
