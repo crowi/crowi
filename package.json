@@ -75,6 +75,7 @@
     "copy-webpack-plugin": "^4.5.2",
     "csrf": "~3.0.3",
     "css-loader": "~1.0.0",
+    "csstype": "^2.5.8",
     "debug": "~3.1.0",
     "del": "~3.0.0",
     "diff": "~3.5.0",
