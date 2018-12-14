@@ -50,14 +50,7 @@ describe('Activity', function() {
           action: 'COMMENT',
         }
 
-        return Activity.createByParameters(parameters).then(
-          function(activity) {
-            throw new Error('not fulfilled')
-          },
-          function(err) {
-            expect(err.message).toBe('Activity validation failed')
-          },
-        )
+        return expect(Activity.createByParameters(parameters)).rejects.toThrow('Activity validation failed')
       })
     })
   })

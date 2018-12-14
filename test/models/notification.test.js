@@ -62,14 +62,7 @@ describe('Notification', function() {
           action: 'COMMENT',
         }
 
-        return Notification.upsertByActivity(userId1, sameActivityUsers, activity).then(
-          function(notification) {
-            throw new Error('validation not work')
-          },
-          function(err) {
-            expect(err.message).toBe('Validation failed')
-          },
-        )
+        return expect(Notification.upsertByActivity(userId1, sameActivityUsers, activity)).rejects.toThrow('Validation failed')
       })
     })
   })
