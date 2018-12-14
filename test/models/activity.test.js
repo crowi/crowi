@@ -66,8 +66,8 @@ describe('Activity', function() {
       })
 
       it('should remove', async () => {
-        const { result } = await Activity.removeByParameters(parameters)
-        expect(result).toEqual({ n: 1, ok: 1 })
+        const { n } = await Activity.removeByParameters(parameters)
+        expect(n).toBe(1)
       })
     })
   })
