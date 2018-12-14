@@ -1,13 +1,18 @@
 {
-  "parser": "babel-eslint",
+  "parser": "typescript-eslint-parser",
+  "parserOptions": {
+    "jsx": true,
+    "useJSXTextNode": true
+  },
   "extends": [
     "standard",
-    "plugin:flowtype/recommended",
     "plugin:react/recommended",
     "plugin:jest/recommended",
+    "typescript",
+    "typescript/react",
+    "typescript/prettier",
     "prettier",
     "prettier/standard",
-    "prettier/flowtype",
     "prettier/react"
   ],
   "env": {
@@ -26,13 +31,7 @@
     "react/prefer-stateless-function": "off",
     "standard/no-callback-literal": "off"
   },
-  "plugins": ["flowtype", "react", "prettier", "jest"],
-  "settings": {
-    "react": {
-      "version": "15.5",
-      "flowVersion": "0.65"
-    }
-  },
+  "plugins": ["react", "prettier", "jest"],
   "globals": {
     "jest/globals": true,
     "ROOT_DIR": true,
