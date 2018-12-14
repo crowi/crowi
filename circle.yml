@@ -26,8 +26,8 @@ jobs:
           paths:
             - /home/node/app/node_modules
       - run: npm run type-check
-      - run: npm run build
       - run: npm run lint
+      - run: npm run build
       - run: npm run test
       - save_cache:
           key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
