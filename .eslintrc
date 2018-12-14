@@ -29,7 +29,17 @@
     "no-redeclare": "off",
     "prettier/prettier": "error",
     "react/prefer-stateless-function": "off",
-    "standard/no-callback-literal": "off"
+    "require-jsdoc": "off",
+    "standard/no-callback-literal": "off",
+    "typescript/explicit-function-return-type": "off",
+    "typescript/explicit-member-accessibility": "off",
+    "typescript/member-delimiter-style": "none",
+    "typescript/no-angle-bracket-type-assertion": "off",
+    "typescript/no-use-before-define": "off",
+    "typescript/no-var-requires": "off",
+    "valid-jsdoc": "off",
+    "no-console": "off"
+  },
   "settings": {
     "react": {
       "version": "16.7"
