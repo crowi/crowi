@@ -180,33 +180,6 @@ class AccessLogModal extends React.Component<Props, State> {
     }
   }
 
-  renderPagination() {
-    const { current, count } = this.state.pagination
-    const range = [...Array(count).keys()]
-    const items = range.map((v, k) => {
-      const page = k + 1
-      const className = page === current ? 'active' : ''
-      return (
-        <li key={page} className={className}>
-          <a onClick={this.movePage(page)}>{page}</a>
-        </li>
-      )
-    })
-    return (
-      <nav>
-        <ul className="pagination">
-          <li className={current === 1 ? 'disabled' : ''}>
-            <a onClick={this.movePage(1)}>&laquo;</a>
-          </li>
-          {items}
-          <li className={current === count ? 'disabled' : ''}>
-            <a onClick={this.movePage(count)}>&raquo;</a>
-          </li>
-        </ul>
-      </nav>
-    )
-  }
-
   render() {
     const { t, show, onHide } = this.props
     const {
