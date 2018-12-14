@@ -30,6 +30,10 @@
     "prettier/prettier": "error",
     "react/prefer-stateless-function": "off",
     "standard/no-callback-literal": "off"
+  "settings": {
+    "react": {
+      "version": "16.7"
+    }
   },
   "plugins": ["react", "prettier", "jest"],
   "globals": {
