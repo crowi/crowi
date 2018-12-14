@@ -5,7 +5,6 @@
         "browsers": ["last 2 versions"]
       }
     }],
-    "@babel/flow",
     "@babel/react",
     "@babel/typescript"
   ],
