@@ -1,8 +1,17 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import UserList from './SeenUserList/UserList'
+import Crowi from 'client/util/Crowi'
+import { User } from 'client/types/crowi'
 
-export default class SeenUserList extends React.Component {
+interface Props {
+  crowi: Crowi
+}
+
+interface State {
+  seenUsers: User[]
+}
+
+export default class SeenUserList extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -34,15 +43,12 @@ export default class SeenUserList extends React.Component {
   }
 
   render() {
+    const { seenUsers } = this.state
     return (
       <div className="seen-user-list">
-        <p className="seen-user-count">{this.state.seenUsers.length}</p>
-        <UserList users={this.state.seenUsers} />
+        <p className="seen-user-count">{seenUsers.length}</p>
+        <UserList users={seenUsers} />
       </div>
     )
   }
-}
-
-SeenUserList.propTypes = {
-  crowi: PropTypes.object.isRequired,
 }

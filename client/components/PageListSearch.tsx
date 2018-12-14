@@ -1,12 +1,25 @@
 // This is the root component for #page-list-search
 
 import React from 'react'
-import PropTypes from 'prop-types'
 
 import queryString from 'query-string'
 import SearchResult from './SearchPage/SearchResult'
+import Crowi from 'client/util/Crowi'
 
-export default class PageListSearch extends React.Component {
+interface Props {
+  crowi: Crowi
+}
+
+interface State {
+  tree: string
+  searchingKeyword: string
+  searchedKeyword: string
+  searchedPages: []
+  searchResultMeta: {}
+  searchError: Error | null
+}
+
+export default class PageListSearch extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -14,7 +27,7 @@ export default class PageListSearch extends React.Component {
     const { q = '' } = queryString.parse(search)
     this.state = {
       tree: $('#search-listpage-input').data('path'),
-      searchingKeyword: q,
+      searchingKeyword: String(q),
       searchedKeyword: '',
       searchedPages: [],
       searchResultMeta: {},
@@ -75,7 +88,7 @@ export default class PageListSearch extends React.Component {
     $('.main-container').addClass('aside-hidden')
   }
 
-  changeURL(keyword, refreshHash) {
+  changeURL(keyword, refreshHash = false) {
     const tree = this.state.tree
     let { hash = '' } = this.props.crowi.location
     // TODO 整理する
@@ -141,11 +154,4 @@ export default class PageListSearch extends React.Component {
       </div>
     )
   }
-}
-
-PageListSearch.propTypes = {
-  crowi: PropTypes.object.isRequired,
-}
-PageListSearch.defaultProps = {
-  // pollInterval: 1000,
 }

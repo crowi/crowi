@@ -1,11 +1,30 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Page from 'components/PageList/Page'
 import SearchResultList from './SearchResultList'
+import { Page as PageType } from 'client/types/crowi'
+
+interface Props {
+  tree: string
+  pages: PageType[]
+  searchingKeyword: string
+  searchResultMeta: { took?; total? }
+  searchError: Error | null
+}
+
+interface State {
+  active: string | null
+}
 
 // Search.SearchResult
-export default class SearchResult extends React.Component {
+export default class SearchResult extends React.Component<Props, State> {
+  static defaultProps = {
+    tree: '',
+    pages: [],
+    searchingKeyword: '',
+    searchResultMeta: {},
+    searchError: null,
+  }
+
   constructor(props) {
     super(props)
 
@@ -95,19 +114,4 @@ export default class SearchResult extends React.Component {
       </div>
     )
   }
-}
-
-SearchResult.propTypes = {
-  tree: PropTypes.string.isRequired,
-  pages: PropTypes.array.isRequired,
-  searchingKeyword: PropTypes.string.isRequired,
-  searchResultMeta: PropTypes.object.isRequired,
-  searchError: PropTypes.object,
-}
-SearchResult.defaultProps = {
-  tree: '',
-  pages: [],
-  searchingKeyword: '',
-  searchResultMeta: {},
-  searchError: null,
 }

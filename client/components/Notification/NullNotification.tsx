@@ -9,7 +9,3 @@ export default class NullNotification extends React.Component {
     )
   }
 }
-
-NullNotification.propTypes = {}
-
-NullNotification.defaultProps = {}

@@ -1,12 +1,32 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { Card } from 'reactstrap'
 import { translate } from 'react-i18next'
 import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
 
-class SearchSuggest extends React.Component {
+interface Props {
+  searchedPages: {
+    portalPages?: []
+    publicPages?: []
+    userPages?: []
+  }
+  searchingKeyword: string
+  searching: boolean
+  searchError: Error | null
+  focused: boolean
+  t: Function
+}
+
+class SearchSuggest extends React.Component<Props> {
+  static defaultProps = {
+    searchedPages: {},
+    searchingKeyword: '',
+    searchError: null,
+    searching: false,
+    focused: false,
+  }
+
   constructor(props) {
     super(props)
 
@@ -88,23 +108,6 @@ class SearchSuggest extends React.Component {
       </Card>
     )
   }
-}
-
-SearchSuggest.propTypes = {
-  searchedPages: PropTypes.object.isRequired,
-  searchingKeyword: PropTypes.string.isRequired,
-  searching: PropTypes.bool.isRequired,
-  searchError: PropTypes.object,
-  focused: PropTypes.bool,
-  t: PropTypes.func.isRequired,
-}
-
-SearchSuggest.defaultProps = {
-  searchedPages: {},
-  searchingKeyword: '',
-  searchError: null,
-  searching: false,
-  focused: false,
 }
 
 export default translate()(SearchSuggest)

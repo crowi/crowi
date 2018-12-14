@@ -1,13 +1,26 @@
 // This is the root component for #search-top
 
 import React from 'react'
-import PropTypes from 'prop-types'
 import queryString from 'query-string'
 
 import SearchForm from './HeaderSearchBox/SearchForm'
 import SearchSuggest from './HeaderSearchBox/SearchSuggest'
+import Crowi from 'client/util/Crowi'
 
-export default class HeaderSearchBox extends React.Component {
+interface Props {
+  crowi: Crowi
+}
+
+interface State {
+  isSearchPage: boolean
+  searchingKeyword: string
+  searchedPages: {}
+  searchError: Error | null
+  searching: boolean
+  focused: boolean
+}
+
+export default class HeaderSearchBox extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -15,7 +28,7 @@ export default class HeaderSearchBox extends React.Component {
     const parsedKeyword = queryString.parse(locationSearch).q || ''
     this.state = {
       isSearchPage: pathname.startsWith('/_search'),
-      searchingKeyword: parsedKeyword,
+      searchingKeyword: String(parsedKeyword),
       searchedPages: {},
       searchError: null,
       searching: false,
@@ -65,28 +78,14 @@ export default class HeaderSearchBox extends React.Component {
   }
 
   render() {
-    const { isSearchPage } = this.state
+    const { isSearchPage, searchingKeyword, searchedPages, searchError, searching, focused } = this.state
     return (
       <div className="search-box">
         <SearchForm onSearchFormChanged={this.search} isShown={this.isShown} isSearchPage={isSearchPage} keyword={this.state.searchingKeyword} />
         {!isSearchPage && (
-          <SearchSuggest
-            searchingKeyword={this.state.searchingKeyword}
-            searchedPages={this.state.searchedPages}
-            searchError={this.state.searchError}
-            searching={this.state.searching}
-            focused={this.state.focused}
-          />
+          <SearchSuggest searchingKeyword={searchingKeyword} searchedPages={searchedPages} searchError={searchError} searching={searching} focused={focused} />
         )}
       </div>
     )
   }
-}
-
-HeaderSearchBox.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  // pollInterval: PropTypes.number,
-}
-HeaderSearchBox.defaultProps = {
-  // pollInterval: 1000,
 }

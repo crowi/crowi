@@ -1,11 +1,25 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGroup, FormFeedback } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
+import Crowi from 'client/util/Crowi'
 
-class SecretKeywordFormContainer extends React.Component {
+interface Props {
+  t: Function
+  crowi: Crowi
+}
+
+interface State {
+  secretKeyword: string
+  error: {
+    status: boolean
+    message: string
+  }
+  usingIME: boolean
+}
+
+class SecretKeywordFormContainer extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -27,14 +41,8 @@ class SecretKeywordFormContainer extends React.Component {
     this.handleKeyUp = this.handleKeyUp.bind(this)
   }
 
-  static propTypes = {
-    t: PropTypes.func,
-    pageId: PropTypes.string,
-    crowi: PropTypes.object.isRequired,
-  }
-
   setSecretKeyword(e) {
-    this.setState({ error: { status: false }, secretKeyword: e.target.value })
+    this.setState({ error: { status: false, message: '' }, secretKeyword: e.target.value })
   }
 
   canSubmit() {
@@ -56,7 +64,7 @@ class SecretKeywordFormContainer extends React.Component {
         secret_keyword: secretKeyword,
       })
       if (hasAccessAuthority) {
-        this.setState({ error: { status: false } })
+        this.setState({ error: { status: false, message: '' } })
         top.location.href = '/_share/' + shareId
       } else {
         this.handleError()

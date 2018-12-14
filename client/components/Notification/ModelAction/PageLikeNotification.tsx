@@ -1,9 +1,15 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import NotificationContent from '../NotificationContent'
 import PagePath from 'components/PageList/PagePath'
+import { Notification } from 'client/types/crowi'
 
-export default class PageLikeNotification extends React.Component {
+interface Props {
+  actionUsers: string
+  notification: Notification
+  onClick: () => void
+}
+
+export default class PageLikeNotification extends React.Component<Props> {
   render() {
     const notification = this.props.notification
 
@@ -16,11 +22,3 @@ export default class PageLikeNotification extends React.Component {
     )
   }
 }
-
-PageLikeNotification.propTypes = {
-  actionUsers: PropTypes.string.isRequired,
-  notification: PropTypes.object.isRequired,
-  onClick: PropTypes.func.isRequired,
-}
-
-PageLikeNotification.defaultProps = {}

@@ -1,11 +1,21 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Icon from 'components/Common/Icon'
+import { User } from 'client/types/crowi'
 
-export default class PageAlert extends React.Component {
+interface Props {
+  data: {
+    user?: User
+  }
+}
+
+export default class PageAlert extends React.Component<Props> {
   render() {
     const user = this.props.data.user
+
+    if (!user) {
+      return null
+    }
+
     const message = <span>{user.name} edited this page.</span>
 
     // TODO: PageAlert.Message etc.
@@ -18,8 +28,4 @@ export default class PageAlert extends React.Component {
       </div>
     )
   }
-}
-
-PageAlert.propTypes = {
-  data: PropTypes.object,
 }

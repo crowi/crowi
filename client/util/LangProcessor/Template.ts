@@ -1,7 +1,10 @@
 import moment from 'moment'
+import Crowi from 'client/crowi'
 
 export default class Template {
-  constructor(crowi) {
+  templatePattern: {}
+
+  constructor(crowi: Crowi) {
     this.templatePattern = {
       year: this.getYear,
       month: this.getMonth,
@@ -24,7 +27,8 @@ export default class Template {
 
   getUser() {
     // FIXME
-    const username = window.crowi.getUser().name || null
+    const user = window.crowi.getUser()
+    const username = user ? user.name : null
 
     if (!username) {
       return ''

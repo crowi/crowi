@@ -1,12 +1,17 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import Tab from 'components/Common/Tab'
 import TabItem from 'components/Common/TabItem'
 import ShareList from './ShareList'
 import AccessLog from './AccessLog'
+import Crowi from 'client/util/Crowi'
 
-class AdminShare extends React.Component {
+interface Props {
+  t: Function
+  crowi: Crowi
+}
+
+class AdminShare extends React.Component<Props> {
   constructor(props) {
     super(props)
 
@@ -26,11 +31,6 @@ class AdminShare extends React.Component {
       </Tab>
     )
   }
-}
-
-AdminShare.propTypes = {
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
 }
 
 export default translate()(AdminShare)

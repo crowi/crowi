@@ -1,10 +1,15 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Icon from 'components/Common/Icon'
 import User from 'components/User/User'
+import { Attachment as AttachmentType } from 'client/types/crowi'
 
-export default class Attachment extends React.Component {
+interface Props {
+  attachment: AttachmentType
+  inUse: boolean
+  onAttachmentDeleteClicked: Function
+}
+
+export default class Attachment extends React.Component<Props> {
   constructor(props) {
     super(props)
 
@@ -27,10 +32,7 @@ export default class Attachment extends React.Component {
     const attachment = this.props.attachment
     const formatIcon = this.iconNameByFormat(attachment.fileFormat)
 
-    let fileInUse = ''
-    if (this.props.inUse) {
-      fileInUse = <span className="attachment-in-use badge badge-info">In Use</span>
-    }
+    const fileInUse = this.props.inUse ? <span className="attachment-in-use badge badge-info">In Use</span> : ''
 
     const fileType = <span className="attachment-filetype badge badge-secondary">{attachment.fileFormat}</span>
 
@@ -52,11 +54,3 @@ export default class Attachment extends React.Component {
     )
   }
 }
-
-Attachment.propTypes = {
-  attachment: PropTypes.object.isRequired,
-  inUse: PropTypes.bool.isRequired,
-  onAttachmentDeleteClicked: PropTypes.func.isRequired,
-}
-
-Attachment.defaultProps = {}

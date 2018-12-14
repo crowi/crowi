@@ -1,10 +1,19 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import Icon from '../Common/Icon'
 import UserDate from '../Common/UserDate'
 import UserPicture from '../User/UserPicture'
+import { Notification } from 'client/types/crowi'
 
-export default class NotificationContent extends React.Component {
+interface Props {
+  children: React.ReactNode
+  notification: Notification
+  icon: string
+  onClick: () => void
+}
+
+export default class NotificationContent extends React.Component<Props> {
+  static defaultProps = { icon: 'circle-o' }
+
   getUserImage() {
     const actionUsers = this.props.notification.actionUsers
 
@@ -39,15 +48,4 @@ export default class NotificationContent extends React.Component {
       </li>
     )
   }
-}
-
-NotificationContent.propTypes = {
-  children: PropTypes.node.isRequired,
-  notification: PropTypes.object.isRequired,
-  icon: PropTypes.string,
-  onClick: PropTypes.func.isRequired,
-}
-
-NotificationContent.defaultProps = {
-  icon: 'circle-o',
 }

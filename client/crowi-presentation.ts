@@ -4,9 +4,6 @@ import hljs from 'highlight.js'
 require('reveal.js/lib/js/head.min.js')
 require('reveal.js/lib/js/html5shiv.js')
 
-if (!window) {
-  window = {}
-}
 window.Reveal = Reveal
 
 Reveal.initialize({

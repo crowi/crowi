@@ -1,9 +1,15 @@
 import React from 'react'
-import PropTypes from 'prop-types'
+import PageBody from 'components/Page/PageBody'
+import { Page } from 'client/types/crowi'
 
-import PageBody from 'components/Page/PageBody.js'
+interface Props {
+  pages: Page[]
+  searchingKeyword: string
+}
 
-export default class SearchResultList extends React.Component {
+export default class SearchResultList extends React.Component<Props> {
+  static defaultProps = { pages: [], searchingKeyword: '' }
+
   render() {
     const resultList = this.props.pages.map(page => {
       const pageBody = page.revision.body
@@ -13,7 +19,7 @@ export default class SearchResultList extends React.Component {
             <a href={page.path}>{page.path}</a>
           </h2>
           <div className="wiki">
-            <PageBody className="hige" page={page} pageBody={pageBody} highlightKeywords={this.props.searchingKeyword} />
+            <PageBody page={page} pageBody={pageBody} highlightKeywords={this.props.searchingKeyword} />
           </div>
         </div>
       )
@@ -21,14 +27,4 @@ export default class SearchResultList extends React.Component {
 
     return <div>{resultList}</div>
   }
-}
-
-SearchResultList.propTypes = {
-  pages: PropTypes.array.isRequired,
-  searchingKeyword: PropTypes.string.isRequired,
-}
-
-SearchResultList.defaultProps = {
-  pages: [],
-  searchingKeyword: '',
 }

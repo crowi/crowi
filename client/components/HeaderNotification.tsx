@@ -1,10 +1,22 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { Dropdown, DropdownToggle } from 'reactstrap'
 import DropdownMenu from './HeaderNotification/DropdownMenu'
 import Icon from './Common/Icon'
+import Crowi from 'client/util/Crowi'
 
-export default class HeaderNotification extends React.Component {
+interface Props {
+  crowi: Crowi
+  me: string
+}
+
+interface State {
+  count: number
+  loaded: boolean
+  notifications: []
+  open: boolean
+}
+
+export default class HeaderNotification extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -82,10 +94,7 @@ export default class HeaderNotification extends React.Component {
   render() {
     const { count, open, loaded, notifications } = this.state
 
-    let badge = ''
-    if (count > 0) {
-      badge = <span className="badge badge-pill badge-danger notification-badge">{count}</span>
-    }
+    const badge = count > 0 ? <span className="badge badge-pill badge-danger notification-badge">{count}</span> : ''
 
     return (
       <Dropdown className="notification-wrapper" isOpen={open} toggle={this.toggle.bind(this)}>
@@ -97,10 +106,3 @@ export default class HeaderNotification extends React.Component {
     )
   }
 }
-
-HeaderNotification.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  me: PropTypes.string.isRequired,
-}
-
-HeaderNotification.defaltProps = {}

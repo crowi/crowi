@@ -1,8 +1,14 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { Nav, NavItem, NavLink } from 'reactstrap'
+import { SearchType } from 'components/SearchPage/SearchToolbar'
 
-class SearchTypeButtons extends React.Component {
+interface Props {
+  searchTypes: SearchType[]
+  activeType: SearchType
+  changeType: Function
+}
+
+class SearchTypeButtons extends React.Component<Props> {
   render() {
     const { searchTypes, activeType, changeType } = this.props
     const { key: activeKey } = activeType
@@ -20,12 +26,5 @@ class SearchTypeButtons extends React.Component {
     )
   }
 }
-
-SearchTypeButtons.propTypes = {
-  searchTypes: PropTypes.array.isRequired,
-  activeType: PropTypes.object.isRequired,
-  changeType: PropTypes.func.isRequired,
-}
-SearchTypeButtons.defaultProps = {}
 
 export default SearchTypeButtons

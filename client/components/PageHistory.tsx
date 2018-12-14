@@ -1,10 +1,20 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Icon from './Common/Icon'
 import PageRevisionList from './PageHistory/PageRevisionList'
+import Crowi from 'client/util/Crowi'
+import { Revision } from 'client/types/crowi'
 
-export default class PageHistory extends React.Component {
+interface Props {
+  pageId: string | null
+  crowi: Crowi
+}
+
+interface State {
+  revisions: Revision[]
+  diffOpened: { [id: string]: boolean }
+}
+
+export default class PageHistory extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -27,7 +37,7 @@ export default class PageHistory extends React.Component {
     this.props.crowi
       .apiGet('/revisions.ids', { page_id: pageId })
       .then(res => {
-        const rev = res.revisions
+        const rev: Revision[] = res.revisions
         let diffOpened = {}
         const lastId = rev.length - 1
         res.revisions.map((revision, i) => {
@@ -65,7 +75,7 @@ export default class PageHistory extends React.Component {
   }
 
   getPreviousRevision(currentRevision) {
-    let cursor = null
+    let cursor: Revision | null = null
     for (let revision of this.state.revisions) {
       if (cursor && cursor._id == currentRevision._id) {
         cursor = revision
@@ -124,18 +134,8 @@ export default class PageHistory extends React.Component {
         <h1>
           <Icon name="history" /> History
         </h1>
-        <PageRevisionList
-          revisions={this.state.revisions}
-          diffOpened={this.state.diffOpened}
-          getPreviousRevision={this.getPreviousRevision}
-          onDiffOpenClicked={this.onDiffOpenClicked}
-        />
+        <PageRevisionList revisions={this.state.revisions} diffOpened={this.state.diffOpened} onDiffOpenClicked={this.onDiffOpenClicked} />
       </div>
     )
   }
-}
-
-PageHistory.propTypes = {
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
 }

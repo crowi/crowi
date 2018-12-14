@@ -1,14 +1,19 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 
 import { createPatch } from 'diff'
 import { Diff2Html } from 'diff2html'
 
-export default class RevisionDiff extends React.Component {
+import { Revision } from 'client/types/crowi'
+
+interface Props {
+  currentRevision: Revision
+  previousRevision: Revision
+  revisionDiffOpened: boolean
+}
+
+export default class RevisionDiff extends React.Component<Props> {
   render() {
-    const currentRevision = this.props.currentRevision
-    const previousRevision = this.props.previousRevision
-    const revisionDiffOpened = this.props.revisionDiffOpened
+    const { currentRevision, previousRevision, revisionDiffOpened } = this.props
 
     let diffViewHTML = ''
     if (currentRevision.body && previousRevision.body && revisionDiffOpened) {
@@ -25,10 +30,4 @@ export default class RevisionDiff extends React.Component {
     const diffView = { __html: diffViewHTML }
     return <div className="revision-history-diff" dangerouslySetInnerHTML={diffView} />
   }
-}
-
-RevisionDiff.propTypes = {
-  currentRevision: PropTypes.object.isRequired,
-  previousRevision: PropTypes.object.isRequired,
-  revisionDiffOpened: PropTypes.bool.isRequired,
 }

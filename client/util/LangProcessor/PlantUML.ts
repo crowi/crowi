@@ -1,8 +1,12 @@
+import CrowiUtil from 'client/crowi'
 import plantuml from 'plantuml-encoder'
-import crypto from 'crypto'
+import * as crypto from 'crypto'
+import crowi from 'client/util/Crowi'
 
 export default class PlantUML {
-  constructor(crowi) {
+  crowi: crowi
+
+  constructor(crowi: crowi) {
     this.crowi = crowi
   }
 
@@ -13,12 +17,13 @@ export default class PlantUML {
   }
 
   process(code, lang) {
-    const config = crowi.getConfig()
-    if (!config.env.PLANTUML_URI) {
-      return `<pre class="wiki-code"><code>${Crowi.escape(code, true)}\n</code></pre>`
+    const { env } = this.crowi.getConfig()
+
+    if (!env || !env.PLANTUML_URI) {
+      return `<pre class="wiki-code"><code>${CrowiUtil.escape(code)}\n</code></pre>`
     }
 
-    let plantumlUri = config.env.PLANTUML_URI
+    let plantumlUri = env.PLANTUML_URI
     if (plantumlUri.substr(-1) !== '/') {
       plantumlUri += '/'
     }

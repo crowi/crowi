@@ -1,9 +1,14 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Icon from 'components/Common/Icon'
+import { Page } from 'client/types/crowi'
 
-export default class PageListMeta extends React.Component {
+interface Props {
+  page: Page
+}
+
+export default class PageListMeta extends React.Component<Props> {
+  static defaultProps = { page: {} }
+
   isPortalPath(path) {
     if (path.match(/.*\/$/)) {
       return true
@@ -72,12 +77,4 @@ export default class PageListMeta extends React.Component {
       </span>
     )
   }
-}
-
-PageListMeta.propTypes = {
-  page: PropTypes.object.isRequired,
-}
-
-PageListMeta.defaultProps = {
-  page: {},
 }

@@ -1,9 +1,14 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Page from './Page'
+import { Page as PageType } from 'client/types/crowi'
 
-export default class ListView extends React.Component {
+interface Props {
+  pages: PageType[]
+}
+
+export default class ListView extends React.Component<Props> {
+  static defaultProps = { pages: [] }
+
   render() {
     const listView = this.props.pages.map(page => {
       return <Page page={page} key={'page-list:list-view:' + page._id} />
@@ -15,12 +20,4 @@ export default class ListView extends React.Component {
       </div>
     )
   }
-}
-
-ListView.propTypes = {
-  pages: PropTypes.array.isRequired,
-}
-
-ListView.defaultProps = {
-  pages: [],
 }

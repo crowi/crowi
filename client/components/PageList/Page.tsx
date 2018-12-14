@@ -1,11 +1,26 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import UserPicture from 'components/User/UserPicture'
 import PageListMeta from './PageListMeta'
 import PagePath from './PagePath'
+import { Page as PageType } from 'client/types/crowi'
 
-export default class Page extends React.Component {
+interface Props {
+  page: PageType
+  linkTo: string
+  excludePathString: string
+  isActive: boolean
+  children?: React.ReactChild
+  onClick?: () => void
+}
+
+export default class Page extends React.Component<Props> {
+  static defaultProps = {
+    page: {},
+    linkTo: '',
+    excludePathString: '',
+    isActive: false,
+  }
+
   render() {
     const { page, linkTo, excludePathString, isActive, children, ...props } = this.props
     const link = linkTo === '' ? page.path : linkTo
@@ -21,19 +36,4 @@ export default class Page extends React.Component {
       </li>
     )
   }
-}
-
-Page.propTypes = {
-  page: PropTypes.object.isRequired,
-  linkTo: PropTypes.string,
-  excludePathString: PropTypes.string,
-  isActive: PropTypes.bool,
-  children: PropTypes.element,
-}
-
-Page.defaultProps = {
-  page: {},
-  linkTo: '',
-  excludePathString: '',
-  isActive: false,
 }

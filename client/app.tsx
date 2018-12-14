@@ -26,17 +26,13 @@ import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
 
-if (!window) {
-  window = {}
-}
-
 i18n()
 
-moment.locale(navigator.userLanguage || navigator.language)
+moment.locale(navigator['userLanguage'] || navigator.language)
 
 const mainContent = document.querySelector('#content-main')
-let pageId = null
-let pageContent = null
+let pageId: string | null = null
+let pageContent: string | null = null
 if (mainContent !== null) {
   pageId = mainContent.attributes['data-page-id'].value
   const rawText = document.getElementById('raw-text-original')
@@ -45,12 +41,14 @@ if (mainContent !== null) {
   }
 }
 
-const { user = {} } = JSON.parse(document.getElementById('user-context-hydrate').textContent || '{}')
+const getTextContent = (element: HTMLElement | null) => (element ? element.textContent : null)
+
+const { user = {} } = JSON.parse(getTextContent(document.getElementById('user-context-hydrate')) || '{}')
 const csrfToken = $('#content-main').data('csrftoken')
 // FIXME
 const crowi = new Crowi({ user, csrfToken }, window)
 window.crowi = crowi
-crowi.setConfig(JSON.parse(document.getElementById('crowi-context-hydrate').textContent || '{}'))
+crowi.setConfig(JSON.parse(getTextContent(document.getElementById('crowi-context-hydrate')) || '{}'))
 const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
 if (!isSharePage) {
   crowi.fetchUsers()
@@ -69,19 +67,19 @@ const componentMappings = {
   'page-list-search': <PageListSearch crowi={crowi} />,
   'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
   'page-alerts': <PageAlerts pageId={pageId} crowi={crowi} />,
-  'rename-tree': <RenameTree pageId={pageId} crowi={crowi} />,
+  'rename-tree': <RenameTree crowi={crowi} />,
   'header-notification': <HeaderNotification me={me} crowi={crowi} />,
   'notification-page': <NotificationPage crowi={crowi} />,
 
   // 'revision-history': <PageHistory pageId={pageId} />,
   // 'page-comment': <PageComment />,
   'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
-  'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
+  'seen-user-list': <SeenUserList crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
   'share-box': <ShareBox pageId={pageId} crowi={crowi} />,
-  'secret-keyword-form-container': <SecretKeywordFormContainer pageId={pageId} crowi={crowi} />,
+  'secret-keyword-form-container': <SecretKeywordFormContainer crowi={crowi} />,
   'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
-  'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
+  'admin-share': <AdminShare crowi={crowi} />,
   'admin-rebuild-search': <AdminRebuildSearch crowi={crowi} />,
 }
 

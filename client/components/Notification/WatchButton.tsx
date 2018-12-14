@@ -1,10 +1,22 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import { Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
+import Crowi from 'client/util/Crowi'
 
-class WatchButton extends React.Component {
+interface Props {
+  pageId: string | null
+  t: Function
+  crowi: Crowi
+}
+
+interface State {
+  watching: boolean
+  isChanging: boolean
+  creationError: boolean
+}
+
+class WatchButton extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -59,16 +71,6 @@ class WatchButton extends React.Component {
       </Button>
     )
   }
-}
-
-WatchButton.propTypes = {
-  isCreated: PropTypes.bool,
-  pageId: PropTypes.string,
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
-}
-WatchButton.defaultProps = {
-  isCreated: false,
 }
 
 export default translate()(WatchButton)

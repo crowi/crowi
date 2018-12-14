@@ -1,12 +1,33 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
+import Crowi from 'client/util/Crowi'
 
-class AccessLogModal extends React.Component {
+interface Props {
+  show: boolean
+  onHide: Function
+  pageId: string | null
+  t: Function
+  crowi: Crowi
+}
+
+interface State {
+  requesting: boolean
+  pageId: null
+  shares: []
+  pagination: {
+    total: number
+    current: number
+    count: number
+    limit: number
+  }
+  error: boolean
+}
+
+class AccessLogModal extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -15,6 +36,7 @@ class AccessLogModal extends React.Component {
       pageId: null,
       shares: [],
       pagination: {
+        total: 0,
         current: 0,
         count: 0,
         limit: 20,
@@ -213,14 +235,6 @@ class AccessLogModal extends React.Component {
       </Modal>
     )
   }
-}
-
-AccessLogModal.propTypes = {
-  show: PropTypes.bool.isRequired,
-  onHide: PropTypes.func.isRequired,
-  pageId: PropTypes.string,
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
 }
 
 export default translate()(AccessLogModal)

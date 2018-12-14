@@ -1,11 +1,27 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import moment from 'moment'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
+import Crowi from 'client/util/Crowi'
+import { Share } from 'client/types/crowi'
 
-class ShareList extends React.Component {
+interface Props {
+  t: Function
+  crowi: Crowi
+}
+
+interface State {
+  shares: Share[]
+  pagination: {
+    current: number
+    count: number
+    limit: number
+  }
+  error: boolean
+}
+
+class ShareList extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -115,12 +131,6 @@ class ShareList extends React.Component {
       </div>
     )
   }
-}
-
-ShareList.propTypes = {
-  t: PropTypes.func.isRequired,
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
 }
 
 export default translate()(ShareList)

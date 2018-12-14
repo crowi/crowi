@@ -1,11 +1,36 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import { Button, Container, Row, Col, Label, Input, CustomInput, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
+import Crowi from 'client/util/Crowi'
+import { Share } from 'client/types/crowi'
 
-class SettingModal extends React.Component {
+interface Props {
+  share: Share | null
+  show: boolean
+  onHide: Function
+  isChanging: boolean
+  handleDelete: Function
+  t: Function
+  crowi: Crowi
+}
+
+interface State {
+  shareId: string | null
+  secretKeyword: string | null
+  restricted: boolean
+  showConfirmModal: boolean
+  result: {
+    show: boolean
+    error: boolean
+    message: string
+  }
+}
+
+class SettingModal extends React.Component<Props, State> {
+  static defaultProps = { show: false }
+
   constructor(props) {
     super(props)
 
@@ -31,8 +56,12 @@ class SettingModal extends React.Component {
   }
 
   componentDidUpdate() {
-    const { share = {} } = this.props
-    const { uuid: shareId, secretKeyword = '' } = share
+    const { share } = this.props
+    if (!share) {
+      return
+    }
+
+    const { uuid: shareId, secretKeyword } = share
 
     if (shareId !== this.state.shareId) {
       this.setState({
@@ -69,7 +98,7 @@ class SettingModal extends React.Component {
         secret_keyword: restricted ? secretKeyword : null,
       })
       this.setState({ result: { show: true, error: false, message: this.props.t('share.setting.saved') } })
-      setTimeout(() => this.setState({ result: { show: false } }), 1000)
+      setTimeout(() => this.setState({ result: { show: false, error: false, message: '' } }), 1000)
     } catch (err) {
       this.setState({ result: { show: true, error: true, message: this.props.t('share.setting.error.message') } })
     }
@@ -163,19 +192,6 @@ class SettingModal extends React.Component {
       </Modal>
     )
   }
-}
-
-SettingModal.propTypes = {
-  share: PropTypes.object,
-  show: PropTypes.bool.isRequired,
-  onHide: PropTypes.func.isRequired,
-  isChanging: PropTypes.bool,
-  handleDelete: PropTypes.func,
-  t: PropTypes.func.isRequired,
-  crowi: PropTypes.object.isRequired,
-}
-SettingModal.defaultProps = {
-  show: false,
 }
 
 export default translate()(SettingModal)

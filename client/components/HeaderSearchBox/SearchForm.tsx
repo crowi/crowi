@@ -1,10 +1,25 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Emitter from '../../emitter'
 
+interface Props {
+  onSearchFormChanged: Function
+  isShown: Function
+  isSearchPage: boolean
+  pollInterval?: number
+  keyword: string
+}
+
+interface State {
+  keyword: string
+  searchedKeyword: string
+}
+
 // Header.SearchForm
-export default class SearchForm extends React.Component {
+export default class SearchForm extends React.Component<Props, State> {
+  static defaultProps = { pollInterval: 1000 }
+
+  ticker: number | undefined
+
   constructor(props) {
     super(props)
 
@@ -18,15 +33,14 @@ export default class SearchForm extends React.Component {
     this.handleFocus = this.handleFocus.bind(this)
     this.handleBlur = this.handleBlur.bind(this)
     this.clearForm = this.clearForm.bind(this)
-    this.ticker = null
   }
 
   componentDidMount() {
-    this.ticker = setInterval(this.searchFieldTicker.bind(this), this.props.pollInterval)
+    this.ticker = window.setInterval(this.searchFieldTicker.bind(this), this.props.pollInterval)
   }
 
   componentWillUnmount() {
-    clearInterval(this.ticker)
+    window.clearInterval(this.ticker)
   }
 
   search() {
@@ -105,15 +119,4 @@ export default class SearchForm extends React.Component {
       </form>
     )
   }
-}
-
-SearchForm.propTypes = {
-  onSearchFormChanged: PropTypes.func.isRequired,
-  isShown: PropTypes.func.isRequired,
-  isSearchPage: PropTypes.bool.isRequired,
-  pollInterval: PropTypes.number,
-  keyword: PropTypes.string,
-}
-SearchForm.defaultProps = {
-  pollInterval: 1000,
 }

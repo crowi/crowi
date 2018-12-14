@@ -1,22 +1,38 @@
 // This is the root component for #search-page
 
 import React from 'react'
-import PropTypes from 'prop-types'
 
 import queryString from 'query-string'
 import Emitter from '../emitter'
 import SearchToolbar from 'components/SearchPage/SearchToolbar'
 import SearchResult from './SearchPage/SearchResult'
+import Crowi from 'client/util/Crowi'
+import { Page } from 'client/types/crowi'
 
-export default class SearchPage extends React.Component {
+interface Props {
+  crowi: Crowi
+}
+
+interface State {
+  searching: boolean
+  searchingKeyword: string
+  searchingType: string
+  searchedPages: Page[]
+  searchResultMeta: { total? }
+  searchError: Error | null
+}
+
+export default class SearchPage extends React.Component<Props, State> {
+  static defaultProps = { searchError: null }
+
   constructor(props) {
     super(props)
 
     const { q = '', type = '' } = queryString.parse(this.props.crowi.location.search)
     this.state = {
       searching: false,
-      searchingKeyword: q,
-      searchingType: type,
+      searchingKeyword: String(q),
+      searchingType: String(type),
       searchedPages: [],
       searchResultMeta: {},
       searchError: null,
@@ -38,7 +54,7 @@ export default class SearchPage extends React.Component {
     }
   }
 
-  buildQuery(override) {
+  buildQuery(override = {}) {
     const { searchingKeyword: q = '', searchingType: type = '' } = this.state
     const removeEmpty = query => Object.keys(query).forEach(k => !query[k] && delete query[k])
     const query = { q, type, ...override }
@@ -46,7 +62,7 @@ export default class SearchPage extends React.Component {
     return query
   }
 
-  changeURL({ q, type }, refreshHash) {
+  changeURL({ q, type }, refreshHash = false) {
     let { hash = '' } = this.props.crowi.location
     // TODO 整理する
     if (refreshHash || q !== '') {
@@ -106,12 +122,4 @@ export default class SearchPage extends React.Component {
       </div>
     )
   }
-}
-
-SearchPage.propTypes = {
-  crowi: PropTypes.object.isRequired,
-}
-SearchPage.defaultProps = {
-  // pollInterval: 1000,
-  searchError: null,
 }

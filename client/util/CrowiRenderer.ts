@@ -14,12 +14,25 @@ import Tsv2Table from './LangProcessor/Tsv2Table'
 import Template from './LangProcessor/Template'
 import PlantUML from './LangProcessor/PlantUML'
 
+interface PreProcessor {
+  process: (markdown: string, dom: HTMLElement | undefined) => string
+}
+
+interface PostProcessor {
+  process: (markdown: string, dom: HTMLElement | undefined) => string
+}
+
 export default class CrowiRenderer {
-  constructor(crowi) {
+  crowi: Crowi
+  preProcessors: PreProcessor[]
+  postProcessors: PostProcessor[]
+  langProcessors: {}
+
+  constructor(crowi: Crowi) {
     this.crowi = crowi
 
-    this.preProcessors = [new MarkdownFixer(crowi), new Linker(crowi), new ImageExpander(crowi)]
-    this.postProcessors = [new Emoji(crowi), new Mathjax(crowi)]
+    this.preProcessors = [new MarkdownFixer(), new Linker(), new ImageExpander()]
+    this.postProcessors = [new Emoji(), new Mathjax(crowi)]
 
     this.langProcessors = {
       tsv: new Tsv2Table(crowi),
@@ -86,7 +99,7 @@ export default class CrowiRenderer {
     return `<pre class="wiki-code"><code>${Crowi.escape(code, true)}\n</code></pre>`
   }
 
-  parseMarkdown(markdown, dom) {
+  parseMarkdown(markdown) {
     let parsed = ''
 
     const markedRenderer = new marked.Renderer()
@@ -125,11 +138,11 @@ export default class CrowiRenderer {
     return parsed
   }
 
-  render(markdown, dom) {
+  render(markdown, dom: HTMLElement | undefined = undefined) {
     let html = ''
 
     markdown = this.preProcess(markdown, dom)
-    html = this.parseMarkdown(markdown, dom)
+    html = this.parseMarkdown(markdown)
     html = this.postProcess(html, dom)
 
     return html

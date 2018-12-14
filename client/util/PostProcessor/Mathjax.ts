@@ -1,13 +1,19 @@
+import Crowi from '../Crowi'
+
 export default class Mathjax {
-  constructor(crowi) {
+  crowi: Crowi
+  defaultUrl: string
+  mathJaxConfigured: boolean
+
+  constructor(crowi: Crowi) {
     this.crowi = crowi
     this.defaultUrl = '//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?skipStartupTypeset=true'
 
     this.mathJaxConfigured = false
 
-    const config = crowi.getConfig()
+    const { env } = crowi.getConfig()
 
-    if (config.env.MATHJAX) {
+    if (env && env.MATHJAX) {
       this.mathJaxConfigured = true
 
       if (crowi.window.MathJax) {
@@ -56,7 +62,7 @@ export default class Mathjax {
 
     const intervalId = setInterval(() => {
       if (this.crowi.window.MathJax) {
-        const MathJax = this.crowi.window.MathJax
+        const MathJax: any = this.crowi.window.MathJax
 
         MathJax.Hub.Queue(['Typeset', MathJax.Hub, dom.id])
         clearInterval(intervalId)

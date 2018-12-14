@@ -1,10 +1,24 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import PageAttachmentList from './PageAttachment/PageAttachmentList'
 import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal'
+import Crowi from 'client/util/Crowi'
+import { Attachment } from 'client/types/crowi'
 
-export default class PageAttachment extends React.Component {
+interface Props {
+  pageId: string | null
+  pageContent: string | null
+  crowi: Crowi
+}
+
+interface State {
+  attachments: Attachment[]
+  inUse: { [id: string]: Attachment }
+  attachmentToDelete: Attachment | null
+  deleting: boolean
+  deleteError: string
+}
+
+export default class PageAttachment extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -28,22 +42,20 @@ export default class PageAttachment extends React.Component {
     }
 
     this.props.crowi.apiGet('/attachments.list', { page_id: pageId }).then(res => {
-      const attachments = res.attachments
+      const attachments: Attachment[] = res.attachments
       let inUse = {}
 
       for (const attachment of attachments) {
         inUse[attachment._id] = this.checkIfFileInUse(attachment)
       }
 
-      this.setState({
-        attachments: attachments,
-        inUse: inUse,
-      })
+      this.setState({ attachments, inUse })
     })
   }
 
   checkIfFileInUse(attachment) {
-    if (this.props.pageContent.match(attachment.url)) {
+    const { pageContent } = this.props
+    if (pageContent && pageContent.match(attachment.url)) {
       return true
     }
     return false
@@ -85,9 +97,9 @@ export default class PageAttachment extends React.Component {
     let deleteModalClose = () => this.setState({ attachmentToDelete: null })
     let showModal = attachmentToDelete !== null
 
-    let deleteInUse = null
+    let deleteInUse = false
     if (attachmentToDelete !== null) {
-      deleteInUse = this.state.inUse[attachmentToDelete._id] || false
+      deleteInUse = !!this.state.inUse[attachmentToDelete._id] || false
     }
 
     if (!attachments || attachments.length <= 0) {
@@ -110,10 +122,4 @@ export default class PageAttachment extends React.Component {
       </div>
     )
   }
-}
-
-PageAttachment.propTypes = {
-  pageId: PropTypes.string,
-  crowi: PropTypes.object.isRequired,
-  pageContent: PropTypes.string,
 }

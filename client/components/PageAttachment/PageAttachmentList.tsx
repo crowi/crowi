@@ -1,15 +1,20 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import Attachment from './Attachment'
+import { Attachment as AttachmentType } from 'client/types/crowi'
 
-export default class PageAttachmentList extends React.Component {
+interface Props {
+  attachments: AttachmentType[]
+  inUse: object
+  onAttachmentDeleteClicked: Function
+}
+
+export default class PageAttachmentList extends React.Component<Props> {
   render() {
-    if (this.props.attachments <= 0) {
+    if (this.props.attachments.length === 0) {
       return null
     }
 
-    const attachmentList = this.props.attachments.map((attachment, idx) => {
+    const attachmentList = this.props.attachments.map(attachment => {
       return (
         <Attachment
           key={'page:attachment:' + attachment._id}
@@ -22,10 +27,4 @@ export default class PageAttachmentList extends React.Component {
 
     return <ul>{attachmentList}</ul>
   }
-}
-
-PageAttachmentList.propTypes = {
-  attachments: PropTypes.array,
-  inUse: PropTypes.object,
-  onAttachmentDeleteClicked: PropTypes.func,
 }

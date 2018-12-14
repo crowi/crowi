@@ -1,11 +1,15 @@
 import React from 'react'
-import PropTypes from 'prop-types'
-
 import UserDate from 'components/Common/UserDate'
 import Icon from 'components/Common/Icon'
 import UserPicture from 'components/User/UserPicture'
+import { Revision as RevisionType } from 'client/types/crowi'
 
-export default class Revision extends React.Component {
+interface Props {
+  revision: RevisionType
+  onDiffOpenClicked: Function
+}
+
+export default class Revision extends React.Component<Props> {
   constructor(props) {
     super(props)
 
@@ -22,10 +26,7 @@ export default class Revision extends React.Component {
     const revision = this.props.revision
     const author = revision.author
 
-    let pic = ''
-    if (typeof author === 'object') {
-      pic = <UserPicture user={author} />
-    }
+    const pic = typeof author !== 'object' ? '' : <UserPicture user={author} />
 
     return (
       <div className="revision-history-main">
@@ -49,9 +50,4 @@ export default class Revision extends React.Component {
       </div>
     )
   }
-}
-
-Revision.propTypes = {
-  revision: PropTypes.object,
-  onDiffOpenClicked: PropTypes.func.isRequired,
 }

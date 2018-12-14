@@ -1,8 +1,13 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { Pagination, PaginationItem, PaginationLink } from 'reactstrap'
 
-export default class PaginationWrapper extends React.Component {
+interface Props {
+  current: number
+  count: number
+  onClick: Function
+}
+
+export default class PaginationWrapper extends React.Component<Props> {
   onClick(i) {
     const { onClick } = this.props
     return e => {
@@ -39,10 +44,4 @@ export default class PaginationWrapper extends React.Component {
       </Pagination>
     )
   }
-}
-
-PaginationWrapper.propTypes = {
-  current: PropTypes.number.isRequired,
-  count: PropTypes.number.isRequired,
-  onClick: PropTypes.func.isRequired,
 }

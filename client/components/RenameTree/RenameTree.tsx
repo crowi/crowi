@@ -1,10 +1,26 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGroupAddon, Input, Label } from 'reactstrap'
 import { translate } from 'react-i18next'
 import Icon from '../Common/Icon'
+import Crowi from 'client/util/Crowi'
 
-class RenameTree extends React.Component {
+interface Props {
+  crowi: Crowi
+  t: Function
+}
+
+interface State {
+  show: boolean
+  newPath: string
+  pathMap: {}
+  error: Error | null
+  errors: {}
+  renamable: boolean
+  removing: boolean
+  timeoutId: number | null
+}
+
+class RenameTree extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -56,7 +72,7 @@ class RenameTree extends React.Component {
       [path]: { path, name, children },
     })
     const generateRoot = path => generateNode(path, path)
-    const assignRecurcive = (tree, parents, path, name) => {
+    const assignRecurcive = (tree, parents, path, name = '') => {
       if (parents.length === 0) {
         return generateNode(path, name)
       }
@@ -96,11 +112,12 @@ class RenameTree extends React.Component {
   }
 
   renderTree(pathMap, errors) {
-    const tree = this.convertPathMapToTree(pathMap)
+    type tree = { [name: string]: { path; name; children } }
+    const tree: tree = this.convertPathMapToTree(pathMap)
 
     const getErrors = path => errors[pathMap[path]]
 
-    const renderRoot = tree => Object.values(tree).map(renderNode)
+    const renderRoot = (tree: tree) => Object.values(tree).map(renderNode)
 
     const renderChanges = path => (
       <code className="changes">
@@ -152,8 +169,10 @@ class RenameTree extends React.Component {
   }
 
   handleChange(e) {
-    clearTimeout(this.state.timeoutId)
-    const timeoutId = setTimeout(() => this.checkTreeRenamable(), 600)
+    if (this.state.timeoutId) {
+      clearTimeout(this.state.timeoutId)
+    }
+    const timeoutId = window.setTimeout(() => this.checkTreeRenamable(), 600)
     this.setState({ newPath: e.target.value, timeoutId })
   }
 
@@ -258,11 +277,6 @@ class RenameTree extends React.Component {
       </Modal>
     )
   }
-}
-
-RenameTree.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  t: PropTypes.func.isRequired,
 }
 
 export default translate()(RenameTree)
