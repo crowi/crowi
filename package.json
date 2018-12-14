@@ -181,6 +181,8 @@
     "coverage": "DEBUG= jest --coverage",
     "build": "npm run prod:client",
     "prod:client": "NODE_ENV=production webpack --bail --colors --display-error-details --config tools/webpack.config.js",
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "npm run type-check -- --watch",
     "webpack": "webpack",
     "watch": "onchange '**/*.{ts,tsx,js,jsx}' -e 'bin' -e 'client/thirdparty-js' -e 'node_modules' -e 'public' -f add -f change -- eslint --fix '{{changed}}'",
     "postinstall": "sh -c '[ \"$SKIP_POSTINSTALL\" != \"\"  ] || npm run build'"
