@@ -444,9 +444,66 @@ $(function() {
   })
 
   // moved from view /me/index.html
-  $('#pictureUploadForm input[name=userPicture]').on('change', function() {
+  $('#pictureUploadForm input[name=userPicture]').on('change', async function() {
     var $form = $('#pictureUploadForm')
     var fd = new FormData($form[0])
+
+    // Like first aid, we'll drop this function with react+cropper.js after.
+    const UP = fd.get('userPicture')
+    const UPName = UP.name
+    const img = await (() =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = function() {
+          resolve(reader.result)
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(UP)
+      }))().then(
+      url =>
+        new Promise(resolve => {
+          const img = document.createElement('img')
+          img.onload = () => {
+            resolve(img)
+          }
+          img.src = url
+        }),
+    )
+
+    const convert = (image, size) => {
+      const canvas = document.createElement('canvas')
+
+      const [w, h] = [image.naturalWidth || image.width, image.naturalHeight || image.height]
+      const s = w > h ? h : w
+
+      canvas.width = canvas.height = s
+      /**
+       * 正方形に整形、中央寄せ
+       * 現在 img に対して `vertical-align: middle` が指定されているので、この変換器を入れても何も問題がない
+       */
+      canvas.getContext('2d').drawImage(image, parseInt((w - s) / 2), parseInt((h - s) / 2), s, s, 0, 0, s, s)
+
+      // 1/2 単位で、だいたいのサイズにする
+      while (canvas.height / 2 > size /* && canvas.width/2 > size */) {
+        const ctx = canvas.getContext('2d')
+
+        const pattern = ctx.createPattern(canvas, 'no-repeat')
+
+        canvas.height /= 2
+        canvas.width /= 2
+        ctx.scale(0.5, 0.5)
+
+        ctx.fillStyle = pattern
+        ctx.fillRect(0, 0, canvas.width * 2, canvas.height * 2)
+      }
+
+      return canvas
+    }
+
+    // Update with converted image
+    const blob = await (() => new Promise(resolve => convert(img, 128).toBlob(resolve, 'image/jpeg', 0.95)))()
+    fd.set('userPicture', blob, UPName + '.compact.jpg')
+
     if ($(this).val() == '') {
       return false
     }
