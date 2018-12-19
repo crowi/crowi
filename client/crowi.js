@@ -524,11 +524,11 @@ $(function() {
       })
     }
 
-    // Update with converted image
     try {
       fd.set('userPicture', await convert(pictureSource, 128, pictureType), pictureName)
     } catch (e) {
       $('#pictureUploadFormMessage')
+        .removeClass()
         .addClass('alert alert-danger')
         .html(e.message)
       return
@@ -549,10 +549,12 @@ $(function() {
         if (data.status) {
           $('#settingUserPicture').attr('src', data.url + '?time=' + new Date())
           $('#pictureUploadFormMessage')
+            .removeClass()
             .addClass('alert alert-success')
             .html('Updated.')
         } else {
           $('#pictureUploadFormMessage')
+            .removeClass()
             .addClass('alert alert-danger')
             .html('Failed to update profile picture.')
         }
