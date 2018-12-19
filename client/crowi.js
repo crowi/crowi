@@ -449,60 +449,90 @@ $(function() {
     var fd = new FormData($form[0])
 
     // Like first aid, we'll drop this function with react+cropper.js after.
-    const UP = fd.get('userPicture')
-    const UPName = UP.name
-    const img = await (() =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = function() {
-          resolve(reader.result)
-        }
-        reader.onerror = reject
-        reader.readAsDataURL(UP)
-      }))().then(
-      url =>
-        new Promise(resolve => {
-          const img = document.createElement('img')
-          img.onload = () => {
-            resolve(img)
-          }
-          img.src = url
-        }),
-    )
+    const picture = fd.get('userPicture')
+    const { name: pictureName, type: pictureType } = picture
+    console.log(pictureType)
+    const pictureSource = await (() => {
+      if ('createImageBitmap' in window) return createImageBitmap(picture)
+      return new Promise((resolve, reject) => {
+        const element = document.createElement('img')
+        const objectURL = URL.createObjectURL(picture)
+        element.addEventListener('load', () => {
+          URL.revokeObjectURL(objectURL)
+          resolve(element)
+        })
+        element.addEventListener('error', reject)
+        element.src = objectURL
+      })
+    })()
 
-    const convert = (image, size) => {
-      const canvas = document.createElement('canvas')
+    /**
+     * @param {string} image
+     * @param {number} size square size in px
+     * @param {string} type output mime-type
+     * @param {number} [quality=0.95] output quality
+     * @returns {Promise<Blob>}
+     */
+    const convert = (image, size, type, quality = 0.95) => {
+      // We can't convert non jpeg || png
+      const types = ['image/jpeg', 'image/png']
+      if (!types.includes(type)) throw new Error(`Image type '${type}' isn't supported. We support only '${types.join(`', '`)}'.`)
 
       const [w, h] = [image.naturalWidth || image.width, image.naturalHeight || image.height]
       const s = w > h ? h : w
 
-      canvas.width = canvas.height = s
       /**
        * 正方形に整形、中央寄せ
        * 現在 img に対して `vertical-align: middle` が指定されているので、この変換器を入れても何も問題がない
        */
+      const canvas = (() => {
+        if ('OffscreenCanvas' in window) return new OffscreenCanvas(s, s)
+        const element = document.createElement('canvas')
+        element.width = element.height = s
+        return element
+      })()
       canvas.getContext('2d').drawImage(image, parseInt((w - s) / 2), parseInt((h - s) / 2), s, s, 0, 0, s, s)
 
-      // 1/2 単位で、だいたいのサイズにする
-      while (canvas.height / 2 > size /* && canvas.width/2 > size */) {
+      /**
+       * 1/2 単位で、だいたいのサイズにする
+       * フィルターの性能不足があり、直接変換するとジャギーなどが発生することがある (らしい)
+       * https://stackoverflow.com/questions/17861447/html5-canvas-drawimage-how-to-apply-antialiasing
+       */
+      while (canvas.height / 2 > size) {
         const ctx = canvas.getContext('2d')
 
+        // Save current canvas state to pettern
         const pattern = ctx.createPattern(canvas, 'no-repeat')
+        const { width, height } = canvas
 
-        canvas.height /= 2
+        // Resize to 1/4 (and canvas state will clear)
         canvas.width /= 2
-        ctx.scale(0.5, 0.5)
+        canvas.height /= 2
 
+        ctx.scale(0.5, 0.5)
         ctx.fillStyle = pattern
-        ctx.fillRect(0, 0, canvas.width * 2, canvas.height * 2)
+        ctx.fillRect(0, 0, width, height)
       }
 
-      return canvas
+      // Offscrean canvas
+      if (!(canvas instanceof HTMLElement)) {
+        return canvas.convertToBlob({ type, quality })
+      }
+      // HTML Element
+      return new Promise(resolve => {
+        canvas.toBlob(resolve, type, quality)
+      })
     }
 
     // Update with converted image
-    const blob = await (() => new Promise(resolve => convert(img, 128).toBlob(resolve, 'image/jpeg', 0.95)))()
-    fd.set('userPicture', blob, UPName + '.compact.jpg')
+    try {
+      fd.set('userPicture', await convert(pictureSource, 128, pictureType), pictureName)
+    } catch (e) {
+      $('#pictureUploadFormMessage')
+        .addClass('alert alert-danger')
+        .html(e.message)
+      return
+    }
 
     if ($(this).val() == '') {
       return false
