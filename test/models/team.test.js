@@ -11,11 +11,10 @@ describe('Team', () => {
   let createdUsers = []
 
   const createTeam = (...users) => {
-    const t = new Team({
+    return Team.create({
       handle: crypto.randomBytes(16).toString('hex'),
       users,
     })
-    return t.save()
   }
   const createPage = ({ path = `/random/${crypto.randomBytes(16)}`, user = null } = {}) => {
     const p = new Page({
@@ -78,7 +77,7 @@ describe('Team', () => {
 
   describe('#findByHandle', () => {
     it('Find the team by handle collectly', async () => {
-      const actualTeam = await createTeam()
+      const actualTeam = await createTeam(...createdUsers)
 
       const team = await Team.findByHandle(actualTeam.handle)
       expect(team._id.toString()).toBe(actualTeam._id.toString())
@@ -93,48 +92,35 @@ describe('Team', () => {
    * instance methods
    */
 
-  // I don't test #addUser and #deleteUser because I will test instance methods that shorthanded its
-  describe('.addUser', async () => {
+  describe('create & edit', async () => {
     it('Add users collectly', async () => {
-      const team = await createTeam()
+      const team = await createTeam(createdUsers[0])
+      expect((await Team.findById(team)).users).toHaveLength(1)
 
-      expect(team.users).toHaveLength(0)
+      // edit users
+      const team1 = await team.edit({ users: createdUsers })
+      expect((await Team.findById(team)).users).toHaveLength(createdUsers.length)
 
-      const team1 = await team.addUser(...createdUsers)
-      expect(team1.users).toHaveLength(2)
+      // edit name
+      const team2 = await team1.edit({ name: 'The good humans' })
+      expect((await Team.findById(team)).name).toBe('The good humans')
 
-      // add same users, no affection
-      const team2 = await team.addUser(...createdUsers)
-      expect(team2.users).toHaveLength(2)
+      // without edit, return as is
+      expect(await team2.edit()).toBe(team2)
     })
 
-    it('When missing arguments', async () => {
-      const team = await createTeam()
-      await expect(team.addUser()).rejects.toThrow(TypeError)
-    })
-  })
-
-  describe('.deleteUser', async () => {
-    it('Delete users collectly', async () => {
-      const team = await createTeam()
-
-      const team1 = await team.addUser(...createdUsers)
-      expect(team1.users).toHaveLength(2)
-
-      const team2 = await team1.deleteUser(createdUsers[0])
-      expect(team2.users).toHaveLength(1)
-
-      // remove same users, no affection
-      const team3 = await team1.deleteUser(createdUsers[0])
-      expect(team3.users).toHaveLength(1)
-
-      const team4 = await team1.deleteUser(createdUsers[1])
-      expect(team4.users).toHaveLength(0)
-    })
-
-    it('When missing arguments', async () => {
-      const team = await createTeam()
-      await expect(team.deleteUser()).rejects.toThrow(TypeError)
+    it('When someone create/edit with 0 users, it will be fail.', async () => {
+      await expect(
+        createTeam().catch(e => {
+          throw e.errors.users
+        }),
+      ).rejects.toThrow()
+      const team = await createTeam(createdUsers[0])
+      await expect(
+        team.edit({ users: [] }).catch(e => {
+          throw e.errors.users
+        }),
+      ).rejects.toThrow()
     })
   })
 

@@ -33,7 +33,7 @@ describe('PageOwner', () => {
   it('MongoDB must prevent duplicate creation', async () => {
     const user = await createUser()
     const page = await createPage({ user })
-    const team = await createTeam()
+    const team = await createTeam(user)
 
     await PageOwner.activate({ team, page })
 
@@ -47,13 +47,13 @@ describe('PageOwner', () => {
 
   describe('activate', () => {
     it('When missing arguments', async () => {
-      const team = await createTeam()
+      const team = await createTeam(await createUser())
       await expect(PageOwner.activate({ team })).rejects.toThrow(TypeError)
     })
 
     it('Operation must be failed when you try to own userpage', async () => {
       const user = await createUser()
-      const [team, page] = await Promise.all([createTeam(), createPage({ path: '/user/dummy', user })])
+      const [team, page] = await Promise.all([createTeam(await createUser()), createPage({ path: '/user/dummy', user })])
       await expect(PageOwner.activate({ team, page })).rejects.toThrow(errors.PreconditionError)
     })
   })
@@ -61,7 +61,7 @@ describe('PageOwner', () => {
   describe('activate & deactivate, findByPageAndTeam', () => {
     it('own and disown some pages', async () => {
       const user = await createUser()
-      const [team, page] = await Promise.all([createTeam(), createPage({ user })])
+      const [team, page] = await Promise.all([createTeam(await createUser()), createPage({ user })])
       expect(await PageOwner.findByTeam(team)).toHaveLength(0)
 
       await expect(PageOwner.activate({ team, page })).resolves.toBeTruthy()
