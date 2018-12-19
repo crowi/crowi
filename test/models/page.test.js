@@ -464,7 +464,7 @@ describe('Page', () => {
     })
   })
 
-  describe('#calculateRevisionExpirationAt', () => {
+  describe('#calculateRevisionExpireAt', () => {
     const moment = require('moment')
     const crypto = require('crypto')
 
@@ -478,14 +478,14 @@ describe('Page', () => {
       prebuiltOption.userId = createdUsers[Math.floor(Math.random() * createdUsers.length)]
     })
 
-    test('collectly calculated with no lifetime / expirationAt given', async () => {
-      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption })
+    test('collectly calculated with no lifetime / expireAt given', async () => {
+      const t = await Page.calculateRevisionExpireAt({ ...prebuiltOption })
       expect(t).toBe(null)
     })
 
     test('collectly calculated with lifetime only', async () => {
       const lifetime = { days: 3 }
-      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime })
+      const t = await Page.calculateRevisionExpireAt({ ...prebuiltOption, lifetime })
       expect(
         moment()
           .add(lifetime)
@@ -494,10 +494,10 @@ describe('Page', () => {
       ).toBe(0)
     })
 
-    test('If revision without expirationAt and lifetime given, it calculated with lifetime.', async () => {
+    test('If revision without expireAt and lifetime given, it calculated with lifetime.', async () => {
       const lifetime = { days: 3 }
       const revision = {} // fake
-      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision })
+      const t = await Page.calculateRevisionExpireAt({ ...prebuiltOption, lifetime, revision })
       expect(
         moment()
           .add(lifetime)
@@ -506,31 +506,31 @@ describe('Page', () => {
       ).toBe(0)
     })
 
-    test('If only revision without expirationAt given, it will be null', async () => {
+    test('If only revision without expireAt given, it will be null', async () => {
       const revision = {} // fake
-      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, revision })
+      const t = await Page.calculateRevisionExpireAt({ ...prebuiltOption, revision })
       expect(t).toBe(null)
     })
 
-    test('If revision with expirationAt and lifetime given, it has higher priority than lifetime.', async () => {
+    test('If revision with expireAt and lifetime given, it has higher priority than lifetime.', async () => {
       const lifetime = { days: 3 }
       const revision = {
-        expirationAt: moment()
+        expireAt: moment()
           .add({ day: 1 })
           .toDate(),
       } // fake
-      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision })
-      expect(t).toBe(revision.expirationAt)
+      const t = await Page.calculateRevisionExpireAt({ ...prebuiltOption, lifetime, revision })
+      expect(t).toBe(revision.expireAt)
     })
 
     test('If bodyConfirmed and revision & lifetime given, skip to use revision and use lifetime to calculate', async () => {
       const lifetime = { days: 3 }
       const revision = {
-        expirationAt: moment()
+        expireAt: moment()
           .add({ day: 1 })
           .toDate(),
       } // fake
-      const t = await Page.calculateRevisionExpirationAt({ ...prebuiltOption, lifetime, revision, bodyConfirmed: true })
+      const t = await Page.calculateRevisionExpireAt({ ...prebuiltOption, lifetime, revision, bodyConfirmed: true })
       expect(
         moment()
           .add(lifetime)

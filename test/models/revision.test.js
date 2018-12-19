@@ -33,7 +33,7 @@ const createUser = () => {
 
 describe('Revision', () => {
   describe('#prepareRevision', () => {
-    describe('Check setting expirationAt', () => {
+    describe('Check setting expireAt', () => {
       let user, team
 
       beforeAll(async () => {
@@ -44,22 +44,22 @@ describe('Revision', () => {
       test('empty', async () => {
         const page = await createPage(user)
         const revision = Revision.prepareRevision(page, '# body', user, {})
-        expect(revision.expirationAt).toBe(null)
+        expect(revision.expireAt).toBe(null)
       })
 
-      test('when expirationAt configuration found', async () => {
+      test('when expireAt configuration found', async () => {
         let page = await createPage(user)
 
         await PageOwner.activate({ team, page })
         page = await page.populate('owners').execPopulate()
 
-        const expirationAt = moment()
+        const expireAt = moment()
           .add({ days: 100 })
           .endOf('day')
           .toDate()
-        const revision = Revision.prepareRevision(page, '# body', user, { expirationAt })
+        const revision = Revision.prepareRevision(page, '# body', user, { expireAt })
 
-        expect(revision.expirationAt).toBe(expirationAt)
+        expect(revision.expireAt).toBe(expireAt)
       })
     })
   })
