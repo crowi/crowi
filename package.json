@@ -170,7 +170,9 @@
     "prod:client": "NODE_ENV=production webpack --bail --colors --display-error-details --config tools/webpack.config.js",
     "webpack": "webpack",
     "watch": "onchange \"**/*.js\" -e \"bin\" -e \"client/thirdparty-js\" -e \"node_modules\" -e \"public\" -f add -f change -- eslint --fix \"{{changed}}\"",
-    "postinstall": "sh -c '[ \"$SKIP_POSTINSTALL\" != \"\"  ] || npm run build'"
+    "postinstall": "sh -c '[ \"$SKIP_POSTINSTALL\" != \"\"  ] || npm run build'",
+    "migrate": "migrate up --store=\"./migrate-mongo-store\"",
+    "migrate:create": "migrate create"
   },
   "env": {
     "NODE_ENV": "production"

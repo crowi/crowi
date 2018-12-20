@@ -40,17 +40,14 @@ const migrationSchema = new mongoose.Schema({
   ],
 })
 migrationSchema.methods.toEntry = function() {
-  const m = this
-  const entry = {
-    title: m.title,
-    timestamp: m.status === 'up' ? m.at.getTime() : null,
+  return {
+    title: this.title,
+    timestamp: this.status === 'up' ? this.at.getTime() : null,
   }
-  return entry
 }
 migrationSchema.statics.updateByEntry = function(entry) {
-  const { title } = entry
-  const at = entry.timestamp || Date.now()
-  const status = entry.timestamp === null ? 'down' : 'up'
+  const { title, timestamp: at = Date.now() } = entry
+  const status = parseInt(entry.timestamp, 10) > 0 ? 'up' : 'down'
 
   return this.findOneAndUpdate(
     { title: entry.title },
@@ -82,6 +79,7 @@ module.exports = class MongoStore {
 
   async init() {
     if (this.ready) return
+    // connect to database with crowi's configuration
     await crowi.setupDatabase()
     this.ready = true
   }
