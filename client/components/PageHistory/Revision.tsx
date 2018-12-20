@@ -25,8 +25,7 @@ export default class Revision extends React.Component<Props> {
   render() {
     const revision = this.props.revision
     const author = revision.author
-
-    const pic = typeof author !== 'object' ? '' : <UserPicture user={author} />
+    const pic = <UserPicture user={author} />
 
     return (
       <div className="revision-history-main">

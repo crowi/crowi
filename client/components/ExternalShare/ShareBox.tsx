@@ -33,7 +33,7 @@ class ShareBox extends React.Component<Props, State> {
     this.state = {
       share: null,
       isChanging: false,
-      isCreated: props.isCreated,
+      isCreated: !!props.isCreated,
       showSettingModal: false,
       showAccessLogModal: false,
       creationError: false,
@@ -59,7 +59,7 @@ class ShareBox extends React.Component<Props, State> {
     }
   }
 
-  async updateLink(promise) {
+  async updateLink(promise: Promise<{ share: Share }>) {
     const { isCreated } = this.state
     this.setState({ isChanging: true })
     try {
@@ -103,7 +103,7 @@ class ShareBox extends React.Component<Props, State> {
     this.setState({ showAccessLogModal: false })
   }
 
-  renderOpenAccessLogButton(handleOpen) {
+  renderOpenAccessLogButton(handleOpen: () => void) {
     const { t } = this.props
     return (
       <Button onClick={handleOpen} outline color="secondary" size="sm">

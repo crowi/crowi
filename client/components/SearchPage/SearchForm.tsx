@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { ChangeEvent } from 'react'
 
 interface Props {
   keyword: string
@@ -32,12 +32,12 @@ export default class SearchForm extends React.Component<Props, State> {
     }
   }
 
-  handleSubmit(event) {
+  handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     this.search()
   }
 
-  handleChange(event) {
+  handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const keyword = event.target.value
     this.setState({ keyword })
   }

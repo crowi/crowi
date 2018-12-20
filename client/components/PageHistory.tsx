@@ -38,10 +38,11 @@ export default class PageHistory extends React.Component<Props, State> {
       .apiGet('/revisions.ids', { page_id: pageId })
       .then(res => {
         const rev: Revision[] = res.revisions
-        let diffOpened = {}
+        let diffOpened: State['diffOpened'] = {}
         const lastId = rev.length - 1
-        res.revisions.map((revision, i) => {
-          const user = this.props.crowi.findUserById(revision.author)
+        res.revisions.map((revision: Revision, i: number) => {
+          const author = typeof revision.author === 'string' ? revision.author : revision.author._id
+          const user = this.props.crowi.findUserById(author)
           if (user) {
             rev[i].author = user
           }
@@ -74,7 +75,7 @@ export default class PageHistory extends React.Component<Props, State> {
       })
   }
 
-  getPreviousRevision(currentRevision) {
+  getPreviousRevision(currentRevision: Revision) {
     let cursor: Revision | null = null
     for (let revision of this.state.revisions) {
       if (cursor && cursor._id == currentRevision._id) {
@@ -88,7 +89,7 @@ export default class PageHistory extends React.Component<Props, State> {
     return cursor
   }
 
-  onDiffOpenClicked(revision) {
+  onDiffOpenClicked(revision: Revision) {
     const diffOpened = this.state.diffOpened
     const revisionId = revision._id
 
@@ -105,10 +106,9 @@ export default class PageHistory extends React.Component<Props, State> {
     this.fetchPageRevisionBody(this.getPreviousRevision(revision))
   }
 
-  fetchPageRevisionBody(revision) {
-    if (revision.body) {
-      return
-    }
+  fetchPageRevisionBody(revision: Revision | null) {
+    if (!revision) return
+    if (revision.body) return
 
     this.props.crowi
       .apiGet('/revisions.get', { revision_id: revision._id })

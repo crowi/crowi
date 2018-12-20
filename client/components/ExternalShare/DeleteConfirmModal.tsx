@@ -4,7 +4,7 @@ import { Button, Modal, ModalHeader, ModalBody, ModalFooter, Alert } from 'react
 
 interface Props {
   show: boolean
-  onHide: Function
+  onHide: () => void
   handleDelete: Function
   handleClose: Function
   t: Function

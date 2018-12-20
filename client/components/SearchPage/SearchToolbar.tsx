@@ -6,7 +6,7 @@ import SearchTypeNav from 'components/SearchPage/SearchTypeNav/SearchTypeNav'
 interface Props {
   keyword: string
   type: string
-  total: number
+  total: number | undefined
   changeType: Function
   searching: boolean
   t: Function
@@ -56,19 +56,13 @@ class SearchToolbar extends React.Component<Props> {
     ]
 
     this.getActiveType = this.getActiveType.bind(this)
-    this.onClick = this.onClick.bind(this)
   }
 
   getActiveType() {
     const defaultType = this.searchTypes[0]
-    const searchTypes = this.searchTypes.reduce((object, { key, icon, name }) => ({ ...object, [key]: { key, icon, name } }), {})
+    const searchTypes: { [key: string]: SearchType } = this.searchTypes.reduce((object, { key, icon, name }) => ({ ...object, [key]: { key, icon, name } }), {})
     const { type: searchType } = this.props
     return searchType in searchTypes ? searchTypes[searchType] : defaultType
-  }
-
-  onClick(type) {
-    const { changeType } = this.props
-    return () => changeType && changeType(type)
   }
 
   render() {

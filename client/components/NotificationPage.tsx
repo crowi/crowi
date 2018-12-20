@@ -4,6 +4,7 @@ import React from 'react'
 import ListView from './Notification/ListView'
 import Pager from './Notification/Pager'
 import Crowi from 'client/util/Crowi'
+import { Notification } from 'client/types/crowi'
 
 interface Props {
   crowi: Crowi
@@ -38,7 +39,7 @@ export default class NotificationPage extends React.Component<Props, State> {
     this.getNotifications()
   }
 
-  async handleNotificationOnClick(notification) {
+  async handleNotificationOnClick(notification: Notification) {
     try {
       await this.props.crowi.apiPost('/notification.open', { id: notification._id })
       // jump to target page

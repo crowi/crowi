@@ -36,7 +36,7 @@ export default class CrowiAuth {
     }
   }
 
-  onStorage(e) {
+  onStorage(e: StorageEvent) {
     const { key, newValue } = e
     const isAuthenticated = newValue === 'true'
     if (key === 'authenticated') {

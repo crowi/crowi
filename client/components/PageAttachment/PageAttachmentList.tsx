@@ -4,7 +4,7 @@ import { Attachment as AttachmentType } from 'client/types/crowi'
 
 interface Props {
   attachments: AttachmentType[]
-  inUse: object
+  inUse: { [id: string]: boolean }
   onAttachmentDeleteClicked: Function
 }
 

@@ -21,7 +21,7 @@ export default class PageBody extends React.Component<Props> {
     this.getHighlightBody = this.getHighlightBody.bind(this)
   }
 
-  getHighlightBody(body, keywords) {
+  getHighlightBody(body: string, keywords: string) {
     let returnBody = body
 
     keywords

@@ -3,6 +3,7 @@ import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGr
 import { translate } from 'react-i18next'
 import Icon from '../Common/Icon'
 import Crowi from 'client/util/Crowi'
+import { Page } from 'client/types/crowi'
 
 interface Props {
   crowi: Crowi
@@ -13,12 +14,23 @@ interface State {
   show: boolean
   newPath: string
   pathMap: {}
-  error: Error | null
+  error: string | null
   errors: {}
   renamable: boolean
   removing: boolean
   timeoutId: number | null
 }
+
+type PathMap = { [name: string]: string }
+interface Node {
+  path: string
+  name: string
+  children: Tree
+}
+interface Tree {
+  [name: string]: Node
+}
+type Errors = { [path: string]: string[] }
 
 class RenameTree extends React.Component<Props, State> {
   constructor(props: Props) {
@@ -58,21 +70,19 @@ class RenameTree extends React.Component<Props, State> {
     return path
   }
 
-  static addTrailingSlash(string) {
+  static addTrailingSlash(string: string) {
     return string.endsWith('/') ? string : `${string}/`
   }
 
-  static removeTrailingSlash(string) {
+  static removeTrailingSlash(string: string) {
     return string.endsWith('/') ? string.substring(0, string.length - 1) : string
   }
 
-  convertPathMapToTree(pathMap) {
-    let tree = {}
-    const generateNode = (path, name, children = {}) => ({
-      [path]: { path, name, children },
-    })
-    const generateRoot = path => generateNode(path, path)
-    const assignRecurcive = (tree, parents, path, name = '') => {
+  convertPathMapToTree(pathMap: PathMap) {
+    let tree: Tree = {}
+    const generateNode = (path: string, name: string, children = {}): Tree => ({ [path]: { path, name, children } })
+    const generateRoot = (path: string) => generateNode(path, path)
+    const assignRecurcive = (tree: Tree, parents: string[], path: string, name: string = ''): Tree => {
       if (parents.length === 0) {
         return generateNode(path, name)
       }
@@ -90,8 +100,8 @@ class RenameTree extends React.Component<Props, State> {
         },
       }
     }
-    const treeName = path => path.replace(/\\/g, '/').replace(/\/[^/]*\/?$/, '')
-    const getParents = (paths, path) =>
+    const treeName = (path: string) => path.replace(/\\/g, '/').replace(/\/[^/]*\/?$/, '')
+    const getParents = (paths: string[], path: string) =>
       paths
         .filter(
           p =>
@@ -111,15 +121,14 @@ class RenameTree extends React.Component<Props, State> {
     return tree
   }
 
-  renderTree(pathMap, errors) {
-    type tree = { [name: string]: { path; name; children } }
-    const tree: tree = this.convertPathMapToTree(pathMap)
+  renderTree(pathMap: PathMap, errors: Errors) {
+    const tree: Tree = this.convertPathMapToTree(pathMap)
 
-    const getErrors = path => errors[pathMap[path]]
+    const getErrors = (path: string) => errors[pathMap[path]]
 
-    const renderRoot = (tree: tree) => Object.values(tree).map(renderNode)
+    const renderRoot = (tree: Tree) => Object.values(tree).map(renderNode)
 
-    const renderChanges = path => (
+    const renderChanges = (path: string) => (
       <code className="changes">
         <Icon name="arrow-right" /> {pathMap[path]}
       </code>
@@ -133,16 +142,16 @@ class RenameTree extends React.Component<Props, State> {
         </svg>
       </div>
     )
-    const renderNodeErrors = nodeErrors => (
+    const renderNodeErrors = (nodeErrors: string[]) => (
       <span className="errors">
         <DottedLine />
-        {nodeErrors.map(e => t(e)).join(', ')}
+        {nodeErrors.map((e: string) => t(e)).join(', ')}
       </span>
     )
 
-    const renderNode = function({ path, name, children }) {
+    const renderNode = function({ path, name, children }: Node) {
       const isRoot = name === path
-      const isEmpty = o => Object.keys(o).length === 0
+      const isEmpty = (o: any) => Object.keys(o).length === 0
       const nodeErrors = getErrors(path)
       const hasChildren = !isEmpty(children)
       const hasNodeErrors = nodeErrors !== undefined && nodeErrors.length > 0
@@ -168,7 +177,7 @@ class RenameTree extends React.Component<Props, State> {
     this.setState({ show: true })
   }
 
-  handleChange(e) {
+  handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (this.state.timeoutId) {
       clearTimeout(this.state.timeoutId)
     }
@@ -176,7 +185,7 @@ class RenameTree extends React.Component<Props, State> {
     this.setState({ newPath: e.target.value, timeoutId })
   }
 
-  normalizePathMap(pathMap, newPath) {
+  normalizePathMap(pathMap: PathMap, newPath: string): PathMap {
     const path = RenameTree.getPath({ removeTrailingSlash: true })
     const portalPath = `${path}/`
     // ${pathMap} has not ${path} key if location is PageList
@@ -210,10 +219,10 @@ class RenameTree extends React.Component<Props, State> {
         new_path: newPath,
         create_redirect: createRedirect,
       })
-      const { pages } = data
+      const { pages }: { pages: Page[] } = data
       const urls = pages.map(({ path }) => path)
-      const exists = path => urls.includes(path)
-      const redirect = to => () => (top.location.href = to)
+      const exists = (path: string) => urls.includes(path)
+      const redirect = (to: string) => () => (top.location.href = to)
       const pageUrl = `${newPath}?redirectFrom=${RenameTree.getPath()}`
       const listUrl = RenameTree.addTrailingSlash(newPath)
       setTimeout(redirect(exists(newPath) ? pageUrl : listUrl), 1000)
@@ -222,11 +231,11 @@ class RenameTree extends React.Component<Props, State> {
     }
   }
 
-  handleError(error) {
+  handleError(error: Error) {
     const { info } = error
     let newState = { renamable: false, error: error.message, removing: false }
     if (info && Object.keys(info).length > 0) {
-      const { errors } = info
+      const { errors }: { errors: Errors } = info
       const { newPath } = this.state
       const pathMap = this.normalizePathMap(info.path_map, newPath)
       this.setState({ ...newState, pathMap, errors })

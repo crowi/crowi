@@ -41,7 +41,7 @@ class SecretKeywordFormContainer extends React.Component<Props, State> {
     this.handleKeyUp = this.handleKeyUp.bind(this)
   }
 
-  setSecretKeyword(e) {
+  setSecretKeyword(e: React.ChangeEvent<HTMLInputElement>) {
     this.setState({ error: { status: false, message: '' }, secretKeyword: e.target.value })
   }
 
@@ -74,23 +74,23 @@ class SecretKeywordFormContainer extends React.Component<Props, State> {
     }
   }
 
-  isEnterAndNotUsingIME(e) {
+  isEnterAndNotUsingIME(e: React.KeyboardEvent<HTMLInputElement>) {
     return e.keyCode == 13 && !this.state.usingIME
   }
 
-  handleKeyPress(e) {
+  handleKeyPress(e: React.KeyboardEvent<HTMLInputElement>) {
     // `onKeyPress` event is not triggered if using IME.
     this.setState({ usingIME: false })
   }
 
-  async handleKeyUp(e) {
+  async handleKeyUp(e: React.KeyboardEvent<HTMLInputElement>) {
     if (this.isEnterAndNotUsingIME(e)) {
       await this.checkSecretKeyword()
     }
     this.setState({ usingIME: true })
   }
 
-  handleSubmit(e) {
+  handleSubmit() {
     this.checkSecretKeyword()
   }
 

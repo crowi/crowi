@@ -18,14 +18,19 @@ interface State {
   searchingKeyword: string
   searchingType: string
   searchedPages: Page[]
-  searchResultMeta: { total? }
+  searchResultMeta: { total?: number }
   searchError: Error | null
+}
+
+type Query = {
+  q: string
+  type: string
 }
 
 export default class SearchPage extends React.Component<Props, State> {
   static defaultProps = { searchError: null }
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     const { q = '', type = '' } = queryString.parse(this.props.crowi.location.search)
@@ -56,13 +61,13 @@ export default class SearchPage extends React.Component<Props, State> {
 
   buildQuery(override = {}) {
     const { searchingKeyword: q = '', searchingType: type = '' } = this.state
-    const removeEmpty = query => Object.keys(query).forEach(k => !query[k] && delete query[k])
+    const removeEmpty = (query: any) => Object.keys(query).forEach(k => !query[k] && delete query[k])
     const query = { q, type, ...override }
     removeEmpty(query)
     return query
   }
 
-  changeURL({ q, type }, refreshHash = false) {
+  changeURL({ q, type }: Query, refreshHash = false) {
     let { hash = '' } = this.props.crowi.location
     // TODO 整理する
     if (refreshHash || q !== '') {
@@ -74,11 +79,11 @@ export default class SearchPage extends React.Component<Props, State> {
     }
   }
 
-  changeType(type) {
+  changeType(type: string) {
     this.search(this.buildQuery({ type }))
   }
 
-  async search(query) {
+  async search(query: Query) {
     const { q = '', type = '' } = query
     if (q === '') {
       this.setState({

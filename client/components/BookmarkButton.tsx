@@ -30,7 +30,7 @@ export default class BookmarkButton extends React.Component<Props, State> {
     })
   }
 
-  handleClick(event) {
+  handleClick(event: React.MouseEvent<HTMLAnchorElement>) {
     event.preventDefault()
 
     const pageId = this.props.pageId

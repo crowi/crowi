@@ -6,8 +6,8 @@ import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
 
 interface Props {
-  handleOpen?: Function
-  handleCreate?: Function
+  handleOpen?: () => void
+  handleCreate?: () => void
   isCreated?: boolean
   isChanging?: boolean
   share: Share | null
@@ -35,7 +35,7 @@ class ShareBoxContent extends React.Component<Props> {
     }
   }
 
-  createRef(node) {
+  createRef(node: HTMLInputElement) {
     this.inputRef = node
   }
 

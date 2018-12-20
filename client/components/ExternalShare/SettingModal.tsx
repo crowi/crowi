@@ -9,7 +9,7 @@ import { Share } from 'client/types/crowi'
 interface Props {
   share: Share | null
   show: boolean
-  onHide: Function
+  onHide: () => void
   isChanging: boolean
   handleDelete: Function
   t: Function
@@ -72,13 +72,13 @@ class SettingModal extends React.Component<Props, State> {
     }
   }
 
-  setRestricted(value) {
+  setRestricted(value: boolean) {
     return () => {
       this.setState({ restricted: value })
     }
   }
 
-  setSecretKeyword(e) {
+  setSecretKeyword(e: React.ChangeEvent<HTMLInputElement>) {
     this.setState({ secretKeyword: e.target.value })
   }
 
@@ -171,7 +171,7 @@ class SettingModal extends React.Component<Props, State> {
                     className="secret-keyword"
                     placeholder={t('share.setting.secret_keyword')}
                     onChange={this.setSecretKeyword}
-                    defaultValue={secretKeyword}
+                    defaultValue={secretKeyword || ''}
                   />
                 )}
               </Col>

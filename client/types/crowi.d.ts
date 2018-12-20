@@ -1,3 +1,5 @@
+import { access } from 'fs'
+
 export interface Attachment {
   _id: string
   page: Page
@@ -12,6 +14,7 @@ export interface Attachment {
 }
 
 export interface Backlink {
+  _id: string
   page: Page
   fromPage: Page
   fromRevision: Revision
@@ -58,6 +61,7 @@ export interface Share {
   status: string
   creator: User
   secretKeyword: string
+  accesses: ShareAccess[]
   createdAt: string
   updatedAt: string
 }

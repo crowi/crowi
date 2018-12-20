@@ -62,7 +62,7 @@ $(function() {
   var prevContent = originalContent
 
   function renderPreview() {
-    var content = $('#form-body').val()
+    var content = <string>$('#form-body').val()
     var previewBody = $('#preview-body')
     var previewBodyElement = <HTMLDivElement>previewBody[0]
     var parsedHTML = crowiRenderer.render(content, previewBodyElement)

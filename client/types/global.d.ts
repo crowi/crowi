@@ -3,6 +3,7 @@ import crowi from 'client/util/Crowi'
 import crowiAuth from 'client/util/CrowiAuth'
 import crowiRenderer from 'client/util/CrowiRenderer'
 import JQuery from 'jquery'
+import { any } from 'prop-types'
 
 declare global {
   interface Window {
@@ -16,10 +17,14 @@ declare global {
   }
 
   interface Error {
-    info?: {}
+    info?: any
   }
 
   interface JQuery {
     selection: (mode?: string, opts?: {}) => any
+  }
+
+  interface Navigator {
+    userLanguage?: string
   }
 }

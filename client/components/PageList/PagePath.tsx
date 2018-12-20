@@ -9,7 +9,7 @@ interface Props {
 export default class PagePath extends React.Component<Props> {
   static defaultProps = { page: {}, excludePathString: '' }
 
-  getShortPath(path) {
+  getShortPath(path: string) {
     let name = path.replace(/(\/)$/, '')
 
     // /.../hoge/YYYY/MM/DD 形式のページ

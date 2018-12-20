@@ -4,6 +4,7 @@ import { translate } from 'react-i18next'
 import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
+import { Page } from 'client/types/crowi'
 
 interface Props {
   searchedPages: {
@@ -34,7 +35,7 @@ class SearchSuggest extends React.Component<Props> {
     this.renderList = this.renderList.bind(this)
   }
 
-  buildSearchUrl(type) {
+  buildSearchUrl(type: string) {
     const q = this.props.searchingKeyword
     const query = queryString.stringify({ q, type })
     return `/_search?${query}`
@@ -43,13 +44,14 @@ class SearchSuggest extends React.Component<Props> {
   getNumberOfResults() {
     const { searchedPages } = this.props
     const groupedPages = Object.values(searchedPages)
-    const sum = array => array.reduce((p, c) => p + c, 0)
+    const sum = (array: any[]): number => array.reduce((p, c) => p + c, 0)
     return sum(groupedPages.map((r = []) => r.length))
   }
 
-  renderList(title, icon, type, pages) {
+  renderList(title: string, icon: string, type: string, pages?: Page[]) {
     const { t } = this.props
     return (
+      pages &&
       pages.length > 0 && (
         <div className="grouped-page-list" key={type}>
           <h6>

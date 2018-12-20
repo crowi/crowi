@@ -7,7 +7,10 @@ interface Props {
   tree: string
   pages: PageType[]
   searchingKeyword: string
-  searchResultMeta: { took?; total? }
+  searchResultMeta: {
+    took?: number
+    total?: number
+  }
   searchError: Error | null
 }
 
@@ -31,7 +34,7 @@ export default class SearchResult extends React.Component<Props, State> {
     this.state = { active: null }
   }
 
-  updateActivePage(pageId) {
+  updateActivePage(pageId: string) {
     if (this.state.active !== pageId) {
       this.setState({ active: pageId })
     }

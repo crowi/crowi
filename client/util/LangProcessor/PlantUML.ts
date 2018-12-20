@@ -10,13 +10,13 @@ export default class PlantUML {
     this.crowi = crowi
   }
 
-  generateId(token) {
+  generateId(token: string) {
     const hasher = crypto.createHash('md5')
     hasher.update(token)
     return hasher.digest('hex')
   }
 
-  process(code, lang) {
+  process(code: string, lang: string) {
     const { env } = this.crowi.getConfig()
 
     if (!env || !env.PLANTUML_URI) {
