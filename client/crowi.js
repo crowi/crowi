@@ -451,20 +451,28 @@ $(function() {
     // Like first aid, we'll drop this function with react+cropper.js after.
     const picture = fd.get('userPicture')
     const { name: pictureName, type: pictureType } = picture
-    console.log(pictureType)
-    const pictureSource = await (() => {
-      if ('createImageBitmap' in window) return createImageBitmap(picture)
-      return new Promise((resolve, reject) => {
-        const element = document.createElement('img')
-        const objectURL = URL.createObjectURL(picture)
-        element.addEventListener('load', () => {
-          URL.revokeObjectURL(objectURL)
-          resolve(element)
+    let pictureSource = null
+    try {
+      pictureSource = await (() => {
+        if ('createImageBitmap' in window) return createImageBitmap(picture)
+        return new Promise((resolve, reject) => {
+          const element = document.createElement('img')
+          const objectURL = URL.createObjectURL(picture)
+          element.addEventListener('load', () => {
+            URL.revokeObjectURL(objectURL)
+            resolve(element)
+          })
+          element.addEventListener('error', reject)
+          element.src = objectURL
         })
-        element.addEventListener('error', reject)
-        element.src = objectURL
-      })
-    })()
+      })()
+    } catch (e) {
+      $('#pictureUploadFormMessage')
+        .removeClass()
+        .addClass('alert alert-danger')
+        .html(e.message)
+      return
+    }
 
     /**
      * @param {string} image
@@ -474,10 +482,6 @@ $(function() {
      * @returns {Promise<Blob>}
      */
     const convert = (image, size, type, quality = 0.95) => {
-      // We can't convert non jpeg || png
-      const types = ['image/jpeg', 'image/png']
-      if (!types.includes(type)) throw new Error(`Image type '${type}' isn't supported. We support only '${types.join(`', '`)}'.`)
-
       const [w, h] = [image.naturalWidth || image.width, image.naturalHeight || image.height]
       const s = w > h ? h : w
 
@@ -525,7 +529,11 @@ $(function() {
     }
 
     try {
-      fd.set('userPicture', await convert(pictureSource, 128, pictureType), pictureName)
+      const acceptTypes = ['image/jpeg', 'image/png']
+      // If convertable image without format that can't be output, choose jpeg
+      const targetType = (acceptTypes.includes(pictureType) && pictureType) || 'image/jpeg'
+      const suffix = acceptTypes.includes(pictureType) ? '' : '.compact.jpg'
+      fd.set('userPicture', await convert(pictureSource, 128, targetType), pictureName + suffix)
     } catch (e) {
       $('#pictureUploadFormMessage')
         .removeClass()
