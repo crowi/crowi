@@ -30,7 +30,7 @@ export default class PageAlerts extends React.Component<Props, State> {
   componentDidMount() {
     const socket = this.props.crowi.getWebSocket()
 
-    socket.on('page edited', (data: { user: User, page: Page }) => {
+    socket.on('page edited', (data: { user: User; page: Page }) => {
       const target = data.user
       const { pageId, crowi } = this.props
       const user = crowi.getUser() || {}
