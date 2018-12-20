@@ -57,7 +57,7 @@ export interface Revision {
 
 export interface Share {
   uuid: string
-  page: Page
+  page: Page | null
   status: string
   creator: User
   secretKeyword: string
