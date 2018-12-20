@@ -93,11 +93,11 @@ class AccessLog extends React.Component<Props, State> {
     return (
       <tbody>
         {this.state.accesses.map(({ share, tracking: { userAgent, remoteAddress }, lastAccessedAt }, i) => {
-          const { page } = share || {}
+          const page = share.page
           const { path = '' } = page || {}
           return this.renderRecord({
             index: start + i,
-            path: path,
+            path,
             info: platform.parse ? platform.parse(userAgent) : undefined,
             remoteAddress,
             date: moment(lastAccessedAt).format('llll'),
