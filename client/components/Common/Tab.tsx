@@ -1,10 +1,10 @@
 import React from 'react'
 import { Nav, NavItem, NavLink, TabContent, TabPane } from 'reactstrap'
-import TabItem from 'client/components/Common/TabItem'
+import { Props as TabItemProps } from 'client/components/Common/TabItem'
 
 interface Props {
   id?: string
-  children: React.ReactElement<TabItem>[]
+  children: React.ReactElement<TabItemProps>[]
   active: number
 }
 
@@ -31,9 +31,9 @@ export default class Tab extends React.Component<Props, State> {
   }
 
   getTabTitles() {
-    type TabItemElement = React.ReactElement<TabItem>
+    type TabItemElement = React.ReactElement<TabItemProps>
     type T = string | false
-    return React.Children.map<T, TabItemElement>(this.props.children, child => (React.isValidElement(child) ? child.props.props.title : false)).filter(
+    return React.Children.map<T, TabItemElement>(this.props.children, child => (React.isValidElement(child) ? child.props.title : false)).filter(
       title => title !== false,
     )
   }
