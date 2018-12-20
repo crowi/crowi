@@ -93,6 +93,7 @@
     "json-loader": "^0.5.7",
     "marked": "~0.4.0",
     "method-override": "~3.0.0",
+    "migrate": "^1.6.2",
     "mkdirp": "~0.5.1",
     "moment": "^2.22.1",
     "mongoose": "4.7.x",
