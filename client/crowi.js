@@ -445,8 +445,15 @@ $(function() {
 
   // moved from view /me/index.html
   $('#pictureUploadForm input[name=userPicture]').on('change', async function() {
-    var $form = $('#pictureUploadForm')
-    var fd = new FormData($form[0])
+    // clear message before process change
+    $('#pictureUploadFormMessage')
+      .removeClass()
+      .empty()
+
+    const $form = $('#pictureUploadForm')
+    // check cancel/abort
+    if ($form[0].elements[0].files.length === 0) return
+    const fd = new FormData($form[0])
 
     // Like first aid, we'll drop this function with react+cropper.js after.
     const picture = fd.get('userPicture')
