@@ -2,7 +2,7 @@ import React from 'react'
 import { User } from 'client/types/crowi'
 
 interface Props {
-  user: User
+  user: User | undefined
   size: string
 }
 
@@ -13,14 +13,14 @@ export default class UserPicture extends React.Component<Props> {
     size: null,
   }
 
-  getUserPicture(user) {
+  getUserPicture(user: User | undefined) {
     // from swig.setFilter('picture', function(user)
 
-    if (user.image && user.image != '/images/userpicture.png') {
+    if (user && user.image && user.image != '/images/userpicture.png') {
       return user.image
-    } else {
-      return '/images/userpicture.png'
     }
+
+    return '/images/userpicture.png'
   }
 
   getClassName() {
@@ -35,6 +35,6 @@ export default class UserPicture extends React.Component<Props> {
   render() {
     const user = this.props.user
 
-    return <img src={this.getUserPicture(user)} alt={user.username} className={this.getClassName()} />
+    return <img src={this.getUserPicture(user)} alt={user ? user.username : ''} className={this.getClassName()} />
   }
 }

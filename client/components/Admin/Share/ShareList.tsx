@@ -21,6 +21,15 @@ interface State {
   error: boolean
 }
 
+type Record = {
+  index: number
+  path: string
+  username: string
+  name: string
+  date: string
+  isActive: boolean
+}
+
 class ShareList extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
@@ -52,7 +61,7 @@ class ShareList extends React.Component<Props, State> {
     }
   }
 
-  movePage(i) {
+  movePage(i: number) {
     if (i !== this.state.pagination.current) {
       this.getPage({ page: i })
     }
@@ -62,13 +71,13 @@ class ShareList extends React.Component<Props, State> {
     this.getPage()
   }
 
-  renderStatus(isActive) {
+  renderStatus(isActive: boolean) {
     const className = ['badge', isActive ? 'badge-success' : 'badge-danger'].join(' ')
     const text = isActive ? 'Active' : 'Inactive'
     return <span className={className}>{text}</span>
   }
 
-  renderRecord({ index, path, username, name, date, isActive }) {
+  renderRecord({ index, path, username, name, date, isActive }: Record) {
     return (
       <tr key={index}>
         <td>{index}</td>

@@ -10,29 +10,16 @@ export default class Tsv2Table {
       option = {}
     }
     this.option = option
-
     this.option.header = this.option.header || false
   }
 
-  getCols(codeLines): number {
-    let max = 0
-
-    for (let i = 0; i < codeLines; i++) {
-      if (max < codeLines.length) {
-        max = codeLines.length
-      }
-    }
-
-    return max
-  }
-
-  splitColums(line) {
+  splitColums(line: string) {
     // \t is replaced to '    ' by Lexer.lex(), so split by 4 spaces
     return line.split(/\s{4}/g)
   }
 
-  getTableHeader(codeLines, option) {
-    let headers = []
+  getTableHeader(codeLines: string[]) {
+    let headers: string[] = []
     let headLine = codeLines[0] || ''
 
     // console.log('head', headLine);
@@ -40,16 +27,12 @@ export default class Tsv2Table {
       return `<th>${Crowi.escape(col)}</th>`
     })
 
-    if (headers.length < option.cols) {
-      headers.concat(...new Array(option.cols - headers.length))
-    }
-
     return `<tr>
       ${headers.join('\n')}
     </tr>`
   }
 
-  getTableBody(codeLines, option) {
+  getTableBody(codeLines: string[]) {
     let rows
 
     if (this.option.header) {
@@ -68,23 +51,20 @@ export default class Tsv2Table {
     return rows.join('\n')
   }
 
-  process(code) {
-    const codeLines = code.split(/\n|\r/)
-    const cols = this.getCols(codeLines)
-
-    const option = { cols }
+  process(code: string) {
+    const codeLines: string[] = code.split(/\n|\r/)
 
     let header = ''
     if (this.option.header) {
       header = `<thead>
-        ${this.getTableHeader(codeLines, option)}
+        ${this.getTableHeader(codeLines)}
       </thead>`
     }
 
     return `<table>
       ${header}
       <tbody>
-        ${this.getTableBody(codeLines, option)}
+        ${this.getTableBody(codeLines)}
       </tbody>
     </table>`
   }

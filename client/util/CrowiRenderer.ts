@@ -22,11 +22,15 @@ interface PostProcessor {
   process: (markdown: string, dom: HTMLElement | undefined) => string
 }
 
+interface LangProcessor {
+  process: (code: string, lang: string) => string
+}
+
 export default class CrowiRenderer {
   crowi: Crowi
   preProcessors: PreProcessor[]
   postProcessors: PostProcessor[]
-  langProcessors: {}
+  langProcessors: { [key: string]: LangProcessor }
 
   constructor(crowi: Crowi) {
     this.crowi = crowi
@@ -45,7 +49,7 @@ export default class CrowiRenderer {
     this.codeRenderer = this.codeRenderer.bind(this)
   }
 
-  preProcess(markdown, dom) {
+  preProcess(markdown: string, dom: HTMLElement | undefined = undefined) {
     for (let i = 0; i < this.preProcessors.length; i++) {
       if (!this.preProcessors[i].process) {
         continue
@@ -55,7 +59,7 @@ export default class CrowiRenderer {
     return markdown
   }
 
-  postProcess(html, dom) {
+  postProcess(html: string, dom: HTMLElement | undefined = undefined) {
     for (let i = 0; i < this.postProcessors.length; i++) {
       if (!this.postProcessors[i].process) {
         continue
@@ -66,7 +70,7 @@ export default class CrowiRenderer {
     return html
   }
 
-  codeRenderer(code, lang, escaped) {
+  codeRenderer(code: string, lang: string, escaped: boolean = false) {
     let result = ''
     let hl
 
@@ -99,7 +103,7 @@ export default class CrowiRenderer {
     return `<pre class="wiki-code"><code>${Crowi.escape(code, true)}\n</code></pre>`
   }
 
-  parseMarkdown(markdown) {
+  parseMarkdown(markdown: string) {
     let parsed = ''
 
     const markedRenderer = new marked.Renderer()
@@ -119,7 +123,8 @@ export default class CrowiRenderer {
       })
 
       // override
-      marked.Lexer.lex = function(src, options) {
+      // @ts-ignore
+      marked.Lexer.lex = function(src: string, options: marked.MarkedOptions) {
         var lexer = new marked.Lexer(options)
 
         // this is maybe not an official way
@@ -138,7 +143,7 @@ export default class CrowiRenderer {
     return parsed
   }
 
-  render(markdown, dom: HTMLElement | undefined = undefined) {
+  render(markdown: string, dom: HTMLElement | undefined = undefined) {
     let html = ''
 
     markdown = this.preProcess(markdown, dom)

@@ -28,13 +28,13 @@ import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
 
 i18n()
 
-moment.locale(navigator['userLanguage'] || navigator.language)
+moment.locale(navigator.userLanguage || navigator.language)
 
 const mainContent = document.querySelector('#content-main')
 let pageId: string | null = null
 let pageContent: string | null = null
 if (mainContent !== null) {
-  pageId = mainContent.attributes['data-page-id'].value
+  pageId = mainContent.getAttribute('data-page-id')
   const rawText = document.getElementById('raw-text-original')
   if (rawText) {
     pageContent = rawText.innerHTML
@@ -83,10 +83,10 @@ const componentMappings = {
   'admin-rebuild-search': <AdminRebuildSearch crowi={crowi} />,
 }
 
-Object.keys(componentMappings).forEach(key => {
+Object.entries(componentMappings).forEach(([key, component]) => {
   const elem = document.getElementById(key)
   if (elem) {
-    ReactDOM.render(componentMappings[key], elem)
+    ReactDOM.render(component, elem)
   }
 })
 

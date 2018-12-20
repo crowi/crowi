@@ -8,9 +8,9 @@ interface Props {
 }
 
 export default class PaginationWrapper extends React.Component<Props> {
-  onClick(i) {
+  onClick(i: number) {
     const { onClick } = this.props
-    return e => {
+    return (e: React.MouseEvent<HTMLElement>) => {
       e.preventDefault()
       if (onClick) {
         onClick(i)

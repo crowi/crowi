@@ -5,10 +5,11 @@ import platform from 'platform'
 import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
+import { Share, ShareAccess } from 'client/types/crowi'
 
 interface Props {
   show: boolean
-  onHide: Function
+  onHide: () => void
   pageId: string | null
   t: Function
   crowi: Crowi
@@ -16,7 +17,7 @@ interface Props {
 
 interface State {
   requesting: boolean
-  pageId: null
+  pageId: string | null
   shares: []
   pagination: {
     total: number
@@ -49,7 +50,7 @@ class AccessLogModal extends React.Component<Props, State> {
     this.renderAccessLogTable = this.renderAccessLogTable.bind(this)
   }
 
-  renderShareInfo(uuid, username, name, createdAt, isActive) {
+  renderShareInfo(uuid: string, username: string, name: string, createdAt: string, isActive: boolean) {
     const { t } = this.props
     const date = moment(createdAt).format('llll')
     return (
@@ -96,26 +97,26 @@ class AccessLogModal extends React.Component<Props, State> {
     )
   }
 
-  static renderTableBody(accesses, i) {
+  static renderTableBody(accesses: ShareAccess, i: number) {
     const {
       tracking: { userAgent, remoteAddress },
       lastAccessedAt,
     } = accesses
     const index = i + 1
-    const info = platform.parse(userAgent)
+    const { name: platformName, os } = platform.parse ? platform.parse(userAgent) : { name: '', os: '' }
     const date = moment(lastAccessedAt).format('llll')
     return (
       <tr key={i}>
         <td>{index}</td>
-        <td>{info.name}</td>
-        <td>{info.os.toString()}</td>
+        <td>{platformName}</td>
+        <td>{os}</td>
         <td>{remoteAddress}</td>
         <td>{date}</td>
       </tr>
     )
   }
 
-  renderAccessLogTable(share, i) {
+  renderAccessLogTable(share: Share, i: number) {
     const { t } = this.props
     const {
       uuid,
@@ -139,7 +140,7 @@ class AccessLogModal extends React.Component<Props, State> {
     )
   }
 
-  async getPage(pageId, options = {}) {
+  async getPage(pageId: string | null, options = {}) {
     const limit = this.state.pagination.limit
     if (!this.state.error && !this.state.requesting) {
       this.setState({ requesting: true })
@@ -160,7 +161,7 @@ class AccessLogModal extends React.Component<Props, State> {
     }
   }
 
-  movePage(i) {
+  movePage(i: number) {
     if (i !== this.state.pagination.current) {
       this.getPage(this.state.pageId, { page: i })
     }

@@ -72,20 +72,20 @@ export default class SearchForm extends React.Component<Props, State> {
     this.search()
   }
 
-  handleFocus(event) {
+  handleFocus(event: React.FocusEvent<HTMLInputElement>) {
     this.props.isShown(true)
   }
 
-  handleBlur(event) {
+  handleBlur(event: React.FocusEvent<HTMLInputElement>) {
     // this.props.isShown(false)
   }
 
-  handleChange(event) {
+  handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const keyword = event.target.value
     this.setState({ keyword })
   }
 
-  handleSubmit(e) {
+  handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     const { keyword } = this.state
     const { isSearchPage } = this.props
     if (isSearchPage) {

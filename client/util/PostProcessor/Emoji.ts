@@ -7,7 +7,7 @@ export default class Emoji {
     })
   }
 
-  process(markdown) {
+  process(markdown: string) {
     return emojify.replace(markdown)
   }
 }

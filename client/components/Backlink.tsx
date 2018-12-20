@@ -1,7 +1,7 @@
 import React from 'react'
 import UserPicture from './User/UserPicture'
 import Crowi from 'client/util/Crowi'
-import { Backlink as BacklinkType } from 'client/types/crowi'
+import { Backlink as BacklinkType, User } from 'client/types/crowi'
 
 interface Props {
   crowi: Crowi
@@ -77,12 +77,12 @@ class Backlink extends React.Component<Props, State> {
       })
   }
 
-  handleReadMore(e) {
+  handleReadMore(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault()
     this.fetchBacklinks()
   }
 
-  createList(backlink) {
+  createList(backlink: BacklinkType) {
     const path = backlink.fromPage.path
     const user = backlink.fromRevision.author
 

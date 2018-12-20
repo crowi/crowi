@@ -22,7 +22,7 @@ export default class Tab extends React.Component<Props, State> {
     this.state = { active }
   }
 
-  toggle(tab) {
+  toggle(tab: number) {
     return () => {
       if (this.state.active !== tab) {
         this.setState({ active: tab })

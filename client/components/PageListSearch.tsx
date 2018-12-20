@@ -51,7 +51,7 @@ export default class PageListSearch extends React.Component<Props, State> {
 
     // This is temporary data bind ... (out of component)
     $('#search-listpage-form').on('submit', () => {
-      const keyword = $pageListSearchForm.val()
+      const keyword = String($pageListSearchForm.val())
       if (keyword != this.state.searchingKeyword) {
         this.search({ keyword })
       }
@@ -69,7 +69,7 @@ export default class PageListSearch extends React.Component<Props, State> {
 
   componentWillUnmount() {}
 
-  handleChange(event) {
+  handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     // this is not fired now because of force-data-bound by jQuery
     const keyword = event.target.value
     this.setState({ searchedKeyword: keyword })
@@ -88,7 +88,7 @@ export default class PageListSearch extends React.Component<Props, State> {
     $('.main-container').addClass('aside-hidden')
   }
 
-  changeURL(keyword, refreshHash = false) {
+  changeURL(keyword: string, refreshHash = false) {
     const tree = this.state.tree
     let { hash = '' } = this.props.crowi.location
     // TODO 整理する
@@ -100,7 +100,7 @@ export default class PageListSearch extends React.Component<Props, State> {
     }
   }
 
-  search(data) {
+  search(data: { keyword: string }) {
     const keyword = data.keyword || ''
     const tree = this.state.tree
 

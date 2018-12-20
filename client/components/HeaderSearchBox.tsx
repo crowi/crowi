@@ -39,11 +39,11 @@ export default class HeaderSearchBox extends React.Component<Props, State> {
     this.isShown = this.isShown.bind(this)
   }
 
-  isShown(focused) {
-    this.setState({ focused: !!focused })
+  isShown(focused: boolean) {
+    this.setState({ focused })
   }
 
-  async search(data) {
+  async search(data: { keyword: string }) {
     const keyword = data.keyword
     if (keyword === '') {
       this.setState({

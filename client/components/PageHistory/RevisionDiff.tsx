@@ -22,7 +22,7 @@ export default class RevisionDiff extends React.Component<Props> {
         previousText = ''
       }
 
-      const patch = createPatch(currentRevision.path, previousText, currentRevision.body)
+      const patch = createPatch(currentRevision.path, previousText, currentRevision.body, '', '')
 
       diffViewHTML = Diff2Html.getPrettyHtml(patch)
     }

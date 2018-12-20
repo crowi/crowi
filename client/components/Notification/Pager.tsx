@@ -13,12 +13,12 @@ export default class Pager extends React.Component<Props> {
     hasNext: false,
   }
 
-  handleOnPrevClick(e) {
+  handleOnPrevClick(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault()
     this.props.handlePrevClick()
   }
 
-  handleOnNextClick(e) {
+  handleOnNextClick(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault()
     this.props.handleNextClick()
   }

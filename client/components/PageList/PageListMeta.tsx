@@ -9,7 +9,7 @@ interface Props {
 export default class PageListMeta extends React.Component<Props> {
   static defaultProps = { page: {} }
 
-  isPortalPath(path) {
+  isPortalPath(path: string) {
     if (path.match(/.*\/$/)) {
       return true
     }
@@ -17,7 +17,7 @@ export default class PageListMeta extends React.Component<Props> {
     return false
   }
 
-  bookmarkHighlightClass(count) {
+  bookmarkHighlightClass(count: number) {
     if (count > 20) {
       // TODO: dynamic??
       return 'page-list-bookmarkCount-amazing'

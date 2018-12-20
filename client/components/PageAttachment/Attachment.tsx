@@ -16,7 +16,7 @@ export default class Attachment extends React.Component<Props> {
     this._onAttachmentDeleteClicked = this._onAttachmentDeleteClicked.bind(this)
   }
 
-  iconNameByFormat(format) {
+  iconNameByFormat(format: string) {
     if (format.match(/image\/.+/i)) {
       return 'file-image'
     }
@@ -24,7 +24,7 @@ export default class Attachment extends React.Component<Props> {
     return 'file'
   }
 
-  _onAttachmentDeleteClicked(event) {
+  _onAttachmentDeleteClicked(event: React.MouseEvent<HTMLAnchorElement>) {
     this.props.onAttachmentDeleteClicked(this.props.attachment)
   }
 

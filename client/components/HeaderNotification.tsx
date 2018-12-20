@@ -3,6 +3,7 @@ import { Dropdown, DropdownToggle } from 'reactstrap'
 import DropdownMenu from './HeaderNotification/DropdownMenu'
 import Icon from './Common/Icon'
 import Crowi from 'client/util/Crowi'
+import { Notification } from 'client/types/crowi'
 
 interface Props {
   crowi: Crowi
@@ -12,7 +13,7 @@ interface Props {
 interface State {
   count: number
   loaded: boolean
-  notifications: []
+  notifications: Notification[]
   open: boolean
 }
 
@@ -35,7 +36,7 @@ export default class HeaderNotification extends React.Component<Props, State> {
   }
 
   initializeSocket() {
-    this.props.crowi.getWebSocket().on('notification updated', data => {
+    this.props.crowi.getWebSocket().on('notification updated', (data: { user: string }) => {
       if (this.props.me === data.user) {
         this.fetchList()
         this.fetchStatus()
@@ -81,7 +82,7 @@ export default class HeaderNotification extends React.Component<Props, State> {
     this.setState({ open: !open })
   }
 
-  async handleNotificationOnClick(notification) {
+  async handleNotificationOnClick(notification: Notification) {
     try {
       await this.props.crowi.apiPost('/notification.open', { id: notification._id })
       // jump to target page

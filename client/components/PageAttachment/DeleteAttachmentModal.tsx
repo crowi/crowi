@@ -9,7 +9,7 @@ import { Attachment } from 'client/types/crowi'
 interface Props {
   inUse: boolean
   isOpen: boolean
-  toggle: Function
+  toggle: () => void
   deleting: boolean
   deleteError: string
   attachmentToDelete: Attachment | null
@@ -27,7 +27,7 @@ export default class DeleteAttachmentModal extends React.Component<Props> {
     this.props.onAttachmentDeleteClickedConfirm(this.props.attachmentToDelete)
   }
 
-  renderByFileFormat(attachment) {
+  renderByFileFormat(attachment: Attachment) {
     if (attachment.fileFormat.match(/image\/.+/i)) {
       return (
         <p className="attachment-delete-image">

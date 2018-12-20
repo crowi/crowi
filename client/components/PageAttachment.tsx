@@ -12,7 +12,7 @@ interface Props {
 
 interface State {
   attachments: Attachment[]
-  inUse: { [id: string]: Attachment }
+  inUse: { [id: string]: boolean }
   attachmentToDelete: Attachment | null
   deleting: boolean
   deleteError: string
@@ -43,7 +43,7 @@ export default class PageAttachment extends React.Component<Props, State> {
 
     this.props.crowi.apiGet('/attachments.list', { page_id: pageId }).then(res => {
       const attachments: Attachment[] = res.attachments
-      let inUse = {}
+      let inUse: State['inUse'] = {}
 
       for (const attachment of attachments) {
         inUse[attachment._id] = this.checkIfFileInUse(attachment)
@@ -53,7 +53,7 @@ export default class PageAttachment extends React.Component<Props, State> {
     })
   }
 
-  checkIfFileInUse(attachment) {
+  checkIfFileInUse(attachment: Attachment) {
     const { pageContent } = this.props
     if (pageContent && pageContent.match(attachment.url)) {
       return true
@@ -61,13 +61,13 @@ export default class PageAttachment extends React.Component<Props, State> {
     return false
   }
 
-  onAttachmentDeleteClicked(attachment) {
+  onAttachmentDeleteClicked(attachment: Attachment) {
     this.setState({
       attachmentToDelete: attachment,
     })
   }
 
-  onAttachmentDeleteClickedConfirm(attachment) {
+  onAttachmentDeleteClickedConfirm(attachment: Attachment) {
     const attachmentId = attachment._id
     this.setState({
       deleting: true,

@@ -51,7 +51,7 @@ export default class Mathjax {
     this.process = this.process.bind(this)
   }
 
-  process(html, dom) {
+  process(html: string, dom: HTMLElement | undefined) {
     if (!this.mathJaxConfigured) {
       return html
     }

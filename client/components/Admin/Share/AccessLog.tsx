@@ -22,6 +22,14 @@ interface State {
   error: boolean
 }
 
+type Record = {
+  index: number
+  path: string
+  info: Platform | undefined
+  remoteAddress: string
+  date: string
+}
+
 class AccessLog extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
@@ -53,7 +61,7 @@ class AccessLog extends React.Component<Props, State> {
     }
   }
 
-  movePage(i) {
+  movePage(i: number) {
     if (i !== this.state.pagination.current) {
       this.getPage({ page: i })
     }
@@ -63,15 +71,16 @@ class AccessLog extends React.Component<Props, State> {
     this.getPage()
   }
 
-  renderRecord({ index, path, info, remoteAddress, date }) {
+  renderRecord({ index, path, info = { name: '', os: '' }, remoteAddress, date }: Record) {
+    const { name: platformName = '', os = '' } = info
     return (
       <tr key={index}>
         <td>{index}</td>
         <td>
           <a href={path}>{path}</a>
         </td>
-        <td>{info.name}</td>
-        <td>{info.os.toString()}</td>
+        <td>{platformName}</td>
+        <td>{os.toString()}</td>
         <td>{remoteAddress}</td>
         <td>{date}</td>
       </tr>
@@ -87,7 +96,7 @@ class AccessLog extends React.Component<Props, State> {
           this.renderRecord({
             index: start + i,
             path: page.path,
-            info: platform.parse(userAgent),
+            info: platform.parse ? platform.parse(userAgent) : undefined,
             remoteAddress,
             date: moment(lastAccessedAt).format('llll'),
           }),

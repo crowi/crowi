@@ -1,8 +1,15 @@
 import moment from 'moment'
 import Crowi from 'client/crowi'
 
+type templatePatternKey = keyof Template['templatePattern']
+
 export default class Template {
-  templatePattern: {}
+  templatePattern: {
+    year: () => string
+    month: () => string
+    date: () => string
+    user: () => string
+  }
 
   constructor(crowi: Crowi) {
     this.templatePattern = {
@@ -13,15 +20,15 @@ export default class Template {
     }
   }
 
-  getYear() {
+  getYear(): string {
     return moment().format('YYYY')
   }
 
-  getMonth() {
+  getMonth(): string {
     return moment().format('YYYY/MM')
   }
 
-  getDate() {
+  getDate(): string {
     return moment().format('YYYY/MM/DD')
   }
 
@@ -37,10 +44,11 @@ export default class Template {
     return `/user/${username}`
   }
 
-  parseTemplateString(templateString) {
+  parseTemplateString(templateString: string) {
     let parsed = templateString
 
-    Object.keys(this.templatePattern).forEach(key => {
+    const templatePatternKeys = <templatePatternKey[]>Object.keys(this.templatePattern)
+    templatePatternKeys.forEach(key => {
       const k = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const matcher = new RegExp(`{${k}}`, 'g')
       if (parsed.match(matcher)) {
@@ -52,7 +60,7 @@ export default class Template {
     return parsed
   }
 
-  process(code, lang) {
+  process(code: string, lang: string) {
     const templateId = new Date().getTime().toString(16) + Math.floor(1000 * Math.random()).toString(16)
     let pageName = lang
     if (lang.match(':')) {
