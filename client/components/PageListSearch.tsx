@@ -20,7 +20,7 @@ interface State {
 }
 
 export default class PageListSearch extends React.Component<Props, State> {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     const { search = '' } = this.props.crowi.location

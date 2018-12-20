@@ -20,7 +20,7 @@ export default class SearchForm extends React.Component<Props, State> {
 
   ticker: number | undefined
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {

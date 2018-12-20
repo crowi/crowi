@@ -27,7 +27,7 @@ class SearchSuggest extends React.Component<Props> {
     focused: false,
   }
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.buildSearchUrl = this.buildSearchUrl.bind(this)

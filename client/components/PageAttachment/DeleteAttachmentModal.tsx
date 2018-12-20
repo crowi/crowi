@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default class DeleteAttachmentModal extends React.Component<Props> {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this._onDeleteConfirm = this._onDeleteConfirm.bind(this)

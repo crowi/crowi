@@ -27,7 +27,7 @@ interface State {
 class ShareBox extends React.Component<Props, State> {
   static defaultProps = { isCreated: false }
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {

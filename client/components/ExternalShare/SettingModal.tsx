@@ -31,7 +31,7 @@ interface State {
 class SettingModal extends React.Component<Props, State> {
   static defaultProps = { show: false }
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {

@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default class Attachment extends React.Component<Props> {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this._onAttachmentDeleteClicked = this._onAttachmentDeleteClicked.bind(this)

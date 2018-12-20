@@ -15,7 +15,7 @@ interface State {
 export default class Tab extends React.Component<Props, State> {
   static defaultProps = { active: 1 }
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     const { active } = props

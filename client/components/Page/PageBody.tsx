@@ -13,7 +13,7 @@ export default class PageBody extends React.Component<Props> {
 
   crowiRenderer: CrowiRenderer
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.crowiRenderer = window.crowiRenderer // FIXME
