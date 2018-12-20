@@ -92,15 +92,17 @@ class AccessLog extends React.Component<Props, State> {
     const start = (current - 1) * limit + 1
     return (
       <tbody>
-        {this.state.accesses.map(({ share: { page }, tracking: { userAgent, remoteAddress }, lastAccessedAt }, i) =>
-          this.renderRecord({
+        {this.state.accesses.map(({ share, tracking: { userAgent, remoteAddress }, lastAccessedAt }, i) => {
+          const { page } = share || {}
+          const { path = '' } = page || {}
+          return this.renderRecord({
             index: start + i,
-            path: page.path,
+            path: path,
             info: platform.parse ? platform.parse(userAgent) : undefined,
             remoteAddress,
             date: moment(lastAccessedAt).format('llll'),
-          }),
-        )}
+          })
+        })}
       </tbody>
     )
   }
