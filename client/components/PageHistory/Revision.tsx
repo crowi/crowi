@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default class Revision extends React.Component<Props> {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this._onDiffOpenClicked = this._onDiffOpenClicked.bind(this)

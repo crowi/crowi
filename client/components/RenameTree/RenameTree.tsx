@@ -21,7 +21,7 @@ interface State {
 }
 
 class RenameTree extends React.Component<Props, State> {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.renderTree = this.renderTree.bind(this)

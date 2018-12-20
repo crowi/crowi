@@ -23,7 +23,7 @@ class Backlink extends React.Component<Props, State> {
     offset: 0,
   }
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {

@@ -25,7 +25,7 @@ export default class SearchResult extends React.Component<Props, State> {
     searchError: null,
   }
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = { active: null }

@@ -21,7 +21,7 @@ class ShareBoxContent extends React.Component<Props> {
 
   inputRef?: HTMLInputElement
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.selectAction = this.selectAction.bind(this)

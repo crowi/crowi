@@ -22,7 +22,7 @@ interface State {
 }
 
 class ShareList extends React.Component<Props, State> {
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     this.state = {

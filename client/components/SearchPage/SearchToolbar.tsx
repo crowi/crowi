@@ -28,7 +28,7 @@ class SearchToolbar extends React.Component<Props> {
 
   searchTypes: SearchType[]
 
-  constructor(props) {
+  constructor(props: Props) {
     super(props)
 
     const { t } = this.props

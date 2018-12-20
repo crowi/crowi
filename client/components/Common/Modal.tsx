@@ -5,7 +5,7 @@ interface State {
 }
 
 export default class Modal extends React.Component<{}, State> {
-  constructor(props) {
+  constructor(props: {}) {
     super(props)
 
     this.state = {
