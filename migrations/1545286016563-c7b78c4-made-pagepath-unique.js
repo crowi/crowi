@@ -32,7 +32,16 @@ async function process() {
    * Remove duplicates with no seenUsers
    * If no seenUsers, there are no information to hold.
    */
-  const removableIds = dups.map(d => d.seen.filter(s => s.count === 0).map(s => s.id)).reduce((p, c) => [...p, ...c], [])
+  const removableIds = []
+  for (const d of dups) {
+    const ids = d.seen.filter(s => s.count === 0).map(s => s.id)
+    /**
+     * If all documents have no seenUsers.
+     *   ... Is it possible to make this situation?
+     */
+    if (ids.length === d.count) ids.pop()
+    removableIds.push(...ids)
+  }
   await Pages.deleteMany({
     _id: { $in: removableIds },
   })
