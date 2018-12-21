@@ -206,7 +206,7 @@ async function process() {
   }
 }
 
-module.exports.up = async function(next) {
+module.exports.up = async function() {
   const indexes = await Page.indexInformation({ full: true })
 
   // Skip when there are already index that equals targetCreateIndexOption
