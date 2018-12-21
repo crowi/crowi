@@ -9,15 +9,22 @@
 const { connection: db } = require('mongoose')
 const assert = require('assert')
 
-const Pages = db.collection('pages')
-const Comment = db.collection('comment')
+const Activity = db.collection('activities')
+const Attachment = db.collection('attachments')
+const Bookmark = db.collection('bookmarks')
+const Backlink = db.collection('backlinks')
+const Comment = db.collection('comments')
+const Notification = db.collection('notifications')
+const Page = db.collection('pages')
+const Share = db.collection('shares')
+const Watcher = db.collection('watchers')
 
 // Extract from schema by schema.prototype.indexes
 const targetCreateIndexOption = [{ path: 1 }, { unique: true, background: true }]
 
 async function process() {
   // get duplicates
-  const dups = await Pages.aggregate([
+  const dups = await Page.aggregate([
     { $sort: { _id: -1 } },
     { $group: { _id: '$path', count: { $sum: 1 }, seen: { $push: { id: '$_id', count: { $size: '$seenUsers' } } } } },
     { $match: { count: { $gt: 1 } } },
@@ -42,7 +49,7 @@ async function process() {
     if (ids.length === d.count) ids.pop()
     removableIds.push(...ids)
   }
-  await Pages.deleteMany({
+  await Page.deleteMany({
     _id: { $in: removableIds },
   })
 
@@ -52,7 +59,7 @@ async function process() {
   const mergePaths = dups.filter(d => d.seen.filter(s => s.count !== 0).length > 0).map(d => d._id)
   if (mergePaths.length === 0) return
   console.dir(mergePaths)
-  const set = await Pages.aggregate([
+  const set = await Page.aggregate([
     { $match: { path: { $in: mergePaths } } },
     {
       $group: {
@@ -88,21 +95,6 @@ async function process() {
     },
   ]).toArray()
 
-  if (set.commentCount > 0) {
-    await Comment.update(
-      {
-        page: {
-          $in: allIds,
-        },
-      },
-      {
-        $set: {
-          page: set.mergeTarget,
-        },
-      },
-    )
-  }
-
   for (const t of set) {
     const { mergeTarget, removeTargets } = t
 
@@ -122,14 +114,100 @@ async function process() {
         },
       },
     }
-    await Pages.update({ _id: mergeTarget }, updateQuery)
 
-    await Pages.remove({ _id: { $in: removeTargets } })
+    await Page.update({ _id: mergeTarget }, updateQuery)
+    await Page.remove({ _id: { $in: removeTargets } })
+
+    // update documents relative to removed pages
+    const inRemoveTargets = { $in: removeTargets }
+    await Activity.update(
+      {
+        targetModel: 'Page',
+        target: inRemoveTargets,
+      },
+      {
+        $set: {
+          target: mergeTarget,
+        },
+      },
+    )
+    await Attachment.update(
+      {
+        page: inRemoveTargets,
+      },
+      {
+        $set: {
+          page: mergeTarget,
+        },
+      },
+    )
+    await Bookmark.update(
+      {
+        page: inRemoveTargets,
+      },
+      {
+        $set: {
+          page: mergeTarget,
+        },
+      },
+    )
+    await Backlink.update(
+      {
+        page: inRemoveTargets,
+      },
+      {
+        $set: {
+          page: mergeTarget,
+        },
+      },
+    )
+    await Notification.update(
+      {
+        targetModel: 'Page',
+        target: inRemoveTargets,
+      },
+      {
+        $set: {
+          target: mergeTarget,
+        },
+      },
+    )
+    await Comment.update(
+      {
+        page: inRemoveTargets,
+      },
+      {
+        $set: {
+          page: mergeTarget,
+        },
+      },
+    )
+    await Share.update(
+      {
+        page: inRemoveTargets,
+      },
+      {
+        $set: {
+          page: mergeTarget,
+        },
+      },
+    )
+    await Watcher.update(
+      {
+        targetModel: 'Page',
+        target: inRemoveTargets,
+      },
+      {
+        $set: {
+          target: mergeTarget,
+        },
+      },
+    )
   }
 }
 
 module.exports.up = async function(next) {
-  const indexes = await Pages.indexInformation({ full: true })
+  const indexes = await Page.indexInformation({ full: true })
 
   // Skip when there are already index that equals targetCreateIndexOption
   const filterWithCreateIndexOption = (key, option) => actualIndex => {
@@ -149,7 +227,7 @@ module.exports.up = async function(next) {
   if (indexes.find(filterWithCreateIndexOption(...targetCreateIndexOption))) return
 
   await process()
-  await Pages.createIndex(...targetCreateIndexOption)
+  await Page.createIndex(...targetCreateIndexOption)
 }
 
 module.exports.down = function(next) {
