@@ -6,7 +6,7 @@ import PropTypes from 'prop-types'
 import queryString from 'query-string'
 import Emitter from '../emitter'
 import SearchToolbar from 'components/SearchPage/SearchToolbar'
-import SearchResult from './SearchPage/SearchResult'
+import SearchResult from './SearchPage/SearchResult/SearchResult'
 
 export default class SearchPage extends React.Component {
   constructor(props) {

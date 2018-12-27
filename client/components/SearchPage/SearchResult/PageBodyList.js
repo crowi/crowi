@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 
 import PageBody from 'components/Page/PageBody.js'
 
-export default class SearchResultList extends React.Component {
+export default class PageBodyList extends React.Component {
   render() {
     const resultList = this.props.pages.map(page => {
       const pageBody = page.revision.body
@@ -23,12 +23,12 @@ export default class SearchResultList extends React.Component {
   }
 }
 
-SearchResultList.propTypes = {
+PageBodyList.propTypes = {
   pages: PropTypes.array.isRequired,
   searchingKeyword: PropTypes.string.isRequired,
 }
 
-SearchResultList.defaultProps = {
+PageBodyList.defaultProps = {
   pages: [],
   searchingKeyword: '',
 }

@@ -4,7 +4,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 
 import queryString from 'query-string'
-import SearchResult from './SearchPage/SearchResult'
+import SearchResult from './SearchPage/SearchResult/SearchResult'
 
 export default class PageListSearch extends React.Component {
   constructor(props) {

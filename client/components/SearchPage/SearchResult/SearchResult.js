@@ -1,8 +1,8 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import Page from 'components/PageList/Page'
-import SearchResultList from './SearchResultList'
+import PagePathList from './PagePathList'
+import PageBodyList from './PageBodyList'
 
 // Search.SearchResult
 export default class SearchResult extends React.Component {
@@ -22,8 +22,6 @@ export default class SearchResult extends React.Component {
   }
 
   render() {
-    const excludePathString = this.props.tree
-
     // console.log(this.props.searchError);
     // console.log(this.isError());
     if (this.isError()) {
@@ -50,33 +48,25 @@ export default class SearchResult extends React.Component {
       )
     }
 
-    const listView = this.props.pages.map(page => {
-      const pageId = '#' + page._id
-      return (
-        <Page page={page} linkTo={pageId} key={page._id} excludePathString={excludePathString}>
-          <div className="page-list-option">
-            <a href={page.path}>
-              <i className="fa fa-arrow-circle-right" />
-            </a>
-          </div>
-        </Page>
-      )
-    })
+    const isSearchPage = !!document.getElementById('search-page')
+    const offset = isSearchPage ? { top: 54 } : { top: 104 }
 
     // TODO あとでなんとかする
     setTimeout(() => {
-      $('#search-result-list > nav').affix({ offset: { top: 120 } })
+      $('#search-result-list > nav').affix({ offset })
     }, 1200)
+
+    const { pages, tree: excludePathString, searchingKeyword } = this.props
 
     return (
       <div className="search-result row" id="search-result">
         <div className="col-md-4 hidden-xs hidden-sm page-list search-result-list" id="search-result-list">
-          <nav data-spy="affix" data-offset-top="120">
-            <ul className="page-list-ul nav">{listView}</ul>
+          <nav data-spy="affix" data-offset-top={offset.top}>
+            <PagePathList pages={pages} excludePathString={excludePathString} />
           </nav>
         </div>
         <div className="col-md-8 search-result-content" id="search-result-content">
-          <SearchResultList pages={this.props.pages} searchingKeyword={this.props.searchingKeyword} />
+          <PageBodyList pages={pages} searchingKeyword={searchingKeyword} />
         </div>
       </div>
     )
