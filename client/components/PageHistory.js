@@ -26,16 +26,10 @@ export default class PageHistory extends React.Component {
 
     this.props.crowi
       .apiGet('/revisions.ids', { page_id: pageId })
-      .then(res => {
-        const rev = res.revisions
+      .then(({ revisions: rev }) => {
         let diffOpened = {}
         const lastId = rev.length - 1
-        res.revisions.map((revision, i) => {
-          const user = this.props.crowi.findUserById(revision.author)
-          if (user) {
-            rev[i].author = user
-          }
-
+        rev.forEach((revision, i) => {
           if (i === 0 || i === lastId) {
             diffOpened[revision._id] = true
           } else {
@@ -43,10 +37,7 @@ export default class PageHistory extends React.Component {
           }
         })
 
-        this.setState({
-          revisions: rev,
-          diffOpened: diffOpened,
-        })
+        this.setState({ revisions: rev, diffOpened })
 
         // load 0, and last default
         if (rev[0]) {
