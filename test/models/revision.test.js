@@ -1,5 +1,5 @@
 const moment = require('moment')
-const crypto = require('crypto')
+const faker = require('faker')
 
 const {
   models: { Team, Page, User, Revision, PageOwner },
@@ -7,14 +7,14 @@ const {
 
 const createTeam = (...users) => {
   const t = new Team({
-    handle: crypto.randomBytes(16).toString('hex'),
+    handle: faker.internet.userName(),
     users,
   })
   return t.save()
 }
 const createPage = user => {
   const p = new Page({
-    path: `/random/${crypto.randomBytes(16)}`,
+    path: faker.system.fileName(),
     grant: Page.GRANT_PUBLIC,
     grantedUsers: [user._id],
     creator: user._id,
@@ -22,7 +22,7 @@ const createPage = user => {
   return p.save()
 }
 const createUser = () => {
-  const r = crypto.randomBytes(16).toString('hex')
+  const r = faker.internet.userName()
   const u = new User({
     name: r,
     username: r,

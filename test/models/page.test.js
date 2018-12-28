@@ -400,11 +400,11 @@ describe('Page', () => {
   })
 
   describe('.updateLifetime', () => {
-    const crypto = require('crypto')
+    const faker = require('faker')
     let page
 
     beforeAll(async () => {
-      page = await Page.create(`/random/${crypto.randomBytes(16)}`, '# test', createdUsers[0], {})
+      page = await Page.create(faker.system.fileName(), '# test', createdUsers[0], {})
     })
 
     test('lifetime must not be empty', async () => {
@@ -437,8 +437,8 @@ describe('Page', () => {
     test('call with valid lifetime: null', async () => {
       const user = createdUsers[0]
 
-      const page = await Page.create(`/random/${crypto.randomBytes(16)}`, '# test', user, {})
-      const team = await new Team({ handle: crypto.randomBytes(16).toString('hex'), users: [user] }).save()
+      const page = await Page.create(faker.system.fileName(), '# test', createdUsers[0], {})
+      const team = await new Team({ handle: faker.internet.userName(), users: createdUsers }).save()
       await PageOwner.activate({ team, page })
 
       const updatedPage = await page.updateLifetime(null, createdUsers[0])
@@ -449,8 +449,8 @@ describe('Page', () => {
     test('call with valid lifetime: object', async () => {
       const user = createdUsers[0]
 
-      const page = await Page.create(`/random/${crypto.randomBytes(16)}`, '# test', user, {})
-      const team = await new Team({ handle: crypto.randomBytes(16).toString('hex'), users: [user] }).save()
+      const page = await Page.create(faker.system.fileName(), '# test', user, {})
+      const team = await new Team({ handle: faker.internet.userName(), users: createdUsers }).save()
       await PageOwner.activate({ team, page })
 
       const updatedPage = await page.updateLifetime(
@@ -466,13 +466,13 @@ describe('Page', () => {
 
   describe('#calculateRevisionExpireAt', () => {
     const moment = require('moment')
-    const crypto = require('crypto')
+    const faker = require('faker')
 
     const prebuiltOption = {}
 
     beforeAll(async () => {
-      const page = await Page.create(`/test/${crypto.randomBytes(16)}`, '# test', createdUsers[0], {})
-      const team = await new Team({ handle: crypto.randomBytes(16).toString('hex'), users: createdUsers }).save()
+      const page = await Page.create(faker.system.fileName(), '# test', createdUsers[0], {})
+      const team = await new Team({ handle: faker.internet.userName(), users: createdUsers }).save()
       await PageOwner.activate({ team, page })
       prebuiltOption.pageId = page._id
       prebuiltOption.userId = createdUsers[Math.floor(Math.random() * createdUsers.length)]

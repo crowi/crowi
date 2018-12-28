@@ -1,16 +1,16 @@
-const crypto = require('crypto')
+const faker = require('faker')
 
 const { models, errors } = require('../utils.js')
 const { Team, Page, User, PageOwner } = models
 
 const createTeam = (...users) => {
   const t = new Team({
-    handle: crypto.randomBytes(16).toString('hex'),
+    handle: faker.internet.userName(),
     users,
   })
   return t.save()
 }
-const createPage = ({ path = `/random/${crypto.randomBytes(16)}`, user } = {}) => {
+const createPage = ({ path = faker.system.fileName(), user } = {}) => {
   const p = new Page({
     path,
     grant: Page.GRANT_PUBLIC,
@@ -20,7 +20,7 @@ const createPage = ({ path = `/random/${crypto.randomBytes(16)}`, user } = {}) =
   return p.save()
 }
 const createUser = () => {
-  const r = crypto.randomBytes(16).toString('hex')
+  const r = faker.internet.userName()
   const u = new User({
     name: r,
     username: r,

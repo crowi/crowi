@@ -1,4 +1,4 @@
-const crypto = require('crypto')
+const faker = require('faker')
 
 const utils = require('../utils.js')
 const { mongoose } = utils
@@ -12,11 +12,11 @@ describe('Team', () => {
 
   const createTeam = (...users) => {
     return Team.create({
-      handle: crypto.randomBytes(16).toString('hex'),
+      handle: faker.internet.userName(),
       users,
     })
   }
-  const createPage = ({ path = `/random/${crypto.randomBytes(16)}`, user = null } = {}) => {
+  const createPage = ({ path = faker.system.fileName(), user = null } = {}) => {
     const p = new Page({
       path,
       grant: Page.GRANT_PUBLIC,
@@ -61,13 +61,11 @@ describe('Team', () => {
 
       const teamsRelatedTo0 = await Team.findByUser(createdUsers[0])
       expect(teamsRelatedTo0).toHaveLength(2)
-      // ここらへんの assert うまいことできんかな
-      expect(teamsRelatedTo0.map(team => team._id.toString())).toEqual(expect.not.arrayContaining([team1._id.toString()]))
+      expect(teamsRelatedTo0.every(team => !team._id.equals(team1._id))).toBe(true)
 
       const teamsRelatedTo1 = await Team.findByUser(createdUsers[1])
       expect(teamsRelatedTo1).toHaveLength(2)
-      // ここらへんの assert うまいことできんかな
-      expect(teamsRelatedTo1.map(team => team._id.toString())).toEqual(expect.not.arrayContaining([team0._id.toString()]))
+      expect(teamsRelatedTo1.every(team => !team._id.equals(team0._id))).toBe(true)
     })
 
     it('When missing arguments', () => {
@@ -93,7 +91,7 @@ describe('Team', () => {
    */
 
   describe('create & edit', async () => {
-    it('Add users collectly', async () => {
+    it('Add users correctly', async () => {
       const team = await createTeam(createdUsers[0])
       expect((await Team.findById(team)).users).toHaveLength(1)
 
