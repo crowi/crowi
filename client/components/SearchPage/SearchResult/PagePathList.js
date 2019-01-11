@@ -5,7 +5,7 @@ import Page from 'components/PageList/Page'
 
 export default class PagePathList extends React.Component {
   render() {
-    const { pages, excludePathString } = this.props
+    const { pages, excludePathString, children } = this.props
     const items = pages.map(page => {
       const pageId = '#' + page._id
       return (
@@ -21,6 +21,7 @@ export default class PagePathList extends React.Component {
     return (
       <div className="page-list">
         <ul className="page-list-ul nav">{items}</ul>
+        {children}
       </div>
     )
   }

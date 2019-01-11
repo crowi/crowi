@@ -19,6 +19,11 @@ export default class SearchPage extends React.Component {
       searchingKeyword: q,
       searchingType: type,
       searchedPages: {},
+      searchedMeta: {
+        portal: { hasNext: null },
+        public: { hasNext: null },
+        user: { hasNext: null },
+      },
       searchError: null,
       searched: false,
       total: 0,
@@ -26,6 +31,7 @@ export default class SearchPage extends React.Component {
     }
 
     this.search = this.search.bind(this)
+    this.searchMore = this.searchMore.bind(this)
     this.buildQuery = this.buildQuery.bind(this)
     this.changeURL = this.changeURL.bind(this)
     this.changeType = this.changeType.bind(this)
@@ -72,6 +78,11 @@ export default class SearchPage extends React.Component {
       this.setState({
         searchingKeyword: '',
         searchedPages: {},
+        searchedMeta: {
+          portal: { hasNext: null },
+          public: { hasNext: null },
+          user: { hasNext: null },
+        },
         searchError: null,
         searched: false,
         total: 0,
@@ -86,6 +97,7 @@ export default class SearchPage extends React.Component {
         ['portal', 'public', 'user'].map(type => this.props.crowi.apiGet('/search', { ...query, type })),
       )
       const total = [portalResult, publicResult, userResult].map(result => result.meta.total).reduce((p, c) => p + c)
+      const hasNext = ({ data, meta }) => data.length < meta.total
 
       this.changeURL(query)
       this.setState({
@@ -96,6 +108,11 @@ export default class SearchPage extends React.Component {
           public: publicResult.data,
           user: userResult.data,
         },
+        searchedMeta: {
+          portal: { hasNext: hasNext(portalResult), ...portalResult.meta },
+          public: { hasNext: hasNext(publicResult), ...publicResult.meta },
+          user: { hasNext: hasNext(userResult), ...userResult.meta },
+        },
         searching: false,
         searched: true,
         total,
@@ -104,6 +121,28 @@ export default class SearchPage extends React.Component {
       // TODO error
       this.setState({ searchError: err, searching: false })
     }
+  }
+
+  async searchMore(type) {
+    const { searchingKeyword: q, searchedPages, searchedMeta } = this.state
+
+    const offset = searchedPages[type].length
+    const result = await this.props.crowi.apiGet('/search', { q, type, offset })
+
+    const pages = [...searchedPages[type], ...result.data]
+    const hasNext = pages.length < result.meta.total
+    const meta = { hasNext, ...result.meta }
+
+    this.setState({
+      searchedPages: {
+        ...searchedPages,
+        [type]: pages,
+      },
+      searchedMeta: {
+        ...searchedMeta,
+        [type]: meta,
+      },
+    })
   }
 
   onStickyChange(stuck) {
@@ -123,7 +162,13 @@ export default class SearchPage extends React.Component {
           stuck={this.state.stuck}
           changeType={this.changeType}
         />
-        <SearchResult pages={this.state.searchedPages} searchingKeyword={this.state.searchingKeyword} searched={this.state.searched} />
+        <SearchResult
+          pages={this.state.searchedPages}
+          meta={this.state.searchedMeta}
+          searchingKeyword={this.state.searchingKeyword}
+          searched={this.state.searched}
+          searchMore={this.searchMore}
+        />
       </div>
     )
   }

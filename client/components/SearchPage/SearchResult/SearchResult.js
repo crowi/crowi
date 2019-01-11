@@ -1,5 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import { Button } from 'react-bootstrap'
 import PagePathList from './PagePathList'
 import PageBodyList from './PageBodyList'
 import GroupedPageList from 'components/GroupedPageList/GroupedPageList'
@@ -28,8 +29,19 @@ export default class SearchResult extends React.Component {
   }
 
   renderList(type, pages) {
-    const { tree: excludePathString } = this.props
-    return <PagePathList pages={pages} excludePathString={excludePathString} />
+    const { tree: excludePathString, meta, searchMore } = this.props
+    const hasNext = meta[type].hasNext
+    return (
+      <PagePathList pages={pages} excludePathString={excludePathString}>
+        {hasNext && (
+          <div className="read-more">
+            <Button onClick={() => searchMore(type)} bsSize="small">
+              More
+            </Button>
+          </div>
+        )}
+      </PagePathList>
+    )
   }
 
   render() {
@@ -89,14 +101,16 @@ export default class SearchResult extends React.Component {
 SearchResult.propTypes = {
   tree: PropTypes.string.isRequired,
   pages: PropTypes.object.isRequired,
+  meta: PropTypes.object.isRequired,
   searchingKeyword: PropTypes.string.isRequired,
   searchError: PropTypes.object,
   searched: PropTypes.bool.isRequired,
+  searchMore: PropTypes.func.isRequired,
 }
 SearchResult.defaultProps = {
   tree: '',
-  pages: [],
+  pages: {},
+  meta: {},
   searchingKeyword: '',
-  searchResultMeta: {},
   searchError: null,
 }
