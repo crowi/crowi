@@ -1,13 +1,19 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-
 import PagePathList from './PagePathList'
 import PageBodyList from './PageBodyList'
+import GroupedPageList from 'components/GroupedPageList/GroupedPageList'
 
 // Search.SearchResult
 export default class SearchResult extends React.Component {
+  constructor(props) {
+    super(props)
+
+    this.renderList = this.renderList.bind(this)
+  }
+
   isNotSearchedYet() {
-    return this.props.searchResultMeta.took === undefined
+    return !this.props.searched
   }
 
   isNotFound() {
@@ -19,6 +25,11 @@ export default class SearchResult extends React.Component {
       return true
     }
     return false
+  }
+
+  renderList(type, pages) {
+    const { tree: excludePathString } = this.props
+    return <PagePathList pages={pages} excludePathString={excludePathString} />
   }
 
   render() {
@@ -56,17 +67,19 @@ export default class SearchResult extends React.Component {
       $('#search-result-list > nav').affix({ offset })
     }, 1200)
 
-    const { pages, tree: excludePathString, searchingKeyword } = this.props
+    const { pages, searchingKeyword } = this.props
 
     return (
       <div className="search-result row" id="search-result">
         <div className="col-md-4 hidden-xs hidden-sm page-list search-result-list" id="search-result-list">
           <nav data-spy="affix" data-offset-top={offset.top}>
-            <PagePathList pages={pages} excludePathString={excludePathString} />
+            <GroupedPageList pages={pages} list={this.renderList} />
           </nav>
         </div>
         <div className="col-md-8 search-result-content" id="search-result-content">
-          <PageBodyList pages={pages} searchingKeyword={searchingKeyword} />
+          <PageBodyList pages={pages.portal} searchingKeyword={searchingKeyword} />
+          <PageBodyList pages={pages.public} searchingKeyword={searchingKeyword} />
+          <PageBodyList pages={pages.user} searchingKeyword={searchingKeyword} />
         </div>
       </div>
     )
@@ -75,10 +88,10 @@ export default class SearchResult extends React.Component {
 
 SearchResult.propTypes = {
   tree: PropTypes.string.isRequired,
-  pages: PropTypes.array.isRequired,
+  pages: PropTypes.object.isRequired,
   searchingKeyword: PropTypes.string.isRequired,
-  searchResultMeta: PropTypes.object.isRequired,
   searchError: PropTypes.object,
+  searched: PropTypes.bool.isRequired,
 }
 SearchResult.defaultProps = {
   tree: '',

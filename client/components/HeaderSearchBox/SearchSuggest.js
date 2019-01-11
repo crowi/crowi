@@ -4,6 +4,7 @@ import { translate } from 'react-i18next'
 import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
+import GroupedPageListTitle from 'components/GroupedPageList/GroupedPageListTitle'
 
 class SearchSuggest extends React.Component {
   constructor(props) {
@@ -24,14 +25,12 @@ class SearchSuggest extends React.Component {
     return (
       pages.length > 0 && (
         <div className="grouped-page-list">
-          <h5>
-            <Icon name={icon} regular />
-            <span className="title">{title}</span>
+          <GroupedPageListTitle icon={icon} title={title}>
             <a className="more text-muted" href={this.buildSearchUrl(type)}>
               {t('search.suggest.more')}
               <Icon name="caret-right" />
             </a>
-          </h5>
+          </GroupedPageListTitle>
           <ListView pages={pages} />
         </div>
       )

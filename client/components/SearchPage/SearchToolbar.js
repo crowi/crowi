@@ -43,19 +43,17 @@ class SearchToolbar extends React.Component {
   }
 
   render() {
-    const { t, changeType } = this.props
+    const { t, changeType, stuck } = this.props
+    const className = ['search-toolbar', stuck ? 'stuck' : null].filter(Boolean).join(' ')
     const activeType = this.getActiveType()
     return (
-      <div className="search-toolbar row">
+      <div className={className}>
         <div className="search-meta col-md-4">
           <h3 className="search-keyword">{this.props.keyword}</h3>
           <small className="text-muted">
             {(this.props.searching && <Icon name="spinner" spin />) || t('search.toolbar.results', { value: this.props.total })}
           </small>
         </div>
-        <nav className="search-navbar col-md-8">
-          <SearchTypeNav searchTypes={this.searchTypes} activeType={activeType} changeType={changeType} />
-        </nav>
       </div>
     )
   }
@@ -66,14 +64,16 @@ SearchToolbar.propTypes = {
   type: PropTypes.string,
   total: PropTypes.number,
   changeType: PropTypes.func,
-  searching: PropTypes.boolean,
+  searching: PropTypes.bool,
   t: PropTypes.func.isRequired,
+  stuck: PropTypes.bool.isRequired,
 }
 SearchToolbar.defaultProps = {
   keyword: '',
   type: '',
   searching: false,
   total: 0,
+  stuck: false,
 }
 
 export default translate()(SearchToolbar)

@@ -164,6 +164,13 @@
   }
 }
 
+.search-toolbar-sticky-sentinel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  visibility: hidden;
+}
+
 .search-toolbar {
   position: sticky;
   z-index: 1;
@@ -234,6 +241,13 @@
       margin-right: 8px;
     }
   }
+}
+
+.search-toolbar.stuck {
+  padding-left: 36px;
+  padding-right: 36px;
+  margin-left: -16px;
+  margin-right: -16px;
 }
 
 @media (min-width: $screen-md-min) {

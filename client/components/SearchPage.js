@@ -7,6 +7,7 @@ import queryString from 'query-string'
 import Emitter from '../emitter'
 import SearchToolbar from 'components/SearchPage/SearchToolbar'
 import SearchResult from './SearchPage/SearchResult/SearchResult'
+import SearchToolbarSentinel from './SearchPage/SearchToolbarSentinel'
 
 export default class SearchPage extends React.Component {
   constructor(props) {
@@ -17,15 +18,18 @@ export default class SearchPage extends React.Component {
       searching: false,
       searchingKeyword: q,
       searchingType: type,
-      searchedPages: [],
-      searchResultMeta: {},
+      searchedPages: {},
       searchError: null,
+      searched: false,
+      total: 0,
+      stuck: false,
     }
 
     this.search = this.search.bind(this)
     this.buildQuery = this.buildQuery.bind(this)
     this.changeURL = this.changeURL.bind(this)
     this.changeType = this.changeType.bind(this)
+    this.onStickyChange = this.onStickyChange.bind(this)
 
     Emitter.on('search', ({ keyword: q = '' }) => {
       this.search(this.buildQuery({ q }))
@@ -67,9 +71,10 @@ export default class SearchPage extends React.Component {
     if (q === '') {
       this.setState({
         searchingKeyword: '',
-        searchedPages: [],
-        searchResultMeta: {},
+        searchedPages: {},
         searchError: null,
+        searched: false,
+        total: 0,
       })
 
       return true
@@ -77,14 +82,23 @@ export default class SearchPage extends React.Component {
 
     this.setState({ searching: true })
     try {
-      const { data, meta } = await this.props.crowi.apiGet('/search', query)
+      const [portalResult, publicResult, userResult] = await Promise.all(
+        ['portal', 'public', 'user'].map(type => this.props.crowi.apiGet('/search', { ...query, type })),
+      )
+      const total = [portalResult, publicResult, userResult].map(result => result.meta.total).reduce((p, c) => p + c)
+
       this.changeURL(query)
       this.setState({
         searchingKeyword: q,
         searchingType: type,
-        searchedPages: data,
-        searchResultMeta: meta,
+        searchedPages: {
+          portal: portalResult.data,
+          public: publicResult.data,
+          user: userResult.data,
+        },
         searching: false,
+        searched: true,
+        total,
       })
     } catch (err) {
       // TODO error
@@ -92,17 +106,24 @@ export default class SearchPage extends React.Component {
     }
   }
 
+  onStickyChange(stuck) {
+    this.setState({ stuck })
+  }
+
   render() {
+    const { toolbar, onStickyChange } = this
     return (
       <div className="content-main">
+        <SearchToolbarSentinel target={toolbar} onStickyChange={onStickyChange} />
         <SearchToolbar
           keyword={this.state.searchingKeyword}
           type={this.state.searchingType}
-          total={this.state.searchResultMeta.total}
+          total={this.state.total}
           searching={this.state.searching}
+          stuck={this.state.stuck}
           changeType={this.changeType}
         />
-        <SearchResult pages={this.state.searchedPages} searchingKeyword={this.state.searchingKeyword} searchResultMeta={this.state.searchResultMeta} />
+        <SearchResult pages={this.state.searchedPages} searchingKeyword={this.state.searchingKeyword} searched={this.state.searched} />
       </div>
     )
   }

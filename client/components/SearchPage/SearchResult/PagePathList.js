@@ -18,7 +18,11 @@ export default class PagePathList extends React.Component {
         </Page>
       )
     })
-    return <ul className="page-list-ul nav">{items}</ul>
+    return (
+      <div className="page-list">
+        <ul className="page-list-ul nav">{items}</ul>
+      </div>
+    )
   }
 }
 
