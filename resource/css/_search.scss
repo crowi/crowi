@@ -131,9 +131,8 @@
 
       .nav {
         > li {
-          padding: 0px 11px 0 8px;
           &.active {
-            padding: 0px 8px;
+            padding-right: 8px;
             border-right: solid 3px #666;
             background: #f0f0f0;
           }

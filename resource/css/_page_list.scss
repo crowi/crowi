@@ -102,10 +102,20 @@
   }
 
   .page-list {
-    margin-left: 22px;
-
     .page-list-ul {
       margin-bottom: 0;
+
+      .page-list-li {
+        padding: 0 11px;
+
+        a {
+          background: transparent;
+        }
+
+        &:hover {
+          background: #f8f8f8;
+        }
+      }
     }
   }
 }
