@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 import { translate } from 'react-i18next'
 import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
-import ListView from 'components/PageList/ListView'
+import GroupedPageList from 'components/GroupedPageList/GroupedPageList'
 import GroupedPageListTitle from 'components/GroupedPageList/GroupedPageListTitle'
 
 class SearchSuggest extends React.Component {
@@ -11,7 +11,7 @@ class SearchSuggest extends React.Component {
     super(props)
 
     this.buildSearchUrl = this.buildSearchUrl.bind(this)
-    this.renderList = this.renderList.bind(this)
+    this.renderTitle = this.renderTitle.bind(this)
   }
 
   buildSearchUrl(type) {
@@ -20,20 +20,15 @@ class SearchSuggest extends React.Component {
     return `/_search?${query}`
   }
 
-  renderList(title, icon, type, pages) {
+  renderTitle(type, title, icon) {
     const { t } = this.props
     return (
-      pages.length > 0 && (
-        <div className="grouped-page-list">
-          <GroupedPageListTitle icon={icon} title={title}>
-            <a className="more text-muted" href={this.buildSearchUrl(type)}>
-              {t('search.suggest.more')}
-              <Icon name="caret-right" />
-            </a>
-          </GroupedPageListTitle>
-          <ListView pages={pages} />
-        </div>
-      )
+      <GroupedPageListTitle icon={icon} title={title}>
+        <a className="more text-muted" href={this.buildSearchUrl(type)}>
+          {t('search.suggest.more')}
+          <Icon name="caret-right" />
+        </a>
+      </GroupedPageListTitle>
     )
   }
 
@@ -72,14 +67,9 @@ class SearchSuggest extends React.Component {
       return <div />
     }
 
-    const { t } = this.props
-    const { portalPages, publicPages, userPages } = this.props.searchedPages
-
     return (
       <div className="search-suggest" id="search-suggest">
-        {this.renderList(t('page_types.portal'), 'circle', 'portal', portalPages)}
-        {this.renderList(t('page_types.public'), 'file', 'public', publicPages)}
-        {this.renderList(t('page_types.user'), 'user', 'user', userPages)}
+        <GroupedPageList pages={this.props.searchedPages} title={this.renderTitle} />
       </div>
     )
   }

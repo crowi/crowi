@@ -47,12 +47,16 @@ export default class HeaderSearchBox extends React.Component {
     })
 
     try {
-      const [{ data: portalPages }, { data: publicPages }, { data: userPages }] = await Promise.all(
+      const [portalResults, publicResults, userResults] = await Promise.all(
         ['portal', 'public', 'user'].map(type => this.props.crowi.apiGet('/search', { q: keyword, type, limit: 10 })),
       )
       this.setState({
         searchingKeyword: keyword,
-        searchedPages: { portalPages, publicPages, userPages },
+        searchedPages: {
+          portal: portalResults.data,
+          public: publicResults.data,
+          user: userResults.data,
+        },
         searching: false,
         searchError: null,
       })
