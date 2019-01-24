@@ -117,11 +117,15 @@
         a {
           background: transparent;
         }
-
-        &:hover {
-          background: #f8f8f8;
-        }
       }
+    }
+  }
+}
+
+#search-result .grouped-page-list {
+  .page-list .page-list-ul {
+    .page-list-li:hover {
+      background: #f8f8f8;
     }
   }
 }
