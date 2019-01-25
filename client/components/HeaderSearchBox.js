@@ -28,7 +28,7 @@ export default class HeaderSearchBox extends React.Component {
     this.handleClickOutside = this.handleClickOutside.bind(this)
   }
 
-  componentWillMount() {
+  componentDidMount() {
     document.addEventListener('mousedown', this.handleClick, false)
   }
 
