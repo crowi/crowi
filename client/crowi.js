@@ -364,17 +364,14 @@ $(function() {
 
   // list-link
   $('.page-list-link').each(function() {
-    var $link = $(this)
-    var path = $link.data('path')
-    var shortPath = $link.attr('data-short-path')
+    const $link = $(this)
+    const path = $link.attr('data-path')
+    const shortPath = $link.attr('data-short-path')
 
-    var escape = function(s) {
-      return s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
+    if (path !== undefined && shortPath !== undefined) {
+      const pathPrefix = path.slice(0, -shortPath.length)
+      $link.html(`${Crowi.escape(pathPrefix)}<strong>${Crowi.escape(shortPath)}</strong>`)
     }
-    path = Crowi.escape(path)
-    var pattern = escape(Crowi.escape(shortPath)) + '(/)?$'
-
-    $link.html(path.replace(new RegExp(pattern), '<strong>' + shortPath + '$1</strong>'))
   })
 
   // for list page
