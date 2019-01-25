@@ -30,4 +30,5 @@ export default class PagePathList extends React.Component {
 PagePathList.propTypes = {
   pages: PropTypes.array.isRequired,
   excludePathString: PropTypes.string.isRequired,
+  children: PropTypes.element,
 }

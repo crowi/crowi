@@ -10,6 +10,7 @@ class GroupedPageList extends React.Component {
     pages: PropTypes.objectOf(PropTypes.array).isRequired,
     title: PropTypes.oneOfType([PropTypes.element, PropTypes.func]),
     list: PropTypes.oneOfType([PropTypes.element, PropTypes.func]),
+    t: PropTypes.func.isRequired,
   }
 
   renderTitle(type, title, icon) {
