@@ -502,7 +502,7 @@ $(function() {
     // header
     var $headerWrap = $('#page-header').parent()
     if ($headerWrap.length > 0) {
-      $headerWrap.attr('data-sps-offset', $('.crowi-header').outerHeight())
+      $headerWrap.attr('data-sps-offset', $('.crowi-header').outerHeight() + $('.page-grant').outerHeight())
       $('.stopper').on('click', e => {
         $headerWrap.removeClass('sps sps--abv sps--blw')
         return false
