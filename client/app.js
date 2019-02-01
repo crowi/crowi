@@ -25,6 +25,8 @@ import HeaderNotification from 'components/HeaderNotification'
 import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
+import CommentForm from 'components/Comment/CommentForm'
+import CommentLists from 'components/Comment/CommentLists'
 
 if (!window) {
   window = {}
@@ -36,9 +38,13 @@ moment.locale(navigator.userLanguage || navigator.language)
 
 const mainContent = document.querySelector('#content-main')
 let pageId = null
+let revisionId = null
+let revisionCreatedAt = null
 let pageContent = null
 if (mainContent !== null) {
   pageId = mainContent.attributes['data-page-id'].value
+  revisionId = mainContent.attributes['data-page-revision-id'].value
+  revisionCreatedAt = mainContent.attributes['data-page-revision-created'].value
   const rawText = document.getElementById('raw-text-original')
   if (rawText) {
     pageContent = rawText.innerHTML
@@ -74,7 +80,6 @@ const componentMappings = {
   'notification-page': <NotificationPage crowi={crowi} />,
 
   // 'revision-history': <PageHistory pageId={pageId} />,
-  // 'page-comment': <PageComment />,
   'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
   'seen-user-list': <SeenUserList pageId={pageId} crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
@@ -83,6 +88,8 @@ const componentMappings = {
   'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
   'admin-rebuild-search': <AdminRebuildSearch crowi={crowi} />,
+  'comment-form': <CommentForm crowi={crowi} pageId={pageId} revisionId={revisionId} />,
+  'comment-lists': <CommentLists crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
 }
 
 Object.keys(componentMappings).forEach(key => {
