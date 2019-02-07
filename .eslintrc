@@ -8,8 +8,7 @@
     "prettier",
     "prettier/standard",
     "prettier/flowtype",
-    "prettier/react",
-    "react-hooks"
+    "prettier/react"
   ],
   "env": {
     "browser": true,
@@ -28,7 +27,7 @@
     "react/prefer-stateless-function": "off",
     "standard/no-callback-literal": "off"
   },
-  "plugins": ["flowtype", "react", "prettier", "jest"],
+  "plugins": ["flowtype", "react", "prettier", "jest", "react-hooks"],
   "settings": {
     "react": {
       "version": "15.5",
