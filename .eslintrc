@@ -8,7 +8,8 @@
     "prettier",
     "prettier/standard",
     "prettier/flowtype",
-    "prettier/react"
+    "prettier/react",
+    "react-hooks"
   ],
   "env": {
     "browser": true,
@@ -23,6 +24,7 @@
     "no-inner-declarations": "off",
     "no-redeclare": "off",
     "prettier/prettier": "error",
+    "react-hooks/rules-of-hooks": "error",
     "react/prefer-stateless-function": "off",
     "standard/no-callback-literal": "off"
   },
