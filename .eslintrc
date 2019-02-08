@@ -26,7 +26,7 @@
     "react/prefer-stateless-function": "off",
     "standard/no-callback-literal": "off"
   },
-  "plugins": ["flowtype", "react", "prettier", "jest"],
+  "plugins": ["flowtype", "react", "prettier", "jest", "react-hooks"],
   "settings": {
     "react": {
       "version": "15.5",
@@ -52,6 +52,12 @@
         "no-redeclare": "off",
         "no-unused-expressions": "off",
         "no-unused-vars": "off"
+      }
+    },
+    {
+      "files": "client/**/*.js",
+      "rules": {
+        "react-hooks/rules-of-hooks": "error"
       }
     }
   ]
