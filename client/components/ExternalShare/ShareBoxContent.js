@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, Input, Alert } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 
@@ -73,4 +73,4 @@ ShareBoxContent.defaultProps = {
   share: {},
 }
 
-export default translate()(ShareBoxContent)
+export default withTranslation()(ShareBoxContent)

@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, Alert } from 'reactstrap'
 
 class DeleteConfirmModal extends React.Component {
@@ -57,4 +57,4 @@ DeleteConfirmModal.defaultProps = {
   show: false,
 }
 
-export default translate()(DeleteConfirmModal)
+export default withTranslation()(DeleteConfirmModal)

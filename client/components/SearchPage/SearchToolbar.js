@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import SearchTypeNav from 'components/SearchPage/SearchTypeNav/SearchTypeNav'
 
@@ -82,4 +82,4 @@ SearchToolbar.defaultProps = {
   total: 0,
 }
 
-export default translate()(SearchToolbar)
+export default withTranslation()(SearchToolbar)

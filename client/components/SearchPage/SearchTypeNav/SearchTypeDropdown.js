@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import { Dropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap'
 
 class SearchTypeDropdown extends React.Component {
@@ -44,4 +44,4 @@ SearchTypeDropdown.propTypes = {
 }
 SearchTypeDropdown.defaultProps = {}
 
-export default translate()(SearchTypeDropdown)
+export default withTranslation()(SearchTypeDropdown)

@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import { Button, Container, Row, Col, Label, Input, CustomInput, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
@@ -178,4 +178,4 @@ SettingModal.defaultProps = {
   show: false,
 }
 
-export default translate()(SettingModal)
+export default withTranslation()(SettingModal)

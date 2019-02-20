@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { Card } from 'reactstrap'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
@@ -107,4 +107,4 @@ SearchSuggest.defaultProps = {
   focused: false,
 }
 
-export default translate()(SearchSuggest)
+export default withTranslation()(SearchSuggest)
