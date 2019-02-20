@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
@@ -223,4 +223,4 @@ AccessLogModal.propTypes = {
   crowi: PropTypes.object.isRequired,
 }
 
-export default translate()(AccessLogModal)
+export default withTranslation()(AccessLogModal)

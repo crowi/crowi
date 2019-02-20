@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import Tab from 'components/Common/Tab'
 import TabItem from 'components/Common/TabItem'
 import ShareList from './ShareList'
@@ -33,4 +33,4 @@ AdminShare.propTypes = {
   crowi: PropTypes.object.isRequired,
 }
 
-export default translate()(AdminShare)
+export default withTranslation()(AdminShare)

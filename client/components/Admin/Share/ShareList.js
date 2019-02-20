@@ -1,6 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import moment from 'moment'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
@@ -123,4 +123,4 @@ ShareList.propTypes = {
   crowi: PropTypes.object.isRequired,
 }
 
-export default translate()(ShareList)
+export default withTranslation()(ShareList)

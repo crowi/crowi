@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGroupAddon, Input, Label } from 'reactstrap'
-import { translate } from 'react-i18next'
+import { withTranslation } from 'react-i18next'
 import Icon from '../Common/Icon'
 
 class RenameTree extends React.Component {
@@ -265,4 +265,4 @@ RenameTree.propTypes = {
   t: PropTypes.func.isRequired,
 }
 
-export default translate()(RenameTree)
+export default withTranslation()(RenameTree)
