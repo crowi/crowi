@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
+import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input } from 'reactstrap'
 import FormRow from '../FormRow'
 import Tips from './Tips'
 
 function GitHubSettings({ settingForm, update, alert = {} }) {
+  const [t] = useTranslation()
   const [clientId, setClientId] = useState(settingForm['github:clientId'])
   const [clientSecret, setClientSecret] = useState(settingForm['github:clientSecret'])
   const [organization, setOrganization] = useState(settingForm['github:organization'])
@@ -21,34 +23,35 @@ function GitHubSettings({ settingForm, update, alert = {} }) {
   return (
     <form className="form-horizontal" role="form" onSubmit={handleSubmit}>
       <fieldset>
-        <legend>GitHub 設定</legend>
+        <legend>{t('admin.github.legend')}</legend>
 
         <Alert color={alert.status} isOpen={!!alert.show}>
           {alert.message}
         </Alert>
 
         <Tips>
-          GitHub プロジェクトの設定をすると、GitHub アカウントにコネクトして登録やログインが可能になります。<br />
-          また、Organizationを指定した場合は、その組織に所属するアカウントのみがコネクトできるようになります。
+          {t('admin.github.tips1')}
+          <br />
+          {t('admin.github.tips2')}
         </Tips>
 
         <FormRow>
-          <Label for="githubClientId">Client ID</Label>
+          <Label for="githubClientId">{t('admin.github.client_id')}</Label>
           <Input id="githubClientId" value={clientId} onChange={e => setClientId(e.target.value)} />
         </FormRow>
 
         <FormRow>
-          <Label for="githubClientSecret">Client Secret</Label>
+          <Label for="githubClientSecret">{t('admin.github.client_secret')}</Label>
           <Input id="githubClientSecret" value={clientSecret} onChange={e => setClientSecret(e.target.value)} />
         </FormRow>
 
         <FormRow>
-          <Label for="githubOrganization">Organization</Label>
+          <Label for="githubOrganization">{t('admin.github.organization')}</Label>
           <Input id="githubOrganization" value={organization} onChange={e => setOrganization(e.target.value)} />
         </FormRow>
 
         <FormRow>
-          <Button color="primary">更新</Button>
+          <Button color="primary">{t('Update')}</Button>
         </FormRow>
       </fieldset>
     </form>

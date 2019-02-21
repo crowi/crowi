@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
+import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input, FormGroup, Row, Col } from 'reactstrap'
 import FormRow from '../FormRow'
 import Tips from './Tips'
 
 function MailSettings({ settingForm, update, alert = {} }) {
+  const [t] = useTranslation()
   const [mail, setMail] = useState(settingForm['mail:from'])
   const [host, setHost] = useState(settingForm['mail:smtpHost'] || '')
   const [port, setPort] = useState(settingForm['mail:smtpPort'] || '')
@@ -25,32 +27,34 @@ function MailSettings({ settingForm, update, alert = {} }) {
   return (
     <form className="form-horizontal" role="form" onSubmit={handleSubmit}>
       <fieldset>
-        <legend>メールの設定</legend>
+        <legend>{t('admin.mail.legend')}</legend>
 
         <Alert color={alert.status} isOpen={!!alert.show}>
           {alert.message}
         </Alert>
 
         <Tips>
-          SMTPの設定がされている場合、それが利用されます。SMTP設定がなく、AWSの設定がある場合、SESでの送信を試みます。<br />どちらの設定もない場合、メールは送信されません。
+          {t('admin.mail.tips1')}
+          <br />
+          {t('admin.mail.tips2')}
         </Tips>
 
         <FormRow>
-          <Label for="mailFrom">Fromアドレス</Label>
-          <Input id="mailFrom" placeholder="例: mail@crowi.wiki" value={mail} onChange={e => setMail(e.target.value)} />
+          <Label for="mailFrom">{t('admin.mail.from')}</Label>
+          <Input id="mailFrom" placeholder={t('admin.mail.from_placeholder')} value={mail} onChange={e => setMail(e.target.value)} />
         </FormRow>
 
         <FormGroup>
           <Row>
             <Col xs={{ size: 3, offset: 1 }}>
-              <Label>SMTP設定</Label>
+              <Label>{t('admin.mail.smtp')}</Label>
             </Col>
             <Col xs="4">
-              <Label for="mailSmtpHost">ホスト</Label>
+              <Label for="mailSmtpHost">{t('admin.mail.host')}</Label>
               <Input id="mailSmtpHost" value={host} onChange={e => setHost(e.target.value)} />
             </Col>
             <Col xs="2">
-              <Label for="mailSmtpPort">ポート</Label>
+              <Label for="mailSmtpPort">{t('admin.mail.port')}</Label>
               <Input id="mailSmtpPort" value={port} onChange={e => setPort(e.target.value)} />
             </Col>
           </Row>
@@ -59,18 +63,18 @@ function MailSettings({ settingForm, update, alert = {} }) {
         <FormGroup>
           <Row>
             <Col xs={{ size: 3, offset: 4 }}>
-              <Label for="mailSmtpUser">ユーザー</Label>
+              <Label for="mailSmtpUser">{t('admin.mail.user')}</Label>
               <Input id="mailSmtpUser" value={user} onChange={e => setUser(e.target.value)} />
             </Col>
             <Col xs="3">
-              <Label for="mailSmtpPassword">パスワード</Label>
+              <Label for="mailSmtpPassword">{t('admin.mail.password')}</Label>
               <Input type="password" id="mailSmtpPassword" value={password} onChange={e => setPassword(e.target.value)} />
             </Col>
           </Row>
         </FormGroup>
 
         <FormRow>
-          <Button color="primary">更新</Button>
+          <Button color="primary">{t('Update')}</Button>
         </FormRow>
       </fieldset>
     </form>

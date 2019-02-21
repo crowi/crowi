@@ -35,7 +35,7 @@ export default function SharePage() {
       <>
         <form className="form-horizontal" role="form" onSubmit={handleSubmit}>
           <fieldset>
-            <legend>外部共有設定</legend>
+            <legend>{t('admin.share.legend')}</legend>
 
             <Alert color={alert.status} isOpen={!!alert.show}>
               {alert.message}
@@ -59,7 +59,7 @@ export default function SharePage() {
               <Row>
                 <Col xs={{ size: 10, offset: 1 }}>
                   <Button type="submit" color="primary">
-                    Save
+                    {t('Save')}
                   </Button>
                 </Col>
               </Row>

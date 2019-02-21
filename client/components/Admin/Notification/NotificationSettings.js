@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
+import { useTranslation } from 'react-i18next'
 
 import FormRow from '../FormRow'
 import { Alert, Button, Label, Input } from 'reactstrap'
 
 function NotificationSettings({ slackSetting, fetchSettings }) {
+  const [t] = useTranslation()
   const [clientId, setClientId] = useState(slackSetting['slack:clientId'])
   const [clientSecret, setClientSecret] = useState(slackSetting['slack:clientSecret'])
   const [alert, setAlert] = useState({})
@@ -30,25 +32,25 @@ function NotificationSettings({ slackSetting, fetchSettings }) {
   return (
     <form className="form-horizontal" role="form" onSubmit={handleSubmit}>
       <fieldset>
-        <legend>Slack App Configuration</legend>
+        <legend>{t('admin.notification.settings.legend')}</legend>
 
         <Alert color={alert.status} isOpen={!!alert.show}>
           {alert.message}
         </Alert>
 
         <FormRow>
-          <Label for="slackClientId">Client ID</Label>
+          <Label for="slackClientId">{t('admin.notification.settings.client_id')}</Label>
           <Input id="slackClientId" type="text" value={clientId} onChange={e => setClientId(e.target.value)} />
         </FormRow>
 
         <FormRow>
-          <Label for="slackClientSecret">Client Secret</Label>
+          <Label for="slackClientSecret">{t('admin.notification.settings.client_secret')}</Label>
           <Input id="slackClientSecret" type="text" value={clientSecret} onChange={e => setClientSecret(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Button type="submit" color="primary">
-            Submit
+            {t('Submit')}
           </Button>
         </FormRow>
       </fieldset>

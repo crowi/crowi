@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
+import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input } from 'reactstrap'
 import FormRow from '../FormRow'
 import Tips from './Tips'
 
 function GoogleSettings({ settingForm, update, alert = {} }) {
+  const [t] = useTranslation()
   const [clientId, setClientId] = useState(settingForm['google:clientId'])
   const [clientSecret, setClientSecret] = useState(settingForm['google:clientSecret'])
 
@@ -19,26 +21,26 @@ function GoogleSettings({ settingForm, update, alert = {} }) {
   return (
     <form className="form-horizontal" role="form" onSubmit={handleSubmit}>
       <fieldset>
-        <legend>Google 設定</legend>
+        <legend>{t('admin.google.legend')}</legend>
 
         <Alert color={alert.status} isOpen={!!alert.show}>
           {alert.message}
         </Alert>
 
-        <Tips>Google プロジェクトの設定をすると、Google アカウントにコネクトして登録やログインが可能になります。</Tips>
+        <Tips>{t('admin.google.tips')}</Tips>
 
         <FormRow>
-          <Label for="googleClientId">Client ID</Label>
+          <Label for="googleClientId">{t('admin.google.client_id')}</Label>
           <Input id="googleClientId" value={clientId} onChange={e => setClientId(e.target.value)} />
         </FormRow>
 
         <FormRow>
-          <Label for="googleClientSecret">Client Secret</Label>
+          <Label for="googleClientSecret">{t('admin.google.client_secret')}</Label>
           <Input id="googleClientSecret" value={clientSecret} onChange={e => setClientSecret(e.target.value)} />
         </FormRow>
 
         <FormRow>
-          <Button color="primary">更新</Button>
+          <Button color="primary">{t('Update')}</Button>
         </FormRow>
       </fieldset>
     </form>
