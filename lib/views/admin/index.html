@@ -1,4 +1,4 @@
-{% extends '../layout/admin.html' %}
+{% extends '../layout/single.html' %}
 
 {% block html_title %}Wiki管理 · {{ path }}{% endblock %}
 
@@ -11,43 +11,7 @@
 {% endblock %}
 
 {% block content_main %}
-<div class="content-main content-form">
-
-  {% set emessage = req.flash('errorMessage') %}
-  {% if emessage.length %}
-  <div class="alert alert-danger">
-    {{ emessage }}
-  </div>
-  {% endif %}
-
-  <div class="row">
-    <div class="col-md-3">
-      {% include './widget/menu.html' %}
-    </div>
-    <div class="col-md-9">
-      <p>
-      この画面はWiki管理者のみがアクセスできる画面です。<br>
-      「ユーザー管理」から「管理者にする」ボタンを使ってユーザーをWiki管理者に任命することができます。
-      </p>
-
-      <h2>Information</h2>
-      <dl class="dl-horizontal">
-          <dt>Crowi Version</dt>
-          <dd>{{ crowiVersion }}</dd>
-          <dt>Search</dt>
-          <dd>
-            {% if searchConfigured() %}
-            {# TODO: multiple nodes #}
-            Configured: {{ searchInfo.host }}{{ searchInfo.indexName }}, <strong>{{ searchInfo.esVersion }}</strong>
-            {% else %}
-            Not available.
-            {% endif %}
-          </dd>
-      </dl>
-    </div>
-  </div>
-
-</div>
+<div id="admin-page" class="content-main content-form" data-csrftoken="{{ csrf() }}"></div>
 {% endblock content_main %}
 
 {% block content_footer %}

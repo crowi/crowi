@@ -440,6 +440,14 @@ input.searching {
   }
 }
 
+.dropdown-menu-buttons {
+  display: flex;
+  flex-direction: column;
+
+  & > button {
+    margin: 0.5rem 1rem;
+  }
+}
 
 
 // import

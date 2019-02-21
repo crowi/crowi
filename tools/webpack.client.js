@@ -19,7 +19,6 @@ const config = {
     crowi: path.join(ROOT, 'client/crowi.js'),
     presentation: path.join(ROOT, 'client/crowi-presentation.js'),
     form: path.join(ROOT, 'client/crowi-form.js'),
-    admin: path.join(ROOT, 'client/crowi-admin.js'),
     installer: path.join(ROOT, 'client/crowi-installer.js'),
   },
   output: {

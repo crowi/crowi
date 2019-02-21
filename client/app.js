@@ -24,7 +24,7 @@ import NotificationPage from 'components/NotificationPage'
 import HeaderNotification from 'components/HeaderNotification'
 import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
-import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
+import AdminPage from 'components/Admin/AdminPage'
 
 if (!window) {
   window = {}
@@ -46,7 +46,7 @@ if (mainContent !== null) {
 }
 
 const { user = {} } = JSON.parse(document.getElementById('user-context-hydrate').textContent || '{}')
-const csrfToken = $('#content-main').data('csrftoken')
+const csrfToken = $('#content-main').data('csrftoken') || $('#admin-page').data('csrftoken')
 // FIXME
 const crowi = new Crowi({ user, csrfToken }, window)
 window.crowi = crowi
@@ -82,7 +82,7 @@ const componentMappings = {
   'secret-keyword-form-container': <SecretKeywordFormContainer pageId={pageId} crowi={crowi} />,
   'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
-  'admin-rebuild-search': <AdminRebuildSearch crowi={crowi} />,
+  'admin-page': <AdminPage crowi={crowi} />,
 }
 
 Object.keys(componentMappings).forEach(key => {
