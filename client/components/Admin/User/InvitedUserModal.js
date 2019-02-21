@@ -1,7 +1,8 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { Modal, ModalHeader, ModalBody, Table } from 'reactstrap'
 
-export default function InvitedUserModal({ users, clear }) {
+function InvitedUserModal({ users, clear }) {
   return (
     <Modal isOpen={users.length > 0} toggle={clear}>
       <ModalHeader toggle={clear}>ユーザーを招待しました</ModalHeader>
@@ -33,3 +34,10 @@ export default function InvitedUserModal({ users, clear }) {
     </Modal>
   )
 }
+
+InvitedUserModal.propTypes = {
+  users: PropTypes.array.isRequired,
+  clear: PropTypes.func.isRequired,
+}
+
+export default InvitedUserModal

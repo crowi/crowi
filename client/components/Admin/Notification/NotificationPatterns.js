@@ -76,6 +76,8 @@ function NotificationPatterns({ settings, addPattern, removePattern }) {
 
 NotificationPatterns.propTypes = {
   settings: PropTypes.array.isRequired,
+  addPattern: PropTypes.func.isRequired,
+  removePattern: PropTypes.func.isRequired,
 }
 
 export default NotificationPatterns

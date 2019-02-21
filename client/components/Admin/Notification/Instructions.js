@@ -33,13 +33,13 @@ export default function Instructions() {
         <div className="row">
           <dt className="col-4">Short description</dt>
           <dd className="col-8">
-            <code>Crowi's Slack Notification Integration</code>
+            <code>Crowi&#39;s Slack Notification Integration</code>
           </dd>
         </div>
         <div className="row">
           <dt className="col-4">Long description</dt>
           <dd className="col-8">
-            <code>Crowi's Slack Notification Integration</code>
+            <code>Crowi&#39;s Slack Notification Integration</code>
           </dd>
         </div>
       </dl>

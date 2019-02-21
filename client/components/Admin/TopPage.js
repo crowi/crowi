@@ -1,5 +1,4 @@
 import React, { useContext, useEffect, useState } from 'react'
-import PropTypes from 'prop-types'
 
 import { AdminContext } from 'components/Admin/AdminPage'
 

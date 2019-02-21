@@ -84,6 +84,7 @@ function MailSettings({ settingForm, update, alert = {} }) {
 MailSettings.propTypes = {
   settingForm: PropTypes.object.isRequired,
   update: PropTypes.func.isRequired,
+  alert: PropTypes.object,
 }
 
 export default MailSettings

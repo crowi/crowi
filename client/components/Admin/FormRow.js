@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { Button, FormGroup, Label, Input, CustomInput, FormText, Row, Col } from 'reactstrap'
 
 function FormRow({ children }) {
@@ -20,6 +21,10 @@ function FormRow({ children }) {
       </Row>
     </FormGroup>
   )
+}
+
+FormRow.propTypes = {
+  children: PropTypes.element,
 }
 
 export default FormRow

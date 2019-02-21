@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react'
+import PropTypes from 'prop-types'
 import { BrowserRouter as Router, Switch, Route } from 'react-router-dom'
 
 import Top from './TopPage'
@@ -34,7 +35,7 @@ function useFetchSettings(crowi) {
   return [settings, fetchSettings]
 }
 
-export default function AdminPage({ crowi }) {
+function AdminPage({ crowi }) {
   const [loading, setLoading] = useState(true)
   const [searchConfigured, fetchSearchConfig] = useSearchConfig(crowi)
   const [settings, fetchSettings] = useFetchSettings(crowi)
@@ -77,3 +78,9 @@ export default function AdminPage({ crowi }) {
     </Router>
   )
 }
+
+AdminPage.propTypes = {
+  crowi: PropTypes.func.isRequired,
+}
+
+export default AdminPage
