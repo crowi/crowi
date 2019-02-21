@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { Badge } from 'reactstrap'
 
 export const STATUS = {
@@ -25,7 +26,7 @@ export const STATUS_LABELS = {
   [STATUS.INVITED]: '招待済み',
 }
 
-export default function UserStatusBadge({ user = {} }) {
+function UserStatusBadge({ user = {} }) {
   const status = user.status in Object.values(STATUS) ? user.status : null
   if (status === null) return null
 
@@ -33,3 +34,9 @@ export default function UserStatusBadge({ user = {} }) {
 
   return <Badge color={color}>{STATUS_LABELS[status]}</Badge>
 }
+
+UserStatusBadge.propTypes = {
+  user: PropTypes.object,
+}
+
+export default UserStatusBadge

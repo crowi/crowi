@@ -50,6 +50,7 @@ function GoogleSettings({ settingForm, update, alert = {} }) {
 GoogleSettings.propTypes = {
   settingForm: PropTypes.object.isRequired,
   update: PropTypes.func.isRequired,
+  alert: PropTypes.object,
 }
 
 export default GoogleSettings

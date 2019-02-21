@@ -70,8 +70,10 @@ function AppSettings({ isUploadable, settingForm, update, alert = {} }) {
 }
 
 AppSettings.propTypes = {
+  isUploadable: PropTypes.bool.isRequired,
   settingForm: PropTypes.object.isRequired,
   update: PropTypes.func.isRequired,
+  alert: PropTypes.object,
 }
 
 export default AppSettings

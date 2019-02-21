@@ -95,6 +95,7 @@ SecuritySettings.propTypes = {
   settingForm: PropTypes.object.isRequired,
   registrationMode: PropTypes.object.isRequired,
   update: PropTypes.func.isRequired,
+  alert: PropTypes.object,
 }
 
 export default SecuritySettings

@@ -72,6 +72,7 @@ function AWSSettings({ settingForm, update, alert = {} }) {
 AWSSettings.propTypes = {
   settingForm: PropTypes.object.isRequired,
   update: PropTypes.func.isRequired,
+  alert: PropTypes.object,
 }
 
 export default AWSSettings

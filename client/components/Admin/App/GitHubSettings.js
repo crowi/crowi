@@ -61,6 +61,7 @@ function GitHubSettings({ settingForm, update, alert = {} }) {
 GitHubSettings.propTypes = {
   settingForm: PropTypes.object.isRequired,
   update: PropTypes.func.isRequired,
+  alert: PropTypes.object,
 }
 
 export default GitHubSettings

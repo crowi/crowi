@@ -28,6 +28,8 @@ function ResetedPasswordModal({ isOpen, toggle, user = {}, password }) {
 ResetedPasswordModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   toggle: PropTypes.func.isRequired,
+  user: PropTypes.object,
+  password: PropTypes.string,
 }
 
 export default ResetedPasswordModal

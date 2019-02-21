@@ -60,6 +60,7 @@ function NotificationSettings({ slackSetting, fetchSettings }) {
 
 NotificationSettings.propTypes = {
   slackSetting: PropTypes.object.isRequired,
+  fetchSettings: PropTypes.func.isRequired,
 }
 
 export default NotificationSettings

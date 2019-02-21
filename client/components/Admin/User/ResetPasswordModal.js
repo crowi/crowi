@@ -31,6 +31,7 @@ function ResetPasswordModal({ isOpen, toggle, user = {}, resetPassword }) {
 ResetPasswordModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   toggle: PropTypes.func.isRequired,
+  user: PropTypes.object,
   resetPassword: PropTypes.func.isRequired,
 }
 

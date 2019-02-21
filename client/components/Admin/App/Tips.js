@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { Card, CardBody, Row, Col } from 'reactstrap'
 
 function Tips({ children }) {
@@ -11,6 +12,10 @@ function Tips({ children }) {
       </Col>
     </Row>
   )
+}
+
+Tips.propTypes = {
+  children: PropTypes.element,
 }
 
 export default Tips

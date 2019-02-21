@@ -1,6 +1,7 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 
-export default function UserSearchForm({ handleSubmit, handleChange, value }) {
+function UserSearchForm({ handleSubmit, handleChange, value }) {
   return (
     <form className="form-group input-group col-xs-6" onSubmit={handleSubmit}>
       {/* q だと事故る (検索欄に入ってしまう) ので、uq にしてます */}
@@ -21,3 +22,11 @@ export default function UserSearchForm({ handleSubmit, handleChange, value }) {
     </form>
   )
 }
+
+UserSearchForm.propTypes = {
+  handleSubmit: PropTypes.func.isRequired,
+  handleChange: PropTypes.func.isRequired,
+  value: PropTypes.string.isRequired,
+}
+
+export default UserSearchForm
