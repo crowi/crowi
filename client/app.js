@@ -25,8 +25,7 @@ import HeaderNotification from 'components/HeaderNotification'
 import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
-import CommentForm from 'components/Comment/CommentForm'
-import CommentLists from 'components/Comment/CommentLists'
+import Comment from 'components/Comment/Comment'
 
 if (!window) {
   window = {}
@@ -88,8 +87,7 @@ const componentMappings = {
   'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare pageId={pageId} crowi={crowi} />,
   'admin-rebuild-search': <AdminRebuildSearch crowi={crowi} />,
-  'comment-form': <CommentForm crowi={crowi} pageId={pageId} revisionId={revisionId} />,
-  'comment-lists': <CommentLists crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
+  'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
 }
 
 Object.keys(componentMappings).forEach(key => {

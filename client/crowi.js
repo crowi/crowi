@@ -172,8 +172,6 @@ Crowi.modifyScrollTop = function() {
 
 $(function() {
   var pageId = $('#content-main').data('page-id')
-  var revisionId = $('#content-main').data('page-revision-id')
-  var currentUser = crowi.getUser().id
   var isSeen = $('#content-main').data('page-is-seen')
   var pagePath = $('#content-main').data('path')
   var isSharePage = !!$('#content-main').data('is-share-page')
