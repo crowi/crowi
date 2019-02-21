@@ -1,4 +1,5 @@
 import React, { useContext, useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Alert } from 'reactstrap'
 import queryString from 'query-string'
 
@@ -140,6 +141,7 @@ function useModal() {
 }
 
 export default function UserPage() {
+  const [t] = useTranslation()
   const { crowi } = useContext(AdminContext)
   const me = crowi.getUser()
   const [{ success, failure }, { setSuccess, setFailure, clearStatus }] = useAlerts()
@@ -161,7 +163,7 @@ export default function UserPage() {
       {success && <Alert color="success">{success}</Alert>}
       {failure && <Alert color="danger">{failure}</Alert>}
 
-      <h2>ユーザー一覧</h2>
+      <h2>{t('admin.user.legend')}</h2>
       <UserTable
         me={me}
         users={users}

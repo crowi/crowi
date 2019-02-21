@@ -1,9 +1,11 @@
 import React, { useContext, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Alert, Button, FormGroup, Label, FormText, Row, Col } from 'reactstrap'
 
 import { AdminContext } from 'components/Admin/AdminPage'
 
 export default function BacklinkPage() {
+  const [t] = useTranslation()
   const { crowi } = useContext(AdminContext)
   const [alert, setAlert] = useState({})
 
@@ -24,7 +26,7 @@ export default function BacklinkPage() {
   return (
     <form className="form-horizontal" role="form" onSubmit={handleSubmit}>
       <fieldset>
-        <legend>Backlinks Build</legend>
+        <legend>{t('admin.backlink.legend')}</legend>
 
         <Alert color={alert.status} isOpen={!!alert.show}>
           {alert.message}
@@ -33,14 +35,16 @@ export default function BacklinkPage() {
         <FormGroup>
           <Row>
             <Col xs={{ size: 3, offset: 1 }}>
-              <Label>Backlinks Build</Label>
+              <Label>{t('admin.backlink.legend')}</Label>
             </Col>
             <Col xs="7">
-              <Button color="primary">Build Now</Button>
+              <Button color="primary">{t('admin.backlink.build')}</Button>
               <FormText color="muted">
-                Force rebuild backlinks.<br />
-                Click &quot;Build Now&quot; to delete all backlinks and create backlinks by all pages.<br />
-                This may take a while.
+                {t('admin.backlink.build_description1')}
+                <br />
+                {t('admin.backlink.build_description2')}
+                <br />
+                {t('admin.backlink.build_description3')}
               </FormText>
             </Col>
           </Row>

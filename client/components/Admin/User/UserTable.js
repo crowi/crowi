@@ -1,4 +1,6 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
+
 import Pagination from 'components/Common/Pagination'
 import UserSearchForm from './UserSearchForm'
 import UserTableRow from './UserTableRow'
@@ -51,6 +53,7 @@ function getHanlders(openResetModal, changeStatus) {
 }
 
 export default function UserTable({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) {
+  const [t] = useTranslation()
   const { current, count } = pagination
   const handlers = getHanlders(openResetModal, changeStatus)
   return (
@@ -63,12 +66,11 @@ export default function UserTable({ me, users, pagination, query, setQuery, sear
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>ユーザーID</th>
-                  <th>名前</th>
-                  <th>メールアドレス</th>
-                  <th>作成日</th>
-                  <th>ステータス</th>
-                  <th>操作</th>
+                  <th>{t('admin.user.user_id')}</th>
+                  <th>{t('admin.user.name')}</th>
+                  <th>{t('admin.user.email')}</th>
+                  <th>{t('admin.user.created_at')}</th>
+                  <th>{t('admin.user.operation')}</th>
                 </tr>
               </thead>
               <tbody>{users.map(user => <UserTableRow key={user._id} changeStatus={changeStatus} me={me} user={user} {...handlers} />)}</tbody>
@@ -76,7 +78,7 @@ export default function UserTable({ me, users, pagination, query, setQuery, sear
             <Pagination current={current} count={count} onClick={move} />
           </>
         ) : (
-          <p>ユーザーが見つかりませんでした</p>
+          <p>{t('admin.user.not_found')}</p>
         )
       ) : null}
     </>

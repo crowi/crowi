@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
+import { useTranslation, Trans } from 'react-i18next'
 import { Input, Button, FormText } from 'reactstrap'
 
 function NotificationPatterns({ settings, addPattern, removePattern }) {
+  const [t] = useTranslation()
   const [pathPattern, setPathPattern] = useState('')
   const [channel, setChannel] = useState('')
 
@@ -18,15 +20,15 @@ function NotificationPatterns({ settings, addPattern, removePattern }) {
 
   return (
     <>
-      <h3 className="mt-4">Default Notification Settings for Patterns</h3>
+      <h3 className="mt-4">{t('admin.notification.patterns.legend')}</h3>
 
       <div className="row">
         <table className="offset-1 col-10 table table-bordered">
           <thead>
             <tr>
-              <th>Pattern</th>
-              <th>Channel</th>
-              <th>Operation</th>
+              <th>{t('admin.notification.patterns.pattern')}</th>
+              <th>{t('admin.notification.patterns.channel')}</th>
+              <th>{t('admin.notification.patterns.operation')}</th>
             </tr>
           </thead>
           <tbody>
@@ -34,18 +36,22 @@ function NotificationPatterns({ settings, addPattern, removePattern }) {
               <td>
                 <Input value={pathPattern} placeholder="e.g. /projects/xxx/MTG/*" onChange={e => setPathPattern(e.target.value)} />
                 <FormText color="muted">
-                  Path name of wiki. Pattern expression with <code>*</code> can be used.
+                  <Trans i18nKey="admin.notification.patterns.path_pattern_description">
+                    Path name of wiki. Pattern expression with <code>*</code> can be used.
+                  </Trans>
                 </FormText>
               </td>
               <td>
                 <Input value={channel} placeholder="e.g. project-xxx" onChange={e => setChannel(e.target.value)} />
                 <FormText color="muted">
-                  Slack channel name. Without <code>#</code>.
+                  <Trans i18nKey="admin.notification.patterns.channel_description">
+                    Slack channel name. Without <code>#</code>.
+                  </Trans>
                 </FormText>
               </td>
               <td>
                 <Button color="primary" onClick={handleAddPattern}>
-                  Add
+                  {t('Add')}
                 </Button>
               </td>
             </tr>
@@ -56,7 +62,7 @@ function NotificationPatterns({ settings, addPattern, removePattern }) {
                 <td>{channel}</td>
                 <td>
                   <form className="admin-remove-updatepost">
-                    <Button onClick={() => removePattern(_id)}>Delete</Button>
+                    <Button onClick={() => removePattern(_id)}>{t('Delete')}</Button>
                   </form>
                 </td>
               </tr>
