@@ -214,7 +214,7 @@ search:
 
 admin:
   app:
-    legend: アプリ設定
+    legend: App Settings
     title: Wikiの名前
     title_description: ヘッダーやHTMLタイトルに使用されるWikiの名前を変更できます。
     confidential: コンフィデンシャル表示
@@ -224,7 +224,7 @@ admin:
     allow_upload_file_description1: ファイルアップロードの設定を有効にしている場合にのみ、選択可能です。
     allow_upload_file_description2: 許可をしている場合、画像以外のファイルをページに添付可能になります。
   aws:
-    legend: AWS設定
+    legend: AWS Settings
     tips1: AWS にアクセスするための設定を行います。AWS の設定を完了させると、ファイルアップロード機能、プロフィール写真機能などが有効になります。
     tips2: また、SMTP の設定が無い場合、SES を利用したメール送信が行われます。FromメールアドレスのVerify、プロダクション利用設定をする必要があります。
     notice: この設定を途中で変更すると、これまでにアップロードしたファイル等へのアクセスができなくなりますのでご注意下さい。
@@ -233,19 +233,19 @@ admin:
     access_key_id: Access Key ID
     secret_access_key: Secret Access Key
   github:
-    legend: GitHub 設定
+    legend: GitHub Settings
     tips1: GitHub プロジェクトの設定をすると、GitHub アカウントにコネクトして登録やログインが可能になります。
     tips2: また、Organizationを指定した場合は、その組織に所属するアカウントのみがコネクトできるようになります。
     client_id: Client ID
     client_secret: Client Secret
     organization: Organization
   google:
-    legend: Google 設定
+    legend: Google Settings
     tips: Google プロジェクトの設定をすると、Google アカウントにコネクトして登録やログインが可能になります。
     client_id: Client ID
     client_secret: Client Secret
   mail:
-    legend: メールの設定
+    legend: Mail Settings
     tips1: SMTPの設定がされている場合、それが利用されます。SMTP設定がなく、AWSの設定がある場合、SESでの送信を試みます。
     tips2: どちらの設定もない場合、メールは送信されません。
     from: Fromアドレス
@@ -256,7 +256,7 @@ admin:
     user: ユーザー
     password: パスワード
   security:
-    legend: セキュリティ設定
+    legend: Security Settings
     basic_auth: Basic認証
     id: ID
     password: パスワード
@@ -302,10 +302,10 @@ admin:
     build_description2: Click &quot;Build Now&quot; to delete all backlinks and create backlinks by all pages.
     build_description3: This may take a while.
   share:
-    legend: 外部共有設定
+    legend: External Share Settings
     enable_external_share: Wikiページの外部ユーザーへの共有を有効にする。
   user:
-    legend: ユーザー一覧
+    legend: User List
     user_id: ユーザーID
     name: 名前
     email: メールアドレス

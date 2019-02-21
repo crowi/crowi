@@ -224,7 +224,7 @@ admin:
     allow_upload_file_description1: ファイルアップロードの設定を有効にしている場合にのみ、選択可能です。
     allow_upload_file_description2: 許可をしている場合、画像以外のファイルをページに添付可能になります。
   aws:
-    legend: AWS設定
+    legend: AWS 設定
     tips1: AWS にアクセスするための設定を行います。AWS の設定を完了させると、ファイルアップロード機能、プロフィール写真機能などが有効になります。
     tips2: また、SMTP の設定が無い場合、SES を利用したメール送信が行われます。FromメールアドレスのVerify、プロダクション利用設定をする必要があります。
     notice: この設定を途中で変更すると、これまでにアップロードしたファイル等へのアクセスができなくなりますのでご注意下さい。
@@ -269,18 +269,18 @@ admin:
     whitelist_description1: 登録可能なメールアドレスを制限することができます。例えば、会社で使う場合、<1>@crowi.wiki</1>などと記載すると、その会社のメールアドレスを持っている人のみ登録可能になります。
     whitelist_description2: 1行に1メールアドレス入力してください。
   backlink:
-    legend: Backlinks Build
+    legend: バックリンク構築
     build: Build Now
     build_description1: Force rebuild backlinks.
     build_description2: Click "Build Now" to delete all backlinks and create backlinks by all pages.
     build_description3: This may take a while.
   notification:
     settings:
-      legend: Slack App Configuration
+      legend: Slack アプリ 設定
       client_id: Client ID
       client_secret: Client Secret
     patterns:
-      legend: Default Notification Settings for Patterns
+      legend: デフォルトの通知パターンの設定
       pattern: Pattern
       channel: Channel
       operation: Operation
@@ -296,7 +296,7 @@ admin:
       step3_description: Click "Connect to Slack" button to start OAuth process.
       step4: 4. Configure Slack on this notification setting screen
   search:
-    legend: Index Build
+    legend: インデックス構築
     build: Build Now
     build_description1: Force rebuild index.
     build_description2: Click "Build Now" to delete all backlinks and create backlinks by all pages.
