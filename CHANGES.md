@@ -1,6 +1,20 @@
 CHANGES
 ========
 
+## 1.7.6
+- Fix: error occurs in admin/share page after a shared page was completely deleted (#393)
+- Improve: Resize profile image before upload (#400)
+- Security: escape path to protect from XSS (#404)
+- some refactorings, internal fixes. (Thanks you @Sw0rdstream, #394, #395, #396)
+
+## 1.7.5
+
+- Improve: Not to allow input on API key form (Thank you @is2ei, #379)
+- Improve: Performances of page and list page (#384, #386)
+- Improve: The calculation method of search score (#391)
+- Improve: Search result UI and Build index page for Elasticsearch UX (#391)
+- I18n: Unportalize dialog (#381)
+
 ## 1.7.4
 
 - Improve: Add portalize button to menu (#368)
