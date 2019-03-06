@@ -21,7 +21,7 @@ export default class PagePath extends React.Component {
     }
 
     // ページの末尾を拾う
-    const suffix = name.replace(/.+\/(.+)?$/, '$1')
+    const suffix = name.replace(/.+\/(.+)$/, '$1')
     return suffix || name
   }
 
