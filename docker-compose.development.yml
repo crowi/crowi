@@ -29,7 +29,7 @@ services:
     image: mongo:3.6.3
     volumes:
       - ./data/mongodb:/data/db
-    restart: always
+    restart: unless-stopped
     ports:
       - 27017:27017
 
@@ -55,12 +55,12 @@ services:
 
   redis:
     image: redis:4.0.8
-    restart: always
+    restart: unless-stopped
     ports:
       - 6379:6379
 
   plantuml:
     image: plantuml/plantuml-server:latest
-    restart: always
+    restart: unless-stopped
     ports:
       - 8080:8080
