@@ -38,7 +38,7 @@ describe('Config model test', function() {
   })
 
   describe('.loadAllConfig', function() {
-    it('Get config array', async function(done) {
+    it('Get config array', async function() {
       const config = await Config.loadAllConfig()
       expect(config.crowi).to.be.an('Object')
       expect(config.crowi)
@@ -56,8 +56,6 @@ describe('Config model test', function() {
         .to.be.an('Object')
         .and.have.property('other:config')
         .and.equal('this is data')
-
-      done()
     })
   })
 })
