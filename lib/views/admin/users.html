@@ -226,11 +226,14 @@
                     </form>
                     {% endif  %}
                     {% if sUser.status == 2 %}
-
-                    <form action="/admin/user/{{ sUser._id.toString() }}/suspend" method="post">
-                      <input type="hidden" name="_csrf" value="{{ csrf() }}">
-                      <button type="submit" class="btn btn-block btn-warning">アカウント停止</button>
-                    </form>
+                      {% if sUser.username != user.username %}
+                      <form action="/admin/user/{{ sUser._id.toString() }}/suspend" method="post">
+                        <input type="hidden" name="_csrf" value="{{ csrf() }}">
+                        <button type="submit" class="btn btn-block btn-warning">アカウント停止</button>
+                      </form>
+                      {% else %}
+                      <p class="alert alert-danger">自分自身をアカウント停止することはできません</p>
+                      {% endif %}
                     {% endif  %}
                     {% if sUser.status == 3 %}
                     <form action="/admin/user/{{ sUser._id.toString() }}/activate" method="post">
