@@ -4,7 +4,7 @@ Crowi - The Simple & Powerful Communication Tool Based on Wiki
 ================================================================
 
 
-[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.6)
+[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.7)
 
 [![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
 [![Docker Pulls](https://img.shields.io/docker/pulls/crowi/crowi.svg)](https://hub.docker.com/r/crowi/crowi)
