@@ -66,19 +66,22 @@ Sign out: Logout
 page_login:
   sign_in: Sign in
   sign_up_is_here: Sign up
-  sign_in_with: 'Sign in with %s Account'
+  sign_in_with: 'Sign in with %s'
+  notice:
+    email_is_used: There is an account of '{{ email }}' not connected to {{ issuer }}.
+    login_to_connect: You can login with {{ issuer }} to connect its account.
 page_register:
   example: Example
   taro_yamada: James Bond
   sign_up: Sign up
-  sign_up_with: 'Sign up with %s Account'
+  sign_up_with: 'Sign up with %s'
   sign_in_is_here: Sign in
   note:
     invited: 'Tell me a bit about you :)'
   notice:
     restricted: Admin approval required.
     restricted_defail: "Once the admin approves your sign up, you'll be able to access this wiki."
-    register_with_this: 'Sign up with this %s Account.'
+    register_with_this: 'Sign up with this %s.'
     social_account_continue: 'Enter your user ID, name and password to continue.'
   form_help:
     email: You must have email address which listed below to sign up to this wiki.
@@ -86,6 +89,10 @@ page_register:
     user_id: 'The URL of pages you create will contain your User ID. Your User ID can consist of letters, numbers, and some symbols.'
     invited_email: "You've invited with this email address."
     invited_password: Please change current temporary password.
+  error:
+    unavailable_user_id: This User ID is not available.
+    already_registered_email: This email address is already registered.
+    unavailable_password_auth: Password authentication is currently invalid. Please register using third-party authentication.
 page_me:
   form_help:
     profile_image1: Image upload settings not completed.
@@ -97,12 +104,17 @@ page_me:
     github_connect1: 'With GitHub Connect, you can sign in with your GitHub Account.'
     github_disconnect1: 'If you disconnect your GitHub account, you will be unable to sign in using GitHub Authentication'
     github_disconnect2: 'After disconnecting your GitHub account, you can sign in normally using your email and password'
+  can_not_disconnect: You can not disconnect because one or more third-party authentication settings are required.
 page_me_apitoken:
   notice:
     apitoken_issued: API Token is not issued.
     update_token1: You can update to generate a new API Token.
     update_token2: You will need to update the API Token in any existing processes.
   form_help: {}
+page_me_third_party_auth:
+  enable_third_party_auth: Enable Third-Party Auth
+  notice:
+    third_party_auth_required: Activation of third-party authentication is required. Please set up authentication to continue using this wiki.
 Password: Password
 Password Settings: Password Settings
 Set new Password: Set new Password
