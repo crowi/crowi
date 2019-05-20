@@ -1,6 +1,6 @@
 {
   "name": "crowi",
-  "version": "1.7.6",
+  "version": "1.7.7",
   "description": "The simple & powerful Wiki",
   "tags": [
     "wiki",
@@ -10,8 +10,8 @@
   ],
   "author": "Sotaro KARASAWA <sotaro.k@gmail.com>",
   "contributors": [
-    "Keisuke SATO <riaf@me.com> (http://riaf.jp)",
-    "Shinya Yamaoka <contact@mail.libmacro.com>",
+    "lightnet328 <lightnet328@gmail.com>",
+    "otofune <otofune@gmail.com>",
     "Norio Suzuki <norio.suzuki@gmail.com>"
   ],
   "config": {
