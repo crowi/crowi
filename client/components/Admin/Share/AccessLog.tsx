@@ -22,7 +22,7 @@ interface State {
   error: boolean
 }
 
-type Record = {
+interface Record {
   index: number
   path: string
   info: Platform | undefined

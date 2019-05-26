@@ -12,7 +12,7 @@ interface State {
   skip: number
 }
 
-type Progress = {
+interface Progress {
   total: number
   current: number
   skip: number
