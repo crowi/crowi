@@ -22,7 +22,7 @@ interface State {
   searchError: Error | null
 }
 
-type Query = {
+interface Query {
   q: string
   type: string
 }

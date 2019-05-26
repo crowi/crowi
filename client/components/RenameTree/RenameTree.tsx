@@ -21,16 +21,19 @@ interface State {
   timeoutId: number | null
 }
 
-type PathMap = { [name: string]: string }
+interface PathMap { [name: string]: string }
+
 interface Node {
   path: string
   name: string
   children: Tree
 }
+
 interface Tree {
   [name: string]: Node
 }
-type Errors = { [path: string]: string[] }
+
+interface Errors { [path: string]: string[] }
 
 class RenameTree extends React.Component<Props, State> {
   constructor(props: Props) {
