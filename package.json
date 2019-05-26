@@ -142,13 +142,14 @@
     "style-loader": "~0.22.1",
     "swig": "~1.4.0",
     "typescript": "^3.1.1",
-    "typescript-eslint-parser": "^21.0.2",
     "uuid": "^3.2.1",
     "webpack": "^4.16.1",
     "webpack-cli": "^3.1.0",
     "yaml-loader": "^0.5.0"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^1.9.0",
+    "@typescript-eslint/parser": "^1.9.0",
     "babel-core": "^7.0.0-bridge.0",
     "babel-eslint": "^9.0.0",
     "babel-jest": "^23.6.0",
@@ -164,7 +165,6 @@
     "eslint-plugin-promise": "^4.0.0",
     "eslint-plugin-react": "^7.11.1",
     "eslint-plugin-standard": "^4.0.0",
-    "eslint-plugin-typescript": "^0.14.0",
     "faker": "^4.1.0",
     "fork-ts-checker-webpack-plugin": "^0.5.0",
     "jest": "^23.6.0",
