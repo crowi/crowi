@@ -1,17 +1,19 @@
 {
-  "parser": "typescript-eslint-parser",
+  "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "jsx": true,
     "useJSXTextNode": true
   },
   "extends": [
     "standard",
+    "plugin:@typescript-eslint/recommended",
     "plugin:react/recommended",
     "plugin:jest/recommended",
     "typescript",
     "typescript/react",
     "typescript/prettier",
     "prettier",
+    "prettier/@typescript-eslint",
     "prettier/standard",
     "prettier/react"
   ],
@@ -45,7 +47,7 @@
       "version": "16.7"
     }
   },
-  "plugins": ["react", "prettier", "jest"],
+  "plugins": ["@typescript-eslint", "react", "prettier", "jest"],
   "globals": {
     "jest/globals": true,
     "ROOT_DIR": true,
