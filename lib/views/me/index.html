@@ -15,7 +15,9 @@
 
   <ul class="nav nav-tabs">
     <li class="active"><a href="/me"><i class="fa fa-cogs"></i> {{ t('User Information') }}</a></li>
+    {% if not config.crowi['auth:disablePasswordAuth'] %}
     <li><a href="/me/password"><i class="fa fa-key"></i> {{ t('Password Settings') }}</a></li>
+    {% endif %}
     <li><a href="/me/apiToken"><i class="fa fa-rocket"></i> {{ t('API Settings') }}</a></li>
   </ul>
 
@@ -154,12 +156,17 @@
               <p>
                 {{ t('Connected') }}
 
-                <input type="submit" name="disconnectGoogle" class="btn btn-default" value="{{ t('Disconnect') }}">
+                <input type="submit" name="disconnectGoogle" class="btn btn-default" value="{{ t('Disconnect') }}" {% if !user.canDisconnectThirdPartyId() %}disabled{% endif %}>
               </p>
               <p class="help-block">
                 {{ t('page_me.form_help.google_disconnect1') }}<br>
                 {{ t('page_me.form_help.google_disconnect2') }}
               </p>
+              {% if !user.canDisconnectThirdPartyId() %}
+              <p class="help-block">
+                {{ t('page_me.can_not_disconnect') }}
+              </p>
+              {% endif %}
             </div>
 
             {% else %}
@@ -215,12 +222,17 @@
               <p>
                 {{ t('Connected') }}
 
-                <input type="submit" name="disconnectGitHub" class="btn btn-default" value="{{ t('Disconnect') }}">
+                <input type="submit" name="disconnectGitHub" class="btn btn-default" value="{{ t('Disconnect') }}" {% if !user.canDisconnectThirdPartyId() %}disabled{% endif %}>
               </p>
               <p class="help-block">
                 {{ t('page_me.form_help.github_disconnect1') }}<br>
                 {{ t('page_me.form_help.github_disconnect2') }}
               </p>
+              {% if !user.canDisconnectThirdPartyId() %}
+              <p class="help-block">
+                {{ t('page_me.can_not_disconnect') }}
+              </p>
+              {% endif %}
             </div>
 
             {% else %}
