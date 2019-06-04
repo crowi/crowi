@@ -1,6 +1,6 @@
 {
   "name": "crowi",
-  "version": "1.7.5",
+  "version": "1.7.6",
   "description": "The simple & powerful Wiki",
   "tags": [
     "wiki",
@@ -82,7 +82,7 @@
     "jquery": "~3.3.1",
     "jquery.cookie": "~1.4.1",
     "json-loader": "^0.5.7",
-    "marked": "~0.4.0",
+    "marked": "^0.5.2",
     "method-override": "~3.0.0",
     "mkdirp": "~0.5.1",
     "moment": "^2.22.2",

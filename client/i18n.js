@@ -10,7 +10,8 @@ export default () => {
   lngDetector.addDetector({
     name: 'userSetting',
     lookup(options) {
-      const { lang = null } = JSON.parse(document.getElementById('user-context-hydrate').textContent || '{}')
+      const { config = {} } = JSON.parse(document.getElementById('user-context-hydrate').textContent || '{}')
+      const { lang = null } = config
       return lang
     },
     cacheUserLanguage(lng, options) {},

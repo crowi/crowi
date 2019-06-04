@@ -1,6 +1,12 @@
 CHANGES
 ========
 
+## 1.7.6
+- Fix: error occurs in admin/share page after a shared page was completely deleted (#393)
+- Improve: Resize profile image before upload (#400)
+- Security: escape path to protect from XSS (#404)
+- some refactorings, internal fixes. (Thanks you @Sw0rdstream, #394, #395, #396)
+
 ## 1.7.5
 
 - Improve: Not to allow input on API key form (Thank you @is2ei, #379)

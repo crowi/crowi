@@ -134,6 +134,46 @@
       </fieldset>
       </form>
 
+      <form action="/_api/admin/settings/auth" method="post" class="form-horizontal" id="authSettingForm" role="form">
+      <fieldset>
+      <legend>認証設定</legend>
+        <div class="form-group">
+          <div class="col-xs-offset-3 col-xs-6">
+            <input id="authRequireThirdPartyAuth" type="checkbox" name="settingForm[auth:requireThirdPartyAuth]" value="1"
+              {% if settingForm['auth:requireThirdPartyAuth'] %}
+              checked
+              {% endif %}
+            />
+            <label for="authRequireThirdPartyAuth">外部認証の設定を必須にする</label>
+            <p class="help-block">
+              外部認証を設定していないユーザーがログインした場合、またはページ遷移した場合に外部認証の設定を要求します。
+            </p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="col-xs-offset-3 col-xs-6">
+            <input id="authDisablePasswordAuth" type="checkbox" name="settingForm[auth:disablePasswordAuth]" value="1"
+              {% if settingForm['auth:disablePasswordAuth'] %}
+              checked
+              {% endif %}
+            />
+            <label for="authDisablePasswordAuth">パスワードによるログインを禁止する</label>
+            <p class="help-block">
+              外部認証以外でログインすることができなくなります。
+            </p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="col-xs-offset-3 col-xs-6">
+            <input type="hidden" name="_csrf" value="{{ csrf() }}">
+            <button type="submit" class="btn btn-primary">更新</button>
+          </div>
+        </div>
+      </fieldset>
+      </form>
+
       <form action="/_api/admin/settings/mail" method="post" class="form-horizontal" id="mailSettingForm" role="form">
       <fieldset>
       <legend>メールの設定</legend>

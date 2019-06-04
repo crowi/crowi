@@ -15,7 +15,7 @@
 
 <div class="login-dialog-container flip-container col-md-5">
 
-<div class="login-dialog flipper {% if req.query.register or req.body.registerForm or isRegistering or googleId or githubId %}to-flip{% endif %}" id="login-dialog">
+<div class="login-dialog flipper {% if req.body.registerForm or isRegistering %}to-flip{% endif %}" id="login-dialog">
 
   <div class="login-dialog-inner front">
     <h2>{{ t('page_login.sign_in') }}</h2>
@@ -38,10 +38,28 @@
       </div>
       {% endif %}
     </div>
+
+    {% if toConnect %}
+      <div class="user-card">
+        <div class="user-card-image">
+          <img src="{{ targetUser|picture }}" class="picture picture-rounded picture-lg">
+        </div>
+        <div class="user-card-body">
+          <h4>{{ targetUser.name }}</h4>
+          <code>{{ targetUser.email }}</code>
+        </div>
+      </div>
+      <div class="alert alert-info">
+        <p>{{ t('page_login.notice.email_is_used', { email: socialEmail, issuer: issuerName }) }}<p>
+        <p>{{ t('page_login.notice.login_to_connect', { issuer: issuerName }) }}<p>
+      </div>
+    {% endif %}
+
+    {% if toConnect || !config.crowi['auth:disablePasswordAuth'] %}
     <form role="form" action="/login" method="post">
       <div class="input-group">
         <span class="input-group-addon"><i class="fa fa-envelope"></i></span>
-        <input type="text" class="form-control" placeholder="E-mail" name="loginForm[email]">
+        <input type="text" class="form-control" placeholder="E-mail" name="loginForm[email]" {% if toConnect %}value="{{ socialEmail }}" readonly{% endif %}>
       </div>
 
       <div class="input-group">
@@ -50,33 +68,53 @@
       </div>
 
       <input type="hidden" name="_csrf" value="{{ csrf() }}">
+      <input type="hidden" name="continue" value="{{ continueUrl }}">
+      {% if toConnect %}
+        <input type="hidden" name="toConnect" value="1">
+      {% endif %}
       <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('page_login.sign_in') }}">
     </form>
+    {% endif %}
 
+    {% if config.crowi['auth:disablePasswordAuth'] && config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
     <hr>
 
-    <div class="row">
+    <p class="help-block">
+      {{ t('page_register.form_help.email') }}
+    </p>
+    <ul>
+      {% for em in config.crowi['security:registrationWhiteList'] %}
+      <li><code>{{ em }}</code></li>
+      {% endfor %}
+    </ul>
+
+    {% endif %}
+
+    {% if not toConnect %}
+    {% if !config.crowi['auth:disablePasswordAuth'] %}
+    <hr>
+    {% endif %}
+
+    <div>
       {% if googleLoginEnabled() %}
-      <div class="col-md-6">
-        <p>{{ t('page_login.sign_in_with', "Google") }}</p>
         <form role="form" action="/login/google" method="get">
-          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('page_login.sign_in') }}</button>
+          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('page_login.sign_in_with', "Google") }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
+          <input type="hidden" name="continue" value="{{ continueUrl }}">
         </form>
-      </div>
       {% endif %}
       {% if githubLoginEnabled() %}
-      <div class="col-md-6">
-        <p>{{ t('page_login.sign_in_with', "GitHub") }}</p>
         <form role="form" action="/login/github" method="get">
-          <button type="submit" class="btn btn-block btn-github"><i class="fab fa-github-square"></i> {{ t('page_login.sign_in') }}</button>
+          <button type="submit" class="btn btn-block btn-github"><i class="fab fa-github-square"></i> {{ t('page_login.sign_in_with', "GitHub") }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
+          <input type="hidden" name="continue" value="{{ continueUrl }}">
         </form>
-      </div>
       {% endif %}
     </div>
+    {% endif %}
 
-    {% if config.crowi['security:registrationMode'] != 'Closed' %}
+    {% set hasAuthMethod = !config.crowi['auth:disablePasswordAuth'] || issuerName %}
+    {% if config.crowi['security:registrationMode'] != 'Closed' && hasAuthMethod %}
     <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil-alt"></i> {{ t('page_login.sign_up_is_here') }}</a></p>
     {% endif %}
   </div>
@@ -94,15 +132,19 @@
     {% endif %}
 
     {% if issuerName %}
-    <div class="google-info github-info alert alert-info">
-      {% if socialImage %}
-      <p class="text-center">
-        <img src="{{ socialImage }}" class="picture picture-rounded picture-lg">
-      </p>
-      {% endif %}
-      <code>{{ socialEmail }}</code> {{ t('page_register.notice.register_with_this', issuerName) }}<br>
-      {{ t('page_register.notice.social_account_continue') }}
-    </div>
+      <div class="user-card">
+        <div class="user-card-image">
+          <img src="{% if socialImage %}{{ socialImage }}{% else %}/images/userpicture.png{% endif %}" class="picture picture-rounded picture-lg">
+        </div>
+        <div class="user-card-body">
+          <h4>{{ socialName }}</h4>
+          <code>{{ socialEmail }}</code>
+        </div>
+      </div>
+      <div class="alert alert-info">
+        <p>{{ t('page_register.notice.register_with_this', issuerName) }}<p>
+        <p>{{ t('page_register.notice.social_account_continue') }}</p>
+      </div>
     {% endif %}
 
     <div id="register-form-errors">
@@ -177,29 +219,6 @@
       <input type="hidden" name="_csrf" value="{{ csrf() }}">
       <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('page_register.sign_up') }}">
     </form>
-
-    <hr>
-
-    <div class="row">
-      {% if googleLoginEnabled() %}
-      <div class="col-md-6">
-        <p>{{ t('page_register.sign_up_with', "Google") }}</p>
-        <form role="form" method="post" action="/register/google">
-          <input type="hidden" name="_csrf" value="{{ csrf() }}">
-          <button type="submit" class="btn btn-block btn-google"><i class="fab fa-google-plus-square"></i> {{ t('page_register.sign_up') }}</button>
-        </form>
-      </div>
-      {% endif %}
-      {% if githubLoginEnabled() %}
-      <div class="col-md-6">
-        <p>{{ t('page_register.sign_up_with', "GitHub") }}</p>
-        <form role="form" method="post" action="/register/github">
-          <input type="hidden" name="_csrf" value="{{ csrf() }}">
-          <button type="submit" class="btn btn-block btn-github"><i class="fab fa-github-square"></i> {{ t('page_register.sign_up') }}</button>
-        </form>
-      </div>
-      {% endif %}
-    </div>
 
     <p class="bottom-text"><a href="#login" id="login"><i class="fa fa-sign-out-alt"></i> {{ t('page_register.sign_in_is_here') }}</a></p>
   </div>
