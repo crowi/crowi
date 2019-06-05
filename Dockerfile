@@ -23,8 +23,10 @@ ARG NODE_ENV="production"
 ENV CROWI_VERSION v1.8.0
 ENV NODE_ENV ${NODE_ENV}
 
+USER node
+
 WORKDIR /crowi
 
-COPY --from=builder /crowi /crowi
+COPY --from=builder --chown=node:node /crowi /crowi
 
 CMD npm run start
