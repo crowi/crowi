@@ -8,7 +8,7 @@ ENV NODE_ENV ${NODE_ENV}
 WORKDIR /crowi
 
 ADD ./package.json ./package-lock.json ./
-RUN SKIP_POSTINSTALL=true npm install --unsafe-perm
+RUN SKIP_POSTINSTALL=true npm install
 
 ADD . .
 
