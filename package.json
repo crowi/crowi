@@ -25,8 +25,8 @@
     "url": "https://github.com/crowi/crowi.git"
   },
   "engines": {
-    "node": "8.x",
-    "npm": "5.x"
+    "node": "10.x",
+    "npm": "6.x"
   },
   "dependencies": {
     "@babel/cli": "^7.0.0",

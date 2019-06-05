@@ -1,4 +1,4 @@
-FROM node:8.12.0-alpine as builder
+FROM node:10.16.0-alpine as builder
 
 ARG NODE_ENV="production"
 
@@ -16,7 +16,7 @@ ADD . .
 RUN npm run postinstall
 
 
-FROM node:8.12.0-alpine
+FROM node:10.16.0-alpine
 
 ARG NODE_ENV="production"
 
