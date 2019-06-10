@@ -2,8 +2,15 @@
   // padding controll of .header-wrap and .content-main are moved to _layout and _form
 
   .main { // {{{ .main of layout related
-    transition: .5s ease;
-    -webkit-transition: .5s ease;
+    &:not(.layout-single) {
+      @include media-breakpoint-up(md) {
+        @include make-col(9);
+        flex: 1;
+      }
+    }
+
+    transition: max-width .5s ease;
+    -webkit-transition: max-width .5s ease;
     background: #fff;
 
     article {
@@ -14,7 +21,6 @@
     }
 
     article .header-wrap {
-      background: #fff;
       width: 100%;
 
       p.stopper {
@@ -23,7 +29,6 @@
 
       &.sps {
         position: sticky;
-        top: 0;
       }
 
       &.sps--blw {
@@ -31,6 +36,7 @@
         top: 0;
         left: 0;
         padding: 8px 20px 8px;
+        margin-left: -16px;
         z-index: 1039;
         background: rgba(255, 255, 255, .9);
         box-shadow: 0 0px 2px #999;
@@ -138,14 +144,18 @@
   .main.grant-specified,
   .main.grant-owner {
     background: #333;
-    padding: 16px;
+    padding: 0 16px 16px 16px;
 
     .page-grant {
       color: #ccc;
+      height: 40px;
+      line-height: 40px;
+      margin: 0;
     }
 
     article {
       border-radius: 5px;
+      min-height: calc(100vh - #{$crowiHeaderHeight} - 40px - 16px);
     }
   }
   // }}}
@@ -288,6 +298,7 @@
 
     .main { // {{{
       width: 100%;
+      max-width: 100%;
 
       article .header-wrap.sps--blw {
         width: 100%;
