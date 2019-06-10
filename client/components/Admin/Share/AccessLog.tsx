@@ -71,8 +71,8 @@ class AccessLog extends React.Component<Props, State> {
     this.getPage()
   }
 
-  renderRecord({ index, path, info = { name: '', os: '' }, remoteAddress, date }: Record) {
-    const { name: platformName = '', os = '' } = info
+  renderRecord({ index, path, info, remoteAddress, date }: Record) {
+    const { name: platformName = '', os = '' } = info || {}
     return (
       <tr key={index}>
         <td>{index}</td>
