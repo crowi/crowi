@@ -50,14 +50,7 @@ describe('Activity', function() {
           action: 'COMMENT',
         }
 
-        return Activity.createByParameters(parameters).then(
-          function(activity) {
-            throw new Error('not fulfilled')
-          },
-          function(err) {
-            expect(err.message).toBe('Activity validation failed')
-          },
-        )
+        return expect(Activity.createByParameters(parameters)).rejects.toThrow('Activity validation failed')
       })
     })
   })
@@ -73,8 +66,8 @@ describe('Activity', function() {
       })
 
       it('should remove', async () => {
-        const { result } = await Activity.removeByParameters(parameters)
-        expect(result).toEqual({ n: 1, ok: 1 })
+        const { n } = await Activity.removeByParameters(parameters)
+        expect(n).toBe(1)
       })
     })
   })

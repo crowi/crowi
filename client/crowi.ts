@@ -513,8 +513,9 @@ $(function() {
     // header
     var $headerWrap = $('#page-header').parent()
     if ($headerWrap.length > 0) {
-      var headerHeight = $('.crowi-header').outerHeight() || 0
-      $headerWrap.attr('data-sps-offset', headerHeight)
+      const headerHeight = $('.crowi-header').outerHeight() || 0
+      const pageGrantHeight = $('.page-grant').outerHeight() || 0
+      $headerWrap.attr('data-sps-offset', headerHeight + pageGrantHeight)
       $('.stopper').on('click', e => {
         $headerWrap.removeClass('sps sps--abv sps--blw')
         return false
