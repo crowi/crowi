@@ -136,6 +136,7 @@
     "flow-bin": "^0.87.0",
     "mocha": "~5.2.0",
     "nodemon": "^1.19.0",
+    "npm-check": "^5.9.0",
     "onchange": "^4.0.0",
     "prettier": "^1.15.3",
     "proxyquire": "~1.8.0",
