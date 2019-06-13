@@ -5,19 +5,19 @@ export default class PagePath extends React.Component {
   getShortPath(path) {
     const name = path
 
-    // /.../hoge/YYYY/MM/DD 形式のページ
-    if (name.match(/.+\/([^/]+\/\d{4}\/\d{2}\/\d{2})\/?$/)) {
-      return name.replace(/.+\/([^/]+\/\d{4}\/\d{2}\/\d{2})\/?$/, '$1')
+    // /.../YYYY/MM/DD 形式のページ
+    if (name.match(/^.*?([^/]+\/\d{4}\/\d{2}\/\d{2})\/?$/)) {
+      return name.replace(/^.*?([^/]+\/\d{4}\/\d{2}\/\d{2})\/?$/, '$1')
     }
 
-    // /.../hoge/YYYY/MM 形式のページ
-    if (name.match(/.+\/([^/]+\/\d{4}\/\d{2})\/?$/)) {
-      return name.replace(/.+\/([^/]+\/\d{4}\/\d{2})\/?$/, '$1')
+    // /.../YYYY/MM 形式のページ
+    if (name.match(/^.*?([^/]+\/\d{4}\/\d{2})\/?$/)) {
+      return name.replace(/^.*?([^/]+\/\d{4}\/\d{2})\/?$/, '$1')
     }
 
-    // /.../hoge/YYYY 形式のページ
-    if (name.match(/.+\/([^/]+\/\d{4})\/?$/)) {
-      return name.replace(/.+\/([^/]+\/\d{4})\/?$/, '$1')
+    // /.../YYYY 形式のページ
+    if (name.match(/^.*?([^/]+\/\d{4})\/?$/)) {
+      return name.replace(/^.*?([^/]+\/\d{4})\/?$/, '$1')
     }
 
     // ページの末尾を拾う
