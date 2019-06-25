@@ -4,7 +4,7 @@ Crowi - The Simple & Powerful Communication Tool Based on Wiki
 ================================================================
 
 
-[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.6)
+[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.7)
 
 [![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
 [![Docker Pulls](https://img.shields.io/docker/pulls/crowi/crowi.svg)](https://hub.docker.com/r/crowi/crowi)
@@ -70,6 +70,7 @@ Optional:
 
 * `MATHJAX`: If set `1`, enable MathJax feature.
 * `PLANTUML_URI`: If set the url of PlantUML server, then enable PlantUML feature. e.g. `http://localhost:18080`.
+* `ENABLE_DNSCACHE`: If set `true`, Use internal DNS cache for crowi in Linux VMs. (See also: [#407](https://github.com/crowi/crowi/pull/407))
 
 see: [.env.sample](./.env.sample)
 
