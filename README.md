@@ -1,6 +1,6 @@
 ![Crowi](http://res.cloudinary.com/hrscywv4p/image/upload/c_limit,f_auto,h_900,q_80,w_1200/v1/199673/https_www_filepicker_io_api_file_VpYEP32ZQyCZ85u6XCXo_zskpra.png)
 
-Crowi - The Simple & Powerful Communication Tool Based on Wiki
+Crowi - Empower the team with sharing your knowledge.
 ================================================================
 
 
@@ -11,7 +11,7 @@ Crowi - The Simple & Powerful Communication Tool Based on Wiki
 [![Join the community on Spectrum](https://withspectrum.github.io/badge/badge.svg)](https://spectrum.chat/crowi)
 
 
-Crowi is:
+Crowi is a **Markdown Wiki** like:
 
 * Easy to edit and share,
 * Markdown supported,
@@ -28,7 +28,7 @@ Install dependencies and build CSS and JavaScript:
 
 More info is [here](https://github.com/crowi/crowi/wiki/Install-and-Configuration).
 
-### WARNING
+### ⚠️WARNING⚠️
 
 Don't use `master` branch because it is unstable. Use released version except when you want to contribute to the project.
 
