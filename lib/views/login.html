@@ -114,8 +114,8 @@
     {% endif %}
 
     {% set hasAuthMethod = !config.crowi['auth:disablePasswordAuth'] || issuerName %}
-    {% if config.crowi['security:registrationMode'] != 'Closed' && hasAuthMethod %}
-    <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil-alt"></i> {{ t('page_login.sign_up_is_here') }}</a></p>
+    {% if config.crowi['security:registrationMode'] != 'Closed' && hasAuthMethod && !toConnect %}
+      <p class="bottom-text"><a href="#register" id="register"><i class="fa fa-pencil-alt"></i> {{ t('page_login.sign_up_is_here') }}</a></p>
     {% endif %}
   </div>
 
