@@ -4,6 +4,7 @@ import { translate } from 'react-i18next'
 import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
+import RecentlyViewedPageList from './RecentlyViewedPageList'
 
 class SearchSuggest extends React.Component {
   constructor(props) {
@@ -41,6 +42,14 @@ class SearchSuggest extends React.Component {
   render() {
     if (!this.props.focused) {
       return <div />
+    }
+
+    if (this.props.searchingKeyword === '') {
+      return (
+        <div className="search-suggest" id="search-suggest">
+          <RecentlyViewedPageList crowi={this.props.crowi} />
+        </div>
+      )
     }
 
     if (this.props.searching) {
@@ -91,7 +100,9 @@ SearchSuggest.propTypes = {
   searchingKeyword: PropTypes.string.isRequired,
   searching: PropTypes.bool.isRequired,
   searchError: PropTypes.object,
+  recentlyViewedPages: PropTypes.arrayOf(PropTypes.object).isRequired,
   focused: PropTypes.bool,
+  crowi: PropTypes.object.isRequired,
   t: PropTypes.func.isRequired,
 }
 
@@ -100,6 +111,7 @@ SearchSuggest.defaultProps = {
   searchingKeyword: '',
   searchError: null,
   searching: false,
+  recentlyViewedPages: [],
   focused: false,
 }
 
