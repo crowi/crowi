@@ -8,7 +8,8 @@ Crowi - The Simple & Powerful Communication Tool Based on Wiki
 
 [![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
 [![Docker Pulls](https://img.shields.io/docker/pulls/crowi/crowi.svg)](https://hub.docker.com/r/crowi/crowi)
-[![Join the chat at https://gitter.im/crowi/general](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/crowi/general)
+[![Join the community on Spectrum](https://withspectrum.github.io/badge/badge.svg)](https://spectrum.chat/crowi)
+
 
 Crowi is:
 
