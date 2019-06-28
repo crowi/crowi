@@ -83,6 +83,38 @@
         {% endif %}
       </div>
 
+      <div class="">
+        <h3>How to configure Slack app for Crowi</h3>
+        <p>
+          Register Crowi as a Slack application, the notification feature for Slack can be enabled.
+        </p>
+
+        <h4>1. Register Slack App</h4>
+        <p>
+        Create App from <strong><a href="https://api.slack.com/apps">this link</a></strong>, and fill the form out as below:
+        </p>
+        <dl class="dl-horizontal">
+          <dt>App Name</dt> <dd><code>Crowi</code> </dd>
+          <dt>Icon</dt> <dd>Upload this image as the icon (Free to download and use it) =&gt; <a href="https://github.com/crowi/crowi/tree/master/resource/logo">Crowi Logo</a></dd>
+          <dt>Redirect URL</dt> <dd><code>{{ baseUrl }}/admin/notification/slackAuth</code> in 'OAuth &amp; Permissions' tab.</dd>
+        </dl>
+
+        <h4>2. Get <code>clientId</code> and <code>clientSecret</code> in 'Basic Information' tab.</h4>
+        <h4>3. After clientId and clientSecret set, click "Connect to Slack" button to start OAuth process.</h4>
+        <h4>4. Configure Slack on this notification setting screen</h4>
+
+        <h3>How to enable unfurling links feature</h3>
+        <h4>1. Subscribe events from Slack</h4>
+        <p>
+          Fill the form in <strong>Features > Event Subscriptions</strong> out as below:
+        </p>
+        <dl class="dl-horizontal">
+          <dt>Request URL</dt> <dd><code>{{ appUrl }}/_api/slack/event</code> </dd>
+          <dt>Workspace Events</dt> <dd><code>link_shared</code> </dd>
+          <dt>Domains</dt> <dd>Your crowi domains </dd>
+        </dl>
+      </div>
+
       <hr>
 
       <h4>Default Notification Settings for Patterns</h4>
@@ -136,42 +168,6 @@
       </table>
 
 
-      {% endif %}
-
-      {% if not hasSlackConfig %}
-      <h3>How to configure Slack app for Crowi</h3>
-      <p>
-      Register Crowi as a Slack application, the notification feature for Slack can be enabled.
-      </p>
-      <h4>1. Register Slack App</h4>
-      <p>
-      Create App from <a href="https://api.slack.com/applications/new">this link</a>, and fill the form out as below:
-      </p>
-      <dl class="dl-horizontal">
-        <dt>App Name</dt> <dd><code>Crowi</code> </dd>
-        <dt>Icon</dt> <dd>Upload this image as the icon (Free to download and use it) =&gt; <a href="https://github.com/crowi/crowi/tree/master/resource/logo">Crowi Logo</a></dd>
-        <dt>Short description</dt> <dd><code>Crowi's Slack Notification Integration</code> </dd>
-        <dt>Long description</dt> <dd><code>Crowi's Slack Notification Integration</code> </dd>
-        <dt>Redirect URL</dt> <dd><code>{{ baseUrl }}/admin/notification/slackAuth</code> </dd>
-      </dl>
-      <p>
-      and <strong>Save</strong> it.
-      </p>
-
-      <h4>2. Get <code>clientId</code> and <code>clientSecret</code></h4>
-      <h4>3. After clientId and clientSecret set, click "Connect to Slack" button to start OAuth process.</h4>
-      <h4>4. Configure Slack on this notification setting screen</h4>
-
-      <h3>How to enable unfurling links feature</h3>
-      <h4>1. Subscribe events from Slack</h4>
-      <p>
-        Fill the form in <strong>Features > Event Subscriptions</strong> out as below:
-      </p>
-      <dl class="dl-horizontal">
-        <dt>Request URL</dt> <dd><code>{{ appUrl }}/_api/slack/event</code> </dd>
-        <dt>Workspace Events</dt> <dd><code>link_shared</code> </dd>
-        <dt>Domains</dt> <dd>Your crowi domains </dd>
-      </dl>
       {% endif %}
 
     </div>
