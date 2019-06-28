@@ -16,7 +16,6 @@ export default class SearchForm extends React.Component {
     this.handleSubmit = this.handleSubmit.bind(this)
     this.handleChange = this.handleChange.bind(this)
     this.handleFocus = this.handleFocus.bind(this)
-    this.handleBlur = this.handleBlur.bind(this)
     this.clearForm = this.clearForm.bind(this)
     this.ticker = null
   }
@@ -62,10 +61,6 @@ export default class SearchForm extends React.Component {
     this.props.isShown(true)
   }
 
-  handleBlur(event) {
-    // this.props.isShown(false)
-  }
-
   handleChange(event) {
     const keyword = event.target.value
     this.setState({ keyword })
@@ -93,7 +88,6 @@ export default class SearchForm extends React.Component {
           name="q"
           value={this.state.keyword}
           onFocus={this.handleFocus}
-          onBlur={this.handleBlur}
           onChange={this.handleChange}
         />
         <div className="input-group-append">
