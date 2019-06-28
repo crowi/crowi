@@ -400,7 +400,7 @@ describe('Page', () => {
       afterEach(async () => Page.remove({}))
     })
 
-    context('Last updated date and time of pages', () => {
+    describe('Last updated date and time of pages', () => {
       beforeEach(async () => {
         await Page.remove({})
         const paths = ['/hoge', '/hoge/huga', '/hoge/piyo']
@@ -418,7 +418,7 @@ describe('Page', () => {
 
           const selectUpdatedAt = pages => pages.map(page => page.updatedAt)
 
-          expect(selectUpdatedAt(pages)).to.deep.equal(selectUpdatedAt(renamedPages))
+          expect(selectUpdatedAt(pages)).toEqual(selectUpdatedAt(renamedPages))
         })
       })
     })
