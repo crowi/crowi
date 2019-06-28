@@ -33,18 +33,15 @@ describe('Config model test', () => {
   })
 
   describe('.loadAllConfig', () => {
-    test('Get config array', done => {
-      Config.loadAllConfig(function(err, config) {
-        expect(config.crowi).toBeInstanceOf(Object)
-        expect(config.crowi).toHaveProperty('test:test', 'crowi test value')
-        expect(config.crowi).toHaveProperty('test:test2', 11111)
-        expect(config.crowi).toHaveProperty('test:test3', [1, 2, 3, 4, 5])
+    test('Get config array', async function() {
+      const config = await Config.loadAllConfig()
+      expect(config.crowi).toBeInstanceOf(Object)
+      expect(config.crowi).toHaveProperty('test:test', 'crowi test value')
+      expect(config.crowi).toHaveProperty('test:test2', 11111)
+      expect(config.crowi).toHaveProperty('test:test3', [1, 2, 3, 4, 5])
 
-        expect(config.plugin).toBeInstanceOf(Object)
-        expect(config.plugin).toHaveProperty('other:config', 'this is data')
-
-        done()
-      })
+      expect(config.plugin).toBeInstanceOf(Object)
+      expect(config.plugin).toHaveProperty('other:config', 'this is data')
     })
   })
 })
