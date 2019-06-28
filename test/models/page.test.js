@@ -335,7 +335,8 @@ describe('Page', () => {
       const grant = Page.GRANT_PUBLIC
       const grantedUsers = [user]
       const creator = user
-      return paths.map(path => ({ path, grant, grantedUsers, creator }))
+      const updatedAt = Date.now()
+      return paths.map(path => ({ path, grant, grantedUsers, creator, updatedAt }))
     }
 
     beforeAll(async () => {
@@ -397,6 +398,29 @@ describe('Page', () => {
       })
 
       afterEach(async () => Page.remove({}))
+    })
+
+    context('Last updated date and time of pages', () => {
+      beforeEach(async () => {
+        await Page.remove({})
+        const paths = ['/hoge', '/hoge/huga', '/hoge/piyo']
+        await testDBUtil.generateFixture(conn, 'Page', generatePages(paths))
+      })
+
+      describe('last updated date and time', () => {
+        it('should not changed', async () => {
+          const pages = await Page.findChildrenByPath('/hoge', user, {})
+
+          const pathMap = Page.getPathMap(pages, '/hoge', '/huga')
+          await Page.renameTree(pathMap, user, {})
+
+          const renamedPages = await Page.findChildrenByPath('/huga', user, {})
+
+          const selectUpdatedAt = pages => pages.map(page => page.updatedAt)
+
+          expect(selectUpdatedAt(pages)).to.deep.equal(selectUpdatedAt(renamedPages))
+        })
+      })
     })
   })
 })

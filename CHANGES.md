@@ -1,6 +1,34 @@
 CHANGES
 ========
 
+## 1.7.7
+
+- Feature: Recently viewd page list appears when focus on search bar (#415)
+- Feature: Rebuild search index without downtime (#406)
+- Feature: Slack unfurl (#417, Thank you @mootoh for the original idea #204)
+- Feature: Restrict mode of forcing user to connect Google/GitHub and its login flow (#349)
+- Feature: Support dnscache to improve speed of network access (#407)
+- Feature: Support image type svg+xml (#432)
+- Improve: Add help text for Slack config (#433, thank you @potato4d)
+- Improve: Preventing updating last update timestamp on rename tree (#416)
+- Improve: Render empty table cell (update marked) (#399, thank you @naughtLdy)
+- Fix: Update config correctly even run Crowi with multiple servers (#435)
+- and some fixes. (Thank you @okonomi, @inductor, @potato4d
+
+## 1.7.6
+- Fix: error occurs in admin/share page after a shared page was completely deleted (#393)
+- Improve: Resize profile image before upload (#400)
+- Security: escape path to protect from XSS (#404)
+- some refactorings, internal fixes. (Thanks you @Sw0rdstream, #394, #395, #396)
+
+## 1.7.5
+
+- Improve: Not to allow input on API key form (Thank you @is2ei, #379)
+- Improve: Performances of page and list page (#384, #386)
+- Improve: The calculation method of search score (#391)
+- Improve: Search result UI and Build index page for Elasticsearch UX (#391)
+- I18n: Unportalize dialog (#381)
+
 ## 1.7.4
 
 - Improve: Add portalize button to menu (#368)

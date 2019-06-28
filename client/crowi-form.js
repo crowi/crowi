@@ -436,6 +436,7 @@ $(function() {
       },
       progressText: '(Uploading file...)',
       jsonFieldName: 'url',
+      allowedTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/svg+xml'],
     }
 
     // if files upload is set

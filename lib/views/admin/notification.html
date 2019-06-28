@@ -83,6 +83,65 @@
         {% endif %}
       </div>
 
+      <div>
+        <h3>How to configure Slack app for Crowi</h3>
+        <p>
+        Register Crowi as a Slack application, the notification feature for Slack can be enabled.
+        </p>
+        <h4>1. Register Slack App</h4>
+        <p>
+        Create App from <a href="https://api.slack.com/applications/new">this link</a>, and fill the form out as below:
+        </p>
+        <dl>
+          <div class="row">
+            <dt class="col-4">App Name</dt>
+            <dd class="col-8"><code>Crowi</code></dd>
+          </div>
+          <div class="row">
+            <dt class="col-4">Icon</dt>
+            <dd class="col-8">
+              <p>Upload this image as the icon</p>
+              <p>(Free to download and use it) =&gt; <a href="https://github.com/crowi/crowi/tree/master/resource/logo">Crowi Logo</a></p>
+            </dd>
+          </div>
+          <div class="row">
+            <dt class="col-4">Short description</dt>
+            <dd class="col-8"><code>Crowi's Slack Notification Integration</code></dd>
+          </div>
+          <div class="row">
+            <dt class="col-4">Long description</dt>
+            <dd class="col-8"><code>Crowi's Slack Notification Integration</code></dd>
+          </div>
+          <div class="row"></div>
+            <dt class="col-4">Redirect URL</dt>
+            <dd class="col-8"><code>{{ baseUrl }}/admin/notification/slackAuth</code></dd>
+          </div>
+        </dl>
+        <p>
+        and <strong>Save</strong> it.
+        </p>
+
+        <h4>2. Get <code>clientId</code> and <code>clientSecret</code>  in 'Basic Information' tab.</h4>
+        <h4>3. After clientId and clientSecret set, click "Connect to Slack" button to start OAuth process.</h4>
+        <h4>4. Configure Slack on this notification setting screen</h4>
+
+        <h3>How to enable unfurling links feature</h3>
+        <h4>1. Subscribe events from Slack</h4>
+        <p>
+          Fill the form in <strong>Features > Event Subscriptions</strong> out as below:
+        </p>
+        <div class="row">
+          <dt class="col-4">Request URL</dt>
+          <dd class="col-8"><code>{{ appUrl }}/_api/slack/event</code></dd>
+          <dt class="col-4">Workspace Events</dt>
+          <dd class="col-8"><code>link_shared</code></dd>
+          <dt class="col-4">Domains</dt>
+          <dd class="col-8">Your crowi domains </dd>
+        </div>
+      </div>
+
+      <hr>
+
       <h4 class="mt-4">Default Notification Settings for Patterns</h4>
 
       <div class="row">
@@ -134,54 +193,7 @@
           </tbody>
         </table>
       </div>
-
-
       {% endif %}
-
-      {% if not hasSlackConfig %}
-      <h3>How to configure Slack app for Crowi</h3>
-      <p>
-      Register Crowi as a Slack application, the notification feature for Slack can be enabled.
-      </p>
-      <h4>1. Register Slack App</h4>
-      <p>
-      Create App from <a href="https://api.slack.com/applications/new">this link</a>, and fill the form out as below:
-      </p>
-      <dl>
-        <div class="row">
-          <dt class="col-4">App Name</dt>
-          <dd class="col-8"><code>Crowi</code></dd>
-        </div>
-        <div class="row">
-          <dt class="col-4">Icon</dt>
-          <dd class="col-8">
-            <p>Upload this image as the icon</p>
-            <p>(Free to download and use it) =&gt; <a href="https://github.com/crowi/crowi/tree/master/resource/logo">Crowi Logo</a></p>
-          </dd>
-        </div>
-        <div class="row">
-          <dt class="col-4">Short description</dt>
-          <dd class="col-8"><code>Crowi's Slack Notification Integration</code></dd>
-        </div>
-        <div class="row">
-          <dt class="col-4">Long description</dt>
-          <dd class="col-8"><code>Crowi's Slack Notification Integration</code></dd>
-        </div>
-      </dl>
-      <p>
-      and <strong>Save</strong> it.
-      </p>
-
-      <h4>2. Get <code>clientId</code> and <code>clientSecret</code></h4>
-      <h4>3. Start OAuth process.</h4>
-      <p>
-      Click "Connect to Slack" button to start OAuth process.
-      </p>
-      <h4>4. Configure Slack on this notification setting screen</h4>
-      {% endif %}
-
-
-
     </div>
   </div>
 
