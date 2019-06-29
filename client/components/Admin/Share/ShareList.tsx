@@ -81,9 +81,7 @@ class ShareList extends React.Component<Props, State> {
     return (
       <tr key={index}>
         <td>{index}</td>
-        <td>
-          <a href={path}>{path}</a>
-        </td>
+        <td>{path ? <a href={path}>{path}</a> : '(Deleted)'}</td>
         <td>
           <a href={`/user/${username}`}>{name}</a>
         </td>

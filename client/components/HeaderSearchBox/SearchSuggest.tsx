@@ -4,7 +4,9 @@ import { translate } from 'react-i18next'
 import queryString from 'query-string'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
+import RecentlyViewedPageList from './RecentlyViewedPageList'
 import { Page } from 'client/types/crowi'
+import Crowi from 'client/util/crowi'
 
 interface Props {
   searchedPages: {
@@ -16,6 +18,7 @@ interface Props {
   searching: boolean
   searchError: Error | null
   focused: boolean
+  crowi: Crowi
   t: Function
 }
 
@@ -72,6 +75,14 @@ class SearchSuggest extends React.Component<Props> {
     const { t, searching, searchError, searchedPages, searchingKeyword } = this.props
     const numberOfResults = this.getNumberOfResults()
     const { portalPages, publicPages, userPages } = searchedPages
+    if (searchingKeyword === '') {
+      return (
+        <div className="search-suggest" id="search-suggest">
+          <RecentlyViewedPageList crowi={this.props.crowi} />
+        </div>
+      )
+    }
+
     if (searching) {
       return (
         <div>
