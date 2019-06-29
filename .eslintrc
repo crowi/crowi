@@ -69,6 +69,12 @@
         "no-unused-expressions": "off",
         "no-unused-vars": "off"
       }
+    },
+    {
+      "files": "client/**/*.js",
+      "rules": {
+        "react-hooks/rules-of-hooks": "error"
+      }
     }
   ]
 }
