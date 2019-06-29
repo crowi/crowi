@@ -3,6 +3,7 @@ import queryString from 'query-string'
 
 export default class CrowiAuth {
   crowi: Crowi
+  window: Window
   location: Crowi['location']
   localStorage: Crowi['localStorage']
 

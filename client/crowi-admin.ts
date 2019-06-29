@@ -56,11 +56,12 @@ $(function() {
     if ($tr.length) {
       const $email = $tr.find('.email')
       const $emailInput = $email.find('input')
+      const initial = $emailInput ? $emailInput.attr('initial') || '' : ''
       const $editPanel = $('#admin-users-table #edit-panel')
       const $padding = $('#admin-users-table .padding')
       $editPanel.on('animationend', () => {
         $tr.attr('id', '')
-        $email.empty().text($emailInput.attr('initial'))
+        $email.empty().text(initial)
 
         $editPanel.remove()
         $padding.remove()
@@ -73,12 +74,13 @@ $(function() {
     const $email = $tr.find('.email')
     const $emailInput = $('<input>', { type: 'text', class: 'form-control', value: $email.text(), initial: $email.text() })
 
-    const $editPanel = {}
-    $editPanel.container = $('<tr>', { id: 'edit-panel' })
-    $editPanel.td = $('<td>', { colspan: 7 })
-    $editPanel.div = $('<div>')
-    $editPanel.update = $('<button>', { type: 'submit', class: 'update btn btn-primary btn-sm' }).text('Update')
-    $editPanel.cancel = $('<button>', { type: 'button', class: 'cancel btn btn-default btn-sm' }).text('Cancel')
+    const $editPanel = {
+      container: $('<tr>', { id: 'edit-panel' }),
+      td: $('<td>', { colspan: 7 }),
+      div: $('<div>'),
+      update: $('<button>', { type: 'submit', class: 'update btn btn-primary btn-sm' }).text('Update'),
+      cancel: $('<button>', { type: 'button', class: 'cancel btn btn-default btn-sm' }).text('Cancel')
+    }
     const $padding = $('<tr>', { class: 'padding' })
 
     $tr.attr('id', 'target')
@@ -95,7 +97,7 @@ $(function() {
       const csrf = $('#admin-users-table').data('csrf')
       const body = { user_id: id, email, _csrf: csrf }
 
-      const { ok } = await crowi.apiPost('/admin/users.updateEmail', body)
+      const { ok } = await window.crowi.apiPost('/admin/users.updateEmail', body)
       if (ok) {
         // TODO Fix
         location.reload()
