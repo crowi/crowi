@@ -32,10 +32,10 @@ class RecentlyViewedPageList extends React.Component<Props, State> {
     return (
       pages.length > 0 && (
         <div className="grouped-page-list">
-          <h5>
+          <h6>
             <Icon name="history" />
             <span className="title">{t('Recently Viewed Pages')}</span>
-          </h5>
+          </h6>
           <ListView pages={pages} />
         </div>
       )

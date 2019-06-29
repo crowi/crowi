@@ -75,11 +75,7 @@ class SearchSuggest extends React.Component<Props> {
     const numberOfResults = this.getNumberOfResults()
     const { portalPages, publicPages, userPages } = searchedPages
     if (searchingKeyword === '') {
-      return (
-        <div className="search-suggest" id="search-suggest">
-          <RecentlyViewedPageList crowi={this.props.crowi} />
-        </div>
-      )
+      return <RecentlyViewedPageList crowi={this.props.crowi} />
     }
 
     if (searching) {
@@ -107,10 +103,8 @@ class SearchSuggest extends React.Component<Props> {
   }
 
   render() {
-    const { focused, searchingKeyword } = this.props
-    const numberOfResults = this.getNumberOfResults()
-    const searched = numberOfResults >= 1 || searchingKeyword !== ''
-    if (!focused || !searched) {
+    const { focused } = this.props
+    if (!focused) {
       return <div />
     }
 
