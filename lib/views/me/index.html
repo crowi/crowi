@@ -155,52 +155,21 @@
             </div>
             {% endif %}
 
-<<<<<<< HEAD
             <div class="form-group row">
-              <div class="col-sm-12">
-              {% if user.googleId %}
-                <p>
-                  {{ t('Connected') }}
-                  <input type="submit" name="disconnectGoogle" class="btn btn-secondary" value="{{ t('Disconnect') }}">
-                </p>
-                <p class="form-text text-muted">
-                  {{ t('page_me.form_help.google_disconnect1') }}<br>
-                  {{ t('page_me.form_help.google_disconnect2') }}
-                </p>
-              {% else %}
-                <p class="text-center">
-                  <input type="submit" name="connectGoogle" class="btn btn-google" value="{{ t('Google Connect') }}">
-                </p>
-                <p class="form-text text-muted">
-                  {{ t('page_me.form_help.google_connect1') }}<br>
-                </p>
-                {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
-                  <p class="form-text text-muted">
-                    {{ t('page_register.form_help.email') }}<br>
-                    {{ t('page_me.form_help.google_connect2') }}
-                  </p>
-                  <ul>
-                    {% for em in config.crowi['security:registrationWhiteList'] %}
-                    <li><code>{{ em }}</code></li>
-                    {% endfor %}
-                  </ul>
-                {% endif %}
-=======
-            <div class="form-group">
             {% if user.googleId %}
 
             <div class="col-sm-12">
               <p>
                 {{ t('Connected') }}
 
-                <input type="submit" name="disconnectGoogle" class="btn btn-default" value="{{ t('Disconnect') }}" {% if !user.canDisconnectThirdPartyId() %}disabled{% endif %}>
+                <input type="submit" name="disconnectGoogle" class="btn btn-secondary" value="{{ t('Disconnect') }}" {% if !user.canDisconnectThirdPartyId() %}disabled{% endif %}>
               </p>
-              <p class="help-block">
+              <p class="form-text text-muted">
                 {{ t('page_me.form_help.google_disconnect1') }}<br>
                 {{ t('page_me.form_help.google_disconnect2') }}
               </p>
               {% if !user.canDisconnectThirdPartyId() %}
-              <p class="help-block">
+              <p class="form-text text-muted">
                 {{ t('page_me.can_not_disconnect') }}
               </p>
               {% endif %}
@@ -212,11 +181,11 @@
               <div class="text-center">
                 <input type="submit" name="connectGoogle" class="btn btn-google" value="{{ t('Google Connect') }}">
               </div>
-              <p class="help-block">
+              <p class="form-text text-muted">
                 {{ t('page_me.form_help.google_connect1') }}<br>
               </p>
               {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
-              <p class="help-block">
+              <p class="form-text text-muted">
                 {{ t('page_register.form_help.email') }}<br>
                 {{ t('page_me.form_help.google_connect2') }}
               </p>
@@ -225,7 +194,6 @@
                 <li><code>{{ em }}</code></li>
                 {% endfor %}
               </ul>
->>>>>>> master
               {% endif %}
               </div>
             </div>
@@ -248,51 +216,21 @@
             </div>
             {% endif %}
 
-<<<<<<< HEAD
             <div class="form-group row">
-              <div class="col-sm-12">
-              {% if user.githubId %}
-                <p>
-                  {{ t('Connected') }}
-                  <input type="submit" name="disconnectGitHub" class="btn btn-secondary" value="{{ t('Disconnect') }}">
-                </p>
-                <p class="form-text text-muted">
-                  {{ t('page_me.form_help.github_disconnect1') }}<br>
-                  {{ t('page_me.form_help.github_disconnect2') }}
-                </p>
-              {% else %}
-                <p class="text-center">
-                  <input type="submit" name="connectGitHub" class="btn btn-github" value="{{ t('GitHub Connect') }}">
-                </p>
-                <p class="form-text text-muted">
-                  {{ t('page_me.form_help.github_connect1') }}<br>
-                </p>
-                {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
-                <p class="form-text text-muted">
-                  {{ t('page_register.form_help.email') }}
-                </p>
-                <ul>
-                  {% for em in config.crowi['security:registrationWhiteList'] %}
-                  <li><code>{{ em }}</code></li>
-                  {% endfor %}
-                </ul>
-                {% endif %}
-=======
-            <div class="form-group">
             {% if user.githubId %}
 
             <div class="col-sm-12">
               <p>
                 {{ t('Connected') }}
 
-                <input type="submit" name="disconnectGitHub" class="btn btn-default" value="{{ t('Disconnect') }}" {% if !user.canDisconnectThirdPartyId() %}disabled{% endif %}>
+                <input type="submit" name="disconnectGitHub" class="btn btn-secondary" value="{{ t('Disconnect') }}" {% if !user.canDisconnectThirdPartyId() %}disabled{% endif %}>
               </p>
-              <p class="help-block">
+              <p class="form-text text-muted">
                 {{ t('page_me.form_help.github_disconnect1') }}<br>
                 {{ t('page_me.form_help.github_disconnect2') }}
               </p>
               {% if !user.canDisconnectThirdPartyId() %}
-              <p class="help-block">
+              <p class="form-text text-muted">
                 {{ t('page_me.can_not_disconnect') }}
               </p>
               {% endif %}
@@ -304,11 +242,11 @@
               <div class="text-center">
                 <input type="submit" name="connectGitHub" class="btn btn-github" value="{{ t('GitHub Connect') }}">
               </div>
-              <p class="help-block">
+              <p class="form-text text-muted">
                 {{ t('page_me.form_help.github_connect1') }}<br>
               </p>
               {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
-              <p class="help-block">
+              <p class="form-text text-muted">
                 {{ t('page_register.form_help.email') }}
               </p>
               <ul>
@@ -316,7 +254,6 @@
                 <li><code>{{ em }}</code></li>
                 {% endfor %}
               </ul>
->>>>>>> master
               {% endif %}
               </div>
             </div>
