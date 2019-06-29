@@ -1,7 +1,7 @@
 CHANGES
 ========
 
-## 1.7.7
+## 1.7.8
 
 - Feature: Recently viewd page list appears when focus on search bar (#415)
 - Feature: Rebuild search index without downtime (#406)
@@ -14,6 +14,10 @@ CHANGES
 - Improve: Render empty table cell (update marked) (#399, thank you @naughtLdy)
 - Fix: Update config correctly even run Crowi with multiple servers (#435)
 - and some fixes. (Thank you @okonomi, @inductor, @potato4d
+
+## 1.7.7
+
+- Release revoked.
 
 ## 1.7.6
 - Fix: error occurs in admin/share page after a shared page was completely deleted (#393)
