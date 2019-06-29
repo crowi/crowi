@@ -102,9 +102,10 @@ export default class Crowi {
     const keys: keys = ['userByName', 'userById', 'users', 'draft']
 
     keys.forEach(key => {
-      if (this.localStorage[key]) {
+      const keyContent = this.localStorage[key]
+      if (keyContent) {
         try {
-          this[key] = JSON.parse(this.localStorage[key])
+          this[key] = JSON.parse(keyContent)
         } catch (e) {
           this.localStorage.removeItem(key)
         }

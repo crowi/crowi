@@ -10,33 +10,33 @@ export default class PagePath extends React.Component<Props> {
   static defaultProps = { page: {}, excludePathString: '' }
 
   getShortPath(path: string) {
-    let name = path.replace(/(\/)$/, '')
+    const name = path
 
-    // /.../hoge/YYYY/MM/DD 形式のページ
-    if (name.match(/.+\/([^/]+\/\d{4}\/\d{2}\/\d{2})$/)) {
-      return name.replace(/.+\/([^/]+\/\d{4}\/\d{2}\/\d{2})$/, '$1')
+    // /.../YYYY/MM/DD 形式のページ
+    if (name.match(/^.*?([^/]+\/\d{4}\/\d{2}\/\d{2})\/?$/)) {
+      return name.replace(/^.*?([^/]+\/\d{4}\/\d{2}\/\d{2})\/?$/, '$1')
     }
 
-    // /.../hoge/YYYY/MM 形式のページ
-    if (name.match(/.+\/([^/]+\/\d{4}\/\d{2})$/)) {
-      return name.replace(/.+\/([^/]+\/\d{4}\/\d{2})$/, '$1')
+    // /.../YYYY/MM 形式のページ
+    if (name.match(/^.*?([^/]+\/\d{4}\/\d{2})\/?$/)) {
+      return name.replace(/^.*?([^/]+\/\d{4}\/\d{2})\/?$/, '$1')
     }
 
-    // /.../hoge/YYYY 形式のページ
-    if (name.match(/.+\/([^/]+\/\d{4})$/)) {
-      return name.replace(/.+\/([^/]+\/\d{4})$/, '$1')
+    // /.../YYYY 形式のページ
+    if (name.match(/^.*?([^/]+\/\d{4})\/?$/)) {
+      return name.replace(/^.*?([^/]+\/\d{4})\/?$/, '$1')
     }
 
     // ページの末尾を拾う
-    return name.replace(/.+\/(.+)?$/, '$1')
+    const suffix = name.replace(/.+\/(.+)?$/, '$1')
+    return suffix || name
   }
 
   render() {
     const page = this.props.page
     const pagePath = page.path.replace(this.props.excludePathString.replace(/^\//, ''), '')
     const shortPath = this.getShortPath(pagePath)
-    const shortPathEscaped = shortPath.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
-    const pathPrefix = pagePath.replace(new RegExp(shortPathEscaped + '(/)?$'), '')
+    const pathPrefix = pagePath.slice(0, -shortPath.length)
 
     return (
       <span className="page-path">

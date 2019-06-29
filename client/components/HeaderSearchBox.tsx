@@ -21,6 +21,8 @@ interface State {
 }
 
 export default class HeaderSearchBox extends React.Component<Props, State> {
+  public node: HTMLDivElement | null = null
+
   constructor(props: Props) {
     super(props)
 
@@ -37,10 +39,30 @@ export default class HeaderSearchBox extends React.Component<Props, State> {
 
     this.search = this.search.bind(this)
     this.isShown = this.isShown.bind(this)
+    this.handleClick = this.handleClick.bind(this)
+    this.handleClickOutside = this.handleClickOutside.bind(this)
+  }
+
+  componentDidMount() {
+    document.addEventListener('mousedown', this.handleClick, false)
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('mousedown', this.handleClick, false)
   }
 
   isShown(focused: boolean) {
     this.setState({ focused })
+  }
+
+  handleClick(e) {
+    if (this.node && !this.node.contains(e.target)) {
+      this.handleClickOutside()
+    }
+  }
+
+  handleClickOutside() {
+    this.isShown(false)
   }
 
   async search(data: { keyword: string }) {
@@ -79,11 +101,19 @@ export default class HeaderSearchBox extends React.Component<Props, State> {
 
   render() {
     const { isSearchPage, searchingKeyword, searchedPages, searchError, searching, focused } = this.state
+    const { crowi } = this.props
     return (
-      <div className="search-box">
+      <div className="search-box" ref={node => (this.node = node)}>
         <SearchForm onSearchFormChanged={this.search} isShown={this.isShown} isSearchPage={isSearchPage} keyword={this.state.searchingKeyword} />
         {!isSearchPage && (
-          <SearchSuggest searchingKeyword={searchingKeyword} searchedPages={searchedPages} searchError={searchError} searching={searching} focused={focused} />
+          <SearchSuggest
+            searchingKeyword={searchingKeyword}
+            searchedPages={searchedPages}
+            searchError={searchError}
+            searching={searching}
+            focused={focused}
+            crowi={crowi}
+          />
         )}
       </div>
     )

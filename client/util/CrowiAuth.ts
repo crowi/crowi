@@ -8,6 +8,7 @@ export default class CrowiAuth {
 
   constructor(crowi: Crowi) {
     this.crowi = crowi
+    this.window = crowi.window
     this.location = crowi.location
     this.localStorage = crowi.localStorage
 
@@ -23,7 +24,7 @@ export default class CrowiAuth {
   }
 
   subscribeStorage() {
-    window.addEventListener('storage', this.onStorage)
+    this.window.addEventListener('storage', this.onStorage)
   }
 
   shouldUpdate(): boolean {
@@ -50,7 +51,11 @@ export default class CrowiAuth {
 
   onLogin() {
     const { continue: continueUrl = '/' } = queryString.parse(this.location.search)
-    top.location.href = typeof continueUrl === 'string' ? continueUrl : '/'
+    if (continueUrl) {
+      top.location.href = typeof continueUrl === 'string' ? continueUrl : '/'
+    } else {
+      this.location.reload()
+    }
   }
 
   onLogout() {
