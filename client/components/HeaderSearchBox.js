@@ -24,10 +24,30 @@ export default class HeaderSearchBox extends React.Component {
 
     this.search = this.search.bind(this)
     this.isShown = this.isShown.bind(this)
+    this.handleClick = this.handleClick.bind(this)
+    this.handleClickOutside = this.handleClickOutside.bind(this)
+  }
+
+  componentDidMount() {
+    document.addEventListener('mousedown', this.handleClick, false)
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('mousedown', this.handleClick, false)
   }
 
   isShown(focused) {
     this.setState({ focused: !!focused })
+  }
+
+  handleClick(e) {
+    if (!this.node.contains(e.target)) {
+      this.handleClickOutside()
+    }
+  }
+
+  handleClickOutside() {
+    this.isShown(false)
   }
 
   async search(data) {
@@ -67,7 +87,7 @@ export default class HeaderSearchBox extends React.Component {
   render() {
     const { isSearchPage } = this.state
     return (
-      <div className="search-box">
+      <div className="search-box" ref={node => (this.node = node)}>
         <SearchForm onSearchFormChanged={this.search} isShown={this.isShown} isSearchPage={isSearchPage} keyword={this.state.searchingKeyword} />
         {!isSearchPage && (
           <SearchSuggest
@@ -76,6 +96,7 @@ export default class HeaderSearchBox extends React.Component {
             searchError={this.state.searchError}
             searching={this.state.searching}
             focused={this.state.focused}
+            crowi={this.props.crowi}
           />
         )}
       </div>
