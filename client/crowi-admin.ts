@@ -146,7 +146,7 @@ $(function() {
       const action = $form.attr('action')
       if (!action) return false
       $.post(action, $form.serialize(), function(data) {
-        if (data.status) {
+        if (data.ok) {
           showMessage($id, 'Updated')
         } else {
           showMessage($id, data.error, 'danger')
