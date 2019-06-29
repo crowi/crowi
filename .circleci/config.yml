@@ -15,7 +15,7 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker:
-          version: 17.11.0-ce
+          version: 18.09.3
       - restore_cache:
           keys:
             - node_modules_{{ checksum "package-lock.json" }}

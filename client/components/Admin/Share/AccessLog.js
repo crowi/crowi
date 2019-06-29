@@ -51,9 +51,7 @@ class AccessLog extends React.Component {
     return (
       <tr key={index}>
         <td>{index}</td>
-        <td>
-          <a href={path}>{path}</a>
-        </td>
+        <td>{path ? <a href={path}>{path}</a> : '(Deleted)'}</td>
         <td>{info.name}</td>
         <td>{info.os.toString()}</td>
         <td>{remoteAddress}</td>
@@ -67,15 +65,17 @@ class AccessLog extends React.Component {
     const start = (current - 1) * limit + 1
     return (
       <tbody>
-        {this.state.accesses.map(({ share: { page }, tracking: { userAgent, remoteAddress }, lastAccessedAt }, i) =>
-          this.renderRecord({
+        {this.state.accesses.map(({ share, tracking: { userAgent, remoteAddress }, lastAccessedAt }, i) => {
+          const { page } = share || {}
+          const { path = '' } = page || {}
+          return this.renderRecord({
             index: start + i,
-            path: page.path,
+            path,
             info: platform.parse(userAgent),
             remoteAddress,
             date: moment(lastAccessedAt).format('llll'),
-          }),
-        )}
+          })
+        })}
       </tbody>
     )
   }
