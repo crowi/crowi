@@ -67,3 +67,20 @@
     margin-right: 4px;
   }
 }
+
+.user-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 20px;
+
+  .user-card-image {
+    position: relative;
+    margin-right: 10px;
+  }
+
+  .user-card-content {
+    display: flex;
+    flex-direction: column;
+  }
+}
