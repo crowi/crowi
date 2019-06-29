@@ -79,7 +79,7 @@ $(function() {
       td: $('<td>', { colspan: 7 }),
       div: $('<div>'),
       update: $('<button>', { type: 'submit', class: 'update btn btn-primary btn-sm' }).text('Update'),
-      cancel: $('<button>', { type: 'button', class: 'cancel btn btn-default btn-sm' }).text('Cancel')
+      cancel: $('<button>', { type: 'button', class: 'cancel btn btn-default btn-sm' }).text('Cancel'),
     }
     const $padding = $('<tr>', { class: 'padding' })
 

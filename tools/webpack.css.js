@@ -49,10 +49,7 @@ const config = {
       },
     ],
   },
-  plugins: [
-    extractSass,
-    ...(isProduction ? [new OptimizeCssAssetsPlugin()] : [])
-  ],
+  plugins: [extractSass, ...(isProduction ? [new OptimizeCssAssetsPlugin()] : [])],
 }
 
 module.exports = config
