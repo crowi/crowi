@@ -1,10 +1,9 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import { Dropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap'
 import { SearchType } from 'components/SearchPage/SearchToolbar'
 
-interface Props {
-  t: Function
+interface Props extends WithTranslation {
   searchTypes: SearchType[]
   activeType: SearchType
   changeType: Function
@@ -47,4 +46,4 @@ class SearchTypeDropdown extends React.Component<Props, State> {
   }
 }
 
-export default translate()(SearchTypeDropdown)
+export default withTranslation()(SearchTypeDropdown)

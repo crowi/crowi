@@ -1,12 +1,11 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGroup, FormFeedback } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
 import Crowi from 'client/util/Crowi'
 
-interface Props {
-  t: Function
+interface Props extends WithTranslation {
   crowi: Crowi
 }
 
@@ -130,4 +129,4 @@ class SecretKeywordFormContainer extends React.Component<Props, State> {
   }
 }
 
-export default translate()(SecretKeywordFormContainer)
+export default withTranslation()(SecretKeywordFormContainer)

@@ -1,15 +1,14 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import SearchTypeNav from 'components/SearchPage/SearchTypeNav/SearchTypeNav'
 
-interface Props {
+interface Props extends WithTranslation {
   keyword: string
   type: string
   total: number | undefined
   changeType: Function
   searching: boolean
-  t: Function
 }
 
 export interface SearchType {
@@ -84,4 +83,4 @@ class SearchToolbar extends React.Component<Props> {
   }
 }
 
-export default translate()(SearchToolbar)
+export default withTranslation()(SearchToolbar)

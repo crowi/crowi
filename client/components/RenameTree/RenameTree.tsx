@@ -1,13 +1,12 @@
 import React from 'react'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGroupAddon, Input, Label } from 'reactstrap'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import Icon from '../Common/Icon'
 import Crowi from 'client/util/Crowi'
 import { Page } from 'client/types/crowi'
 
-interface Props {
+interface Props extends WithTranslation {
   crowi: Crowi
-  t: Function
 }
 
 interface State {
@@ -295,4 +294,4 @@ class RenameTree extends React.Component<Props, State> {
   }
 }
 
-export default translate()(RenameTree)
+export default withTranslation()(RenameTree)

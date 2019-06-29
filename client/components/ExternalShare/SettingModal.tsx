@@ -1,18 +1,17 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import { Button, Container, Row, Col, Label, Input, CustomInput, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
 
-interface Props {
+interface Props extends WithTranslation {
   share: Share | null
   show: boolean
   onHide: () => void
   isChanging: boolean
   handleDelete: Function
-  t: Function
   crowi: Crowi
 }
 
@@ -194,4 +193,4 @@ class SettingModal extends React.Component<Props, State> {
   }
 }
 
-export default translate()(SettingModal)
+export default withTranslation()(SettingModal)
