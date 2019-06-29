@@ -461,16 +461,17 @@ $(function() {
 
     const $form = $('#pictureUploadForm')
     const formElement = <HTMLFormElement>$form[0]
+    const formInputElement = formElement.elements[0] as HTMLInputElement
     // check cancel/abort
-    if (formElement.elements[0].files.length === 0) return
+    if (formInputElement.files && formInputElement.files.length === 0) return
     const fd = new FormData(formElement)
 
     // Like first aid, we'll drop this function with react+cropper.js after.
-    const picture = fd.get('userPicture')
+    const picture = fd.get('userPicture') as File
     const { name: pictureName, type: pictureType } = picture
-    let pictureSource = null
+    let pictureSource: ImageBitmap | HTMLImageElement | null = null
     try {
-      pictureSource = await (() => {
+      pictureSource = await ((): Promise<ImageBitmap | HTMLImageElement> => {
         if ('createImageBitmap' in window) return createImageBitmap(picture)
         return new Promise((resolve, reject) => {
           const element = document.createElement('img')
@@ -498,7 +499,7 @@ $(function() {
      * @param {number} [quality=0.95] output quality
      * @returns {Promise<Blob>}
      */
-    const convert = (image, size, type, quality = 0.95) => {
+    const convert = (image, size, type, quality = 0.95): Promise<Blob | null> => {
       const [w, h] = [image.naturalWidth || image.width, image.naturalHeight || image.height]
       const s = w > h ? h : w
 
@@ -512,7 +513,8 @@ $(function() {
         element.width = element.height = s
         return element
       })()
-      canvas.getContext('2d').drawImage(image, parseInt((w - s) / 2), parseInt((h - s) / 2), s, s, 0, 0, s, s)
+      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
+      ctx.drawImage(image, (w - s) / 2, (h - s) / 2, s, s, 0, 0, s, s)
 
       /**
        * 1/2 単位で、だいたいのサイズにする
@@ -520,10 +522,10 @@ $(function() {
        * https://stackoverflow.com/questions/17861447/html5-canvas-drawimage-how-to-apply-antialiasing
        */
       while (canvas.height / 2 > size) {
-        const ctx = canvas.getContext('2d')
+        const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
 
         // Save current canvas state to pettern
-        const pattern = ctx.createPattern(canvas, 'no-repeat')
+        const pattern = ctx.createPattern(canvas, 'no-repeat') as CanvasPattern
         const { width, height } = canvas
 
         // Resize to 1/4 (and canvas state will clear)
@@ -550,7 +552,10 @@ $(function() {
       // If convertable image without format that can't be output, choose jpeg
       const targetType = (acceptTypes.includes(pictureType) && pictureType) || 'image/jpeg'
       const suffix = acceptTypes.includes(pictureType) ? '' : '.compact.jpg'
-      fd.set('userPicture', await convert(pictureSource, 128, targetType), pictureName + suffix)
+      const blob = await convert(pictureSource, 128, targetType)
+      if (blob) {
+        fd.set('userPicture', blob, pictureName + suffix)
+      }
     } catch (e) {
       $('#pictureUploadFormMessage')
         .removeClass()

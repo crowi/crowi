@@ -6,7 +6,7 @@ import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
 import RecentlyViewedPageList from './RecentlyViewedPageList'
 import { Page } from 'client/types/crowi'
-import Crowi from 'client/util/crowi'
+import Crowi from 'client/util/Crowi'
 
 interface Props extends WithTranslation {
   searchedPages: {
