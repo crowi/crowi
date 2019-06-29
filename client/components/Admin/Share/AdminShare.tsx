@@ -1,13 +1,12 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import Tab from 'components/Common/Tab'
 import TabItem from 'components/Common/TabItem'
 import ShareList from './ShareList'
 import AccessLog from './AccessLog'
 import Crowi from 'client/util/Crowi'
 
-interface Props {
-  t: Function
+interface Props extends WithTranslation {
   crowi: Crowi
 }
 
@@ -33,4 +32,4 @@ class AdminShare extends React.Component<Props> {
   }
 }
 
-export default translate()(AdminShare)
+export default withTranslation()(AdminShare)

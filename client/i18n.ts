@@ -1,6 +1,6 @@
 import i18n from 'i18next'
 import LngDetector from 'i18next-browser-languagedetector'
-import { reactI18nextModule } from 'react-i18next'
+import { initReactI18next } from 'react-i18next'
 
 import en from 'locales/en/translation.yml'
 import ja from 'locales/ja/translation.yml'
@@ -21,7 +21,7 @@ export default () => {
 
   i18n
     .use(lngDetector)
-    .use(reactI18nextModule)
+    .use(initReactI18next)
     .init({
       fallbackLng: 'en',
       debug: process.env.NODE_ENV === 'development',

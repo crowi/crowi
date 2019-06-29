@@ -1,12 +1,11 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 import Crowi from 'client/util/Crowi'
 
-interface Props {
+interface Props extends WithTranslation {
   pageId: string | null
-  t: Function
   crowi: Crowi
 }
 
@@ -73,4 +72,4 @@ class WatchButton extends React.Component<Props, State> {
   }
 }
 
-export default translate()(WatchButton)
+export default withTranslation()(WatchButton)

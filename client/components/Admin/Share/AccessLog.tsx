@@ -1,5 +1,5 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Table, Alert } from 'reactstrap'
@@ -7,8 +7,7 @@ import Pagination from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
 import { ShareAccess } from 'client/types/crowi'
 
-interface Props {
-  t: Function
+interface Props extends WithTranslation {
   crowi: Crowi
 }
 
@@ -136,4 +135,4 @@ class AccessLog extends React.Component<Props, State> {
   }
 }
 
-export default translate()(AccessLog)
+export default withTranslation()(AccessLog)

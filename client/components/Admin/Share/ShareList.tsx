@@ -1,13 +1,12 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import moment from 'moment'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
 
-interface Props {
-  t: Function
+interface Props extends WithTranslation {
   crowi: Crowi
 }
 
@@ -141,4 +140,4 @@ class ShareList extends React.Component<Props, State> {
   }
 }
 
-export default translate()(ShareList)
+export default withTranslation()(ShareList)

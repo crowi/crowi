@@ -1,5 +1,5 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 import ShareBoxContent from './ShareBoxContent'
@@ -8,10 +8,9 @@ import AccessLogModal from './AccessLogModal'
 import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
 
-interface Props {
+interface Props extends WithTranslation {
   isCreated?: boolean
   pageId: string | null
-  t: Function
   crowi: Crowi
 }
 
@@ -145,4 +144,4 @@ class ShareBox extends React.Component<Props, State> {
   }
 }
 
-export default translate()(ShareBox)
+export default withTranslation()(ShareBox)

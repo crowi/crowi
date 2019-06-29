@@ -1,13 +1,12 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, Alert } from 'reactstrap'
 
-interface Props {
+interface Props extends WithTranslation {
   show: boolean
   onHide: () => void
   handleDelete: Function
   handleClose: Function
-  t: Function
 }
 
 interface State {
@@ -59,4 +58,4 @@ class DeleteConfirmModal extends React.Component<Props, State> {
   }
 }
 
-export default translate()(DeleteConfirmModal)
+export default withTranslation()(DeleteConfirmModal)

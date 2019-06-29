@@ -1,5 +1,5 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
@@ -7,11 +7,10 @@ import Pagination from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
 import { Share, ShareAccess } from 'client/types/crowi'
 
-interface Props {
+interface Props extends WithTranslation {
   show: boolean
   onHide: () => void
   pageId: string | null
-  t: Function
   crowi: Crowi
 }
 
@@ -211,4 +210,4 @@ class AccessLogModal extends React.Component<Props, State> {
   }
 }
 
-export default translate()(AccessLogModal)
+export default withTranslation()(AccessLogModal)

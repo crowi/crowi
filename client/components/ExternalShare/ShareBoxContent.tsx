@@ -1,11 +1,11 @@
 import React from 'react'
-import { translate } from 'react-i18next'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, Input, Alert } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
 
-interface Props {
+interface Props extends WithTranslation {
   handleOpen?: () => void
   handleCreate?: () => void
   isCreated?: boolean
@@ -13,7 +13,6 @@ interface Props {
   share: Share | null
   creationError?: boolean
   crowi: Crowi
-  t: Function
 }
 
 class ShareBoxContent extends React.Component<Props> {
@@ -78,4 +77,4 @@ class ShareBoxContent extends React.Component<Props> {
   }
 }
 
-export default translate()(ShareBoxContent)
+export default withTranslation()(ShareBoxContent)
