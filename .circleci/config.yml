@@ -25,8 +25,9 @@ jobs:
           key: node_modules_{{ checksum "package-lock.json" }}
           paths:
             - /home/node/app/node_modules
-      - run: npm run build
+      - run: npm run type-check
       - run: npm run lint
+      - run: npm run build
       - run: npm run test
       - save_cache:
           key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
