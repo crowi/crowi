@@ -11,6 +11,7 @@ jobs:
           ELASTICSEARCH_URI: //localhost:9200/
           PLANTUML_URI: //localhost:8080
           FILE_UPLOAD: local
+          MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
       - image: mongo:3.6.13
     steps:
       - checkout
