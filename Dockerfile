@@ -4,6 +4,7 @@ ARG NODE_ENV="production"
 
 ENV CROWI_VERSION v1.8.0
 ENV NODE_ENV ${NODE_ENV}
+ENV MONGOMS_DOWNLOAD_MIRROR https://downloads.mongodb.org
 
 WORKDIR /crowi
 
