@@ -4,7 +4,7 @@ const MongodbMemoryServer = require('mongodb-memory-server').default
 class MongoDbEnvironment extends NodeEnvironment {
   constructor(config) {
     super(config)
-    this.mongodb = new MongodbMemoryServer({ binary: { version: '3.6.3' } })
+    this.mongodb = new MongodbMemoryServer({ binary: { version: '3.6.13' } })
   }
 
   async setup() {

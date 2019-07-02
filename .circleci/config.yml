@@ -11,7 +11,7 @@ jobs:
           ELASTICSEARCH_URI: //localhost:9200/
           PLANTUML_URI: //localhost:8080
           FILE_UPLOAD: local
-      - image: mongo:3.6.3
+      - image: mongo:3.6.13
     steps:
       - checkout
       - setup_remote_docker:
