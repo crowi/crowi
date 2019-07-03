@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: /home/node/app
     docker:
-      - image: node:8.11.2
+      - image: node:10.16.0
         environment:
           NODE_ENV: development
           MONGO_URI: mongodb://localhost:27017/crowi
@@ -11,7 +11,8 @@ jobs:
           ELASTICSEARCH_URI: //localhost:9200/
           PLANTUML_URI: //localhost:8080
           FILE_UPLOAD: local
-      - image: mongo:3.6.3
+          MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
+      - image: mongo:3.6.13
     steps:
       - checkout
       - setup_remote_docker:
@@ -25,8 +26,9 @@ jobs:
           key: node_modules_{{ checksum "package-lock.json" }}
           paths:
             - /home/node/app/node_modules
-      - run: npm run build
+      - run: npm run type-check
       - run: npm run lint
+      - run: npm run build
       - run: npm run test
       - save_cache:
           key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
