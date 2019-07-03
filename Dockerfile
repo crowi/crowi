@@ -9,7 +9,7 @@ ENV MONGOMS_DOWNLOAD_MIRROR https://downloads.mongodb.org
 WORKDIR /crowi
 
 ADD ./package.json ./package-lock.json ./
-RUN SKIP_POSTINSTALL=true npm install --unsafe-perm
+RUN SKIP_POSTINSTALL=true npm install
 
 ADD . .
 
@@ -24,8 +24,10 @@ ARG NODE_ENV="production"
 ENV CROWI_VERSION v1.8.0
 ENV NODE_ENV ${NODE_ENV}
 
+USER node
+
 WORKDIR /crowi
 
-COPY --from=builder /crowi /crowi
+COPY --from=builder --chown=node:node /crowi /crowi
 
 CMD npm run start

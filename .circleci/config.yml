@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: /home/node/app
     docker:
-      - image: node:8.11.2
+      - image: node:10.16.0
         environment:
           NODE_ENV: development
           MONGO_URI: mongodb://localhost:27017/crowi
