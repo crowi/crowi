@@ -14,7 +14,7 @@ class RecentlyViewedPageList extends React.Component {
   }
 
   async componentDidMount() {
-    const { pages } = await this.props.crowi.apiGet('/user/recentlyViewed', {})
+    const { pages } = await this.props.crowi.apiGet('/user.recentlyViewed', {})
     this.setState({ pages })
   }
 
