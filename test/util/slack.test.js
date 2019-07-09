@@ -9,6 +9,7 @@ describe('Slack Util', function() {
   var crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
   var slack = require(crowi.libDir + '/util/slack')(crowi)
 
+  // FIXME: Mock. Should be changed to use a real Crowi object.
   crowi.config = {
     data: {},
     set(config) {
