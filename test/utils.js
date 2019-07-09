@@ -60,6 +60,17 @@ fs.readdirSync(MODEL_DIR).forEach(function(file) {
 
 crowi.models = models
 
+// FIXME: Mock. Should be changed to use a real Crowi object.
+crowi.config = {
+  data: {},
+  set(config) {
+    this.data = config
+  },
+  get() {
+    return this.data
+  },
+}
+
 module.exports = {
   models: models,
   mongoose: mongoose,
