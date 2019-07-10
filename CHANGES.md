@@ -1,6 +1,8 @@
 CHANGES
 ========
 
+## 1.7.9
+
 ## 1.7.8
 
 - Feature: Recently viewd page list appears when focus on search bar (#415)
