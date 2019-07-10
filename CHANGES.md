@@ -3,6 +3,10 @@ CHANGES
 
 ## 1.7.9
 
+- Fix: Redirecting to the password setting page incorrectly when a user logged in (#469)
+- Fix: Some configs will not be updated on multi apps (#475)
+- Fix: Error when Basic auth is required and receive Bearer token (#480)
+
 ## 1.7.8
 
 - Feature: Recently viewd page list appears when focus on search bar (#415)
