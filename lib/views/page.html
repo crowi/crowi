@@ -32,7 +32,7 @@
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
-            <i class="far fa-star"></i>
+            <i class="mdi mdi-star-outline"></i>
           </p>
         </span>
       </div>
@@ -41,7 +41,7 @@
             data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
             class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
-        ><i class="far fa-thumbs-up"></i></button>
+        ><i class="mdi mdi-thumb-up-outline"></i></button>
       </div>
       {% endif %}
     </div>
@@ -54,7 +54,7 @@
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
-            <i class="far fa-star"></i>
+            <i class="mdi mdi-star-outlin"></i>
           </a>
         </span>
       </div>
