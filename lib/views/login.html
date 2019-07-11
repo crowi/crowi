@@ -58,12 +58,12 @@
     {% if toConnect || !config.crowi['auth:disablePasswordAuth'] %}
     <form role="form" action="/login" method="post">
       <div class="input-group">
-        <span class="input-group-prepend"><span class="input-group-text"><i class="fa fa-envelope"></i></span></span>
+        <span class="input-group-prepend"><span class="input-group-text"><span class="mdi mdi-email"></span></span></span>
         <input type="text" class="form-control" placeholder="E-mail" name="loginForm[email]" {% if toConnect %}value="{{ socialEmail }}" readonly{% endif %}>
       </div>
 
       <div class="input-group">
-        <span class="input-group-prepend"><span class="input-group-text"><i class="fa fa-key"></i></span></span>
+        <span class="input-group-prepend"><span class="input-group-text"><span class="mdi mdi-key"></span></span></span>
         <input type="password" class="form-control" placeholder="Password" name="loginForm[password]">
       </div>
 
