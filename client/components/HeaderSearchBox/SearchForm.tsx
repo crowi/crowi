@@ -1,4 +1,5 @@
 import React from 'react'
+import Icon from 'components/Common/Icon'
 import Emitter from '../../emitter'
 
 interface Props {
@@ -54,7 +55,7 @@ export default class SearchForm extends React.Component<Props, State> {
     if (this.state.keyword !== '') {
       return (
         <a className="search-top-clear" onClick={this.clearForm}>
-          <i className="fa fa-times-circle" />
+          <Icon name="close-circle" />
         </a>
       )
     } else {
@@ -107,7 +108,7 @@ export default class SearchForm extends React.Component<Props, State> {
         <div className="input-group-append">
           {formClear}
           <button type="submit" className="btn btn-light">
-            <i className="search-top-icon fa fa-search" />
+            <Icon className="search-top-icon" name="magnify" />
           </button>
         </div>
       </form>

@@ -34,6 +34,7 @@ export default class DeleteAttachmentModal extends React.Component<Props> {
           <span>
             {attachment.originalName} uploaded by <User user={attachment.creator} username />
           </span>
+          <br />
           <img src={attachment.url} />
         </p>
       )
@@ -41,7 +42,7 @@ export default class DeleteAttachmentModal extends React.Component<Props> {
 
     return (
       <p className="attachment-delete-file">
-        <Icon name="file-o" />
+        <Icon name="file-outline" />
         <span>
           {attachment.originalName} uploaded by <User user={attachment.creator} username />
         </span>
@@ -59,7 +60,7 @@ export default class DeleteAttachmentModal extends React.Component<Props> {
 
     let deletingIndicator: JSX.Element | string = ''
     if (deleting) {
-      deletingIndicator = <Icon name="spinner" spin />
+      deletingIndicator = <Icon name="loading" spin />
     }
     if (deleteError) {
       deletingIndicator = <p>{this.props.deleteError}</p>
