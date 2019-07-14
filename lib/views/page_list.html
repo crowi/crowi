@@ -12,14 +12,21 @@
     <div class="flex-title-line">
       <h1 class="title flex-item-title">
         <span id="revision-path">{{ path|insertSpaceToEachSlashes }}</span>
+
         {% if searchConfigured() && !isTopPage() && !isTrashPage() %}
+
         <form class="input-group search-input-group d-none d-md-inline-flex" data-toggle="tooltip" data-placement="bottom" title="Search pages under '{{ path }}'" id="search-listpage-form">
-          <input type="text" class="search-listpage-input form-control" data-path="{{ path }}" id="search-listpage-input">
-          <span class="input-group-append search-listpage-submit-group">
+          <input
+            type="text"
+            class="search-listpage-input form-control"
+            data-path="{{ path }}"
+            id="search-listpage-input">
+          <div class="input-group-append search-listpage-submit-group">
+            <a class="search-listpage-clear" id="search-listpage-clear"><i class="mdi mdi-close-circle"></i></a>
             <button type="submit" class="btn btn-outline-secondary" id="search-listpage-submit">
               <i class="mdi mdi-magnify"></i>
             </button>
-          </span>
+          </div>
         </form>
         {% endif %}
       </h1>
