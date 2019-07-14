@@ -128,7 +128,9 @@ export default class CrowiRenderer {
         var lexer = new marked.Lexer(options)
 
         // this is maybe not an official way
+        // @ts-ignore: Unofficial hack
         if (lexer.rules) {
+          // @ts-ignore: Unofficial hack
           lexer.rules.fences = /^ *(`{3,}|~{3,})[ .]*([^\r\n]+)? *\n([\s\S]*?)\s*\1 *(?:\n+|$)/
         }
 
