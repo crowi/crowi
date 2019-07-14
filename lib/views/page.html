@@ -264,15 +264,15 @@
   <div class="page-attachments" id="page-attachment"></div>
 
   <div class="page-meta">
-  Path: <span id="pagePath">{{ page.path }}</span><br>
-  {# for BC #}
-  {% if page.lastUpdateUser %}
+    Path: <span id="pagePath">{{ page.path }}</span><br>
+    {# for BC #}
+    {% if page.lastUpdateUser %}
     Last updated at {{ page.updatedAt|datetz('Y-m-d H:i:s') }} by <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-rounded"> {{ page.lastUpdateUser.name }}<br>
-  {% else %}
+    {% else %}
     Last updated at {{ page.revision.createdAt|datetz('Y-m-d H:i:s') }} by <img src="{{ page.revision.author|picture }}" class="picture picture-rounded"> {{ page.revision.author.name }}<br>
-  {% endif %}
-  {# /for BC #}
-  Created at {{ page.createdAt|datetz('Y-m-d H:i:s') }} by <img src="{{ page.creator|default(page.creator)|picture }}" class="picture picture-rounded"> {{ page.creator.name }}<br>
+    {% endif %}
+    {# /for BC #}
+    Created at {{ page.createdAt|datetz('Y-m-d H:i:s') }} by <img src="{{ page.creator|default(page.creator)|picture }}" class="picture picture-rounded"> {{ page.creator.name }}<br>
   </div>
 </div>
 {% endif %}
@@ -280,22 +280,22 @@
 {% endblock %}
 
 {% block side_header %}
-  {% if not page.isDeleted() %}
-    {% include 'widget/page_side_header.html' %}
-  {% endif %}
+{% if not page.isDeleted() %}
+{% include 'widget/page_side_header.html' %}
+{% endif %}
 {% endblock %} {# side_header #}
 
 {% block side_content %}
-  {% if not page.isDeleted() %}
-    {% include 'widget/page_side_content.html' %}
-  {% endif %}
+{% if not page.isDeleted() %}
+{% include 'widget/page_side_content.html' %}
+{% endif %}
 {% endblock %}
 
 {% block footer %}
 {% endblock %}
 
 {% block body_end %}
-  {% parent %}
+{% parent %}
 
 <div id="presentation-layer" class="fullscreen-layer">
   <div id="presentation-container"></div>
