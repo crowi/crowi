@@ -1,31 +1,40 @@
 import React from 'react'
+import MDIIcon from '@mdi/react'
+import * as MDIJs from '@mdi/js'
 
 // TODO: support size and so far
 interface Props {
   name: string
-  solid?: boolean
-  regular?: boolean
-  light?: boolean
-  spin?: boolean
+  spin: boolean
   className?: string
 }
 
 export default class Icon extends React.Component<Props> {
-  static defaultProps = { spin: false, solid: false, regular: false, light: false }
+  static defaultProps = { spin: false }
+
+  toPathName(name: string): string {
+    return (
+      'mdi' +
+      name.charAt(0).toUpperCase() +
+      name.slice(1).replace(/([-_][a-z])/gi, $1 => {
+        return $1
+          .toUpperCase()
+          .replace('-', '')
+          .replace('_', '')
+      })
+    )
+  }
 
   render() {
-    const { name, spin, solid, regular, light, className: c, ...props } = this.props
-    const { solid: s, regular: r, light: l } = { solid, regular, light }
-
-    const isSpin = spin ? 'fa-spinner fa-pulse' : ''
-    const type = s ? 's' : r ? 'r' : l ? 'l' : ''
-
-    const className = [`fa${type}`, `fa-${name}`, isSpin, c].filter(Boolean).join(' ')
+    const { name, spin, ...props } = this.props
 
     if (!name) {
       return ''
     }
 
-    return <i className={className} {...props} />
+    let path = this.toPathName(name)
+    console.log(path, spin)
+
+    return <MDIIcon className="mdi-svg" path={MDIJs[path]} spin={spin} {...props} />
   }
 }
