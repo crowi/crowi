@@ -34,7 +34,7 @@
           </div>
           {% endif %}
         <form action="/me/auth/google" method="post" role="form">
-          <button type="submit" class="btn btn-block btn-google" name="connectGoogle" value="1"><i class="fab fa-google-plus-square"></i> {{ t('page_login.sign_in_with', "Google") }}</button>
+          <button type="submit" class="btn btn-block btn-google" name="connectGoogle" value="1"><i class="mdi mdi-google"></i> {{ t('page_login.sign_in_with', "Google") }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
         </form>
       </div>
@@ -48,7 +48,7 @@
           </div>
           {% endif %}
         <form action="/me/auth/github" method="post" role="form">
-          <button type="submit" class="btn btn-block btn-github" name="connectGitHub" value="1"><i class="fab fa-github-square"></i> {{ t('page_login.sign_in_with', "GitHub") }}</button>
+          <button type="submit" class="btn btn-block btn-github" name="connectGitHub" value="1"><i class="mdi mdi-github-box"></i> {{ t('page_login.sign_in_with', "GitHub") }}</button>
           <input type="hidden" name="_csrf" value="{{ csrf() }}">
         </form>
       </div>
@@ -60,7 +60,7 @@
 
     <div class="row">
       <div class="col-lg-12">
-        <a href="/logout"><i class="fa fa-sign-out-alt"></i> {{ t('Sign out') }}</a>
+        <a href="/logout"><i class="mdi mdi-sign-out-alt"></i> {{ t('Sign out') }}</a>
       </div>
     </div>
   </div>
