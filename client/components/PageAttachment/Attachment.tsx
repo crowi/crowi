@@ -39,7 +39,7 @@ export default class Attachment extends React.Component<Props> {
     return (
       <li>
         <User user={attachment.creator} />
-        <Icon name={formatIcon} regular />
+        <Icon name={formatIcon} />
 
         <a href={attachment.url}> {attachment.originalName}</a>
 
@@ -48,7 +48,7 @@ export default class Attachment extends React.Component<Props> {
         {fileInUse}
 
         <a className="text-danger attachment-delete" onClick={this._onAttachmentDeleteClicked}>
-          <Icon name="trash" solid />
+          <Icon name="trash-can-outline" />
         </a>
       </li>
     )

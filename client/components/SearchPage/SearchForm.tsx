@@ -1,4 +1,5 @@
 import React, { ChangeEvent } from 'react'
+import Icon from 'components/Common/Icon'
 
 interface Props {
   keyword: string
@@ -48,7 +49,7 @@ export default class SearchForm extends React.Component<Props, State> {
         <input type="text" name="q" value={this.state.keyword} onChange={this.handleChange} className="form-control" />
         <span className="input-group-append">
           <button type="submit" className="btn btn-outline-secondary">
-            <i className="search-top-icon fa fa-search" />
+            <Icon name="magnify" />
           </button>
         </span>
       </form>

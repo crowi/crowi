@@ -69,8 +69,7 @@ class ShareBoxContent extends React.Component<Props> {
         {creationError && <Alert color="danger">{t('share.error.can_not_create')}</Alert>}
         <p>{t('share.no_link_has_been_created_yet')}</p>
         <Button className="d-block ml-auto" color="primary" onClick={handleCreate} disabled={isChanging}>
-          <Icon name={isChanging ? 'spinner' : 'link'} spin={isChanging} />
-          {t('share.create_link')}
+          <Icon name={isChanging ? 'loading' : 'link'} spin={isChanging} /> {t('share.create_link')}
         </Button>
       </div>
     )

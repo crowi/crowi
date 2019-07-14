@@ -1,3 +1,4 @@
+// FIXME: This file is not used from any components ...
 import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGroup, FormFeedback } from 'reactstrap'
