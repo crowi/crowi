@@ -7,6 +7,7 @@ Crowi - Empower the team with sharing your knowledge.
 [![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.8)
 
 [![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
+[![Codecov](https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg)](https://codecov.io/gh/crowi/crowi)
 [![Docker Pulls](https://img.shields.io/docker/pulls/crowi/crowi.svg)](https://hub.docker.com/r/crowi/crowi)
 [![Join the community on Spectrum](https://withspectrum.github.io/badge/badge.svg)](https://spectrum.chat/crowi)
 
@@ -84,12 +85,10 @@ We can use docker-compose for develop without complicated settings.
 $ docker-compose -f docker-compose.development.yml up
 ```
 
-### Features
-
 - Express restarts when a file changed
-- webpack compiled assets automatically
+- Webpack compiled assets automatically
 
-#### When a trouble occured
+### Troubleshooting
 
 Please try the following commands.
 
