@@ -31,7 +31,7 @@ jobs:
       - run: npm run build
       - run: npm run coverage
       - codecov/upload:
-          file: ./coverage/
+          file: coverage/clover.xml
           when: on_success
       - save_cache:
           key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
