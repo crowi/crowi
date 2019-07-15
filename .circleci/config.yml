@@ -32,12 +32,15 @@ jobs:
       - run: npm run coverage
       - codecov/upload:
           file: ./coverage/
+          when: on_success
       - save_cache:
           key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
           paths:
             - /root/.mongo-binaries
+workflows:
+  version: 2
+  main:
+    jobs:
+      - build
 orbs:
   codecov: codecov/codecov@1.0.5
-notify:
-  webhooks:
-    - url: https://webhooks.gitter.im/e/5a035388e3274b621d20
