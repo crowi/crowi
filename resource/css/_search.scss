@@ -2,22 +2,31 @@
   font-size: 16px;
   color: #999;
 }
-.search-listpage-clear {
-  z-index: 3;
-  display: none;
-  position: absolute;
-  right: 8px;
-  z-index: 10;
-  font-size: 0.6em;
-  width: 22px;
-  height: 22px;
-  color: #ccc;
-  padding: 8px;
-}
 
 .search-input-group {
   width: 240px;
   vertical-align: bottom;
+
+  .input-group-append.search-listpage-submit-group {
+    position: relative;
+    > button {
+      width: 40px;
+      border-color: $border-color;
+    }
+
+    .search-listpage-clear {
+      z-index: 3;
+      display: none;
+      position: absolute;
+      right: 46px;
+      z-index: 10;
+      font-size: 0.6em;
+      width: 22px;
+      height: 22px;
+      color: #ccc;
+      padding: 8px;
+    }
+  }
 }
 
 .search-top {
@@ -33,6 +42,10 @@
 
     .input-group-append {
       position: relative;
+      button {
+        width: 40px;
+        border-color: $border-color;
+      }
     }
     .search-top-clear {
       display: inline-block;

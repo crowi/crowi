@@ -17,8 +17,7 @@ class SearchTypeButtons extends React.Component<Props> {
         {searchTypes.map(({ key, icon, name }) => (
           <NavItem key={key} active={key === activeKey}>
             <NavLink onClick={() => changeType(key)}>
-              {icon}
-              {name}
+              {icon} {name}
             </NavLink>
           </NavItem>
         ))}

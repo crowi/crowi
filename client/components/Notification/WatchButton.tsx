@@ -65,8 +65,7 @@ class WatchButton extends React.Component<Props, State> {
 
     return (
       <Button outline size="sm" onClick={this.watch} active={watching}>
-        <Icon className="mr-1" name="eye" />
-        {t(text)}
+        <Icon name="eye" /> {t(text)}
       </Button>
     )
   }

@@ -15,7 +15,7 @@ export default class ListView extends React.Component<Props> {
     let listView
 
     if (!this.props.loaded) {
-      listView = <Icon name="pulse" spin={true} />
+      listView = <Icon name="loading" spin />
     } else if (this.props.notifications.length <= 0) {
       listView = <NullNotification />
     } else {

@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default class NotificationContent extends React.Component<Props> {
-  static defaultProps = { icon: 'circle-o' }
+  static defaultProps = { icon: 'checkbox-blank-circle' }
 
   getUserImage() {
     const actionUsers = this.props.notification.actionUsers
@@ -40,7 +40,7 @@ export default class NotificationContent extends React.Component<Props> {
           <div className="notification-box-message">
             <div className="notification-box-text">{this.props.children}</div>
             <div className="notification-box-time">
-              <Icon name={this.props.icon} regular />
+              <Icon name={this.props.icon} />
               <UserDate className="ml-1" dateTime={notification.createdAt} format="fromNow" />
             </div>
           </div>

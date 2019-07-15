@@ -21,9 +21,9 @@ export default class PageAlert extends React.Component<Props> {
     // TODO: PageAlert.Message etc.
     return (
       <div className="fk-notif fk-notif-danger">
-        <Icon name="exclamation-triangle" /> {message}{' '}
+        <Icon name="alert" /> {message}{' '}
         <a href="javascript:location.reload();">
-          <Icon name="angle-double-right" /> Load latest
+          <Icon name="chevron-double-right" /> Load latest
         </a>
       </div>
     )

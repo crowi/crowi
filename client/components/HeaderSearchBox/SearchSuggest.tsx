@@ -57,11 +57,10 @@ class SearchSuggest extends React.Component<Props> {
       pages.length > 0 && (
         <div className="grouped-page-list" key={type}>
           <h6>
-            <Icon name={icon} regular />
-            <span className="title">{title}</span>
+            <Icon name={icon} /> <span className="title">{title}</span>
             <a className="more text-muted" href={this.buildSearchUrl(type)}>
               {t('search.suggest.more')}
-              <Icon name="caret-right" />
+              <Icon name="chevron-right" />
             </a>
           </h6>
           <ListView pages={pages} />
@@ -81,14 +80,14 @@ class SearchSuggest extends React.Component<Props> {
     if (searching) {
       return (
         <div>
-          <i className="searching fa fa-circle-o-notch fa-spin fa-fw" /> Searching ...
+          <Icon name="loading" spin /> Searching ...
         </div>
       )
     }
     if (searchError !== null) {
       return (
         <div>
-          <i className="searcing fa fa-exclamation-triangle" /> Error on searching.
+          <Icon name="alert" /> Error on searching.
         </div>
       )
     }
@@ -96,9 +95,9 @@ class SearchSuggest extends React.Component<Props> {
       return <div>No results for &quot;{searchingKeyword}&quot;.</div>
     }
     return [
-      this.renderList(t('page_types.portal'), 'circle', 'portal', portalPages),
-      this.renderList(t('page_types.public'), 'file', 'public', publicPages),
-      this.renderList(t('page_types.user'), 'user', 'user', userPages),
+      this.renderList(t('page_types.portal'), 'file-document-box-multiple-outline', 'portal', portalPages),
+      this.renderList(t('page_types.public'), 'file-document-box-outline', 'public', publicPages),
+      this.renderList(t('page_types.user'), 'account', 'user', userPages),
     ]
   }
 

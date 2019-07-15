@@ -106,8 +106,7 @@ class ShareBox extends React.Component<Props, State> {
     const { t } = this.props
     return (
       <Button onClick={handleOpen} outline color="secondary" size="sm">
-        <Icon name="list-alt" />
-        {t('share.watch_the_log')}
+        <Icon name="shoe-print" /> {t('share.watch_the_log')}
       </Button>
     )
   }
