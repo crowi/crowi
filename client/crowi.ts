@@ -49,7 +49,7 @@ export default class Crowi {
       var id = 'head' + i++
       $(this).attr('id', id)
       $(this).addClass('revision-head')
-      $(this).append('<span class="revision-head-link"><a href="#' + id + '"><i class="fa fa-link"></i></a></span>')
+      $(this).append('<span class="revision-head-link"><a href="#' + id + '"><i class="mdi mdi-link-variant"></i></a></span>')
     })
   }
 
@@ -272,7 +272,7 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        newPageNameCheck.html('<i class="fa fa-times-circle"></i> ' + res.error)
+        newPageNameCheck.html('<i class="mdi mdi-alert"></i> ' + res.error)
         newPageNameCheck.addClass('alert-danger')
       } else {
         var page = res.page
@@ -305,7 +305,7 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        $('#delete-errors').html('<i class="fa fa-times-circle"></i> ' + res.error)
+        $('#delete-errors').html('<i class="mdi mdi-alert"></i> ' + res.error)
         $('#delete-errors').addClass('alert-danger')
       } else {
         var page = res.page
@@ -323,7 +323,7 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        $('#delete-errors').html('<i class="fa fa-times-circle"></i> ' + res.error)
+        $('#delete-errors').html('<i class="mdi mdi-alert"></i> ' + res.error)
         $('#delete-errors').addClass('alert-danger')
       } else {
         var page = res.page
@@ -341,7 +341,7 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        $('#delete-errors').html('<i class="fa fa-times-circle"></i> ' + res.error)
+        $('#delete-errors').html('<i class="mdi mdi-alert"></i> ' + res.error)
         $('#delete-errors').addClass('alert-danger')
       } else {
         var page = res.page
@@ -432,7 +432,7 @@ $(function() {
 
     $.getJSON('/_api/check_username', { username: username }, function(json) {
       if (!json.valid) {
-        $('#help-block-username').html('<i class="fa fa-exclamation-triangle"></i> This User ID is not available.<br>')
+        $('#help-block-username').html('<i class="mdi mdi-alert"></i> This User ID is not available.<br>')
         $('#input-group-username').addClass('has-error')
       }
     })
@@ -446,7 +446,7 @@ $(function() {
 
     $.getJSON('/_api/check_username', { username: username }, function(json) {
       if (!json.valid) {
-        $('#help-block-username').html('<i class="fa fa-warning"></i> This User ID is not available.<br>')
+        $('#help-block-username').html('<i class="mdi mdi-alert"></i> This User ID is not available.<br>')
         $('#input-group-username').addClass('has-error')
       }
     })

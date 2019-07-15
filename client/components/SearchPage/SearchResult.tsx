@@ -1,5 +1,6 @@
 import React from 'react'
 import Page from 'components/PageList/Page'
+import Icon from 'components/Common/Icon'
 import SearchResultList from './SearchResultList'
 import { Page as PageType } from 'client/types/crowi'
 
@@ -63,7 +64,7 @@ export default class SearchResult extends React.Component<Props, State> {
     if (this.isError()) {
       return (
         <div>
-          <i className="searcing fa fa-exclamation-triangle" /> Error on searching.
+          <Icon name="Alert" /> Error on searching.
         </div>
       )
     }
@@ -79,7 +80,7 @@ export default class SearchResult extends React.Component<Props, State> {
       }
       return (
         <div>
-          <i className="fa fa-meh" /> No page found with &quot;{this.props.searchingKeyword}&quot;{under}
+          <Icon name="emoticon-sad" /> No page found with &quot;{this.props.searchingKeyword}&quot;{under}
         </div>
       )
     }
@@ -97,7 +98,7 @@ export default class SearchResult extends React.Component<Props, State> {
         >
           <div className="page-list-option">
             <a href={page.path}>
-              <i className="fa fa-arrow-circle-right" />
+              <Icon name="arrow-right-circle" />
             </a>
           </div>
         </Page>

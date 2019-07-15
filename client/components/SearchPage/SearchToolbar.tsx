@@ -34,22 +34,22 @@ class SearchToolbar extends React.Component<Props> {
     this.searchTypes = [
       {
         key: '',
-        icon: <Icon name="th" />,
+        icon: <Icon name="grid" />,
         name: t('page_types.all'),
       },
       {
         key: 'portal',
-        icon: <Icon name="circle" regular />,
+        icon: <Icon name="file-document-box-multiple-outline" />,
         name: t('page_types.portal'),
       },
       {
         key: 'public',
-        icon: <Icon name="file" regular />,
+        icon: <Icon name="file-document-box-outline" />,
         name: t('page_types.public'),
       },
       {
         key: 'user',
-        icon: <Icon name="user" regular />,
+        icon: <Icon name="account" />,
         name: t('page_types.user'),
       },
     ]
@@ -72,7 +72,7 @@ class SearchToolbar extends React.Component<Props> {
         <div className="search-meta col-md-4">
           <h3 className="search-keyword">{this.props.keyword}</h3>
           <small className="text-muted">
-            {(this.props.searching && <Icon name="spinner" spin />) || t('search.toolbar.results', { value: this.props.total })}
+            {(this.props.searching && <Icon name="loading" spin />) || t('search.toolbar.results', { value: this.props.total })}
           </small>
         </div>
         <nav className="search-navbar col-md-8">

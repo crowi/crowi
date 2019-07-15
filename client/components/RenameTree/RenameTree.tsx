@@ -274,14 +274,14 @@ class RenameTree extends React.Component<Props, State> {
           {error && (
             <p>
               <small className="mr-auto alert-danger">
-                <Icon name="times-circle" /> {t(error)}
+                <Icon name="alert" /> {t(error)}
               </small>
             </p>
           )}
           {removing && (
             <p>
               <small className="mr-auto">
-                <img src="/images/loading_s.gif" /> Page tree moved! Redirecting to new location.
+                <Icon name="loading" spin /> Page tree moved! Redirecting to new location.
               </small>
             </p>
           )}
