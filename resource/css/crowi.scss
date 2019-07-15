@@ -35,7 +35,12 @@ code {
 
 .mdi-svg {
   fill: currentColor;
-  width: 1em;
+  width: 1.12em;
+  margin-top: -2px;
+}
+.mdi {
+  font-size: 1.12em;
+  vertical-align: -0.05em;
 }
 
 .meta {
@@ -291,7 +296,7 @@ footer {
       transform: rotateY(0);
     }
   }
-}
+} // }}}
 
 // buttons
 
