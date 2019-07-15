@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 jobs:
   build:
     working_directory: /home/node/app
@@ -29,11 +29,18 @@ jobs:
       - run: npm run type-check
       - run: npm run lint
       - run: npm run build
-      - run: npm run test
+      - run: npm run coverage
+      - codecov/upload:
+          file: coverage/clover.xml
+          when: on_success
       - save_cache:
           key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
           paths:
             - /root/.mongo-binaries
-notify:
-  webhooks:
-    - url: https://webhooks.gitter.im/e/5a035388e3274b621d20
+workflows:
+  version: 2
+  main:
+    jobs:
+      - build
+orbs:
+  codecov: codecov/codecov@1.0.5
