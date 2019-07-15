@@ -14,11 +14,6 @@
     "otofune <otofune@gmail.com>",
     "Norio Suzuki <norio.suzuki@gmail.com>"
   ],
-  "config": {
-    "blanket": {
-      "pattern": "./lib/**/*.js"
-    }
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/crowi/crowi.git"
