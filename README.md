@@ -85,12 +85,10 @@ We can use docker-compose for develop without complicated settings.
 $ docker-compose -f docker-compose.development.yml up
 ```
 
-### Features
-
 - Express restarts when a file changed
-- webpack compiled assets automatically
+- Webpack compiled assets automatically
 
-#### When a trouble occured
+### Troubleshooting
 
 Please try the following commands.
 
