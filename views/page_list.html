@@ -1,6 +1,6 @@
 {% extends 'layout/2column.html' %}
 
-{% block html_title %}{{ path|path2name }} · {{ path }}{% endblock %}
+{% block html_title %}{% if path !== '/' %}{{ path|path2name }} ·{{ path }}{% endif %} {% endblock %}
 
 {% block content_head %}
 
