@@ -39,7 +39,7 @@
 
 {% block layout_head_nav %}
 <nav class="v2-crowi-header navbar navbar-expand-md" role="navigation">
-  <div class="col-md-8 p-2 d-flex">
+  <div class="col-md-7 col-lg-8 p-2 d-flex">
     <a class="navbar-brand" href="/">
       <img alt="Crowi" src="/logo/32x32i.png" width="16">
       <span class="d-none d-sm-inline">{% block title %}{{ config.crowi['app:title']|default('Crowi') }}{% endblock %}</span>
@@ -62,7 +62,7 @@
     {% endif %}
   </div>
 
-  <ul class="navbar-nav col-md-4 p-2 justify-content-end">
+  <ul class="navbar-nav col-md-5 col-lg-4 p-2 justify-content-end">
     {% if config.crowi['app:confidential'] && config.crowi['app:confidential'] != '' %}
     <li class="nav-item confidential">
       <a href="#">{{ config.crowi['app:confidential'] }}</a>
