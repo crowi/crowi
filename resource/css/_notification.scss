@@ -59,7 +59,7 @@
 .navbar-nav > .header-notification {
   > div.notification-wrapper {
     > a {
-      line-height: 20px;
+      line-height: 22px;
       position: relative;
       display: block;
       color: #ccc;
@@ -94,9 +94,11 @@
         height: 10px;
         position: absolute;
         right: 10px;
-        top: -4px;
+        top: -6px;
         transform: rotate(45deg);
         border-radius: 2px;
+        border-top: solid 1px #ccc;
+        border-left: solid 1px #ccc;
       }
 
       .notification-loader {

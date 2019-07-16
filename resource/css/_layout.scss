@@ -1,86 +1,71 @@
 .crowi { // {{{
   &.main-container { // {{{
-
-    .crowi-header { // {{{
+    .v2-crowi-header { // {{{
       z-index: 1040;
-      background: $crowiHeaderBackground;
+      border-top: solid 2px $crowiHeaderBackground;
+      border-bottom: solid 1px #ccc;
+      background: #fff;
       height: $crowiHeaderHeight;
+      color: #333;
       padding: 0;
-      box-shadow: 0 3px 10px 0px rgba(0,0,0,.3);
-      flex-wrap: nowrap;
 
       .navbar-brand {
         margin-left: 1rem;
-        font-weight: bold;
+        font-weight: 600;
         img {
           display: inline;
           margin-right: 8px;
         }
       }
 
-      .navbar-toggler {
-        border: 1px solid #ddd;
-        color: #ccc;
-        line-height: unset;
-        margin-right: 1rem;
-      }
-
-      .navbar-collapse {
-        background: $crowiHeaderBackground;
-        flex-grow: 0;
-
-        @include media-breakpoint-down(sm) {
-          position: absolute;
-          top: $crowiHeaderHeight;
-          width: 100vw;
-        }
-      }
-
-      .navbar-brand,
-      .navbar-nav > li > a {
-        color: #ccc;
-        &:hover {
-          color: #aaa;
-        }
-      }
-
       .navbar-nav {
         padding-left: 1rem;
         padding-right: 1rem;
+        color: $primary;
+      }
 
-        @include media-breakpoint-up(sm) {
-          align-items: center;
+      .nav-divider {
+        border-right: solid 1px #ccc;
+        margin-right: 10px;
+        margin-left: 20px;
+        height: 30px;
+        margin-top: 6px;
+      }
 
-          .nav-item > button {
-            margin: 0 $nav-link-padding-x;
-          }
+      .confidential {
+        a {
+          display: inline-block;
+          border: dotted 1px #f00;
+          color: #f00;
+          font-weight: bold;
+          padding: 7px;
         }
+      }
 
-        .dropdown-toggle:after {
+      .header-user {
+        .dropdown-toggle::after {
+          // don't show caret
           display: none;
         }
 
-        .confidential {
-          a {
-            display: inline-block;
-            border: solid 2px #f00;
-            background: #fff;
-            color: #f00;
-            font-weight: bold;
-            padding: 10px;
+        .dropdown-menu-right {
+          .picture {
+            width: 64px;
+            height: 64px;
+          }
 
-            @include media-breakpoint-down(sm) {
-              margin-bottom: 1rem;
-            }
-
-            @include media-breakpoint-up(sm) {
-              margin-left: 1rem;
-            }
+          .header-user-name {
+            font-weight: 600;
           }
         }
+
       }
     } // }}}
+  } // }}}
+} // }}}
 
+.crowi { // {{{
+  &.main-container { // {{{
     .main {
       padding: 0; // cancel bootstrap padding
 
@@ -270,8 +255,9 @@
   }
 }
 
-@media print { // {{{ printable style
-  .crowi.main-container { // {{{
+// {{{ printable style
+@media print {
+  .crowi.main-container {
     padding: 30px;
 
     a:after {
@@ -310,8 +296,6 @@
         margin-top: 32px;
         color: #666;
       }
-
-
     }
   }
 } // }}}

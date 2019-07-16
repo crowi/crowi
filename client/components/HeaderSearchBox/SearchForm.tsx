@@ -8,6 +8,7 @@ interface Props {
   isSearchPage: boolean
   pollInterval?: number
   keyword: string
+  focused: boolean
 }
 
 interface State {
@@ -95,22 +96,23 @@ export default class SearchForm extends React.Component<Props, State> {
 
     return (
       <form action="/_search" className="search-form input-group search-top-input-group" onSubmit={this.handleSubmit}>
+        <div className="input-group-prepend">
+          <span className="input-group-text">
+            <Icon name="magnify" />
+          </span>
+        </div>
+        {this.props.focused && formClear}
         <input
           autoComplete="off"
           type="text"
           className="search-top-input form-control"
-          placeholder="Search ... Page Title (Path) and Content"
+          placeholder="Search ... Page title and content"
           name="q"
           value={this.state.keyword}
           onFocus={this.handleFocus}
           onChange={this.handleChange}
+          style={{ maxWidth: this.props.focused ? 'none' : '200px' }}
         />
-        <div className="input-group-append">
-          {formClear}
-          <button type="submit" className="btn btn-light">
-            <Icon className="search-top-icon" name="magnify" />
-          </button>
-        </div>
       </form>
     )
   }
