@@ -54,7 +54,7 @@
             class="search-top-input form-control" name="q" disabled="disabled">
         <div class="input-group-append">
           <button type="submit" class="btn btn-light">
-            <i class="search-top-icon fa fa-search"></i>
+            <i class="search-top-icon mdi mdi-magnify"></i>
           </button>
         </div>
       </form>
@@ -63,7 +63,7 @@
   {% endif %}
 
   <button class="btn navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-    <i class="fa fa-bars"></i>
+    <i class="mdi mdi-menu"></i>
   </button>
 
   <div id="navbarContent" class="collapse navbar-collapse ml-auto">
@@ -71,20 +71,20 @@
       {% if user and user.admin %}
       <li class="nav-item">
         <a href="/admin" id="link-mypage" class="nav-link">
-          <i class="fa fa-cube"></i> {{ t('Admin') }}
+          <i class="mdi mdi-cube"></i> {{ t('Admin') }}
         </a>
       </li>
       {% endif %}
       {% if user %}
       <li class="nav-item dropdown">
         <button class="btn btn-light create-page-button" data-target="#create-page" data-toggle="modal">
-          <i class="fa fa-pencil-alt"></i> {{ t('New') }}
+          <i class="mdi mdi-pencil-outline"></i> {{ t('New') }}
         </button>
       </li>
       <li id="header-notification" class="nav-item header-notification">
         <div class="notification-wrapper">
           <a href="#">
-            <i class="fa fa-bell"></i>
+            <i class="mdi mdi-bell"></i>
           </a>
         </div>
       </li>
@@ -94,15 +94,13 @@
         </a>
       </li>
       <li class="nav-item dropdown">
-        <a href="#" id="nav-dropdown-menu" class="nav-link dropdown-toggle" data-toggle="dropdown" role="button"><i class="fa fa-bars"></i> <label class="sr-only">メニュー</label></a>
+        <a href="#" id="nav-dropdown-menu" class="nav-link dropdown-toggle" data-toggle="dropdown" role="button"><i class="mdi mdi-menu"></i> <label class="sr-only">メニュー</label></a>
         <div class="dropdown-menu dropdown-menu-right" aria-labelledby="nav-dropdown-menu">
-          <a class="dropdown-item" href="/me"><i class="fa fa-cogs"></i> {{ t('User Settings') }}</a>
-          <a class="dropdown-item" href="/trash/"><i class="fa fa-trash-alt"></i> {{ t('Deleted Pages') }}</a>
-          <a class="dropdown-item" href="/logout"><i class="fa fa-sign-out-alt"></i> {{ t('Sign out') }}</a>
+          <a class="dropdown-item" href="/me"><i class="mdi mdi-cogs"></i> {{ t('User Settings') }}</a>
+          <a class="dropdown-item" href="/trash/"><i class="mdi mdi-trash-can-outline"></i> {{ t('Deleted Pages') }}</a>
+          <a class="dropdown-item" href="/logout"><i class="mdi mdi-logout"></i> {{ t('Sign out') }}</a>
         </div>
       </li>
-      {% else %}
-      <li id="login-user" class="nav-item"><a href="/login" id="login" class="nav-link"><i class="fa fa-user"></i> Login</a></li>
       {% endif %}
       {% if config.crowi['app:confidential'] && config.crowi['app:confidential'] != '' %}
       <li class="nav-item confidential"><a href="#">{{ config.crowi['app:confidential'] }}</a></li>
