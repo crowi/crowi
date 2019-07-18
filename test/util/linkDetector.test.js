@@ -2,13 +2,16 @@ const utils = require('../utils.js')
 
 describe('Url test', () => {
   const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
-  // crowi.config.crowi['app:url'] = 'http://localhost:3000';
 
-  // console.log(crowi.config);
-  beforeEach(() => {
-    crowi.config = {}
-    crowi.config.crowi = {}
-    crowi.config.crowi['app:url'] = 'http://localhost:3000'
+  beforeAll(async () => {
+    // FIXME: This is a hack
+    crowi.redisOpts = null
+    crowi.models = utils.models
+    await crowi.setupConfig()
+    const config = {}
+    config.crowi = {}
+    config.crowi['app:url'] = 'http://localhost:3000'
+    crowi.setConfig(config)
   })
 
   test('detectInternalLink', () => {

@@ -19,13 +19,13 @@ Update Page: ページを更新
 Warning: 注意
 List View: リスト表示
 Timeline View: タイムライン表示
+Recently Viewed Pages: 最近閲覧したページ
 Presentation Mode: プレゼンモード
 Created: 作成日
 Last updated: 最終更新
 Share: 共有
 Share Link: 共有用リンク
 Markdown Link: Markdown形式のリンク
-Unportalize: ポータル解除
 View this version: このバージョンを見る
 View diff: 差分を見る
 User ID: ユーザーID
@@ -70,6 +70,9 @@ page_login:
   sign_in: ログイン
   sign_up_is_here: 新規登録はこちら
   sign_in_with: '%s でログイン'
+  notice:
+    email_is_used: "このメールアドレス({{ email }})は既に使用されていますが、{{ issuer }}と接続されていません。"
+    login_to_connect: ログインすることで{{ issuer }}のアカウントと接続することができます。
 page_register:
   example: 例
   taro_yamada: 山田 太郎
@@ -89,6 +92,10 @@ page_register:
     user_id: ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。
     invited_email: このメールアドレスで招待を受け取っています。
     invited_password: 現在、仮パスワードでログインしています。新しいパスワードを決定してください。
+  error:
+    unavailable_user_id: このユーザーIDは使用できません。
+    already_registered_email: このメールアドレスは既に使用されています。
+    unavailable_password_auth: 現在、パスワード認証は無効です。外部認証を用いて登録してください。
 page_me:
   form_help:
     profile_image1: 画像をアップロードをするための設定がされていません。
@@ -100,12 +107,17 @@ page_me:
     github_connect1: GitHubコネクトをすると、GitHubアカウントでログイン可能になります。
     github_disconnect1: 接続を解除すると、GitHubでログインができなくなります。
     github_disconnect2: 解除後はメールアドレスとパスワードでログインすることができます。
+  can_not_disconnect: 1つ以上の外部認証設定が必要なため、接続を解除できません。
 page_me_apitoken:
   notice:
     apitoken_issued: API Token が設定されていません。
     update_token1: API Token を更新すると、自動的に新しい Token が生成されます。
     update_token2: 現在の Token を利用している処理は動かなくなります。
   form_help: {}
+page_me_third_party_auth:
+  enable_third_party_auth: 外部認証の有効化
+  notice:
+    third_party_auth_required: 外部認証の有効化が必要です。利用を続けるために外部認証を設定してください。
 Password: パスワード
 Password Settings: パスワード設定
 Set new Password: パスワードを新規に設定
@@ -219,3 +231,11 @@ portalize:
   make_this_page_portal: 'このページをポータルにします。'
   this_page: 'このページ'
   changed_page: '変更後のページ'
+
+Unportalize: ポータル解除
+unportalize:
+  title: ポータル化を解除する
+  make_this_page_normal: このポータル化を解除し、通常のページに戻します。
+  this_page: 'このページ'
+  unportalized_page: '解除後のページ'
+  alert_toppage: このポータルはトップページのポータルのため、特別なページに移動します。
