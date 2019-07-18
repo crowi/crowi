@@ -70,6 +70,9 @@
         "username": {
           "type": "keyword"
         },
+        "grant": {
+          "type": "integer"
+        },
         "comment_count": {
           "type": "integer"
         },
