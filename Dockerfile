@@ -1,20 +1,33 @@
-FROM node:8.12.0
+FROM node:10.16.0-stretch-slim as builder
 
 ARG NODE_ENV="production"
 
 ENV CROWI_VERSION v1.8.0
 ENV NODE_ENV ${NODE_ENV}
-ENV SKIP_POSTINSTALL true
+ENV MONGOMS_DOWNLOAD_MIRROR https://downloads.mongodb.org
 
 WORKDIR /crowi
 
 ADD ./package.json ./package-lock.json ./
-RUN npm install --unsafe-perm
+RUN SKIP_POSTINSTALL=true npm install
 
 ADD . .
 
-# run postinstall manually
-ENV SKIP_POSTINSTALL ""
+# Run postinstall manually
 RUN npm run postinstall
+
+
+FROM node:10.16.0-stretch-slim
+
+ARG NODE_ENV="production"
+
+ENV CROWI_VERSION v1.8.0
+ENV NODE_ENV ${NODE_ENV}
+
+USER node
+
+WORKDIR /crowi
+
+COPY --from=builder --chown=node:node /crowi /crowi
 
 CMD npm run start
