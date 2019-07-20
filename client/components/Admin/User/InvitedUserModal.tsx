@@ -1,8 +1,12 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { FC } from 'react'
 import { Modal, ModalHeader, ModalBody, Table } from 'reactstrap'
 
-function InvitedUserModal({ users, clear }) {
+interface Props {
+  users: any[]
+  clear: () => void
+}
+
+const InvitedUserModal: FC<Props> = ({ users, clear }) => {
   return (
     <Modal isOpen={users.length > 0} toggle={clear}>
       <ModalHeader toggle={clear}>ユーザーを招待しました</ModalHeader>
@@ -33,11 +37,6 @@ function InvitedUserModal({ users, clear }) {
       </ModalBody>
     </Modal>
   )
-}
-
-InvitedUserModal.propTypes = {
-  users: PropTypes.array.isRequired,
-  clear: PropTypes.func.isRequired,
 }
 
 export default InvitedUserModal

@@ -1,11 +1,20 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input, FormGroup, Row, Col } from 'reactstrap'
 import FormRow from '../FormRow'
 import Tips from './Tips'
 
-function MailSettings({ settingForm, update, alert = {} }) {
+interface Props {
+  settingForm: object
+  update: (settings: object) => void
+  alert: {
+    status: string
+    show: boolean
+    message: string
+  }
+}
+
+const MailSettings: FC<Props> = ({ settingForm, update, alert  }) => {
   const [t] = useTranslation()
   const [mail, setMail] = useState(settingForm['mail:from'])
   const [host, setHost] = useState(settingForm['mail:smtpHost'] || '')
@@ -79,12 +88,6 @@ function MailSettings({ settingForm, update, alert = {} }) {
       </fieldset>
     </form>
   )
-}
-
-MailSettings.propTypes = {
-  settingForm: PropTypes.object.isRequired,
-  update: PropTypes.func.isRequired,
-  alert: PropTypes.object,
 }
 
 export default MailSettings

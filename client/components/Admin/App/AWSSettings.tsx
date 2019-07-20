@@ -1,11 +1,20 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input } from 'reactstrap'
 import Tips from './Tips'
 import FormRow from '../FormRow'
 
-function AWSSettings({ settingForm, update, alert = {} }) {
+interface Props {
+  settingForm: object
+  update: (settings: object) => void
+  alert: {
+    status: string
+    show: boolean
+    message: string
+  }
+}
+
+const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [region, setRegion] = useState(settingForm['aws:region'])
   const [bucket, setBucket] = useState(settingForm['aws:bucket'])
@@ -67,12 +76,6 @@ function AWSSettings({ settingForm, update, alert = {} }) {
       </fieldset>
     </form>
   )
-}
-
-AWSSettings.propTypes = {
-  settingForm: PropTypes.object.isRequired,
-  update: PropTypes.func.isRequired,
-  alert: PropTypes.object,
 }
 
 export default AWSSettings

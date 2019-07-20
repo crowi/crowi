@@ -20,7 +20,7 @@ function useRequest() {
       finishRequest()
     }
   }
-  return [{ requesting }, { startRequest, finishRequest, executeRequest }]
+  return [{ requesting }, { startRequest, finishRequest, executeRequest }] as const
 }
 
 function useAlert() {
@@ -28,17 +28,18 @@ function useAlert() {
 
   const showAlert = (action, status, message) => setAlert({ ...alert, [action]: { message, status, show: true } })
   const hideAlert = action => {
-    const { message, status } = alert[action] || {}
+    const { message, status } = alert[action] || { message: '', status: ''}
     setAlert({ ...alert, [action]: { message, status, show: false } })
   }
 
-  return [{ alert }, { showAlert, hideAlert }]
+  return [{ alert }, { showAlert, hideAlert }] as const
 }
 
 export default function AppPage() {
   const { crowi, loading, settingForm, registrationMode, isUploadable, fetchSettings } = useContext(AdminContext)
   const [{ requesting }, { executeRequest }] = useRequest()
   const [{ alert }, { showAlert, hideAlert }] = useAlert()
+  const defaultAlert = { status: '', show: false, message: '' }
 
   const updateSettings = action => params =>
     executeRequest(async () => {
@@ -54,17 +55,17 @@ export default function AppPage() {
       }
     })
 
-  const props = { settingForm, requesting }
+  const getProps = action => ({ update: updateSettings(action), alert: alert[action] || defaultAlert, settingForm, requesting })
 
   return (
     !loading && (
       <>
-        <AppSettings isUploadable={isUploadable} update={updateSettings('app')} alert={alert['app']} {...props} />
-        <SecuritySettings registrationMode={registrationMode} update={updateSettings('sec')} alert={alert['sec']} {...props} />
-        <MailSettings update={updateSettings('mail')} alert={alert['mail']} {...props} />
-        <AWSSettings isUploadable={isUploadable} update={updateSettings('aws')} alert={alert['aws']} {...props} />
-        <GoogleSettings update={updateSettings('google')} alert={alert['google']} {...props} />
-        <GitHubSettings update={updateSettings('github')} alert={alert['github']} {...props} />
+        <AppSettings isUploadable={isUploadable} {...getProps('app')} />
+        <SecuritySettings registrationMode={registrationMode} {...getProps('sec')} />
+        <MailSettings {...getProps('mail')} />
+        <AWSSettings {...getProps('aws')} />
+        <GoogleSettings {...getProps('google')} />
+        <GitHubSettings {...getProps('github')} />
       </>
     )
   )

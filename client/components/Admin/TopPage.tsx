@@ -1,19 +1,28 @@
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useState, FC } from 'react'
 
 import { AdminContext } from 'components/Admin/AdminPage'
 
+interface Info {
+  crowiVersion: string | null
+  searchInfo: {
+    host?: string
+    indexName?: string
+    esVersion?: string
+  }
+}
+
 function useInfo(crowi) {
-  const [info, setInfo] = useState({ crowiVersion: null, searchInfo: {} })
+  const [info, setInfo] = useState<Info>({ crowiVersion: null, searchInfo: {} })
 
   const fetchInfo = async () => {
     const { crowiVersion, searchInfo } = await crowi.apiGet('/admin/top')
     setInfo({ crowiVersion, searchInfo })
   }
 
-  return [info, fetchInfo]
+  return [info, fetchInfo] as const
 }
 
-export default function TopPage() {
+const TopPage: FC<{}> = () => {
   const { crowi, searchConfigured } = useContext(AdminContext)
   const [{ crowiVersion, searchInfo }, fetchInfo] = useInfo(crowi)
   const { host, indexName, esVersion } = searchInfo
@@ -48,3 +57,5 @@ export default function TopPage() {
     </>
   )
 }
+
+export default TopPage

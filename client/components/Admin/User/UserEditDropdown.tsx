@@ -1,5 +1,4 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { Button, Alert, Dropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap'
 import { STATUS } from './UserTable'
 
@@ -7,7 +6,21 @@ function OnlyStatusFactory(user) {
   return ({ status, children }) => user.status === status && children
 }
 
-function UserEditDropdown({ me, user, ...props }) {
+interface Props {
+  me: any
+  user: any
+  handleClickEdit: (user: any) => void
+  handleClickResetPassword: (user: any) => void
+  handleClickApprove: (user: any) => void
+  handleClickSuspend: (user: any) => void
+  handleClickRestore: (user: any) => void
+  handleClickRemove: (user: any) => void
+  handleClickRemoveCompletely: (user: any) => void
+  handleClickRevokeAdmin: (user: any) => void
+  handleClickGrantAdmin: (user: any) => void
+}
+
+const UserEditDropdown: FC<Props> = ({ me, user, ...props }) => {
   const { admin, username } = user
   const [open, setOpen] = useState(false)
   const {
@@ -87,20 +100,6 @@ function UserEditDropdown({ me, user, ...props }) {
       </DropdownMenu>
     </Dropdown>
   )
-}
-
-UserEditDropdown.propTypes = {
-  me: PropTypes.object.isRequired,
-  user: PropTypes.object.isRequired,
-  handleClickEdit: PropTypes.func.isRequired,
-  handleClickResetPassword: PropTypes.func.isRequired,
-  handleClickApprove: PropTypes.func.isRequired,
-  handleClickSuspend: PropTypes.func.isRequired,
-  handleClickRestore: PropTypes.func.isRequired,
-  handleClickRemove: PropTypes.func.isRequired,
-  handleClickRemoveCompletely: PropTypes.func.isRequired,
-  handleClickRevokeAdmin: PropTypes.func.isRequired,
-  handleClickGrantAdmin: PropTypes.func.isRequired,
 }
 
 export default UserEditDropdown

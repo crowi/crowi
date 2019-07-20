@@ -1,7 +1,12 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { FC } from 'react'
 
-function UserSearchForm({ handleSubmit, handleChange, value }) {
+interface Props {
+  handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void
+  handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  value: string
+}
+
+const UserSearchForm: FC<Props> = ({ handleSubmit, handleChange, value }) => {
   return (
     <form className="form-group input-group col-xs-6" onSubmit={handleSubmit}>
       {/* q だと事故る (検索欄に入ってしまう) ので、uq にしてます */}
@@ -21,12 +26,6 @@ function UserSearchForm({ handleSubmit, handleChange, value }) {
       </span>
     </form>
   )
-}
-
-UserSearchForm.propTypes = {
-  handleSubmit: PropTypes.func.isRequired,
-  handleChange: PropTypes.func.isRequired,
-  value: PropTypes.string.isRequired,
 }
 
 export default UserSearchForm

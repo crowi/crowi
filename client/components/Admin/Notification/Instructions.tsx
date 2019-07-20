@@ -1,8 +1,11 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
 
-function Instructions({ appUrl }) {
+interface Props {
+  appUrl: string
+}
+
+const Instructions: FC<Props> = ({ appUrl }) => {
   const [t] = useTranslation()
 
   return (
@@ -102,10 +105,6 @@ function Instructions({ appUrl }) {
       </dl>
     </>
   )
-}
-
-Instructions.propTypes = {
-  appUrl: PropTypes.string.isRequired,
 }
 
 export default Instructions

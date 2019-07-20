@@ -1,11 +1,20 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input } from 'reactstrap'
 import FormRow from '../FormRow'
 import Tips from './Tips'
 
-function GoogleSettings({ settingForm, update, alert = {} }) {
+interface Props {
+  settingForm: object
+  update: (settings: object) => void
+  alert: {
+    status: string
+    show: boolean
+    message: string
+  }
+}
+
+const GoogleSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [clientId, setClientId] = useState(settingForm['google:clientId'])
   const [clientSecret, setClientSecret] = useState(settingForm['google:clientSecret'])
@@ -45,12 +54,6 @@ function GoogleSettings({ settingForm, update, alert = {} }) {
       </fieldset>
     </form>
   )
-}
-
-GoogleSettings.propTypes = {
-  settingForm: PropTypes.object.isRequired,
-  update: PropTypes.func.isRequired,
-  alert: PropTypes.object,
 }
 
 export default GoogleSettings

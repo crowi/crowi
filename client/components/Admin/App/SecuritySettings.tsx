@@ -1,10 +1,20 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
 import { Alert, Button, Label, Input, FormText, FormGroup, Row, Col } from 'reactstrap'
 import FormRow from '../FormRow'
 
-function SecuritySettings({ registrationMode: registrationModeOptions, settingForm, update, alert = {} }) {
+interface Props {
+  settingForm: object
+  registrationMode: string
+  update: (settings: object) => void
+  alert: {
+    status: string
+    show: boolean
+    message: string
+  }
+}
+
+const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions, settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [basicName, setBasicName] = useState(settingForm['security:basicName'] || '')
   const [basicSecret, setBasicSecret] = useState(settingForm['security:basicSecret'] || '')
@@ -76,7 +86,8 @@ function SecuritySettings({ registrationMode: registrationModeOptions, settingFo
           />
           <FormText color="muted">
             <Trans i18nKey="admin.security.whitelist_description1">
-              登録可能なメールアドレスを制限することができます。例えば、会社で使う場合、<code>@crowi.wiki</code>などと記載すると、その会社のメールアドレスを持っている人のみ登録可能になります。
+              登録可能なメールアドレスを制限することができます。例えば、会社で使う場合、<code>@crowi.wiki</code>
+              などと記載すると、その会社のメールアドレスを持っている人のみ登録可能になります。
             </Trans>
             <br />
             {t('admin.security.whitelist_description2')}
@@ -89,13 +100,6 @@ function SecuritySettings({ registrationMode: registrationModeOptions, settingFo
       </fieldset>
     </form>
   )
-}
-
-SecuritySettings.propTypes = {
-  settingForm: PropTypes.object.isRequired,
-  registrationMode: PropTypes.object.isRequired,
-  update: PropTypes.func.isRequired,
-  alert: PropTypes.object,
 }
 
 export default SecuritySettings

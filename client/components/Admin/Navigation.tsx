@@ -1,9 +1,9 @@
-import React, { useContext, useEffect } from 'react'
+import React, { useContext, useEffect, FC } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { AdminContext } from 'components/Admin/AdminPage'
 
-export default function Navigation() {
+const Navigation: FC<{}> = () => {
   const { settingForm, searchConfigured } = useContext(AdminContext)
 
   const items = [
@@ -18,7 +18,7 @@ export default function Navigation() {
 
   useEffect(() => {
     const appTitle = settingForm['app:title'] || 'Crowi'
-    const { title, name = '' } = items.find(({ to }) => to === location.pathname) || {}
+    const { title = undefined, name = '' } = items.find(({ to }) => to === location.pathname) || {}
     const pageTitle = `${title || name} · ${appTitle}`
 
     if (name && document.title !== pageTitle) {
@@ -39,3 +39,5 @@ export default function Navigation() {
     </div>
   )
 }
+
+export default Navigation
