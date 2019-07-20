@@ -8,14 +8,14 @@ function ConnectButton({ hasSlackToken, slackAuthUrl }) {
         Crowi and Slack is already <strong>connected</strong>.You can re-connect to refresh and overwirte the token with your Slack account.
       </p>
       <a className="btn btn-secondary" href={slackAuthUrl}>
-        <i className="fab fa-slack" /> Reconnect to Slack
+        <i className="mdi mdi-slack" /> Reconnect to Slack
       </a>
     </div>
   ) : (
     <div className="text-center">
       <p>Slack clientId and clientSecret is configured. Now, you can connect with Slack.</p>
       <a className="btn btn-primary" href={slackAuthUrl}>
-        <i className="fab fa-slack" /> Connect to Slack
+        <i className="mdi mdi-slack" /> Connect to Slack
       </a>
     </div>
   )

@@ -80,7 +80,7 @@ function AdminPage({ crowi }) {
 }
 
 AdminPage.propTypes = {
-  crowi: PropTypes.func.isRequired,
+  crowi: PropTypes.object.isRequired,
 }
 
 export default AdminPage

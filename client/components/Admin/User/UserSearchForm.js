@@ -16,7 +16,7 @@ function UserSearchForm({ handleSubmit, handleChange, value }) {
       />
       <span className="input-group-append">
         <button type="submit" className="btn btn-outline-secondary">
-          <i className="search-top-icon fa fa-search" />
+          <i className="search-top-icon mdi mdi-magnify" />
         </button>
       </span>
     </form>

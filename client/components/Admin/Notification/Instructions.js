@@ -1,17 +1,22 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { useTranslation, Trans } from 'react-i18next'
 
-export default function Instructions() {
+function Instructions({ appUrl }) {
   const [t] = useTranslation()
 
   return (
     <>
-      <h3>{t('admin.notification.instructions.legend')}</h3>
-      <p>{t('admin.notification.instructions.description')}</p>
-      <h4>{t('admin.notification.instructions.step1')}</h4>
+      <h3>{t('admin.notification.instructions.basic.legend')}</h3>
+      <p>{t('admin.notification.instructions.basic.description')}</p>
+      <h4>{t('admin.notification.instructions.basic.steps.0.title')}</h4>
       <p>
-        <Trans i18nKey="admin.notification.instructions.step1_description">
-          Create App from <a href="https://api.slack.com/applications/new">this link</a>, and fill the form out as below:
+        <Trans i18nKey="admin.notification.instructions.basic.steps.0.description">
+          Create App from{' '}
+          <strong>
+            <a href="https://api.slack.com/applications/new">this link</a>
+          </strong>
+          , and fill the form out as below:
         </Trans>
       </p>
       <dl>
@@ -26,8 +31,14 @@ export default function Instructions() {
           <dd className="col-8">
             <p>Upload this image as the icon</p>
             <p>
-              (Free to download and use it) =&gt; <a href="https://github.com/crowi/crowi/tree/master/resource/logo">Crowi Logo</a>
+              <a href="https://github.com/crowi/crowi/tree/master/resource/logo">Crowi Logo</a> (Free to download and use it)
             </p>
+          </dd>
+        </div>
+        <div className="row">
+          <dt className="col-4">Redirect URL</dt>
+          <dd className="col-8">
+            <code>{appUrl}/admin/notification/slackAuth</code> in <code>OAuth &amp; Permissions</code> tab.
           </dd>
         </div>
         <div className="row">
@@ -48,13 +59,53 @@ export default function Instructions() {
       </p>
 
       <h4>
-        <Trans i18nKey="admin.notification.instructions.step2">
+        <Trans i18nKey="admin.notification.instructions.basic.steps.1.title">
           Get <code>clientId</code> and <code>clientSecret</code>
         </Trans>
       </h4>
-      <h4>{t('admin.notification.instructions.step3')}</h4>
-      <p>{t('admin.notification.instructions.step3_description')}</p>
-      <h4>{t('admin.notification.instructions.step4')}</h4>
+      <h4>
+        <Trans i18nKey="admin.notification.instructions.basic.steps.2.title">
+          After <code>clientId</code> and <code>clientSecret</code> set, click &quot;Connect to Slack&quot; button to start OAuth process.
+        </Trans>
+      </h4>
+      <p>{t('admin.notification.instructions.basic.steps.2.description')}</p>
+      <h4>{t('admin.notification.instructions.basic.steps.3.title')}</h4>
+
+      <h3>{t('admin.notification.instructions.unfurl.legend')}</h3>
+      <h4>{t('admin.notification.instructions.unfurl.steps.0.title')}</h4>
+      <p>
+        <Trans i18nKey="admin.notification.instructions.unfurl.steps.0.description">
+          Create App from{' '}
+          <strong>
+            <a href="https://api.slack.com/applications/new">this link</a>
+          </strong>
+          , and fill the form out as below:
+        </Trans>
+      </p>
+      <dl>
+        <div className="row">
+          <dt className="col-4">Request URL</dt>
+          <dd className="col-8">
+            <code>{appUrl}</code>
+          </dd>
+        </div>
+        <div className="row">
+          <dt className="col-4">Workspace Events</dt>
+          <dd className="col-8">
+            <code>link_shared</code>
+          </dd>
+        </div>
+        <div className="row">
+          <dt className="col-4">Domains</dt>
+          <dd className="col-8">Your crowi domains</dd>
+        </div>
+      </dl>
     </>
   )
 }
+
+Instructions.propTypes = {
+  appUrl: PropTypes.string.isRequired,
+}
+
+export default Instructions

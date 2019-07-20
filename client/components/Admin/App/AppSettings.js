@@ -51,7 +51,7 @@ function AppSettings({ isUploadable, settingForm, update, alert = {} }) {
             id="appFileUpload"
             label={t('admin.app.allow_upload_file')}
             checked={fileUpload}
-            disabled={isUploadable}
+            disabled={!isUploadable}
             onChange={() => setFileUpload(!fileUpload)}
           />
           <FormText color="muted">

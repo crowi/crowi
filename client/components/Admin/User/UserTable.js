@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { useTranslation } from 'react-i18next'
 
 import Pagination from 'components/Common/Pagination'
@@ -52,7 +53,7 @@ function getHanlders(openResetModal, changeStatus) {
   }
 }
 
-export default function UserTable({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) {
+function UserTable({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) {
   const [t] = useTranslation()
   const { current, count } = pagination
   const handlers = getHanlders(openResetModal, changeStatus)
@@ -70,10 +71,15 @@ export default function UserTable({ me, users, pagination, query, setQuery, sear
                   <th>{t('admin.user.name')}</th>
                   <th>{t('admin.user.email')}</th>
                   <th>{t('admin.user.created_at')}</th>
+                  <th>{t('admin.user.status')}</th>
                   <th>{t('admin.user.operation')}</th>
                 </tr>
               </thead>
-              <tbody>{users.map(user => <UserTableRow key={user._id} changeStatus={changeStatus} me={me} user={user} {...handlers} />)}</tbody>
+              <tbody>
+                {users.map(user => (
+                  <UserTableRow key={user._id} changeStatus={changeStatus} me={me} user={user} {...handlers} />
+                ))}
+              </tbody>
             </table>
             <Pagination current={current} count={count} onClick={move} />
           </>
@@ -84,3 +90,17 @@ export default function UserTable({ me, users, pagination, query, setQuery, sear
     </>
   )
 }
+
+UserTable.propTypes = {
+  me: PropTypes.object.isRequired,
+  users: PropTypes.arrayOf(PropTypes.object).isRequired,
+  pagination: PropTypes.object.isRequired,
+  query: PropTypes.string.isRequired,
+  setQuery: PropTypes.func.isRequired,
+  search: PropTypes.func.isRequired,
+  move: PropTypes.func.isRequired,
+  openResetModal: PropTypes.func.isRequired,
+  changeStatus: PropTypes.func.isRequired,
+}
+
+export default UserTable
