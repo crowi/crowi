@@ -27,7 +27,7 @@
 
         <form id="create-page-under-tree" role="form">
           <fieldset>
-            <h4>{{ t('Create under', parentPath(path)) }}</h4>
+            <h4>{{ t('Create under', parentPath(path | escape)) }}</h4>
             <div class="page-under-tree-form">
               <input class="form-control page-name-input" type="text" value="{{ parentPath(path) }}" placeholder="{{ t('Input page name') }}" required>
               <button class="btn btn-primary" type="submit">{{ t('Create') }}</button>

@@ -47,7 +47,7 @@
 
       <label>{{ t('Email') }}</label>
       <div class="input-group">
-        <span class="input-group-prepend"><span class="input-group-text"><i class="fa fa-envelope"></i></span></span>
+        <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-email"></i></span></span>
         <input type="text" class="form-control" disabled value="{{ user.email }}">
       </div>
       <p class="help-block">
@@ -66,13 +66,13 @@
 
       <label>{{ t('Name') }}</label>
       <div class="input-group">
-        <span class="input-group-prepend"><span class="input-group-text"><i class="fa fa-user"></i></span></span>
+        <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-account"></i></span></span>
         <input type="text" class="form-control" placeholder="{{ t('Example') }}: {{ t('Taro Yamada') }}" name="invitedForm[name]" value="{{ req.body.invitedForm.name }}" required>
       </div>
 
       <label>{{ t('Password') }}</label>
       <div class="input-group">
-        <span class="input-group-prepend"><span class="input-group-text"><i class="fa fa-key"></i></span></span>
+        <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-key"></i></span></span>
         <input type="password" class="form-control" placeholder="Password" name="invitedForm[password]" required>
       </div>
       <p class="help-block">
