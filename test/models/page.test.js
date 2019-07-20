@@ -1,13 +1,14 @@
-const utils = require('../utils.js')
 
 describe('Page', () => {
-  const Page = utils.models.Page
-  const User = utils.models.User
-  const conn = utils.mongoose.connection
+  const crowi = global.crowi
+  const Page = crowi.model('Page')
+  const User = crowi.model('User')
+  const conn = crowi.getMongo().connection
   let createdPages
   let createdUsers
 
   beforeAll(done => {
+
     Promise.resolve()
       .then(() => {
         const userFixture = [
@@ -313,17 +314,11 @@ describe('Page', () => {
         })
       })
 
-      test('should error by grant', done => {
+      test('should error by grant', async () => {
         const pageToFind = createdPages[0]
         const grantedUser = createdUsers[1]
-        Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser)
-          .then(pageData => {
-            done(new Error())
-          })
-          .catch(err => {
-            expect(err).toBeInstanceOf(Error)
-            done()
-          })
+
+        await expect(Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser)).rejects.toThrow()
       })
     })
   })
@@ -392,7 +387,7 @@ describe('Page', () => {
       describe('findChildrenByPath', () => {
         test('should not contain other trees', async () => {
           const pages = await Page.findChildrenByPath('/car', user, {})
-          expect(pages).toBeInstanceOf(Array)
+          expect(pages.length).toBe(4)
           expect(pages.some(page => page.path === '/carrot')).toBe(false)
         })
       })
