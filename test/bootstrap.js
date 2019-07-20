@@ -1,5 +1,7 @@
 'use strict'
 
+import "@babel/polyfill";
+
 const express = require('express')
 const path = require('path')
 const ROOT_DIR = path.join(__dirname, './..')
