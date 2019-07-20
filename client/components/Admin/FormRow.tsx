@@ -1,8 +1,11 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { ReactElement, FC } from 'react'
 import { Button, FormGroup, Label, Input, CustomInput, FormText, Row, Col } from 'reactstrap'
 
-function FormRow({ children }) {
+interface Props {
+  children: ReactElement[] | ReactElement
+}
+
+const FormRow: FC<Props> = ({ children }: Props) => {
   const c = React.Children.toArray(children)
   const label = c.find(({ type }) => type === Label) || null
   const input = c.find(({ type }) => type === Input || type === CustomInput) || null
@@ -21,10 +24,6 @@ function FormRow({ children }) {
       </Row>
     </FormGroup>
   )
-}
-
-FormRow.propTypes = {
-  children: PropTypes.node,
 }
 
 export default FormRow

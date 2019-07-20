@@ -1,15 +1,21 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
+import Crowi from 'client/util/Crowi'
 
 import FormRow from '../FormRow'
 import { Alert, Button, Label, Input } from 'reactstrap'
 
-function NotificationSettings({ slackSetting, fetchSettings }) {
+interface Props {
+  crowi: Crowi
+  slackSetting: object
+  fetchSettings: () => void
+}
+
+const NotificationSettings: FC<Props> = ({ crowi, slackSetting, fetchSettings }) => {
   const [t] = useTranslation()
   const [clientId, setClientId] = useState(slackSetting['slack:clientId'])
   const [clientSecret, setClientSecret] = useState(slackSetting['slack:clientSecret'])
-  const [alert, setAlert] = useState({})
+  const [alert, setAlert] = useState({ status: '', show: false, message: '' })
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -23,7 +29,7 @@ function NotificationSettings({ slackSetting, fetchSettings }) {
     } catch ({ message }) {
       setAlert({ message, status: 'danger', show: true })
     } finally {
-      setTimeout(() => setAlert({}), 5000)
+      setTimeout(() => setAlert({ status: '', show: false, message: '' }), 5000)
     }
 
     fetchSettings()
@@ -56,11 +62,6 @@ function NotificationSettings({ slackSetting, fetchSettings }) {
       </fieldset>
     </form>
   )
-}
-
-NotificationSettings.propTypes = {
-  slackSetting: PropTypes.object.isRequired,
-  fetchSettings: PropTypes.func.isRequired,
 }
 
 export default NotificationSettings

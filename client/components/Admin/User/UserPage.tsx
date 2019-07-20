@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from 'react'
+import React, { useContext, useState, useEffect, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert } from 'reactstrap'
 import queryString from 'query-string'
@@ -19,7 +19,7 @@ function useAlerts() {
     setFailure(null)
   }
 
-  return [{ success, failure }, { setSuccess, setFailure, clearStatus }]
+  return [{ success, failure }, { setSuccess, setFailure, clearStatus }] as const
 }
 
 function useInviteUsers(crowi, fetchUsers, setFailure, clearStatus) {
@@ -46,7 +46,7 @@ function useInviteUsers(crowi, fetchUsers, setFailure, clearStatus) {
 
   const clear = () => setInvitedUsers([])
 
-  return [{ invitedUsers }, { invite, clear }]
+  return [{ invitedUsers }, { invite, clear }] as const
 }
 
 function useQuery(crowi) {
@@ -56,7 +56,7 @@ function useQuery(crowi) {
   const [page, setPage] = useState(parseInt(p) || 0)
   const [query, setQuery] = useState(q)
 
-  return [{ page, query }, { setPage, setQuery }]
+  return [{ page, query }, { setPage, setQuery }] as const
 }
 
 function useFetchUsers(crowi, setFailure, clearStatus) {
@@ -94,7 +94,7 @@ function useFetchUsers(crowi, setFailure, clearStatus) {
     [search],
   )
 
-  return [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }]
+  return [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] as const
 }
 
 function useChangeStatus(crowi, fetchUsers, setSuccess, setFailure, clearStatus) {
@@ -123,9 +123,9 @@ function useResetPassword(crowi, closeResetModal, openResetedModal) {
   }
 }
 
-function useModal() {
+function useModal<T = any>(initialState: T | {} = {}) {
   const [isOpen, setModal] = useState(false)
-  const [modalState, setModalState] = useState({})
+  const [modalState, setModalState] = useState(initialState)
 
   const toggle = () => setModal(!isOpen)
   const open = state => {
@@ -137,10 +137,10 @@ function useModal() {
     setModalState({})
   }
 
-  return [{ isOpen, modalState }, { toggle, open, close }]
+  return [{ isOpen, modalState }, { toggle, open, close }] as const
 }
 
-export default function UserPage() {
+const UserPage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi } = useContext(AdminContext)
   const me = crowi.getUser()
@@ -176,9 +176,11 @@ export default function UserPage() {
         changeStatus={changeStatus}
       />
 
-      <InvitedUserModal users={invitedUsers} clear={clear} reload={fetchUsers} />
+      <InvitedUserModal users={invitedUsers} clear={clear} />
       <ResetPasswordModal isOpen={isOpenResetModal} toggle={toggleResetModal} user={resetUser} resetPassword={resetPassword} />
       <ResetedPasswordModal isOpen={isOpenResetedModal} toggle={toggleResetedModal} user={resetedUser} password={resetedPassword} />
     </>
   )
 }
+
+export default UserPage

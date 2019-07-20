@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, FC } from 'react'
 import { Collapse, Form, FormGroup, FormText, Label, Input, CustomInput, Button, Row, Col } from 'reactstrap'
 
 function useForm(invite) {
@@ -16,10 +16,14 @@ function useForm(invite) {
     clearForm()
   }
 
-  return [{ emails, sendEmail }, { setEmails, setSendEmail, onSubmit }]
+  return [{ emails, sendEmail }, { setEmails, setSendEmail, onSubmit }] as const
 }
 
-export default function InviteUserForm({ invite }) {
+interface Props {
+  invite: ({ emails, sendEmail }: { emails: string, sendEmail: boolean }) => void
+}
+
+const InviteUserForm: FC<Props> = ({ invite }) => {
   const [collapse, setCollapse] = useState(false)
   const [{ emails, sendEmail }, { setEmails, setSendEmail, onSubmit }] = useForm(invite)
 
@@ -64,3 +68,5 @@ export default function InviteUserForm({ invite }) {
     </>
   )
 }
+
+export default InviteUserForm

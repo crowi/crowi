@@ -1,10 +1,20 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input, CustomInput, FormText } from 'reactstrap'
 import FormRow from '../FormRow'
 
-function AppSettings({ isUploadable, settingForm, update, alert = {} }) {
+interface Props {
+  isUploadable: boolean
+  settingForm: object
+  update: (settings: object) => void
+  alert: {
+    status: string
+    show: boolean
+    message: string
+  }
+}
+
+const AppSettings: FC<Props> = ({ isUploadable, settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [title, setTitle] = useState(settingForm['app:title'])
   const [confidential, setConfidential] = useState(settingForm['app:confidential'])
@@ -67,13 +77,6 @@ function AppSettings({ isUploadable, settingForm, update, alert = {} }) {
       </fieldset>
     </form>
   )
-}
-
-AppSettings.propTypes = {
-  isUploadable: PropTypes.bool.isRequired,
-  settingForm: PropTypes.object.isRequired,
-  update: PropTypes.func.isRequired,
-  alert: PropTypes.object,
 }
 
 export default AppSettings

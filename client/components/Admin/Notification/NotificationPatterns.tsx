@@ -1,9 +1,14 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
 import { Input, Button, FormText } from 'reactstrap'
 
-function NotificationPatterns({ settings, addPattern, removePattern }) {
+interface Props {
+  settings: any[]
+  addPattern: ({ pathPattern, channel }: { pathPattern: string, channel: string }) => void
+  removePattern: (pattern: string) => void
+}
+
+const NotificationPatterns: FC<Props> = ({ settings, addPattern, removePattern }) => {
   const [t] = useTranslation()
   const [pathPattern, setPathPattern] = useState('')
   const [channel, setChannel] = useState('')
@@ -72,12 +77,6 @@ function NotificationPatterns({ settings, addPattern, removePattern }) {
       </div>
     </>
   )
-}
-
-NotificationPatterns.propTypes = {
-  settings: PropTypes.array.isRequired,
-  addPattern: PropTypes.func.isRequired,
-  removePattern: PropTypes.func.isRequired,
 }
 
 export default NotificationPatterns

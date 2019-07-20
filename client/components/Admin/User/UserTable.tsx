@@ -1,5 +1,4 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import Pagination from 'components/Common/Pagination'
@@ -53,6 +52,21 @@ function getHanlders(openResetModal, changeStatus) {
   }
 }
 
+interface Props {
+  me: any
+  users: any[]
+  pagination: {
+    current: number,
+    count: number
+  }
+  query: string
+  setQuery: (query: string) => void
+  search: (query: string) => void
+  move: (page: number) => void
+  openResetModal: () => void
+  changeStatus: (user: any, string: string) => void
+}
+
 function UserTable({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) {
   const [t] = useTranslation()
   const { current, count } = pagination
@@ -89,18 +103,6 @@ function UserTable({ me, users, pagination, query, setQuery, search, move, openR
       ) : null}
     </>
   )
-}
-
-UserTable.propTypes = {
-  me: PropTypes.object.isRequired,
-  users: PropTypes.arrayOf(PropTypes.object).isRequired,
-  pagination: PropTypes.object.isRequired,
-  query: PropTypes.string.isRequired,
-  setQuery: PropTypes.func.isRequired,
-  search: PropTypes.func.isRequired,
-  move: PropTypes.func.isRequired,
-  openResetModal: PropTypes.func.isRequired,
-  changeStatus: PropTypes.func.isRequired,
 }
 
 export default UserTable

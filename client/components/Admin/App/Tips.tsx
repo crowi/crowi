@@ -1,8 +1,11 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { ReactNode, FC } from 'react'
 import { Card, CardBody, Row, Col } from 'reactstrap'
 
-function Tips({ children }) {
+interface Props {
+  children: ReactNode
+}
+
+const Tips: FC<Props> = ({ children }: Props) => {
   return (
     <Row>
       <Col xs={{ size: 10, offset: 1 }} className="mb-4">
@@ -12,10 +15,6 @@ function Tips({ children }) {
       </Col>
     </Row>
   )
-}
-
-Tips.propTypes = {
-  children: PropTypes.node,
 }
 
 export default Tips

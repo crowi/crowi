@@ -1,11 +1,20 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input } from 'reactstrap'
 import FormRow from '../FormRow'
 import Tips from './Tips'
 
-function GitHubSettings({ settingForm, update, alert = {} }) {
+interface Props {
+  settingForm: object
+  update: (settings: object) => void
+  alert: {
+    status: string
+    show: boolean
+    message: string
+  }
+}
+
+const GitHubSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [clientId, setClientId] = useState(settingForm['github:clientId'])
   const [clientSecret, setClientSecret] = useState(settingForm['github:clientSecret'])
@@ -56,12 +65,6 @@ function GitHubSettings({ settingForm, update, alert = {} }) {
       </fieldset>
     </form>
   )
-}
-
-GitHubSettings.propTypes = {
-  settingForm: PropTypes.object.isRequired,
-  update: PropTypes.func.isRequired,
-  alert: PropTypes.object,
 }
 
 export default GitHubSettings

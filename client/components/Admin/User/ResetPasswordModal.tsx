@@ -1,8 +1,14 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { FC } from 'react'
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'reactstrap'
 
-function ResetPasswordModal({ isOpen, toggle, user = {}, resetPassword }) {
+interface Props {
+  isOpen: boolean
+  toggle: () => void
+  user: any
+  resetPassword: (user: any) => void
+}
+
+const ResetPasswordModal: FC<Props> = ({ isOpen, toggle, user = {}, resetPassword }) => {
   const handleClick = e => {
     e.preventDefault()
     resetPassword(user)
@@ -26,13 +32,6 @@ function ResetPasswordModal({ isOpen, toggle, user = {}, resetPassword }) {
       </ModalFooter>
     </Modal>
   )
-}
-
-ResetPasswordModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  toggle: PropTypes.func.isRequired,
-  user: PropTypes.object,
-  resetPassword: PropTypes.func.isRequired,
 }
 
 export default ResetPasswordModal

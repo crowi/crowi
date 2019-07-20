@@ -1,12 +1,25 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { FC } from 'react'
 import moment from 'moment'
 import { Badge } from 'reactstrap'
 import UserPicture from 'components/User/UserPicture'
 import UserStatusBadge from 'components/User/UserStatusBadge'
 import UserEditDropdown from './UserEditDropdown'
 
-function UserTableRow({ me, user, ...props }) {
+interface Props {
+  me: any
+  user: any
+  handleClickEdit: (user: any) => void
+  handleClickResetPassword: (user: any) => void
+  handleClickApprove: (user: any) => void
+  handleClickSuspend: (user: any) => void
+  handleClickRestore: (user: any) => void
+  handleClickRemove: (user: any) => void
+  handleClickRemoveCompletely: (user: any) => void
+  handleClickRevokeAdmin: (user: any) => void
+  handleClickGrantAdmin: (user: any) => void
+}
+
+const UserTableRow: FC<Props> = ({ me, user, ...props }) => {
   const { admin, username, name, email, createdAt } = user
   const {
     handleClickEdit,
@@ -57,11 +70,6 @@ function UserTableRow({ me, user, ...props }) {
       </td>
     </tr>
   )
-}
-
-UserTableRow.propTypes = {
-  me: PropTypes.object.isRequired,
-  user: PropTypes.object.isRequired,
 }
 
 export default UserTableRow

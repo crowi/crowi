@@ -1,6 +1,6 @@
-import React, { createContext, useState, useEffect } from 'react'
-import PropTypes from 'prop-types'
+import React, { createContext, useState, useEffect, FC } from 'react'
 import { BrowserRouter as Router, Switch, Route } from 'react-router-dom'
+import Crowi from 'client/util/Crowi'
 
 import Top from './TopPage'
 import App from './App/AppPage'
@@ -11,9 +11,25 @@ import Share from './Share/SharePage'
 import Backlink from './Backlink/BacklinkPage'
 import Navigation from './Navigation'
 
-export const AdminContext = createContext()
+interface AdminContext {
+  crowi: Crowi
+  loading: boolean
+  searchConfigured: boolean
+  settingForm: Object
+  registrationMode: string
+  isUploadable: boolean
+  fetchSettings: () => Promise<void>
+}
 
-function useSearchConfig(crowi) {
+export const AdminContext = createContext<AdminContext>({
+  loading: true,
+  searchConfigured: false,
+  settingForm: {},
+  registrationMode: '',
+  isUploadable: false,
+} as AdminContext)
+
+function useSearchConfig(crowi: Crowi) {
   const [searchConfigured, setSearchConfigured] = useState(false)
 
   const fetchSearchConfig = async () => {
@@ -21,21 +37,25 @@ function useSearchConfig(crowi) {
     setSearchConfigured(isConfigured)
   }
 
-  return [searchConfigured, fetchSearchConfig]
+  return [searchConfigured, fetchSearchConfig] as const
 }
 
-function useFetchSettings(crowi) {
-  const [settings, setSettings] = useState({ settingForm: {}, registrationMode: {}, isUploadable: false })
+function useFetchSettings(crowi: Crowi) {
+  const [settings, setSettings] = useState({ settingForm: {}, registrationMode: '', isUploadable: false })
 
   const fetchSettings = async () => {
     const { settingForm, registrationMode, isUploadable } = await crowi.apiGet('/admin/app')
     setSettings({ settingForm, registrationMode, isUploadable })
   }
 
-  return [settings, fetchSettings]
+  return [settings, fetchSettings] as const
 }
 
-function AdminPage({ crowi }) {
+interface Props {
+  crowi: Crowi
+}
+
+const AdminPage: FC<Props> = ({ crowi }) => {
   const [loading, setLoading] = useState(true)
   const [searchConfigured, fetchSearchConfig] = useSearchConfig(crowi)
   const [settings, fetchSettings] = useFetchSettings(crowi)
@@ -77,10 +97,6 @@ function AdminPage({ crowi }) {
       </AdminContext.Provider>
     </Router>
   )
-}
-
-AdminPage.propTypes = {
-  crowi: PropTypes.object.isRequired,
 }
 
 export default AdminPage

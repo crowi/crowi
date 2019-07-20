@@ -1,7 +1,18 @@
 import React from 'react'
-import PropTypes from 'prop-types'
+import Crowi from 'client/util/Crowi'
 
-export default class AdminRebuildSearch extends React.Component {
+interface Props {
+  crowi: Crowi
+}
+
+interface State {
+  isCompleted: boolean
+  total: number
+  current: number
+  skip: number
+}
+
+export default class AdminRebuildSearch extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -50,7 +61,7 @@ export default class AdminRebuildSearch extends React.Component {
         <div
           className="progress-bar progress-bar-striped progress-bar-animated active"
           role="progressbar"
-          aria-valuemin="0"
+          aria-valuemin={0}
           aria-valuenow={current}
           aria-valuemax={total}
           style={{ width: `${(current / total) * 100}%` }}
@@ -60,8 +71,4 @@ export default class AdminRebuildSearch extends React.Component {
       </div>
     )
   }
-}
-
-AdminRebuildSearch.propTypes = {
-  crowi: PropTypes.object.isRequired,
 }
