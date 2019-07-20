@@ -7,13 +7,13 @@ export default function Navigation() {
   const { settingForm, searchConfigured } = useContext(AdminContext)
 
   const items = [
-    { key: 'index', to: '/admin', icon: 'fa-cube', name: 'Wiki 管理トップ', title: 'Wiki管理', exact: true },
-    { key: 'app', to: '/admin/app', icon: 'fa-cogs', name: 'アプリ設定' },
-    { key: 'notification', to: '/admin/notification', icon: 'fa-bell', name: '通知管理' },
-    { key: 'user', to: '/admin/users', icon: 'fa-users', name: 'ユーザー管理' },
-    { key: 'search', to: '/admin/search', icon: 'fa-search', name: '検索管理', show: searchConfigured },
-    { key: 'share', to: '/admin/share', icon: 'fa-lock', name: '外部共有設定' },
-    { key: 'backlink', to: '/admin/backlink', icon: 'fa-anchor', name: 'バックリンク管理' },
+    { key: 'index', to: '/admin', icon: 'mdi-cube', name: 'Wiki 管理トップ', title: 'Wiki管理', exact: true },
+    { key: 'app', to: '/admin/app', icon: 'mdi-cogs', name: 'アプリ設定' },
+    { key: 'notification', to: '/admin/notification', icon: 'mdi-bell', name: '通知管理' },
+    { key: 'user', to: '/admin/users', icon: 'mdi-account-group', name: 'ユーザー管理' },
+    { key: 'search', to: '/admin/search', icon: 'mdi-magnify', name: '検索管理', show: searchConfigured },
+    { key: 'share', to: '/admin/share', icon: 'mdi-open-in-new', name: '外部共有設定' },
+    { key: 'backlink', to: '/admin/backlink', icon: 'mdi-anchor', name: 'バックリンク管理' },
   ]
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export default function Navigation() {
         ({ key, to, icon, name, exact = false, show = true }) =>
           show && (
             <NavLink key={key} className="nav-link" to={to} exact={exact} activeClassName="active">
-              <i className={`fa ${icon}`} /> {name}
+              <i className={`mdi ${icon}`} /> {name}
             </NavLink>
           ),
       )}

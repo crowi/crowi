@@ -37,7 +37,7 @@ function AWSSettings({ settingForm, update, alert = {} }) {
           {t('admin.aws.tips2')}
           <br />
           <span className="mt-2 text-danger">
-            <i className="fa fa-exclamation-triangle" /> {t('admin.aws.notice')}
+            <i className="mdi mdi-alert" /> {t('admin.aws.notice')}
           </span>
         </Tips>
 

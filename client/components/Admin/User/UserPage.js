@@ -60,7 +60,7 @@ function useQuery(crowi) {
 }
 
 function useFetchUsers(crowi, setFailure, clearStatus) {
-  const [users, setUsers] = useState(null)
+  const [users, setUsers] = useState([])
   const [{ page, query }, { setPage, setQuery }] = useQuery(crowi)
   const [count, setCount] = useState(0)
   const [search, setSearch] = useState('')

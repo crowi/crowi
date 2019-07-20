@@ -59,7 +59,7 @@ export default function AppPage() {
   return (
     !loading && (
       <>
-        <AppSettings update={updateSettings('app')} alert={alert['app']} {...props} />
+        <AppSettings isUploadable={isUploadable} update={updateSettings('app')} alert={alert['app']} {...props} />
         <SecuritySettings registrationMode={registrationMode} update={updateSettings('sec')} alert={alert['sec']} {...props} />
         <MailSettings update={updateSettings('mail')} alert={alert['mail']} {...props} />
         <AWSSettings isUploadable={isUploadable} update={updateSettings('aws')} alert={alert['aws']} {...props} />

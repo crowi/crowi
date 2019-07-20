@@ -15,7 +15,7 @@ function Tips({ children }) {
 }
 
 Tips.propTypes = {
-  children: PropTypes.element,
+  children: PropTypes.node,
 }
 
 export default Tips

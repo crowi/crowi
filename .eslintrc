@@ -1,14 +1,18 @@
 {
-  "parser": "babel-eslint",
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "jsx": true,
+    "useJSXTextNode": true
+  },
   "extends": [
     "standard",
-    "plugin:flowtype/recommended",
+    "plugin:@typescript-eslint/recommended",
     "plugin:react/recommended",
     "plugin:jest/recommended",
     "prettier",
+    "prettier/@typescript-eslint",
     "prettier/standard",
-    "prettier/flowtype",
-    "prettier/react"
+    "prettier/react",
   ],
   "env": {
     "browser": true,
@@ -17,22 +21,34 @@
     "jquery": true
   },
   "rules": {
+    "@typescript-eslint/camelcase": "off",
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/explicit-member-accessibility": "off",
+    "@typescript-eslint/no-angle-bracket-type-assertion": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-use-before-define": "off",
+    "@typescript-eslint/no-var-requires": "off",
     "eqeqeq": "off",
     "handle-callback-err": "off",
+    "jest/valid-describe": "off",
+    "no-console": "off",
     "no-global-assign": "off",
     "no-inner-declarations": "off",
     "no-redeclare": "off",
+    "node/no-deprecated-api": "off",
     "prettier/prettier": "error",
     "react/prefer-stateless-function": "off",
-    "standard/no-callback-literal": "off"
+    "require-jsdoc": "off",
+    "standard/no-callback-literal": "off",
+    "valid-jsdoc": "off"
   },
-  "plugins": ["flowtype", "react", "prettier", "jest", "react-hooks"],
   "settings": {
     "react": {
-      "version": "15.5",
-      "flowVersion": "0.65"
+      "version": "16.7"
     }
   },
+  "plugins": ["@typescript-eslint", "react", "prettier", "jest", "react-hooks"],
   "globals": {
     "jest/globals": true,
     "ROOT_DIR": true,

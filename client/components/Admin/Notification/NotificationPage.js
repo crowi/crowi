@@ -7,11 +7,11 @@ import Instructions from './Instructions'
 import ConnectButton from './ConnectButton'
 
 function useFetchNotificationSettings(crowi) {
-  const [settings, setSettings] = useState({ settings: {}, slackSetting: {}, hasSlackConfig: null, hasSlackToken: null, slackAuthUrl: null })
+  const [settings, setSettings] = useState({ settings: {}, slackSetting: {}, hasSlackConfig: null, hasSlackToken: null, slackAuthUrl: null, appUrl: '' })
 
   const fetchSettings = async () => {
-    const { settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl } = await crowi.apiGet('/admin/notification')
-    setSettings({ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl })
+    const { settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl } = await crowi.apiGet('/admin/notification')
+    setSettings({ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl })
   }
 
   return [settings, fetchSettings]
@@ -19,7 +19,7 @@ function useFetchNotificationSettings(crowi) {
 
 export default function NotificationPage() {
   const { crowi, loading } = useContext(AdminContext)
-  const [{ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl }, fetchSettings] = useFetchNotificationSettings(crowi)
+  const [{ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl }, fetchSettings] = useFetchNotificationSettings(crowi)
 
   const addPattern = async ({ pathPattern, channel }) => {
     await crowi.apiPost('/admin/notification.add', { pathPattern, channel })
@@ -40,8 +40,8 @@ export default function NotificationPage() {
       <>
         <NotificationSettings slackSetting={slackSetting} fetchSettings={fetchSettings} />
         {slackAuthUrl && <ConnectButton hasSlackToken={hasSlackToken} slackAuthUrl={slackAuthUrl} />}
-        {hasSlackConfig === true && <NotificationPatterns settings={settings} addPattern={addPattern} removePattern={removePattern} />}
-        {hasSlackConfig === false && <Instructions />}
+        {hasSlackConfig && <NotificationPatterns settings={settings} addPattern={addPattern} removePattern={removePattern} />}
+        <Instructions appUrl={appUrl} />
       </>
     )
   )
