@@ -1,14 +1,14 @@
-const utils = require('../utils.js')
+
 
 describe('Notification', function() {
-  const Comment = utils.models.Comment
-  const Notification = utils.models.Notification
-  const Page = utils.models.Page
-  const User = utils.models.User
-  const Activity = utils.models.Activity
-  const mongoose = utils.mongoose
+  const Comment = crowi.model('Comment')
+  const Notification = crowi.model('Notification')
+  const Page = crowi.model('Page')
+  const User = crowi.model('User')
+  const Activity = crowi.model('Activity')
+  const mongoose = crowi.getMongo()
   const ObjectId = mongoose.Types.ObjectId
-  const conn = utils.mongoose.connection
+  const conn = mongoose.connection
 
   const data = {}
 
