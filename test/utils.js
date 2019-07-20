@@ -5,9 +5,6 @@ const models = require(MODEL_DIR)
 const Config = require(MODEL_DIR + '/config')
 const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
 
-// Want fix...
-crowi.config.crowi = { 'app:url': 'http://localhost:3000' }
-
 mongoose.Promise = global.Promise
 
 const { __MONGO_URI__: MONGO_URI } = global
@@ -39,6 +36,19 @@ crowi.getIo = function() {
       emit: function(str, obj) {},
     },
   }
+}
+
+// FIXME: Mock. Should be changed to use a real Crowi object.
+crowi.config = {
+  data: {
+    crowi: { 'app:url': 'http://localhost:3000' },
+  },
+  set(config) {
+    this.data = config
+  },
+  get() {
+    return this.data
+  },
 }
 
 module.exports = {

@@ -152,14 +152,14 @@
           name="uq" value="{{ uq }}" />
         <span class="input-group-append">
           <button type="submit" class="btn btn-outline-secondary">
-            <i class="search-top-icon fa fa-search"></i>
+            <i class="search-top-icon mdi mdi-magnify"></i>
           </button>
         </span>
       </form>
 
       {% if error %}
         <div class="alert alert-danger" role="alert">
-          <i class="fas fa-exclamation-triangle"></i>
+          <i class="mdi mdi-alert"></i>
           {{error}}
         </div>
       {% endif %}
@@ -169,7 +169,7 @@
       {% endif %}
 
       {% if users.length %}
-        <table class="table table-hover table-striped table-bordered">
+        <table id="admin-users-table" class="table table-hover table-striped table-bordered" data-csrf="{{ csrf() }}">
           <thead>
             <tr>
               <th>#</th>
@@ -183,7 +183,7 @@
           </thead>
           <tbody>
             {% for sUser in users %}
-            <tr>
+            <tr data-user-id="{{ sUser._id.toString() }}">
               <td>
                 <img src="{{ sUser|picture }}" class="picture picture-rounded" />
                 <span class="badge {{ css.userStatus(sUser) }}">
@@ -199,7 +199,7 @@
                 <strong>{{ sUser.username }}</strong>
               </td>
               <td>{{ sUser.name }}</td>
-              <td>{{ sUser.email }}</td>
+              <td class="email">{{ sUser.email }}</td>
               <td>{{ sUser.createdAt|date('Y-m-d') }}</td>
               <td>{{ sUser.lastLoginAt }}</td>
               <td>
@@ -210,9 +210,14 @@
                   </button>
                   <ul class="dropdown-menu dropdown-menu-right" role="menu">
                     <li class="dropdown-header">編集メニュー</li>
-                    <li>
-                      <a href="">編集</a>
-
+                    <li class="dropdown-button">
+                      <a href="#"
+                        data-user-id="{{ sUser._id.toString() }}"
+                        data-user-email="{{ sUser.email }}"
+                        data-target="#admin-password-reset-modal"
+                        class="edit-button btn btn-block btn-default">
+                        編集
+                      </a>
                     </li>
                     <li class="dropdown-button">
                       <a href="#"
