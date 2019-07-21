@@ -1,11 +1,10 @@
 const faker = require('faker')
-const utils = require('../utils.js')
 
 describe('Share', () => {
-  const User = utils.models.User
-  const Page = utils.models.Page
-  const Share = utils.models.Share
-  const conn = utils.mongoose.connection
+  const User = crowi.model('User')
+  const Page = crowi.model('Page')
+  const Share = crowi.model('Share')
+  const conn = crowi.getMongo().connection
   let user
   let createdPages
 
