@@ -1,11 +1,10 @@
 const faker = require('faker')
-const utils = require('../utils.js')
 
 describe('Backlink', () => {
-  const Backlink = utils.models.Backlink
-  const Page = utils.models.Page
-  const Revision = utils.models.Revision
-  const conn = utils.mongoose.connection
+  const Backlink = crowi.model('Backlink')
+  const Page = crowi.model('Page')
+  const Revision = crowi.model('Revision')
+  const conn = crowi.getMongo().connection
   const appUrl = 'http://localhost:3000'
   let user
 

@@ -1,23 +1,14 @@
 const path = require('path')
-const utils = require('../utils.js')
+const Crowi = require(path.join(ROOT_DIR, '/lib/crowi'))
 
 describe('Test for Crowi application context', () => {
-  const Crowi = require('../../lib/crowi')
-  const mongoose = require('mongoose')
-  const crowi = new Crowi(path.normalize(path.join(__dirname, './../../')), process.env)
-
-  beforeAll(async () => {
-    crowi.models = utils.models
-    // FIXME: This is a hack
-    crowi.redisOpts = null
-    await crowi.setupConfig()
-    return crowi
-  })
+  // test crowi object by environment
+  const crowi = global.crowi
 
   describe('construction', () => {
     test('initialize crowi context', () => {
-      expect(crowi).toBeInstanceOf(Crowi)
       expect(crowi.version).toBe(require('../../package.json').version)
+      expect(crowi.isInitialized()).toBe(true)
       expect(typeof crowi.env).toBe('object')
     })
 
@@ -38,7 +29,7 @@ describe('Test for Crowi application context', () => {
 
   describe('.setupDatabase', () => {
     test('setup completed', () => {
-      expect(mongoose.connection.readyState).toBe(1)
+      expect(crowi.getMongo().connection.readyState).toBe(1)
     })
   })
 })
