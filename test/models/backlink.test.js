@@ -8,14 +8,11 @@ describe('Backlink', () => {
   const appUrl = 'http://localhost:13001'
   let user
 
-  beforeAll(async done => {
+  beforeAll(done => {
     Backlink = crowi.model('Backlink')
     Page = crowi.model('Page')
     Revision = crowi.model('Revision')
     conn = crowi.getMongo().connection
-    const config = crowi.getConfig()
-    config.crowi['app:url'] = appUrl
-    crowi.setConfig(config)
 
     done()
   })
@@ -40,16 +37,18 @@ describe('Backlink', () => {
       const srcPaths = createPaths()
 
       await Promise.all(destPaths.map(path => createPage(path)))
-      await Promise.all([
+      const pages = await Promise.all([
         createPage(srcPaths[0], `<${destPaths[0]}>`),
         createPage(srcPaths[1], `[test](${appUrl}${destPaths[1]})`),
         createPage(srcPaths[2], `${appUrl}${destPaths[2]}`),
       ])
+
       await Backlink.remove({})
     })
 
     test('should have all backlinks', async () => {
-      expect(await Backlink.createByAllPages()).toHaveLength(3)
+      const pages = await Backlink.createByAllPages()
+      expect(pages).toHaveLength(3)
     })
   })
 })

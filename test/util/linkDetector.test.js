@@ -1,10 +1,4 @@
 describe('Url test', () => {
-  beforeAll(async () => {
-    const config = crowi.getConfig()
-    config.crowi['app:url'] = 'http://localhost:13001'
-    crowi.setConfig(config)
-  })
-
   test('detectInternalLink', () => {
     const linkDetector = require(crowi.libDir + '/util/linkDetector')(crowi)
 

@@ -26,7 +26,6 @@ afterAll(async done => {
 
   // delete model caches
   Object.keys(crowi.models).forEach(key => {
-    // console.log('delete', key)
     delete mongoose.models[key]
     delete mongoose.modelSchemas[key]
   })
