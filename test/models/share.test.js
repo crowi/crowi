@@ -32,7 +32,7 @@ describe('Share', () => {
     describe('Create shares', () => {
       test('should be able to create only one active share per page', async () => {
         await expect(Share.create(createdPages[0]._id, user)).resolves.toBeInstanceOf(Share)
-        await expect(Share.create(createdPages[0]._id, user)).rejects.toBeInstanceOf(Error)
+        await expect(Share.create(createdPages[0]._id, user)).rejects.toThrow()
       })
     })
   })
