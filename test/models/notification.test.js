@@ -14,7 +14,7 @@ describe('Notification', function() {
 
   describe('.upsertByActivity', function() {
     describe('valid parameters', function() {
-      it('should create', function() {
+      it('should create', async function() {
         const userId1 = ObjectId()
         const userId2 = ObjectId()
         const userId3 = ObjectId()
@@ -30,23 +30,19 @@ describe('Notification', function() {
           action: 'COMMENT',
         }
 
-        return Notification.upsertByActivity(userId1, sameActivityUsers, activity)
-          .then(function(notification) {
-            expect(notification.user.toString()).toBe(userId1.toString())
-            expect(notification.targetModel).toBe('Page')
-            expect(notification.target.toString()).toBe(targetId.toString())
-            expect(notification.action).toBe('COMMENT')
-            expect(notification.status).toBe(Notification.STATUS_UNREAD)
-            expect(notification.activities).toHaveLength(3)
-          })
-          .catch(function(err) {
-            throw new Error(err)
-          })
+        const notification = await Notification.upsertByActivity(userId1, sameActivityUsers, activity)
+
+        expect(notification.user.toString()).toBe(userId1.toString())
+        expect(notification.targetModel).toBe('Page')
+        expect(notification.target.toString()).toBe(targetId.toString())
+        expect(notification.action).toBe('COMMENT')
+        expect(notification.status).toBe(Notification.STATUS_UNREAD)
+        expect(notification.activities).toHaveLength(3)
       })
     })
 
     describe('invalid parameters', function() {
-      it('should create', function() {
+      it('should create', async () => {
         const userId1 = ObjectId()
         const userId2 = ObjectId()
         const userId3 = ObjectId()
@@ -62,7 +58,7 @@ describe('Notification', function() {
           action: 'COMMENT',
         }
 
-        return expect(Notification.upsertByActivity(userId1, sameActivityUsers, activity)).rejects.toThrow('Validation failed')
+        await expect(Notification.upsertByActivity(userId1, sameActivityUsers, activity)).rejects.toThrow('Validation failed')
       })
     })
   })
