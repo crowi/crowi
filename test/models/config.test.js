@@ -39,7 +39,6 @@ describe('Config model test', () => {
       expect(config.crowi).toHaveProperty('test:test2', 11111)
       expect(config.crowi).toHaveProperty('test:test3', [1, 2, 3, 4, 5])
 
-      expect(config.plugin).toBeInstanceOf(Object)
       expect(config.plugin).toHaveProperty('other:config', 'this is data')
     })
   })

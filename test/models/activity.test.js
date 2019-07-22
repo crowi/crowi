@@ -1,14 +1,14 @@
 const faker = require('faker')
 
 describe('Activity', function() {
-  const mongoose = require('mongoose')
   const Activity = crowi.model('Activity')
   const User = crowi.model('User')
   const Page = crowi.model('Page')
   const Comment = crowi.model('Comment')
   const Watcher = crowi.model('Watcher')
-  const conn = crowi.getMongo().connection
+  const mongoose = crowi.getMongo()
   const ObjectId = mongoose.Types.ObjectId
+  const conn = mongoose.connection
 
   describe('.createByParameters', function() {
     describe('correct parameters', function() {

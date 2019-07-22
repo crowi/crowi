@@ -1,7 +1,7 @@
 
 describe('Watcher', function() {
-  const mongoose = require('mongoose')
   const Watcher = crowi.model('Watcher')
+  const mongoose = crowi.getMongo()
   const ObjectId = mongoose.Types.ObjectId
 
   describe('.upsertWatcher', () => {
