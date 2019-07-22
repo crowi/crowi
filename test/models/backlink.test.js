@@ -5,8 +5,14 @@ describe('Backlink', () => {
   const Page = crowi.model('Page')
   const Revision = crowi.model('Revision')
   const conn = crowi.getMongo().connection
-  const appUrl = 'http://localhost:3000'
+  const appUrl = 'http://localhost:13001'
   let user
+
+  beforeAll(async () => {
+    const config = crowi.getConfig()
+    config.crowi['app:url'] = appUrl
+    crowi.setConfig(config)
+  })
 
   beforeAll(async () => {
     const createdUsers = await testDBUtil.generateFixture(conn, 'User', [

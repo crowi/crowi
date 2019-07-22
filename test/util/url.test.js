@@ -1,4 +1,3 @@
-const utils = require('../utils.js')
 
 describe('Url Util', function() {
   const { getContinueUrl } = require(ROOT_DIR + '/lib/util/url')
