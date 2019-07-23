@@ -28,8 +28,11 @@ interface LangProcessor {
 
 export default class CrowiRenderer {
   crowi: Crowi
+
   preProcessors: PreProcessor[]
+
   postProcessors: PostProcessor[]
+
   langProcessors: { [key: string]: LangProcessor }
 
   constructor(crowi: Crowi) {

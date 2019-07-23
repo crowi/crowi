@@ -1,4 +1,3 @@
-
 describe('UpdatePost', () => {
   const UpdatePost = crowi.model('UpdatePost')
 

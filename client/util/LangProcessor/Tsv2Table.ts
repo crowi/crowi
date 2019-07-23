@@ -20,7 +20,7 @@ export default class Tsv2Table {
 
   getTableHeader(codeLines: string[]) {
     let headers: string[] = []
-    let headLine = codeLines[0] || ''
+    const headLine = codeLines[0] || ''
 
     // console.log('head', headLine);
     headers = this.splitColums(headLine).map(col => {

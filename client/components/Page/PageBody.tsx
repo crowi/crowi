@@ -55,7 +55,7 @@ export default class PageBody extends React.Component<Props> {
   }
 
   render() {
-    let parsedBody = this.getMarkupHTML()
+    const parsedBody = this.getMarkupHTML()
 
     return <div className="content" dangerouslySetInnerHTML={parsedBody} />
   }

@@ -1,4 +1,3 @@
-
 describe('User', () => {
   const Page = crowi.model('Page')
   const User = crowi.model('User')

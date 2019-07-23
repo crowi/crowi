@@ -18,6 +18,7 @@ interface Context {
 
 export default class Crowi {
   public context: Context
+
   public config: {
     crowi?: {}
     upload?: {
@@ -29,17 +30,25 @@ export default class Crowi {
       MATHJAX: string | null
     }
   }
+
   public csrfToken: string
 
   public window: Window
+
   public location: Location
+
   public document: Document
+
   public localStorage: Storage
 
   public user?: Me
+
   public users: User[]
+
   public userByName: { [name: string]: User }
+
   public userById: { [id: string]: User }
+
   public draft: { [path: string]: string }
 
   public socket: any
@@ -126,8 +135,8 @@ export default class Crowi {
         this.users = data.users
         this.localStorage.users = JSON.stringify(data.users)
 
-        let userByName: { [name: string]: User } = {}
-        let userById: { [id: string]: User } = {}
+        const userByName: { [name: string]: User } = {}
+        const userById: { [id: string]: User } = {}
         data.users.forEach((user: User) => {
           const { username, _id } = user
           userByName[username] = user
@@ -174,9 +183,9 @@ export default class Crowi {
   }
 
   findUserByIds(userIds: string[]) {
-    let users: User[] = []
-    for (let userId of userIds) {
-      let user = this.findUserById(userId)
+    const users: User[] = []
+    for (const userId of userIds) {
+      const user = this.findUserById(userId)
       if (user) {
         users.push(user)
       }
@@ -207,7 +216,7 @@ export default class Crowi {
 
   async apiRequest(method: 'get' | 'post', path: string, payload: { params?: any; data?: any }) {
     const createError = (message: string, info = {}) => {
-      let error = new Error(message)
+      const error = new Error(message)
       error.info = info
       return error
     }

@@ -22,7 +22,7 @@ class CrowiEnvironment extends NodeEnvironment {
     this.crowi = new Crowi(ROOT_DIR, {
       PORT: 13001,
       MONGO_URI: this.global.__MONGO_URI__,
-      ...process.env
+      ...process.env,
     })
     await this.crowi.init()
 
@@ -33,12 +33,12 @@ class CrowiEnvironment extends NodeEnvironment {
 
   async teardown() {
     await super.teardown()
-    await this.crowi.getMongo().disconnect();
+    await this.crowi.getMongo().disconnect()
     await this.mongodb.stop()
 
     // delete model caches
     Object.keys(this.crowi.models).forEach(key => {
-      //console.log('delete', key)
+      // console.log('delete', key)
       delete mongoose.models[key]
       delete mongoose.modelSchemas[key]
     })

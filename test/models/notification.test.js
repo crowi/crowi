@@ -1,5 +1,3 @@
-
-
 describe('Notification', function() {
   const Comment = crowi.model('Comment')
   const Notification = crowi.model('Notification')
