@@ -10,7 +10,6 @@ describe('Page', () => {
     User = crowi.model('User')
     conn = crowi.getMongo().connection
 
-
     Promise.resolve()
       .then(() => {
         const userFixture = [

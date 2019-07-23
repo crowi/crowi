@@ -62,12 +62,13 @@
   },
   "overrides": [
     {
-      "files": "*.test.js",
+      "files": ["*.test.js", "test/setup.js"],
       "rules": {
         "handle-callback-err": "off",
         "no-redeclare": "off",
         "no-unused-expressions": "off",
-        "no-unused-vars": "off"
+        "no-unused-vars": "off",
+        "no-undef": "off"
       }
     },
     {
