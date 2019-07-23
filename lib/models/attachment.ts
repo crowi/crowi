@@ -1,6 +1,33 @@
-module.exports = function(crowi) {
-  var debug = require('debug')('crowi:models:attachment')
-  var mongoose = require('mongoose')
+import * as mongoose from 'mongoose'
+import Debug from 'debug'
+
+type ObjectId = mongoose.Types.ObjectId
+export interface AttachmentDocument extends mongoose.Document {
+  page: ObjectId,
+  creator: ObjectId,
+  filePath: string,
+  fileName: string,
+  originalName: string,
+  fileFormat: string,
+  fileSize: number,
+  createdAt: Date,
+  // virtual
+  fileURL: string,
+}
+
+export interface AttachmentModel extends mongoose.Model<AttachmentDocument> {
+  getListByPageId(id: ObjectId): Promise<AttachmentDocument[]>
+  // FIXME: 競合
+  create(pageId: ObjectId, creator: any, filePath: string, originName: string, fileName: string, fileFormat: string, fileSize: number): Promise<AttachmentDocument>
+  guessExtByFileType(fileType: string): string
+  createAttachmentFilePath(pageId: ObjectId, fileName: string, fileType: string): string
+  removeAttachmentsByPageId(pageId: ObjectId): any
+  findDeliveryFile(attachment: AttachmentDocument, forceUpdate: boolean): any
+  removeAttachment(attachment: AttachmentDocument): any
+}
+
+export default (crowi) => {
+  var debug = Debug('crowi:models:attachment')
   var ObjectId = mongoose.Schema.Types.ObjectId
   var fileUploader = require('../util/fileUploader')(crowi)
 
@@ -11,7 +38,7 @@ module.exports = function(crowi) {
     return hasher.digest('hex')
   }
 
-  const attachmentSchema = new mongoose.Schema(
+  const attachmentSchema = new mongoose.Schema<AttachmentDocument, AttachmentModel>(
     {
       page: { type: ObjectId, ref: 'Page', index: true },
       creator: { type: ObjectId, ref: 'User', index: true },
@@ -32,23 +59,6 @@ module.exports = function(crowi) {
   attachmentSchema.virtual('fileUrl').get(function() {
     return `/files/${this._id}`
   })
-
-  attachmentSchema.statics.findById = function(id) {
-    var Attachment = this
-
-    return new Promise(function(resolve, reject) {
-      Attachment.findOne({ _id: id }, function(err, data) {
-        if (err) {
-          return reject(err)
-        }
-
-        if (data === null) {
-          return reject(new Error('Attachment not found'))
-        }
-        return resolve(data)
-      })
-    })
-  }
 
   attachmentSchema.statics.getListByPageId = function(id) {
     var self = this
@@ -76,7 +86,7 @@ module.exports = function(crowi) {
     var Attachment = this
 
     return new Promise(function(resolve, reject) {
-      var newAttachment = new Attachment()
+      var newAttachment = new (Attachment as any)()
 
       newAttachment.page = pageId
       newAttachment.creator = creator._id
@@ -162,7 +172,7 @@ module.exports = function(crowi) {
     const filePath = attachment.filePath
 
     return new Promise((resolve, reject) => {
-      Attachment.remove({ _id: attachment._id }, (err, data) => {
+      Attachment.remove({ _id: attachment._id }, (err) => {
         if (err) {
           return reject(err)
         }
@@ -179,5 +189,5 @@ module.exports = function(crowi) {
     })
   }
 
-  return mongoose.model('Attachment', attachmentSchema)
+  return mongoose.model<AttachmentDocument>('Attachment', attachmentSchema)
 }

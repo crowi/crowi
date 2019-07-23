@@ -1,18 +1,66 @@
-'use strict'
+import Debug from 'debug'
+const debug = Debug('crowi:crowi')
+import path, { sep } from 'path'
+import mongoose from 'mongoose'
+import Tokens from 'csrf'
+import redis from 'redis'
+import url from 'url'
+import socketIO from 'socket.io'
 
-const debug = require('debug')('crowi:crowi')
 const pkg = require('../../package.json')
-const path = require('path')
-const sep = path.sep
-const uuidv4 = require('uuid/v4')
-const mongoose = require('mongoose')
-const models = require('../models')
+import models from '../models'
 const events = require('../events')
 const middlewares = require('../middlewares')
 const controllers = require('../controllers')
 
+type Model<T> = T extends (crowi: any) => infer R ? R : any
+type Models<M = typeof models> = {
+  [K in keyof M]: Model<M[K]>
+}
+
 class Crowi {
-  constructor(rootdir, env) {
+  version: string
+
+  rootDir: string
+  pluginDir: string
+  publicDir: string
+  libDir: string
+  localeDir: string
+  resourceDir: string
+  viewsDir: string
+  mailDir: string
+  tmpDir: string
+  cacheDir: string
+
+  // FIXME after service/config typed
+  config: any
+  searcher: any = null
+  mailer: any = {}
+  lru: any = {}
+
+  tokens: Tokens | null = null
+
+  // FIXME: {} をアサインしないで済む方法を捜す
+  models: Models | {} = {}
+  events: any = {}
+
+  env: typeof process.env
+  node_env: string
+  port: number
+
+  redis: redis.RedisClient | null = null
+  redisUrl: string | null
+  redisOpts: any
+
+  // TODO: @types モジュール入れたらやる
+  sessionConfig: any
+
+  io?: socketIO.Server
+
+  // FIXME: util/slack に型付けたらやる
+  slack: any
+
+  constructor(rootdir: string, env: typeof process.env) {
     this.version = pkg.version
 
     this.rootDir = rootdir
@@ -26,28 +74,13 @@ class Crowi {
     this.tmpDir = path.join(this.rootDir, 'tmp') + sep
     this.cacheDir = path.join(this.tmpDir, 'cache')
 
-    this.config = {}
-    this.searcher = null
-    this.mailer = {}
-    this.lru = {}
-
-    this.tokens = null
-
-    this.models = {}
-    this.events = {}
     this.setupEvents()
 
     this.env = env
     this.node_env = this.env.NODE_ENV || 'development'
-    this.port = this.env.PORT || 3000
-    this.redis = null
+    this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
     this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
     this.redisOpts = this.buildRedisOpts(this.redisUrl)
-
-    this.pubSubId = uuidv4()
-    this.publisher = null
-    this.subscriber = null
-    this.configPubSubChannel = 'config'
   }
 
   async init() {
@@ -87,9 +120,8 @@ class Crowi {
     return this.env
   }
 
-  buildRedisOpts(redisUrl) {
+  buildRedisOpts(redisUrl: string | null) {
     if (redisUrl) {
-      const url = require('url')
       const { hostname: host, port, auth } = url.parse(redisUrl)
       const password = auth ? { password: auth.split(':')[1] } : {}
       return { host, port, ...password }
@@ -99,7 +131,7 @@ class Crowi {
 
   // getter/setter of model instance
   //
-  model(name, model) {
+  model<T>(name: string, model?: T) {
     if (model) {
       return (this.models[name] = model)
     }
@@ -141,7 +173,6 @@ class Crowi {
 
   async setupRedisClient() {
     if (this.redisOpts) {
-      const redis = require('redis')
       const redisClient = redis.createClient(this.redisOpts)
       this.redis = redisClient
     }
@@ -158,6 +189,7 @@ class Crowi {
       cookie: {
         maxAge: sessionAge,
       },
+      store: undefined,
     }
 
     if (this.redis) {
@@ -171,17 +203,14 @@ class Crowi {
     this.sessionConfig = sessionConfig
   }
 
-  setupModels() {
-    return new Promise((resolve, reject) => {
-      Object.keys(models).forEach(key => {
-        this.model(key, models[key](this))
-      })
-      resolve()
+  async setupModels() {
+    Object.keys(models).forEach(key => {
+      this.model(key, models[key](this))
     })
   }
 
   setupEvents() {
-    return Object.entries(events).forEach(([key, Event]) => {
+    return Object.entries(events).forEach(([key, Event]: any[]) => {
       this.event(key, new Event(this))
     })
   }
@@ -243,7 +272,6 @@ class Crowi {
   }
 
   setupCsrf() {
-    const Tokens = require('csrf')
     this.tokens = new Tokens()
   }
 
@@ -275,7 +303,7 @@ class Crowi {
     const server = http.createServer(app).listen(this.port, () => {
       console.log('[' + this.node_env + '] Express server listening on port ' + this.port)
     })
-    const io = require('socket.io')(server, { transports: ['websocket'] })
+    const io = socketIO(server, { transports: ['websocket'] })
     if (this.redisOpts) {
       const redisAdapter = require('socket.io-redis')
       io.adapter(redisAdapter(this.redisOpts))
@@ -328,4 +356,4 @@ class Crowi {
   }
 }
 
-module.exports = Crowi
+export default Crowi

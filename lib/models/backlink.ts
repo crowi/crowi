@@ -1,12 +1,29 @@
-module.exports = function(crowi) {
-  const debug = require('debug')('crowi:models:backlink')
-  const mongoose = require('mongoose')
+import * as mongoose from 'mongoose'
+import Debug from 'debug'
+
+type ObjectId = mongoose.Types.ObjectId
+export interface BacklinkDocument extends mongoose.Document {
+  page: ObjectId,
+  fromPage: ObjectId,
+  fromRevision: ObjectId,
+  updatedAt: Date,
+}
+
+export interface BacklinkModel extends mongoose.Model<BacklinkDocument> {
+  findByPageId(pageId: ObjectId, limit: any, offset: any): Promise<BacklinkDocument[]>
+  removeByPageId(pageId: ObjectId): any
+  removeBySavedPage(savedPage: any)
+  createByParameters(parameters: any): Promise<BacklinkDocument>
+  createBySavedPage(savedPage: any): Promise<BacklinkDocument[]>
+  createByAllPages(): Promise<BacklinkDocument[]>
+}
+
+export default (crowi) => {
+  const debug = Debug('crowi:models:backlink')
   const ObjectId = mongoose.Schema.Types.ObjectId
   const linkDetector = require('../util/linkDetector')(crowi)
 
-  var backlinkSchema
-
-  backlinkSchema = new mongoose.Schema({
+  const backlinkSchema = new mongoose.Schema<BacklinkDocument, BacklinkModel>({
     page: { type: ObjectId, ref: 'Page', index: true },
     fromPage: { type: ObjectId, ref: 'Page' },
     fromRevision: { type: ObjectId, ref: 'Revision' },
@@ -78,11 +95,11 @@ module.exports = function(crowi) {
         fromPage: savedPage._id,
       }
 
-      Backlink.remove(conditions, (err, data) => {
+      Backlink.remove(conditions, (err) => {
         if (err) {
           return reject(err)
         }
-        return resolve(data)
+        return resolve()
       })
     })
   }
@@ -190,5 +207,5 @@ module.exports = function(crowi) {
     )
   }
 
-  return mongoose.model('BackLink', backlinkSchema)
+  return mongoose.model<BacklinkDocument, BacklinkModel>('BackLink', backlinkSchema)
 }
