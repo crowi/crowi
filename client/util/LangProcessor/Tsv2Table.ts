@@ -33,13 +33,11 @@ export default class Tsv2Table {
   }
 
   getTableBody(codeLines: string[]) {
-    let rows
-
     if (this.option.header) {
       codeLines.shift()
     }
 
-    rows = codeLines.map(row => {
+    const rows = codeLines.map(row => {
       const cols = this.splitColums(row)
         .map(col => {
           return `<td>${Crowi.escape(col)}</td>`
