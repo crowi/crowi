@@ -1,11 +1,9 @@
-
 describe('Routes /_api/versions test', () => {
   const request = require('supertest')
   const app = crowi.getApp()
 
   describe('/_api/versions.get', () => {
     it('should returns crowi version', done => {
-
       request(app)
         .get('/_api/versions.get')
         .expect('Content-Type', /json/)

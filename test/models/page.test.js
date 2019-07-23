@@ -1,4 +1,3 @@
-
 describe('Page', () => {
   const crowi = global.crowi
   const Page = crowi.model('Page')
@@ -8,7 +7,6 @@ describe('Page', () => {
   let createdUsers
 
   beforeAll(done => {
-
     Promise.resolve()
       .then(() => {
         const userFixture = [

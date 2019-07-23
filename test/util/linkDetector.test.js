@@ -1,6 +1,4 @@
-
 describe('Url test', () => {
-
   beforeAll(async () => {
     const config = crowi.getConfig()
     config.crowi['app:url'] = 'http://localhost:13001'

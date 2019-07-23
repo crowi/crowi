@@ -1,4 +1,3 @@
-
 describe('Url Util', function() {
   const { getContinueUrl } = require(ROOT_DIR + '/lib/util/url')
   const req = url => ({ body: { continue: url } })

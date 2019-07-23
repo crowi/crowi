@@ -43,7 +43,7 @@ export default class PageAttachment extends React.Component<Props, State> {
 
     this.props.crowi.apiGet('/attachments.list', { page_id: pageId }).then(res => {
       const attachments: Attachment[] = res.attachments
-      let inUse: State['inUse'] = {}
+      const inUse: State['inUse'] = {}
 
       for (const attachment of attachments) {
         inUse[attachment._id] = this.checkIfFileInUse(attachment)
@@ -94,8 +94,8 @@ export default class PageAttachment extends React.Component<Props, State> {
 
   render() {
     const { attachmentToDelete, attachments } = this.state
-    let deleteModalClose = () => this.setState({ attachmentToDelete: null })
-    let showModal = attachmentToDelete !== null
+    const deleteModalClose = () => this.setState({ attachmentToDelete: null })
+    const showModal = attachmentToDelete !== null
 
     let deleteInUse = false
     if (attachmentToDelete !== null) {

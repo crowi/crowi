@@ -12,7 +12,6 @@ jobs:
           PLANTUML_URI: //localhost:8080
           FILE_UPLOAD: local
           MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
-      - image: mongo:3.6.13
     steps:
       - checkout
       - setup_remote_docker:
@@ -20,7 +19,7 @@ jobs:
       - restore_cache:
           keys:
             - node_modules_{{ checksum "package-lock.json" }}
-            - mongo_binaries_{{ checksum "test/mongo-environment.js" }}
+            - mongo_binaries_{{ checksum "test/crowi-environment.js" }}
       - run: npm install
       - save_cache:
           key: node_modules_{{ checksum "package-lock.json" }}
@@ -34,7 +33,7 @@ jobs:
           file: coverage/clover.xml
           when: on_success
       - save_cache:
-          key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
+          key: mongo_binaries_{{ checksum "test/crowi-environment.js" }}
           paths:
             - /root/.mongo-binaries
 workflows:

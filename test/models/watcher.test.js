@@ -1,4 +1,3 @@
-
 describe('Watcher', function() {
   const Watcher = crowi.model('Watcher')
   const mongoose = crowi.getMongo()
