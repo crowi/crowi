@@ -27,17 +27,17 @@ export interface PageDocument extends Document {
   seenUsers: Types.ObjectId[]
   commentCount: number
 
-  isPublished() : boolean
-  isDeleted() : boolean
-  isDeprecated() : boolean
-  isPublic() : boolean
-  isPortal() : boolean
+  isPublished(): boolean
+  isDeleted(): boolean
+  isDeprecated(): boolean
+  isPublic(): boolean
+  isPortal(): boolean
   isCreator(user: any): boolean
   isGrantedFor(user: any): boolean
-  isLatestRevision() : boolean
+  isLatestRevision(): boolean
   isUpdatable(previousRevision): boolean
   isLiked(user: any): boolean
-  isRedirectOriginPage() : boolean
+  isRedirectOriginPage(): boolean
   isUnlinkable(user: any): boolean
   isWIP(): boolean
   like(user: any): any
@@ -1258,8 +1258,8 @@ export default crowi => {
     const Page = this
     let error = false
     let errors = {}
-    for (let path of paths) {
-      let e: string[] = []
+    for (const path of paths) {
+      const e: string[] = []
       if (!Page.isCreatableName(path)) {
         e.push('rename_tree.error.can_not_use_this_name')
       }

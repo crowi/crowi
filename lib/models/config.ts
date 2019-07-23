@@ -11,8 +11,8 @@ export interface ConfigDocument extends Document {
   value: string
 }
 
-type Config = {
-  crowi: object,
+interface Config {
+  crowi: object
   notification: object
 }
 

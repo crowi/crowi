@@ -3,19 +3,22 @@ import Debug from 'debug'
 
 type ObjectId = mongoose.Types.ObjectId
 export interface BookmarkDocument extends mongoose.Document {
-  page: ObjectId | any,
-  user: ObjectId | any,
-  createdAt: Date,
+  page: ObjectId | any
+  user: ObjectId | any
+  createdAt: Date
 }
 export interface BookmarkModel extends mongoose.Model<BookmarkDocument> {
   populatePage(bookmarks: any[], requestUser?: any): Promise<BookmarkDocument[]>
   findByPageIdAndUserId(pageId: ObjectId, userId: ObjectId): Promise<BookmarkDocument | null>
-  findByUserId(userId: ObjectId, option: any): Promise<{
+  findByUserId(
+    userId: ObjectId,
+    option: any,
+  ): Promise<{
     meta: {
-      total: any,
-      limit: any,
-      offset: any,
-    },
+      total: any
+      limit: any
+      offset: any
+    }
     data: any
   }>
   countByPageId(pageId: ObjectId): Promise<number>
@@ -25,7 +28,7 @@ export interface BookmarkModel extends mongoose.Model<BookmarkDocument> {
   removeBookmark(page: any, user: any): any
 }
 
-export default (crowi) => {
+export default crowi => {
   const debug = Debug('crowi:models:Bookmark')
   const ObjectId = mongoose.Schema.Types.ObjectId
   const BookmarkEvent = crowi.event('Bookmark')

@@ -78,7 +78,7 @@ export interface UserModel extends Model<UserDocument> {
   isRegisterableUsername(username, callback): boolean
   isRegisterable(email, username, callback): boolean
   removeCompletelyById(id, callback: (err: Error | null, userData: 1 | null) => void): any
-  resetPasswordByRandomString(id: Types.ObjectId): Promise<{ user: UserDocument, newPassword: string }>
+  resetPasswordByRandomString(id: Types.ObjectId): Promise<{ user: UserDocument; newPassword: string }>
   createUsersByInvitation(emailList, toSendEmail, callback): any
   createUserByEmailAndPassword(name, username, email, password, lang, callback): any
   createUserPictureFilePath(user: UserDocument, ext: string): string

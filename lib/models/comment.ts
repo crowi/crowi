@@ -3,12 +3,12 @@ import Debug from 'debug'
 
 type ObjectId = mongoose.Types.ObjectId
 export interface CommentDocument extends mongoose.Document {
-  page: ObjectId | any,
-  creator: ObjectId,
-  revision: ObjectId,
-  comment: string,
-  commentPosition: number,
-  createdAt: Date,
+  page: ObjectId | any
+  creator: ObjectId
+  revision: ObjectId
+  comment: string
+  commentPosition: number
+  createdAt: Date
 }
 export interface CommentModel extends mongoose.Model<CommentDocument> {
   // conflict
@@ -20,7 +20,7 @@ export interface CommentModel extends mongoose.Model<CommentDocument> {
   findCreatorsByPage(page: any): Promise<any[]>
 }
 
-export default (crowi) => {
+export default crowi => {
   var debug = Debug('crowi:models:comment')
   var ObjectId = mongoose.Schema.Types.ObjectId
 

@@ -1,14 +1,14 @@
 import Debug from 'debug'
-const debug = Debug('crowi:crowi')
 import path, { sep } from 'path'
 import mongoose from 'mongoose'
 import Tokens from 'csrf'
 import redis from 'redis'
 import url from 'url'
 import socketIO from 'socket.io'
+import models from '../models'
+const debug = Debug('crowi:crowi')
 
 const pkg = require('../../package.json')
-import models from '../models'
 const events = require('../events')
 const middlewares = require('../middlewares')
 const controllers = require('../controllers')
@@ -22,36 +22,53 @@ class Crowi {
   version: string
 
   rootDir: string
+
   pluginDir: string
+
   publicDir: string
+
   libDir: string
+
   localeDir: string
+
   resourceDir: string
+
   viewsDir: string
+
   mailDir: string
+
   tmpDir: string
+
   cacheDir: string
 
   // FIXME after service/config typed
   config: any
+
   searcher: any = null
+
   mailer: any = {}
+
   lru: any = {}
 
   tokens: Tokens | null = null
 
   // FIXME: {} をアサインしないで済む方法を捜す
   models: Models = {} as any
+
   events: any = {}
   middlewares: any = {}
   controllers: any = {}
 
   env: typeof process.env
+
   node_env: string
+
   port: number
 
   redis: redis.RedisClient | null = null
+
   redisUrl: string | null
+
   redisOpts: any
 
   // TODO: @types モジュール入れたらやる

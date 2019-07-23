@@ -3,22 +3,30 @@ import Debug from 'debug'
 
 type ObjectId = mongoose.Types.ObjectId
 export interface AttachmentDocument extends mongoose.Document {
-  page: ObjectId,
-  creator: ObjectId,
-  filePath: string,
-  fileName: string,
-  originalName: string,
-  fileFormat: string,
-  fileSize: number,
-  createdAt: Date,
+  page: ObjectId
+  creator: ObjectId
+  filePath: string
+  fileName: string
+  originalName: string
+  fileFormat: string
+  fileSize: number
+  createdAt: Date
   // virtual
-  fileURL: string,
+  fileURL: string
 }
 
 export interface AttachmentModel extends mongoose.Model<AttachmentDocument> {
   getListByPageId(id: ObjectId): Promise<AttachmentDocument[]>
   // FIXME: 競合
-  create(pageId: ObjectId, creator: any, filePath: string, originName: string, fileName: string, fileFormat: string, fileSize: number): Promise<AttachmentDocument>
+  create(
+    pageId: ObjectId,
+    creator: any,
+    filePath: string,
+    originName: string,
+    fileName: string,
+    fileFormat: string,
+    fileSize: number,
+  ): Promise<AttachmentDocument>
   guessExtByFileType(fileType: string): string
   createAttachmentFilePath(pageId: ObjectId, fileName: string, fileType: string): string
   removeAttachmentsByPageId(pageId: ObjectId): any
@@ -26,7 +34,7 @@ export interface AttachmentModel extends mongoose.Model<AttachmentDocument> {
   removeAttachment(attachment: AttachmentDocument): any
 }
 
-export default (crowi) => {
+export default crowi => {
   var debug = Debug('crowi:models:attachment')
   var ObjectId = mongoose.Schema.Types.ObjectId
   var fileUploader = require('../util/fileUploader')(crowi)
@@ -142,7 +150,7 @@ export default (crowi) => {
     return new Promise((resolve, reject) => {
       Attachment.getListByPageId(pageId)
         .then(attachments => {
-          for (let attachment of attachments) {
+          for (const attachment of attachments) {
             Attachment.removeAttachment(attachment)
               .then(res => {
                 // do nothing
@@ -172,7 +180,7 @@ export default (crowi) => {
     const filePath = attachment.filePath
 
     return new Promise((resolve, reject) => {
-      Attachment.remove({ _id: attachment._id }, (err) => {
+      Attachment.remove({ _id: attachment._id }, err => {
         if (err) {
           return reject(err)
         }
