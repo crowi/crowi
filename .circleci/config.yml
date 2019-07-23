@@ -9,6 +9,7 @@ jobs:
           PLANTUML_URI: //localhost:8080
           FILE_UPLOAD: local
           MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
+          MONGOMS_DISABLE_POSTINSTALL: 1
       - image: circleci/redis:5
     steps:
       - checkout
