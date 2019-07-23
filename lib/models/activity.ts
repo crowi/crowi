@@ -1,14 +1,41 @@
-module.exports = function(crowi) {
-  'use strict'
+import * as mongoose from 'mongoose'
+import Debug from 'debug'
 
-  const debug = require('debug')('crowi:models:activity')
-  const mongoose = require('mongoose')
+type ObjectId = mongoose.Types.ObjectId
+export interface ActivityDocument extends mongoose.Document {
+  // populatable
+  user: ObjectId | any
+  targetModel: string
+  target: String
+  action: String
+  event: mongoose.Types.ObjectId
+  eventModel: String
+  createdAt: Date
+
+  getSameActivities(): Promise<ActivityDocument[]>
+  getNotificationTargetUsers(): Promise<any[]>
+}
+
+export interface ActivityModel extends mongoose.Model<ActivityDocument> {
+  getSameActivities(parameters: any): Promise<ActivityDocument>
+  createByParameters(parameters: any): Promise<ActivityDocument>
+  removeByParameters(parameters: any): any
+  createByPageComment(comment: any): Promise<ActivityDocument>
+  createByPageLike(page: any, user: any): Promise<ActivityDocument>
+  removeByPageUnlike(page: any, user: any): Promise<ActivityDocument>
+  removeByPage(page: any): Promise<ActivityDocument>
+  findByUser(user: any): Promise<ActivityDocument[]>
+  getActionUsersFromActivities(activities: ActivityDocument[]): any[]
+}
+
+export default (crowi) => {
+  const debug = Debug('crowi:models:activity')
   const ObjectId = mongoose.Schema.Types.ObjectId
   const ActivityDefine = require('../util/activityDefine')()
   const activityEvent = crowi.event('Activity')
 
   // TODO: add revision id
-  const activitySchema = new mongoose.Schema({
+  const activitySchema = new mongoose.Schema<ActivityDocument, ActivityModel>({
     user: {
       type: ObjectId,
       ref: 'User',
@@ -182,7 +209,7 @@ module.exports = function(crowi) {
           }
 
           debug(activities)
-          resolve(activities)
+          resolve(activities as any)
         })
     })
   }
@@ -192,7 +219,7 @@ module.exports = function(crowi) {
     const Watcher = crowi.model('Watcher')
     const { user: actionUser, targetModel, target } = this
 
-    const model = await this.model(targetModel).findById(target)
+    const model: any = await this.model(targetModel).findById(target)
     const [targetUsers, watchUsers, ignoreUsers] = await Promise.all([
       model.getNotificationTargetUsers(),
       Watcher.getWatchers(target),
@@ -215,7 +242,7 @@ module.exports = function(crowi) {
   /**
    * saved hook
    */
-  activitySchema.post('save', async function(savedActivity) {
+  activitySchema.post('save', async function(savedActivity: ActivityDocument) {
     const Notification = crowi.model('Notification')
     try {
       const [notificationUsers, sameActivities] = await Promise.all([savedActivity.getNotificationTargetUsers(), savedActivity.getSameActivities()])
@@ -232,7 +259,7 @@ module.exports = function(crowi) {
 
   // because mongoose's 'remove' hook fired only when remove by a method of Document (not by a Model method)
   // move 'save' hook from mongoose's events to activityEvent if I have a time.
-  activityEvent.on('remove', async function(activity) {
+  activityEvent.on('remove', async function(activity: ActivityDocument) {
     const Notification = crowi.model('Notification')
 
     try {
@@ -242,5 +269,5 @@ module.exports = function(crowi) {
     }
   })
 
-  return mongoose.model('Activity', activitySchema)
+  return mongoose.model<ActivityDocument, ActivityModel>('Activity', activitySchema)
 }

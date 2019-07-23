@@ -1,19 +1,34 @@
-'use strict'
+import Activity from './activity'
+import Attachment from './attachment'
+import Backlink from './backlink'
+import Bookmark from './bookmark'
+import Comment from './comment'
+// import with allow-js flag
+import Config from './config'
+import Notification from './notification'
+import Page from './page'
+import Revision from './revision'
+import Share from './share'
+import ShareAccess from './shareAccess'
+import Tracking from './tracking'
+import UpdatePost from './updatePost'
+import User from './user'
+import Watcher from './watcher'
 
-module.exports = {
-  Page: require('./page'),
-  User: require('./user'),
-  Revision: require('./revision'),
-  Backlink: require('./backlink'),
-  Bookmark: require('./bookmark'),
-  Comment: require('./comment'),
-  Attachment: require('./attachment'),
-  UpdatePost: require('./updatePost'),
-  Share: require('./share'),
-  Tracking: require('./tracking'),
-  ShareAccess: require('./shareAccess'),
-  Activity: require('./activity'),
-  Notification: require('./notification'),
-  Watcher: require('./watcher'),
-  Config: require('./config'),
+export default {
+  Page,
+  User,
+  Revision,
+  Backlink,
+  Bookmark,
+  Comment,
+  Attachment,
+  UpdatePost,
+  Share,
+  Tracking,
+  ShareAccess,
+  Activity,
+  Notification,
+  Watcher,
+  Config,
 }

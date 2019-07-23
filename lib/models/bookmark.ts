@@ -1,41 +1,67 @@
-module.exports = function(crowi) {
-  const debug = require('debug')('crowi:models:bookmark')
-  const mongoose = require('mongoose')
+import * as mongoose from 'mongoose'
+import Debug from 'debug'
+
+type ObjectId = mongoose.Types.ObjectId
+export interface BookmarkDocument extends mongoose.Document {
+  page: ObjectId | any,
+  user: ObjectId | any,
+  createdAt: Date,
+}
+export interface BookmarkModel extends mongoose.Model<BookmarkDocument> {
+  populatePage(bookmarks: any[], requestUser?: any): Promise<BookmarkDocument[]>
+  findByPageIdAndUserId(pageId: ObjectId, userId: ObjectId): Promise<BookmarkDocument | null>
+  findByUserId(userId: ObjectId, option: any): Promise<{
+    meta: {
+      total: any,
+      limit: any,
+      offset: any,
+    },
+    data: any
+  }>
+  countByPageId(pageId: ObjectId): Promise<number>
+  findByUser(user: any, option: any): Promise<BookmarkDocument[]>
+  add(page: any, user: any): Promise<BookmarkDocument>
+  removeBookmarksByPageId(pageId: ObjectId): any
+  removeBookmark(page: any, user: any): any
+}
+
+export default (crowi) => {
+  const debug = Debug('crowi:models:Bookmark')
   const ObjectId = mongoose.Schema.Types.ObjectId
-  const bookmarkEvent = crowi.event('Bookmark')
-  const bookmarkSchema = new mongoose.Schema({
+  const BookmarkEvent = crowi.event('Bookmark')
+  const BookmarkSchema = new mongoose.Schema<BookmarkDocument, BookmarkModel>({
     page: { type: ObjectId, ref: 'Page', index: true },
     user: { type: ObjectId, ref: 'User', index: true },
     createdAt: { type: Date, default: Date.now() },
   })
-  bookmarkSchema.index({ page: 1, user: 1 }, { unique: true })
+  BookmarkSchema.index({ page: 1, user: 1 }, { unique: true })
 
-  bookmarkSchema.statics.populatePage = function(bookmarks, requestUser) {
+  BookmarkSchema.statics.populatePage = function(Bookmarks, requestUser) {
     var Bookmark = this
 
     requestUser = requestUser || null
 
-    return Bookmark.populate(bookmarks, { path: 'page' })
-      .then(function(bookmarks) {
-        return Bookmark.populate(bookmarks, { path: 'page.revision', model: 'Revision' })
+    return Bookmark.populate(Bookmarks, { path: 'page' })
+      .then(function(Bookmarks) {
+        return Bookmark.populate(Bookmarks, { path: 'page.revision', model: 'Revision' })
       })
-      .then(function(bookmarks) {
+      .then(function(Bookmarks) {
         // hmm...
-        bookmarks = bookmarks.filter(function(bookmark) {
+        Bookmarks = Bookmarks.filter(function(Bookmark) {
           // requestUser を指定しない場合 public のみを返す
           if (requestUser === null) {
-            return bookmark.page.isPublic()
+            return Bookmark.page.isPublic()
           }
 
-          return bookmark.page.isGrantedFor(requestUser)
+          return Bookmark.page.isGrantedFor(requestUser)
         })
 
-        return Bookmark.populate(bookmarks, { path: 'page.revision.author', model: 'User' })
+        return Bookmark.populate(Bookmarks, { path: 'page.revision.author', model: 'User' })
       })
   }
 
-  // bookmark チェック用
-  bookmarkSchema.statics.findByPageIdAndUserId = function(pageId, userId) {
+  // Bookmark チェック用
+  BookmarkSchema.statics.findByPageIdAndUserId = function(pageId, userId) {
     var Bookmark = this
 
     return new Promise(function(resolve, reject) {
@@ -49,7 +75,7 @@ module.exports = function(crowi) {
     })
   }
 
-  bookmarkSchema.statics.findByUserId = function(userId, option) {
+  BookmarkSchema.statics.findByUserId = function(userId, option) {
     var Bookmark = this
 
     var limit = option.limit || 50
@@ -60,12 +86,12 @@ module.exports = function(crowi) {
         .sort({ createdAt: -1 })
         .skip(offset)
         .limit(limit)
-        .exec(function(err, bookmarks) {
+        .exec(function(err, Bookmarks) {
           if (err) {
             return reject(err)
           }
 
-          return Bookmark.populatePage(bookmarks).then(resolve)
+          return Bookmark.populatePage(Bookmarks).then(resolve)
         })
     })
 
@@ -80,14 +106,14 @@ module.exports = function(crowi) {
     })
 
     return Promise.all([finder, counter])
-      .then(function([bookmarks, count]) {
+      .then(function([Bookmarks, count]) {
         return {
           meta: {
             total: count,
             limit: limit,
             offset: offset,
           },
-          data: bookmarks,
+          data: Bookmarks,
         }
       })
       .catch(function(err) {
@@ -96,8 +122,8 @@ module.exports = function(crowi) {
       })
   }
 
-  // bookmark count
-  bookmarkSchema.statics.countByPageId = async function(pageId) {
+  // Bookmark count
+  BookmarkSchema.statics.countByPageId = async function(pageId) {
     const Bookmark = this
     const count = await Bookmark.count({ page: pageId })
 
@@ -111,7 +137,7 @@ module.exports = function(crowi) {
    *  requestUser: User
    * }
    */
-  bookmarkSchema.statics.findByUser = function(user, option) {
+  BookmarkSchema.statics.findByUser = function(user, option) {
     var Bookmark = this
     var requestUser = option.requestUser || null
 
@@ -124,29 +150,29 @@ module.exports = function(crowi) {
         .sort({ createdAt: -1 })
         .skip(offset)
         .limit(limit)
-        .exec(function(err, bookmarks) {
+        .exec(function(err, Bookmarks) {
           if (err) {
             return reject(err)
           }
 
           if (!populatePage) {
-            return resolve(bookmarks)
+            return resolve(Bookmarks)
           }
 
-          return Bookmark.populatePage(bookmarks, requestUser).then(resolve)
+          return Bookmark.populatePage(Bookmarks, requestUser).then(resolve)
         })
     })
   }
 
-  bookmarkSchema.statics.add = async function(page, user) {
+  BookmarkSchema.statics.add = async function(page, user) {
     const Bookmark = this
 
-    const newBookmark = new Bookmark({ page, user, createdAt: Date.now() })
+    const newBookmark = new (Bookmark as any)({ page, user, createdAt: Date.now() })
 
     try {
-      const bookmark = await newBookmark.save()
-      bookmarkEvent.emit('create', page._id)
-      return bookmark
+      const Bookmark = await newBookmark.save()
+      BookmarkEvent.emit('create', page._id)
+      return Bookmark
     } catch (err) {
       if (err.code === 11000) {
         // duplicate key (dummy response of new object)
@@ -157,12 +183,12 @@ module.exports = function(crowi) {
     }
   }
 
-  bookmarkSchema.statics.removeBookmarksByPageId = async function(pageId) {
+  BookmarkSchema.statics.removeBookmarksByPageId = async function(pageId) {
     const Bookmark = this
 
     try {
       const data = await Bookmark.remove({ page: pageId })
-      bookmarkEvent.emit('delete', pageId)
+      BookmarkEvent.emit('delete', pageId)
       return data
     } catch (err) {
       debug('Bookmark.remove failed (removeBookmarkByPage)', err)
@@ -170,12 +196,12 @@ module.exports = function(crowi) {
     }
   }
 
-  bookmarkSchema.statics.removeBookmark = async function(page, user) {
+  BookmarkSchema.statics.removeBookmark = async function(page, user) {
     const Bookmark = this
 
     try {
       const data = await Bookmark.findOneAndRemove({ page, user })
-      bookmarkEvent.emit('delete', page)
+      BookmarkEvent.emit('delete', page)
       return data
     } catch (err) {
       debug('Bookmark.findOneAndRemove failed', err)
@@ -183,5 +209,5 @@ module.exports = function(crowi) {
     }
   }
 
-  return mongoose.model('Bookmark', bookmarkSchema)
+  return mongoose.model<BookmarkDocument>('Bookmark', BookmarkSchema)
 }

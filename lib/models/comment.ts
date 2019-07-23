@@ -1,10 +1,30 @@
-module.exports = function(crowi) {
-  var debug = require('debug')('crowi:models:comment')
-  var mongoose = require('mongoose')
-  var ObjectId = mongoose.Schema.Types.ObjectId
-  var commentSchema
+import * as mongoose from 'mongoose'
+import Debug from 'debug'
 
-  commentSchema = new mongoose.Schema({
+type ObjectId = mongoose.Types.ObjectId
+export interface CommentDocument extends mongoose.Document {
+  page: ObjectId | any,
+  creator: ObjectId,
+  revision: ObjectId,
+  comment: string,
+  commentPosition: number,
+  createdAt: Date,
+}
+export interface CommentModel extends mongoose.Model<CommentDocument> {
+  // conflict
+  create(pageId: ObjectId, creatorId: ObjectId, revisionId: ObjectId, comment: any, position: any): Promise<CommentDocument>
+  getCommentsByPageId(id: ObjectId): Promise<CommentDocument[]>
+  getCommentsByRevisionId(id: ObjectId): Promise<CommentDocument[]>
+  countCommentByPageId(page: any): Promise<number>
+  removeCommentsByPageId(pageId: ObjectId): Promise<void>
+  findCreatorsByPage(page: any): Promise<any[]>
+}
+
+export default (crowi) => {
+  var debug = Debug('crowi:models:comment')
+  var ObjectId = mongoose.Schema.Types.ObjectId
+
+  const commentSchema = new mongoose.Schema<CommentDocument, CommentModel>({
     page: { type: ObjectId, ref: 'Page', index: true },
     creator: { type: ObjectId, ref: 'User', index: true },
     revision: { type: ObjectId, ref: 'Revision', index: true },
@@ -18,7 +38,7 @@ module.exports = function(crowi) {
     var commentPosition = position || -1
 
     return new Promise(function(resolve, reject) {
-      var newComment = new Comment()
+      var newComment = new (Comment as any)()
 
       newComment.page = pageId
       newComment.creator = creatorId
@@ -101,12 +121,12 @@ module.exports = function(crowi) {
     var Comment = this
 
     return new Promise(function(resolve, reject) {
-      Comment.remove({ page: pageId }, function(err, done) {
+      Comment.remove({ page: pageId }, function(err) {
         if (err) {
           return reject(err)
         }
 
-        resolve(done)
+        resolve()
       })
     })
   }
@@ -128,7 +148,7 @@ module.exports = function(crowi) {
   /**
    * post save hook
    */
-  commentSchema.post('save', function(savedComment) {
+  commentSchema.post('save', function(savedComment: CommentDocument) {
     var Page = crowi.model('Page')
     var Comment = crowi.model('Comment')
     var Activity = crowi.model('Activity')
@@ -149,5 +169,5 @@ module.exports = function(crowi) {
       .catch(function(err) {})
   })
 
-  return mongoose.model('Comment', commentSchema)
+  return mongoose.model<CommentDocument>('Comment', commentSchema)
 }
