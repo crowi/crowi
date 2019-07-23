@@ -56,7 +56,9 @@ class Crowi {
   models: Models = {} as any
 
   events: any = {}
+
   middlewares: any = {}
+
   controllers: any = {}
 
   env: typeof process.env
