@@ -1,19 +1,123 @@
-module.exports = function(crowi) {
-  const debug = require('debug')('crowi:models:page')
+import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import Debug from 'debug'
+
+const GRANT_PUBLIC = 1
+const GRANT_RESTRICTED = 2
+const GRANT_SPECIFIED = 3
+const GRANT_OWNER = 4
+const PAGE_GRANT_ERROR = 1
+const STATUS_WIP = 'wip'
+const STATUS_PUBLISHED = 'published'
+const STATUS_DELETED = 'deleted'
+const STATUS_DEPRECATED = 'deprecated'
+const TYPE_PORTAL = 'portal'
+const TYPE_USER = 'user'
+const TYPE_PUBLIC = 'public'
+
+export interface PageDocument extends Document {
+  path: string
+  revision: Types.ObjectId
+  redirectTo: string
+  status: string
+  grant: number
+  grantedUsers: Types.ObjectId[]
+  creator: Types.ObjectId
+  lastUpdateUser: Types.ObjectId
+  liker: Types.ObjectId[]
+  seenUsers: Types.ObjectId[]
+  commentCount: number
+
+  isPublished() : boolean
+  isDeleted() : boolean
+  isDeprecated() : boolean
+  isPublic() : boolean
+  isPortal() : boolean
+  isCreator(user: any): boolean
+  isGrantedFor(user: any): boolean
+  isLatestRevision() : boolean
+  isUpdatable(previousRevision): boolean
+  isLiked(user: any): boolean
+  isRedirectOriginPage() : boolean
+  isUnlinkable(user: any): boolean
+  isWIP(): boolean
+  like(user: any): any
+  unlike(user: any, callback): any
+  unlink(user: any): any
+  isSeenUser(user: any): any
+  seen(user: any): any
+  getSlackChannel(): any
+  updateSlackChannel(slackChannel): any
+  updateExtended(extended): any
+  getNotificationTargetUsers(): any
+}
+
+export interface PageModel extends Model<PageDocument> {
+  GRANT_PUBLIC: number
+  GRANT_RESTRICTED: number
+  GRANT_SPECIFIED: number
+  GRANT_OWNER: number
+  PAGE_GRANT_ERROR: number
+  TYPE_PORTAL: string
+  TYPE_PUBLIC: string
+  TYPE_USER: string
+
+  populatePageData(pageData, revisionId): any
+  populatePagesRevision(pages, revisions): any
+  populatePageListToAnyObjects(pageIdObjectArray): any
+  updateCommentCount(page, num): any
+  hasPortalPage(path, user, revisionId): any
+  getGrantLabels(): any
+  normalizePath(path): any
+  getUserPagePath(user): any
+  getDeletedPageName(path): any
+  getRevertDeletedPageName(path): any
+  isDeletableName(path): any
+  isCreatableName(name): any
+  fixToCreatableName(path): any
+  updateRevision(pageId, revisionId, cb): any
+  exists(query): any
+  findUpdatedList(offset, limit, cb): any
+  findPageById(id): any
+  findPageByIdAndGrantedUser(id, userData): any
+  findPage(path, userData, revisionId, ignoreNotFound): any
+  findPageByPath(path): any
+  isExistByPath(path): any
+  isExistById(id): any
+  findListByPageIds(ids, options): any
+  findPageByRedirectTo(path): any
+  findPagesByIds(ids): any
+  findListByCreator(user, option, currentUser): any
+  getStreamOfFindAll(options): any
+  findListByStartWith(path, userData, option): any
+  findChildrenByPath(path, userData, option): any
+  findUnfurlablePages(type, array, grants: number[]): any
+  findUnfurlablePagesByIds(ids): any
+  findUnfurlablePagesByPaths(paths): any
+  updatePageProperty(page, updateData): any
+  updateGrant(page, grant, userData): any
+  pushToGrantedUsers(page, userData): any
+  pushRevision(pageData, newRevision, user): any
+  // FIXME: Conflict
+  create(path, body, user, options): any
+  updatePage(pageData, body, user, options: object): any
+  deletePage(pageData, user, options): any
+  revertDeletedPage(pageData, user, options): any
+  completelyDeletePage(pageData, user, options): any
+  removePage(pageData): any
+  removePageById(pageId): any
+  removePageByPath(pagePath): any
+  removeRedirectOriginPageByPath(pagePath): any
+  rename(pageData, newPagePath, user, options): any
+  getPathMap(paths, search, replace): any
+  checkPagesRenamable(paths, user): any
+  renameTree(pathMap, user, options): any
+  allPageCount(): any
+}
+
+export default crowi => {
+  const debug = Debug('crowi:models:page')
   const mongoose = require('mongoose')
-  const ObjectId = mongoose.Schema.Types.ObjectId
-  const GRANT_PUBLIC = 1
-  const GRANT_RESTRICTED = 2
-  const GRANT_SPECIFIED = 3
-  const GRANT_OWNER = 4
-  const PAGE_GRANT_ERROR = 1
-  const STATUS_WIP = 'wip'
-  const STATUS_PUBLISHED = 'published'
-  const STATUS_DELETED = 'deleted'
-  const STATUS_DEPRECATED = 'deprecated'
-  const TYPE_PORTAL = 'portal'
-  const TYPE_USER = 'user'
-  const TYPE_PUBLIC = 'public'
+  const ObjectId = Schema.Types.ObjectId
   const pageEvent = crowi.event('Page')
 
   function isPortalPath(path) {
@@ -28,7 +132,7 @@ module.exports = function(crowi) {
     return string.endsWith('/') ? string.substring(0, string.length - 1) : string
   }
 
-  const pageSchema = new mongoose.Schema(
+  const pageSchema = new Schema<PageDocument, PageModel>(
     {
       path: { type: String, required: true, index: true, unique: true },
       revision: { type: ObjectId, ref: 'Revision' },
@@ -714,7 +818,7 @@ module.exports = function(crowi) {
    */
   pageSchema.statics.findListByStartWith = function(path, userData, option) {
     var Page = this
-    var pathCondition = []
+    var pathCondition: Record<string, string | RegExp>[] = []
     var includeDeletedPage = option.includeDeletedPage || false
 
     if (!option) {
@@ -1155,7 +1259,7 @@ module.exports = function(crowi) {
     let error = false
     let errors = {}
     for (let path of paths) {
-      let e = []
+      let e: string[] = []
       if (!Page.isCreatableName(path)) {
         e.push('rename_tree.error.can_not_use_this_name')
       }
@@ -1225,7 +1329,7 @@ module.exports = function(crowi) {
     debug('targetUsers', targetUsers)
 
     var uniqueChecker = {}
-    var uniqueUsers = []
+    var uniqueUsers: Types.ObjectId[] = []
     targetUsers.forEach(function(user) {
       var userId = user.toString()
       if (uniqueChecker[userId] !== 1) {
@@ -1256,5 +1360,5 @@ module.exports = function(crowi) {
   pageSchema.statics.TYPE_PUBLIC = TYPE_PUBLIC
   pageSchema.statics.TYPE_USER = TYPE_USER
 
-  return mongoose.model('Page', pageSchema)
+  return model('Page', pageSchema)
 }

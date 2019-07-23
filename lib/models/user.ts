@@ -1,23 +1,107 @@
-module.exports = function(crowi) {
-  var debug = require('debug')('crowi:models:user')
-  var mongoose = require('mongoose')
-  var mongoosePaginate = require('mongoose-paginate')
-  var crypto = require('crypto')
-  var async = require('async')
-  var STATUS_REGISTERED = 1
-  var STATUS_ACTIVE = 2
-  var STATUS_SUSPENDED = 3
-  var STATUS_DELETED = 4
-  var STATUS_INVITED = 5
-  var LANG_EN = 'en'
-  var LANG_EN_US = 'en-US'
-  var LANG_EN_GB = 'en-GB'
-  var LANG_JA = 'ja'
-  var PAGE_ITEMS = 50
-  var userEvent = crowi.event('User')
-  var userSchema
+import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import Debug from 'debug'
+import mongoosePaginate from 'mongoose-paginate'
+import crypto from 'crypto'
+import async from 'async'
 
-  userSchema = new mongoose.Schema({
+const STATUS_REGISTERED = 1
+const STATUS_ACTIVE = 2
+const STATUS_SUSPENDED = 3
+const STATUS_DELETED = 4
+const STATUS_INVITED = 5
+const LANG_EN = 'en'
+const LANG_EN_US = 'en-US'
+const LANG_EN_GB = 'en-GB'
+const LANG_JA = 'ja'
+const PAGE_ITEMS = 50
+
+export interface UserDocument extends Document {
+  userId: string
+  image: string | null
+  googleId: string | null
+  githubId: string | null
+  name: string
+  username: string
+  email: string
+  introduction: string
+  password: string
+  apiToken: string
+  lang: 'en' | 'en-US' | 'en-GB' | 'ja'
+  status: number
+  createdAt: Date
+  admin: boolean
+
+  isPasswordSet(): boolean
+  isPasswordValid(password: string): boolean
+  setPassword(password: string): this
+  isEmailSet(): boolean
+  // FIXME: Conflict
+  update(name, email, lang, callback: (err: Error, userData: UserDocument) => void): any
+  updatePassword(password: string, callback: (err: Error, userData: UserDocument) => void): any
+  updateApiToken(callback: (err: Error, userData: UserDocument) => void): any
+  updateImage(image, callback: (err: Error, userData: UserDocument) => void): any
+  updateEmail(email: string): any
+  deleteImage(callback): any
+  updateGoogleId(googleId): Promise<UserDocument>
+  deleteGoogleId(): Promise<UserDocument>
+  updateGitHubId(githubId): Promise<UserDocument>
+  deleteGitHubId(): Promise<UserDocument>
+  countValidThirdPartyIds(): number
+  hasValidThirdPartyId(): boolean
+  canDisconnectThirdPartyId(): boolean
+  activateInvitedUser(username, name, password, callback: (err: Error, userData: UserDocument) => void): any
+  removeFromAdmin(callback: (err: Error, userData: UserDocument) => void): any
+  makeAdmin(callback: (err: Error, userData: UserDocument) => void): any
+  statusActivate(callback: (err: Error, userData: UserDocument) => void): any
+  statusSuspend(callback: (err: Error, userData: UserDocument) => void): any
+  statusDelete(callback: (err: Error, userData: UserDocument) => void): any
+  populateSecrets(): Promise<any>
+}
+
+export interface UserModel extends Model<UserDocument> {
+  getLanguageLabels(): object
+  getUserStatusLabels(): any
+  isEmailValid(email, callback: any): boolean
+  isGitHubAccountValid(organizations): boolean
+  findUsers(options, callback: (err: Error, userData: UserDocument[]) => void)
+  findAllUsers(option): Promise<UserDocument[]>
+  findUsersByIds(ids, option): Promise<UserDocument[]>
+  findAdmins(callback: (err: Error, admins: UserDocument[]) => void): void
+  findUsersWithPagination(options, query, callback): any
+  findUsersByPartOfEmail(emailPart, options): any
+  findUserByUsername(username): Promise<UserDocument | null>
+  findUserByApiToken(apiToken): Promise<UserDocument | null>
+  findUserByGoogleId(googleId): Promise<UserDocument | null>
+  findUserByGitHubId(githubId): Promise<UserDocument | null>
+  findUserByEmail(email): Promise<UserDocument | null>
+  findUserByEmailAndPassword(email: string, password: string): Promise<UserDocument | null>
+  isRegisterableUsername(username, callback): boolean
+  isRegisterable(email, username, callback): boolean
+  removeCompletelyById(id, callback: (err: Error | null, userData: 1 | null) => void): any
+  resetPasswordByRandomString(id: Types.ObjectId): Promise<{ user: UserDocument, newPassword: string }>
+  createUsersByInvitation(emailList, toSendEmail, callback): any
+  createUserByEmailAndPassword(name, username, email, password, lang, callback): any
+  createUserPictureFilePath(user: UserDocument, ext: string): string
+  getUsernameByPath(path): string | null
+
+  STATUS_REGISTERED: number
+  STATUS_ACTIVE: number
+  STATUS_SUSPENDED: number
+  STATUS_DELETED: number
+  STATUS_INVITED: number
+  PAGE_ITEMS: number
+  LANG_EN: string
+  LANG_EN_US: string
+  LANG_EN_GB: string
+  LANG_JA: string
+}
+
+export default crowi => {
+  const debug = Debug('crowi:models:user')
+
+  const userEvent = crowi.event('User')
+
+  const userSchema = new Schema<UserDocument, UserModel>({
     userId: String,
     image: String,
     googleId: String,
@@ -707,5 +791,5 @@ module.exports = function(crowi) {
   userSchema.statics.LANG_EN_GB = LANG_EN_US
   userSchema.statics.LANG_JA = LANG_JA
 
-  return mongoose.model('User', userSchema)
+  return model('User', userSchema)
 }

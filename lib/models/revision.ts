@@ -1,19 +1,40 @@
-module.exports = function(crowi) {
-  // var debug = require('debug')('crowi:models:revision')
-  var mongoose = require('mongoose')
-  var ObjectId = mongoose.Schema.Types.ObjectId
-  var revisionSchema
+import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import Debug from 'debug'
 
-  revisionSchema = new mongoose.Schema({
+export interface RevisionDocument extends Document {
+  path: string
+  body: string
+  format: string
+  author: Types.ObjectId
+  createdAt: Date
+}
+
+export interface RevisionModel extends Model<RevisionDocument> {
+  findLatestRevision(path: string, cb: (err: Error, data: RevisionDocument) => void): any
+  findRevision(id: Types.ObjectId): Promise<RevisionDocument | null>
+  findRevisions(ids): Promise<RevisionDocument[]>
+  findRevisionIdList(path): Promise<RevisionDocument[]>
+  findRevisionList(path, options): Promise<RevisionDocument[]>
+  updateRevisionListByPath(path, updateData, options): RevisionDocument
+  prepareRevision(pageData, body, user, options): RevisionDocument
+  removeRevisionsByPath(path): Query<any>
+  updatePath(pathName): void
+  findAuthorsByPage(page): RevisionDocument['author'][]
+}
+
+export default crowi => {
+  // const debug = Debug('crowi:models:revision')
+
+  const revisionSchema = new Schema<RevisionDocument, RevisionModel>({
     path: { type: String, required: true, index: true },
     body: { type: String, required: true },
     format: { type: String, default: 'markdown' },
-    author: { type: ObjectId, ref: 'User' },
+    author: { type: Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now },
   })
 
   revisionSchema.statics.findLatestRevision = function(path, cb) {
-    this.find({ path: path })
+    this.find({ path })
       .sort({ createdAt: -1 })
       .limit(1)
       .exec(function(err, data) {
@@ -139,5 +160,5 @@ module.exports = function(crowi) {
     })
   }
 
-  return mongoose.model('Revision', revisionSchema)
+  return model('Revision', revisionSchema)
 }

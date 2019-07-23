@@ -1,19 +1,43 @@
+import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import Debug from 'debug'
+import uuidv4 from 'uuid/v4'
+
+export interface UpdatePostDocument extends Document {
+  pathPattern: string
+  patternPrefix: string
+  patternPrefix2: string
+  channel: string
+  provider: string
+  creator: Schema.Types.ObjectId
+  createdAt: Date
+}
+
+export interface UpdatePostModel extends Model<UpdatePostDocument> {
+  normalizeChannelName(channel): any
+  createPrefixesByPathPattern(pathPattern): any
+  getRegExpByPattern(pattern): any
+  findSettingsByPath(path): any
+  findAll(offset): any
+  // FIXME: Conflict
+  create(pathPattern, channel, user): any
+  // FIXME: Conflict
+  remove(id): any
+}
+
 /**
  * This is the setting for notify to 3rd party tool (like Slack).
  */
-module.exports = function(crowi) {
-  var debug = require('debug')('crowi:models:updatePost')
-  var mongoose = require('mongoose')
-  var ObjectId = mongoose.Schema.Types.ObjectId
+export default crowi => {
+  const debug = Debug('crowi:models:updatePost')
 
   // TODO: slack 以外の対応
-  const updatePostSchema = new mongoose.Schema({
+  const updatePostSchema = new Schema<UpdatePostDocument, UpdatePostModel>({
     pathPattern: { type: String, required: true },
     patternPrefix: { type: String, required: true },
     patternPrefix2: { type: String, required: true },
     channel: { type: String, required: true },
     provider: { type: String, required: true },
-    creator: { type: ObjectId, ref: 'User', index: true },
+    creator: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     createdAt: { type: Date, default: Date.now },
   })
 
@@ -142,5 +166,5 @@ module.exports = function(crowi) {
     })
   }
 
-  return mongoose.model('UpdatePost', updatePostSchema)
+  return model('UpdatePost', updatePostSchema)
 }
