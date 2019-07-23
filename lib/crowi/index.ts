@@ -41,8 +41,10 @@ class Crowi {
   tokens: Tokens | null = null
 
   // FIXME: {} をアサインしないで済む方法を捜す
-  models: Models | {} = {}
+  models: Models = {} as any
   events: any = {}
+  middlewares: any = {}
+  controllers: any = {}
 
   env: typeof process.env
   node_env: string
@@ -131,7 +133,7 @@ class Crowi {
 
   // getter/setter of model instance
   //
-  model<T>(name: string, model?: T) {
+  model<T extends keyof Models>(name: T, model?: Models[T]): Models[T] {
     if (model) {
       return (this.models[name] = model)
     }
@@ -204,7 +206,8 @@ class Crowi {
   }
 
   async setupModels() {
-    Object.keys(models).forEach(key => {
+    const keys = Object.keys(models) as (keyof typeof models)[]
+    keys.forEach(key => {
       this.model(key, models[key](this))
     })
   }
