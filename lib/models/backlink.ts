@@ -3,9 +3,9 @@ import Debug from 'debug'
 
 type ObjectId = mongoose.Types.ObjectId
 export interface BacklinkDocument extends mongoose.Document {
-  page: ObjectId,
-  fromPage: ObjectId,
-  fromRevision: ObjectId,
+  page: ObjectId | any,
+  fromPage: ObjectId | any,
+  fromRevision: ObjectId | any,
   updatedAt: Date,
 }
 
