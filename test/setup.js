@@ -7,7 +7,6 @@ const path = require('path')
 const Crowi = require(path.join(ROOT_DIR, '/lib/crowi'))
 
 beforeAll(async done => {
-
   const crowi = new Crowi(ROOT_DIR, {
     PORT: 13001,
     MONGO_URI: __MONGO_URI__,
@@ -23,7 +22,6 @@ beforeAll(async done => {
 })
 
 afterAll(async done => {
-
   await crowi.getMongo().disconnect()
 
   // delete model caches
@@ -36,7 +34,6 @@ afterAll(async done => {
   done()
 })
 
-
 const testDBUtil = {
   async generateFixture(conn, model, fixture) {
     if (conn.readyState === 0) {
@@ -46,7 +43,6 @@ const testDBUtil = {
     return Promise.all(fixture.map(entity => new Model(entity).save()))
   },
 }
-
 
 global.mongoose = mongoose
 global.testDBUtil = testDBUtil
