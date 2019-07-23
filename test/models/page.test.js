@@ -1,12 +1,16 @@
 describe('Page', () => {
-  const crowi = global.crowi
-  const Page = crowi.model('Page')
-  const User = crowi.model('User')
-  const conn = crowi.getMongo().connection
+  let Page
+  let User
+  let conn
   let createdPages
   let createdUsers
 
   beforeAll(done => {
+    Page = crowi.model('Page')
+    User = crowi.model('User')
+    conn = crowi.getMongo().connection
+
+
     Promise.resolve()
       .then(() => {
         const userFixture = [

@@ -1,24 +1,32 @@
 const faker = require('faker')
 
 describe('Backlink', () => {
-  const Backlink = crowi.model('Backlink')
-  const Page = crowi.model('Page')
-  const Revision = crowi.model('Revision')
-  const conn = crowi.getMongo().connection
+  let Backlink
+  let Page
+  let Revision
+  let conn
   const appUrl = 'http://localhost:13001'
   let user
 
-  beforeAll(async () => {
+  beforeAll(async done => {
+    Backlink = crowi.model('Backlink')
+    Page = crowi.model('Page')
+    Revision = crowi.model('Revision')
+    conn = crowi.getMongo().connection
     const config = crowi.getConfig()
     config.crowi['app:url'] = appUrl
     crowi.setConfig(config)
+
+    done()
   })
 
-  beforeAll(async () => {
+  beforeAll(async done => {
     const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
       { name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() },
     ])
     user = createdUsers[0]
+
+    done()
   })
 
   describe('.createByAllPages', () => {

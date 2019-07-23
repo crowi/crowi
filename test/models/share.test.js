@@ -1,14 +1,19 @@
 const faker = require('faker')
 
 describe('Share', () => {
-  const User = crowi.model('User')
-  const Page = crowi.model('Page')
-  const Share = crowi.model('Share')
-  const conn = crowi.getMongo().connection
+  let User
+  let Page
+  let Share
+  let conn
   let user
   let createdPages
 
   beforeAll(async () => {
+    User = crowi.model('User')
+    Page = crowi.model('Page')
+    Share = crowi.model('Share')
+    conn = crowi.getMongo().connection
+
     await User.remove({})
     const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
       { name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() },

@@ -1,5 +1,8 @@
 describe('Slack Util', () => {
-  const slack = require(crowi.libDir + '/util/slack')(crowi)
+  let slack
+  beforeAll(() => {
+    slack = require(crowi.libDir + '/util/slack')(crowi)
+  })
 
   test('convert markdown', () => {
     const markdown = '# ほげほげ\n\n* aaa\n* bbb\n* ccc\n\n## ほげほげほげ\n\n[Yahoo! Japan](http://www.yahoo.co.jp/) is here\n**Bold** and *Italic*'
