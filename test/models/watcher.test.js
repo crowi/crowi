@@ -9,8 +9,6 @@ describe('Watcher', function() {
         const userId = ObjectId()
         const targetId = ObjectId()
 
-        console.log('targetId', targetId, targetId.constructor.name)
-
         try {
           const watcher = await Watcher.upsertWatcher(userId, 'Page', targetId, Watcher.STATUS_WATCH)
           expect(watcher.user.toString()).toBe(userId.toString())
