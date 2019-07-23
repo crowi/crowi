@@ -1,4 +1,4 @@
-import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 import mongoosePaginate from 'mongoose-paginate'
 import crypto from 'crypto'
@@ -120,6 +120,8 @@ export default crowi => {
     admin: { type: Boolean, default: 0, index: true },
   })
   userSchema.plugin(mongoosePaginate)
+
+  const User = model<UserDocument, UserModel>('User', userSchema)
 
   userEvent.on('activated', userEvent.onActivated)
 
@@ -347,7 +349,6 @@ export default crowi => {
   }
 
   userSchema.methods.populateSecrets = async function() {
-    const User = crowi.model('User')
     return User.findById(this._id, '+password +apiToken').exec()
   }
 
@@ -399,7 +400,6 @@ export default crowi => {
   }
 
   userSchema.statics.findAllUsers = function(option) {
-    var User = this
     var option = option || {}
     var sort = option.sort || { createdAt: -1 }
     var status = option.status || [STATUS_ACTIVE, STATUS_SUSPENDED]
@@ -429,7 +429,6 @@ export default crowi => {
   }
 
   userSchema.statics.findUsersByIds = function(ids, option) {
-    var User = this
     var option = option || {}
     var sort = option.sort || { createdAt: -1 }
     var status = option.status || STATUS_ACTIVE
@@ -477,7 +476,6 @@ export default crowi => {
   userSchema.statics.findUsersByPartOfEmail = function(emailPart, options) {
     const status = options.status || null
     const emailPartRegExp = new RegExp(emailPart.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))
-    const User = this
 
     return new Promise((resolve, reject) => {
       const query = User.find({ email: emailPartRegExp })
@@ -497,7 +495,6 @@ export default crowi => {
   }
 
   userSchema.statics.findUserByUsername = function(username) {
-    var User = this
     return new Promise(function(resolve, reject) {
       User.findOne({ username: username }, function(err, userData) {
         if (err) {
@@ -552,7 +549,6 @@ export default crowi => {
   }
 
   userSchema.statics.isRegisterable = function(email, username, callback) {
-    var User = this
     var emailUsable = true
     var usernameUsable = true
 
@@ -578,7 +574,6 @@ export default crowi => {
   }
 
   userSchema.statics.removeCompletelyById = function(id, callback) {
-    var User = this
     User.findById(id, function(err, userData) {
       if (!userData) {
         return callback(err, null)
@@ -602,8 +597,6 @@ export default crowi => {
   }
 
   userSchema.statics.resetPasswordByRandomString = function(id) {
-    var User = this
-
     return new Promise(function(resolve, reject) {
       User.findById(id, function(err, userData) {
         if (!userData) {
@@ -626,7 +619,6 @@ export default crowi => {
   }
 
   userSchema.statics.createUsersByInvitation = function(emailList, toSendEmail, callback) {
-    var User = this
     var createdUserList = []
     var config = crowi.getConfig()
     var mailer = crowi.getMailer()
@@ -732,7 +724,6 @@ export default crowi => {
   }
 
   userSchema.statics.createUserByEmailAndPassword = function(name, username, email, password, lang, callback) {
-    var User = this
     var newUser = new User()
 
     newUser.name = name
@@ -779,5 +770,5 @@ export default crowi => {
   userSchema.statics.LANG_EN_GB = LANG_EN_US
   userSchema.statics.LANG_JA = LANG_JA
 
-  return model('User', userSchema)
+  return User
 }

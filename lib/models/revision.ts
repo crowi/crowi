@@ -1,5 +1,5 @@
 import { Types, Document, Model, Schema, Query, model } from 'mongoose'
-import Debug from 'debug'
+// import Debug from 'debug'
 
 export interface RevisionDocument extends Document {
   path: string
@@ -33,6 +33,8 @@ export default crowi => {
     createdAt: { type: Date, default: Date.now },
   })
 
+  const Revision = model<RevisionDocument, RevisionModel>('Revision', revisionSchema)
+
   revisionSchema.statics.findLatestRevision = function(path, cb) {
     this.find({ path })
       .sort({ createdAt: -1 })
@@ -43,8 +45,6 @@ export default crowi => {
   }
 
   revisionSchema.statics.findRevision = function(id) {
-    var Revision = this
-
     return new Promise(function(resolve, reject) {
       Revision.findById(id)
         .populate('author')
@@ -59,8 +59,6 @@ export default crowi => {
   }
 
   revisionSchema.statics.findRevisions = function(ids) {
-    var Revision = this
-
     if (!Array.isArray(ids)) {
       return Promise.reject(new Error('The argument was not Array.'))
     }
@@ -87,8 +85,6 @@ export default crowi => {
   }
 
   revisionSchema.statics.findRevisionList = function(path, options) {
-    var Revision = this
-
     return new Promise(function(resolve, reject) {
       Revision.find({ path: path })
         .sort({ createdAt: -1 })
@@ -104,8 +100,6 @@ export default crowi => {
   }
 
   revisionSchema.statics.updateRevisionListByPath = function(path, updateData, options) {
-    var Revision = this
-
     return new Promise(function(resolve, reject) {
       Revision.update({ path: path }, { $set: updateData }, { multi: true }, function(err, data) {
         if (err) {
@@ -118,8 +112,6 @@ export default crowi => {
   }
 
   revisionSchema.statics.prepareRevision = function(pageData, body, user, options) {
-    var Revision = this
-
     if (!options) {
       options = {}
     }
@@ -140,15 +132,12 @@ export default crowi => {
   }
 
   revisionSchema.statics.removeRevisionsByPath = function(path) {
-    const Revision = this
     return Revision.remove({ path })
   }
 
   revisionSchema.statics.updatePath = function(pathName) {}
 
   revisionSchema.statics.findAuthorsByPage = function(page) {
-    var Revision = this
-
     return new Promise(function(resolve, reject) {
       Revision.distinct('author', { path: page.path }).exec(function(err, authors) {
         if (err) {
@@ -160,5 +149,5 @@ export default crowi => {
     })
   }
 
-  return model('Revision', revisionSchema)
+  return Revision
 }

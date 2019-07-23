@@ -86,8 +86,9 @@ export default crowi => {
   notificationSchema.set('toJSON', { virtuals: true, transform })
   notificationSchema.index({ user: 1, target: 1, action: 1, createdAt: 1 }, { unique: true })
 
+  const Notification = model<NotificationDocument, NotificationModel>('Notification', notificationSchema)
+
   notificationSchema.statics.findLatestNotificationsByUser = function(user, limit, offset) {
-    const Notification = this
     limit = limit || 10
 
     return new Promise(function(resolve, reject) {
@@ -110,7 +111,6 @@ export default crowi => {
   }
 
   notificationSchema.statics.upsertByActivity = function(user, sameActivities, activity) {
-    const Notification = this
     const { targetModel, target, action } = activity
 
     return new Promise(function(resolve, reject) {
@@ -148,7 +148,6 @@ export default crowi => {
   }
 
   notificationSchema.statics.removeActivity = async function(activity) {
-    const Notification = this
     const { _id, target, action } = activity
     const query = { target, action }
     const parameters = { $pull: { activities: _id } }
@@ -161,12 +160,10 @@ export default crowi => {
   }
 
   notificationSchema.statics.removeEmpty = function() {
-    const Notification = this
     return Notification.remove({ activities: { $size: 0 } })
   }
 
   notificationSchema.statics.read = async function(user) {
-    const Notification = this
     const query = { user, status: STATUS_UNREAD }
     const parameters = { status: STATUS_UNOPENED }
     const options = { multi: true }
@@ -175,7 +172,6 @@ export default crowi => {
   }
 
   notificationSchema.statics.open = async function(user, id) {
-    const Notification = this
     const query = { _id: id, user: user._id }
     const parameters = { status: STATUS_OPENED }
     const options = { new: true }
@@ -188,7 +184,6 @@ export default crowi => {
   }
 
   notificationSchema.statics.getUnreadCountByUser = async function(user) {
-    const Notification = this
     const query = { user, status: STATUS_UNREAD }
 
     try {
@@ -209,5 +204,5 @@ export default crowi => {
   notificationSchema.statics.STATUS_UNREAD = STATUS_UNREAD
   notificationSchema.statics.STATUS_OPENED = STATUS_OPENED
 
-  return model('Notification', notificationSchema)
+  return Notification
 }

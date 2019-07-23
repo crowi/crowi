@@ -1,17 +1,16 @@
-import * as mongoose from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
-type ObjectId = mongoose.Types.ObjectId
-export interface BookmarkDocument extends mongoose.Document {
-  page: ObjectId | any
-  user: ObjectId | any
+export interface BookmarkDocument extends Document {
+  page: Types.ObjectId | any
+  user: Types.ObjectId | any
   createdAt: Date
 }
-export interface BookmarkModel extends mongoose.Model<BookmarkDocument> {
+export interface BookmarkModel extends Model<BookmarkDocument> {
   populatePage(bookmarks: any[], requestUser?: any): Promise<BookmarkDocument[]>
-  findByPageIdAndUserId(pageId: ObjectId, userId: ObjectId): Promise<BookmarkDocument | null>
+  findByPageIdAndUserId(pageId: Types.ObjectId, userId: Types.ObjectId): Promise<BookmarkDocument | null>
   findByUserId(
-    userId: ObjectId,
+    userId: Types.ObjectId,
     option: any,
   ): Promise<{
     meta: {
@@ -21,27 +20,27 @@ export interface BookmarkModel extends mongoose.Model<BookmarkDocument> {
     }
     data: any
   }>
-  countByPageId(pageId: ObjectId): Promise<number>
+  countByPageId(pageId: Types.ObjectId): Promise<number>
   findByUser(user: any, option: any): Promise<BookmarkDocument[]>
   add(page: any, user: any): Promise<BookmarkDocument>
-  removeBookmarksByPageId(pageId: ObjectId): any
+  removeBookmarksByPageId(pageId: Types.ObjectId): any
   removeBookmark(page: any, user: any): any
 }
 
 export default crowi => {
   const debug = Debug('crowi:models:Bookmark')
-  const ObjectId = mongoose.Schema.Types.ObjectId
   const BookmarkEvent = crowi.event('Bookmark')
-  const BookmarkSchema = new mongoose.Schema<BookmarkDocument, BookmarkModel>({
-    page: { type: ObjectId, ref: 'Page', index: true },
-    user: { type: ObjectId, ref: 'User', index: true },
+
+  const BookmarkSchema = new Schema<BookmarkDocument, BookmarkModel>({
+    page: { type: Schema.Types.ObjectId, ref: 'Page', index: true },
+    user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     createdAt: { type: Date, default: Date.now() },
   })
   BookmarkSchema.index({ page: 1, user: 1 }, { unique: true })
 
-  BookmarkSchema.statics.populatePage = function(Bookmarks, requestUser) {
-    var Bookmark = this
+  const Bookmark = model<BookmarkDocument, BookmarkModel>('Bookmark', BookmarkSchema)
 
+  BookmarkSchema.statics.populatePage = function(Bookmarks, requestUser) {
     requestUser = requestUser || null
 
     return Bookmark.populate(Bookmarks, { path: 'page' })
@@ -65,8 +64,6 @@ export default crowi => {
 
   // Bookmark チェック用
   BookmarkSchema.statics.findByPageIdAndUserId = function(pageId, userId) {
-    var Bookmark = this
-
     return new Promise(function(resolve, reject) {
       return Bookmark.findOne({ page: pageId, user: userId }, function(err, doc) {
         if (err) {
@@ -79,8 +76,6 @@ export default crowi => {
   }
 
   BookmarkSchema.statics.findByUserId = function(userId, option) {
-    var Bookmark = this
-
     var limit = option.limit || 50
     var offset = option.offset || 0
 
@@ -127,7 +122,6 @@ export default crowi => {
 
   // Bookmark count
   BookmarkSchema.statics.countByPageId = async function(pageId) {
-    const Bookmark = this
     const count = await Bookmark.count({ page: pageId })
 
     return count
@@ -141,7 +135,6 @@ export default crowi => {
    * }
    */
   BookmarkSchema.statics.findByUser = function(user, option) {
-    var Bookmark = this
     var requestUser = option.requestUser || null
 
     var limit = option.limit || 50
@@ -168,8 +161,6 @@ export default crowi => {
   }
 
   BookmarkSchema.statics.add = async function(page, user) {
-    const Bookmark = this
-
     const newBookmark = new (Bookmark as any)({ page, user, createdAt: Date.now() })
 
     try {
@@ -187,8 +178,6 @@ export default crowi => {
   }
 
   BookmarkSchema.statics.removeBookmarksByPageId = async function(pageId) {
-    const Bookmark = this
-
     try {
       const data = await Bookmark.remove({ page: pageId })
       BookmarkEvent.emit('delete', pageId)
@@ -200,8 +189,6 @@ export default crowi => {
   }
 
   BookmarkSchema.statics.removeBookmark = async function(page, user) {
-    const Bookmark = this
-
     try {
       const data = await Bookmark.findOneAndRemove({ page, user })
       BookmarkEvent.emit('delete', page)
@@ -212,5 +199,5 @@ export default crowi => {
     }
   }
 
-  return mongoose.model<BookmarkDocument>('Bookmark', BookmarkSchema)
+  return Bookmark
 }

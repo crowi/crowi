@@ -1,13 +1,12 @@
-import * as mongoose from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
-type ObjectId = mongoose.Types.ObjectId
-export interface ActivityDocument extends mongoose.Document {
-  user: ObjectId | any
+export interface ActivityDocument extends Document {
+  user: Types.ObjectId | any
   targetModel: string
   target: string
   action: string
-  event: mongoose.Types.ObjectId
+  event: Types.ObjectId
   eventModel: string
   createdAt: Date
 
@@ -15,7 +14,7 @@ export interface ActivityDocument extends mongoose.Document {
   getNotificationTargetUsers(): Promise<any[]>
 }
 
-export interface ActivityModel extends mongoose.Model<ActivityDocument> {
+export interface ActivityModel extends Model<ActivityDocument> {
   getSameActivities(parameters: any): Promise<ActivityDocument>
   createByParameters(parameters: any): Promise<ActivityDocument>
   removeByParameters(parameters: any): any
@@ -29,14 +28,13 @@ export interface ActivityModel extends mongoose.Model<ActivityDocument> {
 
 export default crowi => {
   const debug = Debug('crowi:models:activity')
-  const ObjectId = mongoose.Schema.Types.ObjectId
   const ActivityDefine = require('../util/activityDefine')()
   const activityEvent = crowi.event('Activity')
 
   // TODO: add revision id
-  const activitySchema = new mongoose.Schema<ActivityDocument, ActivityModel>({
+  const activitySchema = new Schema<ActivityDocument, ActivityModel>({
     user: {
-      type: ObjectId,
+      type: Schema.Types.ObjectId,
       ref: 'User',
       index: true,
       require: true,
@@ -47,7 +45,7 @@ export default crowi => {
       enum: ActivityDefine.getSupportTargetModelNames(),
     },
     target: {
-      type: ObjectId,
+      type: Schema.Types.ObjectId,
       refPath: 'targetModel',
       require: true,
     },
@@ -57,7 +55,7 @@ export default crowi => {
       enum: ActivityDefine.getSupportActionNames(),
     },
     event: {
-      type: ObjectId,
+      type: Schema.Types.ObjectId,
       refPath: 'eventModel',
     },
     eventModel: {
@@ -72,13 +70,13 @@ export default crowi => {
   activitySchema.index({ target: 1, action: 1 })
   activitySchema.index({ user: 1, target: 1, action: 1, createdAt: 1 }, { unique: true })
 
+  const Activity = model<ActivityDocument, ActivityModel>('Activity', activitySchema)
+
   /**
    * @param {object} parameters
    * @return {Promise}
    */
   activitySchema.statics.createByParameters = function(parameters) {
-    const Activity = this
-
     return new Promise(function(resolve, reject) {
       try {
         resolve(Activity.create(parameters))
@@ -92,8 +90,6 @@ export default crowi => {
    * @param {object} parameters
    */
   activitySchema.statics.removeByParameters = function(parameters) {
-    const Activity = this
-
     return new Promise(async function(resolve, reject) {
       try {
         const activity = await Activity.findOne(parameters)
@@ -159,7 +155,6 @@ export default crowi => {
    * @return {Promise}
    */
   activitySchema.statics.removeByPage = async function(page) {
-    const Activity = this
     const activities = await Activity.find({ target: page })
     for (const activity of activities) {
       activityEvent.emit('remove', activity)
@@ -172,8 +167,6 @@ export default crowi => {
    * @return {Promise}
    */
   activitySchema.statics.findByUser = function(user) {
-    const Activity = this
-
     return new Promise(function(resolve, reject) {
       Activity.find({ user: user })
         .sort({ createdAt: -1 })
@@ -192,9 +185,7 @@ export default crowi => {
   }
 
   activitySchema.methods.getSameActivities = function() {
-    const self = this
-    const Activity = self.model('Activity')
-    const { target, action } = self
+    const { target, action } = this
     const query = { target, action }
     const limit = 1000
 
@@ -268,5 +259,5 @@ export default crowi => {
     }
   })
 
-  return mongoose.model<ActivityDocument, ActivityModel>('Activity', activitySchema)
+  return Activity
 }

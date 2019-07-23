@@ -1,10 +1,9 @@
-import * as mongoose from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
-type ObjectId = mongoose.Types.ObjectId
-export interface AttachmentDocument extends mongoose.Document {
-  page: ObjectId
-  creator: ObjectId
+export interface AttachmentDocument extends Document {
+  page: Types.ObjectId
+  creator: Types.ObjectId
   filePath: string
   fileName: string
   originalName: string
@@ -15,19 +14,18 @@ export interface AttachmentDocument extends mongoose.Document {
   fileURL: string
 }
 
-export interface AttachmentModel extends mongoose.Model<AttachmentDocument> {
-  getListByPageId(id: ObjectId): Promise<AttachmentDocument[]>
+export interface AttachmentModel extends Model<AttachmentDocument> {
+  getListByPageId(id: Types.ObjectId): Promise<AttachmentDocument[]>
   guessExtByFileType(fileType: string): string
-  createAttachmentFilePath(pageId: ObjectId, fileName: string, fileType: string): string
-  removeAttachmentsByPageId(pageId: ObjectId): any
+  createAttachmentFilePath(pageId: Types.ObjectId, fileName: string, fileType: string): string
+  removeAttachmentsByPageId(pageId: Types.ObjectId): any
   findDeliveryFile(attachment: AttachmentDocument, forceUpdate: boolean): any
   removeAttachment(attachment: AttachmentDocument): any
 }
 
 export default crowi => {
-  var debug = Debug('crowi:models:attachment')
-  var ObjectId = mongoose.Schema.Types.ObjectId
-  var fileUploader = require('../util/fileUploader')(crowi)
+  const debug = Debug('crowi:models:attachment')
+  const fileUploader = require('../util/fileUploader')(crowi)
 
   function generateFileHash(fileName) {
     var hasher = require('crypto').createHash('md5')
@@ -36,10 +34,10 @@ export default crowi => {
     return hasher.digest('hex')
   }
 
-  const attachmentSchema = new mongoose.Schema<AttachmentDocument, AttachmentModel>(
+  const attachmentSchema = new Schema<AttachmentDocument, AttachmentModel>(
     {
-      page: { type: ObjectId, ref: 'Page', index: true },
-      creator: { type: ObjectId, ref: 'User', index: true },
+      page: { type: Schema.Types.ObjectId, ref: 'Page', index: true },
+      creator: { type: Schema.Types.ObjectId, ref: 'User', index: true },
       filePath: { type: String, required: true },
       fileName: { type: String, required: true },
       originalName: { type: String },
@@ -54,9 +52,11 @@ export default crowi => {
     },
   )
 
-  attachmentSchema.virtual('fileUrl').get(function() {
-    return `/files/${this._id}`
+  attachmentSchema.virtual('fileUrl').get(function(this: AttachmentDocument) {
+    ;`/files/${this._id}`
   })
+
+  const Attachment = model<AttachmentDocument, AttachmentModel>('Attachment', attachmentSchema)
 
   attachmentSchema.statics.getListByPageId = function(id) {
     var self = this
@@ -92,7 +92,6 @@ export default crowi => {
   }
 
   attachmentSchema.statics.createAttachmentFilePath = function(pageId, fileName, fileType) {
-    const Attachment = this
     let ext = ''
     const fnExt = fileName.match(/(.*)(?:\.([^.]+$))/)
 
@@ -109,8 +108,6 @@ export default crowi => {
   }
 
   attachmentSchema.statics.removeAttachmentsByPageId = function(pageId) {
-    var Attachment = this
-
     return new Promise((resolve, reject) => {
       Attachment.getListByPageId(pageId)
         .then(attachments => {
@@ -140,7 +137,6 @@ export default crowi => {
   }
 
   attachmentSchema.statics.removeAttachment = function(attachment) {
-    const Attachment = this
     const filePath = attachment.filePath
 
     return new Promise((resolve, reject) => {
@@ -161,5 +157,5 @@ export default crowi => {
     })
   }
 
-  return mongoose.model<AttachmentDocument>('Attachment', attachmentSchema)
+  return Attachment
 }
