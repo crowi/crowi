@@ -3,7 +3,6 @@ import Debug from 'debug'
 
 type ObjectId = mongoose.Types.ObjectId
 export interface ActivityDocument extends mongoose.Document {
-  // populatable
   user: ObjectId | any
   targetModel: string
   target: String
