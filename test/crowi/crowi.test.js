@@ -3,7 +3,6 @@ const Crowi = require(path.join(ROOT_DIR, '/lib/crowi'))
 
 describe('Test for Crowi application context', () => {
   // test crowi object by environment
-  const crowi = global.crowi
 
   describe('construction', () => {
     test('initialize crowi context', () => {

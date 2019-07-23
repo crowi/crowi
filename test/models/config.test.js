@@ -1,12 +1,17 @@
 const utils = require('../utils.js')
 
 describe('Config model test', () => {
-  const Page = crowi.model('Page')
-  const Config = crowi.model('Config')
-  const User = crowi.model('User')
-  const conn = crowi.getMongo().connection
+  let Page
+  let Config
+  let User
+  let conn
 
-  beforeAll(function(done) {
+  beforeAll(done => {
+    Page = crowi.model('Page')
+    Config = crowi.model('Config')
+    User = crowi.model('User')
+    conn = crowi.getMongo().connection
+
     const fixture = [
       { ns: 'crowi', key: 'test:test', value: JSON.stringify('crowi test value') },
       { ns: 'crowi', key: 'test:test2', value: JSON.stringify(11111) },

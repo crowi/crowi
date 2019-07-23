@@ -1,14 +1,27 @@
+const mongoose = require('mongoose')
+
 describe('Notification', function() {
-  const Comment = crowi.model('Comment')
-  const Notification = crowi.model('Notification')
-  const Page = crowi.model('Page')
-  const User = crowi.model('User')
-  const Activity = crowi.model('Activity')
-  const mongoose = crowi.getMongo()
+  let Comment
+  let Notification
+  let Page
+  let User
+  let Activity
+  let conn
+
   const ObjectId = mongoose.Types.ObjectId
-  const conn = mongoose.connection
 
   const data = {}
+
+  beforeAll(done => {
+    Comment = crowi.model('Comment')
+    Notification = crowi.model('Notification')
+    Page = crowi.model('Page')
+    User = crowi.model('User')
+    Activity = crowi.model('Activity')
+    conn = crowi.getMongo().connection
+
+    done()
+  })
 
   describe('.upsertByActivity', function() {
     describe('valid parameters', function() {

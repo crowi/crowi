@@ -1,6 +1,11 @@
 describe('User', () => {
-  const Page = crowi.model('Page')
-  const User = crowi.model('User')
+  let Page
+  let User
+
+  beforeAll(() => {
+    Page = crowi.model('Page')
+    User = crowi.model('User')
+  })
 
   describe('Create and Find.', () => {
     describe('The user', () => {

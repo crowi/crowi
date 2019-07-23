@@ -1,5 +1,9 @@
 describe('UpdatePost', () => {
-  const UpdatePost = crowi.model('UpdatePost')
+  let UpdatePost
+
+  beforeAll(() => {
+    UpdatePost = crowi.model('UpdatePost')
+  })
 
   describe('.createPrefixesByPathPattern', () => {
     describe('with a path', () => {
