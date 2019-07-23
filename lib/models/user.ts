@@ -35,8 +35,6 @@ export interface UserDocument extends Document {
   isPasswordValid(password: string): boolean
   setPassword(password: string): this
   isEmailSet(): boolean
-  // FIXME: Conflict
-  update(name, email, lang, callback: (err: Error, userData: UserDocument) => void): any
   updatePassword(password: string, callback: (err: Error, userData: UserDocument) => void): any
   updateApiToken(callback: (err: Error, userData: UserDocument) => void): any
   updateImage(image, callback: (err: Error, userData: UserDocument) => void): any
@@ -203,16 +201,6 @@ export default crowi => {
       return true
     }
     return false
-  }
-
-  userSchema.methods.update = function(name, email, lang, callback) {
-    this.name = name
-    this.email = email
-    this.lang = lang
-
-    this.save(function(err, userData) {
-      return callback(err, userData)
-    })
   }
 
   userSchema.methods.updatePassword = function(password, callback) {

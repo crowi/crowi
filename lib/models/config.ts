@@ -21,8 +21,7 @@ export interface ConfigModel extends Model<ConfigDocument> {
   applicationInstall(): Promise<void>
   updateCache(ns: string, key: string, value: string): void
   updateCacheByNamespace(ns: string, nsConfig: Record<string, any>): void
-  // FIXME: Conflict
-  update(ns: string, key: string, value: string): Promise<void>
+  updateByParams(ns: string, key: string, value: string): Promise<void>
   updateConfig(ns: string, key: string, value: string): Promise<void>
   updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>
   loadAllConfig(): Promise<object>
@@ -126,7 +125,7 @@ export default crowi => {
     crowi.setConfig(config)
   }
 
-  configSchema.statics.update = async function(ns, key, value) {
+  configSchema.statics.updateByParams = async function(ns, key, value) {
     const Config = this
 
     await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec()
@@ -136,7 +135,7 @@ export default crowi => {
     const Config = this
 
     try {
-      await Config.update(ns, key, value)
+      await Config.updateByParams(ns, key, value)
     } catch (err) {
       debug('updateConfig', err)
     }
@@ -148,7 +147,7 @@ export default crowi => {
     const Config = this
 
     try {
-      await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.update(ns, key, value)))
+      await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)))
     } catch (err) {
       debug('updateConfigByNamespace', err)
     }

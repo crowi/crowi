@@ -26,7 +26,7 @@ export interface ShareModel extends Model<ShareDocument> {
   findShare(query, options: object): Promise<any>
   findShareByUuid(uuid, query, options): Promise<any>
   findShareByPageId(pageId, query, options): Promise<any>
-  create(pageId, user): Promise<any>
+  createShare(pageId: Types.ObjectId, user: Types.ObjectId): Promise<ShareDocument>
   delete(query: object): Promise<any>
   deleteById(id): Promise<any>
   deleteByPageId(pageId): Promise<any>
@@ -148,7 +148,7 @@ export default crowi => {
     return this.findShare(query, options)
   }
 
-  shareSchema.statics.create = async function(pageId, user) {
+  shareSchema.statics.createShare = async function(pageId, user) {
     const Share = this
 
     const isExists = await Share.isExists({
@@ -159,7 +159,7 @@ export default crowi => {
       throw new Error('Cannot create new share.')
     }
 
-    const newShare = new Share({
+    return Share.create({
       uuid: uuidv4(),
       page: pageId,
       creator: user,
@@ -167,7 +167,6 @@ export default crowi => {
       updatedAt: Date.now(),
       status: STATUS_ACTIVE,
     })
-    return newShare.save()
   }
 
   shareSchema.statics.delete = async function(query = {}) {

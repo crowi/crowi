@@ -32,8 +32,8 @@ describe('Share', () => {
   describe('.create', () => {
     describe('Create shares', () => {
       test('should be able to create only one active share per page', async () => {
-        await expect(Share.create(createdPages[0]._id, user)).resolves.toBeInstanceOf(Share)
-        await expect(Share.create(createdPages[0]._id, user)).rejects.toBeInstanceOf(Error)
+        await expect(Share.creatShare(createdPages[0]._id, user)).resolves.toBeInstanceOf(Share)
+        await expect(Share.creatShare(createdPages[0]._id, user)).rejects.toBeInstanceOf(Error)
       })
     })
   })
@@ -42,7 +42,7 @@ describe('Share', () => {
     describe('Delete share', () => {
       let createdShares
       beforeAll(async () => {
-        createdShares = [await Share.create(createdPages[0]._id, user), await Share.create(createdPages[1]._id, user)]
+        createdShares = [await Share.creatShare(createdPages[0]._id, user), await Share.creatShare(createdPages[1]._id, user)]
       })
 
       test('should inactivate share', async () => {

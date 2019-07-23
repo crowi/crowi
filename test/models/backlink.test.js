@@ -22,7 +22,7 @@ describe('Backlink', () => {
       await Revision.remove({})
       const createPath = () => '/' + faker.lorem.slug()
       const createPaths = () => [...Array(3)].map(createPath)
-      const createPage = (path, body = 'test') => Page.create(path, body, user, {})
+      const createPage = (path, body = 'test') => Page.createPage(path, body, user, {})
       const destPaths = createPaths()
       const srcPaths = createPaths()
 

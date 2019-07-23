@@ -97,8 +97,7 @@ export interface PageModel extends Model<PageDocument> {
   updateGrant(page, grant, userData): any
   pushToGrantedUsers(page, userData): any
   pushRevision(pageData, newRevision, user): any
-  // FIXME: Conflict
-  create(path, body, user, options): any
+  createPage(path, body, user, options): any
   updatePage(pageData, body, user, options: object): any
   deletePage(pageData, user, options): any
   revertDeletedPage(pageData, user, options): any
@@ -985,54 +984,44 @@ export default crowi => {
     })
   }
 
-  pageSchema.statics.create = function(path, body, user, options) {
-    var Page = this
-    var Revision = crowi.model('Revision')
-    var format = options.format || 'markdown'
-    var grant = options.grant || GRANT_PUBLIC
-    var redirectTo = options.redirectTo || null
+  pageSchema.statics.createPage = async function(path, body, user, options) {
+    const Page = this
+    const Revision = crowi.model('Revision')
+    const format = options.format || 'markdown'
+    let grant = options.grant || GRANT_PUBLIC
+    const redirectTo = options.redirectTo || null
 
     // force public
     if (isPortalPath(path)) {
       grant = GRANT_PUBLIC
     }
 
-    return new Promise(function(resolve, reject) {
-      Page.findOne({ path: path }, function(err, pageData) {
-        if (pageData) {
-          return reject(new Error('Cannot create new page to existed path'))
-        }
+    const pageData = await Page.findOne({ path })
+    if (pageData) {
+      return new Error('Cannot create new page to existed path')
+    }
 
-        var newPage = new Page()
-        newPage.path = path
-        newPage.creator = user
-        newPage.lastUpdateUser = user
-        newPage.createdAt = Date.now()
-        newPage.updatedAt = Date.now()
-        newPage.redirectTo = redirectTo
-        newPage.grant = grant
-        newPage.status = STATUS_PUBLISHED
-        newPage.grantedUsers = []
-        newPage.grantedUsers.push(user)
-
-        newPage.save(function(err, newPage) {
-          if (err) {
-            return reject(err)
-          }
-
-          var newRevision = Revision.prepareRevision(newPage, body, user, { format: format })
-          Page.pushRevision(newPage, newRevision, user)
-            .then(function(data) {
-              resolve(data)
-              pageEvent.emit('create', data, user)
-            })
-            .catch(function(err) {
-              debug('Push Revision Error on create page', err)
-              return reject(err)
-            })
-        })
-      })
+    const newPage = await Page.create({
+      path,
+      creator: user,
+      lastUpdateUser: user,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      redirectTo: redirectTo,
+      grant: grant,
+      status: STATUS_PUBLISHED,
+      grantedUsers: user ? [user] : [],
     })
+
+    const newRevision = Revision.prepareRevision(newPage, body, user, { format })
+    try {
+      const revisionData = await Page.pushRevision(newPage, newRevision, user)
+      pageEvent.emit('create', revisionData, user)
+      return revisionData
+    } catch (err) {
+      debug('Push Revision Error on create page', err)
+      throw err
+    }
   }
 
   pageSchema.statics.updatePage = function(pageData, body, user, options = {}) {

@@ -11,8 +11,6 @@ export interface CommentDocument extends mongoose.Document {
   createdAt: Date
 }
 export interface CommentModel extends mongoose.Model<CommentDocument> {
-  // conflict
-  create(pageId: ObjectId, creatorId: ObjectId, revisionId: ObjectId, comment: any, position: any): Promise<CommentDocument>
   getCommentsByPageId(id: ObjectId): Promise<CommentDocument[]>
   getCommentsByRevisionId(id: ObjectId): Promise<CommentDocument[]>
   countCommentByPageId(page: any): Promise<number>
@@ -32,30 +30,6 @@ export default crowi => {
     commentPosition: { type: Number, default: -1 },
     createdAt: { type: Date, default: Date.now },
   })
-
-  commentSchema.statics.create = function(pageId, creatorId, revisionId, comment, position) {
-    var Comment = this
-    var commentPosition = position || -1
-
-    return new Promise(function(resolve, reject) {
-      var newComment = new (Comment as any)()
-
-      newComment.page = pageId
-      newComment.creator = creatorId
-      newComment.revision = revisionId
-      newComment.comment = comment
-      newComment.commentPosition = commentPosition
-
-      newComment.save(function(err, data) {
-        if (err) {
-          debug('Error on saving comment.', err)
-          return reject(err)
-        }
-        debug('Comment saved.', data)
-        return resolve(data)
-      })
-    })
-  }
 
   commentSchema.statics.getCommentsByPageId = function(id) {
     var self = this
