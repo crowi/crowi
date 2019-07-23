@@ -5,10 +5,10 @@ type ObjectId = mongoose.Types.ObjectId
 export interface ActivityDocument extends mongoose.Document {
   user: ObjectId | any
   targetModel: string
-  target: String
-  action: String
+  target: string
+  action: string
   event: mongoose.Types.ObjectId
-  eventModel: String
+  eventModel: string
   createdAt: Date
 
   getSameActivities(): Promise<ActivityDocument[]>
@@ -27,7 +27,7 @@ export interface ActivityModel extends mongoose.Model<ActivityDocument> {
   getActionUsersFromActivities(activities: ActivityDocument[]): any[]
 }
 
-export default (crowi) => {
+export default crowi => {
   const debug = Debug('crowi:models:activity')
   const ObjectId = mongoose.Schema.Types.ObjectId
   const ActivityDefine = require('../util/activityDefine')()
@@ -110,7 +110,7 @@ export default (crowi) => {
    * @return {Promise}
    */
   activitySchema.statics.createByPageComment = function(comment) {
-    let parameters = {
+    const parameters = {
       user: comment.creator,
       targetModel: ActivityDefine.MODEL_PAGE,
       target: comment.page,
@@ -128,7 +128,7 @@ export default (crowi) => {
    * @return {Promise}
    */
   activitySchema.statics.createByPageLike = function(page, user) {
-    let parameters = {
+    const parameters = {
       user: user._id,
       targetModel: ActivityDefine.MODEL_PAGE,
       target: page,
@@ -144,7 +144,7 @@ export default (crowi) => {
    * @return {Promise}
    */
   activitySchema.statics.removeByPageUnlike = function(page, user) {
-    let parameters = {
+    const parameters = {
       user: user,
       targetModel: ActivityDefine.MODEL_PAGE,
       target: page,
@@ -161,7 +161,7 @@ export default (crowi) => {
   activitySchema.statics.removeByPage = async function(page) {
     const Activity = this
     const activities = await Activity.find({ target: page })
-    for (let activity of activities) {
+    for (const activity of activities) {
       activityEvent.emit('remove', activity)
     }
     return Activity.remove({ target: page })
@@ -172,7 +172,7 @@ export default (crowi) => {
    * @return {Promise}
    */
   activitySchema.statics.findByUser = function(user) {
-    let Activity = this
+    const Activity = this
 
     return new Promise(function(resolve, reject) {
       Activity.find({ user: user })

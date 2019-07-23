@@ -3,10 +3,10 @@ import Debug from 'debug'
 
 type ObjectId = mongoose.Types.ObjectId
 export interface BacklinkDocument extends mongoose.Document {
-  page: ObjectId | any,
-  fromPage: ObjectId | any,
-  fromRevision: ObjectId | any,
-  updatedAt: Date,
+  page: ObjectId | any
+  fromPage: ObjectId | any
+  fromRevision: ObjectId | any
+  updatedAt: Date
 }
 
 export interface BacklinkModel extends mongoose.Model<BacklinkDocument> {
@@ -18,7 +18,7 @@ export interface BacklinkModel extends mongoose.Model<BacklinkDocument> {
   createByAllPages(): Promise<BacklinkDocument[]>
 }
 
-export default (crowi) => {
+export default crowi => {
   const debug = Debug('crowi:models:backlink')
   const ObjectId = mongoose.Schema.Types.ObjectId
   const linkDetector = require('../util/linkDetector')(crowi)
@@ -95,7 +95,7 @@ export default (crowi) => {
         fromPage: savedPage._id,
       }
 
-      Backlink.remove(conditions, (err) => {
+      Backlink.remove(conditions, err => {
         if (err) {
           return reject(err)
         }
