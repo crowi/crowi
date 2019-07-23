@@ -1,5 +1,5 @@
-import { Types, Document, Model, Schema, Query, model } from 'mongoose'
-import Debug from 'debug'
+import { Types, Document, Model, Schema, model } from 'mongoose'
+// import Debug from 'debug'
 import uuidv4 from 'uuid/v4'
 import mongoosePaginate from 'mongoose-paginate'
 
@@ -55,6 +55,8 @@ export default crowi => {
   shareSchema.set('toObject', { virtuals: true })
   shareSchema.set('toJSON', { virtuals: true })
   shareSchema.plugin(mongoosePaginate)
+
+  const Share = model<ShareDocument, ShareModel>('Share', shareSchema)
 
   shareSchema.methods.isActive = function() {
     return this.status === STATUS_ACTIVE
@@ -149,8 +151,6 @@ export default crowi => {
   }
 
   shareSchema.statics.createShare = async function(pageId, user) {
-    const Share = this
-
     const isExists = await Share.isExists({
       page: pageId,
       status: STATUS_ACTIVE,
@@ -170,23 +170,20 @@ export default crowi => {
   }
 
   shareSchema.statics.delete = async function(query = {}) {
-    const Share = this
     const defaultQuery = { status: STATUS_ACTIVE }
     return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: STATUS_INACTIVE }, { new: true }).exec()
   }
 
   shareSchema.statics.deleteById = async function(id) {
-    const Share = this
     return Share.delete({ _id: id })
   }
 
   shareSchema.statics.deleteByPageId = async function(pageId) {
-    const Share = this
     return Share.delete({ page: pageId })
   }
 
   shareSchema.statics.STATUS_ACTIVE = STATUS_ACTIVE
   shareSchema.statics.STATUS_INACTIVE = STATUS_INACTIVE
 
-  return model('Share', shareSchema)
+  return Share
 }

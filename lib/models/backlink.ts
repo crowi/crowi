@@ -1,17 +1,16 @@
-import * as mongoose from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
-type ObjectId = mongoose.Types.ObjectId
-export interface BacklinkDocument extends mongoose.Document {
-  page: ObjectId | any
-  fromPage: ObjectId | any
-  fromRevision: ObjectId | any
+export interface BacklinkDocument extends Document {
+  page: Types.ObjectId | any
+  fromPage: Types.ObjectId | any
+  fromRevision: Types.ObjectId | any
   updatedAt: Date
 }
 
-export interface BacklinkModel extends mongoose.Model<BacklinkDocument> {
-  findByPageId(pageId: ObjectId, limit: any, offset: any): Promise<BacklinkDocument[]>
-  removeByPageId(pageId: ObjectId): any
+export interface BacklinkModel extends Model<BacklinkDocument> {
+  findByPageId(pageId: Types.ObjectId, limit: any, offset: any): Promise<BacklinkDocument[]>
+  removeByPageId(pageId: Types.ObjectId): any
   removeBySavedPage(savedPage: any)
   createByParameters(parameters: any): Promise<BacklinkDocument>
   createBySavedPage(savedPage: any): Promise<BacklinkDocument[]>
@@ -20,18 +19,18 @@ export interface BacklinkModel extends mongoose.Model<BacklinkDocument> {
 
 export default crowi => {
   const debug = Debug('crowi:models:backlink')
-  const ObjectId = mongoose.Schema.Types.ObjectId
   const linkDetector = require('../util/linkDetector')(crowi)
 
-  const backlinkSchema = new mongoose.Schema<BacklinkDocument, BacklinkModel>({
-    page: { type: ObjectId, ref: 'Page', index: true },
-    fromPage: { type: ObjectId, ref: 'Page' },
-    fromRevision: { type: ObjectId, ref: 'Revision' },
+  const backlinkSchema = new Schema<BacklinkDocument, BacklinkModel>({
+    page: { type: Schema.Types.ObjectId, ref: 'Page', index: true },
+    fromPage: { type: Schema.Types.ObjectId, ref: 'Page' },
+    fromRevision: { type: Schema.Types.ObjectId, ref: 'Revision' },
     updatedAt: { type: Date, default: Date.now, index: true },
   })
 
+  const Backlink = model<BacklinkDocument, BacklinkModel>('BackLink', backlinkSchema)
+
   backlinkSchema.statics.findByPageId = function(pageId, limit, offset) {
-    var Backlink = this
     limit = limit || 10
     offset = offset || 0
 
@@ -83,13 +82,10 @@ export default crowi => {
   }
 
   backlinkSchema.statics.removeByPageId = function(pageId) {
-    const Backlink = this
     return Backlink.remove({ fromPage: pageId })
   }
 
   backlinkSchema.statics.removeBySavedPage = function(savedPage) {
-    var Backlink = this
-
     return new Promise((resolve, reject) => {
       var conditions = {
         fromPage: savedPage._id,
@@ -105,8 +101,6 @@ export default crowi => {
   }
 
   backlinkSchema.statics.createByParameters = function(parameters) {
-    var BackLink = this
-
     return new Promise((resolve, reject) => {
       var data = {
         page: parameters.page,
@@ -114,7 +108,7 @@ export default crowi => {
         fromRevision: parameters.fromRevision,
         updatedAt: Date.now(),
       }
-      BackLink.create(data, (err, savedBacklink) => {
+      Backlink.create(data, (err, savedBacklink) => {
         if (err) {
           return reject(err)
         }
@@ -136,21 +130,19 @@ export default crowi => {
   }
 
   backlinkSchema.statics.createBySavedPage = async function(savedPage) {
-    const BackLink = this
-
     if (!(savedPage.revision && savedPage.revision.body)) {
       throw new Error('no revision/body in savedPage')
     }
 
     const body = savedPage.revision.body
 
-    await BackLink.removeBySavedPage(savedPage)
+    await Backlink.removeBySavedPage(savedPage)
 
     const links = linkDetector.search(body)
     const ids = await convertLinksToPageIds(savedPage, links)
     return Promise.all(
       ids.map(id =>
-        BackLink.createByParameters({
+        Backlink.createByParameters({
           page: id,
           fromPage: savedPage._id,
           fromRevision: savedPage.revision._id,
@@ -167,7 +159,6 @@ export default crowi => {
   }
 
   backlinkSchema.statics.createByAllPages = async function() {
-    const BackLink = this
     const Page = crowi.model('Page')
     const Revision = crowi.model('Revision')
 
@@ -178,7 +169,7 @@ export default crowi => {
       $or: [{ body: linkDetector.getLinkRegexp() }, { body: linkDetector.getPathRegexps()[0] }, { body: linkDetector.getPathRegexps()[1] }],
     })
 
-    await BackLink.remove({})
+    await Backlink.remove({})
 
     return Promise.all(
       revisions.map(async ({ _id: revisionId, body }) => {
@@ -189,7 +180,7 @@ export default crowi => {
         const ids = await convertLinksToPageIds(page, links)
         return Promise.all(
           ids.map(id =>
-            BackLink.createByParameters({
+            Backlink.createByParameters({
               page: id,
               fromPage: pageId,
               fromRevision: revisionId,
@@ -207,5 +198,5 @@ export default crowi => {
     )
   }
 
-  return mongoose.model<BacklinkDocument, BacklinkModel>('BackLink', backlinkSchema)
+  return Backlink
 }

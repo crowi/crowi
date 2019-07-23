@@ -1,35 +1,35 @@
-import * as mongoose from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
-type ObjectId = mongoose.Types.ObjectId
-export interface CommentDocument extends mongoose.Document {
-  page: ObjectId | any
-  creator: ObjectId
-  revision: ObjectId
+export interface CommentDocument extends Document {
+  page: Types.ObjectId | any
+  creator: Types.ObjectId
+  revision: Types.ObjectId
   comment: string
   commentPosition: number
   createdAt: Date
 }
-export interface CommentModel extends mongoose.Model<CommentDocument> {
-  getCommentsByPageId(id: ObjectId): Promise<CommentDocument[]>
-  getCommentsByRevisionId(id: ObjectId): Promise<CommentDocument[]>
+export interface CommentModel extends Model<CommentDocument> {
+  getCommentsByPageId(id: Types.ObjectId): Promise<CommentDocument[]>
+  getCommentsByRevisionId(id: Types.ObjectId): Promise<CommentDocument[]>
   countCommentByPageId(page: any): Promise<number>
-  removeCommentsByPageId(pageId: ObjectId): Promise<void>
+  removeCommentsByPageId(pageId: Types.ObjectId): Promise<void>
   findCreatorsByPage(page: any): Promise<any[]>
 }
 
 export default crowi => {
-  var debug = Debug('crowi:models:comment')
-  var ObjectId = mongoose.Schema.Types.ObjectId
+  const debug = Debug('crowi:models:comment')
 
-  const commentSchema = new mongoose.Schema<CommentDocument, CommentModel>({
-    page: { type: ObjectId, ref: 'Page', index: true },
-    creator: { type: ObjectId, ref: 'User', index: true },
-    revision: { type: ObjectId, ref: 'Revision', index: true },
+  const commentSchema = new Schema<CommentDocument, CommentModel>({
+    page: { type: Schema.Types.ObjectId, ref: 'Page', index: true },
+    creator: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    revision: { type: Schema.Types.ObjectId, ref: 'Revision', index: true },
     comment: { type: String, required: true },
     commentPosition: { type: Number, default: -1 },
     createdAt: { type: Date, default: Date.now },
   })
+
+  const Comment = model<CommentDocument, CommentModel>('Comment', commentSchema)
 
   commentSchema.statics.getCommentsByPageId = function(id) {
     var self = this
@@ -92,8 +92,6 @@ export default crowi => {
   }
 
   commentSchema.statics.removeCommentsByPageId = function(pageId) {
-    var Comment = this
-
     return new Promise(function(resolve, reject) {
       Comment.remove({ page: pageId }, function(err) {
         if (err) {
@@ -106,8 +104,6 @@ export default crowi => {
   }
 
   commentSchema.statics.findCreatorsByPage = function(page) {
-    var Comment = this
-
     return new Promise(function(resolve, reject) {
       Comment.distinct('creator', { page: page }).exec(function(err, creaters) {
         if (err) {
@@ -124,7 +120,6 @@ export default crowi => {
    */
   commentSchema.post('save', function(savedComment: CommentDocument) {
     var Page = crowi.model('Page')
-    var Comment = crowi.model('Comment')
     var Activity = crowi.model('Activity')
 
     Comment.countCommentByPageId(savedComment.page)
@@ -143,5 +138,5 @@ export default crowi => {
       .catch(function(err) {})
   })
 
-  return mongoose.model<CommentDocument>('Comment', commentSchema)
+  return Comment
 }

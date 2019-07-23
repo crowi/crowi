@@ -1,5 +1,5 @@
-import { Types, Document, Model, Schema, Query, model } from 'mongoose'
-import Debug from 'debug'
+import { Types, Document, Model, Schema, model } from 'mongoose'
+// import Debug from 'debug'
 import mongoosePaginate from 'mongoose-paginate'
 
 export interface ShareAccessDocument extends Document {
@@ -9,10 +9,15 @@ export interface ShareAccessDocument extends Document {
   lastAccessedAt: Date
 }
 
+export interface ShareAccessModel extends Model<ShareAccessDocument> {
+  findAccesses(query, options: object): Promise<any>
+  access(shareId: Types.ObjectId, trackingId: Types.ObjectId): Promise<any>
+}
+
 export default crowi => {
   // const debug = Debug('crowi:models:shareAccess')
 
-  const shareAccessSchema = new Schema<ShareAccessDocument>({
+  const shareAccessSchema = new Schema<ShareAccessDocument, ShareAccessModel>({
     share: { type: Schema.Types.ObjectId, ref: 'Share', index: true },
     tracking: { type: Schema.Types.ObjectId, ref: 'Tracking', index: true },
     createdAt: { type: Date, default: Date.now },
@@ -20,6 +25,8 @@ export default crowi => {
   })
   shareAccessSchema.index({ share: 1, tracking: 1 }, { unique: true })
   shareAccessSchema.plugin(mongoosePaginate)
+
+  const ShareAccess = model<ShareAccessDocument, ShareAccessModel>('ShareAccess', shareAccessSchema)
 
   shareAccessSchema.statics.findAccesses = async function(query, options = {}) {
     const page = options.page || 1
@@ -50,5 +57,5 @@ export default crowi => {
     return this.findOneAndUpdate(query, update, { upsert: true, new: true }).exec()
   }
 
-  return model('ShareAccess', shareAccessSchema)
+  return ShareAccess
 }

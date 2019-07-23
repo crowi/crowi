@@ -1,19 +1,19 @@
-import { Types, Document, Model, Schema, model } from 'mongoose'
+import { Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
 const SECURITY_REGISTRATION_MODE_OPEN = 'Open'
 const SECURITY_REGISTRATION_MODE_RESTRICTED = 'Resricted'
 const SECURITY_REGISTRATION_MODE_CLOSED = 'Closed'
 
+interface Config {
+  crowi: object
+  notification: object
+}
+
 export interface ConfigDocument extends Document {
   ns: string
   key: string
   value: string
-}
-
-interface Config {
-  crowi: object
-  notification: object
 }
 
 export interface ConfigModel extends Model<ConfigDocument> {
@@ -42,11 +42,14 @@ export interface ConfigModel extends Model<ConfigDocument> {
 
 export default crowi => {
   const debug = Debug('crowi:models:config')
+
   const configSchema = new Schema<ConfigDocument, ConfigModel>({
     ns: { type: String, required: true, index: true },
     key: { type: String, required: true, index: true },
     value: { type: String, required: true },
   })
+
+  const Config = model<ConfigDocument, ConfigModel>('Config', configSchema)
 
   function getArrayForInstalling() {
     return {
@@ -93,7 +96,6 @@ export default crowi => {
 
   // Execute only once for installing application
   configSchema.statics.applicationInstall = async function() {
-    const Config = this
     const count = await Config.count({ ns: 'crowi' }).exec()
     if (count > 0) {
       throw new Error('Application already installed')
@@ -126,14 +128,10 @@ export default crowi => {
   }
 
   configSchema.statics.updateByParams = async function(ns, key, value) {
-    const Config = this
-
     await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec()
   }
 
   configSchema.statics.updateConfig = async function(ns, key, value) {
-    const Config = this
-
     try {
       await Config.updateByParams(ns, key, value)
     } catch (err) {
@@ -144,8 +142,6 @@ export default crowi => {
   }
 
   configSchema.statics.updateConfigByNamespace = async function(ns, nsConfig) {
-    const Config = this
-
     try {
       await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)))
     } catch (err) {
@@ -156,8 +152,6 @@ export default crowi => {
   }
 
   configSchema.statics.loadAllConfig = async function() {
-    const Config = this
-
     const config = { crowi: {} }
 
     const doc = await Config.find()
@@ -197,8 +191,6 @@ export default crowi => {
   }
 
   configSchema.statics.fileUploadEnabled = function(config) {
-    const Config = this
-
     if (!Config.isUploadable(config)) {
       return false
     }
@@ -238,7 +230,6 @@ export default crowi => {
   }
 
   configSchema.statics.getLocalconfig = function(config) {
-    const Config = this
     const env = crowi.getEnv()
 
     const localConfig = {
@@ -267,5 +258,5 @@ export default crowi => {
   configSchema.statics.SECURITY_REGISTRATION_MODE_RESTRICTED = SECURITY_REGISTRATION_MODE_RESTRICTED
   configSchema.statics.SECURITY_REGISTRATION_MODE_CLOSED = SECURITY_REGISTRATION_MODE_CLOSED
 
-  return model('Config', configSchema)
+  return Config
 }

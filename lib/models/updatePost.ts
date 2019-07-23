@@ -1,6 +1,5 @@
-import { Types, Document, Model, Schema, Query, model } from 'mongoose'
-import Debug from 'debug'
-import uuidv4 from 'uuid/v4'
+import { Types, Document, Model, Schema, model } from 'mongoose'
+// import Debug from 'debug'
 
 export interface UpdatePostDocument extends Document {
   pathPattern: string
@@ -25,7 +24,7 @@ export interface UpdatePostModel extends Model<UpdatePostDocument> {
  * This is the setting for notify to 3rd party tool (like Slack).
  */
 export default crowi => {
-  const debug = Debug('crowi:models:updatePost')
+  // const debug = Debug('crowi:models:updatePost')
 
   // TODO: slack 以外の対応
   const updatePostSchema = new Schema<UpdatePostDocument, UpdatePostModel>({
@@ -37,6 +36,8 @@ export default crowi => {
     creator: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     createdAt: { type: Date, default: Date.now },
   })
+
+  const UpdatePost = model<UpdatePostDocument, UpdatePostModel>('UpdatePost', updatePostSchema)
 
   updatePostSchema.statics.normalizeChannelName = function(channel) {
     return channel.replace(/(#|,)/g, '')
@@ -75,7 +76,6 @@ export default crowi => {
   }
 
   updatePostSchema.statics.findSettingsByPath = function(path) {
-    var UpdatePost = this
     var prefixes = UpdatePost.createPrefixesByPathPattern(path)
 
     return new Promise(function(resolve, reject) {
@@ -102,7 +102,6 @@ export default crowi => {
   }
 
   updatePostSchema.statics.findAll = function(offset) {
-    var UpdatePost = this
     var offset = offset || 0
 
     return new Promise(function(resolve, reject) {
@@ -124,7 +123,6 @@ export default crowi => {
   }
 
   updatePostSchema.statics.createUpdatePost = async function(pathPattern, channel, creator) {
-    const UpdatePost = this
     const provider = 'slack' // now slack only
 
     const prefixes = UpdatePost.createPrefixesByPathPattern(pathPattern)
@@ -140,5 +138,5 @@ export default crowi => {
     })
   }
 
-  return model('UpdatePost', updatePostSchema)
+  return UpdatePost
 }

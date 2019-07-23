@@ -1,10 +1,12 @@
-import { Document, Schema, model } from 'mongoose'
+import { Document, Model, Schema, model } from 'mongoose'
 
 export interface TrackingDocument extends Document {
   userAgent: string
   remoteAddress: string
   createdAt: Date
 }
+
+export interface TrackingModel extends Model<TrackingDocument> {}
 
 export default crowi => {
   // const debug = Debug('crowi:models:tracking')
@@ -15,5 +17,7 @@ export default crowi => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  return model('Tracking', trackingSchema)
+  const Tracking = model<TrackingDocument, TrackingModel>('Tracking', trackingSchema)
+
+  return Tracking
 }

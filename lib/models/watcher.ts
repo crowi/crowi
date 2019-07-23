@@ -1,4 +1,4 @@
-import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 // import Debug from 'debug'
 
 const ActivityDefine = require('../util/activityDefine')()
@@ -56,6 +56,8 @@ export default crowi => {
     createdAt: { type: Date, default: Date.now },
   })
 
+  const Watcher = model<WatcherDocument, WatcherModel>('Watcher', watcherSchema)
+
   watcherSchema.methods.isWatching = function() {
     return this.status === STATUS_WATCH
   }
@@ -69,7 +71,6 @@ export default crowi => {
   }
 
   watcherSchema.statics.upsertWatcher = function(user, targetModel, target, status) {
-    const Watcher = crowi.model('Watcher')
     const query = { user, targetModel, target }
     const doc = { ...query, status }
     const options = { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
@@ -81,17 +82,15 @@ export default crowi => {
   }
 
   watcherSchema.statics.getWatchers = async function(target) {
-    const Watcher = crowi.model('Watcher')
     return Watcher.find({ target, status: STATUS_WATCH }).distinct('user')
   }
 
   watcherSchema.statics.getIgnorers = async function(target) {
-    const Watcher = crowi.model('Watcher')
     return Watcher.find({ target, status: STATUS_IGNORE }).distinct('user')
   }
 
   watcherSchema.statics.STATUS_WATCH = STATUS_WATCH
   watcherSchema.statics.STATUS_IGNORE = STATUS_IGNORE
 
-  return model('Watcher', watcherSchema)
+  return Watcher
 }
