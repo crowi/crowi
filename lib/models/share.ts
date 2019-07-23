@@ -1,17 +1,48 @@
-module.exports = function(crowi) {
-  // const debug = require('debug')('crowi:models:share')
-  const mongoose = require('mongoose')
-  const uuidv4 = require('uuid/v4')
-  const mongoosePaginate = require('mongoose-paginate')
-  const ObjectId = mongoose.Schema.Types.ObjectId
-  const STATUS_ACTIVE = 'active'
-  const STATUS_INACTIVE = 'inactive'
+import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import Debug from 'debug'
+import uuidv4 from 'uuid/v4'
+import mongoosePaginate from 'mongoose-paginate'
 
-  const shareSchema = new mongoose.Schema({
+const STATUS_ACTIVE = 'active'
+const STATUS_INACTIVE = 'inactive'
+
+export interface ShareDocument extends Document {
+  uuid: string
+  page: Types.ObjectId
+  status: string
+  creator: Types.ObjectId
+  secretKeyword: string
+  createdAt: Date
+  updatedAt: Date
+
+  isActive(): boolean
+  isInactive(): boolean
+  isCreator(userData): boolean
+}
+
+export interface ShareModel extends Model<ShareDocument> {
+  isExists(query): Promise<any>
+  findShares(query, options: object): Promise<any>
+  findShare(query, options: object): Promise<any>
+  findShareByUuid(uuid, query, options): Promise<any>
+  findShareByPageId(pageId, query, options): Promise<any>
+  create(pageId, user): Promise<any>
+  delete(query: object): Promise<any>
+  deleteById(id): Promise<any>
+  deleteByPageId(pageId): Promise<any>
+
+  STATUS_ACTIVE: string
+  STATUS_INACTIVE: string
+}
+
+export default crowi => {
+  // const debug = Debug('crowi:models:share')
+
+  const shareSchema = new Schema<ShareDocument, ShareModel>({
     uuid: { type: String, required: true, index: true, unique: true },
-    page: { type: ObjectId, ref: 'Page', required: true, index: true },
+    page: { type: Schema.Types.ObjectId, ref: 'Page', required: true, index: true },
     status: { type: String, default: STATUS_ACTIVE, index: true },
-    creator: { type: ObjectId, ref: 'User', required: true, index: true },
+    creator: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     secretKeyword: String,
     createdAt: { type: Date, default: Date.now },
     updatedAt: Date,
@@ -158,5 +189,5 @@ module.exports = function(crowi) {
   shareSchema.statics.STATUS_ACTIVE = STATUS_ACTIVE
   shareSchema.statics.STATUS_INACTIVE = STATUS_INACTIVE
 
-  return mongoose.model('Share', shareSchema)
+  return model('Share', shareSchema)
 }

@@ -1,15 +1,39 @@
-module.exports = function(crowi) {
-  // const debug = require('debug')('crowi:models:watcher')
-  const mongoose = require('mongoose')
-  const ObjectId = mongoose.Schema.Types.ObjectId
-  const ActivityDefine = require('../util/activityDefine')()
-  const STATUS_WATCH = 'WATCH'
-  const STATUS_IGNORE = 'IGNORE'
-  const STATUSES = [STATUS_WATCH, STATUS_IGNORE]
+import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+// import Debug from 'debug'
 
-  const watcherSchema = new mongoose.Schema({
+const ActivityDefine = require('../util/activityDefine')()
+const STATUS_WATCH = 'WATCH'
+const STATUS_IGNORE = 'IGNORE'
+const STATUSES = [STATUS_WATCH, STATUS_IGNORE]
+
+export interface WatcherDocument extends Document {
+  user: Types.ObjectId
+  targetModel: string
+  target: Types.ObjectId
+  status: string
+  createdAt: Date
+
+  isWatching(): boolean
+  isIgnoring(): boolean
+}
+
+export interface WatcherModel extends Model<WatcherDocument> {
+  findByUserIdAndTargetId(userId: Types.ObjectId, targetId: Types.ObjectId): any
+  upsertWatcher(user: Types.ObjectId, targetModel: string, target: Types.ObjectId, status: string): any
+  watchByPageId(user: Types.ObjectId, pageId: Types.ObjectId, status: string): any
+  getWatchers(target: Types.ObjectId): Promise<Types.ObjectId[]>
+  getIgnorers(target: Types.ObjectId): Promise<Types.ObjectId[]>
+
+  STATUS_WATCH: string
+  STATUS_IGNORE: string
+}
+
+export default crowi => {
+  // const debug = Debug('crowi:models:watcher')
+
+  const watcherSchema = new Schema<WatcherDocument, WatcherModel>({
     user: {
-      type: ObjectId,
+      type: Schema.Types.ObjectId,
       ref: 'User',
       index: true,
       required: true,
@@ -20,7 +44,7 @@ module.exports = function(crowi) {
       enum: ActivityDefine.getSupportTargetModelNames(),
     },
     target: {
-      type: ObjectId,
+      type: Schema.Types.ObjectId,
       refPath: 'targetModel',
       require: true,
     },
@@ -69,5 +93,5 @@ module.exports = function(crowi) {
   watcherSchema.statics.STATUS_WATCH = STATUS_WATCH
   watcherSchema.statics.STATUS_IGNORE = STATUS_IGNORE
 
-  return mongoose.model('Watcher', watcherSchema)
+  return model('Watcher', watcherSchema)
 }

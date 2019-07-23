@@ -1,14 +1,53 @@
-module.exports = function(crowi) {
-  const mongoose = require('mongoose')
-  const debug = require('debug')('crowi:models:config')
-  const configSchema = new mongoose.Schema({
+import { Types, Document, Model, Schema, model } from 'mongoose'
+import Debug from 'debug'
+
+const SECURITY_REGISTRATION_MODE_OPEN = 'Open'
+const SECURITY_REGISTRATION_MODE_RESTRICTED = 'Resricted'
+const SECURITY_REGISTRATION_MODE_CLOSED = 'Closed'
+
+export interface ConfigDocument extends Document {
+  ns: string
+  key: string
+  value: string
+}
+
+type Config = {
+  crowi: object,
+  notification: object
+}
+
+export interface ConfigModel extends Model<ConfigDocument> {
+  getRegistrationModeLabels(): Record<string, any>
+  applicationInstall(): Promise<void>
+  updateCache(ns: string, key: string, value: string): void
+  updateCacheByNamespace(ns: string, nsConfig: Record<string, any>): void
+  // FIXME: Conflict
+  update(ns: string, key: string, value: string): Promise<void>
+  updateConfig(ns: string, key: string, value: string): Promise<void>
+  updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>
+  loadAllConfig(): Promise<object>
+  isRequiredThirdPartyAuth(config: Config): boolean
+  isDisabledPasswordAuth(config: Config): boolean
+  isUploadable(config: Config): boolean
+  fileUploadEnabled(config: Config): boolean
+  googleLoginEnabled(config: Config): boolean
+  githubLoginEnabled(config: Config): boolean
+  hasSlackConfig(config: Config): boolean
+  hasSlackToken(config: Config): boolean
+  getLocalconfig(config: Config): object
+
+  SECURITY_REGISTRATION_MODE_OPEN: string
+  SECURITY_REGISTRATION_MODE_RESTRICTED: string
+  SECURITY_REGISTRATION_MODE_CLOSED: string
+}
+
+export default crowi => {
+  const debug = Debug('crowi:models:config')
+  const configSchema = new Schema<ConfigDocument, ConfigModel>({
     ns: { type: String, required: true, index: true },
     key: { type: String, required: true, index: true },
     value: { type: String, required: true },
   })
-  const SECURITY_REGISTRATION_MODE_OPEN = 'Open'
-  const SECURITY_REGISTRATION_MODE_RESTRICTED = 'Resricted'
-  const SECURITY_REGISTRATION_MODE_CLOSED = 'Closed'
 
   function getArrayForInstalling() {
     return {
@@ -229,5 +268,5 @@ module.exports = function(crowi) {
   configSchema.statics.SECURITY_REGISTRATION_MODE_RESTRICTED = SECURITY_REGISTRATION_MODE_RESTRICTED
   configSchema.statics.SECURITY_REGISTRATION_MODE_CLOSED = SECURITY_REGISTRATION_MODE_CLOSED
 
-  return mongoose.model('Config', configSchema)
+  return model('Config', configSchema)
 }

@@ -1,19 +1,43 @@
-module.exports = function(crowi) {
-  'use strict'
+import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import Debug from 'debug'
 
-  const debug = require('debug')('crowi:models:notification')
-  const mongoose = require('mongoose')
-  const ObjectId = mongoose.Schema.Types.ObjectId
+const STATUS_UNREAD = 'UNREAD'
+const STATUS_UNOPENED = 'UNOPENED'
+const STATUS_OPENED = 'OPENED'
+const STATUSES = [STATUS_UNREAD, STATUS_UNOPENED, STATUS_OPENED]
+
+export interface NotificationDocument extends Document {
+  user: Types.ObjectId
+  targetModel: string
+  target: Types.ObjectId
+  action: string
+  activities: Types.ObjectId[]
+  status: string
+  createdAt: Date
+}
+
+export interface NotificationModel extends Model<NotificationDocument> {
+  findLatestNotificationsByUser(user: Types.ObjectId, skip: number, offset: number): Promise<NotificationDocument[]>
+  upsertByActivity(user: Types.ObjectId, sameActivities: Types.ObjectId[], activity: any): Promise<NotificationDocument | null>
+  removeActivity(activity: any): any
+  removeEmpty(): Query<any>
+  read(user: Types.ObjectId): Promise<Query<any>>
+  open(user: Types.ObjectId, id: Types.ObjectId): Promise<NotificationDocument | null>
+  getUnreadCountByUser(user: Types.ObjectId): Promise<number | undefined>
+
+  STATUS_UNREAD: string
+  STATUS_UNOPENED: string
+  STATUS_OPENED: string
+}
+
+export default crowi => {
+  const debug = Debug('crowi:models:notification')
   const ActivityDefine = require('../util/activityDefine')()
-  const STATUS_UNREAD = 'UNREAD'
-  const STATUS_UNOPENED = 'UNOPENED'
-  const STATUS_OPENED = 'OPENED'
-  const STATUSES = [STATUS_UNREAD, STATUS_UNOPENED, STATUS_OPENED]
   const notificationEvent = crowi.event('Notification')
 
-  const notificationSchema = new mongoose.Schema({
+  const notificationSchema = new Schema<NotificationDocument, NotificationModel>({
     user: {
-      type: ObjectId,
+      type: Schema.Types.ObjectId,
       ref: 'User',
       index: true,
       require: true,
@@ -24,7 +48,7 @@ module.exports = function(crowi) {
       enum: ActivityDefine.getSupportTargetModelNames(),
     },
     target: {
-      type: ObjectId,
+      type: Schema.Types.ObjectId,
       refPath: 'targetModel',
       require: true,
     },
@@ -35,7 +59,7 @@ module.exports = function(crowi) {
     },
     activities: [
       {
-        type: ObjectId,
+        type: Schema.Types.ObjectId,
         ref: 'Activity',
       },
     ],
@@ -185,5 +209,5 @@ module.exports = function(crowi) {
   notificationSchema.statics.STATUS_UNREAD = STATUS_UNREAD
   notificationSchema.statics.STATUS_OPENED = STATUS_OPENED
 
-  return mongoose.model('Notification', notificationSchema)
+  return model('Notification', notificationSchema)
 }
