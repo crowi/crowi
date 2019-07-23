@@ -18,10 +18,7 @@ export interface UpdatePostModel extends Model<UpdatePostDocument> {
   getRegExpByPattern(pattern): any
   findSettingsByPath(path): any
   findAll(offset): any
-  // FIXME: Conflict
-  create(pathPattern, channel, user): any
-  // FIXME: Conflict
-  remove(id): any
+  createUpdatePost(pathPattern: string, channel: string, creator: Types.ObjectId): Promise<UpdatePostDocument>
 }
 
 /**
@@ -126,43 +123,20 @@ export default crowi => {
     })
   }
 
-  updatePostSchema.statics.create = function(pathPattern, channel, user) {
-    var UpdatePost = this
-    var provider = 'slack' // now slack only
+  updatePostSchema.statics.createUpdatePost = async function(pathPattern, channel, creator) {
+    const UpdatePost = this
+    const provider = 'slack' // now slack only
 
-    var prefixes = UpdatePost.createPrefixesByPathPattern(pathPattern)
-    var notif = new UpdatePost()
-    notif.pathPattern = pathPattern
-    notif.patternPrefix = prefixes[0]
-    notif.patternPrefix2 = prefixes[1]
-    notif.channel = UpdatePost.normalizeChannelName(channel)
-    notif.provider = provider
-    notif.creator = user
-    notif.createdAt = Date.now()
+    const prefixes = UpdatePost.createPrefixesByPathPattern(pathPattern)
 
-    return new Promise(function(resolve, reject) {
-      notif.save(function(err, doc) {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(doc)
-      })
-    })
-  }
-
-  updatePostSchema.statics.remove = function(id) {
-    var UpdatePost = this
-
-    return new Promise(function(resolve, reject) {
-      UpdatePost.findOneAndRemove({ _id: id }, function(err, data) {
-        if (err) {
-          debug('UpdatePost.findOneAndRemove failed', err)
-          return reject(err)
-        }
-
-        return resolve(data)
-      })
+    return UpdatePost.create({
+      pathPattern,
+      patternPrefix: prefixes[0],
+      patternPrefix2: prefixes[1],
+      channel: UpdatePost.normalizeChannelName(channel),
+      provider,
+      creator,
+      createdAt: Date.now(),
     })
   }
 

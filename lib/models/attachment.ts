@@ -17,16 +17,6 @@ export interface AttachmentDocument extends mongoose.Document {
 
 export interface AttachmentModel extends mongoose.Model<AttachmentDocument> {
   getListByPageId(id: ObjectId): Promise<AttachmentDocument[]>
-  // FIXME: 競合
-  create(
-    pageId: ObjectId,
-    creator: any,
-    filePath: string,
-    originName: string,
-    fileName: string,
-    fileFormat: string,
-    fileSize: number,
-  ): Promise<AttachmentDocument>
   guessExtByFileType(fileType: string): string
   createAttachmentFilePath(pageId: ObjectId, fileName: string, fileType: string): string
   removeAttachmentsByPageId(pageId: ObjectId): any
@@ -87,32 +77,6 @@ export default crowi => {
 
           return resolve(data)
         })
-    })
-  }
-
-  attachmentSchema.statics.create = function(pageId, creator, filePath, originalName, fileName, fileFormat, fileSize) {
-    var Attachment = this
-
-    return new Promise(function(resolve, reject) {
-      var newAttachment = new (Attachment as any)()
-
-      newAttachment.page = pageId
-      newAttachment.creator = creator._id
-      newAttachment.filePath = filePath
-      newAttachment.originalName = originalName
-      newAttachment.fileName = fileName
-      newAttachment.fileFormat = fileFormat
-      newAttachment.fileSize = fileSize
-      newAttachment.createdAt = Date.now()
-
-      newAttachment.save(function(err, data) {
-        if (err) {
-          debug('Error on saving attachment.', err)
-          return reject(err)
-        }
-        debug('Attachment saved.', data)
-        return resolve(data)
-      })
     })
   }
 
