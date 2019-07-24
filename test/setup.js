@@ -10,6 +10,7 @@ beforeAll(async done => {
   const crowi = new Crowi(ROOT_DIR, {
     PORT: 13001,
     MONGO_URI: __MONGO_URI__,
+    BASE_URL: 'http://localhost:13001',
     ...process.env,
   })
   await crowi.init()
