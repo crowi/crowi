@@ -5,7 +5,6 @@ describe('Backlink', () => {
   let Page
   let Revision
   let conn
-  const appUrl = 'http://localhost:13001'
   let user
 
   beforeAll(done => {
@@ -27,7 +26,7 @@ describe('Backlink', () => {
   })
 
   describe('.createByAllPages', () => {
-    beforeAll(async () => {
+    beforeAll(async done => {
       await Page.remove({})
       await Revision.remove({})
       const createPath = () => '/' + faker.lorem.slug()
@@ -35,6 +34,7 @@ describe('Backlink', () => {
       const createPage = (path, body = 'test') => Page.create(path, body, user, {})
       const destPaths = createPaths()
       const srcPaths = createPaths()
+      const appUrl = crowi.baseUrl
 
       await Promise.all(destPaths.map(path => createPage(path)))
       const pages = await Promise.all([
@@ -44,11 +44,15 @@ describe('Backlink', () => {
       ])
 
       await Backlink.remove({})
+
+      done()
     })
 
-    test('should have all backlinks', async () => {
+    test('should have all backlinks', async done => {
       const pages = await Backlink.createByAllPages()
       expect(pages).toHaveLength(3)
+
+      done()
     })
   })
 })
