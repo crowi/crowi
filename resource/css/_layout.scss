@@ -126,10 +126,27 @@
   } // }}}
 } // }}}
 
+@keyframes LoginScreenBackgroundGradients {
+  0% { background-position: 0% 50% }
+  50% { background-position: 100% 50% }
+  100% { background-position: 0% 50% }
+}
+
 .crowi.single.nologin { // {{{
   //background: lighten($crowiHeaderBackground, 15%);
-  background: $crowiHeaderBackground;
+  height: 100vh;
+  background: $crowiHeaderBackground linear-gradient(135deg,
+    $crowiHeaderBackground,
+    lighten(saturate(adjust-hue($crowiHeaderBackground, 15deg), 25%), 30%),
+    lighten($crowiHeaderBackground, 40%),
+  );
+  background-size: 200% 200%;
+  animation: LoginScreenBackgroundGradients 30s ease infinite;
 
+
+  > .container-fluid {
+    height: 100vh;
+  }
   > .container-fluid > .row {
     flex-direction: column;
   }
@@ -163,8 +180,7 @@
 
   .login-dialog-container {
 
-    margin: 40px auto;
-    float: none;
+    margin: 0 auto;
 
     .login-dialog {
       position: relative;
