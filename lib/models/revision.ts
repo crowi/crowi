@@ -1,4 +1,4 @@
-import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 // import Debug from 'debug'
 
 export interface RevisionDocument extends Document {
@@ -15,11 +15,11 @@ export interface RevisionModel extends Model<RevisionDocument> {
   findRevisions(ids): Promise<RevisionDocument[]>
   findRevisionIdList(path): Promise<RevisionDocument[]>
   findRevisionList(path, options): Promise<RevisionDocument[]>
-  updateRevisionListByPath(path, updateData, options): RevisionDocument
+  updateRevisionListByPath(path, updateData): Promise<RevisionDocument>
   prepareRevision(pageData, body, user, options): RevisionDocument
-  removeRevisionsByPath(path): Query<any>
+  removeRevisionsByPath(path): Promise<RevisionDocument>
   updatePath(pathName): void
-  findAuthorsByPage(page): RevisionDocument['author'][]
+  findAuthorsByPage(page): Promise<RevisionDocument['author'][]>
 }
 
 export default crowi => {
@@ -45,108 +45,68 @@ export default crowi => {
   }
 
   revisionSchema.statics.findRevision = function(id) {
-    return new Promise(function(resolve, reject) {
-      Revision.findById(id)
-        .populate('author')
-        .exec(function(err, data) {
-          if (err) {
-            return reject(err)
-          }
-
-          return resolve(data)
-        })
-    })
+    return Revision.findById(id)
+      .populate('author')
+      .exec()
   }
 
-  revisionSchema.statics.findRevisions = function(ids) {
+  revisionSchema.statics.findRevisions = async function(ids) {
     if (!Array.isArray(ids)) {
-      return Promise.reject(new Error('The argument was not Array.'))
+      throw new Error('The argument was not Array.')
     }
 
-    return new Promise(function(resolve, reject) {
-      Revision.find({ _id: { $in: ids } })
-        .sort({ createdAt: -1 })
-        .populate('author')
-        .exec(function(err, revisions) {
-          if (err) {
-            return reject(err)
-          }
-
-          return resolve(revisions)
-        })
-    })
+    return Revision.find({ _id: { $in: ids } })
+      .sort({ createdAt: -1 })
+      .populate('author')
+      .exec()
   }
 
   revisionSchema.statics.findRevisionIdList = function(path) {
-    return this.find({ path: path })
+    return Revision.find({ path: path })
       .select('_id author createdAt')
       .sort({ createdAt: -1 })
       .exec()
   }
 
   revisionSchema.statics.findRevisionList = function(path, options) {
-    return new Promise(function(resolve, reject) {
-      Revision.find({ path: path })
-        .sort({ createdAt: -1 })
-        .populate('author')
-        .exec(function(err, data) {
-          if (err) {
-            return reject(err)
-          }
-
-          return resolve(data)
-        })
-    })
+    return Revision.find({ path: path })
+      .sort({ createdAt: -1 })
+      .populate('author')
+      .exec()
   }
 
-  revisionSchema.statics.updateRevisionListByPath = function(path, updateData, options) {
-    return new Promise(function(resolve, reject) {
-      Revision.update({ path: path }, { $set: updateData }, { multi: true }, function(err, data) {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(data)
-      })
-    })
+  revisionSchema.statics.updateRevisionListByPath = function(path, updateData) {
+    return Revision.update({ path: path }, { $set: updateData }, { multi: true }).exec()
   }
 
   revisionSchema.statics.prepareRevision = function(pageData, body, user, options) {
     if (!options) {
       options = {}
     }
-    var format = options.format || 'markdown'
+    const format = options.format || 'markdown'
 
     if (!user._id) {
       throw new Error('Error: user should have _id')
     }
 
-    var newRevision = new Revision()
+    const newRevision = new Revision()
     newRevision.path = pageData.path
     newRevision.body = body
     newRevision.format = format
     newRevision.author = user._id
-    newRevision.createdAt = Date.now()
+    newRevision.createdAt = (Date.now() as any) as Date
 
     return newRevision
   }
 
   revisionSchema.statics.removeRevisionsByPath = function(path) {
-    return Revision.remove({ path })
+    return Revision.remove({ path }).exec()
   }
 
   revisionSchema.statics.updatePath = function(pathName) {}
 
   revisionSchema.statics.findAuthorsByPage = function(page) {
-    return new Promise(function(resolve, reject) {
-      Revision.distinct('author', { path: page.path }).exec(function(err, authors) {
-        if (err) {
-          reject(err)
-        }
-
-        resolve(authors)
-      })
-    })
+    return Revision.distinct('author', { path: page.path }).exec() as Promise<RevisionDocument['author'][]>
   }
 
   return Revision

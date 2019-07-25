@@ -30,92 +30,57 @@ export default crowi => {
 
   const Backlink = model<BacklinkDocument, BacklinkModel>('BackLink', backlinkSchema)
 
-  backlinkSchema.statics.findByPageId = function(pageId, limit, offset) {
+  backlinkSchema.statics.findByPageId = async function(pageId, limit, offset) {
     limit = limit || 10
     offset = offset || 0
 
     limit = parseInt(limit, 10)
     offset = parseInt(offset, 10)
 
-    return new Promise((resolve, reject) => {
-      var conditions = {
-        page: pageId,
-      }
-      var projection = {
-        fromPage: 1,
-        fromRevision: 1,
-        updatedAt: 1,
-      }
-      var options = {
-        limit: limit,
-        skip: offset,
-        sort: { updatedAt: -1 },
-      }
+    const conditions = { page: pageId }
+    const projection = { fromPage: 1, fromRevision: 1, updatedAt: 1 }
+    const options = { limit, skip: offset, sort: { updatedAt: -1 } }
 
-      Backlink.find(conditions, projection, options)
-        .populate('fromPage')
-        .populate('fromRevision')
-        .exec((err, backlinks) => {
-          if (err) {
-            return reject(err)
-          }
+    const backlinks = await Backlink.find(conditions, projection, options)
+      .populate('fromPage')
+      .populate('fromRevision')
 
-          // populate author
-          var options = {
-            path: 'fromRevision.author',
-            model: 'User',
-            select: {
-              username: 1,
-              name: 1,
-              image: 1,
-            },
-          }
-          Backlink.populate(backlinks, options, (err, backlinks) => {
-            if (err) {
-              return reject(err)
-            }
+    // populate author
+    const populateOptions = {
+      path: 'fromRevision.author',
+      model: 'User',
+      select: {
+        username: 1,
+        name: 1,
+        image: 1,
+      },
+    }
 
-            return resolve(backlinks)
-          })
-        })
-    })
+    const populatedBacklinks = await Backlink.populate(backlinks, populateOptions)
+
+    return populatedBacklinks
   }
 
   backlinkSchema.statics.removeByPageId = function(pageId) {
     return Backlink.remove({ fromPage: pageId })
   }
 
-  backlinkSchema.statics.removeBySavedPage = function(savedPage) {
-    return new Promise((resolve, reject) => {
-      var conditions = {
-        fromPage: savedPage._id,
-      }
+  backlinkSchema.statics.removeBySavedPage = async function(savedPage) {
+    const conditions = {
+      fromPage: savedPage._id,
+    }
 
-      Backlink.remove(conditions, err => {
-        if (err) {
-          return reject(err)
-        }
-        return resolve()
-      })
-    })
+    await Backlink.remove(conditions)
   }
 
-  backlinkSchema.statics.createByParameters = function(parameters) {
-    return new Promise((resolve, reject) => {
-      var data = {
-        page: parameters.page,
-        fromPage: parameters.fromPage,
-        fromRevision: parameters.fromRevision,
-        updatedAt: Date.now(),
-      }
-      Backlink.create(data, (err, savedBacklink) => {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(savedBacklink)
-      })
-    })
+  backlinkSchema.statics.createByParameters = async function(parameters) {
+    const data = {
+      page: parameters.page,
+      fromPage: parameters.fromPage,
+      fromRevision: parameters.fromRevision,
+      updatedAt: Date.now(),
+    }
+    return Backlink.create(data)
   }
 
   const convertLinksToPageIds = async (page, { paths, objectIds }) => {
@@ -140,7 +105,8 @@ export default crowi => {
 
     const links = linkDetector.search(body)
     const ids = await convertLinksToPageIds(savedPage, links)
-    return Promise.all(
+
+    const backlinks = await Promise.all(
       ids.map(id =>
         Backlink.createByParameters({
           page: id,
@@ -149,13 +115,9 @@ export default crowi => {
         }),
       ),
     )
-      .then(backlinks => {
-        debug('All backlinks saved')
-        return backlinks
-      })
-      .catch(err => {
-        throw err
-      })
+
+    debug('All backlinks saved')
+    return backlinks
   }
 
   backlinkSchema.statics.createByAllPages = async function() {
@@ -178,7 +140,8 @@ export default crowi => {
 
         const links = linkDetector.search(body)
         const ids = await convertLinksToPageIds(page, links)
-        return Promise.all(
+
+        const backlinks = await Promise.all(
           ids.map(id =>
             Backlink.createByParameters({
               page: id,
@@ -187,13 +150,9 @@ export default crowi => {
             }),
           ),
         )
-          .then(backlinks => {
-            debug('All backlinks saved')
-            return backlinks
-          })
-          .catch(err => {
-            throw err
-          })
+
+        debug('All backlinks saved')
+        return backlinks
       }),
     )
   }

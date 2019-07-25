@@ -75,51 +75,36 @@ export default crowi => {
     return new RegExp(reg)
   }
 
-  updatePostSchema.statics.findSettingsByPath = function(path) {
-    var prefixes = UpdatePost.createPrefixesByPathPattern(path)
+  updatePostSchema.statics.findSettingsByPath = async function(path) {
+    const prefixes = UpdatePost.createPrefixesByPathPattern(path)
 
-    return new Promise(function(resolve, reject) {
-      UpdatePost.find({
-        $or: [
-          { patternPrefix: prefixes[0], patternPrefix2: prefixes[1] },
-          { patternPrefix: '*', patternPrefix2: '*' },
-          { patternPrefix: prefixes[0], patternPrefix2: '*' },
-          { patternPrefix: '*', patternPrefix2: prefixes[1] },
-        ],
-      }).then(function(settings) {
-        if (settings.length <= 0) {
-          return resolve(settings)
-        }
-
-        settings = settings.filter(function(setting) {
-          var patternRegex = UpdatePost.getRegExpByPattern(setting.pathPattern)
-          return patternRegex.test(path)
-        })
-
-        return resolve(settings)
-      })
+    const settings = await UpdatePost.find({
+      $or: [
+        { patternPrefix: prefixes[0], patternPrefix2: prefixes[1] },
+        { patternPrefix: '*', patternPrefix2: '*' },
+        { patternPrefix: prefixes[0], patternPrefix2: '*' },
+        { patternPrefix: '*', patternPrefix2: prefixes[1] },
+      ],
     })
+    if (settings.length <= 0) {
+      return settings
+    }
+
+    const validSettings = settings.filter(setting => {
+      const patternRegex = UpdatePost.getRegExpByPattern(setting.pathPattern)
+      return patternRegex.test(path)
+    })
+
+    return validSettings
   }
 
   updatePostSchema.statics.findAll = function(offset) {
-    var offset = offset || 0
+    offset = offset || 0
 
-    return new Promise(function(resolve, reject) {
-      UpdatePost.find()
-        .sort({ createdAt: 1 })
-        .populate('creator')
-        .exec(function(err, data) {
-          if (err) {
-            return reject(err)
-          }
-
-          if (data.length < 1) {
-            return resolve([])
-          }
-
-          return resolve(data)
-        })
-    })
+    return UpdatePost.find()
+      .sort({ createdAt: 1 })
+      .populate('creator')
+      .exec()
   }
 
   updatePostSchema.statics.createUpdatePost = async function(pathPattern, channel, creator) {

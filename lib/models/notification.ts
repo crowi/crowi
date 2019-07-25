@@ -91,60 +91,43 @@ export default crowi => {
   notificationSchema.statics.findLatestNotificationsByUser = function(user, limit, offset) {
     limit = limit || 10
 
-    return new Promise(function(resolve, reject) {
-      Notification.find({ user: user })
-        .sort({ createdAt: -1 })
-        .skip(offset)
-        .limit(limit)
-        .populate(['user', 'target'])
-        .populate({ path: 'activities', populate: { path: 'user' } })
-        .exec(function(err, notifications) {
-          if (err) {
-            reject(err)
-          }
-
-          // debug('notifications', notifications);
-
-          resolve(notifications)
-        })
-    })
+    return Notification.find({ user })
+      .sort({ createdAt: -1 })
+      .skip(offset)
+      .limit(limit)
+      .populate(['user', 'target'])
+      .populate({ path: 'activities', populate: { path: 'user' } })
+      .exec()
   }
 
-  notificationSchema.statics.upsertByActivity = function(user, sameActivities, activity) {
+  notificationSchema.statics.upsertByActivity = async function(user, sameActivities, activity) {
     const { targetModel, target, action } = activity
 
-    return new Promise(function(resolve, reject) {
-      const query = { user, target, action }
-      const parameters = {
-        user,
-        targetModel,
-        target,
-        action,
-        activities: sameActivities,
-        status: STATUS_UNREAD,
-        createdAt: Date.now(),
-      }
+    const query = { user, target, action }
+    const parameters = {
+      user,
+      targetModel,
+      target,
+      action,
+      activities: sameActivities,
+      status: STATUS_UNREAD,
+      createdAt: Date.now(),
+    }
 
-      const options = {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true,
-        runValidators: true,
-      }
+    const options = {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+      runValidators: true,
+    }
 
-      Notification.findOneAndUpdate(query, parameters, options, function(err, notification) {
-        if (err) {
-          debug(err)
-          reject(err)
-        }
+    const notification = await Notification.findOneAndUpdate(query, parameters, options)
 
-        if (notification !== undefined) {
-          notificationEvent.emit('update', notification.user)
-        }
+    if (notification !== undefined) {
+      notificationEvent.emit('update', notification.user)
+    }
 
-        resolve(notification)
-      })
-    })
+    return notification
   }
 
   notificationSchema.statics.removeActivity = async function(activity) {
@@ -187,7 +170,7 @@ export default crowi => {
     const query = { user, status: STATUS_UNREAD }
 
     try {
-      const count = Notification.count(query)
+      const count = await Notification.count(query)
 
       return count
     } catch (err) {
