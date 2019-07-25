@@ -212,19 +212,9 @@ export default crowi => {
     })
   }
 
-  userSchema.methods.updateApiToken = function(callback) {
-    var self = this
-
-    self.apiToken = generateApiToken(this)
-    return new Promise(function(resolve, reject) {
-      self.save(function(err, userData) {
-        if (err) {
-          return reject(err)
-        } else {
-          return resolve(userData)
-        }
-      })
-    })
+  userSchema.methods.updateApiToken = function() {
+    this.apiToken = generateApiToken(this)
+    return this.save()
   }
 
   userSchema.methods.updateImage = function(image, callback) {
@@ -409,23 +399,15 @@ export default crowi => {
       status = [status]
     }
 
-    return new Promise(function(resolve, reject) {
-      User.find()
-        .or(
-          status.map(s => {
-            return { status: s }
-          }),
-        )
-        .select(fields)
-        .sort(sort)
-        .exec(function(err, userData) {
-          if (err) {
-            return reject(err)
-          }
-
-          return resolve(userData)
-        })
-    })
+    return User.find()
+      .or(
+        status.map(s => {
+          return { status: s }
+        }),
+      )
+      .select(fields)
+      .sort(sort)
+      .exec()
   }
 
   userSchema.statics.findUsersByIds = function(ids, option) {
@@ -434,18 +416,10 @@ export default crowi => {
     var status = option.status || STATUS_ACTIVE
     var fields = option.fields
 
-    return new Promise(function(resolve, reject) {
-      User.find({ _id: { $in: ids }, status: status })
-        .select(fields)
-        .sort(sort)
-        .exec(function(err, userData) {
-          if (err) {
-            return reject(err)
-          }
-
-          return resolve(userData)
-        })
-    })
+    return User.find({ _id: { $in: ids }, status: status })
+      .select(fields)
+      .sort(sort)
+      .exec()
   }
 
   userSchema.statics.findAdmins = function(callback) {
@@ -477,100 +451,67 @@ export default crowi => {
     const status = options.status || null
     const emailPartRegExp = new RegExp(emailPart.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))
 
-    return new Promise((resolve, reject) => {
-      const query = User.find({ email: emailPartRegExp })
+    const query = User.find({ email: emailPartRegExp })
 
-      if (status) {
-        query.and({ status })
-      }
+    if (status) {
+      query.and({ status })
+    }
 
-      query.limit(PAGE_ITEMS + 1).exec((err, userData) => {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(userData)
-      })
-    })
+    return query.limit(PAGE_ITEMS + 1).exec()
   }
 
   userSchema.statics.findUserByUsername = function(username) {
-    return new Promise(function(resolve, reject) {
-      User.findOne({ username: username }, function(err, userData) {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(userData)
-      })
-    })
+    return User.findOne({ username })
   }
 
   userSchema.statics.findUserByApiToken = function(apiToken) {
-    var self = this
-
-    return new Promise(function(resolve, reject) {
-      self.findOne({ apiToken: apiToken }, function(err, userData) {
-        if (err) {
-          return reject(err)
-        } else {
-          return resolve(userData)
-        }
-      })
-    })
+    return User.findOne({ apiToken })
   }
 
   userSchema.statics.findUserByGoogleId = function(googleId) {
-    return this.findOne({ googleId })
+    return User.findOne({ googleId })
   }
 
   userSchema.statics.findUserByGitHubId = function(githubId) {
-    return this.findOne({ githubId })
+    return User.findOne({ githubId })
   }
 
   userSchema.statics.findUserByEmail = function(email) {
-    return this.findOne({ email })
+    return User.findOne({ email })
   }
 
   userSchema.statics.findUserByEmailAndPassword = function(email, password) {
     const hashedPassword = generatePassword(password)
-    return this.findOne({ email, password: hashedPassword })
+    return User.findOne({ email, password: hashedPassword })
   }
 
-  userSchema.statics.isRegisterableUsername = function(username, callback) {
-    var usernameUsable = true
-
-    this.findOne({ username: username }, function(err, userData) {
-      if (userData) {
-        usernameUsable = false
-      }
-      return callback(usernameUsable)
-    })
+  userSchema.statics.isRegisterableUsername = async function(username, callback) {
+    const userData = await User.findOne({ username })
+    callback(!!userData)
   }
 
-  userSchema.statics.isRegisterable = function(email, username, callback) {
+  userSchema.statics.isRegisterable = async function(email, username, callback) {
     var emailUsable = true
     var usernameUsable = true
+    let userData: UserDocument | null = null
 
     // username check
-    this.findOne({ username: username }, function(err, userData) {
-      if (userData) {
-        usernameUsable = false
-      }
+    userData = await User.findOne({ username })
+    if (userData) {
+      usernameUsable = false
+    }
 
-      // email check
-      User.findOne({ email: email }, function(err, userData) {
-        if (userData) {
-          emailUsable = false
-        }
+    // email check
+    userData = await User.findOne({ email })
+    if (userData) {
+      emailUsable = false
+    }
 
-        if (!emailUsable || !usernameUsable) {
-          return callback(false, { email: emailUsable, username: usernameUsable })
-        }
+    if (!emailUsable || !usernameUsable) {
+      return callback(false, { email: emailUsable, username: usernameUsable })
+    }
 
-        return callback(true, {})
-      })
-    })
+    return callback(true, {})
   }
 
   userSchema.statics.removeCompletelyById = function(id, callback) {
@@ -596,26 +537,19 @@ export default crowi => {
     })
   }
 
-  userSchema.statics.resetPasswordByRandomString = function(id) {
-    return new Promise(function(resolve, reject) {
-      User.findById(id, function(err, userData) {
-        if (!userData) {
-          return reject(new Error('User not found'))
-        }
+  userSchema.statics.resetPasswordByRandomString = async function(id) {
+    const userData = await User.findById(id)
+    if (!userData) {
+      throw new Error('User not found')
+    }
 
-        // is updatable check
-        // if (userData.isUp
-        var newPassword = generateRandomTempPassword()
-        userData.setPassword(newPassword)
-        userData.save(function(err, userData) {
-          if (err) {
-            return reject(err)
-          }
+    // is updatable check
+    // if (userData.isUp
+    const newPassword = generateRandomTempPassword()
+    userData.setPassword(newPassword)
+    const user = await userData.save()
 
-          resolve({ user: userData, newPassword: newPassword })
-        })
-      })
-    })
+    return { user, newPassword }
   }
 
   userSchema.statics.createUsersByInvitation = function(emailList, toSendEmail, callback) {

@@ -90,7 +90,7 @@ export interface PageModel extends Model<PageDocument> {
   getStreamOfFindAll(options): any
   findListByStartWith(path, userData, option): any
   findChildrenByPath(path, userData, option): any
-  findUnfurlablePages(type, array, grants: number[]): any
+  findUnfurlablePages(type, array, grants?: number[]): any
   findUnfurlablePagesByIds(ids): any
   findUnfurlablePagesByPaths(paths): any
   updatePageProperty(page, updateData): any
@@ -254,56 +254,47 @@ export default crowi => {
     return this.isRedirectOriginPage() && this.isGrantedFor(userData)
   }
 
-  pageSchema.methods.like = function(userData) {
-    var self = this
+  pageSchema.methods.like = async function(userData) {
     var Activity = crowi.model('Activity')
 
-    return new Promise(function(resolve, reject) {
-      var added = self.liker.addToSet(userData._id)
-      if (added.length > 0) {
-        self.save(function(err, data) {
-          if (err) {
-            return reject(err)
-          }
-          debug('liker updated!', added)
+    const added = this.liker.addToSet(userData._id)
+    if (added.length > 0) {
+      const data = await this.save()
 
-          Activity.createByPageLike(data, userData)
-            .then(activityLog => debug('Activity created', activityLog))
-            .catch(err => debug('Activity err', err))
+      debug('liker updated!', added)
 
-          return resolve(data)
-        })
-      } else {
-        debug('liker not updated')
-        return reject(self)
+      try {
+        const activityLog = await Activity.createByPageLike(data, userData)
+        debug('Activity created', activityLog)
+      } catch (err) {
+        debug('Activity err', err)
       }
-    })
+
+      return data
+    } else {
+      debug('liker not updated')
+    }
   }
 
-  pageSchema.methods.unlike = function(userData, callback) {
-    var self = this
-    var Activity = crowi.model('Activity')
+  pageSchema.methods.unlike = async function(userData) {
+    const Activity = crowi.model('Activity')
 
-    return new Promise(function(resolve, reject) {
-      var beforeCount = self.liker.length
-      self.liker.pull(userData._id)
-      if (self.liker.length != beforeCount) {
-        self.save(function(err, data) {
-          if (err) {
-            return reject(err)
-          }
+    const beforeCount = this.liker.length
+    this.liker.pull(userData._id)
+    if (this.liker.length != beforeCount) {
+      const data = await this.save()
 
-          Activity.removeByPageUnlike(data, userData)
-            .then(activityLog => debug('Activity removed'))
-            .catch(err => debug('Activity remove err', err))
-
-          return resolve(data)
-        })
-      } else {
-        debug('liker not updated')
-        return reject(self)
+      try {
+        await Activity.removeByPageUnlike(data, userData)
+        debug('Activity removed')
+      } catch (err) {
+        debug('Activity remove err', err)
       }
-    })
+
+      return data
+    } else {
+      debug('liker not updated')
+    }
   }
 
   // Unlink: Remove redirect origin page
@@ -329,29 +320,23 @@ export default crowi => {
     })
   }
 
-  pageSchema.methods.seen = function(userData) {
-    var self = this
-
+  pageSchema.methods.seen = async function(userData) {
     if (this.isSeenUser(userData)) {
       debug('seenUsers not updated')
-      return Promise.resolve(this)
+      return this
     }
 
-    return new Promise(function(resolve, reject) {
-      if (!userData || !userData._id) {
-        reject(new Error('User data is not valid'))
-      }
+    if (!userData || !userData._id) {
+      throw new Error('User data is not valid')
+    }
 
-      var added = self.seenUsers.addToSet(userData)
-      self.save(function(err, data) {
-        if (err) {
-          return reject(err)
-        }
+    const added = this.seenUsers.addToSet(userData)
 
-        debug('seenUsers updated!', added)
-        return resolve(self)
-      })
-    })
+    await this.save()
+
+    debug('seenUsers updated!', added)
+
+    return this
   }
 
   pageSchema.methods.getSlackChannel = function() {
@@ -371,21 +356,11 @@ export default crowi => {
   }
 
   pageSchema.methods.updateExtended = function(extended) {
-    var page = this
-    page.extended = extended
-    return new Promise(function(resolve, reject) {
-      return page.save(function(err, doc) {
-        if (err) {
-          return reject(err)
-        }
-        return resolve(doc)
-      })
-    })
+    this.extended = extended
+    return this.save()
   }
 
   pageSchema.statics.populatePageData = function(pageData, revisionId) {
-    var Page = crowi.model('Page')
-
     pageData.latestRevision = pageData.revision
     if (revisionId) {
       pageData.revision = revisionId
@@ -393,29 +368,14 @@ export default crowi => {
     pageData.likerCount = pageData.liker.length || 0
     pageData.seenUsersCount = pageData.seenUsers.length || 0
 
-    return new Promise(function(resolve, reject) {
-      pageData.populate(
-        [
-          { path: 'lastUpdateUser', model: 'User' },
-          { path: 'creator', model: 'User' },
-          { path: 'revision', model: 'Revision' },
-          // {path: 'liker', options: { limit: 11 }},
-          // {path: 'seenUsers', options: { limit: 11 }},
-        ],
-        function(err, pageData) {
-          Page.populate(pageData, { path: 'revision.author', model: 'User' }, function(err, data) {
-            if (err) {
-              return reject(err)
-            }
-
-            return resolve(data)
-          })
-        },
-      )
-    })
+    return pageData.populate([
+      { path: 'lastUpdateUser', model: 'User' },
+      { path: 'creator', model: 'User' },
+      { path: 'revision', model: 'Revision', populate: { path: 'author' } },
+    ])
   }
 
-  pageSchema.statics.populatePagesRevision = function(pages, revisions) {
+  pageSchema.statics.populatePagesRevision = async function(pages, revisions) {
     if (pages.length !== revisions.length) {
       throw new TypeError('page.length must be equal revisions.length')
     }
@@ -429,9 +389,9 @@ export default crowi => {
     return Page.populate(pages, { path: 'revision', model: 'Revision' })
   }
 
-  pageSchema.statics.populatePageListToAnyObjects = function(pageIdObjectArray) {
-    var pageIdMappings = {}
-    var pageIds = pageIdObjectArray.map(function(page, idx) {
+  pageSchema.statics.populatePageListToAnyObjects = async function(pageIdObjectArray) {
+    const pageIdMappings = {}
+    const pageIds = pageIdObjectArray.map(function(page, idx) {
       if (!page._id) {
         throw new Error('Pass the arg of populatePageListToAnyObjects() must have _id on each element.')
       }
@@ -440,45 +400,25 @@ export default crowi => {
       return page._id
     })
 
-    return new Promise(function(resolve, reject) {
-      Page.findListByPageIds(pageIds, { limit: 100 }) // limit => if the pagIds is greater than 100, ignore
-        .then(function(pages) {
-          pages.forEach(function(page) {
-            Object.assign(pageIdObjectArray[pageIdMappings[String(page._id)]], page._doc)
-          })
-
-          resolve(pageIdObjectArray)
-        })
+    const pages = Page.findListByPageIds(pageIds, { limit: 100 }) // limit => if the pagIds is greater than 100, ignore
+    pages.forEach(page => {
+      Object.assign(pageIdObjectArray[pageIdMappings[String(page._id)]], page._doc)
     })
+
+    return pageIdMappings
   }
 
   pageSchema.statics.updateCommentCount = function(page, num) {
-    var self = this
-
-    return new Promise(function(resolve, reject) {
-      self.update({ _id: page }, { commentCount: num }, {}, function(err, data) {
-        if (err) {
-          debug('Update commentCount Error', err)
-          return reject(err)
-        }
-
-        return resolve(data)
-      })
-    })
+    return Page.update({ _id: page }, { commentCount: num }, {})
   }
 
   pageSchema.statics.hasPortalPage = function(path, user, revisionId) {
-    var self = this
-    return new Promise(function(resolve, reject) {
-      self
-        .findPage(path, user, revisionId)
-        .then(function(page) {
-          resolve(page)
-        })
-        .catch(function(err) {
-          resolve(null) // check only has portal page, through error
-        })
-    })
+    try {
+      const page = await Page.findPage(path, user, revisionId)
+      return page
+    } catch (err) {
+      return null
+    }
   }
 
   pageSchema.statics.getGrantLabels = function() {
@@ -562,169 +502,117 @@ export default crowi => {
   }
 
   pageSchema.statics.updateRevision = function(pageId, revisionId, cb) {
-    this.update({ _id: pageId }, { revision: revisionId }, {}, function(err, data) {
+    Page.update({ _id: pageId }, { revision: revisionId }, {}, function(err, data) {
       cb(err, data)
     })
   }
 
   pageSchema.statics.exists = async function(query) {
-    const count = await this.count(query)
+    const count = await Page.count(query)
     return count > 0
   }
 
   pageSchema.statics.findUpdatedList = function(offset, limit, cb) {
-    this.find({})
+    Page.find({})
       .sort({ updatedAt: -1 })
       .skip(offset)
       .limit(limit)
-      .exec(function(err, data) {
-        cb(err, data)
-      })
+      .exec()
   }
 
-  pageSchema.statics.findPageById = function(id) {
-    return new Promise(function(resolve, reject) {
-      Page.findOne({ _id: id }, function(err, pageData) {
-        if (err) {
-          return reject(err)
-        }
+  pageSchema.statics.findPageById = async function(id) {
+    const pageData = await Page.findOne({ _id: id })
 
-        if (pageData == null) {
-          return reject(new Error('Page not found'))
-        }
-        return Page.populatePageData(pageData, null).then(resolve)
-      })
-    })
+    if (pageData === null) {
+      throw new Error('Page not found')
+    }
+
+    return Page.populatePageData(pageData, null)
   }
 
-  pageSchema.statics.findPageByIdAndGrantedUser = function(id, userData) {
-    return new Promise(function(resolve, reject) {
-      Page.findPageById(id)
-        .then(function(pageData) {
-          if (userData && !pageData.isGrantedFor(userData)) {
-            return reject(new Error('Page is not granted for the user')) // PAGE_GRANT_ERROR, null);
-          }
+  pageSchema.statics.findPageByIdAndGrantedUser = async function(id, userData) {
+    const pageData = await Page.findPageById(id)
 
-          return resolve(pageData)
-        })
-        .catch(function(err) {
-          return reject(err)
-        })
-    })
+    if (userData && !pageData.isGrantedFor(userData)) {
+      throw new Error('Page is not granted for the user') // PAGE_GRANT_ERROR, null);
+    }
+
+    return pageData
   }
 
   // find page and check if granted user
-  pageSchema.statics.findPage = function(path, userData, revisionId, ignoreNotFound) {
-    var self = this
+  pageSchema.statics.findPage = async function(path, userData, revisionId, ignoreNotFound) {
+    const pageData = await Page.findOne({ path })
 
-    return new Promise(function(resolve, reject) {
-      self.findOne({ path: path }, function(err, pageData) {
-        if (err) {
-          return reject(err)
-        }
+    if (pageData === null) {
+      if (ignoreNotFound) {
+        return null
+      }
 
-        if (pageData === null) {
-          if (ignoreNotFound) {
-            return resolve(null)
-          }
+      const pageNotFoundError = new Error('Page Not Found')
+      pageNotFoundError.name = 'Crowi:Page:NotFound'
+      throw pageNotFoundError
+    }
 
-          var pageNotFoundError = new Error('Page Not Found')
-          pageNotFoundError.name = 'Crowi:Page:NotFound'
-          return reject(pageNotFoundError)
-        }
+    if (!pageData.isGrantedFor(userData)) {
+      return new Error('Page is not granted for the user') // PAGE_GRANT_ERROR, null);
+    }
 
-        if (!pageData.isGrantedFor(userData)) {
-          return reject(new Error('Page is not granted for the user')) // PAGE_GRANT_ERROR, null);
-        }
-
-        self
-          .populatePageData(pageData, revisionId || null)
-          .then(resolve)
-          .catch(reject)
-      })
-    })
+    return Page.populatePageData(pageData, revisionId || null)
   }
 
   // find page by path
-  pageSchema.statics.findPageByPath = function(path) {
-    return new Promise(function(resolve, reject) {
-      Page.findOne({ path: path }, function(err, pageData) {
-        if (err || pageData === null) {
-          return reject(err)
-        }
+  pageSchema.statics.findPageByPath = async function(path) {
+    const pageData = await Page.findOne({ path })
+    if (pageData === null) {
+      throw null
+    }
 
-        return resolve(pageData)
-      })
-    })
+    return pageData
   }
 
-  pageSchema.statics.isExistByPath = function(path) {
-    return new Promise(function(resolve, reject) {
-      Page.findOne({ path: path }, function(err, pageData) {
-        if (err) {
-          return reject(err)
-        }
-        if (pageData === null) {
-          return resolve(false)
-        }
+  pageSchema.statics.isExistByPath = async function(path) {
+    const pageData = await Page.findOne({ path })
+    if (pageData === null) {
+      return false
+    }
 
-        return resolve(pageData._id)
-      })
-    })
+    return pageData._id
   }
 
-  pageSchema.statics.isExistById = function(id) {
-    return new Promise(function(resolve, reject) {
-      Page.findOne({ _id: id }, function(err, pageData) {
-        if (err) {
-          return reject(err)
-        }
-        if (pageData === null) {
-          return resolve(false)
-        }
+  pageSchema.statics.isExistById = async function(id) {
+    const pageData = await Page.findOne({ _id: id })
+    if (pageData === null) {
+      return false
+    }
 
-        return resolve(pageData._id)
-      })
-    })
+    return pageData._id
   }
 
   pageSchema.statics.findListByPageIds = function(ids, options) {
-    var options = options || {}
-    var limit = options.limit || 50
-    var offset = options.skip || 0
+    options = options || {}
+    const limit = options.limit || 50
+    const offset = options.skip || 0
 
-    return new Promise(function(resolve, reject) {
+    return (
       Page.find({ _id: { $in: ids } })
         // .sort({createdAt: -1}) // TODO optionize
         .skip(offset)
         .limit(limit)
-        .populate([{ path: 'creator', model: 'User' }, { path: 'revision', model: 'Revision' }])
-        .exec(function(err, pages) {
-          if (err) {
-            return reject(err)
-          }
-
-          Page.populate(pages, { path: 'revision.author', model: 'User' }, function(err, data) {
-            if (err) {
-              return reject(err)
-            }
-
-            return resolve(data)
-          })
-        })
-    })
+        .populate({ path: 'creator', model: 'User' })
+        .populate({ path: 'revision', model: 'Revision', populate: { path: 'author' } })
+        .exec()
+    )
   }
 
-  pageSchema.statics.findPageByRedirectTo = function(path) {
-    return new Promise(function(resolve, reject) {
-      Page.findOne({ redirectTo: path }, function(err, pageData) {
-        if (err || pageData === null) {
-          return reject(err)
-        }
+  pageSchema.statics.findPageByRedirectTo = async function(path) {
+    const pageData = await Page.findOne({ redirectTo: path })
 
-        return resolve(pageData)
-      })
-    })
+    if (pageData === null) {
+      throw null
+    }
+
+    return pageData
   }
 
   pageSchema.statics.findPagesByIds = function(ids) {
@@ -759,17 +647,12 @@ export default crowi => {
       conditions.grant = GRANT_PUBLIC
     }
 
-    return new Promise(function(resolve, reject) {
-      Page.find(conditions)
-        .sort({ createdAt: -1 })
-        .skip(offset)
-        .limit(limit)
-        .populate('revision')
-        .exec()
-        .then(function(pages) {
-          return Page.populate(pages, { path: 'revision.author', model: 'User' }).then(resolve)
-        })
-    })
+    return Page.find(conditions)
+      .sort({ createdAt: -1 })
+      .skip(offset)
+      .limit(limit)
+      .populate({ path: 'revision', populate: { path: 'author' } })
+      .exec()
   }
 
   /**
@@ -784,7 +667,7 @@ export default crowi => {
       criteria.grant = GRANT_PUBLIC
     }
 
-    return this.find(criteria)
+    return Page.find(criteria)
       .populate([{ path: 'creator', model: 'User' }, { path: 'revision', model: 'Revision' }])
       .lean()
       .cursor()
@@ -798,21 +681,21 @@ export default crowi => {
    * e.g.
    */
   pageSchema.statics.findListByStartWith = function(path, userData, option) {
-    var pathCondition: Record<string, string | RegExp>[] = []
-    var includeDeletedPage = option.includeDeletedPage || false
+    const pathCondition: Record<string, string | RegExp>[] = []
+    const includeDeletedPage = option.includeDeletedPage || false
 
     if (!option) {
       option = { sort: 'updatedAt', desc: -1, offset: 0, limit: 50 }
     }
-    var opt = {
+    const opt = {
       sort: option.sort || 'updatedAt',
       desc: option.desc || -1,
       offset: option.offset || 0,
       limit: option.limit === 0 ? 0 : option.limit || 50,
     }
-    var sortOpt = {}
+    const sortOpt = {}
     sortOpt[opt.sort] = opt.desc
-    var queryReg = new RegExp('^' + path)
+    const queryReg = new RegExp('^' + path)
     // var sliceOption = option.revisionSlice || { $slice: 1 }
 
     pathCondition.push({ path: queryReg })
@@ -821,43 +704,37 @@ export default crowi => {
       pathCondition.push({ path: path.substr(0, path.length - 1) })
     }
 
-    return new Promise(function(resolve, reject) {
-      // FIXME: might be heavy
-      var q = Page.find({
-        redirectTo: null,
-        $or: [
-          { grant: null },
-          { grant: GRANT_PUBLIC },
-          { grant: GRANT_RESTRICTED, grantedUsers: userData._id },
-          { grant: GRANT_SPECIFIED, grantedUsers: userData._id },
-          { grant: GRANT_OWNER, grantedUsers: userData._id },
-        ],
-      })
-        .populate('revision')
-        .and({
-          $or: pathCondition,
-        })
-        .sort(sortOpt)
-        .skip(opt.offset)
-        .limit(opt.limit)
-
-      if (!includeDeletedPage) {
-        q.and({
-          $or: [{ status: null }, { status: STATUS_PUBLISHED }],
-        })
-      }
-
-      q.exec().then(function(pages) {
-        Page.populate(pages, { path: 'revision.author', model: 'User' })
-          .then(resolve)
-          .catch(reject)
-      })
+    // FIXME: might be heavy
+    const q = Page.find({
+      redirectTo: null,
+      $or: [
+        { grant: null },
+        { grant: GRANT_PUBLIC },
+        { grant: GRANT_RESTRICTED, grantedUsers: userData._id },
+        { grant: GRANT_SPECIFIED, grantedUsers: userData._id },
+        { grant: GRANT_OWNER, grantedUsers: userData._id },
+      ],
     })
+      .populate({ path: 'revision', populate: { path: 'revision.author', model: 'User' } })
+      .and({
+        $or: pathCondition,
+      } as any)
+      .sort(sortOpt)
+      .skip(opt.offset)
+      .limit(opt.limit)
+
+    if (!includeDeletedPage) {
+      q.and({
+        $or: [{ status: null }, { status: STATUS_PUBLISHED }],
+      } as any)
+    }
+
+    return q.exec()
   }
 
   pageSchema.statics.findChildrenByPath = async function(path, userData, option) {
     path = addTrailingSlash(path)
-    return this.findListByStartWith(path, userData, { limit: 0, ...option })
+    return Page.findListByStartWith(path, userData, { limit: 0, ...option })
   }
 
   pageSchema.statics.findUnfurlablePages = async function(type, array, grants = [GRANT_PUBLIC, GRANT_RESTRICTED]) {
@@ -878,87 +755,53 @@ export default crowi => {
   }
 
   pageSchema.statics.updatePageProperty = function(page, updateData) {
-    return new Promise(function(resolve, reject) {
-      // TODO foreach して save
-      Page.update({ _id: page._id }, { $set: updateData }, function(err, data) {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(data)
-      })
-    })
+    return Page.update({ _id: page._id }, { $set: updateData })
   }
 
-  pageSchema.statics.updateGrant = function(page, grant, userData) {
-    return new Promise(function(resolve, reject) {
-      page.grant = grant
-      if (grant == GRANT_PUBLIC) {
-        page.grantedUsers = []
-      } else {
-        page.grantedUsers = []
-        page.grantedUsers.addToSet(userData._id)
-      }
+  pageSchema.statics.updateGrant = async function(page, grant, userData) {
+    page.grant = grant
+    if (grant == GRANT_PUBLIC) {
+      page.grantedUsers = []
+    } else {
+      page.grantedUsers = []
+      page.grantedUsers.addToSet(userData._id)
+    }
 
-      page.save(function(err, data) {
-        debug('Page.updateGrant, saved grantedUsers.', err, (data && data.path) || {})
-        if (err) {
-          return reject(err)
-        }
+    const data = await page.save()
 
-        return resolve(data)
-      })
-    })
+    debug('Page.updateGrant, saved grantedUsers.', (data && data.path) || {})
   }
 
   // Instance method でいいのでは
   pageSchema.statics.pushToGrantedUsers = function(page, userData) {
-    return new Promise(function(resolve, reject) {
-      if (!page.grantedUsers || !Array.isArray(page.grantedUsers)) {
-        page.grantedUsers = []
-      }
-      page.grantedUsers.addToSet(userData)
-      page.save(function(err, data) {
-        if (err) {
-          return reject(err)
-        }
-        return resolve(data)
-      })
-    })
+    if (!page.grantedUsers || !Array.isArray(page.grantedUsers)) {
+      page.grantedUsers = []
+    }
+    page.grantedUsers.addToSet(userData)
+    return page.save()
   }
 
-  pageSchema.statics.pushRevision = function(pageData, newRevision, user) {
-    var isCreate = false
-    if (pageData.revision === undefined) {
+  pageSchema.statics.pushRevision = async function(pageData, newRevision, user) {
+    const isCreate = pageData.revision === undefined
+    if (isCreate) {
       debug('pushRevision on Create')
-      isCreate = true
     }
 
-    return new Promise(function(resolve, reject) {
-      newRevision.save(function(err, newRevision) {
-        if (err) {
-          debug('Error on saving revision', err)
-          return reject(err)
-        }
+    await newRevision.save()
 
-        debug('Successfully saved new revision', newRevision)
-        pageData.revision = newRevision
-        pageData.lastUpdateUser = user
-        pageData.updatedAt = Date.now()
-        pageData.save(function(err, data) {
-          if (err) {
-            // todo: remove new revision?
-            debug('Error on save page data (after push revision)', err)
-            return reject(err)
-          }
+    debug('Successfully saved new revision', newRevision)
 
-          resolve(data)
-          if (!isCreate) {
-            debug('pushRevision on Update')
-          }
-        })
-      })
-    })
+    pageData.revision = newRevision
+    pageData.lastUpdateUser = user
+    pageData.updatedAt = Date.now()
+
+    const data = pageData.save()
+
+    if (!isCreate) {
+      debug('pushRevision on Update')
+    }
+
+    return data
   }
 
   pageSchema.statics.createPage = async function(path, body, user, options) {
@@ -974,7 +817,7 @@ export default crowi => {
 
     const pageData = await Page.findOne({ path })
     if (pageData) {
-      return new Error('Cannot create new page to existed path')
+      throw new Error('Cannot create new page to existed path')
     }
 
     const newPage = await Page.create({
@@ -1000,93 +843,61 @@ export default crowi => {
     }
   }
 
-  pageSchema.statics.updatePage = function(pageData, body, user, options = {}) {
+  pageSchema.statics.updatePage = async function(pageData, body, user, options = {}) {
     const Revision = crowi.model('Revision')
     const Bookmark = crowi.model('Bookmark')
     const grant = options.grant || null
     // update existing page
     const newRevision = Revision.prepareRevision(pageData, body, user)
 
-    return new Promise(async (resolve, reject) => {
-      Page.pushRevision(pageData, newRevision, user)
-        .then(async revision => {
-          const bookmarkCount = await Bookmark.countByPageId(pageData._id)
+    await Page.pushRevision(pageData, newRevision, user)
+    const bookmarkCount = await Bookmark.countByPageId(pageData._id)
 
-          if (grant != pageData.grant) {
-            return Page.updateGrant(pageData, grant, user).then(function(data) {
-              resolve(data)
-              pageEvent.emit('update', data, user, bookmarkCount)
-            })
-          } else {
-            resolve(pageData)
-            pageEvent.emit('update', pageData, user, bookmarkCount)
-          }
-        })
-        .catch(function(err) {
-          debug('Error on update', err)
-          debug('Error on update', err.stack)
-        })
-    })
-  }
-
-  pageSchema.statics.deletePage = function(pageData, user, options) {
-    var Share = crowi.model('Share')
-    var newPath = Page.getDeletedPageName(pageData.path)
-    if (Page.isDeletableName(pageData.path)) {
-      return new Promise(function(resolve, reject) {
-        Page.updatePageProperty(pageData, { status: STATUS_DELETED, lastUpdateUser: user })
-          .then(function() {
-            return Share.deleteByPageId(pageData._id)
-          })
-          .then(function(share) {
-            pageData.status = STATUS_DELETED
-
-            // ページ名が /trash/ 以下に存在する場合、おかしなことになる
-            // が、 /trash 以下にページが有るのは、個別に作っていたケースのみ。
-            // 一応しばらく前から uncreatable pages になっているのでこれでいいことにする
-            debug('Deleted the page, and rename it', pageData.path, newPath)
-            return Page.rename(pageData, newPath, user, { createRedirectPage: true })
-          })
-          .then(function(pageData) {
-            resolve(pageData)
-          })
-          .catch(reject)
-      })
-    } else {
-      return Promise.reject(new Error('Page is not deletable.'))
+    if (grant != pageData.grant) {
+      const data = await Page.updateGrant(pageData, grant, user)
+      pageEvent.emit('update', data, user, bookmarkCount)
+      return data
     }
+    pageEvent.emit('update', pageData, user, bookmarkCount)
+    return pageData
   }
 
-  pageSchema.statics.revertDeletedPage = function(pageData, user, options) {
-    var newPath = Page.getRevertDeletedPageName(pageData.path)
+  pageSchema.statics.deletePage = async function(pageData, user, options) {
+    const Share = crowi.model('Share')
+    const newPath = Page.getDeletedPageName(pageData.path)
+    if (Page.isDeletableName(pageData.path)) {
+      await Page.updatePageProperty(pageData, { status: STATUS_DELETED, lastUpdateUser: user })
+      await Share.deleteByPageId(pageData._id)
+      pageData.status = STATUS_DELETED
+
+      // ページ名が /trash/ 以下に存在する場合、おかしなことになる
+      // が、 /trash 以下にページが有るのは、個別に作っていたケースのみ。
+      // 一応しばらく前から uncreatable pages になっているのでこれでいいことにする
+      debug('Deleted the page, and rename it', pageData.path, newPath)
+      return Page.rename(pageData, newPath, user, { createRedirectPage: true })
+    }
+    throw new Error('Page is not deletable.')
+  }
+
+  pageSchema.statics.revertDeletedPage = async function(pageData, user, options) {
+    const newPath = Page.getRevertDeletedPageName(pageData.path)
 
     // 削除時、元ページの path には必ず redirectTo 付きで、ページが作成される。
     // そのため、そいつは削除してOK
     // が、redirectTo ではないページが存在している場合それは何かがおかしい。(データ補正が必要)
-    return new Promise(function(resolve, reject) {
-      Page.findPageByPath(newPath)
-        .then(function(originPageData) {
-          if (originPageData.redirectTo !== pageData.path) {
-            throw new Error('The new page of to revert is exists and the redirect path of the page is not the deleted page.')
-          }
+    const originPageData = await Page.findPageByPath(newPath)
+    if (originPageData.redirectTo !== pageData.path) {
+      throw new Error('The new page of to revert is exists and the redirect path of the page is not the deleted page.')
+    }
 
-          return Page.completelyDeletePage(originPageData)
-        })
-        .then(function(done) {
-          return Page.updatePageProperty(pageData, { status: STATUS_PUBLISHED, lastUpdateUser: user })
-        })
-        .then(function(done) {
-          pageData.status = STATUS_PUBLISHED
+    await Page.completelyDeletePage(originPageData)
+    await Page.updatePageProperty(pageData, { status: STATUS_PUBLISHED, lastUpdateUser: user })
+    pageData.status = STATUS_PUBLISHED
 
-          debug('Revert deleted the page, and rename again it', pageData, newPath)
-          return Page.rename(pageData, newPath, user, {})
-        })
-        .then(function(done) {
-          pageData.path = newPath
-          resolve(pageData)
-        })
-        .catch(reject)
-    })
+    debug('Revert deleted the page, and rename again it', pageData, newPath)
+    await Page.rename(pageData, newPath, user, {})
+    pageData.path = newPath
+    return pageData
   }
 
   /**
@@ -1169,36 +980,27 @@ export default crowi => {
       })
   }
 
-  pageSchema.statics.rename = function(pageData, newPagePath, user, options) {
+  pageSchema.statics.rename = async function(pageData, newPagePath, user, options) {
     const Revision = crowi.model('Revision')
     const path = pageData.path
     const createRedirectPage = options.createRedirectPage || false
     const preserveUpdatedAt = options.preserveUpdatedAt || false
 
-    return new Promise(function(resolve, reject) {
-      const updatedAt = preserveUpdatedAt ? {} : { updatedAt: Date.now() }
-      const updateData = { path: newPagePath, lastUpdateUser: user, ...updatedAt }
+    const updatedAt = preserveUpdatedAt ? {} : { updatedAt: Date.now() }
+    const updateData = { path: newPagePath, lastUpdateUser: user, ...updatedAt }
 
-      // pageData の path を変更
-      Page.updatePageProperty(pageData, updateData)
-        .then(function(data) {
-          // reivisions の path を変更
-          return Revision.updateRevisionListByPath(path, { path: newPagePath }, {})
-        })
-        .then(function(data) {
-          pageData.path = newPagePath
+    // pageData の path を変更
+    await Page.updatePageProperty(pageData, updateData)
+    // reivisions の path を変更
+    const data = await Revision.updateRevisionListByPath(path, { path: newPagePath }, {})
+    pageData.path = newPagePath
 
-          if (createRedirectPage) {
-            var body = 'redirect ' + newPagePath
-            Page.create(path, body, user, { redirectTo: newPagePath })
-              .then(resolve)
-              .catch(reject)
-          } else {
-            resolve(data)
-          }
-          pageEvent.emit('update', pageData, user) // update as renamed page
-        })
-    })
+    if (createRedirectPage) {
+      var body = 'redirect ' + newPagePath
+      return Page.create(path, body, user, { redirectTo: newPagePath })
+    }
+    pageEvent.emit('update', pageData, user) // update as renamed page
+    return data
   }
 
   pageSchema.statics.getPathMap = function(paths, search, replace) {

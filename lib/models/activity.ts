@@ -77,28 +77,17 @@ export default crowi => {
    * @return {Promise}
    */
   activitySchema.statics.createByParameters = function(parameters) {
-    return new Promise(function(resolve, reject) {
-      try {
-        resolve(Activity.create(parameters))
-      } catch (e) {
-        reject(e)
-      }
-    })
+    return Activity.create(parameters)
   }
 
   /**
    * @param {object} parameters
    */
-  activitySchema.statics.removeByParameters = function(parameters) {
-    return new Promise(async function(resolve, reject) {
-      try {
-        const activity = await Activity.findOne(parameters)
-        activityEvent.emit('remove', activity)
-        resolve(Activity.remove(parameters))
-      } catch (e) {
-        reject(e)
-      }
-    })
+  activitySchema.statics.removeByParameters = async function(parameters) {
+    const activity = await Activity.findOne(parameters)
+    activityEvent.emit('remove', activity)
+
+    return Activity.remove(parameters)
   }
 
   /**
@@ -167,17 +156,9 @@ export default crowi => {
    * @return {Promise}
    */
   activitySchema.statics.findByUser = function(user) {
-    return new Promise(function(resolve, reject) {
-      Activity.find({ user: user })
-        .sort({ createdAt: -1 })
-        .exec(function(err, notifications) {
-          if (err) {
-            return reject(err)
-          }
-
-          return resolve(notifications)
-        })
-    })
+    return Activity.find({ user: user })
+      .sort({ createdAt: -1 })
+      .exec()
   }
 
   activitySchema.statics.getActionUsersFromActivities = function(activities) {
@@ -189,19 +170,10 @@ export default crowi => {
     const query = { target, action }
     const limit = 1000
 
-    return new Promise(function(resolve, reject) {
-      Activity.find(query)
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .exec(function(err, activities) {
-          if (err) {
-            reject(err)
-          }
-
-          debug(activities)
-          resolve(activities as any)
-        })
-    })
+    return Activity.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .exec()
   }
 
   activitySchema.methods.getNotificationTargetUsers = async function() {

@@ -6,8 +6,6 @@ export interface TrackingDocument extends Document {
   createdAt: Date
 }
 
-export interface TrackingModel extends Model<TrackingDocument> {}
-
 export default crowi => {
   // const debug = Debug('crowi:models:tracking')
 
@@ -17,7 +15,7 @@ export default crowi => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  const Tracking = model<TrackingDocument, TrackingModel>('Tracking', trackingSchema)
+  const Tracking = model<TrackingDocument>('Tracking', trackingSchema)
 
   return Tracking
 }

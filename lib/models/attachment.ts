@@ -59,25 +59,10 @@ export default crowi => {
   const Attachment = model<AttachmentDocument, AttachmentModel>('Attachment', attachmentSchema)
 
   attachmentSchema.statics.getListByPageId = function(id) {
-    var self = this
-
-    return new Promise(function(resolve, reject) {
-      self
-        .find({ page: id })
-        .sort({ updatedAt: 1 })
-        .populate('creator')
-        .exec(function(err, data) {
-          if (err) {
-            return reject(err)
-          }
-
-          if (data.length < 1) {
-            return resolve([])
-          }
-
-          return resolve(data)
-        })
-    })
+    return Attachment.find({ page: id })
+      .sort({ updatedAt: 1 })
+      .populate('creator')
+      .exec()
   }
 
   attachmentSchema.statics.guessExtByFileType = function(fileType) {
@@ -107,26 +92,11 @@ export default crowi => {
     return 'attachment/' + pageId + '/' + generateFileHash(fileName) + ext
   }
 
-  attachmentSchema.statics.removeAttachmentsByPageId = function(pageId) {
-    return new Promise((resolve, reject) => {
-      Attachment.getListByPageId(pageId)
-        .then(attachments => {
-          for (const attachment of attachments) {
-            Attachment.removeAttachment(attachment)
-              .then(res => {
-                // do nothing
-              })
-              .catch(err => {
-                debug('Attachment remove error', err)
-              })
-          }
+  attachmentSchema.statics.removeAttachmentsByPageId = async function(pageId) {
+    const attachments = await Attachment.getListByPageId(pageId)
+    await Promise.all(attachments.map(attachment => Attachment.removeAttachment(attachment)))
 
-          resolve(attachments)
-        })
-        .catch(err => {
-          reject(err)
-        })
-    })
+    return attachments
   }
 
   attachmentSchema.statics.findDeliveryFile = function(attachment, forceUpdate) {
@@ -136,25 +106,14 @@ export default crowi => {
     return fileUploader.findDeliveryFile(attachment._id, attachment.filePath)
   }
 
-  attachmentSchema.statics.removeAttachment = function(attachment) {
+  attachmentSchema.statics.removeAttachment = async function(attachment) {
     const filePath = attachment.filePath
 
-    return new Promise((resolve, reject) => {
-      Attachment.remove({ _id: attachment._id }, err => {
-        if (err) {
-          return reject(err)
-        }
+    await Attachment.remove({ _id: attachment._id })
 
-        fileUploader
-          .deleteFile(attachment._id, filePath)
-          .then(data => {
-            resolve(data) // this may null
-          })
-          .catch(err => {
-            reject(err)
-          })
-      })
-    })
+    const data = await fileUploader.deleteFile(attachment._id, filePath)
+
+    return data
   }
 
   return Attachment

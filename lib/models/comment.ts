@@ -32,87 +32,29 @@ export default crowi => {
   const Comment = model<CommentDocument, CommentModel>('Comment', commentSchema)
 
   commentSchema.statics.getCommentsByPageId = function(id) {
-    var self = this
-
-    return new Promise(function(resolve, reject) {
-      self
-        .find({ page: id })
-        .sort({ createdAt: -1 })
-        .populate('creator')
-        .exec(function(err, data) {
-          if (err) {
-            return reject(err)
-          }
-
-          if (data.length < 1) {
-            return resolve([])
-          }
-
-          // debug('Comment loaded', data);
-          return resolve(data)
-        })
-    })
+    return Comment.find({ page: id })
+      .sort({ createdAt: -1 })
+      .populate('creator')
+      .exec()
   }
 
   commentSchema.statics.getCommentsByRevisionId = function(id) {
-    var self = this
-
-    return new Promise(function(resolve, reject) {
-      self
-        .find({ revision: id })
-        .sort({ createdAt: -1 })
-        .populate('creator')
-        .exec(function(err, data) {
-          if (err) {
-            return reject(err)
-          }
-
-          if (data.length < 1) {
-            return resolve([])
-          }
-
-          debug('Comment loaded', data)
-          return resolve(data)
-        })
-    })
+    return Comment.find({ revision: id })
+      .sort({ createdAt: -1 })
+      .populate('creator')
+      .exec()
   }
 
   commentSchema.statics.countCommentByPageId = function(page) {
-    var self = this
-
-    return new Promise(function(resolve, reject) {
-      self.count({ page: page }, function(err, data) {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(data)
-      })
-    })
+    return Comment.count({ page }).exec()
   }
 
-  commentSchema.statics.removeCommentsByPageId = function(pageId) {
-    return new Promise(function(resolve, reject) {
-      Comment.remove({ page: pageId }, function(err) {
-        if (err) {
-          return reject(err)
-        }
-
-        resolve()
-      })
-    })
+  commentSchema.statics.removeCommentsByPageId = async function(pageId) {
+    await Comment.remove({ page: pageId }).exec()
   }
 
   commentSchema.statics.findCreatorsByPage = function(page) {
-    return new Promise(function(resolve, reject) {
-      Comment.distinct('creator', { page: page }).exec(function(err, creaters) {
-        if (err) {
-          reject(err)
-        }
-
-        resolve(creaters)
-      })
-    })
+    return Comment.distinct('creator', { page }).exec()
   }
 
   /**

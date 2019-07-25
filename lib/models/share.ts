@@ -124,7 +124,7 @@ export default crowi => {
         ]
       : []
 
-    const shareData = await this.findOne(query)
+    const shareData = await Share.findOne(query)
       .findOne(query)
       .populate([...optionalDocs, { path: 'page' }, { path: 'creator' }])
       .exec()
@@ -141,13 +141,13 @@ export default crowi => {
 
   shareSchema.statics.findShareByUuid = async function(uuid, query, options) {
     query = Object.assign({ uuid }, query !== undefined ? query : {})
-    return this.findShare(query, options)
+    return Share.findShare(query, options)
   }
 
   shareSchema.statics.findShareByPageId = async function(pageId, query, options) {
     query = Object.assign({ page: pageId }, query !== undefined ? query : {})
 
-    return this.findShare(query, options)
+    return Share.findShare(query, options)
   }
 
   shareSchema.statics.createShare = async function(pageId, user) {

@@ -64,60 +64,32 @@ export default crowi => {
 
   // Bookmark チェック用
   BookmarkSchema.statics.findByPageIdAndUserId = function(pageId, userId) {
-    return new Promise(function(resolve, reject) {
-      return Bookmark.findOne({ page: pageId, user: userId }, function(err, doc) {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(doc)
-      })
-    })
+    return Bookmark.findOne({ page: pageId, user: userId }).exec()
   }
 
-  BookmarkSchema.statics.findByUserId = function(userId, option) {
-    var limit = option.limit || 50
-    var offset = option.offset || 0
+  BookmarkSchema.statics.findByUserId = async function(userId, option) {
+    const limit = option.limit || 50
+    const offset = option.offset || 0
 
-    var finder = new Promise(function(resolve, reject) {
-      Bookmark.find({ user: userId })
-        .sort({ createdAt: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec(function(err, Bookmarks) {
-          if (err) {
-            return reject(err)
-          }
+    const finder = Bookmark.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .skip(offset)
+      .limit(limit)
+      .exec()
+      .then(bookmarks => Bookmark.populatePage(bookmarks))
 
-          return Bookmark.populatePage(Bookmarks).then(resolve)
-        })
-    })
+    const counter = Bookmark.count({ user: userId }).exec()
 
-    var counter = new Promise(function(resolve, reject) {
-      Bookmark.count({ user: userId }).exec(function(err, count) {
-        if (err) {
-          return reject(err)
-        }
+    const [bookmarks, count] = await Promise.all([finder, counter])
 
-        return resolve(count)
-      })
-    })
-
-    return Promise.all([finder, counter])
-      .then(function([Bookmarks, count]) {
-        return {
-          meta: {
-            total: count,
-            limit: limit,
-            offset: offset,
-          },
-          data: Bookmarks,
-        }
-      })
-      .catch(function(err) {
-        debug('err', err)
-        throw err
-      })
+    return {
+      meta: {
+        total: count,
+        limit: limit,
+        offset: offset,
+      },
+      data: bookmarks,
+    }
   }
 
   // Bookmark count
@@ -127,37 +99,24 @@ export default crowi => {
     return count
   }
 
-  /**
-   * option = {
-   *  limit: Int
-   *  offset: Int
-   *  requestUser: User
-   * }
-   */
-  BookmarkSchema.statics.findByUser = function(user, option) {
-    var requestUser = option.requestUser || null
+  BookmarkSchema.statics.findByUser = async function(user, option) {
+    const requestUser = option.requestUser || null
 
-    var limit = option.limit || 50
-    var offset = option.offset || 0
-    var populatePage = option.populatePage || false
+    const limit = option.limit || 50
+    const offset = option.offset || 0
+    const populatePage = option.populatePage || false
 
-    return new Promise(function(resolve, reject) {
-      Bookmark.find({ user: user._id })
-        .sort({ createdAt: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec(function(err, Bookmarks) {
-          if (err) {
-            return reject(err)
-          }
+    const bookmarks = await Bookmark.find({ user: user._id })
+      .sort({ createdAt: -1 })
+      .skip(offset)
+      .limit(limit)
+      .exec()
 
-          if (!populatePage) {
-            return resolve(Bookmarks)
-          }
+    if (!populatePage) {
+      return bookmarks
+    }
 
-          return Bookmark.populatePage(Bookmarks, requestUser).then(resolve)
-        })
-    })
+    return Bookmark.populatePage(bookmarks, requestUser)
   }
 
   BookmarkSchema.statics.add = async function(page, user) {
