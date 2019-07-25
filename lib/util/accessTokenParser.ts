@@ -11,7 +11,6 @@ const debug = Debug('crowi:util:accessTokenParser')
  */
 const extractBearerToken = headers => {
   const v = headers.authorization
-  debug('Authorization', v)
   if (!v) {
     return null
   }
