@@ -1,10 +1,15 @@
-'use strict'
+import Activity from './activity'
+import Bookmark from './bookmark'
+import Notification from './notification'
+import Page from './page'
+import Search from './search'
+import User from './user'
 
-module.exports = {
-  User: require('./user'),
-  Page: require('./page'),
-  Activity: require('./activity'),
-  Notification: require('./notification'),
-  Search: require('./search'),
-  Bookmark: require('./bookmark'),
+export default {
+  Activity,
+  Bookmark,
+  Notification,
+  Page,
+  Search,
+  User,
 }
