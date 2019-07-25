@@ -1,13 +1,14 @@
-const debug = require('debug')('crowi:events:user')
-const { EventEmitter } = require('events')
+import { EventEmitter } from 'events'
+import Debug from 'debug'
+const debug = Debug('crowi:events:user')
 
-class UserEvent extends EventEmitter {
+export default class UserEvent extends EventEmitter {
   constructor(crowi) {
     super()
     this.crowi = crowi
   }
 
-  onActivated(user) {
+  async onActivated(user) {
     const Page = this.crowi.model('Page')
 
     const userPagePath = Page.getUserPagePath(user)
@@ -29,5 +30,3 @@ class UserEvent extends EventEmitter {
       })
   }
 }
-
-module.exports = UserEvent
