@@ -2,8 +2,14 @@
   &.main-container { // {{{
     .v2-crowi-header { // {{{
       z-index: 1040;
-      border-top: solid 2px $crowiHeaderBackground;
-      border-bottom: solid 1px #ccc;
+      border-top: solid 3px $crowiHeaderBackground;
+      border-image: linear-gradient(90deg,
+        $crowiHeaderBackground,
+        lighten(saturate(adjust-hue($crowiHeaderBackground, -60deg), 25%), 30%),
+        lighten(saturate(adjust-hue($crowiHeaderBackground, 25deg), 25%), 40%),
+        lighten($crowiHeaderBackground, 40%)
+      ) 3;
+      box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.4);
       background: #fff;
       height: $crowiHeaderHeight;
       color: #333;
