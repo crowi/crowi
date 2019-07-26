@@ -1,12 +1,12 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
 
-  // var debug = require('debug')('crowi:routes:search')
-  var Page = crowi.model('Page')
-  var ApiResponse = require('../util/apiResponse')
-  var ApiPaginate = require('../util/apiPaginate')
-  var actions = {}
-  var api = (actions.api = {})
+export default (crowi: Crowi) => {
+  // var debug = Debug('crowi:routes:search')
+  const Page = crowi.model('Page')
+  const ApiResponse = require('../util/apiResponse')
+  const ApiPaginate = require('../util/apiPaginate')
+  const actions = {} as any
+  const api = (actions.api = {} as any)
 
   actions.searchPage = function(req, res) {
     var keyword = req.query.q || null

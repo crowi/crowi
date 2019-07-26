@@ -1,14 +1,14 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-  var debug = require('debug')('crowi:routes:bookmark')
-  var Bookmark = crowi.model('Bookmark')
-  var Page = crowi.model('Page')
-  var Bookmark = crowi.model('Bookmark')
-  var ApiResponse = require('../util/apiResponse')
-  var ApiPaginate = require('../util/apiPaginate')
-  var actions = {}
-  actions.api = {}
+export default (crowi: Crowi) => {
+  const debug = Debug('crowi:routes:bookmark')
+  const Bookmark = crowi.model('Bookmark')
+  const Page = crowi.model('Page')
+  const ApiResponse = require('../util/apiResponse')
+  const ApiPaginate = require('../util/apiPaginate')
+  const actions = {} as any
+  actions.api = {} as any
 
   /**
    * @api {get} /bookmarks.get Get bookmark of the page with the user

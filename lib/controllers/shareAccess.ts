@@ -1,12 +1,12 @@
-module.exports = (crowi, app) => {
-  'use strict'
+import Crowi from 'server/crowi'
 
-  // const debug = require('debug')('crowi:routes:shareAccess')
+export default (crowi: Crowi) => {
+  // const debug = Debug('crowi:routes:shareAccess')
   const ShareAccess = crowi.model('ShareAccess')
   const ApiResponse = require('../util/apiResponse')
-  const actions = {}
+  const actions = {} as any
 
-  const api = (actions.api = {})
+  const api = (actions.api = {} as any)
 
   api.list = async (req, res) => {
     let { page = 1, limit = 50 } = req.query

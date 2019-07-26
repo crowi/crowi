@@ -1,6 +1,6 @@
-module.exports = function(crowi, app) {
+export default () => {
   return {
-    logout: function(req, res) {
+    logout(req, res) {
       req.session.destroy()
       return res.redirect('/')
     },

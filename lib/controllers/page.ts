@@ -1,7 +1,8 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-  const debug = require('debug')('crowi:routes:page')
+export default (crowi: Crowi) => {
+  const debug = Debug('crowi:routes:page')
   const Page = crowi.model('Page')
   const User = crowi.model('User')
   const Bookmark = crowi.model('Bookmark')

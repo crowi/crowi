@@ -1,13 +1,14 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-  const debug = require('debug')('crowi:routes:slack')
+export default (crowi: Crowi) => {
+  const debug = Debug('crowi:routes:slack')
   const url = require('url')
   const { slack } = crowi
   const Page = crowi.model('Page')
 
-  const actions = {}
-  const api = (actions.api = {})
+  const actions = {} as any
+  const api = (actions.api = {} as any)
 
   api.handleEvent = function(req, res) {
     if (req.body.type != null && req.body.type == 'url_verification') {

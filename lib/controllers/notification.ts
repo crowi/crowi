@@ -1,11 +1,11 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
 
-  // const debug = require('debug')('crowi:routes:notification')
+export default (crowi: Crowi) => {
+  // const debug = Debug('crowi:routes:notification')
   const Notification = crowi.model('Notification')
   const ApiResponse = require('../util/apiResponse')
-  const actions = {}
-  actions.api = {}
+  const actions = {} as any
+  actions.api = {} as any
 
   actions.notificationPage = function(req, res) {
     return res.render('notification', {})

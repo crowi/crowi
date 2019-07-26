@@ -1,7 +1,9 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import { Express } from 'express'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-  const debug = require('debug')('crowi:routes:login')
+export default (crowi: Crowi, app: Express) => {
+  const debug = Debug('crowi:routes:login')
   const async = require('async')
   const url = require('url')
   const { getContinueUrl } = require('../util/url')
@@ -10,7 +12,7 @@ module.exports = function(crowi, app) {
   const mailer = crowi.getMailer()
   const User = crowi.model('User')
   const Config = crowi.model('Config')
-  const actions = {}
+  const actions = {} as any
 
   const getSocialSession = function(session) {
     const { google = {}, github = {} } = session

@@ -1,12 +1,13 @@
-module.exports = (crowi, app) => {
-  'use strict'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-  const debug = require('debug')('crowi:routes:share')
+export default (crowi: Crowi) => {
+  const debug = Debug('crowi:routes:share')
   const Share = crowi.model('Share')
   const ShareAccess = crowi.model('ShareAccess')
   const Tracking = crowi.model('Tracking')
   const ApiResponse = require('../util/apiResponse')
-  const actions = {}
+  const actions = {} as any
 
   async function firstOrCreateTrackingId(req) {
     const { trackingId } = req.session
@@ -79,7 +80,7 @@ module.exports = (crowi, app) => {
     }
   }
 
-  const api = (actions.api = {})
+  const api = (actions.api = {} as any)
 
   api.list = async (req, res) => {
     // list is allowed if the feature is disabled because it is used in admin page
