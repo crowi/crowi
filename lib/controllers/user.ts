@@ -1,12 +1,11 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
 
+export default (crowi: Crowi) => {
   const User = crowi.model('User')
-  const Bookmark = crowi.model('Bookmark')
   const Page = crowi.model('Page')
   const ApiResponse = require('../util/apiResponse')
-  const actions = {}
-  const api = {}
+  const actions = {} as any
+  const api = {} as any
 
   actions.api = api
 

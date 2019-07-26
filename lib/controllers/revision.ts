@@ -1,12 +1,13 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-  var debug = require('debug')('crowi:routes:revision')
-  var Page = crowi.model('Page')
-  var Revision = crowi.model('Revision')
-  var ApiResponse = require('../util/apiResponse')
-  var actions = {}
-  actions.api = {}
+export default (crowi: Crowi) => {
+  const debug = Debug('crowi:routes:revision')
+  const Page = crowi.model('Page')
+  const Revision = crowi.model('Revision')
+  const ApiResponse = require('../util/apiResponse')
+  const actions = {} as any
+  actions.api = {} as any
 
   /**
    * @api {get} /revisions.get Get revision

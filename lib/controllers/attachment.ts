@@ -1,14 +1,16 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import { Express } from 'express'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-  var debug = require('debug')('crowi:routs:attachment')
-  var Attachment = crowi.model('Attachment')
-  var Page = crowi.model('Page')
-  var fs = require('fs')
-  var fileUploader = require('../util/fileUploader')(crowi, app)
-  var ApiResponse = require('../util/apiResponse')
-  var actions = {}
-  var api = {}
+export default (crowi: Crowi, app: Express) => {
+  const debug = Debug('crowi:routs:attachment')
+  const Attachment = crowi.model('Attachment')
+  const Page = crowi.model('Page')
+  const fs = require('fs')
+  const fileUploader = require('../util/fileUploader')(crowi, app)
+  const ApiResponse = require('../util/apiResponse')
+  const actions = {} as any
+  const api = {} as any
 
   actions.api = api
 

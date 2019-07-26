@@ -1,11 +1,10 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
 
-  // var debug = require('debug')('crowi:routes:installer')
-  var models = crowi.models
-  var Config = models.Config
-  var User = models.User
-  var actions = {}
+export default (crowi: Crowi) => {
+  // var debug = Debug('crowi:routes:installer')
+  const Config = crowi.model('Config')
+  const User = crowi.model('User')
+  const actions = {} as any
 
   actions.index = function(req, res) {
     return res.render('installer')

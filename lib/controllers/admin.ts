@@ -1,22 +1,32 @@
-module.exports = function(crowi, app) {
-  'use strict'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-  const debug = require('debug')('crowi:routes:admin')
+export default (crowi: Crowi) => {
+  const debug = Debug('crowi:routes:admin')
   const models = crowi.models
   const User = models.User
   const Config = models.Config
   const ApiResponse = require('../util/apiResponse')
   const MAX_PAGE_LIST = 5
-  const actions = {}
+  const actions = {} as any
 
   const searchEvent = crowi.event('Search')
 
   function createPager(total, limit, page, pagesCount, maxPageList) {
-    const pager = {
-      page: page,
-      pagesCount: pagesCount,
+    const pager: {
+      page: any,
+      pagesCount: number,
+      pages: number[],
+      total: number,
+      previous: number | null,
+      previousDots: boolean | null,
+      next: number | null,
+      nextDots: boolean | null,
+    } = {
+      page,
+      pagesCount,
       pages: [],
-      total: total,
+      total,
       previous: null,
       previousDots: false,
       next: null,
@@ -464,8 +474,13 @@ module.exports = function(crowi, app) {
   }
 
   function validateMailSetting(req, form, callback) {
-    var mailer = crowi.mailer
-    var option = {
+    const mailer = crowi.mailer
+    const option: {
+      host: string,
+      port: number,
+      auth?: any,
+      secure?: boolean
+    } = {
       host: form['mail:smtpHost'],
       port: form['mail:smtpPort'],
     }
