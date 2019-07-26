@@ -1,4 +1,4 @@
-module.exports = () => {
+export default () => {
   return (req, res, next) => {
     var config = req.config
 

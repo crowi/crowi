@@ -1,4 +1,4 @@
-module.exports = () => {
+export default () => {
   return (req, res, next) => {
     if (req.user && '_id' in req.user) {
       if (req.user.admin) {

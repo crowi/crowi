@@ -1,8 +1,9 @@
-const basicAuth = require('basic-auth-connect')
+import { Express } from 'express'
+import Crowi from 'server/crowi'
+import basicAuth from 'basic-auth-connect'
+import { parseAccessToken } from '../util/accessTokenParser'
 
-const { parseAccessToken } = require('../util/accessTokenParser')
-
-module.exports = (crowi, app) => {
+export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
     const config = crowi.getConfig()
     const accessToken = parseAccessToken(req)

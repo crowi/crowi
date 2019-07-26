@@ -1,4 +1,6 @@
-module.exports = (crowi, app) => {
+import Crowi from 'server/crowi'
+
+export default (crowi: Crowi) => {
   return async (req, res, next) => {
     const User = crowi.model('User')
     const config = crowi.getConfig()

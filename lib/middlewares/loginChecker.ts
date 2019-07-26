@@ -1,9 +1,11 @@
+import { Express } from 'express'
+import Crowi from 'server/crowi'
 // const debug = require('debug')('crowi:middlewares:loginChecker')
 
-module.exports = (crowi, app) => {
-  return function(req, res, next) {
-    var User = crowi.model('User')
-    var csrfKey = (req.session && req.session.id) || 'anon'
+export default (crowi: Crowi, app: Express) => {
+  return (req, res, next) => {
+    const User = crowi.model('User')
+    const csrfKey = (req.session && req.session.id) || 'anon'
 
     if (req.csrfToken === null) {
       req.csrfToken = crowi.getTokens().create(csrfKey)

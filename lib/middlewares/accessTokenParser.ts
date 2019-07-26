@@ -1,15 +1,19 @@
-const debug = require('debug')('crowi:middlewares:accessTokenParser')
+import { Express } from 'express'
+import Crowi from 'server/crowi'
+import Debug from 'debug'
+
+const debug = Debug('crowi:middlewares:accessTokenParser')
 
 const { parseAccessToken } = require('../util/accessTokenParser')
 
-module.exports = (crowi, app) => {
+export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
     const accessToken = parseAccessToken(req)
     if (!accessToken) {
       return next()
     }
 
-    var User = crowi.model('User')
+    const User = crowi.model('User')
 
     debug('accessToken is', accessToken)
     User.findUserByApiToken(accessToken)

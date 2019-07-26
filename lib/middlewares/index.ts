@@ -1,17 +1,36 @@
-module.exports = (crowi, app) => ({
-  AccessTokenParser: require('./accessTokenParser')(crowi, app),
-  AdminRequired: require('./adminRequired')(crowi, app),
-  ApplicationInstalled: require('./applicationInstalled')(crowi, app),
-  ApplicationNotInstalled: require('./applicationNotInstalled')(crowi, app),
-  AwsEnabled: require('./awsEnabled')(crowi, app),
-  BasicAuth: require('./basicAuth')(crowi, app),
-  ClientContext: require('./clientContext')(crowi, app),
-  CsrfVerify: require('./csrfVerify')(crowi, app),
-  EncodeSpace: require('./encodeSpace')(crowi, app),
-  FileAccessRightOrLoginRequired: require('./fileAccessRightOrLoginRequired')(crowi, app),
-  I18next: require('./i18next')(crowi, app),
-  LoginChecker: require('./loginChecker')(crowi, app),
-  LoginRequired: require('./loginRequired')(crowi, app),
-  SwigFilters: require('./swigFilters')(crowi, app),
-  SwigFunctions: require('./swigFunctions')(crowi, app),
+import { Express } from 'express'
+import Crowi from 'server/crowi'
+
+import AccessTokenParser from './accessTokenParser'
+import AdminRequired from './adminRequired'
+import ApplicationInstalled from './applicationInstalled'
+import ApplicationNotInstalled from './applicationNotInstalled'
+import AwsEnabled from './awsEnabled'
+import BasicAuth from './basicAuth'
+import ClientContext from './clientContext'
+import CsrfVerify from './csrfVerify'
+import EncodeSpace from './encodeSpace'
+import FileAccessRightOrLoginRequired from './fileAccessRightOrLoginRequired'
+import I18next from './i18next'
+import LoginChecker from './loginChecker'
+import LoginRequired from './loginRequired'
+import SwigFilters from './swigFilters'
+import SwigFunctions from './swigFunctions'
+
+export default (crowi: Crowi, app: Express) => ({
+  AccessTokenParser: AccessTokenParser(crowi, app),
+  AdminRequired: AdminRequired(),
+  ApplicationInstalled: ApplicationInstalled(),
+  ApplicationNotInstalled: ApplicationNotInstalled(),
+  AwsEnabled: AwsEnabled(),
+  BasicAuth: BasicAuth(crowi, app),
+  ClientContext: ClientContext(),
+  CsrfVerify: CsrfVerify(crowi),
+  EncodeSpace: EncodeSpace(),
+  FileAccessRightOrLoginRequired: FileAccessRightOrLoginRequired(crowi),
+  I18next: I18next(crowi, app),
+  LoginChecker: LoginChecker(crowi, app),
+  LoginRequired: LoginRequired(crowi),
+  SwigFilters: SwigFilters(crowi, app),
+  SwigFunctions: SwigFunctions(crowi, app),
 })

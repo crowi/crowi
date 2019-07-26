@@ -1,10 +1,12 @@
-const i18next = require('i18next')
-const i18nFsBackend = require('i18next-node-fs-backend')
-const i18nSprintf = require('i18next-sprintf-postprocessor')
-const i18nMiddleware = require('i18next-express-middleware')
-const i18nUserSettingDetector = require('../util/i18nUserSettingDetector')
+import { Express } from 'express'
+import Crowi from 'server/crowi'
+import i18next from 'i18next'
+import i18nFsBackend from 'i18next-node-fs-backend'
+import i18nSprintf from 'i18next-sprintf-postprocessor'
+import i18nMiddleware from 'i18next-express-middleware'
+import i18nUserSettingDetector from '../util/i18nUserSettingDetector'
 
-module.exports = (crowi, app) => {
+export default (crowi: Crowi, app: Express) => {
   const User = crowi.model('User')
   const lngDetector = new i18nMiddleware.LanguageDetector()
   lngDetector.addDetector(i18nUserSettingDetector)
