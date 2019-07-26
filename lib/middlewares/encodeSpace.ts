@@ -1,6 +1,6 @@
 const { encodeSpace } = require('../util/path')
 
-module.exports = (crowi, app) => {
+export default () => {
   return (req, res, next) => {
     const path = decodeURIComponent(req.originalUrl || '')
     const encodedPath = encodeSpace(path)

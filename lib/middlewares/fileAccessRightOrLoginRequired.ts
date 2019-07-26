@@ -1,4 +1,6 @@
-module.exports = (crowi, app) => {
+import Crowi from 'server/crowi'
+
+export default (crowi: Crowi) => {
   return async function(req, res, next) {
     try {
       const Attachment = crowi.model('Attachment')

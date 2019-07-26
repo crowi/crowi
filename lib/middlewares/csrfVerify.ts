@@ -1,9 +1,12 @@
-const debug = require('debug')('crowi:middlewares:csrfVerify')
+import Crowi from 'server/crowi'
+import Debug from 'debug'
 
-module.exports = (crowi, app) => {
+const debug = Debug('crowi:middlewares:csrfVerify')
+
+export default (crowi: Crowi) => {
   return (req, res, next) => {
-    var token = req.body._csrf || req.query._csrf || null
-    var csrfKey = (req.session && req.session.id) || 'anon'
+    const token = req.body._csrf || req.query._csrf || null
+    const csrfKey = (req.session && req.session.id) || 'anon'
 
     debug('req.skipCsrfVerify', req.skipCsrfVerify)
     if (req.skipCsrfVerify) {

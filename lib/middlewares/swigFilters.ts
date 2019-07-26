@@ -1,6 +1,8 @@
-const swig = require('swig')
+import { Express } from 'express'
+import Crowi from 'server/crowi'
+import swig from 'swig'
 
-module.exports = (crowi, app) => {
+export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
     swig.setFilter('path2name', function(string) {
       const name = string

@@ -1,4 +1,4 @@
-module.exports = (crowi, app) => {
+export default () => {
   return (req, res, next) => {
     const { _id = '', username: name = '' } = req.user || {}
     const id = _id.toString()
