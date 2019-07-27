@@ -1,34 +1,19 @@
-const utils = require('../utils.js')
-
 describe('Url test', () => {
-  const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
-
-  beforeAll(async () => {
-    // FIXME: This is a hack
-    crowi.redisOpts = null
-    crowi.models = utils.models
-    await crowi.setupConfig()
-    const config = {}
-    config.crowi = {}
-    config.crowi['app:url'] = 'http://localhost:3000'
-    crowi.setConfig(config)
-  })
-
   test('detectInternalLink', () => {
     const linkDetector = require(crowi.libDir + '/util/linkDetector')(crowi)
 
     let text = 'aaaaaaaa '
-    text += '[/user/suzuki/memo/2017/01/22/aaa](http://localhost:3000/58842b9ccf3556baedce2762)'
+    text += '[/user/suzuki/memo/2017/01/22/aaa](http://localhost:13001/58842b9ccf3556baedce2762)'
     text += ' bbbbb '
-    text += '[/user/suzuki/memo/2017/01/22/bbb](http://localhost:3000/58842b9ccf3556baedce2763)'
+    text += '[/user/suzuki/memo/2017/01/22/bbb](http://localhost:13001/58842b9ccf3556baedce2763)'
     text += 'ccccc'
     text += '</user/suzuki/memo/2017/01/22/ccc>'
     text += 'ddd'
-    text += '[/user/suzuki/memo/2017/01/22/aaa](http://localhost:3000/58842b9ccf3556baedce2762)'
+    text += '[/user/suzuki/memo/2017/01/22/aaa](http://localhost:13001/58842b9ccf3556baedce2762)'
     text += ' bbbbb '
-    text += 'http://localhost:3000/user/suzuki/%E3%83%A1%E3%83%A2/2017/01/31/ddd#aaa'
+    text += 'http://localhost:13001/user/suzuki/%E3%83%A1%E3%83%A2/2017/01/31/ddd#aaa'
     text += ' bbbbb '
-    text += 'http://localhost:3000/user/suzuki/メモ/2017/02/01/ddd?a=1'
+    text += 'http://localhost:13001/user/suzuki/メモ/2017/02/01/ddd?a=1'
     text += 'ee '
     text += '[/user/suzuki/memo/2017/05/06/eee]'
 

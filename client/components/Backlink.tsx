@@ -54,7 +54,7 @@ class Backlink extends React.Component<Props, State> {
           }
           const appendBacklinks: BacklinkType[] = response.data.slice(0, this.props.limit)
 
-          let backLinks = this.state.backLinks
+          const backLinks = this.state.backLinks
           let i = 0
           appendBacklinks.forEach(backLink => {
             const index = this.state.currentOffset + i
