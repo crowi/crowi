@@ -7,26 +7,22 @@ describe('Backlink', () => {
   let conn
   let user
 
-  beforeAll(done => {
+  beforeAll(() => {
     Backlink = crowi.model('Backlink')
     Page = crowi.model('Page')
     Revision = crowi.model('Revision')
     conn = crowi.getMongo().connection
-
-    done()
   })
 
-  beforeAll(async done => {
+  beforeAll(async () => {
     const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
       { name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() },
     ])
     user = createdUsers[0]
-
-    done()
   })
 
   describe('.createByAllPages', () => {
-    beforeAll(async done => {
+    beforeAll(async () => {
       await Page.remove({})
       await Revision.remove({})
       const createPath = () => '/' + faker.lorem.slug()
@@ -44,15 +40,11 @@ describe('Backlink', () => {
       ])
 
       await Backlink.remove({})
-
-      done()
     })
 
-    test('should have all backlinks', async done => {
+    test('should have all backlinks', async () => {
       const pages = await Backlink.createByAllPages()
       expect(pages).toHaveLength(3)
-
-      done()
     })
   })
 })

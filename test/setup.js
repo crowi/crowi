@@ -6,7 +6,7 @@ const mongoose = require('mongoose')
 const path = require('path')
 const Crowi = require(path.join(ROOT_DIR, '/lib/crowi'))
 
-beforeAll(async done => {
+beforeAll(async () => {
   const crowi = new Crowi(ROOT_DIR, {
     PORT: 13001,
     MONGO_URI: __MONGO_URI__,
@@ -18,11 +18,9 @@ beforeAll(async done => {
 
   global.crowi = crowi
   global.app = app
-
-  done()
 })
 
-afterAll(async done => {
+afterAll(async () => {
   await crowi.getMongo().disconnect()
 
   // delete model caches
@@ -30,8 +28,6 @@ afterAll(async done => {
     delete mongoose.models[key]
     delete mongoose.modelSchemas[key]
   })
-
-  done()
 })
 
 const testDBUtil = {
