@@ -1,8 +1,9 @@
-const utils = require('../utils.js')
-
 describe('UpdatePost', () => {
-  const UpdatePost = utils.models.UpdatePost
-  const conn = utils.mongoose.connection
+  let UpdatePost
+
+  beforeAll(() => {
+    UpdatePost = crowi.model('UpdatePost')
+  })
 
   describe('.createPrefixesByPathPattern', () => {
     describe('with a path', () => {

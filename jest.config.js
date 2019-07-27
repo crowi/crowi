@@ -89,8 +89,8 @@ module.exports = {
   projects: [
     {
       displayName: 'server',
-      setupTestFrameworkScriptFile: './test/bootstrap.js',
-      testEnvironment: './test/mongo-environment.js',
+      testEnvironment: './test/crowi-environment.js',
+      setupFilesAfterEnv: ['./test/setup.js'],
       testMatch: ['<rootDir>/test/**/*.test.js'],
     },
     {

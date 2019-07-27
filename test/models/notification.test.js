@@ -1,20 +1,31 @@
-const utils = require('../utils.js')
+const mongoose = require('mongoose')
 
 describe('Notification', function() {
-  const Comment = utils.models.Comment
-  const Notification = utils.models.Notification
-  const Page = utils.models.Page
-  const User = utils.models.User
-  const Activity = utils.models.Activity
-  const mongoose = utils.mongoose
+  let Comment
+  let Notification
+  let Page
+  let User
+  let Activity
+  let conn
+
   const ObjectId = mongoose.Types.ObjectId
-  const conn = utils.mongoose.connection
 
   const data = {}
 
+  beforeAll(done => {
+    Comment = crowi.model('Comment')
+    Notification = crowi.model('Notification')
+    Page = crowi.model('Page')
+    User = crowi.model('User')
+    Activity = crowi.model('Activity')
+    conn = crowi.getMongo().connection
+
+    done()
+  })
+
   describe('.upsertByActivity', function() {
     describe('valid parameters', function() {
-      it('should create', function() {
+      it('should create', async function() {
         const userId1 = ObjectId()
         const userId2 = ObjectId()
         const userId3 = ObjectId()
@@ -30,23 +41,19 @@ describe('Notification', function() {
           action: 'COMMENT',
         }
 
-        return Notification.upsertByActivity(userId1, sameActivityUsers, activity)
-          .then(function(notification) {
-            expect(notification.user.toString()).toBe(userId1.toString())
-            expect(notification.targetModel).toBe('Page')
-            expect(notification.target.toString()).toBe(targetId.toString())
-            expect(notification.action).toBe('COMMENT')
-            expect(notification.status).toBe(Notification.STATUS_UNREAD)
-            expect(notification.activities).toHaveLength(3)
-          })
-          .catch(function(err) {
-            throw new Error(err)
-          })
+        const notification = await Notification.upsertByActivity(userId1, sameActivityUsers, activity)
+
+        expect(notification.user.toString()).toBe(userId1.toString())
+        expect(notification.targetModel).toBe('Page')
+        expect(notification.target.toString()).toBe(targetId.toString())
+        expect(notification.action).toBe('COMMENT')
+        expect(notification.status).toBe(Notification.STATUS_UNREAD)
+        expect(notification.activities).toHaveLength(3)
       })
     })
 
     describe('invalid parameters', function() {
-      it('should create', function() {
+      it('should create', async () => {
         const userId1 = ObjectId()
         const userId2 = ObjectId()
         const userId3 = ObjectId()
@@ -62,7 +69,7 @@ describe('Notification', function() {
           action: 'COMMENT',
         }
 
-        return expect(Notification.upsertByActivity(userId1, sameActivityUsers, activity)).rejects.toThrow('Validation failed')
+        await expect(Notification.upsertByActivity(userId1, sameActivityUsers, activity)).rejects.toThrow('Validation failed')
       })
     })
   })

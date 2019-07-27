@@ -1,15 +1,19 @@
 const faker = require('faker')
-const utils = require('../utils.js')
 
 describe('Share', () => {
-  const User = utils.models.User
-  const Page = utils.models.Page
-  const Share = utils.models.Share
-  const conn = utils.mongoose.connection
+  let User
+  let Page
+  let Share
+  let conn
   let user
   let createdPages
 
   beforeAll(async () => {
+    User = crowi.model('User')
+    Page = crowi.model('Page')
+    Share = crowi.model('Share')
+    conn = crowi.getMongo().connection
+
     await User.remove({})
     const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
       { name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() },
@@ -33,7 +37,7 @@ describe('Share', () => {
     describe('Create shares', () => {
       test('should be able to create only one active share per page', async () => {
         await expect(Share.create(createdPages[0]._id, user)).resolves.toBeInstanceOf(Share)
-        await expect(Share.create(createdPages[0]._id, user)).rejects.toBeInstanceOf(Error)
+        await expect(Share.create(createdPages[0]._id, user)).rejects.toThrow()
       })
     })
   })
