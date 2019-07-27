@@ -5,9 +5,37 @@
 {% block layout_container %}
 <div class="v2-content-main-container container-fluid">
   <div class="v2-content-header row">
-    <header class="col-md-12 col-lg-8 offset-lg-2" id="page-header">
+    <header class="col-md-12 col-lg-7 offset-lg-2" id="page-header">
       <h1 class="title">{{ path|insertSpaceToEachSlashes }}</h1>
     </header>
+    <div class="col-md-12 col-lg-3">
+      <div class="page-action d-flex justify-content-end">
+        <div class="page-action-watch mr-2">
+          <div id="watch-button"></div>
+        </div>
+        <div class="page-action-bookmark mr-2" id="bookmark-button">
+        </div>
+        <div class="page-action-like">
+          <div class="input-group input-group-sm">
+            <div class="input-group-prepend">
+              <button
+                data-csrftoken="{{ csrf() }}"
+                data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
+                class="like-button btn btn-outline-secondary {% if page.isLiked(user) %}active{% endif %}"
+                >
+                <i class="mdi mdi-thumb-up"></i>
+              </button>
+            </div>
+            <div class="input-group-append">
+              <div class="input-group-text">
+                {{ page.liker.length }}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
   </div>
   <div
     class="v2-content-main row"
@@ -20,14 +48,13 @@
     data-page-is-seen="{% if page and page.isSeenUser(user) %}1{% else %}0{% endif %}"
     data-csrftoken="{{ csrf() }}"
     >
-    <div class="page-content col-md-9 order-md-1 col-lg-8 order-lg-2">
+    <div class="page-content col-md-9 order-md-1 col-lg-7 order-lg-2">
       <div class="page-menu d-flex justify-content-end button-toolbar">
         <div class="btn-group mr-2" role="group" aria-label="Edit button">
           <button type="button" class="btn btn-primary"><i class="mdi mdi-square-edit-outline"></i> {{ t('Edit') }}</button>
         </div>
         <div class="btn-group" role="group" aria-label="Page menu">
-          <button type="button" class="btn btn-light"><i class="mdi mdi-star"></i></button>
-          <button type="button" class="btn btn-light"><i class="mdi mdi-eye"></i></button>
+          <button type="button" class="btn btn-light"><i class="mdi mdi-attachment"></i></button>
           <button type="button" class="btn btn-light"><i class="mdi mdi-history"></i></button>
 
           <div class="btn-group" role="group">
@@ -67,15 +94,25 @@
         <div class="wiki" id="revision-body-content"></div>
       </div>
 
+
+      <div class="page-footer>">
+        <div class="backlink-list" id="backlink-list"></div>
+      </div>
     </div>
-    <div class="col-md-3 order-md-2 col-lg-2 order-lg-3">
-      <p class="created-at">
-        {{ t('Created') }}: {{ page.createdAt|datetz('Y/m/d H:i:s') }}<br>
-        {{ t('Last updated') }}: {{ page.updatedAt|datetz('Y/m/d H:i:s') }} <a href="/user/{{ page.lastUpdateUser.username }}"><img src="{{ page.lastUpdateUser|picture }}" class="picture picture-xs picture-rounded" alt="{{ page.lastUpdateUser.name }}"></a>
+    <div class="col-md-3 order-md-2 col-lg-3 order-lg-3">
+      <p class="page-created-at">
+        <a href="{{ userPageRoot(page.creator) }}">
+          <img src="{{ page.creator|default(author)|picture }}" class="picture picture-xs picture-rounded">
+        </a>  {{ t('Created') }}: {{ page.createdAt|datetz('Y/m/d H:i:s') }}<br>
+        <a title="{{ page.lastUpdateUser.name }}" href="{{ userPageRoot(page.lastUpdateUser) }}">
+          <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-xs picture-rounded">
+        </a> {{ t('Last updated') }}: {{ page.updatedAt|datetz('Y/m/d H:i:s') }}
       </p>
     </div>
     <div class="col-md-12 order-md-3 col-lg-2 order-lg-1">
-      side1
+      <div class="page-toc" id="page-toc">
+      </div>
+      <div class="page-attachments" id="page-attachment"></div>
     </div>
   </div>
 </div>
@@ -110,11 +147,6 @@
         </div>
       {% endif %}
       <div class="flex-item-action">
-        <span id="bookmark-button">
-          <p class="bookmark-link">
-            <i class="mdi mdi-star-outline"></i>
-          </p>
-        </span>
       </div>
       <div class="flex-item-action d-md-none">
         <button

@@ -6,12 +6,28 @@
       padding: 0;
       font-size: 1.8em;
     }
+
+    .page-action {
+      .page-action-watch {
+      }
+      .page-action-bookmark {
+      }
+      .page-action-like {
+        button {
+          .mdi {
+            font-size: 1em;
+          }
+        }
+      }
+    }
   }
 
   .v2-content-main {
     .page-menu {
+      margin-bottom: 8px;
+
       button {
-        border: solid 1px #aaa;
+        border: solid 1px #ccc;
       }
 
       // hide caret

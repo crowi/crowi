@@ -1,4 +1,5 @@
 import React from 'react'
+import { InputGroup, InputGroupAddon, InputGroupText, Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
 import Crowi from 'client/util/Crowi'
 
@@ -61,9 +62,16 @@ export default class BookmarkButton extends React.Component<Props, State> {
     }
 
     return (
-      <a href="#" title="Bookmark" className="bookmark-link" onClick={this.handleClick}>
-        <Icon name={`star${bookmarked}`} />
-      </a>
+      <InputGroup size="sm" className="input-group">
+        <InputGroupAddon addonType="prepend">
+          <Button className="bookmark-link" onClick={this.handleClick}>
+            <Icon name={`star${bookmarked}`} />
+          </Button>
+        </InputGroupAddon>
+        <InputGroupAddon addonType="append">
+          <InputGroupText>32</InputGroupText>
+        </InputGroupAddon>
+      </InputGroup>
     )
   }
 }

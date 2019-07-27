@@ -45,7 +45,7 @@
         border-bottom-left-radius: 20px;
       }
       .search-top-input {
-        transition: width ease .5s;
+        transition: max-width ease .5s;
         max-width: 200px;
         border-top-right-radius: 20px;
         border-bottom-right-radius: 20px;
