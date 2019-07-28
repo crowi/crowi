@@ -1,6 +1,13 @@
 .crowi.main-container {
   .v2-content-header {
     padding: 16px 0;
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1039;
+    .on-sticky {
+      box-shadow: 0 -1px 10px rgba(0,0,0,.2);
+    }
 
     h1.title {
       padding: 0;

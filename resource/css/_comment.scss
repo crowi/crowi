@@ -1,7 +1,11 @@
-.crowi.main-container aside.sidebar .side-content {
+.crowi.main-container {
 
 .page-comments {
-  margin: 8px 0 0 0;
+  margin: 16px 0 0 0;
+
+  h3 {
+    font-size: 1.1em;
+  }
 
   .page-comment-form {
     margin-top: 16px;
