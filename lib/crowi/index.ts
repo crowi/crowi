@@ -5,18 +5,29 @@ import Tokens from 'csrf'
 import redis from 'redis'
 import url from 'url'
 import socketIO from 'socket.io'
-import models from '../models'
-const debug = Debug('crowi:crowi')
+import express from 'express'
+import errorHandler from 'errorhandler'
+import morgan from 'morgan'
+import models from 'server/models'
+import events from 'server/events'
+import middlewares from 'server/middlewares'
+import controllers from 'server/controllers'
 
 const pkg = require('../../package.json')
-const events = require('../events')
-const middlewares = require('../middlewares')
-const controllers = require('../controllers')
 
-type Model<T> = T extends (crowi: any) => infer R ? R : any
-type Models<M = typeof models> = {
-  [K in keyof M]: Model<M[K]>
+type Models = {
+  [K in keyof typeof models]: ReturnType<typeof models[K]>
 }
+
+type Events = {
+  [K in keyof typeof events]: InstanceType<typeof events[K]>
+}
+
+type Middlewares = {
+  [K in keyof ReturnType<typeof middlewares>]: ReturnType<typeof middlewares>[K]
+}
+
+const debug = Debug('crowi:crowi')
 
 class Crowi {
   version: string
@@ -50,14 +61,14 @@ class Crowi {
 
   lru: any = {}
 
-  tokens: Tokens | null = null
+  tokens: Tokens
 
   // FIXME: {} をアサインしないで済む方法を捜す
-  models: Models = {} as any
+  models: Models = {} as Models
 
-  events: any = {}
+  events: Events = {} as Events
 
-  middlewares: any = {}
+  middlewares: Middlewares = {} as Middlewares
 
   controllers: any = {}
 
@@ -102,6 +113,8 @@ class Crowi {
     this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
     this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
     this.redisOpts = this.buildRedisOpts(this.redisUrl)
+
+    this.tokens = new Tokens()
   }
 
   async init() {
@@ -114,7 +127,6 @@ class Crowi {
     await this.setupSearcher()
     await this.setupMailer()
     await this.setupSlack()
-    await this.setupCsrf()
     await this.setupDNSCache()
     await this.setupLRU()
   }
@@ -161,7 +173,7 @@ class Crowi {
   }
 
   // getter/setter of event instance
-  event(name, event) {
+  event<T extends keyof Events>(name: T, event?: Events[T]): Events[T] {
     if (event) {
       return (this.events[name] = event)
     }
@@ -237,7 +249,7 @@ class Crowi {
     })
   }
 
-  getIo() {
+  getIo(): any {
     return this.io
   }
 
@@ -293,10 +305,6 @@ class Crowi {
     }
   }
 
-  setupCsrf() {
-    this.tokens = new Tokens()
-  }
-
   async setupDNSCache() {
     /**
      * Enable dnscache
@@ -341,9 +349,6 @@ class Crowi {
   }
 
   buildServer() {
-    const express = require('express')
-    const errorHandler = require('errorhandler')
-    const morgan = require('morgan')
     const app = express()
     const env = this.node_env
 
