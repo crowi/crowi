@@ -1,21 +1,18 @@
-/**
- * githubAuth utility
- */
+import Debug from 'debug'
+import auth from './auth'
+import passport from 'passport'
+import { Strategy as GitHubStrategy } from 'passport-github'
+import { getContinueUrl } from '../util/url'
 
-module.exports = function(config) {
-  'use strict'
+const debug = Debug('crowi:lib:githubAuth')
+const octokit = require('@octokit/rest')()
 
-  const lib = {}
-  const auth = require('./auth')
-  const passport = require('passport')
-  const GitHubStrategy = require('passport-github').Strategy
-  const debug = require('debug')('crowi:lib:githubAuth')
-  const octokit = require('@octokit/rest')()
-  const { getContinueUrl } = require('../util/url')
+export default (config) => {
+  const lib: any = {}
 
   lib.PROVIDER = 'github'
 
-  function useGitHubStrategy(config, callbackQuery) {
+  function useGitHubStrategy(config, callbackQuery = '') {
     passport.use(
       new GitHubStrategy(
         {

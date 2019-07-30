@@ -1,9 +1,9 @@
-module.exports = function(crowi) {
-  'use strict'
+import Crowi from "server/crowi";
+import { decodeSpace } from '../util/path'
 
+export default (crowi: Crowi) => {
   // const debug = require('debug')('crowi:lib:url')
-  const linkDetector = {}
-  const { decodeSpace } = require('../util/path')
+  const linkDetector: any = {}
 
   linkDetector.getLinkRegexp = () => {
     const config = crowi.getConfig()
@@ -22,8 +22,8 @@ module.exports = function(crowi) {
       })
     }
 
-    var objectIds = []
-    var paths = []
+    const objectIds: any = []
+    const paths: any = []
 
     const linkRegexp = linkDetector.getLinkRegexp()
     const objectIdRegexp = linkDetector.getObjectIdRegexp()

@@ -1,6 +1,4 @@
-module.exports = function() {
-  'use strict'
-
+export default () => {
   const MODEL_PAGE = 'Page'
   const MODEL_COMMENT = 'Comment'
 
@@ -10,15 +8,15 @@ module.exports = function() {
   const ACTION_COMMENT = 'COMMENT'
   const ACTION_LIKE = 'LIKE'
 
-  const getSupportTargetModelNames = function() {
+  const getSupportTargetModelNames = () => {
     return [MODEL_PAGE]
   }
 
-  const getSupportEventModelNames = function() {
+  const getSupportEventModelNames = () => {
     return [MODEL_COMMENT]
   }
 
-  const getSupportActionNames = function() {
+  const getSupportActionNames = () => {
     return [
       // ACTION_CREATE,
       // ACTION_MODIFY,

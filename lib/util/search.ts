@@ -1,13 +1,11 @@
-/**
- * Search
- */
+import path from 'path'
+import elasticsearch from 'elasticsearch'
+import Debug from 'debug'
+import moment from 'moment'
 
-const path = require('path')
-const elasticsearch = require('elasticsearch')
-const debug = require('debug')('crowi:lib:search')
-const moment = require('moment')
+const debug = Debug('crowi:lib:search')
 
-function SearchClient(crowi, esUri) {
+function SearchClient(this: any, crowi, esUri) {
   this.DEFAULT_OFFSET = 0
   this.DEFAULT_LIMIT = 50
 
@@ -74,7 +72,7 @@ SearchClient.prototype.checkESVersion = async function() {
       throw new Error('no nodes info')
     }
 
-    for (const [nodeName, nodeInfo] of Object.entries(nodes.nodes)) {
+    for (const [nodeName, nodeInfo] of Object.entries<any>(nodes.nodes)) {
       this.esNodeName = nodeName
       this.esNodeNames.push(nodeName)
       this.esVersion = nodeInfo.version
@@ -579,7 +577,7 @@ SearchClient.prototype.appendCriteriaForKeywordContains = function(query, keywor
   }
 
   if (parsedKeywords.phrase.length > 0) {
-    var phraseQueries = []
+    var phraseQueries: any = []
     parsedKeywords.phrase.forEach(function(phrase) {
       phraseQueries.push({
         multi_match: {
@@ -598,7 +596,7 @@ SearchClient.prototype.appendCriteriaForKeywordContains = function(query, keywor
   }
 
   if (parsedKeywords.not_phrase.length > 0) {
-    var notPhraseQueries = []
+    var notPhraseQueries: any = []
     parsedKeywords.not_phrase.forEach(function(phrase) {
       notPhraseQueries.push({
         multi_match: {
@@ -745,10 +743,10 @@ SearchClient.prototype.searchKeywordUnderPath = function(keyword, path, user = {
 }
 
 SearchClient.prototype.getParsedKeywords = function(keyword) {
-  var matchWords = []
-  var notMatchWords = []
-  var phraseWords = []
-  var notPhraseWords = []
+  var matchWords: any = []
+  var notMatchWords: any = []
+  var phraseWords: any = []
+  var notPhraseWords: any = []
 
   keyword.trim()
   keyword = keyword.replace(/\s+/g, ' ')

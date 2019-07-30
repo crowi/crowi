@@ -1,8 +1,11 @@
-module.exports = function(crowi, app, req, locals) {
-  // var debug = require('debug')('crowi:lib:swigFunctions')
-  var Page = crowi.model('Page')
-  var Config = crowi.model('Config')
-  var User = crowi.model('User')
+import Crowi from "server/crowi";
+import { Express } from 'express'
+
+export default (crowi: Crowi, app: Express, req, locals) => {
+  // const debug = Debug('crowi:lib:swigFunctions')
+  const Page = crowi.model('Page')
+  const Config = crowi.model('Config')
+  const User = crowi.model('User')
 
   // token getter
   locals.csrf = function() {

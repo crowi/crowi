@@ -1,16 +1,12 @@
-/**
- * slack
- */
+import Crowi from "server/crowi";
 
-module.exports = function(crowi) {
-  'use strict'
-
+export default (crowi: Crowi) => {
   const SLACK_URL = 'https://slack.com'
 
   const debug = require('debug')('crowi:util:slack')
   const Config = crowi.model('Config')
   const SlackWebClient = require('@slack/client').WebClient
-  const slack = {}
+  const slack: any = {}
 
   slack.client = undefined
 

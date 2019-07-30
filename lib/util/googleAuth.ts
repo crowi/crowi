@@ -1,14 +1,11 @@
-/**
- * googleAuth utility
- */
+import Debug from 'debug'
+import auth from './auth'
+import { google as googleApis } from 'googleapis'
 
-module.exports = function(config) {
-  'use strict'
+const debug = Debug('crowi:lib:googleAuth')
 
-  const auth = require('./auth')
-  const { google: googleApis } = require('googleapis')
-  const debug = require('debug')('crowi:lib:googleAuth')
-  const lib = {}
+export default (config) => {
+  const lib: any = {}
 
   lib.PROVIDER = 'google'
 
@@ -41,7 +38,7 @@ module.exports = function(config) {
       res: {
         data: { access_token: accessToken, refresh_token: refreshToken, expiry_date: expiryDate },
       },
-    } = await oauth2Client.refreshAccessToken()
+    } = await oauth2Client.refreshAccessToken() as any
     return { accessToken, refreshToken, expiryDate }
   }
 
@@ -82,7 +79,7 @@ module.exports = function(config) {
       }
 
       oauth2Client.setCredentials({
-        access_token: tokens.access_token,
+        access_token: (tokens as any).access_token,
       })
 
       const oauth2 = googleApis.oauth2('v2')
@@ -91,9 +88,9 @@ module.exports = function(config) {
         if (err) {
           return callback(new Error('[googleAuth.handleCallback] Error while proceccing userinfo.get.'), null)
         }
-        const { access_token: accessToken, refresh_token: refreshToken, expiry_date: expiryDate } = tokens
+        const { access_token: accessToken, refresh_token: refreshToken, expiry_date: expiryDate } = tokens as any
         auth.saveTokenToSession(req, lib.PROVIDER, { accessToken, refreshToken, expiryDate })
-        const { data } = response
+        const { data } = response as any
         data.user_id = data.id // This is for B.C. (tokeninfo をつかっている前提のコードに対してのもの)
         return callback(null, data)
       })
