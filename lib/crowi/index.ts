@@ -27,6 +27,10 @@ type Middlewares = {
   [K in keyof ReturnType<typeof middlewares>]: ReturnType<typeof middlewares>[K]
 }
 
+type Controllers = {
+  [K in keyof ReturnType<typeof controllers>]: ReturnType<typeof controllers>[K]
+}
+
 const debug = Debug('crowi:crowi')
 
 class Crowi {
@@ -70,7 +74,7 @@ class Crowi {
 
   middlewares: Middlewares = ({} as any) as Middlewares
 
-  controllers: any = {}
+  controllers: Controllers = ({} as any) as Controllers
 
   env: typeof process.env
 
