@@ -338,8 +338,8 @@ class Crowi {
     return this.tokens
   }
 
-  async start() {
-    const app = await this.buildServer()
+  start = () => {
+    const app = this.buildServer()
     const server = http.createServer(app).listen(this.port, () => {
       console.log('[' + this.node_env + '] Express server listening on port ' + this.port)
     })
@@ -381,7 +381,7 @@ class Crowi {
       })
     }
 
-    return Promise.resolve(app)
+    return app
   }
 
   exitOnError(err) {

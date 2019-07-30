@@ -40,8 +40,6 @@ export default (crowi: Crowi) => {
   })
   BookmarkSchema.index({ page: 1, user: 1 }, { unique: true })
 
-  const Bookmark = model<BookmarkDocument, BookmarkModel>('Bookmark', BookmarkSchema)
-
   BookmarkSchema.statics.populatePage = function(Bookmarks, requestUser) {
     requestUser = requestUser || null
 
@@ -159,6 +157,8 @@ export default (crowi: Crowi) => {
       throw err
     }
   }
+
+  const Bookmark = model<BookmarkDocument, BookmarkModel>('Bookmark', BookmarkSchema)
 
   return Bookmark
 }
