@@ -7,7 +7,7 @@ import { getContinueUrl } from '../util/url'
 const debug = Debug('crowi:lib:githubAuth')
 const octokit = require('@octokit/rest')()
 
-export default (config) => {
+export default config => {
   const lib: any = {}
 
   lib.PROVIDER = 'github'

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { LanguageDetectorInterfaceOptions } from 'i18next-express-middleware';
+import { LanguageDetectorInterfaceOptions } from 'i18next-express-middleware'
 
 export default {
   name: 'userSettingDetector',
