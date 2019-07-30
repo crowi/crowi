@@ -1,24 +1,43 @@
-module.exports = {
-  login: require('./login'),
-  register: require('./register'),
-  invited: require('./invited'),
-  revision: require('./revision'),
-  comment: require('./comment'),
+import login from './login'
+import register from './register'
+import invited from './invited'
+import revision from './revision'
+import comment from './comment'
+import user from './me/user'
+import password from './me/password'
+import apiToken from './me/apiToken'
+import app from './admin/app'
+import sec from './admin/sec'
+import auth from './admin/auth'
+import mail from './admin/mail'
+import aws from './admin/aws'
+import google from './admin/google'
+import github from './admin/github'
+import userInvite from './admin/userInvite'
+import slackSetting from './admin/slackSetting'
+import share from './admin/share'
+
+export default {
+  login,
+  register,
+  invited,
+  revision,
+  comment,
   me: {
-    user: require('./me/user'),
-    password: require('./me/password'),
-    apiToken: require('./me/apiToken'),
+    user,
+    password,
+    apiToken,
   },
   admin: {
-    app: require('./admin/app'),
-    sec: require('./admin/sec'),
-    auth: require('./admin/auth'),
-    mail: require('./admin/mail'),
-    aws: require('./admin/aws'),
-    google: require('./admin/google'),
-    github: require('./admin/github'),
-    userInvite: require('./admin/userInvite'),
-    slackSetting: require('./admin/slackSetting'),
-    share: require('./admin/share'),
+    app,
+    sec,
+    auth,
+    mail,
+    aws,
+    google,
+    github,
+    userInvite,
+    slackSetting,
+    share,
   },
 }

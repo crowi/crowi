@@ -1,9 +1,7 @@
-'use strict'
+import form from 'express-form'
+const { field } = form
 
-var form = require('express-form')
-var field = form.field
-
-module.exports = form(
+export default form(
   field('mePassword.oldPassword'),
   field('mePassword.newPassword')
     .required()

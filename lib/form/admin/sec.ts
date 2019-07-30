@@ -1,11 +1,8 @@
-'use strict'
+import form from 'express-form'
+import { stringToArrayFilter as stringToArray, normalizeCRLFFilter as normalizeCRLF } from 'server/util/formUtil'
+const { field } = form
 
-var form = require('express-form')
-var field = form.field
-var stringToArray = require('../../util/formUtil').stringToArrayFilter
-var normalizeCRLF = require('../../util/formUtil').normalizeCRLFFilter
-
-module.exports = form(
+export default form(
   field('settingForm[security:basicName]'),
   field('settingForm[security:basicSecret]'),
   field('settingForm[security:registrationMode]').required(),
