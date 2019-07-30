@@ -1,13 +1,22 @@
-module.exports = function(crowi, app) {
+import { Express } from 'express'
+import Crowi from 'server/crowi'
+
+import form from '../form'
+
+import Admin from './admin'
+import API from './api'
+import Login from './login'
+import Me from './me'
+
+export default (crowi: Crowi, app: Express) => {
   const controllers = crowi.controllers
   const middlewares = crowi.middlewares
-  const form = require('../form')
 
   const routes = {
-    Admin: require('./admin')(crowi, app, form),
-    API: require('./api')(crowi, app, form),
-    Login: require('./login')(crowi, app, form),
-    Me: require('./me')(crowi, app, form),
+    Admin: Admin(crowi, app, form),
+    API: API(crowi, app, form),
+    Login: Login(crowi, app, form),
+    Me: Me(crowi, app, form),
   }
 
   const multer = require('multer')

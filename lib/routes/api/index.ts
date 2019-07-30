@@ -1,17 +1,29 @@
-const { Router } = require('express')
+import { Router, Express } from 'express'
+import Crowi from 'server/crowi'
+
+import Admin from './admin'
+import Attachment from './attachment'
+import Bookmark from './bookmark'
+import Comment from './comment'
+import Like from './like'
+import Notification from './notification'
+import Page from './page'
+import Revision from './revision'
+import Share from './share'
+
 const router = Router()
 
-module.exports = (crowi, app, form) => {
+export default (crowi: Crowi, app: Express, form) => {
   const routes = {
-    Admin: require('./admin')(crowi, app, form),
-    Attachment: require('./attachment')(crowi, app, form),
-    Bookmark: require('./bookmark')(crowi, app, form),
-    Comment: require('./comment')(crowi, app, form),
-    Like: require('./like')(crowi, app, form),
-    Notification: require('./notification')(crowi, app, form),
-    Page: require('./page')(crowi, app, form),
-    Revision: require('./revision')(crowi, app, form),
-    Share: require('./share')(crowi, app, form),
+    Admin: Admin(crowi, app, form),
+    Attachment: Attachment(crowi, app, form),
+    Bookmark: Bookmark(crowi, app, form),
+    Comment: Comment(crowi, app, form),
+    Like: Like(crowi, app, form),
+    Notification: Notification(crowi, app, form),
+    Page: Page(crowi, app, form),
+    Revision: Revision(crowi, app, form),
+    Share: Share(crowi, app, form),
   }
 
   for (const route of Object.values(routes)) {
