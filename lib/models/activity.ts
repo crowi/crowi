@@ -4,6 +4,7 @@ import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
 export interface ActivityDocument extends Document {
+  _id: Types.ObjectId
   user: Types.ObjectId | any
   targetModel: string
   target: string

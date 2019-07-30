@@ -4,6 +4,7 @@ import Debug from 'debug'
 import { PageDocument } from './page'
 
 export interface BacklinkDocument extends Document {
+  _id: Types.ObjectId
   page: Types.ObjectId | any
   fromPage: Types.ObjectId | any
   fromRevision: Types.ObjectId | any

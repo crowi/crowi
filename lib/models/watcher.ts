@@ -8,6 +8,7 @@ const STATUS_IGNORE = 'IGNORE'
 const STATUSES = [STATUS_WATCH, STATUS_IGNORE]
 
 export interface WatcherDocument extends Document {
+  _id: Types.ObjectId
   user: Types.ObjectId
   targetModel: string
   target: Types.ObjectId

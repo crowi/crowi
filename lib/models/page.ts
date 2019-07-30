@@ -18,6 +18,7 @@ const TYPE_USER = 'user'
 const TYPE_PUBLIC = 'public'
 
 export interface PageDocument extends Document {
+  _id: Types.ObjectId
   path: string
   revision: Types.ObjectId
   redirectTo: string
@@ -241,7 +242,7 @@ export default (crowi: Crowi) => {
       return true
     }
 
-    return this.latestRevision == ((this.revision as any) as RevisionDocument)._id.toString()
+    return this.latestRevision == (((this.revision as any) as RevisionDocument)._id.toString() as any)
   }
 
   pageSchema.methods.isUpdatable = function(previousRevision) {

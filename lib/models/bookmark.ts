@@ -3,6 +3,7 @@ import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
 export interface BookmarkDocument extends Document {
+  _id: Types.ObjectId
   page: Types.ObjectId | any
   user: Types.ObjectId | any
   createdAt: Date

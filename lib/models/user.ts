@@ -17,6 +17,7 @@ const LANG_JA = 'ja'
 const PAGE_ITEMS = 50
 
 export interface UserDocument extends Document {
+  _id: Types.ObjectId
   userId: string
   image: string | null
   googleId: string | null
