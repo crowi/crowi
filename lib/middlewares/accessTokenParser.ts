@@ -5,7 +5,6 @@ import { parseAccessToken } from '../util/accessTokenParser'
 
 const debug = Debug('crowi:middlewares:accessTokenParser')
 
-
 export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
     const accessToken = parseAccessToken(req)
