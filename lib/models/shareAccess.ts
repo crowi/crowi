@@ -4,6 +4,7 @@ import { Types, Document, Model, Schema, model } from 'mongoose'
 import mongoosePaginate from 'mongoose-paginate'
 
 export interface ShareAccessDocument extends Document {
+  _id: Types.ObjectId
   share: Types.ObjectId
   tracking: Types.ObjectId
   createdAt: Date

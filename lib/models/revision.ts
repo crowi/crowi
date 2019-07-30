@@ -5,6 +5,7 @@ import { PageDocument } from './page'
 // import Debug from 'debug'
 
 export interface RevisionDocument extends Document {
+  _id: Types.ObjectId
   path: string
   body: string
   format: string

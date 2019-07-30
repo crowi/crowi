@@ -1,7 +1,8 @@
 import Crowi from 'server/crowi'
-import { Document, Schema, model } from 'mongoose'
+import { Types, Document, Schema, model } from 'mongoose'
 
 export interface TrackingDocument extends Document {
+  _id: Types.ObjectId
   userAgent: string
   remoteAddress: string
   createdAt: Date

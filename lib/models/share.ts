@@ -9,6 +9,7 @@ const STATUS_ACTIVE = 'active'
 const STATUS_INACTIVE = 'inactive'
 
 export interface ShareDocument extends Document {
+  _id: Types.ObjectId
   uuid: string
   page: Types.ObjectId
   status: string

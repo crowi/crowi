@@ -3,6 +3,7 @@ import { Types, Document, Model, Schema, model } from 'mongoose'
 // import Debug from 'debug'
 
 export interface UpdatePostDocument extends Document {
+  _id: Types.ObjectId
   pathPattern: string
   patternPrefix: string
   patternPrefix2: string

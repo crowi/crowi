@@ -1,5 +1,5 @@
 import Crowi from 'server/crowi'
-import { Document, Model, Schema, model } from 'mongoose'
+import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
 const SECURITY_REGISTRATION_MODE_OPEN = 'Open'
@@ -12,6 +12,7 @@ interface Config {
 }
 
 export interface ConfigDocument extends Document {
+  _id: Types.ObjectId
   ns: string
   key: string
   value: string

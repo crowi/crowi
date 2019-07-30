@@ -3,6 +3,7 @@ import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
 export interface AttachmentDocument extends Document {
+  _id: Types.ObjectId
   page: Types.ObjectId
   creator: Types.ObjectId
   filePath: string

@@ -10,6 +10,7 @@ const STATUS_OPENED = 'OPENED'
 const STATUSES = [STATUS_UNREAD, STATUS_UNOPENED, STATUS_OPENED]
 
 export interface NotificationDocument extends Document {
+  _id: Types.ObjectId
   user: Types.ObjectId
   targetModel: string
   target: Types.ObjectId
