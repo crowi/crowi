@@ -1,4 +1,7 @@
+import Crowi from 'server/crowi'
+import { DeleteWriteOpResultObject } from 'mongodb'
 import { Types, Document, Model, Schema, model } from 'mongoose'
+import { PageDocument } from './page'
 // import Debug from 'debug'
 
 export interface RevisionDocument extends Document {
@@ -10,19 +13,19 @@ export interface RevisionDocument extends Document {
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
-  findLatestRevision(path: string, cb: (err: Error, data: RevisionDocument) => void): any
+  findLatestRevision(path: string, cb: (err: Error, data: RevisionDocument | null) => void): void
   findRevision(id: Types.ObjectId): Promise<RevisionDocument | null>
   findRevisions(ids): Promise<RevisionDocument[]>
   findRevisionIdList(path): Promise<RevisionDocument[]>
   findRevisionList(path, options): Promise<RevisionDocument[]>
   updateRevisionListByPath(path, updateData): Promise<RevisionDocument>
-  prepareRevision(pageData, body, user, options): RevisionDocument
-  removeRevisionsByPath(path): Promise<RevisionDocument>
+  prepareRevision(pageData: PageDocument, body, user, options?): RevisionDocument
+  removeRevisionsByPath(path): Promise<DeleteWriteOpResultObject['result']>
   updatePath(pathName): void
   findAuthorsByPage(page): Promise<RevisionDocument['author'][]>
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   // const debug = Debug('crowi:models:revision')
 
   const revisionSchema = new Schema<RevisionDocument, RevisionModel>({
@@ -36,11 +39,10 @@ export default crowi => {
   const Revision = model<RevisionDocument, RevisionModel>('Revision', revisionSchema)
 
   revisionSchema.statics.findLatestRevision = function(path, cb) {
-    this.find({ path })
+    this.findOne({ path })
       .sort({ createdAt: -1 })
-      .limit(1)
       .exec(function(err, data) {
-        cb(err, data.shift())
+        cb(err, data)
       })
   }
 

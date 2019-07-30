@@ -1,7 +1,9 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 // import Debug from 'debug'
 import uuidv4 from 'uuid/v4'
 import mongoosePaginate from 'mongoose-paginate'
+import { UserDocument } from './user'
 
 const STATUS_ACTIVE = 'active'
 const STATUS_INACTIVE = 'inactive'
@@ -21,21 +23,23 @@ export interface ShareDocument extends Document {
 }
 
 export interface ShareModel extends Model<ShareDocument> {
+  paginate: any
+
   isExists(query): Promise<any>
-  findShares(query, options: object): Promise<any>
-  findShare(query, options: object): Promise<any>
-  findShareByUuid(uuid, query, options): Promise<any>
-  findShareByPageId(pageId, query, options): Promise<any>
+  findShares(query, options: { page?: number; limit?: number; sort?: object; populateAccesses?: boolean }): Promise<any>
+  findShare(query, options?: { populateAccesses?: boolean }): Promise<ShareDocument>
+  findShareByUuid(uuid, query?, options?): Promise<ShareDocument>
+  findShareByPageId(pageId, query?, options?): Promise<ShareDocument>
   createShare(pageId: Types.ObjectId, user: Types.ObjectId): Promise<ShareDocument>
-  delete(query: object): Promise<any>
-  deleteById(id): Promise<any>
-  deleteByPageId(pageId): Promise<any>
+  delete(query: object): Promise<ShareDocument | null>
+  deleteById(id): Promise<ShareDocument | null>
+  deleteByPageId(pageId): Promise<ShareDocument | null>
 
   STATUS_ACTIVE: string
   STATUS_INACTIVE: string
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   // const debug = Debug('crowi:models:share')
 
   const shareSchema = new Schema<ShareDocument, ShareModel>({
@@ -68,7 +72,7 @@ export default crowi => {
 
   shareSchema.methods.isCreator = function(userData) {
     this.populate('creator')
-    const creatorId = this.creator._id.toString()
+    const creatorId = ((this.creator as any) as UserDocument)._id.toString()
     const userId = userData._id.toString()
 
     return creatorId === userId
@@ -135,7 +139,7 @@ export default crowi => {
       throw shareNotFoundError
     }
 
-    shareData.page = await Page.populatePageData(shareData.page)
+    shareData.page = (await Page.populatePageData(shareData.page)) as any
     return shareData
   }
 

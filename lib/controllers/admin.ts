@@ -1,5 +1,6 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:admin')
@@ -14,14 +15,14 @@ export default (crowi: Crowi) => {
 
   function createPager(total, limit, page, pagesCount, maxPageList) {
     const pager: {
-      page: any,
-      pagesCount: number,
-      pages: number[],
-      total: number,
-      previous: number | null,
-      previousDots: boolean | null,
-      next: number | null,
-      nextDots: boolean | null,
+      page: any
+      pagesCount: number
+      pages: number[]
+      total: number
+      previous: number | null
+      previousDots: boolean | null
+      next: number | null
+      nextDots: boolean | null
     } = {
       page,
       pagesCount,
@@ -220,7 +221,9 @@ export default (crowi: Crowi) => {
     // uq means user query
     // q used by search box on header
     const uq = req.query.uq
-    const query = {}
+    const query: {
+      $or?: any
+    } = {}
 
     if (uq) {
       const $regex = uq.trim().replace(' ', '|')
@@ -274,7 +277,7 @@ export default (crowi: Crowi) => {
   actions.user.makeAdmin = function(req, res) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
-      userData.makeAdmin(function(err, userData) {
+      ;(userData as UserDocument).makeAdmin(function(err, userData) {
         if (err === null) {
           req.flash('successMessage', userData.name + 'さんのアカウントを管理者に設定しました。')
         } else {
@@ -289,7 +292,7 @@ export default (crowi: Crowi) => {
   actions.user.removeFromAdmin = function(req, res) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
-      userData.removeFromAdmin(function(err, userData) {
+      ;(userData as UserDocument).removeFromAdmin(function(err, userData) {
         if (err === null) {
           req.flash('successMessage', userData.name + 'さんのアカウントを管理者から外しました。')
         } else {
@@ -304,7 +307,7 @@ export default (crowi: Crowi) => {
   actions.user.activate = function(req, res) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
-      userData.statusActivate(function(err, userData) {
+      ;(userData as UserDocument).statusActivate(function(err, userData) {
         if (err === null) {
           req.flash('successMessage', userData.name + 'さんのアカウントを承認しました')
         } else {
@@ -320,7 +323,7 @@ export default (crowi: Crowi) => {
     var id = req.params.id
 
     User.findById(id, function(err, userData) {
-      userData.statusSuspend(function(err, userData) {
+      ;(userData as UserDocument).statusSuspend(function(err, userData) {
         if (err === null) {
           req.flash('successMessage', userData.name + 'さんのアカウントを利用停止にしました')
         } else {
@@ -374,6 +377,7 @@ export default (crowi: Crowi) => {
 
     try {
       const user = await User.findById(id)
+      if (!user) throw new Error('User not found')
       await user.updateEmail(email)
       return res.json(ApiResponse.success())
     } catch (err) {
@@ -426,7 +430,7 @@ export default (crowi: Crowi) => {
         debug('Successfully save updatePost', doc)
 
         // fixme: うーん
-        doc.creator = doc.creator._id.toString()
+        doc.creator = ((doc.creator as any) as UserDocument)._id.toString()
         return res.json(ApiResponse.success({ updatePost: doc }))
       })
       .catch(function(err) {
@@ -476,9 +480,9 @@ export default (crowi: Crowi) => {
   function validateMailSetting(req, form, callback) {
     const mailer = crowi.mailer
     const option: {
-      host: string,
-      port: number,
-      auth?: any,
+      host: string
+      port: number
+      auth?: any
       secure?: boolean
     } = {
       host: form['mail:smtpHost'],

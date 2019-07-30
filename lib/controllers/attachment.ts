@@ -19,6 +19,9 @@ export default (crowi: Crowi, app: Express) => {
 
     Attachment.findById(id)
       .then(function(data) {
+        if (!data) {
+          throw new Error('File not found')
+        }
         // TODO: file delivery plugin for cdn
         Attachment.findDeliveryFile(data)
           .then(fileName => {
@@ -89,49 +92,45 @@ export default (crowi: Crowi, app: Express) => {
    * @apiParam {String} page_id
    * @apiParam {File} file
    */
-  api.add = function(req, res) {
-    var id = req.body.page_id || 0
-    var path = decodeURIComponent(req.body.path) || null
-    var pageCreated = false
-    var page = {}
+  api.add = async function(req, res) {
+    const id = req.body.page_id || 0
+    const path = decodeURIComponent(req.body.path) || null
+    let pageCreated = false
+    const page = {}
 
     debug('id and path are: ', id, path)
 
-    var tmpFile = req.file || null
+    const tmpFile = req.file || null
     debug('Uploaded tmpFile: ', tmpFile)
     if (!tmpFile) {
       return res.json(ApiResponse.error('File error.'))
     }
 
-    new Promise(function(resolve, reject) {
+    try {
+      let pageData
       if (id == 0) {
         if (path === null) {
           throw new Error('path required if page_id is not specified.')
         }
         debug('Create page before file upload')
-        Page.createPage(path, '# ' + path, req.user, { grant: Page.GRANT_OWNER })
-          .then(function(page) {
-            pageCreated = true
-            resolve(page)
-          })
-          .catch(reject)
+        pageData = await Page.createPage(path, '# ' + path, req.user, { grant: Page.GRANT_OWNER })
+        pageCreated = true
       } else {
-        Page.findPageById(id)
-          .then(resolve)
-          .catch(reject)
+        pageData = await Page.findPageById(id)
       }
-    })
-      .then(function(pageData) {
-        page = pageData
-        id = pageData._id
 
-        var tmpPath = tmpFile.path
-        var originalName = tmpFile.originalname
-        var fileName = tmpFile.filename + tmpFile.originalname
-        var fileType = tmpFile.mimetype
-        var fileSize = tmpFile.size
-        var filePath = Attachment.createAttachmentFilePath(id, fileName, fileType)
-        var tmpFileStream = fs.createReadStream(tmpPath, {
+      const tmpPath = tmpFile.path
+      const originalName = tmpFile.originalname
+      const fileName = tmpFile.filename + tmpFile.originalname
+      const fileType = tmpFile.mimetype
+      const fileSize = tmpFile.size
+      const page = pageData._id
+      const creator = req.user.id
+      const fileFormat = fileType
+
+      try {
+        const filePath = Attachment.createAttachmentFilePath(pageData._id, fileName, fileType)
+        const tmpFileStream = fs.createReadStream(tmpPath, {
           flags: 'r',
           encoding: null,
           fd: null,
@@ -139,61 +138,52 @@ export default (crowi: Crowi, app: Express) => {
           autoClose: true,
         })
 
-        return fileUploader
-          .uploadFile(filePath, fileType, tmpFileStream, {})
-          .then(function(data) {
-            debug('Uploaded data is: ', data)
+        const data = await fileUploader.uploadFile(filePath, fileType, tmpFileStream, {})
+        debug('Uploaded data is: ', data)
 
-            const page = id
-            const creator = req.user.id
-            const fileFormat = fileType
+        // TODO size
+        const attachment = await Attachment.create({ page, creator, filePath, originalName, fileName, fileFormat, fileSize })
+        let fileUrl = attachment.fileUrl
+        const config = crowi.getConfig()
 
-            // TODO size
-            return Attachment.create({ page, creator, filePath, originalName, fileName, fileFormat, fileSize, createdAt })
-          .then(function(data) {
-            var fileUrl = data.fileUrl
-            var config = crowi.getConfig()
+        // isLocalUrl??
+        if (!fileUrl.match(/^https?/)) {
+          fileUrl = (config.crowi['app:url'] || '') + fileUrl
+        }
 
-            // isLocalUrl??
-            if (!fileUrl.match(/^https?/)) {
-              fileUrl = (config.crowi['app:url'] || '') + fileUrl
-            }
+        const result = {
+          page: page.toObject(),
+          attachment: data.toObject(),
+          url: fileUrl,
+          pageCreated: pageCreated,
+        }
 
-            var result = {
-              page: page.toObject(),
-              attachment: data.toObject(),
-              url: fileUrl,
-              pageCreated: pageCreated,
-            }
+        // delete anyway
+        fs.unlink(tmpPath, function(err) {
+          if (err) {
+            debug('Error while deleting tmp file.')
+          }
+        })
 
-            // delete anyway
-            fs.unlink(tmpPath, function(err) {
-              if (err) {
-                debug('Error while deleting tmp file.')
-              }
-            })
+        return res.json(ApiResponse.success(result))
+      } catch (err) {
+        debug('Error on saving attachment data', err)
+        // @TODO
+        // Remove from S3
 
-            return res.json(ApiResponse.success(result))
-          })
-          .catch(function(err) {
-            debug('Error on saving attachment data', err)
-            // @TODO
-            // Remove from S3
+        // delete anyway
+        fs.unlink(tmpPath, function(err) {
+          if (err) {
+            debug('Error while deleting tmp file.')
+          }
+        })
 
-            // delete anyway
-            fs.unlink(tmpPath, function(err) {
-              if (err) {
-                debug('Error while deleting tmp file.')
-              }
-            })
-
-            return res.json(ApiResponse.error('Error while uploading.'))
-          })
-      })
-      .catch(function(err) {
-        debug('Attachement upload error', err)
-        return res.json(ApiResponse.error('Error.'))
-      })
+        return res.json(ApiResponse.error('Error while uploading.'))
+      }
+    } catch (err) {
+      debug('Attachement upload error', err)
+      return res.json(ApiResponse.error('Error.'))
+    }
   }
 
   /**
@@ -207,8 +197,8 @@ export default (crowi: Crowi, app: Express) => {
     const id = req.body.attachment_id
 
     Attachment.findById(id)
-      .then(function(data) {
-        const attachment = data
+      .then(function(attachment) {
+        if (!attachment) throw new Error('Attachment not found')
 
         Attachment.removeAttachment(attachment)
           .then(data => {

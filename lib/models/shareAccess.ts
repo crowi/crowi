@@ -1,3 +1,4 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 // import Debug from 'debug'
 import mongoosePaginate from 'mongoose-paginate'
@@ -10,11 +11,13 @@ export interface ShareAccessDocument extends Document {
 }
 
 export interface ShareAccessModel extends Model<ShareAccessDocument> {
-  findAccesses(query, options: object): Promise<any>
+  paginate: any
+
+  findAccesses(query, options: { page?: number; limit?: number; sort?: object }): Promise<any>
   access(shareId: Types.ObjectId, trackingId: Types.ObjectId): Promise<any>
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   // const debug = Debug('crowi:models:shareAccess')
 
   const shareAccessSchema = new Schema<ShareAccessDocument, ShareAccessModel>({

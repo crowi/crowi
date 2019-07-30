@@ -1,5 +1,16 @@
+import { Types } from 'mongoose'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import { BookmarkDocument } from 'server/models/bookmark'
+import { PageDocument } from 'server/models/page'
+import { RevisionDocument } from 'server/models/revision'
+import { UserDocument } from 'server/models/user'
+
+interface PagerOptions {
+  offset: number | string
+  limit: number | string
+  length?: number
+}
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:page')
@@ -9,7 +20,8 @@ export default (crowi: Crowi) => {
   const Watcher = crowi.model('Watcher')
   const ApiResponse = require('../util/apiResponse')
   const { decodeSpace } = require('../util/path')
-  const actions = {}
+  const actions = {} as any
+  const api = (actions.api = {} as any)
 
   // register page events
   const pageEvent = crowi.event('Page')
@@ -26,12 +38,12 @@ export default (crowi: Crowi) => {
   }
 
   // TODO: total とかでちゃんと計算する
-  function generatePager(options) {
-    var next = null
-    var prev = null
-    var offset = parseInt(options.offset, 10)
-    var limit = parseInt(options.limit, 10)
-    var length = options.length || 0
+  function generatePager(options: PagerOptions) {
+    let next: number | null = null
+    let prev: number | null = null
+    const offset = parseInt(String(options.offset), 10)
+    const limit = parseInt(String(options.limit), 10)
+    const length = options.length || 0
 
     if (offset > 0) {
       prev = offset - limit
@@ -63,18 +75,12 @@ export default (crowi: Crowi) => {
 
     debug('Page list show', path)
 
-    const pagerOptions = {
-      offset: offset,
-      limit: limit,
-    }
-    const queryOptions = {
-      offset: offset,
-      limit: limit + 1,
-    }
+    const pagerOptions: PagerOptions = { offset, limit }
+    const queryOptions = { offset, limit: limit + 1 }
 
     try {
       const [portalPage, pageList] = await Promise.all([
-        Page.hasPortalPage(path, req.user, req.query.revision),
+        Page.findPortalPage(path, req.user, req.query.revision),
         Page.findListByStartWith(path, req.user, queryOptions),
       ])
 
@@ -107,19 +113,16 @@ export default (crowi: Crowi) => {
     var offset = parseInt(req.query.offset) || 0
 
     // index page
-    var pagerOptions = {
-      offset: offset,
-      limit: limit,
-    }
-    var queryOptions = {
-      offset: offset,
+    const pagerOptions: PagerOptions = { offset, limit }
+    const queryOptions = {
+      offset,
       limit: limit + 1,
       includeDeletedPage: true,
     }
 
-    var renderVars = {
+    const renderVars: any = {
       page: null,
-      path: path,
+      path,
       pages: [],
     }
 
@@ -187,8 +190,8 @@ export default (crowi: Crowi) => {
       return renderPage(null, req, res) // show create
     }
 
-    let pageUser = {}
-    let bookmarkList = []
+    let pageUser: UserDocument | {} | null = {}
+    let bookmarkList: BookmarkDocument[] = []
     let createdList = []
     try {
       // user いない場合
@@ -221,12 +224,12 @@ export default (crowi: Crowi) => {
 
     res.locals.path = path
     try {
-      const page = await Page.findPage(path, req.user, req.query.revision)
+      const page = (await Page.findPage(path, req.user, req.query.revision)) as PageDocument
       debug('Page found', page._id, page.path)
 
       if (isMarkdown) {
         res.set('Content-Type', 'text/plain')
-        return res.send(page.revision.body)
+        return res.send(((page.revision as any) as RevisionDocument).body)
       }
 
       return renderPage(page, req, res)
@@ -286,9 +289,9 @@ export default (crowi: Crowi) => {
     debug('notify: ', notify)
 
     var redirectPath = encodeURI(path)
-    var pageData = {}
+    var pageData: PageDocument | null | {} = {}
     var updateOrCreate
-    var previousRevision = false
+    var previousRevision: Types.ObjectId | null | false = false
 
     // set to render
     res.locals.pageForm = pageForm
@@ -368,10 +371,10 @@ export default (crowi: Crowi) => {
     var limit = 50
     var offset = parseInt(req.query.offset) || 0
 
-    var renderVars = {}
+    var renderVars: any = {}
 
-    var pagerOptions = { offset: offset, limit: limit }
-    var queryOptions = { offset: offset, limit: limit + 1, populatePage: true, requestUser: req.user }
+    var pagerOptions: PagerOptions = { offset, limit }
+    var queryOptions = { offset, limit: limit + 1, populatePage: true, requestUser: req.user }
 
     User.findUserByUsername(username)
       .then(function(user) {
@@ -405,10 +408,10 @@ export default (crowi: Crowi) => {
     var limit = 50
     var offset = parseInt(req.query.offset) || 0
 
-    var renderVars = {}
+    var renderVars: any = {}
 
-    var pagerOptions = { offset: offset, limit: limit }
-    var queryOptions = { offset: offset, limit: limit + 1 }
+    var pagerOptions: PagerOptions = { offset, limit }
+    var queryOptions = { offset, limit: limit + 1 }
 
     User.findUserByUsername(username)
       .then(function(user) {
@@ -435,8 +438,6 @@ export default (crowi: Crowi) => {
         res.redirect('/')
       })
   }
-
-  var api = (actions.api = {})
 
   /**
    * redirector
@@ -480,8 +481,8 @@ export default (crowi: Crowi) => {
     var limit = 50
     var offset = parseInt(req.query.offset) || 0
 
-    var pagerOptions = { offset: offset, limit: limit }
-    var queryOptions = { offset: offset, limit: limit + 1 }
+    var pagerOptions: PagerOptions = { offset, limit }
+    var queryOptions = { offset, limit: limit + 1 }
 
     // Accepts only one of these
     if (username === null && path === null) {
@@ -510,8 +511,7 @@ export default (crowi: Crowi) => {
         }
         pagerOptions.length = pages.length
 
-        var result = {}
-        result.pages = pages
+        const result = { pages }
         return res.json(ApiResponse.success(result))
       })
       .catch(function(err) {
@@ -634,9 +634,8 @@ export default (crowi: Crowi) => {
     }
 
     pageFinder
-      .then(function(pageData) {
-        var result = {}
-        result.page = pageData
+      .then(function(page) {
+        const result = { page }
 
         return res.json(ApiResponse.success(result))
       })
@@ -662,9 +661,8 @@ export default (crowi: Crowi) => {
       .then(function(page) {
         return page.seen(req.user)
       })
-      .then(function(user) {
-        var result = {}
-        result.seenUser = user
+      .then(function(seenUser) {
+        const result = { seenUser }
 
         return res.json(ApiResponse.success(result))
       })
@@ -782,10 +780,9 @@ export default (crowi: Crowi) => {
         }
         return Page.deletePage(pageData, req.user)
       })
-      .then(function(data) {
-        debug('Page deleted', data.path)
-        var result = {}
-        result.page = data
+      .then(function(page) {
+        debug('Page deleted', page.path)
+        const result = { page }
 
         return res.json(ApiResponse.success(result))
       })
@@ -810,10 +807,9 @@ export default (crowi: Crowi) => {
         // TODO: これでいいんだっけ
         return Page.revertDeletedPage(pageData, req.user)
       })
-      .then(function(data) {
-        debug('Complete to revert deleted page', data.path)
-        var result = {}
-        result.page = data
+      .then(function(page) {
+        debug('Complete to revert deleted page', page.path)
+        const result = { page }
 
         return res.json(ApiResponse.success(result))
       })
@@ -947,6 +943,7 @@ export default (crowi: Crowi) => {
       const watcher = await Watcher.findByUserIdAndTargetId(userId, pageId)
       const getDefaultStatus = async () => {
         const page = await Page.findById(pageId)
+        if (!page) throw new Error('Page not found')
         const targetUsers = await page.getNotificationTargetUsers()
         return targetUsers.some(user => user.toString() === userId.toString())
       }

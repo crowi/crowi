@@ -1,3 +1,4 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 import mongoosePaginate from 'mongoose-paginate'
@@ -57,13 +58,15 @@ export interface UserDocument extends Document {
 }
 
 export interface UserModel extends Model<UserDocument> {
+  paginate: any
+
   getLanguageLabels(): object
   getUserStatusLabels(): any
-  isEmailValid(email, callback: any): boolean
+  isEmailValid(email): boolean
   isGitHubAccountValid(organizations): boolean
   findUsers(options, callback: (err: Error, userData: UserDocument[]) => void)
-  findAllUsers(option): Promise<UserDocument[]>
-  findUsersByIds(ids, option): Promise<UserDocument[]>
+  findAllUsers(option?): Promise<UserDocument[]>
+  findUsersByIds(ids, option?): Promise<UserDocument[]>
   findAdmins(callback: (err: Error, admins: UserDocument[]) => void): void
   findUsersWithPagination(options, query, callback): any
   findUsersByPartOfEmail(emailPart, options): any
@@ -73,8 +76,8 @@ export interface UserModel extends Model<UserDocument> {
   findUserByGitHubId(githubId): Promise<UserDocument | null>
   findUserByEmail(email): Promise<UserDocument | null>
   findUserByEmailAndPassword(email: string, password: string): Promise<UserDocument | null>
-  isRegisterableUsername(username, callback): boolean
-  isRegisterable(email, username, callback): boolean
+  isRegisterableUsername(username, callback: (registerable: boolean) => void): void
+  isRegisterable(email, username, callback: (registerable: boolean, detail: { email?: boolean; username?: boolean }) => void): void
   removeCompletelyById(id, callback: (err: Error | null, userData: 1 | null) => void): any
   resetPasswordByRandomString(id: Types.ObjectId): Promise<{ user: UserDocument; newPassword: string }>
   createUsersByInvitation(emailList, toSendEmail, callback): any
@@ -94,7 +97,7 @@ export interface UserModel extends Model<UserDocument> {
   LANG_JA: string
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:user')
 
   const userEvent = crowi.event('User')
@@ -173,11 +176,12 @@ export default crowi => {
   }
 
   function getLanguageLabels() {
-    var lang = {}
-    lang.LANG_EN = LANG_EN
-    lang.LANG_EN_US = LANG_EN_US
-    lang.LANG_EN_GB = LANG_EN_GB
-    lang.LANG_JA = LANG_JA
+    const lang = {
+      LANG_EN,
+      LANG_EN_US,
+      LANG_EN_GB,
+      LANG_JA,
+    }
 
     return lang
   }
@@ -283,7 +287,7 @@ export default crowi => {
 
   userSchema.methods.removeFromAdmin = function(callback) {
     debug('Remove from admin', this)
-    this.admin = 0
+    this.admin = false
     this.save(function(err, userData) {
       return callback(err, userData)
     })
@@ -291,7 +295,7 @@ export default crowi => {
 
   userSchema.methods.makeAdmin = function(callback) {
     debug('Admin', this)
-    this.admin = 1
+    this.admin = true
     this.save(function(err, userData) {
       return callback(err, userData)
     })
@@ -317,7 +321,7 @@ export default crowi => {
       // migrate old data
       this.name = '-' + Date.now()
     }
-    if (this.username === undefined || this.usename === null) {
+    if (this.username === undefined || this.username === null) {
       // migrate old data
       this.username = '-'
     }
@@ -354,7 +358,7 @@ export default crowi => {
     return userStatus
   }
 
-  userSchema.statics.isEmailValid = function(email, callback) {
+  userSchema.statics.isEmailValid = function(email) {
     var config = crowi.getConfig()
     var whitelist = config.crowi['security:registrationWhiteList']
 
@@ -454,35 +458,35 @@ export default crowi => {
     const query = User.find({ email: emailPartRegExp })
 
     if (status) {
-      query.and({ status })
+      query.and({ status } as any)
     }
 
     return query.limit(PAGE_ITEMS + 1).exec()
   }
 
   userSchema.statics.findUserByUsername = function(username) {
-    return User.findOne({ username })
+    return User.findOne({ username }).exec()
   }
 
   userSchema.statics.findUserByApiToken = function(apiToken) {
-    return User.findOne({ apiToken })
+    return User.findOne({ apiToken }).exec()
   }
 
   userSchema.statics.findUserByGoogleId = function(googleId) {
-    return User.findOne({ googleId })
+    return User.findOne({ googleId }).exec()
   }
 
   userSchema.statics.findUserByGitHubId = function(githubId) {
-    return User.findOne({ githubId })
+    return User.findOne({ githubId }).exec()
   }
 
   userSchema.statics.findUserByEmail = function(email) {
-    return User.findOne({ email })
+    return User.findOne({ email }).exec()
   }
 
   userSchema.statics.findUserByEmailAndPassword = function(email, password) {
     const hashedPassword = generatePassword(password)
-    return User.findOne({ email, password: hashedPassword })
+    return User.findOne({ email, password: hashedPassword }).exec()
   }
 
   userSchema.statics.isRegisterableUsername = async function(username, callback) {
@@ -553,9 +557,13 @@ export default crowi => {
   }
 
   userSchema.statics.createUsersByInvitation = function(emailList, toSendEmail, callback) {
-    var createdUserList = []
-    var config = crowi.getConfig()
-    var mailer = crowi.getMailer()
+    const createdUserList: {
+      email: string
+      password: string | null
+      user: UserDocument | null
+    }[] = []
+    const config = crowi.getConfig()
+    const mailer = crowi.getMailer()
 
     if (!Array.isArray(emailList)) {
       debug('emailList is not array')
@@ -564,21 +572,17 @@ export default crowi => {
     async.each(
       emailList,
       function(email, next) {
-        var newUser = new User()
-        var password
+        const newUser = new User()
+        let password
 
         email = email.trim()
 
         // email check
         // TODO: 削除済みはチェック対象から外そう〜
-        User.findOne({ email: email }, function(err, userData) {
+        User.findOne({ email }, function(err, user) {
           // The user is exists
-          if (userData) {
-            createdUserList.push({
-              email: email,
-              password: null,
-              user: null,
-            })
+          if (user) {
+            createdUserList.push({ email, password: null, user: null })
 
             return next()
           }
@@ -589,23 +593,15 @@ export default crowi => {
 
           newUser.email = email
           newUser.setPassword(password)
-          newUser.createdAt = Date.now()
+          newUser.createdAt = Date.now() as any
           newUser.status = STATUS_INVITED
 
-          newUser.save(function(err, userData) {
+          newUser.save(function(err, user) {
             if (err) {
-              createdUserList.push({
-                email: email,
-                password: null,
-                user: null,
-              })
+              createdUserList.push({ email, password: null, user: null })
               debug('save failed!! ', email)
             } else {
-              createdUserList.push({
-                email: email,
-                password: password,
-                user: userData,
-              })
+              createdUserList.push({ email, password, user })
               debug('saved!', email)
             }
 
@@ -658,14 +654,14 @@ export default crowi => {
   }
 
   userSchema.statics.createUserByEmailAndPassword = function(name, username, email, password, lang, callback) {
-    var newUser = new User()
+    const newUser = new User()
 
     newUser.name = name
     newUser.username = username
     newUser.email = email
     newUser.setPassword(password)
     newUser.lang = lang
-    newUser.createdAt = Date.now()
+    newUser.createdAt = Date.now() as any
     newUser.status = decideUserStatusOnRegistration()
 
     newUser.save(function(err, userData) {
@@ -677,13 +673,13 @@ export default crowi => {
   }
 
   userSchema.statics.createUserPictureFilePath = function(user, ext) {
-    var ext = '.' + ext
+    ext = '.' + ext
 
     return 'user/' + user._id + ext
   }
 
   userSchema.statics.getUsernameByPath = function(path) {
-    var username = null
+    let username = null
     let m
     if ((m = path.match(/^\/user\/([^/]+)\/?/))) {
       username = m[1]
