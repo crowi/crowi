@@ -2,6 +2,7 @@ import Crowi from 'server/crowi'
 import { DeleteWriteOpResultObject } from 'mongodb'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
+import ActivityDefine from '../util/activityDefine'
 
 export interface ActivityDocument extends Document {
   _id: Types.ObjectId
@@ -31,7 +32,6 @@ export interface ActivityModel extends Model<ActivityDocument> {
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:activity')
-  const ActivityDefine = require('../util/activityDefine')()
   const activityEvent = crowi.event('Activity')
 
   // TODO: add revision id

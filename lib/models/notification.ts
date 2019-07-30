@@ -1,6 +1,7 @@
 import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, Query, model } from 'mongoose'
 import Debug from 'debug'
+import ActivityDefine from '../util/activityDefine'
 import { ActivityDocument } from './activity'
 import { UserDocument } from './user'
 
@@ -36,7 +37,6 @@ export interface NotificationModel extends Model<NotificationDocument> {
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:notification')
-  const ActivityDefine = require('../util/activityDefine')()
   const notificationEvent = crowi.event('Notification')
 
   const notificationSchema = new Schema<NotificationDocument, NotificationModel>({
