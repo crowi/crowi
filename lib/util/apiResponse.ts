@@ -1,7 +1,7 @@
 export default {
   error(err, info = {}) {
     const result: {
-      ok: boolean,
+      ok: boolean
       info: object
       error?: any
     } = {

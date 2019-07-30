@@ -1,4 +1,4 @@
-import Crowi from "server/crowi";
+import Crowi from 'server/crowi'
 
 export default (crowi: Crowi) => {
   const SLACK_URL = 'https://slack.com'

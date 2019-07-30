@@ -1,4 +1,4 @@
-import Crowi from "server/crowi";
+import Crowi from 'server/crowi'
 import { Express } from 'express'
 
 export default (crowi: Crowi, app: Express, req, locals) => {

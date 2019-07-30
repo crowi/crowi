@@ -1,4 +1,4 @@
-import Crowi from "server/crowi";
+import Crowi from 'server/crowi'
 import { decodeSpace } from './path'
 
 export default (crowi: Crowi) => {

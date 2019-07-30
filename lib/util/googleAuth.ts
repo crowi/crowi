@@ -4,7 +4,7 @@ import { google as googleApis } from 'googleapis'
 
 const debug = Debug('crowi:lib:googleAuth')
 
-export default (config) => {
+export default config => {
   const lib: any = {}
 
   lib.PROVIDER = 'google'
@@ -38,7 +38,7 @@ export default (config) => {
       res: {
         data: { access_token: accessToken, refresh_token: refreshToken, expiry_date: expiryDate },
       },
-    } = await oauth2Client.refreshAccessToken() as any
+    } = (await oauth2Client.refreshAccessToken()) as any
     return { accessToken, refreshToken, expiryDate }
   }
 
