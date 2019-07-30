@@ -131,7 +131,7 @@ export default (crowi: Crowi) => {
       } else if (line.removed) {
         // diffText += '-' + line.value.replace(/(.+)?\n/g, '- $1\n');
         // 1以下は無視
-        if (line.count > 1) {
+        if (line.count && line.count > 1) {
           diffText += `':wastebasket: ... ${line.count} lines\n`
         }
       } else {
