@@ -1,10 +1,10 @@
 import { Express } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import { parseAccessToken } from '../util/accessTokenParser'
 
 const debug = Debug('crowi:middlewares:accessTokenParser')
 
-const { parseAccessToken } = require('../util/accessTokenParser')
 
 export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {

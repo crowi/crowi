@@ -1,9 +1,9 @@
 import Crowi from 'server/crowi'
+import ApiResponse from '../util/apiResponse'
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routes:backlink')
   const Backlink = crowi.model('Backlink')
-  const ApiResponse = require('../util/apiResponse')
   const actions = {} as any
   actions.api = {} as any
 

@@ -1,18 +1,23 @@
 import { Express } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import async from 'async'
+import url from 'url'
+import { getContinueUrl } from '../util/url'
+import auth from '../util/auth'
+import GoogleAuth from '../util/googleAuth'
+import GitHubAuth from '../util/githubAuth'
+import axios from 'axios'
+import FileUploader from '../util/fileUploader'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:login')
-  const async = require('async')
-  const url = require('url')
-  const { getContinueUrl } = require('../util/url')
-  const { isLoggedIn } = require('../util/auth')
   const config = crowi.getConfig()
   const mailer = crowi.getMailer()
   const User = crowi.model('User')
   const Config = crowi.model('Config')
   const actions = {} as any
+  const isLoggedIn = auth.isLoggedIn
 
   const getSocialSession = function(session) {
     const { google = {}, github = {} } = session
@@ -180,7 +185,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.loginGoogle = function(req, res) {
     debug('Header', req.url, req.headers.referer)
-    const googleAuth = require('../util/googleAuth')(config)
+    const googleAuth = GoogleAuth(config)
     const { google = {} } = req.session
     const { authCode: code } = google
 
@@ -218,7 +223,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.loginGitHub = function(req, res, next) {
     debug('Header', req.url, req.headers.referer)
-    const githubAuth = require('../util/githubAuth')(config)
+    const githubAuth = GitHubAuth(config)
     const { github = {} } = req.session
     const { authCode: code } = github
 
@@ -359,8 +364,7 @@ export default (crowi: Crowi, app: Express) => {
 
             debug('socialImage?:', socialImage)
             if (socialImage) {
-              const axios = require('axios')
-              const fileUploader = require('../util/fileUploader')(crowi, app)
+              const fileUploader = FileUploader(crowi)
 
               axios
                 .get(socialImage, { responseType: 'stream' })

@@ -1,6 +1,6 @@
 import { Express } from 'express'
 import Crowi from 'server/crowi'
-// const debug = require('debug')('crowi:middlewares:loginChecker')
+// const debug = Debug('crowi:middlewares:loginChecker')
 
 export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {

@@ -2,7 +2,7 @@ import Crowi from 'server/crowi'
 import { decodeSpace } from './path'
 
 export default (crowi: Crowi) => {
-  // const debug = require('debug')('crowi:lib:url')
+  // const debug = Debug('crowi:lib:url')
   const linkDetector: any = {}
 
   linkDetector.getLinkRegexp = () => {

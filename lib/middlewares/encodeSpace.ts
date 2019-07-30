@@ -1,4 +1,4 @@
-const { encodeSpace } = require('../util/path')
+import { encodeSpace } from '../util/path'
 
 export default () => {
   return (req, res, next) => {

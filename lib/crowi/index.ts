@@ -4,14 +4,25 @@ import mongoose from 'mongoose'
 import Tokens from 'csrf'
 import redis from 'redis'
 import url from 'url'
+import http from 'http'
 import socketIO from 'socket.io'
+import socketIORedis from 'socket.io-redis'
+import connectRedis from 'connect-redis'
 import express from 'express'
+import session from 'express-session'
 import errorHandler from 'errorhandler'
 import morgan from 'morgan'
+import dnscache from 'dnscache'
 import models from 'server/models'
 import events from 'server/events'
 import middlewares from 'server/middlewares'
 import controllers from 'server/controllers'
+import routes from '../routes'
+import LRU from '../service/lru'
+import Config from '../service/config'
+import mailer from '../util/mailer'
+import slack from '../util/slack'
+import expressInit from './express-init'
 
 const pkg = require('../../package.json')
 
@@ -216,7 +227,6 @@ class Crowi {
   }
 
   setupSessionConfig() {
-    const session = require('express-session')
     const sessionAge = 1000 * 3600 * 24 * 30
     const sessionConfig = {
       rolling: true,
@@ -230,7 +240,7 @@ class Crowi {
     }
 
     if (this.redis) {
-      const RedisStore = require('connect-redis')(session)
+      const RedisStore = connectRedis(session)
       sessionConfig.store = new RedisStore({
         prefix: 'crowi:sess:',
         client: this.redis,
@@ -266,7 +276,6 @@ class Crowi {
   }
 
   async setupConfig() {
-    const Config = require('../service/config')
     this.config = new Config(this)
 
     return this.config.load()
@@ -295,7 +304,7 @@ class Crowi {
   }
 
   setupMailer() {
-    this.mailer = require('../util/mailer')(this)
+    this.mailer = mailer(this)
   }
 
   setupSlack() {
@@ -305,7 +314,7 @@ class Crowi {
     if (!Config.hasSlackConfig(config)) {
       this.slack = {}
     } else {
-      this.slack = require('../util/slack')(this)
+      this.slack = slack(this)
     }
   }
 
@@ -318,11 +327,10 @@ class Crowi {
      */
     if (this.env.ENABLE_DNSCACHE !== 'true') return
 
-    require('dnscache')({ enable: true })
+    dnscache({ enable: true })
   }
 
   setupLRU() {
-    const LRU = require('../service/lru')
     this.lru = new LRU(this)
   }
 
@@ -331,16 +339,13 @@ class Crowi {
   }
 
   async start() {
-    const http = require('http')
-
     const app = await this.buildServer()
     const server = http.createServer(app).listen(this.port, () => {
       console.log('[' + this.node_env + '] Express server listening on port ' + this.port)
     })
     const io = socketIO(server, { transports: ['websocket'] })
     if (this.redisOpts) {
-      const redisAdapter = require('socket.io-redis')
-      io.adapter(redisAdapter(this.redisOpts))
+      io.adapter(socketIORedis(this.redisOpts))
       debug('Using socket.io-redis')
     }
     io.sockets.on('connection', socket => {
@@ -359,8 +364,8 @@ class Crowi {
     this.middlewares = middlewares(this, app)
     this.controllers = controllers(this, app)
 
-    require('./express-init')(this, app)
-    require('../routes')(this, app)
+    expressInit(this, app)
+    routes(this, app)
 
     if (env == 'development') {
       // swig.setDefaults({ cache: false });

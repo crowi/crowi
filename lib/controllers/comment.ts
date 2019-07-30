@@ -1,9 +1,9 @@
 import Crowi from 'server/crowi'
+import ApiResponse from '../util/apiResponse'
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routs:comment')
   const Comment = crowi.model('Comment')
-  const ApiResponse = require('../util/apiResponse')
   const actions = {} as any
   const api = {} as any
 

@@ -1,9 +1,9 @@
 import Crowi from 'server/crowi'
+import ApiResponse from '../util/apiResponse'
 
 export default (crowi: Crowi) => {
   // const debug = Debug('crowi:routes:notification')
   const Notification = crowi.model('Notification')
-  const ApiResponse = require('../util/apiResponse')
   const actions = {} as any
   actions.api = {} as any
 

@@ -1,6 +1,7 @@
 import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
+import LinkDetector from '../util/linkDetector'
 import { PageDocument } from './page'
 
 export interface BacklinkDocument extends Document {
@@ -22,7 +23,7 @@ export interface BacklinkModel extends Model<BacklinkDocument> {
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:backlink')
-  const linkDetector = require('../util/linkDetector')(crowi)
+  const linkDetector = LinkDetector(crowi)
 
   const backlinkSchema = new Schema<BacklinkDocument, BacklinkModel>({
     page: { type: Schema.Types.ObjectId, ref: 'Page', index: true },

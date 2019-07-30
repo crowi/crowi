@@ -1,5 +1,6 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import ApiResponse from '../util/apiResponse'
 import { PageDocument } from 'server/models/page'
 
 export default (crowi: Crowi) => {
@@ -7,7 +8,6 @@ export default (crowi: Crowi) => {
   const Share = crowi.model('Share')
   const ShareAccess = crowi.model('ShareAccess')
   const Tracking = crowi.model('Tracking')
-  const ApiResponse = require('../util/apiResponse')
   const actions = {} as any
 
   async function firstOrCreateTrackingId(req) {

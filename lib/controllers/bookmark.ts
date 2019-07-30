@@ -1,12 +1,12 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import ApiResponse from '../util/apiResponse'
+import ApiPaginate from '../util/apiPaginate'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:bookmark')
   const Bookmark = crowi.model('Bookmark')
   const Page = crowi.model('Page')
-  const ApiResponse = require('../util/apiResponse')
-  const ApiPaginate = require('../util/apiPaginate')
   const actions = {} as any
   actions.api = {} as any
 

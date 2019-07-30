@@ -1,6 +1,8 @@
 import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
+import crypto from 'crypto'
+import FileUploader from '../util/fileUploader'
 
 export interface AttachmentDocument extends Document {
   _id: Types.ObjectId
@@ -31,10 +33,10 @@ export interface AttachmentModel extends Model<AttachmentDocument> {
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:attachment')
-  const fileUploader = require('../util/fileUploader')(crowi)
+  const fileUploader = FileUploader(crowi)
 
   function generateFileHash(fileName) {
-    var hasher = require('crypto').createHash('md5')
+    var hasher = crypto.createHash('md5')
     hasher.update(fileName)
 
     return hasher.digest('hex')
