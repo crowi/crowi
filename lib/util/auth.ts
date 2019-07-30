@@ -1,4 +1,7 @@
-module.exports = {
+import googleAuth from './googleAuth'
+import githubAuth from './githubAuth'
+
+export default {
   isLoggedIn(crowi, req) {
     const { user = {} } = req
     const User = crowi.model('User')
@@ -18,8 +21,8 @@ module.exports = {
     const { auth = {} } = req.session
     const { provider = '', accessToken = null, refreshToken = null } = auth
     const authServices = {
-      google: require('./googleAuth')(config),
-      github: require('./githubAuth')(config),
+      google: googleAuth(config),
+      github: githubAuth(config),
     }
     const providers = [authServices.google.PROVIDER, authServices.github.PROVIDER]
     if (providers.includes(provider)) {
@@ -33,7 +36,11 @@ module.exports = {
     }
     return false
   },
-  saveTokenToSession(req, provider = '', { accessToken = null, refreshToken = null, expiryDate = null }) {
+  saveTokenToSession(
+    req,
+    provider = '',
+    { accessToken = null, refreshToken = null, expiryDate = null }: { accessToken: string | null; refreshToken: string | null; expiryDate: number | null },
+  ) {
     expiryDate = expiryDate || new Date().getTime() + 60 * 60 * 1000
     req.session.auth = { provider, accessToken, refreshToken, expiryDate }
   },

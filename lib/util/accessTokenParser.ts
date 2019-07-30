@@ -1,6 +1,6 @@
-'use strict'
+import Debug from 'debug'
 
-const debug = require('debug')('crowi:util:accessTokenParser')
+const debug = Debug('crowi:util:accessTokenParser')
 
 /**
  * Extract Bearer token from Authorization header.
@@ -27,12 +27,10 @@ const extractBearerToken = headers => {
   return parts[1]
 }
 
-module.exports = {
-  parseAccessToken: req => {
-    if (!req) {
-      throw new Error('req required.')
-    }
+export const parseAccessToken = req => {
+  if (!req) {
+    throw new Error('req required.')
+  }
 
-    return extractBearerToken(req.headers) || req.query.access_token || req.body.access_token || null
-  },
+  return extractBearerToken(req.headers) || req.query.access_token || req.body.access_token || null
 }

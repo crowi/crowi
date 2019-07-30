@@ -1,19 +1,18 @@
-/**
- * mailer
- */
+import Debug from 'debug'
+import nodemailer from 'nodemailer'
+import swig from 'swig'
 
-module.exports = function(crowi) {
+const debug = Debug('crowi:lib:mailer')
+
+export default crowi => {
   'use strict'
 
-  var debug = require('debug')('crowi:lib:mailer')
-  var nodemailer = require('nodemailer')
-  var swig = require('swig')
   var config = crowi.getConfig()
-  var mailConfig = {}
-  var mailer = {}
+  var mailConfig: any = {}
+  var mailer: any = {}
   var MAIL_TEMPLATE_DIR = crowi.mailDir
 
-  function createSMTPClient(option) {
+  function createSMTPClient(option?) {
     var client
 
     debug('createSMTPClient option', option)
@@ -41,7 +40,7 @@ module.exports = function(crowi) {
     return client
   }
 
-  function createSESClient(option) {
+  function createSESClient(option?) {
     var client
 
     if (!option) {
@@ -82,7 +81,7 @@ module.exports = function(crowi) {
 
   function setupMailConfig(overrideConfig) {
     var c = overrideConfig
-    var mc = {}
+    var mc: any = {}
     mc = mailConfig
 
     mc.to = c.to

@@ -1,8 +1,6 @@
-/**
- * fileUploader
- */
+import Crowi from "server/crowi";
 
-module.exports = function(crowi) {
+export default (crowi: Crowi) => {
   'use strict'
 
   // var debug = require('debug')('crowi:lib:fileUploader')
