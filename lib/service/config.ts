@@ -1,14 +1,26 @@
-const debug = require('debug')('crowi:service:config')
-const uuidv4 = require('uuid/v4')
-const redis = require('redis')
+import Debug from 'debug'
+import { v4 as uuid } from 'uuid/v4'
+import redis from 'redis'
+import Crowi from 'server/crowi'
 
-class Config {
-  constructor(crowi) {
+const debug = Debug('crowi:service:config')
+
+export default class Config {
+  crowi: Crowi
+  config: any
+  pubSub: {
+    id: uuid
+    publisher: redis.RedisClient | null
+    subscriber: redis.RedisClient | null
+    channel: string
+  }
+
+  constructor(crowi: Crowi) {
     this.crowi = crowi
     this.config = {}
 
     this.pubSub = {
-      id: uuidv4(),
+      id: uuid(),
       publisher: null,
       subscriber: null,
       channel: 'config',
@@ -49,7 +61,7 @@ class Config {
 
   update(config) {
     this.set(config)
-    this.notifyUpdated(config)
+    this.notifyUpdated()
   }
 
   setupPubSub() {
@@ -83,5 +95,3 @@ class Config {
     }
   }
 }
-
-module.exports = Config
