@@ -1,11 +1,11 @@
 import Crowi from 'server/crowi'
+import auth from '../util/auth'
 
 export default (crowi: Crowi) => {
   return async (req, res, next) => {
     const User = crowi.model('User')
     const config = crowi.getConfig()
     const { path = '', originalUrl } = req
-    const auth = require('../util/auth')
     const query = originalUrl === '/' ? '' : `?continue=${originalUrl}`
     const isAuthPage = path.startsWith('/me/auth/')
     const isAPI = path.startsWith('/_api/')

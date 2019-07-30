@@ -1,10 +1,10 @@
 import Crowi from 'server/crowi'
+import ApiResponse from '../util/apiResponse'
+import ApiPaginate from '../util/apiPaginate'
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routes:search')
   const Page = crowi.model('Page')
-  const ApiResponse = require('../util/apiResponse')
-  const ApiPaginate = require('../util/apiPaginate')
   const actions = {} as any
   const api = (actions.api = {} as any)
 

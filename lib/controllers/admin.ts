@@ -1,5 +1,6 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import ApiResponse from '../util/apiResponse'
 import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi) => {
@@ -7,7 +8,6 @@ export default (crowi: Crowi) => {
   const models = crowi.models
   const User = models.User
   const Config = models.Config
-  const ApiResponse = require('../util/apiResponse')
   const MAX_PAGE_LIST = 5
   const actions = {} as any
 

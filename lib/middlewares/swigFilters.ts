@@ -1,6 +1,7 @@
 import { Express } from 'express'
 import Crowi from 'server/crowi'
 import swig from 'swig'
+import swigFilters from 'swig/lib/filters'
 
 export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
@@ -52,7 +53,6 @@ export default (crowi: Crowi, app: Express) => {
 
     swig.setFilter('datetz', function(input, format) {
       // timezone
-      var swigFilters = require('swig/lib/filters')
       return swigFilters.date(input, format, app.get('tzoffset'))
     })
 

@@ -1,9 +1,9 @@
 import Crowi from 'server/crowi'
+import ApiResponse from '../util/apiResponse'
 
 export default (crowi: Crowi) => {
   // const debug = Debug('crowi:routes:shareAccess')
   const ShareAccess = crowi.model('ShareAccess')
-  const ApiResponse = require('../util/apiResponse')
   const actions = {} as any
 
   const api = (actions.api = {} as any)

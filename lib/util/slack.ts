@@ -1,11 +1,14 @@
 import Crowi from 'server/crowi'
+import Debug from 'debug'
+import { WebClient as SlackWebClient } from '@slack/client'
+import diff from 'diff'
+
+const debug = Debug('crowi:util:slack')
 
 export default (crowi: Crowi) => {
   const SLACK_URL = 'https://slack.com'
 
-  const debug = require('debug')('crowi:util:slack')
   const Config = crowi.model('Config')
-  const SlackWebClient = require('@slack/client').WebClient
   const slack: any = {}
 
   slack.client = undefined
@@ -60,12 +63,12 @@ export default (crowi: Crowi) => {
     const clientSecret = config.notification['slack:clientSecret']
     const redirectUri = slack.getSlackAuthCallbackUrl()
 
-    const response = await client.oauth.access({
+    const response = (await client.oauth.access({
       client_id: clientId,
       client_secret: clientSecret,
       code: code,
       redirect_uri: redirectUri,
-    })
+    })) as any
 
     if (!response.access_token) {
       debug('Error response', response)
@@ -118,7 +121,6 @@ export default (crowi: Crowi) => {
   }
 
   slack.prepareAttachmentTextForUpdate = function(page, user, previousRevision) {
-    var diff = require('diff')
     var diffText = ''
 
     diff.diffLines(previousRevision.body, page.revision.body).forEach(function(line) {

@@ -1,6 +1,8 @@
 import { Types } from 'mongoose'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import ApiResponse from '../util/apiResponse'
+import { decodeSpace } from '../util/path'
 import { BookmarkDocument } from 'server/models/bookmark'
 import { PageDocument } from 'server/models/page'
 import { RevisionDocument } from 'server/models/revision'
@@ -18,8 +20,6 @@ export default (crowi: Crowi) => {
   const User = crowi.model('User')
   const Bookmark = crowi.model('Bookmark')
   const Watcher = crowi.model('Watcher')
-  const ApiResponse = require('../util/apiResponse')
-  const { decodeSpace } = require('../util/path')
   const actions = {} as any
   const api = (actions.api = {} as any)
 

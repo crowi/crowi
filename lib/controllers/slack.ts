@@ -1,9 +1,9 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import url from 'url'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:slack')
-  const url = require('url')
   const { slack } = crowi
   const Page = crowi.model('Page')
 
@@ -32,7 +32,7 @@ export default (crowi: Crowi) => {
 
   function parseLink(link) {
     const { pathname, query } = url.parse(link, true)
-    const pagePath = decodeURIComponent(pathname) || null
+    const pagePath = (pathname && decodeURIComponent(pathname)) || null
     const revisionId = query.revision || null
     return { pagePath, revisionId }
   }

@@ -1,14 +1,15 @@
 import { Express } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import fs from 'fs'
+import FileUploader from '../util/fileUploader'
+import ApiResponse from '../util/apiResponse'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routs:attachment')
   const Attachment = crowi.model('Attachment')
   const Page = crowi.model('Page')
-  const fs = require('fs')
-  const fileUploader = require('../util/fileUploader')(crowi, app)
-  const ApiResponse = require('../util/apiResponse')
+  const fileUploader = FileUploader(crowi)
   const actions = {} as any
   const api = {} as any
 
@@ -132,9 +133,7 @@ export default (crowi: Crowi, app: Express) => {
         const filePath = Attachment.createAttachmentFilePath(pageData._id, fileName, fileType)
         const tmpFileStream = fs.createReadStream(tmpPath, {
           flags: 'r',
-          encoding: null,
-          fd: null,
-          mode: '0666',
+          mode: 666,
           autoClose: true,
         })
 

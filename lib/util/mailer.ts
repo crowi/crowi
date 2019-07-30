@@ -1,6 +1,7 @@
 import Debug from 'debug'
 import nodemailer from 'nodemailer'
 import swig from 'swig'
+import ses from 'nodemailer-ses-transport'
 
 const debug = Debug('crowi:lib:mailer')
 
@@ -50,7 +51,6 @@ export default crowi => {
       }
     }
 
-    var ses = require('nodemailer-ses-transport')
     client = nodemailer.createTransport(ses(option))
 
     debug('mailer set up for SES', client)

@@ -1,6 +1,8 @@
 import { Express } from 'express'
 import Crowi from 'server/crowi'
 
+import multer from 'multer'
+
 import form from '../form'
 
 import Admin from './admin'
@@ -19,7 +21,6 @@ export default (crowi: Crowi, app: Express) => {
     Me: Me(crowi, app, form),
   }
 
-  const multer = require('multer')
   const uploads = multer({ dest: crowi.tmpDir + 'uploads' })
 
   const {

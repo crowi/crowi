@@ -1,10 +1,13 @@
 import { Express } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import fs from 'fs'
+import FileUploader from '../util/fileUploader'
+import GoogleAuth from '../util/googleAuth'
+import GitHubAuth from '../util/githubAuth'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:me')
-  const fs = require('fs')
   const config = crowi.getConfig()
   const User = crowi.model('User')
   const actions = {} as any
@@ -13,7 +16,7 @@ export default (crowi: Crowi, app: Express) => {
   actions.api = api
 
   api.uploadPicture = function(req, res) {
-    var fileUploader = require('../util/fileUploader')(crowi, app)
+    var fileUploader = FileUploader(crowi)
     // var storagePlugin = new pluginService('storage');
     // var storage = require('../service/storage').StorageService(config);
 
@@ -47,9 +50,7 @@ export default (crowi: Crowi, app: Express) => {
     // });
     var tmpFileStream = fs.createReadStream(tmpPath, {
       flags: 'r',
-      encoding: null,
-      fd: null,
-      mode: '0666',
+      mode: 666,
       autoClose: true,
     })
 
@@ -220,7 +221,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authGoogle = async function(req, res) {
-    const googleAuth = require('../util/googleAuth')(config)
+    const googleAuth = GoogleAuth(config)
     const { user: userData, t } = req
     const toDisconnect = !!req.body.disconnectGoogle
     const toConnect = !!req.body.connectGoogle
@@ -252,7 +253,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authGoogleCallback = function(req, res) {
-    const googleAuth = require('../util/googleAuth')(config)
+    const googleAuth = GoogleAuth(config)
     const { user: userData } = req
     const callback = req.session.callback || '/me'
 
@@ -290,7 +291,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authGitHub = async function(req, res, next) {
-    const githubAuth = require('../util/githubAuth')(config)
+    const githubAuth = GitHubAuth(config)
     const { user: userData, t } = req
     const toDisconnect = !!req.body.disconnectGitHub
     const toConnect = !!req.body.connectGitHub
@@ -317,7 +318,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authGitHubCallback = function(req, res, next) {
-    const githubAuth = require('../util/githubAuth')(config)
+    const githubAuth = GitHubAuth(config)
     const { user: userData } = req
     const callback = req.session.callback || '/me'
 
