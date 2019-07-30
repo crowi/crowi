@@ -5,11 +5,12 @@ export default {
   name: 'userSettingDetector',
 
   lookup(req: Request, res: Response, options?: LanguageDetectorInterfaceOptions) {
-    let lang = null
+    let lang = ''
+    const { user } = req as any
 
-    if (req.user) {
-      if ('lang' in req.user) {
-        lang = req.user.lang || null
+    if (user) {
+      if ('lang' in user) {
+        lang = user.lang || null
       }
     }
 

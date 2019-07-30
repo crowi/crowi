@@ -1,5 +1,5 @@
 import Crowi from "server/crowi";
-import { decodeSpace } from '../util/path'
+import { decodeSpace } from './path'
 
 export default (crowi: Crowi) => {
   // const debug = require('debug')('crowi:lib:url')

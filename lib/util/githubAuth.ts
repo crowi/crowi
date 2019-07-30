@@ -77,7 +77,8 @@ export default (config) => {
         if (err) {
           return callback(err, null)
         }
-        auth.saveTokenToSession(req, lib.PROVIDER, { accessToken: user.token })
+
+        auth.saveTokenToSession(req, lib.PROVIDER, { accessToken: user.token, refreshToken: null, expiryDate: null })
         return callback(err, user)
       })(req, res, next)
     }
