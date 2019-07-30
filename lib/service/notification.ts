@@ -1,20 +1,21 @@
-'use strict'
+import Crowi from 'server/crowi'
 
-function Notification(crowi) {
-  this.crowi = crowi
-  this.config = crowi.getConfig()
-}
+export default class Notification {
+  crowi: Crowi
+  config: any
 
-Notification.prototype.hasSlackConfig = function() {
-  if (!this.config.notification['slack']) {
-    return false
+  constructor(crowi: Crowi) {
+    this.crowi = crowi
+    this.config = crowi.getConfig()
   }
 
-  // var config = ;
+  hasSlackConfig() {
+    if (!this.config.notification['slack']) {
+      return false
+    }
+  }
+
+  noitfyByEmail() {}
+
+  noitfyByChat() {}
 }
-
-Notification.prototype.noitfyByEmail = function() {}
-
-Notification.prototype.noitfyByChat = function() {}
-
-module.exports = Notification
