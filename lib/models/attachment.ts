@@ -64,8 +64,6 @@ export default (crowi: Crowi) => {
     return `/files/${this._id}`
   })
 
-  const Attachment = model<AttachmentDocument, AttachmentModel>('Attachment', attachmentSchema)
-
   attachmentSchema.statics.getListByPageId = function(id) {
     return Attachment.find({ page: id })
       .sort({ updatedAt: 1 })
@@ -123,6 +121,8 @@ export default (crowi: Crowi) => {
 
     return data
   }
+
+  const Attachment = model<AttachmentDocument, AttachmentModel>('Attachment', attachmentSchema)
 
   return Attachment
 }
