@@ -30,8 +30,6 @@ export default (crowi: Crowi) => {
   shareAccessSchema.index({ share: 1, tracking: 1 }, { unique: true })
   shareAccessSchema.plugin(mongoosePaginate)
 
-  const ShareAccess = model<ShareAccessDocument, ShareAccessModel>('ShareAccess', shareAccessSchema)
-
   shareAccessSchema.statics.findAccesses = async function(query, options = {}) {
     const page = options.page || 1
     const limit = options.limit || 50
@@ -60,6 +58,8 @@ export default (crowi: Crowi) => {
     const update = { lastAccessedAt: Date.now() }
     return this.findOneAndUpdate(query, update, { upsert: true, new: true }).exec()
   }
+
+  const ShareAccess = model<ShareAccessDocument, ShareAccessModel>('ShareAccess', shareAccessSchema)
 
   return ShareAccess
 }

@@ -180,8 +180,6 @@ export default (crowi: Crowi) => {
     },
   )
 
-  const Page = model<PageDocument, PageModel>('Page', pageSchema)
-
   pageEvent.on('create', pageEvent.onCreate)
   pageEvent.on('update', pageEvent.onUpdate)
 
@@ -1139,6 +1137,8 @@ export default (crowi: Crowi) => {
   pageSchema.statics.TYPE_PORTAL = TYPE_PORTAL
   pageSchema.statics.TYPE_PUBLIC = TYPE_PUBLIC
   pageSchema.statics.TYPE_USER = TYPE_USER
+
+  const Page = model<PageDocument, PageModel>('Page', pageSchema)
 
   return Page
 }

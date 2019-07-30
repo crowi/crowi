@@ -61,8 +61,6 @@ export default (crowi: Crowi) => {
   shareSchema.set('toJSON', { virtuals: true })
   shareSchema.plugin(mongoosePaginate)
 
-  const Share = model<ShareDocument, ShareModel>('Share', shareSchema)
-
   shareSchema.methods.isActive = function() {
     return this.status === STATUS_ACTIVE
   }
@@ -189,6 +187,8 @@ export default (crowi: Crowi) => {
 
   shareSchema.statics.STATUS_ACTIVE = STATUS_ACTIVE
   shareSchema.statics.STATUS_INACTIVE = STATUS_INACTIVE
+
+  const Share = model<ShareDocument, ShareModel>('Share', shareSchema)
 
   return Share
 }

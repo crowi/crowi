@@ -125,8 +125,6 @@ export default (crowi: Crowi) => {
   })
   userSchema.plugin(mongoosePaginate)
 
-  const User = model<UserDocument, UserModel>('User', userSchema)
-
   userEvent.on('activated', userEvent.onActivated)
 
   function decideUserStatusOnRegistration() {
@@ -700,6 +698,8 @@ export default (crowi: Crowi) => {
   userSchema.statics.LANG_EN_US = LANG_EN_US
   userSchema.statics.LANG_EN_GB = LANG_EN_US
   userSchema.statics.LANG_JA = LANG_JA
+
+  const User = model<UserDocument, UserModel>('User', userSchema)
 
   return User
 }

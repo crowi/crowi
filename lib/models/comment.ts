@@ -31,8 +31,6 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  const Comment = model<CommentDocument, CommentModel>('Comment', commentSchema)
-
   commentSchema.statics.getCommentsByPageId = function(id) {
     return Comment.find({ page: id })
       .sort({ createdAt: -1 })
@@ -81,6 +79,8 @@ export default (crowi: Crowi) => {
       })
       .catch(function(err) {})
   })
+
+  const Comment = model<CommentDocument, CommentModel>('Comment', commentSchema)
 
   return Comment
 }

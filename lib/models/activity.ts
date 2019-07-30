@@ -73,8 +73,6 @@ export default (crowi: Crowi) => {
   activitySchema.index({ target: 1, action: 1 })
   activitySchema.index({ user: 1, target: 1, action: 1, createdAt: 1 }, { unique: true })
 
-  const Activity = model<ActivityDocument, ActivityModel>('Activity', activitySchema)
-
   /**
    * @param {object} parameters
    * @return {Promise}
@@ -233,6 +231,8 @@ export default (crowi: Crowi) => {
       debug(err)
     }
   })
+
+  const Activity = model<ActivityDocument, ActivityModel>('Activity', activitySchema)
 
   return Activity
 }

@@ -39,8 +39,6 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  const UpdatePost = model<UpdatePostDocument, UpdatePostModel>('UpdatePost', updatePostSchema)
-
   updatePostSchema.statics.normalizeChannelName = function(channel) {
     return channel.replace(/(#|,)/g, '')
   }
@@ -124,6 +122,8 @@ export default (crowi: Crowi) => {
       createdAt: Date.now(),
     })
   }
+
+  const UpdatePost = model<UpdatePostDocument, UpdatePostModel>('UpdatePost', updatePostSchema)
 
   return UpdatePost
 }

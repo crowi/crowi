@@ -37,8 +37,6 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  const Revision = model<RevisionDocument, RevisionModel>('Revision', revisionSchema)
-
   revisionSchema.statics.findLatestRevision = function(path, cb) {
     this.findOne({ path })
       .sort({ createdAt: -1 })
@@ -111,6 +109,8 @@ export default (crowi: Crowi) => {
   revisionSchema.statics.findAuthorsByPage = function(page) {
     return Revision.distinct('author', { path: page.path }).exec() as Promise<RevisionDocument['author'][]>
   }
+
+  const Revision = model<RevisionDocument, RevisionModel>('Revision', revisionSchema)
 
   return Revision
 }
