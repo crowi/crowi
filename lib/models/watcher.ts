@@ -1,8 +1,8 @@
 import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
+import ActivityDefine from '../util/activityDefine'
 // import Debug from 'debug'
 
-const ActivityDefine = require('../util/activityDefine')()
 const STATUS_WATCH = 'WATCH'
 const STATUS_IGNORE = 'IGNORE'
 const STATUSES = [STATUS_WATCH, STATUS_IGNORE]
