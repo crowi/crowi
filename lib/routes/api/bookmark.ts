@@ -1,7 +1,8 @@
-const { Router } = require('express')
+import { Router, Express } from 'express'
+import Crowi from 'server/crowi'
 const router = Router()
 
-module.exports = (crowi, app, form) => {
+export default (crowi: Crowi, app: Express, form) => {
   const { Bookmark } = crowi.controllers
   const { LoginRequired, AccessTokenParser, CsrfVerify: csrf } = crowi.middlewares
 

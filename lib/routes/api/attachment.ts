@@ -1,8 +1,9 @@
-const { Router } = require('express')
+import { Router, Express } from 'express'
+import Crowi from 'server/crowi'
+import multer from 'multer'
 const router = Router()
-const multer = require('multer')
 
-module.exports = (crowi, app, form) => {
+export default (crowi: Crowi, app: Express, form) => {
   const { Attachment } = crowi.controllers
   const { AccessTokenParser, LoginRequired, CsrfVerify: csrf } = crowi.middlewares
 
