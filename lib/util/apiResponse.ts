@@ -1,5 +1,5 @@
 export default {
-  error(err, info = {}) {
+  error(err?, info = {}) {
     const result: {
       ok: boolean
       info: object
@@ -17,7 +17,7 @@ export default {
 
     return result
   },
-  success(data) {
+  success(data?) {
     const result = data || {}
 
     result.ok = true
