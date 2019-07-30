@@ -5,14 +5,15 @@
  * @author  Sotaro KARASAWA <sotarok@crocos.co.jp>
  */
 
-// load .env
-require('dotenv').config()
+import dotenv from 'dotenv'
+import Crowi from 'server/crowi'
 
-var crowi = new (require('./lib/crowi'))(__dirname, process.env)
+// load .env
+dotenv.config()
+
+const crowi = new Crowi(__dirname, process.env)
 
 crowi
   .init()
-  .then(function() {
-    return crowi.start()
-  })
+  .then(crowi.start)
   .catch(crowi.exitOnError)
