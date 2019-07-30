@@ -90,8 +90,6 @@ export default (crowi: Crowi) => {
   notificationSchema.set('toJSON', { virtuals: true, transform })
   notificationSchema.index({ user: 1, target: 1, action: 1, createdAt: 1 }, { unique: true })
 
-  const Notification = model<NotificationDocument, NotificationModel>('Notification', notificationSchema)
-
   notificationSchema.statics.findLatestNotificationsByUser = function(user, limit, offset) {
     limit = limit || 10
 
@@ -190,6 +188,8 @@ export default (crowi: Crowi) => {
   notificationSchema.statics.STATUS_UNOPENED = STATUS_UNOPENED
   notificationSchema.statics.STATUS_UNREAD = STATUS_UNREAD
   notificationSchema.statics.STATUS_OPENED = STATUS_OPENED
+
+  const Notification = model<NotificationDocument, NotificationModel>('Notification', notificationSchema)
 
   return Notification
 }

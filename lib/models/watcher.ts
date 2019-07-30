@@ -58,8 +58,6 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  const Watcher = model<WatcherDocument, WatcherModel>('Watcher', watcherSchema)
-
   watcherSchema.methods.isWatching = function() {
     return this.status === STATUS_WATCH
   }
@@ -93,6 +91,8 @@ export default (crowi: Crowi) => {
 
   watcherSchema.statics.STATUS_WATCH = STATUS_WATCH
   watcherSchema.statics.STATUS_IGNORE = STATUS_IGNORE
+
+  const Watcher = model<WatcherDocument, WatcherModel>('Watcher', watcherSchema)
 
   return Watcher
 }

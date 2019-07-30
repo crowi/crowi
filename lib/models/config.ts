@@ -51,8 +51,6 @@ export default (crowi: Crowi) => {
     value: { type: String, required: true },
   })
 
-  const Config = model<ConfigDocument, ConfigModel>('Config', configSchema)
-
   function getArrayForInstalling() {
     return {
       // 'app:installed'     : "0.0.0",
@@ -259,6 +257,8 @@ export default (crowi: Crowi) => {
   configSchema.statics.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN
   configSchema.statics.SECURITY_REGISTRATION_MODE_RESTRICTED = SECURITY_REGISTRATION_MODE_RESTRICTED
   configSchema.statics.SECURITY_REGISTRATION_MODE_CLOSED = SECURITY_REGISTRATION_MODE_CLOSED
+
+  const Config = model<ConfigDocument, ConfigModel>('Config', configSchema)
 
   return Config
 }

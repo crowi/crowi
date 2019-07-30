@@ -32,8 +32,6 @@ export default (crowi: Crowi) => {
     updatedAt: { type: Date, default: Date.now, index: true },
   })
 
-  const Backlink = model<BacklinkDocument, BacklinkModel>('BackLink', backlinkSchema)
-
   backlinkSchema.statics.findByPageId = async function(pageId, limit, offset) {
     limit = limit || 10
     offset = offset || 0
@@ -160,6 +158,8 @@ export default (crowi: Crowi) => {
       }),
     )
   }
+
+  const Backlink = model<BacklinkDocument, BacklinkModel>('BackLink', backlinkSchema)
 
   return Backlink
 }
