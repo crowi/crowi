@@ -1,5 +1,6 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
+import { PageDocument } from 'server/models/page'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:share')
@@ -67,7 +68,7 @@ export default (crowi: Crowi) => {
 
       if (hasAccessAuthority(secretKeywords, share)) {
         req.session.shareIds = updateShareIds(shareIds, uuid)
-        const page = share.page
+        const page = (share.page as any) as PageDocument
         const { path = '', revision = {} } = page
 
         return res.render('page_share', { hasSecretKeyword: true, shareId, page, path, revision })

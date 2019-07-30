@@ -1,5 +1,8 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, Query, model } from 'mongoose'
 import Debug from 'debug'
+import { ActivityDocument } from './activity'
+import { UserDocument } from './user'
 
 const STATUS_UNREAD = 'UNREAD'
 const STATUS_UNOPENED = 'UNOPENED'
@@ -21,8 +24,8 @@ export interface NotificationModel extends Model<NotificationDocument> {
   upsertByActivity(user: Types.ObjectId, sameActivities: Types.ObjectId[], activity: any): Promise<NotificationDocument | null>
   removeActivity(activity: any): any
   removeEmpty(): Query<any>
-  read(user: Types.ObjectId): Promise<Query<any>>
-  open(user: Types.ObjectId, id: Types.ObjectId): Promise<NotificationDocument | null>
+  read(user: UserDocument): Promise<Query<any>>
+  open(user: UserDocument, id: Types.ObjectId): Promise<NotificationDocument | null>
   getUnreadCountByUser(user: Types.ObjectId): Promise<number | undefined>
 
   STATUS_UNREAD: string
@@ -30,7 +33,7 @@ export interface NotificationModel extends Model<NotificationDocument> {
   STATUS_OPENED: string
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:notification')
   const ActivityDefine = require('../util/activityDefine')()
   const notificationEvent = crowi.event('Notification')
@@ -75,9 +78,9 @@ export default crowi => {
       default: Date.now,
     },
   })
-  notificationSchema.virtual('actionUsers').get(function() {
+  notificationSchema.virtual('actionUsers').get(function(this: NotificationDocument) {
     const Activity = crowi.model('Activity')
-    return Activity.getActionUsersFromActivities(this.activities)
+    return Activity.getActionUsersFromActivities((this.activities as any) as ActivityDocument[])
   })
   const transform = (doc, ret) => {
     delete ret.activities
@@ -123,7 +126,7 @@ export default crowi => {
 
     const notification = await Notification.findOneAndUpdate(query, parameters, options)
 
-    if (notification !== undefined) {
+    if (notification) {
       notificationEvent.emit('update', notification.user)
     }
 
@@ -160,7 +163,7 @@ export default crowi => {
     const options = { new: true }
 
     const notification = await Notification.findOneAndUpdate(query, parameters, options)
-    if (notification !== undefined) {
+    if (notification) {
       notificationEvent.emit('update', notification.user)
     }
     return notification

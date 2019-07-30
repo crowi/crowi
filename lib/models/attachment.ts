@@ -1,3 +1,4 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
@@ -10,8 +11,12 @@ export interface AttachmentDocument extends Document {
   fileFormat: string
   fileSize: number
   createdAt: Date
+
   // virtual
-  fileURL: string
+  fileUrl: string
+
+  // dynamic field
+  url: string
 }
 
 export interface AttachmentModel extends Model<AttachmentDocument> {
@@ -19,11 +24,11 @@ export interface AttachmentModel extends Model<AttachmentDocument> {
   guessExtByFileType(fileType: string): string
   createAttachmentFilePath(pageId: Types.ObjectId, fileName: string, fileType: string): string
   removeAttachmentsByPageId(pageId: Types.ObjectId): any
-  findDeliveryFile(attachment: AttachmentDocument, forceUpdate: boolean): any
+  findDeliveryFile(attachment: AttachmentDocument, forceUpdate?: boolean): any
   removeAttachment(attachment: AttachmentDocument): any
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:attachment')
   const fileUploader = require('../util/fileUploader')(crowi)
 
@@ -53,7 +58,7 @@ export default crowi => {
   )
 
   attachmentSchema.virtual('fileUrl').get(function(this: AttachmentDocument) {
-    ;`/files/${this._id}`
+    return `/files/${this._id}`
   })
 
   const Attachment = model<AttachmentDocument, AttachmentModel>('Attachment', attachmentSchema)
@@ -101,7 +106,7 @@ export default crowi => {
 
   attachmentSchema.statics.findDeliveryFile = function(attachment, forceUpdate) {
     // TODO
-    var forceUpdate = forceUpdate || false
+    forceUpdate = forceUpdate || false
 
     return fileUploader.findDeliveryFile(attachment._id, attachment.filePath)
   }

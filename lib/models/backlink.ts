@@ -1,5 +1,7 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
+import { PageDocument } from './page'
 
 export interface BacklinkDocument extends Document {
   page: Types.ObjectId | any
@@ -14,10 +16,10 @@ export interface BacklinkModel extends Model<BacklinkDocument> {
   removeBySavedPage(savedPage: any)
   createByParameters(parameters: any): Promise<BacklinkDocument>
   createBySavedPage(savedPage: any): Promise<BacklinkDocument[]>
-  createByAllPages(): Promise<BacklinkDocument[]>
+  createByAllPages(): Promise<BacklinkDocument[][]>
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:backlink')
   const linkDetector = require('../util/linkDetector')(crowi)
 
@@ -129,13 +131,13 @@ export default crowi => {
 
     const revisions = await Revision.find({ _id: { $in: latestRevisionIds } }).and({
       $or: [{ body: linkDetector.getLinkRegexp() }, { body: linkDetector.getPathRegexps()[0] }, { body: linkDetector.getPathRegexps()[1] }],
-    })
+    } as any)
 
     await Backlink.remove({})
 
     return Promise.all(
       revisions.map(async ({ _id: revisionId, body }) => {
-        const page = pages.find(({ revision }) => revision.toString() === revisionId.toString())
+        const page = pages.find(({ revision }) => revision.toString() === revisionId.toString()) as PageDocument
         const pageId = page._id
 
         const links = linkDetector.search(body)

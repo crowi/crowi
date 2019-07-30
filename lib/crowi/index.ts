@@ -64,11 +64,11 @@ class Crowi {
   tokens: Tokens
 
   // FIXME: {} をアサインしないで済む方法を捜す
-  models: Models = {} as Models
+  models: Models = ({} as any) as Models
 
-  events: Events = {} as Events
+  events: Events = ({} as any) as Events
 
-  middlewares: Middlewares = {} as Middlewares
+  middlewares: Middlewares = ({} as any) as Middlewares
 
   controllers: any = {}
 

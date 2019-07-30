@@ -1,3 +1,4 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
@@ -27,7 +28,7 @@ export interface BookmarkModel extends Model<BookmarkDocument> {
   removeBookmark(page: any, user: any): any
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:Bookmark')
   const BookmarkEvent = crowi.event('Bookmark')
 

@@ -1,3 +1,4 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 // import Debug from 'debug'
 
@@ -16,14 +17,14 @@ export interface UpdatePostModel extends Model<UpdatePostDocument> {
   createPrefixesByPathPattern(pathPattern): any
   getRegExpByPattern(pattern): any
   findSettingsByPath(path): any
-  findAll(offset): any
+  findAll(offset?: number): Promise<UpdatePostDocument[]>
   createUpdatePost(pathPattern: string, channel: string, creator: Types.ObjectId): Promise<UpdatePostDocument>
 }
 
 /**
  * This is the setting for notify to 3rd party tool (like Slack).
  */
-export default crowi => {
+export default (crowi: Crowi) => {
   // const debug = Debug('crowi:models:updatePost')
 
   // TODO: slack 以外の対応
@@ -98,7 +99,7 @@ export default crowi => {
     return validSettings
   }
 
-  updatePostSchema.statics.findAll = function(offset) {
+  updatePostSchema.statics.findAll = function(offset = 0) {
     offset = offset || 0
 
     return UpdatePost.find()

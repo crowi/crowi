@@ -1,3 +1,4 @@
+import Crowi from 'server/crowi'
 import { Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
@@ -40,7 +41,7 @@ export interface ConfigModel extends Model<ConfigDocument> {
   SECURITY_REGISTRATION_MODE_CLOSED: string
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:config')
 
   const configSchema = new Schema<ConfigDocument, ConfigModel>({

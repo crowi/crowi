@@ -1,3 +1,4 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
@@ -17,7 +18,7 @@ export interface CommentModel extends Model<CommentDocument> {
   findCreatorsByPage(page: any): Promise<any[]>
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:comment')
 
   const commentSchema = new Schema<CommentDocument, CommentModel>({

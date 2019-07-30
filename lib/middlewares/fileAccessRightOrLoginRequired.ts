@@ -6,6 +6,9 @@ export default (crowi: Crowi) => {
       const Attachment = crowi.model('Attachment')
       const Share = crowi.model('Share')
       const attachment = await Attachment.findById(req.params.id)
+      if (!attachment) {
+        return res.sendStatus(404)
+      }
       const { uuid, secretKeyword } = await Share.findShareByPageId(attachment.page, { status: Share.STATUS_ACTIVE })
       const { shareIds = [], secretKeywords = {} } = req.session
       const isNoExistKeyword = !secretKeyword

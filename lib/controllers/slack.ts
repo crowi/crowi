@@ -41,7 +41,9 @@ export default (crowi: Crowi) => {
     const results = {}
     links.forEach(({ url }) => {
       const { pagePath, revisionId } = parseLink(url)
-      results[pagePath] = { url, pagePath, revisionId }
+      if (pagePath) {
+        results[pagePath] = { url, pagePath, revisionId }
+      }
     })
     return results
   }

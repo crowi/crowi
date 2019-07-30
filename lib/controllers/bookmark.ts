@@ -21,11 +21,10 @@ export default (crowi: Crowi) => {
     var pageId = req.query.page_id
 
     Bookmark.findByPageIdAndUserId(pageId, req.user)
-      .then(function(data) {
-        debug('bookmark found', pageId, data)
-        var result = {}
+      .then(function(bookmark) {
+        debug('bookmark found', pageId, bookmark)
+        const result = { bookmark }
 
-        result.bookmark = data
         return res.json(ApiResponse.success(result))
       })
       .catch(function(err) {
@@ -67,12 +66,12 @@ export default (crowi: Crowi) => {
           return res.json(ApiResponse.success({ bookmark: null }))
         }
       })
-      .then(function(data) {
-        var result = {}
-        data.depopulate('page')
-        data.depopulate('user')
+      .then(function(bookmark) {
+        bookmark.depopulate('page')
+        bookmark.depopulate('user')
 
-        result.bookmark = data
+        const result = { bookmark }
+
         return res.json(ApiResponse.success(result))
       })
       .catch(function(err) {

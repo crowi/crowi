@@ -1,3 +1,5 @@
+import Crowi from 'server/crowi'
+import { DeleteWriteOpResultObject } from 'mongodb'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
@@ -20,13 +22,13 @@ export interface ActivityModel extends Model<ActivityDocument> {
   removeByParameters(parameters: any): any
   createByPageComment(comment: any): Promise<ActivityDocument>
   createByPageLike(page: any, user: any): Promise<ActivityDocument>
-  removeByPageUnlike(page: any, user: any): Promise<ActivityDocument>
-  removeByPage(page: any): Promise<ActivityDocument>
+  removeByPageUnlike(page: any, user: any): Promise<DeleteWriteOpResultObject['result']>
+  removeByPage(page: any): Promise<DeleteWriteOpResultObject['result']>
   findByUser(user: any): Promise<ActivityDocument[]>
   getActionUsersFromActivities(activities: ActivityDocument[]): any[]
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:activity')
   const ActivityDefine = require('../util/activityDefine')()
   const activityEvent = crowi.event('Activity')
@@ -87,7 +89,7 @@ export default crowi => {
     const activity = await Activity.findOne(parameters)
     activityEvent.emit('remove', activity)
 
-    return Activity.remove(parameters)
+    return Activity.remove(parameters).exec()
   }
 
   /**
@@ -148,7 +150,7 @@ export default crowi => {
     for (const activity of activities) {
       activityEvent.emit('remove', activity)
     }
-    return Activity.remove({ target: page })
+    return Activity.remove({ target: page }).exec()
   }
 
   /**
@@ -184,8 +186,8 @@ export default crowi => {
     const model: any = await this.model(targetModel).findById(target)
     const [targetUsers, watchUsers, ignoreUsers] = await Promise.all([
       model.getNotificationTargetUsers(),
-      Watcher.getWatchers(target),
-      Watcher.getIgnorers(target),
+      Watcher.getWatchers((target as any) as Types.ObjectId),
+      Watcher.getIgnorers((target as any) as Types.ObjectId),
     ])
 
     const unique = array => Object.values(array.reduce((objects, object) => ({ ...objects, [object.toString()]: object }), {}))
@@ -211,7 +213,7 @@ export default crowi => {
 
       const notificationPromises = notificationUsers.map(user => {
         const filteredActivities = sameActivities.filter(({ user: sameActionUser }) => user.toString() !== sameActionUser.toString())
-        return Notification.upsertByActivity(user, filteredActivities, savedActivity)
+        return Notification.upsertByActivity(user, (filteredActivities as any) as Types.ObjectId[], savedActivity)
       })
       return Promise.all(notificationPromises)
     } catch (err) {

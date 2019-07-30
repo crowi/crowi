@@ -30,7 +30,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} offset
    * @apiParam {String} limit
    */
-  api.search = function(req, res) {
+  api.search = async function(req, res) {
     const { user } = req
     const { q: keyword = null, tree = null, type = null } = req.query
     let paginateOpts
@@ -57,31 +57,28 @@ export default (crowi: Crowi) => {
     } else {
       doSearch = search.searchKeyword(keyword, user, searchOpts)
     }
-    const result = {}
-    doSearch
-      .then(function(data) {
-        result.meta = data.meta
-        result.searchResult = data.data
 
-        return Page.populatePageListToAnyObjects(data.data)
-      })
-      .then(function(pages) {
-        result.data = pages
-          .filter(page => {
-            if (Object.keys(page).length < 12) {
-              // FIXME: 12 is a number of columns.
-              return false
-            }
-            return true
-          })
-          .map(page => {
-            return { ...page, bookmarkCount: (page._source && page._source.bookmark_count) || 0 }
-          })
-        return res.json(ApiResponse.success(result))
-      })
-      .catch(function(err) {
-        return res.json(ApiResponse.error(err))
-      })
+    try {
+      const { meta, data: searchResult } = await doSearch
+
+      const pages = await Page.populatePageListToAnyObjects(searchResult)
+
+      const data = pages
+        .filter(page => {
+          if (Object.keys(page).length < 12) {
+            // FIXME: 12 is a number of columns.
+            return false
+          }
+          return true
+        })
+        .map(page => {
+          return { ...page, bookmarkCount: (page._source && page._source.bookmark_count) || 0 }
+        })
+
+      return res.json(ApiResponse.success({ meta, searchResult, data }))
+    } catch (err) {
+      return res.json(ApiResponse.error(err))
+    }
   }
 
   return actions

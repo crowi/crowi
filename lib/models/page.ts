@@ -1,5 +1,8 @@
+import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
+import { RevisionDocument } from './revision'
+import { UserDocument } from './user'
 
 const GRANT_PUBLIC = 1
 const GRANT_RESTRICTED = 2
@@ -26,6 +29,14 @@ export interface PageDocument extends Document {
   liker: Types.ObjectId[]
   seenUsers: Types.ObjectId[]
   commentCount: number
+  extended: object
+  createdAt: Date
+  updatedAt: Date
+
+  // dynamic fields
+  latestRevision?: Types.ObjectId
+  likerCount?: number
+  seenUsersCount?: number
 
   isPublished(): boolean
   isDeleted(): boolean
@@ -41,13 +52,13 @@ export interface PageDocument extends Document {
   isUnlinkable(user: any): boolean
   isWIP(): boolean
   like(user: any): any
-  unlike(user: any, callback): any
+  unlike(user: any): any
   unlink(user: any): any
   isSeenUser(user: any): any
   seen(user: any): any
   getSlackChannel(): any
   updateSlackChannel(slackChannel): any
-  updateExtended(extended): any
+  updateExtended(extended: object): any
   getNotificationTargetUsers(): any
 }
 
@@ -61,11 +72,12 @@ export interface PageModel extends Model<PageDocument> {
   TYPE_PUBLIC: string
   TYPE_USER: string
 
-  populatePageData(pageData, revisionId): any
+  populatePageData(pageData, revisionId?: Types.ObjectId | null): PageDocument
   populatePagesRevision(pages, revisions): any
   populatePageListToAnyObjects(pageIdObjectArray): any
   updateCommentCount(page, num): any
-  hasPortalPage(path, user, revisionId): any
+  hasPortalPage(path, user, revisionId?): Promise<boolean>
+  findPortalPage(path, user, revisionId?): Promise<PageDocument | null>
   getGrantLabels(): any
   normalizePath(path): any
   getUserPagePath(user): any
@@ -77,10 +89,10 @@ export interface PageModel extends Model<PageDocument> {
   updateRevision(pageId, revisionId, cb): any
   exists(query): any
   findUpdatedList(offset, limit, cb): any
-  findPageById(id): any
-  findPageByIdAndGrantedUser(id, userData): any
-  findPage(path, userData, revisionId, ignoreNotFound): any
-  findPageByPath(path): any
+  findPageById(id): Promise<PageDocument>
+  findPageByIdAndGrantedUser(id, userData): Promise<PageDocument>
+  findPage(path, userData, revisionId?, ignoreNotFound?): Promise<PageDocument | null>
+  findPageByPath(path): Promise<PageDocument>
   isExistByPath(path): any
   isExistById(id): any
   findListByPageIds(ids, options): any
@@ -88,7 +100,7 @@ export interface PageModel extends Model<PageDocument> {
   findPagesByIds(ids): any
   findListByCreator(user, option, currentUser): any
   getStreamOfFindAll(options): any
-  findListByStartWith(path, userData, option): any
+  findListByStartWith(path, userData, option): Promise<PageDocument[]>
   findChildrenByPath(path, userData, option): any
   findUnfurlablePages(type, array, grants?: number[]): any
   findUnfurlablePagesByIds(ids): any
@@ -98,11 +110,11 @@ export interface PageModel extends Model<PageDocument> {
   pushToGrantedUsers(page, userData): any
   pushRevision(pageData, newRevision, user): any
   createPage(path, body, user, options): any
-  updatePage(pageData, body, user, options: object): any
-  deletePage(pageData, user, options): any
-  revertDeletedPage(pageData, user, options): any
-  completelyDeletePage(pageData, user, options): any
-  removePage(pageData): any
+  updatePage(pageData: PageDocument, body, user, options: any): any
+  deletePage(pageData: PageDocument, user): any
+  revertDeletedPage(pageData: PageDocument, user): Promise<PageDocument>
+  completelyDeletePage(pageData: PageDocument, user?): Promise<PageDocument>
+  removePage(pageData: PageDocument): any
   removePageById(pageId): any
   removePageByPath(pagePath): any
   removeRedirectOriginPageByPath(pagePath): any
@@ -113,7 +125,7 @@ export interface PageModel extends Model<PageDocument> {
   allPageCount(): any
 }
 
-export default crowi => {
+export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:page')
   const pageEvent = crowi.event('Page')
 
@@ -202,7 +214,7 @@ export default crowi => {
   }
 
   pageSchema.methods.isCreator = function(userData) {
-    if (this.populated('creator') && this.creator._id.toString() === userData._id.toString()) {
+    if (this.populated('creator') && ((this.creator as any) as UserDocument)._id.toString() === userData._id.toString()) {
       return true
     } else if (this.creator.toString() === userData._id.toString()) {
       return true
@@ -229,7 +241,7 @@ export default crowi => {
       return true
     }
 
-    return this.latestRevision == this.revision._id.toString()
+    return this.latestRevision == ((this.revision as any) as RevisionDocument)._id.toString()
   }
 
   pageSchema.methods.isUpdatable = function(previousRevision) {
@@ -257,7 +269,7 @@ export default crowi => {
   pageSchema.methods.like = async function(userData) {
     var Activity = crowi.model('Activity')
 
-    const added = this.liker.addToSet(userData._id)
+    const added = ((this.liker as any) as Types.Array<UserDocument>).addToSet(userData._id)
     if (added.length > 0) {
       const data = await this.save()
 
@@ -279,9 +291,10 @@ export default crowi => {
   pageSchema.methods.unlike = async function(userData) {
     const Activity = crowi.model('Activity')
 
-    const beforeCount = this.liker.length
-    this.liker.pull(userData._id)
-    if (this.liker.length != beforeCount) {
+    const liker = (this.liker as any) as Types.Array<UserDocument>
+    const beforeCount = liker.length
+    liker.pull(userData._id)
+    if (liker.length != beforeCount) {
       const data = await this.save()
 
       try {
@@ -315,12 +328,16 @@ export default crowi => {
   }
 
   pageSchema.methods.isSeenUser = function(userData) {
-    return this.seenUsers.some(function(seenUser) {
+    const seenUsers = (this.seenUsers as any) as UserDocument[]
+
+    return seenUsers.some(function(seenUser) {
       return seenUser.equals(userData._id)
     })
   }
 
   pageSchema.methods.seen = async function(userData) {
+    const seenUsers = (this.seenUsers as any) as Types.Array<UserDocument>
+
     if (this.isSeenUser(userData)) {
       debug('seenUsers not updated')
       return this
@@ -330,7 +347,7 @@ export default crowi => {
       throw new Error('User data is not valid')
     }
 
-    const added = this.seenUsers.addToSet(userData)
+    const added = seenUsers.addToSet(userData)
 
     await this.save()
 
@@ -349,7 +366,7 @@ export default crowi => {
   }
 
   pageSchema.methods.updateSlackChannel = function(slackChannel) {
-    var extended = this.extended
+    var extended = this.extended as any
     extended.slack = slackChannel
 
     return this.updateExtended(extended)
@@ -360,7 +377,7 @@ export default crowi => {
     return this.save()
   }
 
-  pageSchema.statics.populatePageData = function(pageData, revisionId) {
+  pageSchema.statics.populatePageData = function(pageData: PageDocument, revisionId) {
     pageData.latestRevision = pageData.revision
     if (revisionId) {
       pageData.revision = revisionId
@@ -412,7 +429,16 @@ export default crowi => {
     return Page.update({ _id: page }, { commentCount: num }, {})
   }
 
-  pageSchema.statics.hasPortalPage = function(path, user, revisionId) {
+  pageSchema.statics.hasPortalPage = async function(path, user, revisionId) {
+    try {
+      const page = await Page.findPage(path, user, revisionId)
+      return !!page
+    } catch (err) {
+      return false
+    }
+  }
+
+  pageSchema.statics.findPortalPage = async function(path, user, revisionId) {
     try {
       const page = await Page.findPage(path, user, revisionId)
       return page
@@ -555,7 +581,7 @@ export default crowi => {
     }
 
     if (!pageData.isGrantedFor(userData)) {
-      return new Error('Page is not granted for the user') // PAGE_GRANT_ERROR, null);
+      throw new Error('Page is not granted for the user') // PAGE_GRANT_ERROR, null);
     }
 
     return Page.populatePageData(pageData, revisionId || null)
@@ -565,7 +591,7 @@ export default crowi => {
   pageSchema.statics.findPageByPath = async function(path) {
     const pageData = await Page.findOne({ path })
     if (pageData === null) {
-      throw null
+      throw new Error('Page not found')
     }
 
     return pageData
@@ -609,7 +635,7 @@ export default crowi => {
     const pageData = await Page.findOne({ redirectTo: path })
 
     if (pageData === null) {
-      throw null
+      throw new Error('Page not found')
     }
 
     return pageData
@@ -637,7 +663,7 @@ export default crowi => {
   pageSchema.statics.findListByCreator = function(user, option, currentUser) {
     var limit = option.limit || 50
     var offset = option.offset || 0
-    var conditions = {
+    var conditions: any = {
       creator: user._id,
       redirectTo: null,
       $or: [{ status: null }, { status: STATUS_PUBLISHED }],
@@ -661,7 +687,7 @@ export default crowi => {
   pageSchema.statics.getStreamOfFindAll = function(options) {
     var options = options || {}
     var publicOnly = options.publicOnly !== false
-    var criteria = { redirectTo: null }
+    var criteria: any = { redirectTo: null }
 
     if (publicOnly) {
       criteria.grant = GRANT_PUBLIC
@@ -862,7 +888,7 @@ export default crowi => {
     return pageData
   }
 
-  pageSchema.statics.deletePage = async function(pageData, user, options) {
+  pageSchema.statics.deletePage = async function(pageData, user) {
     const Share = crowi.model('Share')
     const newPath = Page.getDeletedPageName(pageData.path)
     if (Page.isDeletableName(pageData.path)) {
@@ -879,7 +905,7 @@ export default crowi => {
     throw new Error('Page is not deletable.')
   }
 
-  pageSchema.statics.revertDeletedPage = async function(pageData, user, options) {
+  pageSchema.statics.revertDeletedPage = async function(pageData, user) {
     const newPath = Page.getRevertDeletedPageName(pageData.path)
 
     // 削除時、元ページの path には必ず redirectTo 付きで、ページが作成される。
@@ -903,7 +929,7 @@ export default crowi => {
   /**
    * This is danger.
    */
-  pageSchema.statics.completelyDeletePage = async function(pageData, user, options) {
+  pageSchema.statics.completelyDeletePage = async function(pageData, user) {
     // Delete Bookmarks, Attachments, Revisions, Pages and emit delete
     const Bookmark = crowi.model('Bookmark')
     const Attachment = crowi.model('Attachment')
@@ -992,7 +1018,7 @@ export default crowi => {
     // pageData の path を変更
     await Page.updatePageProperty(pageData, updateData)
     // reivisions の path を変更
-    const data = await Revision.updateRevisionListByPath(path, { path: newPagePath }, {})
+    const data = await Revision.updateRevisionListByPath(path, { path: newPagePath })
     pageData.path = newPagePath
 
     if (createRedirectPage) {
