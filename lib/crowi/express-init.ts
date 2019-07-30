@@ -1,26 +1,26 @@
-'use strict'
+import express, { Express } from 'express'
+import bodyParser from 'body-parser'
+import cookieParser from 'cookie-parser'
+import methodOverride from 'method-override'
+import passport from 'passport'
+import session from 'express-session'
+import flash from 'connect-flash'
+import cons from 'consolidate'
+import Crowi from 'server/crowi'
 
-module.exports = function(crowi, app) {
-  // var debug = require('debug')('crowi:crowi:express-init')
-  var express = require('express')
-  var bodyParser = require('body-parser')
-  var cookieParser = require('cookie-parser')
-  var methodOverride = require('method-override')
-  var passport = require('passport')
-  var session = require('express-session')
-  var flash = require('connect-flash')
-  var cons = require('consolidate')
-  var env = crowi.node_env
+export default (crowi: Crowi, app: Express) => {
+  // const debug = Debug('crowi:crowi:express-init')
+  const env = crowi.node_env
   const middlewares = crowi.middlewares
 
-  app.use(function(req, res, next) {
-    var now = new Date()
-    var baseUrl
-    var config = crowi.getConfig()
-    var tzoffset = -(config.crowi['app:timezone'] || 9) * 60 // for date
-    var Page = crowi.model('Page')
-    var User = crowi.model('User')
-    var Config = crowi.model('Config')
+  app.use(function(req: any, res, next) {
+    const now = new Date()
+    let baseUrl
+    let config = crowi.getConfig()
+    const tzoffset = -(config.crowi['app:timezone'] || 9) * 60 // for date
+    const Page = crowi.model('Page')
+    const User = crowi.model('User')
+    const Config = crowi.model('Config')
 
     app.set('tzoffset', tzoffset)
 
