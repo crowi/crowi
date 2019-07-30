@@ -1,6 +1,4 @@
-'use strict'
+import form from 'express-form'
+const { field } = form
 
-var form = require('express-form')
-var field = form.field
-
-module.exports = form(field('settingForm[auth:requireThirdPartyAuth]').toBoolean(), field('settingForm[auth:disablePasswordAuth]').toBoolean())
+export default form(field('settingForm[auth:requireThirdPartyAuth]').toBoolean(), field('settingForm[auth:disablePasswordAuth]').toBoolean())

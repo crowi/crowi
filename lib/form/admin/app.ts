@@ -1,6 +1,4 @@
-'use strict'
+import form from 'express-form'
+const { field } = form
 
-var form = require('express-form')
-var field = form.field
-
-module.exports = form(field('settingForm[app:title]').required(), field('settingForm[app:confidential]'), field('settingForm[app:fileUpload]').isInt())
+export default form(field('settingForm[app:title]').required(), field('settingForm[app:confidential]'), field('settingForm[app:fileUpload]').isInt())

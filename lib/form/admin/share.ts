@@ -1,4 +1,4 @@
-const form = require('express-form')
-const field = form.field
+import form from 'express-form'
+const { field } = form
 
-module.exports = form(field('settingForm[app:externalShare]'))
+export default form(field('settingForm[app:externalShare]'))

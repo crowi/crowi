@@ -1,6 +1,4 @@
-'use strict'
+import form from 'express-form'
+const { field } = form
 
-var form = require('express-form')
-var field = form.field
-
-module.exports = form(field('apiTokenForm.confirm').required())
+export default form(field('apiTokenForm.confirm').required())
