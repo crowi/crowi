@@ -612,8 +612,8 @@ $(function() {
         top.location.href = path
       })
 
-      Crowi.correctHeaders('#revision-body-content')
-      Crowi.revisionToc('#revision-body-content', '#revision-toc')
+      // Crowi.correctHeaders('#revision-body-content')
+      // Crowi.revisionToc('#revision-body-content', '#revision-toc')
     }
 
     // header

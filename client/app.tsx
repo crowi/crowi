@@ -67,6 +67,7 @@ const componentMappings = {
   'page-list-search': <PageListSearch crowi={crowi} />,
   'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
   'page-alerts': <PageAlerts pageId={pageId} crowi={crowi} />,
+  //'page-toc': <PageTOC pageId={pageId} crowi={crowi} />,
   'rename-tree': <RenameTree crowi={crowi} />,
   'header-notification': <HeaderNotification me={me} crowi={crowi} />,
   'notification-page': <NotificationPage crowi={crowi} />,

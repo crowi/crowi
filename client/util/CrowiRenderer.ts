@@ -50,6 +50,7 @@ export default class CrowiRenderer {
 
     this.parseMarkdown = this.parseMarkdown.bind(this)
     this.codeRenderer = this.codeRenderer.bind(this)
+    // this.headingRenderer = this.headingRenderer.bind(this)
   }
 
   preProcess(markdown: string, dom: HTMLElement | undefined = undefined) {
@@ -106,11 +107,22 @@ export default class CrowiRenderer {
     return `<pre class="wiki-code"><code>${Crowi.escape(code, true)}\n</code></pre>`
   }
 
+  // headingRenderer(text, level) {
+  //  var slug = text.toLowerCase().replace(/[^\w]+/g, '-');
+  //  toc.push({
+  //    level: level,
+  //    slug: slug,
+  //    title: text
+  //  });
+  //  return "<h" + level + " id=\"" + slug + "\"><a href=\"#" + slug + "\" class=\"anchor\"></a>" + text + "</h" + level + ">";
+  // }
+
   parseMarkdown(markdown: string) {
     let parsed = ''
 
     const markedRenderer = new marked.Renderer()
     markedRenderer.code = this.codeRenderer
+    // markedRenderer.heading = this.headingRenderer
 
     try {
       // TODO
