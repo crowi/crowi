@@ -56,6 +56,10 @@ export default (crowi: Crowi, app: Express) => {
       return swigFilters.date(input, format, app.get('tzoffset'))
     })
 
+    swig.setFilter('moment', function(date, fun, ...opts) {
+      return moment(date)[fun](...opts)
+    })
+
     swig.setFilter('nl2br', function(string) {
       return string.replace(/\n/g, '<br>')
     })
