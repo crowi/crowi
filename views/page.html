@@ -4,7 +4,8 @@
 
 {% block layout_container %}
 <div class="v2-content-main-container container-fluid">
-  <div class="v2-content-header row">
+  <div class="v2-content-header row {% if page && page.grant != 1 %}grant-restricted{% endif %}">
+
     <header class="col-md-12 col-lg-7 offset-lg-2" id="page-header">
       <h1 class="title">{{ path|insertSpaceToEachSlashes }}</h1>
     </header>
