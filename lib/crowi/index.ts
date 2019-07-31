@@ -67,6 +67,10 @@ class Crowi {
 
   cacheDir: string
 
+  app: any = null
+
+  mongoose: any = null
+
   // FIXME after service/config typed
   config: any
 
@@ -89,6 +93,8 @@ class Crowi {
 
   env: typeof process.env
 
+  baseUrl: string | null = null
+
   node_env: string
 
   port: number
@@ -107,6 +113,8 @@ class Crowi {
   // FIXME: util/slack に型付けたらやる
   slack: any
 
+  initialized: boolean = false
+
   constructor(rootdir: string, env: typeof process.env) {
     this.version = pkg.version
 
@@ -124,6 +132,7 @@ class Crowi {
     this.setupEvents()
 
     this.env = env
+    this.baseUrl = this.env.BASE_URL || null
     this.node_env = this.env.NODE_ENV || 'development'
     this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
     this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
@@ -144,6 +153,11 @@ class Crowi {
     await this.setupSlack()
     await this.setupDNSCache()
     await this.setupLRU()
+    await this.buildServer()
+  }
+
+  isInitialized() {
+    return this.initialized
   }
 
   isPageId(pageId) {
@@ -162,6 +176,20 @@ class Crowi {
 
   getConfig() {
     return this.config.get()
+  }
+
+  getBaseUrl() {
+    if (this.baseUrl) {
+      return this.baseUrl
+    }
+    const config = this.getConfig()
+    if (config && config.crowi && config.crowi['app:url']) {
+      return config.crowi['app:url']
+    }
+
+    // This might be happend when env BASE_URL is not set and this is not an express request.
+    // While initialize express, config.crowi['app:url'] could be set be detecting accessing URL.
+    return null
   }
 
   getEnv() {
@@ -207,14 +235,20 @@ class Crowi {
       this.env.MONGO_URI ||
       'mongodb://localhost/crowi'
 
-    return new Promise(function(resolve, reject) {
-      mongoose.connect(mongoUri, function(e) {
+    return new Promise((resolve, reject) => {
+      const mongooseOptions = {
+        useNewUrlParser: true,
+        useFindAndModify: false,
+      }
+      mongoose.connect(mongoUri, mongooseOptions, e => {
         if (e) {
           debug('DB Connect Error: ', e)
           debug('DB Connect Error: ', mongoUri)
           return reject(new Error("Cann't connect to Database Server."))
         }
-        return resolve()
+
+        this.mongoose = mongoose
+        return resolve(mongoose)
       })
     })
   }
@@ -261,6 +295,14 @@ class Crowi {
     return Object.entries(events).forEach(([key, Event]: any[]) => {
       this.event(key, new Event(this))
     })
+  }
+
+  getApp() {
+    return this.app
+  }
+
+  getMongo() {
+    return this.mongoose
   }
 
   getIo(): any {
@@ -339,8 +381,11 @@ class Crowi {
   }
 
   start = () => {
-    const app = this.buildServer()
-    const server = http.createServer(app).listen(this.port, () => {
+    if (this.app === null) {
+      throw new Error('Must call init() before start().')
+    }
+
+    const server = http.createServer(this.app).listen(this.port, () => {
       console.log('[' + this.node_env + '] Express server listening on port ' + this.port)
     })
     const io = socketIO(server, { transports: ['websocket'] })
@@ -354,7 +399,7 @@ class Crowi {
 
     this.io = io
 
-    return app
+    return this.app
   }
 
   buildServer() {
@@ -381,6 +426,7 @@ class Crowi {
       })
     }
 
+    this.app = app
     return app
   }
 

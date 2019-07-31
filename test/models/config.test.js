@@ -1,12 +1,17 @@
 const utils = require('../utils.js')
 
 describe('Config model test', () => {
-  const Page = utils.models.Page
-  const Config = utils.models.Config
-  const User = utils.models.User
-  const conn = utils.mongoose.connection
+  let Page
+  let Config
+  let User
+  let conn
 
-  beforeAll(function(done) {
+  beforeAll(done => {
+    Page = crowi.model('Page')
+    Config = crowi.model('Config')
+    User = crowi.model('User')
+    conn = crowi.getMongo().connection
+
     const fixture = [
       { ns: 'crowi', key: 'test:test', value: JSON.stringify('crowi test value') },
       { ns: 'crowi', key: 'test:test2', value: JSON.stringify(11111) },
@@ -35,12 +40,10 @@ describe('Config model test', () => {
   describe('.loadAllConfig', () => {
     test('Get config array', async function() {
       const config = await Config.loadAllConfig()
-      expect(config.crowi).toBeInstanceOf(Object)
       expect(config.crowi).toHaveProperty('test:test', 'crowi test value')
       expect(config.crowi).toHaveProperty('test:test2', 11111)
       expect(config.crowi).toHaveProperty('test:test3', [1, 2, 3, 4, 5])
 
-      expect(config.plugin).toBeInstanceOf(Object)
       expect(config.plugin).toHaveProperty('other:config', 'this is data')
     })
   })

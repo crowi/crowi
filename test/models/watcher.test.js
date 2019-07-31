@@ -1,13 +1,16 @@
-const utils = require('../utils.js')
+const mongoose = require('mongoose')
 
 describe('Watcher', function() {
-  const Watcher = utils.models.Watcher
-  const mongoose = utils.mongoose
+  let Watcher
   const ObjectId = mongoose.Types.ObjectId
 
-  describe('.upsertWatcher', function() {
-    describe('valid parameters', function() {
-      it('should create', async function() {
+  beforeAll(() => {
+    Watcher = crowi.model('Watcher')
+  })
+
+  describe('.upsertWatcher', () => {
+    describe('valid parameters', () => {
+      it('should create', async () => {
         const userId = ObjectId()
         const targetId = ObjectId()
 

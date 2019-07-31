@@ -1,15 +1,23 @@
 const faker = require('faker')
-const utils = require('../utils.js')
+const mongoose = require('mongoose')
 
 describe('Activity', function() {
-  const Activity = utils.models.Activity
-  const User = utils.models.User
-  const Page = utils.models.Page
-  const Comment = utils.models.Comment
-  const Watcher = utils.models.Watcher
-  const mongoose = utils.mongoose
-  const conn = utils.mongoose.connection
+  let Activity
+  let User
+  let Page
+  let Comment
+  let Watcher
+  let conn
   const ObjectId = mongoose.Types.ObjectId
+
+  beforeAll(() => {
+    Activity = crowi.model('Activity')
+    User = crowi.model('User')
+    Page = crowi.model('Page')
+    Comment = crowi.model('Comment')
+    Watcher = crowi.model('Watcher')
+    conn = crowi.getMongo().connection
+  })
 
   describe('.createByParameters', function() {
     describe('correct parameters', function() {

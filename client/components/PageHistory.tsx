@@ -38,7 +38,7 @@ export default class PageHistory extends React.Component<Props, State> {
       .apiGet('/revisions.ids', { page_id: pageId })
       .then(res => {
         const rev: Revision[] = res.revisions
-        let diffOpened: State['diffOpened'] = {}
+        const diffOpened: State['diffOpened'] = {}
         const lastId = rev.length - 1
         res.revisions.map((revision: Revision, i: number) => {
           const author = typeof revision.author === 'string' ? revision.author : revision.author._id
@@ -77,7 +77,7 @@ export default class PageHistory extends React.Component<Props, State> {
 
   getPreviousRevision(currentRevision: Revision) {
     let cursor: Revision | null = null
-    for (let revision of this.state.revisions) {
+    for (const revision of this.state.revisions) {
       if (cursor && cursor._id == currentRevision._id) {
         cursor = revision
         break

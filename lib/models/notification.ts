@@ -182,7 +182,10 @@ export default (crowi: Crowi) => {
   }
 
   notificationEvent.on('update', user => {
-    crowi.getIo().sockets.emit('notification updated', { user })
+    const io = crowi.getIo()
+    if (io) {
+      io.sockets.emit('notification updated', { user })
+    }
   })
 
   notificationSchema.statics.STATUS_UNOPENED = STATUS_UNOPENED
