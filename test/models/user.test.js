@@ -1,9 +1,11 @@
-const utils = require('../utils.js')
-
 describe('User', () => {
-  const Page = utils.models.Page
-  const User = utils.models.User
-  const conn = utils.mongoose.connection
+  let Page
+  let User
+
+  beforeAll(() => {
+    Page = crowi.model('Page')
+    User = crowi.model('User')
+  })
 
   describe('Create and Find.', () => {
     describe('The user', () => {
@@ -24,7 +26,6 @@ describe('User', () => {
 
       test('should be found by findUsersByPartOfEmail', done => {
         User.findUsersByPartOfEmail('ao', {}).then(function(userData) {
-          expect(userData).toBeInstanceOf(Array)
           expect(userData[0]).toBeInstanceOf(User)
           expect(userData[0].email).toBe('aoi@example.com')
           done()

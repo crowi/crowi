@@ -153,10 +153,8 @@ export default (crowi: Crowi, app: Express) => {
       } else {
         userData.updatePassword(newPassword, function(err, userData) {
           if (err) {
-            for (var e in err.errors) {
-              if (err.errors.hasOwnProperty(e)) {
-                req.form.errors.push(err.errors[e].message)
-              }
+            for (const [key, e] of err.errors) {
+              req.form.errors.push(e.message)
             }
             return res.render('me/password', {})
           }

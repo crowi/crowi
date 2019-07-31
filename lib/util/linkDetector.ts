@@ -6,8 +6,7 @@ export default (crowi: Crowi) => {
   const linkDetector: any = {}
 
   linkDetector.getLinkRegexp = () => {
-    const config = crowi.getConfig()
-    const appUrl = config.crowi['app:url']
+    const appUrl = crowi.getBaseUrl()
     return new RegExp(appUrl + '(/[^\\s"?)#]*)?', 'g')
   }
 

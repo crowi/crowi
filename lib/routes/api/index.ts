@@ -10,6 +10,7 @@ import Notification from './notification'
 import Page from './page'
 import Revision from './revision'
 import Share from './share'
+import Version from './version'
 
 const router = Router()
 
@@ -24,6 +25,7 @@ export default (crowi: Crowi, app: Express, form) => {
     Page: Page(crowi, app, form),
     Revision: Revision(crowi, app, form),
     Share: Share(crowi, app, form),
+    Version: Version(crowi, app, form),
   }
 
   for (const route of Object.values(routes)) {

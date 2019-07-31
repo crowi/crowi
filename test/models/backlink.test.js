@@ -1,13 +1,18 @@
 const faker = require('faker')
-const utils = require('../utils.js')
 
 describe('Backlink', () => {
-  const Backlink = utils.models.Backlink
-  const Page = utils.models.Page
-  const Revision = utils.models.Revision
-  const conn = utils.mongoose.connection
-  const appUrl = 'http://localhost:3000'
+  let Backlink
+  let Page
+  let Revision
+  let conn
   let user
+
+  beforeAll(() => {
+    Backlink = crowi.model('Backlink')
+    Page = crowi.model('Page')
+    Revision = crowi.model('Revision')
+    conn = crowi.getMongo().connection
+  })
 
   beforeAll(async () => {
     const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
@@ -25,18 +30,21 @@ describe('Backlink', () => {
       const createPage = (path, body = 'test') => Page.createPage(path, body, user, {})
       const destPaths = createPaths()
       const srcPaths = createPaths()
+      const appUrl = crowi.baseUrl
 
       await Promise.all(destPaths.map(path => createPage(path)))
-      await Promise.all([
+      const pages = await Promise.all([
         createPage(srcPaths[0], `<${destPaths[0]}>`),
         createPage(srcPaths[1], `[test](${appUrl}${destPaths[1]})`),
         createPage(srcPaths[2], `${appUrl}${destPaths[2]}`),
       ])
+
       await Backlink.remove({})
     })
 
     test('should have all backlinks', async () => {
-      expect(await Backlink.createByAllPages()).toHaveLength(3)
+      const pages = await Backlink.createByAllPages()
+      expect(pages).toHaveLength(3)
     })
   })
 })
