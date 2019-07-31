@@ -4,6 +4,7 @@ import * as MDIJs from '@mdi/js'
 
 // TODO: support size and so far
 interface Props {
+  id?: string
   name: string
   spin: boolean
   className?: string
