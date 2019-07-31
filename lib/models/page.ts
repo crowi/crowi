@@ -73,7 +73,7 @@ export interface PageModel extends Model<PageDocument> {
   TYPE_PUBLIC: string
   TYPE_USER: string
 
-  populatePageData(pageData, revisionId?: Types.ObjectId | null): PageDocument
+  populatePageData(pageData, revisionId?: Types.ObjectId | null): Promise<PageDocument>
   populatePagesRevision(pages, revisions): any
   populatePageListToAnyObjects(pageIdObjectArray): any
   updateCommentCount(page, num): any
@@ -384,11 +384,13 @@ export default (crowi: Crowi) => {
     pageData.likerCount = pageData.liker.length || 0
     pageData.seenUsersCount = pageData.seenUsers.length || 0
 
-    return pageData.populate([
-      { path: 'lastUpdateUser', model: 'User' },
-      { path: 'creator', model: 'User' },
-      { path: 'revision', model: 'Revision', populate: { path: 'author' } },
-    ])
+    return pageData
+      .populate([
+        { path: 'lastUpdateUser', model: 'User' },
+        { path: 'creator', model: 'User' },
+        { path: 'revision', model: 'Revision', populate: { path: 'author', model: 'User' } },
+      ])
+      .execPopulate()
   }
 
   pageSchema.statics.populatePagesRevision = async function(pages, revisions) {
@@ -624,8 +626,7 @@ export default (crowi: Crowi) => {
         // .sort({createdAt: -1}) // TODO optionize
         .skip(offset)
         .limit(limit)
-        .populate({ path: 'creator', model: 'User' })
-        .populate({ path: 'revision', model: 'Revision', populate: { path: 'author' } })
+        .populate([{ path: 'creator', model: 'User' }, { path: 'revision', model: 'Revision', populate: { path: 'author' } }])
         .exec()
     )
   }
