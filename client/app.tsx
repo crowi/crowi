@@ -14,6 +14,7 @@ import PageListSearch from 'components/PageListSearch'
 import PageHistory from 'components/PageHistory'
 import PageAttachment from 'components/PageAttachment'
 import PageAlerts from 'components/PageAlerts'
+import PageTOC from 'components/PageTOC'
 import SeenUserList from 'components/SeenUserList'
 import BookmarkButton from 'components/BookmarkButton'
 import ShareBox from 'components/ExternalShare/ShareBox'
@@ -67,7 +68,7 @@ const componentMappings = {
   'page-list-search': <PageListSearch crowi={crowi} />,
   'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
   'page-alerts': <PageAlerts pageId={pageId} crowi={crowi} />,
-  //'page-toc': <PageTOC pageId={pageId} crowi={crowi} />,
+  'page-toc': <PageTOC crowi={crowi} />,
   'rename-tree': <RenameTree crowi={crowi} />,
   'header-notification': <HeaderNotification me={me} crowi={crowi} />,
   'notification-page': <NotificationPage crowi={crowi} />,
