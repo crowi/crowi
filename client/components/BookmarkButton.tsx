@@ -56,16 +56,19 @@ export default class BookmarkButton extends React.Component<Props, State> {
   }
 
   render() {
-    let bookmarked = ''
-    if (!this.state.bookmarked) {
-      bookmarked = '-outline'
+    const { bookmarked } = this.state
+    let bookmarkedIconStyle = '-outline'
+    let bookmarkedButtonStyle = {}
+    if (bookmarked) {
+      bookmarkedIconStyle = ''
+      bookmarkedButtonStyle = { color: '#e6b422' }
     }
 
     return (
       <InputGroup size="sm" className="input-group">
         <InputGroupAddon addonType="prepend">
-          <Button className="bookmark-link" onClick={this.handleClick}>
-            <Icon name={`star${bookmarked}`} />
+          <Button outline color="primary" className="bookmark-link" onClick={this.handleClick} style={bookmarkedButtonStyle}>
+            <Icon name={`star${bookmarkedIconStyle}`} />
           </Button>
         </InputGroupAddon>
         <InputGroupAddon addonType="append">

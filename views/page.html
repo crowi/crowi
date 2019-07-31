@@ -21,9 +21,13 @@
               <button
                 data-csrftoken="{{ csrf() }}"
                 data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
-                class="like-button btn btn-outline-secondary {% if page.isLiked(user) %}active{% endif %}"
+                class="like-button btn btn-outline-primary"
                 >
-                <i class="mdi mdi-thumb-up"></i>
+                {% if page.isLiked(user) %}
+                  <i class="mdi mdi-thumb-up"></i>
+                {% else %}
+                  <i class="mdi mdi-thumb-up-outline"></i>
+                {% endif %}
               </button>
             </div>
             <div class="input-group-append">
@@ -108,10 +112,12 @@
         >
         <a href="{{ userPageRoot(page.creator) }}">
           <img src="{{ page.creator|default(author)|picture }}" class="picture picture-md picture-rounded">
-        </a> {# {{ t('Created') }}: {{ page.createdAt|datetz('Y/m/d H:i:s') }}<br> #}
-        <a title="{{ page.lastUpdateUser.name }}" href="{{ userPageRoot(page.lastUpdateUser) }}">
-          <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-md picture-rounded">
-        </a> {{ page.updatedAt|moment('fromNow') }} ... <i class="mdi mdi-pencil"></i>
+        </a>
+        {% if page.creator._id.toString() != page.lastUpdateUser._id.toString() %}
+          <a title="{{ page.lastUpdateUser.name }}" href="{{ userPageRoot(page.lastUpdateUser) }}">
+            <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-md picture-rounded">
+          </a>
+        {% endif %} {{ page.updatedAt|moment('fromNow') }} ... <i class="mdi mdi-pencil"></i>
       </div>
       <div class="page-count-info-lists">
         {# <div class="page-like-users" id="liker-list" data-likers="{{ page.liker|default([])|join(',') }}">

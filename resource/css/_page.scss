@@ -26,6 +26,20 @@
           }
         }
       }
+
+      .btn, .input-group-text {
+        background: #fff;
+        font-weight: 600;
+        border-color: #aaa;
+        &.active {
+          color: inherit;
+        }
+      }
+      .btn:hover {
+        > svg { fill: currentColor; }
+        color: inherit;
+        background-color: #f0f0f0;
+      }
     }
   }
 
