@@ -181,7 +181,7 @@
   },
   "license": "MIT",
   "scripts": {
-    "start": "ts-node -r tsconfig-paths/register --project ./tsconfig.server.json app.ts",
+    "start": "ts-node --files -r tsconfig-paths/register --project tsconfig.server.json app.ts",
     "dev": "concurrently --kill-others 'npm run dev:server' 'npm run dev:client' 'npm run watch'",
     "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon --watch ./lib/ --watch ./locales/ --ext 'ts,tsx,js,jsx,json' --exec npm run start",
     "dev:client": "NODE_ENV=development webpack --progress --profile --colors --display-error-details --watch --config tools/webpack.config.js",
