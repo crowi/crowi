@@ -2,6 +2,8 @@ import React from 'react'
 import UserList from './SeenUserList/UserList'
 import Crowi from 'client/util/Crowi'
 import { User } from 'client/types/crowi'
+import Icon from './Common/Icon'
+import { UncontrolledTooltip } from 'reactstrap'
 
 interface Props {
   crowi: Crowi
@@ -9,6 +11,7 @@ interface Props {
 
 interface State {
   seenUsers: User[]
+  tooltipOpen: boolean
 }
 
 export default class SeenUserList extends React.Component<Props, State> {
@@ -17,6 +20,7 @@ export default class SeenUserList extends React.Component<Props, State> {
 
     this.state = {
       seenUsers: [],
+      tooltipOpen: false,
     }
   }
 
@@ -45,9 +49,16 @@ export default class SeenUserList extends React.Component<Props, State> {
   render() {
     const { seenUsers } = this.state
     return (
-      <div className="seen-user-list">
-        <p className="seen-user-count">{seenUsers.length}</p>
-        <UserList users={seenUsers} />
+      <div className="seen-user-list d-flex">
+        <div className="flex-shrink-1 page-count-info-title">
+          <Icon name="paw" id="page-seen-user" /> <span className="seen-user-count">{seenUsers.length}</span>
+        </div>
+        <div className="flex-grow-1 page-count-info-value">
+          <UserList users={seenUsers} />
+        </div>
+        <UncontrolledTooltip placement="top" target="page-seen-user">
+          Users who have seen this page.
+        </UncontrolledTooltip>
       </div>
     )
   }

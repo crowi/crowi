@@ -94,20 +94,39 @@
         <div class="wiki" id="revision-body-content"></div>
       </div>
 
-      <div class="page-footer>">
+      <div class="page-footer">
         <div class="backlink-list" id="backlink-list"></div>
       </div>
 
     </div>
-    <div class="col-md-3 order-md-2 col-lg-3 order-lg-3">
-      <div class="page-created-at">
+    <div class="v2-content-side col-md-3 order-md-2 col-lg-3 order-lg-3">
+      <div
+        class="page-created-at"
+        data-toggle="popover"
+        data-placement="bottom"
+        data-content="Created {{ page.createdAt|datetz('Y/m/d H:i:s') }} Updated {{ page.updatedAt|datetz('Y/m/d H:i:s') }}"
+        >
         <a href="{{ userPageRoot(page.creator) }}">
-          <img src="{{ page.creator|default(author)|picture }}" class="picture picture-xs picture-rounded">
-        </a>  {{ t('Created') }}: {{ page.createdAt|datetz('Y/m/d H:i:s') }}<br>
+          <img src="{{ page.creator|default(author)|picture }}" class="picture picture-md picture-rounded">
+        </a> {# {{ t('Created') }}: {{ page.createdAt|datetz('Y/m/d H:i:s') }}<br> #}
         <a title="{{ page.lastUpdateUser.name }}" href="{{ userPageRoot(page.lastUpdateUser) }}">
-          <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-xs picture-rounded">
-        </a> {{ t('Last updated') }}: {{ page.updatedAt|datetz('Y/m/d H:i:s') }}
+          <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-md picture-rounded">
+        </a> {{ page.updatedAt|moment('fromNow') }} ... <i class="mdi mdi-pencil"></i>
       </div>
+      <div class="page-count-info-lists">
+        {# <div class="page-like-users" id="liker-list" data-likers="{{ page.liker|default([])|join(',') }}">
+        <div className="liker--list d-flex">
+          <div className="flex-shrink-1 page-count-info-title">
+            <i class="mdi mdi-thumb-up"></i> <span id="like-count">{{ page.liker.length }}</span>
+          </div>
+          <div className="flex-grow-1 page-count-info-value">
+          </div>
+        </div> #}
+        <div class="page-seen-users" id="seen-user-list" data-seen-users="{{ page.seenUsers|default([])|join(',') }}">
+        </div>
+      </div>
+
+
       <div class="page-comments">
         <h3><i class="mdi mdi-comment"></i> Comments</h3>
         <form class="form page-comment-form" id="page-comment-form" onsubmit="return false;">

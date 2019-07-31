@@ -43,6 +43,32 @@
       }
     }
   }
+
+  .v2-content-side {
+    color: #555;
+
+    .page-count-info-lists {
+      margin: 16px 0;
+
+      .page-count-info-title {
+        margin-right: 8px;
+        white-space: nowrap;
+      }
+      .page-count-info-value {
+        min-width: 0;
+
+        > .value {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          display: inline-block;
+        }
+
+        > .more {
+        }
+      }
+    }
+  }
 }
 
 .crowi.main-container {

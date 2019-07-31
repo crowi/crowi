@@ -13,7 +13,7 @@ export default class UserList extends React.Component<Props> {
 
   isSeenUserListShown() {
     const userCount = this.props.users.length
-    if (userCount > 0 && userCount <= 10) {
+    if (userCount > 0) {
       return true
     }
 
@@ -25,7 +25,7 @@ export default class UserList extends React.Component<Props> {
       return null
     }
 
-    const users = this.props.users.map(user => {
+    const users = this.props.users.slice(0, 14).map(user => {
       return (
         <a key={user._id} data-user-id={user._id} href={'/user/' + user.username} title={user.name}>
           <UserPicture user={user} size="xs" />
@@ -33,6 +33,11 @@ export default class UserList extends React.Component<Props> {
       )
     })
 
-    return <p className="seen-user-list">{users}</p>
+    return (
+      <div className="seen-user-list d-flex">
+        <div className="value w-100">{users}</div>
+        {this.props.users.length > 14 && <div className="more flex-shrink-1">...</div>}
+      </div>
+    )
   }
 }
