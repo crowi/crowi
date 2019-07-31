@@ -40,26 +40,23 @@ export default (crowi: Crowi) => {
   })
   BookmarkSchema.index({ page: 1, user: 1 }, { unique: true })
 
-  BookmarkSchema.statics.populatePage = function(Bookmarks, requestUser) {
+  BookmarkSchema.statics.populatePage = async function(bookmarks, requestUser) {
     requestUser = requestUser || null
 
-    return Bookmark.populate(Bookmarks, { path: 'page' })
-      .then(function(Bookmarks) {
-        return Bookmark.populate(Bookmarks, { path: 'page.revision', model: 'Revision' })
-      })
-      .then(function(Bookmarks) {
-        // hmm...
-        Bookmarks = Bookmarks.filter(function(Bookmark) {
-          // requestUser を指定しない場合 public のみを返す
-          if (requestUser === null) {
-            return Bookmark.page.isPublic()
-          }
+    const populatedBookmarks = await Bookmark.populate(bookmarks, {
+      path: 'page',
+      populate: { path: 'revision', model: 'Revision', populate: { path: 'author', model: 'User' } },
+    })
 
-          return Bookmark.page.isGrantedFor(requestUser)
-        })
+    // hmm...
+    return populatedBookmarks.filter(bookmark => {
+      // requestUser を指定しない場合 public のみを返す
+      if (requestUser === null) {
+        return bookmark.page.isPublic()
+      }
 
-        return Bookmark.populate(Bookmarks, { path: 'page.revision.author', model: 'User' })
-      })
+      return bookmark.page.isGrantedFor(requestUser)
+    })
   }
 
   // Bookmark チェック用
