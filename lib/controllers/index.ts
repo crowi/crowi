@@ -18,7 +18,7 @@ import Share from './share'
 import ShareAccess from './shareAccess'
 import Slack from './slack'
 import User from './user'
-import Version from './version';
+import Version from './version'
 
 export default (crowi: Crowi, app: Express) => ({
   Admin: Admin(crowi),

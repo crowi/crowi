@@ -7,7 +7,9 @@ const debug = Debug('crowi:service:config')
 
 export default class Config {
   crowi: Crowi
+
   config: any
+
   pubSub: {
     id: uuid
     publisher: redis.RedisClient | null

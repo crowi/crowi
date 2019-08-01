@@ -3,7 +3,9 @@ import { RedisClient } from 'redis'
 
 export default class LRU {
   crowi: Crowi
+
   max: number
+
   client: RedisClient | null
 
   constructor(crowi: Crowi) {
