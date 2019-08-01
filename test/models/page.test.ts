@@ -147,7 +147,7 @@ describe('Page', () => {
 
       expect(Page.isCreatableName('/ the / path / with / space')).toBe(false)
 
-      let forbidden = []
+      let forbidden: string[] = []
       forbidden = ['installer', 'register', 'login', 'logout', 'admin', 'files', 'trash', 'paste', 'comments']
       for (var i = 0; i < forbidden.length; i++) {
         const pn = forbidden[i]
