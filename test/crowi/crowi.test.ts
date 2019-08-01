@@ -1,5 +1,4 @@
-const path = require('path')
-const Crowi = require(path.join(ROOT_DIR, '/lib/crowi'))
+import { crowi } from '../setup'
 
 describe('Test for Crowi application context', () => {
   // test crowi object by environment
@@ -21,8 +20,8 @@ describe('Test for Crowi application context', () => {
 
     test('model getter, setter', () => {
       // set
-      crowi.model('hoge', { fuga: 1 })
-      expect(crowi.model('hoge')).toEqual({ fuga: 1 })
+      crowi.model('hoge' as any, { fuga: 1 })
+      expect(crowi.model('hoge' as any)).toEqual({ fuga: 1 })
     })
   })
 

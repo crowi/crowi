@@ -1,23 +1,20 @@
-const faker = require('faker')
+import faker from 'faker'
+import { crowi, Fixture } from '../setup'
 
 describe('Backlink', () => {
   let Backlink
   let Page
   let Revision
-  let conn
   let user
 
   beforeAll(() => {
     Backlink = crowi.model('Backlink')
     Page = crowi.model('Page')
     Revision = crowi.model('Revision')
-    conn = crowi.getMongo().connection
   })
 
   beforeAll(async () => {
-    const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
-      { name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() },
-    ])
+    const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() }])
     user = createdUsers[0]
   })
 

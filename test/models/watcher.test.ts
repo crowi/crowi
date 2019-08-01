@@ -1,4 +1,5 @@
-const mongoose = require('mongoose')
+import mongoose from 'mongoose'
+import { crowi } from '../setup'
 
 describe('Watcher', function() {
   let Watcher

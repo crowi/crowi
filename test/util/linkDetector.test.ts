@@ -1,6 +1,9 @@
+import LinkDetector from 'server/util/linkDetector'
+import { crowi } from '../setup'
+
 describe('Url test', () => {
   test('detectInternalLink', () => {
-    const linkDetector = require(crowi.libDir + '/util/linkDetector')(crowi)
+    const linkDetector = LinkDetector(crowi)
 
     let text = 'aaaaaaaa '
     text += '[/user/suzuki/memo/2017/01/22/aaa](http://localhost:13001/58842b9ccf3556baedce2762)'

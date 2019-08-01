@@ -1,26 +1,19 @@
-const utils = require('../utils.js')
+import { crowi, Fixture } from '../setup'
 
 describe('Config model test', () => {
-  let Page
   let Config
-  let User
-  let conn
 
   beforeAll(done => {
-    Page = crowi.model('Page')
     Config = crowi.model('Config')
-    User = crowi.model('User')
-    conn = crowi.getMongo().connection
 
-    const fixture = [
+    const fixtures = [
       { ns: 'crowi', key: 'test:test', value: JSON.stringify('crowi test value') },
       { ns: 'crowi', key: 'test:test2', value: JSON.stringify(11111) },
       { ns: 'crowi', key: 'test:test3', value: JSON.stringify([1, 2, 3, 4, 5]) },
       { ns: 'plugin', key: 'other:config', value: JSON.stringify('this is data') },
     ]
 
-    testDBUtil
-      .generateFixture(conn, 'Config', fixture)
+    Fixture.generate('Config', fixtures)
       .then(function(configs) {
         done()
       })

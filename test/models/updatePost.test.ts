@@ -1,3 +1,5 @@
+import { crowi } from '../setup'
+
 describe('UpdatePost', () => {
   let UpdatePost
 

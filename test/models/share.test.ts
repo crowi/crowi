@@ -1,10 +1,10 @@
-const faker = require('faker')
+import faker from 'faker'
+import { crowi, Fixture } from '../setup'
 
 describe('Share', () => {
   let User
   let Page
   let Share
-  let conn
   let user
   let createdPages
 
@@ -12,16 +12,13 @@ describe('Share', () => {
     User = crowi.model('User')
     Page = crowi.model('Page')
     Share = crowi.model('Share')
-    conn = crowi.getMongo().connection
 
     await User.remove({})
-    const createdUsers = await testDBUtil.generateFixture(conn, 'User', [
-      { name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() },
-    ])
+    const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() }])
     user = createdUsers[0]
 
     await Page.remove({})
-    createdPages = await testDBUtil.generateFixture(conn, 'Page', [
+    createdPages = await Fixture.generate('Page', [
       { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
       { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
     ])
@@ -36,8 +33,8 @@ describe('Share', () => {
   describe('.create', () => {
     describe('Create shares', () => {
       test('should be able to create only one active share per page', async () => {
-        await expect(Share.create(createdPages[0]._id, user)).resolves.toBeInstanceOf(Share)
-        await expect(Share.create(createdPages[0]._id, user)).rejects.toThrow()
+        await expect(Share.createShare(createdPages[0]._id, user)).resolves.toBeInstanceOf(Share)
+        await expect(Share.createShare(createdPages[0]._id, user)).rejects.toThrow()
       })
     })
   })
@@ -46,7 +43,7 @@ describe('Share', () => {
     describe('Delete share', () => {
       let createdShares
       beforeAll(async () => {
-        createdShares = [await Share.creatShare(createdPages[0]._id, user), await Share.creatShare(createdPages[1]._id, user)]
+        createdShares = [await Share.createShare(createdPages[0]._id, user), await Share.createShare(createdPages[1]._id, user)]
       })
 
       test('should inactivate share', async () => {

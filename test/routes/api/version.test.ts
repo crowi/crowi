@@ -1,6 +1,7 @@
-describe('Routes /_api/versions test', () => {
-  const request = require('supertest')
+import request from 'supertest'
+import { app } from '../../setup'
 
+describe('Routes /_api/versions test', () => {
   describe('/_api/versions.get', () => {
     it('should returns crowi version', done => {
       request(app)

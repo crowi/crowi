@@ -1,14 +1,14 @@
+import { crowi, Fixture } from '../setup'
+
 describe('Page', () => {
   let Page
   let User
-  let conn
   let createdPages
   let createdUsers
 
   beforeAll(done => {
     Page = crowi.model('Page')
     User = crowi.model('User')
-    conn = crowi.getMongo().connection
 
     Promise.resolve()
       .then(() => {
@@ -17,7 +17,7 @@ describe('Page', () => {
           { name: 'Anon 1', username: 'anonymous1', email: 'anonymous1@example.com' },
         ]
 
-        return testDBUtil.generateFixture(conn, 'User', userFixture)
+        return Fixture.generate('User', userFixture)
       })
       .then(testUsers => {
         createdUsers = testUsers
@@ -62,7 +62,7 @@ describe('Page', () => {
           },
         ]
 
-        return testDBUtil.generateFixture(conn, 'Page', fixture).then(pages => {
+        return Fixture.generate('Page', fixture).then(pages => {
           createdPages = pages
           done()
         })
@@ -343,7 +343,7 @@ describe('Page', () => {
     describe('A page already exists in the destination', () => {
       beforeEach(async () => {
         const paths = ['/jp/hoge', '/us/hoge/huga', '/jp/hoge/huga']
-        await testDBUtil.generateFixture(conn, 'Page', generatePages(paths))
+        await Fixture.generate('Page', generatePages(paths))
       })
 
       describe('checkPagesRenamable', () => {
@@ -365,7 +365,7 @@ describe('Page', () => {
         const children = Array.from(new Array(50).keys()).map(v => `/parent/${v}`)
         const paths = ['/parent', ...children]
         treeSize = paths.length
-        await testDBUtil.generateFixture(conn, 'Page', generatePages(paths))
+        await Fixture.generate('Page', generatePages(paths))
       })
 
       describe('findChildrenByPath', () => {
@@ -382,7 +382,7 @@ describe('Page', () => {
       beforeEach(async () => {
         await Page.remove({})
         const paths = ['/car', '/car/ambulance', '/car/minicar', '/car/taxi', '/carrot']
-        await testDBUtil.generateFixture(conn, 'Page', generatePages(paths))
+        await Fixture.generate('Page', generatePages(paths))
       })
 
       describe('findChildrenByPath', () => {
@@ -400,7 +400,7 @@ describe('Page', () => {
       beforeEach(async () => {
         await Page.remove({})
         const paths = ['/hoge', '/hoge/huga', '/hoge/piyo']
-        await testDBUtil.generateFixture(conn, 'Page', generatePages(paths))
+        await Fixture.generate('Page', generatePages(paths))
       })
 
       describe('last updated date and time', () => {
