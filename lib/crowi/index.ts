@@ -154,6 +154,8 @@ class Crowi {
     await this.setupDNSCache()
     await this.setupLRU()
     await this.buildServer()
+
+    this.initialized = true
   }
 
   isInitialized() {
