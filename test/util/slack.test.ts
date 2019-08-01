@@ -1,7 +1,10 @@
+import Slack from 'server/util/slack'
+import { crowi } from '../setup'
+
 describe('Slack Util', () => {
   let slack
   beforeAll(() => {
-    slack = require(crowi.libDir + '/util/slack')(crowi)
+    slack = Slack(crowi)
   })
 
   test('convert markdown', () => {

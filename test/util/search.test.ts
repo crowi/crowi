@@ -1,8 +1,9 @@
-const utils = require('../utils.js')
-const path = require('path')
+import path from 'path'
+import Crowi from 'server/crowi'
+import { ROOT_DIR } from '../setup'
 
 describe('Search client', () => {
-  const crowi = new (require(ROOT_DIR + '/lib/crowi'))(ROOT_DIR, process.env)
+  const crowi = new Crowi(ROOT_DIR, process.env)
   const searcherUri = 'http://127.0.0.1:19200/crowi'
   const searcher = new (require(path.join(crowi.libDir, 'util', 'search')))(crowi, searcherUri)
 

@@ -1,37 +1,38 @@
-'use strict'
-
 import '@babel/polyfill'
 
-const mongoose = require('mongoose')
-const path = require('path')
-const Crowi = require(path.join(ROOT_DIR, '/lib/crowi'))
+import Crowi from 'server/crowi'
+import { Express } from 'express'
+
+export let crowi: Crowi
+export let app: Express
+
+// @ts-ignore
+export const ROOT_DIR = global.ROOT_DIR as string
+// @ts-ignore
+export const MODEL_DIR = global.MODEL_DIR as string
+// @ts-ignore
+export const MONGO_URI = global.MONGO_URI as string
+// @ts-ignore
+export const MONGO_DB_NAME = global.MONGO_DB_NAME as string
 
 beforeAll(async () => {
-  const crowi = new Crowi(ROOT_DIR, {
-    PORT: 13001,
-    MONGO_URI: __MONGO_URI__,
+  crowi = new Crowi(ROOT_DIR, {
+    PORT: '13001',
+    MONGO_URI: MONGO_URI,
     BASE_URL: 'http://localhost:13001',
     ...process.env,
   })
   await crowi.init()
-  const app = crowi.getApp()
-
-  global.crowi = crowi
-  global.app = app
+  app = crowi.getApp()
 })
 
 afterAll(async () => {
   await crowi.getMongo().disconnect()
-
-  // delete model caches
-  Object.keys(crowi.models).forEach(key => {
-    delete mongoose.models[key]
-    delete mongoose.modelSchemas[key]
-  })
 })
 
-const testDBUtil = {
-  async generateFixture(conn, model, fixture) {
+export const Fixture = {
+  async generate(model, fixture) {
+    const conn = crowi.getMongo().connection
     if (conn.readyState === 0) {
       throw new Error()
     }
@@ -39,6 +40,3 @@ const testDBUtil = {
     return Promise.all(fixture.map(entity => new Model(entity).save()))
   },
 }
-
-global.mongoose = mongoose
-global.testDBUtil = testDBUtil

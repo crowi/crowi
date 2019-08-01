@@ -1,26 +1,13 @@
-const mongoose = require('mongoose')
+import mongoose from 'mongoose'
+import { crowi } from '../setup'
 
 describe('Notification', function() {
-  let Comment
   let Notification
-  let Page
-  let User
-  let Activity
-  let conn
 
   const ObjectId = mongoose.Types.ObjectId
 
-  const data = {}
-
-  beforeAll(done => {
-    Comment = crowi.model('Comment')
+  beforeAll(() => {
     Notification = crowi.model('Notification')
-    Page = crowi.model('Page')
-    User = crowi.model('User')
-    Activity = crowi.model('Activity')
-    conn = crowi.getMongo().connection
-
-    done()
   })
 
   describe('.upsertByActivity', function() {

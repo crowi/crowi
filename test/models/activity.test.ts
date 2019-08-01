@@ -1,5 +1,6 @@
-const faker = require('faker')
-const mongoose = require('mongoose')
+import faker from 'faker'
+import mongoose from 'mongoose'
+import { crowi, Fixture } from '../setup'
 
 describe('Activity', function() {
   let Activity
@@ -16,7 +17,6 @@ describe('Activity', function() {
     Page = crowi.model('Page')
     Comment = crowi.model('Comment')
     Watcher = crowi.model('Watcher')
-    conn = crowi.getMongo().connection
   })
 
   describe('.createByParameters', function() {
@@ -83,7 +83,6 @@ describe('Activity', function() {
   describe('Target users', () => {
     const userIds = [ObjectId(), ObjectId(), ObjectId()]
     const pageId = ObjectId()
-    const activityId = ObjectId()
 
     beforeAll(async () => {
       await Promise.all([User, Page, Comment, Watcher, Activity].map(model => model.remove({})))
@@ -96,9 +95,7 @@ describe('Activity', function() {
       const pages = [{ _id: pageId, path: `/${faker.lorem.word()}`, grant: Page.GRANT_PUBLIC, creator: userIds[0] }]
       const comments = userIds.map(userId => ({ page: pageId, creator: userId, comment: faker.lorem.word() }))
 
-      await testDBUtil.generateFixture(conn, 'User', users)
-      await testDBUtil.generateFixture(conn, 'Page', pages)
-      await testDBUtil.generateFixture(conn, 'Comment', comments)
+      await Promise.all([Fixture.generate('User', users), Fixture.generate('Page', pages), Fixture.generate('Comment', comments)])
     })
 
     afterEach(async () => {

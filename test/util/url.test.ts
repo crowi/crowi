@@ -1,5 +1,6 @@
+import { getContinueUrl } from 'server/util/url'
+
 describe('Url Util', function() {
-  const { getContinueUrl } = require(ROOT_DIR + '/lib/util/url')
   const req = url => ({ body: { continue: url } })
 
   it('should return internal URL', () => {

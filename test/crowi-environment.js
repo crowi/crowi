@@ -13,8 +13,8 @@ class CrowiEnvironment extends NodeEnvironment {
 
   async setup() {
     await super.setup()
-    this.global.__MONGO_URI__ = await this.mongodb.getConnectionString()
-    this.global.__MONGO_DB_NAME__ = await this.mongodb.getDbName()
+    this.global.MONGO_URI = await this.mongodb.getConnectionString()
+    this.global.MONGO_DB_NAME = await this.mongodb.getDbName()
 
     this.global.ROOT_DIR = ROOT_DIR
     this.global.MODEL_DIR = MODEL_DIR
