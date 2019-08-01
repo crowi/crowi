@@ -2,6 +2,7 @@ import Crowi from 'server/crowi'
 
 export default class Notification {
   crowi: Crowi
+
   config: any
 
   constructor(crowi: Crowi) {
