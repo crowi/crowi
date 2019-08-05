@@ -11,6 +11,8 @@ RUN npm ci
 ADD . .
 RUN npm run build
 
+RUN rm -rf lib client
+
 # Remove devDependencies if NODE_ENV is production
 # TODO: verify that crowi can boot normally without devDependencies
 #ARG NODE_ENV="production"
