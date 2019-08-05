@@ -23,6 +23,7 @@ import Config from '../service/config'
 import mailer from '../util/mailer'
 import slack from '../util/slack'
 import expressInit from './express-init'
+import Searcher from 'server/util/search'
 
 const pkg = require('../../package.json')
 
@@ -52,8 +53,6 @@ class Crowi {
   pluginDir: string
 
   publicDir: string
-
-  libDir: string
 
   localeDir: string
 
@@ -121,10 +120,9 @@ class Crowi {
     this.rootDir = rootdir
     this.pluginDir = path.join(this.rootDir, 'node_modules') + sep
     this.publicDir = path.join(this.rootDir, 'public') + sep
-    this.libDir = path.join(this.rootDir, 'lib') + sep
     this.localeDir = path.join(this.rootDir, 'locales') + sep
     this.resourceDir = path.join(this.rootDir, 'resource') + sep
-    this.viewsDir = path.join(this.libDir, 'views') + sep
+    this.viewsDir = path.join(this.rootDir, 'views') + sep
     this.mailDir = path.join(this.viewsDir, 'mail') + sep
     this.tmpDir = path.join(this.rootDir, 'tmp') + sep
     this.cacheDir = path.join(this.tmpDir, 'cache')
@@ -331,7 +329,7 @@ class Crowi {
     return new Promise((resolve, reject) => {
       if (searcherUri) {
         try {
-          this.searcher = new (require(path.join(this.libDir, 'util', 'search')))(this, searcherUri)
+          this.searcher = new Searcher(this, searcherUri)
 
           // workaround
           setTimeout(() => {
