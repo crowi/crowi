@@ -3,11 +3,5 @@
   "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
-    "outDir": "dist",
-    "typeRoots": ["lib/types"],
   },
-  "include": [
-    "app.ts",
-    "lib/**/*.ts"
-  ]
 }
