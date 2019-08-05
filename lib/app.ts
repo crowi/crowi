@@ -7,11 +7,12 @@
 
 import dotenv from 'dotenv'
 import Crowi from 'server/crowi'
+import { join } from 'path'
 
 // load .env
 dotenv.config()
 
-const crowi = new Crowi(__dirname, process.env)
+const crowi = new Crowi(join(__dirname, '..'), process.env)
 
 crowi
   .init()
