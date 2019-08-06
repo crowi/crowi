@@ -9,7 +9,7 @@ interface Props {
   children?: React.ReactNode
   crowi: Crowi
   comments: Comment[]
-  revisionId: string
+  revisionId: string | null
 }
 
 const CommentList: FC<Props> = ({ crowi, comments, revisionId, ...props }) => {

@@ -5,7 +5,7 @@ import Crowi from 'client/util/Crowi'
 
 interface Props {
   crowi: Crowi
-  revisionId: string
+  revisionId: string | null
   comment: Record<string, any>
 }
 

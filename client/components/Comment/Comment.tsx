@@ -2,20 +2,20 @@ import React, { FC, useState, useEffect } from 'react'
 import CommentLists from './CommentLists'
 import CommentForm from './CommentForm'
 import Crowi from 'client/util/Crowi'
-import { Comment } from 'client/types/crowi'
+import { Comment as CommentType } from 'client/types/crowi'
 
 function useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage) {
   const [comments, setComments] = useState<{
-    current: Comment[]
-    newer: Comment[]
-    older: Comment[]
+    current: CommentType[]
+    newer: CommentType[]
+    older: CommentType[]
   }>({ current: [], newer: [], older: [] })
 
   const fetchComments = async () => {
     if (isSharePage) return
 
-    const { ok, comments }: { ok: boolean; comments: Comment[] } = await crowi.apiGet('/comments.get', { page_id: pageId })
-    const [current, newer, older]: [Comment[], Comment[], Comment[]] = [[], [], []]
+    const { ok, comments }: { ok: boolean; comments: CommentType[] } = await crowi.apiGet('/comments.get', { page_id: pageId })
+    const [current, newer, older]: [CommentType[], CommentType[], CommentType[]] = [[], [], []]
     if (ok) {
       comments.forEach(comment => {
         const { revision, createdAt } = comment
@@ -59,14 +59,14 @@ function usePostComment(crowi, pageId, revisionId, fetchComments) {
     }
   }
 
-  return [{ posting, message }, { postComment }]
+  return [{ posting, message }, { postComment }] as const
 }
 
 interface Props {
   crowi: Crowi
-  pageId: string
-  revisionId: string
-  revisionCreatedAt: string
+  pageId: string | null
+  revisionId: string | null
+  revisionCreatedAt: string | null
   isSharePage: boolean
 }
 
