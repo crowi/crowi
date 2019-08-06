@@ -8,6 +8,7 @@ import UserEditDropdown from './UserEditDropdown'
 interface Props {
   me: any
   user: any
+  changeStatus: (user: any, string: string) => void
   handleClickEdit: (user: any) => void
   handleClickResetPassword: (user: any) => void
   handleClickApprove: (user: any) => void

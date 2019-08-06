@@ -20,7 +20,7 @@ function useForm(invite) {
 }
 
 interface Props {
-  invite: ({ emails, sendEmail }: { emails: string, sendEmail: boolean }) => void
+  invite: ({ emails, sendEmail }: { emails: string; sendEmail: boolean }) => void
 }
 
 const InviteUserForm: FC<Props> = ({ invite }) => {

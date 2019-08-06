@@ -28,7 +28,7 @@ function useAlert() {
 
   const showAlert = (action, status, message) => setAlert({ ...alert, [action]: { message, status, show: true } })
   const hideAlert = action => {
-    const { message, status } = alert[action] || { message: '', status: ''}
+    const { message, status } = alert[action] || { message: '', status: '' }
     setAlert({ ...alert, [action]: { message, status, show: false } })
   }
 

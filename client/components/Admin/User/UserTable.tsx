@@ -56,18 +56,18 @@ interface Props {
   me: any
   users: any[]
   pagination: {
-    current: number,
+    current: number
     count: number
   }
   query: string
   setQuery: (query: string) => void
   search: (query: string) => void
   move: (page: number) => void
-  openResetModal: () => void
+  openResetModal: (state: any) => void
   changeStatus: (user: any, string: string) => void
 }
 
-function UserTable({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) {
+const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) => {
   const [t] = useTranslation()
   const { current, count } = pagination
   const handlers = getHanlders(openResetModal, changeStatus)

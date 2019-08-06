@@ -12,7 +12,8 @@ const InvitedUserModal: FC<Props> = ({ users, clear }) => {
       <ModalHeader toggle={clear}>ユーザーを招待しました</ModalHeader>
       <ModalBody>
         <p>
-          作成したユーザーは仮パスワードが設定されています。<br />
+          作成したユーザーは仮パスワードが設定されています。
+          <br />
           仮パスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
           <span className="text-danger">招待メールを送っていない場合、この画面で必ず仮パスワードをコピーし、招待者へ連絡してください。</span>
         </p>
