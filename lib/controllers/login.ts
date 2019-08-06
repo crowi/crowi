@@ -133,7 +133,6 @@ export default (crowi: Crowi, app: Express) => {
       }
 
       email = toConnect ? socialEmail : email
-      console.log({ email, password })
       const userData = await User.findUserByEmailAndPassword(email, password).catch(err => {
         debug('on login findUserByEmailAndPassword', err)
       })
