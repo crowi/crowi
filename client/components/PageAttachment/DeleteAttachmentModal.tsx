@@ -66,7 +66,7 @@ export default class DeleteAttachmentModal extends React.Component<Props> {
       deletingIndicator = <p>{this.props.deleteError}</p>
     }
 
-    let renderAttachment = this.renderByFileFormat(attachment)
+    const renderAttachment = this.renderByFileFormat(attachment)
 
     return (
       <Modal {...props} className="attachment-delete-modal modal-large">

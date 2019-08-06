@@ -32,7 +32,7 @@ export default class Icon extends React.Component<Props> {
       return ''
     }
 
-    let path = this.toPathName(name)
+    const path = this.toPathName(name)
 
     return <MDIIcon className="mdi-svg" path={MDIJs[path]} spin={spin} {...props} />
   }

@@ -21,7 +21,7 @@ module.exports = {
   // collectCoverage: false,
 
   // An array of glob patterns indicating a set of files for which coverage information should be collected
-  collectCoverageFrom: ['lib/**/*.js'],
+  collectCoverageFrom: ['lib/**/*.ts'],
 
   // The directory where Jest should output its coverage files
   coverageDirectory: 'coverage',
@@ -55,7 +55,11 @@ module.exports = {
   // globalTeardown: null,
 
   // A set of global variables that need to be available in all test environments
-  // globals: {},
+  globals: {
+    'ts-jest': {
+      tsConfigFile: 'tsconfig.server.json',
+    },
+  },
 
   // An array of directory names to be searched recursively up from the requiring module's location
   // moduleDirectories: [
@@ -63,12 +67,7 @@ module.exports = {
   // ],
 
   // An array of file extensions your modules use
-  // moduleFileExtensions: [
-  //   "js",
-  //   "json",
-  //   "jsx",
-  //   "node"
-  // ],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'json', 'jsx', 'node'],
 
   // A map from regular expressions to module names that allow to stub out resources with a single module
   // moduleNameMapper: {},
@@ -83,19 +82,19 @@ module.exports = {
   // notifyMode: "always",
 
   // A preset that is used as a base for Jest's configuration
-  // preset: null,
+  preset: 'ts-jest',
 
   // Run tests from one or more projects
   projects: [
     {
       displayName: 'server',
-      setupTestFrameworkScriptFile: './test/bootstrap.js',
-      testEnvironment: './test/mongo-environment.js',
-      testMatch: ['<rootDir>/test/**/*.test.js'],
+      testEnvironment: './test/crowi-environment.js',
+      setupFilesAfterEnv: ['./test/setup.ts'],
+      testMatch: ['<rootDir>/test/**/*.test.ts'],
     },
     {
       displayName: 'client',
-      testMatch: ['<rootDir>/client/**/*.test.js'],
+      testMatch: ['<rootDir>/client/**/*.test.(ts|tsx)'],
     },
   ],
 
@@ -172,6 +171,8 @@ module.exports = {
   // A map from regular expressions to paths to transformers
   transform: {
     '/client/': 'babel-jest',
+    '/lib/': 'ts-jest',
+    '/test/': 'ts-jest',
   },
 
   // An array of regexp pattern strings that are matched against all source file paths, matched files will skip transformation
