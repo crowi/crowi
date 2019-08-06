@@ -18,7 +18,8 @@ const ResetPasswordModal: FC<Props> = ({ isOpen, toggle, user = {}, resetPasswor
       <ModalHeader toggle={toggle}>パスワードを新規発行しますか?</ModalHeader>
       <ModalBody>
         <p>
-          新規発行したパスワードはこの画面を閉じると二度と表示できませんのでご注意ください。<br />
+          新規発行したパスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
+          <br />
           <span className="text-danger">新規発行したパスワードを、対象ユーザーへ連絡してください。</span>
         </p>
         <p>

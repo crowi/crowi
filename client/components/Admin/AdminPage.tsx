@@ -15,7 +15,7 @@ interface AdminContext {
   crowi: Crowi
   loading: boolean
   searchConfigured: boolean
-  settingForm: Object
+  settingForm: Record<string, any>
   registrationMode: string
   isUploadable: boolean
   fetchSettings: () => Promise<void>

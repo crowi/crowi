@@ -14,7 +14,7 @@ interface Props {
   }
 }
 
-const MailSettings: FC<Props> = ({ settingForm, update, alert  }) => {
+const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [mail, setMail] = useState(settingForm['mail:from'])
   const [host, setHost] = useState(settingForm['mail:smtpHost'] || '')

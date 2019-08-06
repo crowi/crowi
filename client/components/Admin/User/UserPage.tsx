@@ -52,9 +52,11 @@ function useInviteUsers(crowi, fetchUsers, setFailure, clearStatus) {
 function useQuery(crowi) {
   const { search = '' } = crowi.location
   const { page: p = '', uq: q = '' } = queryString.parse(search)
+  const initialPage = Array.isArray(p) ? parseInt(p[0]) : p ? parseInt(p) : 0
+  const initialQuery = (Array.isArray(q) ? q[0] : q) || ''
 
-  const [page, setPage] = useState(parseInt(p) || 0)
-  const [query, setQuery] = useState(q)
+  const [page, setPage] = useState(initialPage)
+  const [query, setQuery] = useState(initialQuery)
 
   return [{ page, query }, { setPage, setQuery }] as const
 }

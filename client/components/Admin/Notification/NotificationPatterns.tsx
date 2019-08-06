@@ -4,7 +4,7 @@ import { Input, Button, FormText } from 'reactstrap'
 
 interface Props {
   settings: any[]
-  addPattern: ({ pathPattern, channel }: { pathPattern: string, channel: string }) => void
+  addPattern: ({ pathPattern, channel }: { pathPattern: string; channel: string }) => void
   removePattern: (pattern: string) => void
 }
 

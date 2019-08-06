@@ -8,7 +8,14 @@ import Instructions from './Instructions'
 import ConnectButton from './ConnectButton'
 
 function useFetchNotificationSettings(crowi: Crowi) {
-  const [settings, setSettings] = useState({ settings: [] as {}[], slackSetting: {}, hasSlackConfig: null, hasSlackToken: null, slackAuthUrl: null, appUrl: '' })
+  const [settings, setSettings] = useState({
+    settings: [] as {}[],
+    slackSetting: {},
+    hasSlackConfig: null,
+    hasSlackToken: null,
+    slackAuthUrl: null,
+    appUrl: '',
+  })
 
   const fetchSettings = async () => {
     const { settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl } = await crowi.apiGet('/admin/notification')
