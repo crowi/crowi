@@ -32,7 +32,7 @@ function OlderCommentList({ crowi, comments, revisionId }) {
 interface Props {
   crowi: Crowi
   comments: { newer: Comment[]; current: Comment[]; older: Comment[] }
-  revisionId: string
+  revisionId: string | null
 }
 
 const CommentLists: FC<Props> = ({ crowi, comments, revisionId }) => {
