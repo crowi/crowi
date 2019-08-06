@@ -16,6 +16,7 @@ services:
     volumes:
       - ./:/crowi
       - /crowi/node_modules
+      - /root/.mongo-binaries
     ports:
       - 3000:3000
     links:
@@ -26,7 +27,7 @@ services:
     command: bash -c "npm install && npm run dev"
 
   mongodb:
-    image: mongo:3.6.3
+    image: mongo:3.6.13
     volumes:
       - ./data/mongodb:/data/db
     restart: unless-stopped

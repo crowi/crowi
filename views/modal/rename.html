@@ -1,0 +1,44 @@
+  <div class="modal" id="renamePage">
+    <div class="modal-dialog">
+      <div class="modal-content">
+
+      <form role="form" id="renamePageForm" onsubmit="return false;">
+
+        <div class="modal-header">
+          <h4 class="modal-title">{{ t('Rename page') }}</h4>
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+              <label for="">{{ t('Current page name') }}</label><br>
+              <code>{{ page.path }}</code>
+            </div>
+            <div class="form-group">
+              <label for="newPageName">{{ t('New page name') }}</label><br>
+              <div class="input-group">
+                <span class="input-group-prepend"><span class="input-group-text">{{ config.crowi['app:url'] }}</span></span>
+                <input type="text" class="form-control" name="new_path" id="newPageName" value="{{ page.path }}">
+              </div>
+            </div>
+            {# <div class="checkbox"> #}
+            {#    <label> #}
+            {#      <input name="moveUnderTrees" value="1" type="checkbox"> 下層ページも全部移動する #}
+            {#    </label> #}
+            {#    <p class="help-block">チェックを入れると、<code>{{ page.path }}</code>以下の階層以下もすべて移動します。</p> #}
+            {#    <p class="help-block">例: <code>/hoge/fuga/move</code> を <code>/foo/bar/move</code> に移動すると、<code>/hoge/fuga/move/page1</code> も <code>/foo/bar/move/page1</code> に。</p> #}
+            {# </div> #}
+        </div>
+        <div class="modal-footer">
+          <p class="mr-auto"><small class="new-page-name-check"></small></p>
+          <input type="hidden" name="create_redirect" value="1">
+          <input type="hidden" name="_csrf" value="{{ csrf() }}">
+          <input type="hidden" name="path" value="{{ page.path }}">
+          <input type="hidden" name="page_id" value="{{ page._id.toString() }}">
+          <input type="hidden" name="revision_id" value="{{ page.revision._id.toString() }}">
+          <input type="submit" class="btn btn-primary" value="Rename!">
+        </div>
+
+      </form>
+      </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+  </div><!-- /.modal -->

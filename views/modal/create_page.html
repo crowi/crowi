@@ -1,0 +1,43 @@
+<div class="modal create-page" id="create-page">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h4 class="modal-title">{{ t('New Page') }}</h4>
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+      </div>
+
+      <div class="modal-body">
+
+        <form id="create-page-today" role="form">
+          <fieldset>
+            <h4>{{ t("Create today's") }}</h4>
+            <div class="page-today-form">
+              <span class="page-today-prefix">{{ userPageRoot(user) }}/</span>
+              <input class="form-control page-today-input1" type="text" data-prefix="{{ userPageRoot(user) }}/" value="{{ t('Memo') }}">
+              <span class="page-today-suffix">/{{ now|datetz('Y/m/d') }}/</span>
+              <input  id="page-today-input2" class="form-control page-today-input2" type="text" data-prefix="/{{ now|datetz('Y/m/d') }}/" placeholder="{{ t('Page name (optional)') }}">
+            </div>
+            <button type="submit" class="btn btn-primary float-right">{{ t('Create') }}</button>
+          </fieldset>
+        </form>
+
+        {% if !isTopPage() %}
+        <hr>
+
+        <form id="create-page-under-tree" role="form">
+          <fieldset>
+            <h4>{{ t('Create under', parentPath(path | escape)) }}</h4>
+            <div class="page-under-tree-form">
+              <input class="form-control page-name-input" type="text" value="{{ parentPath(path) }}" placeholder="{{ t('Input page name') }}" required>
+              <button class="btn btn-primary" type="submit">{{ t('Create') }}</button>
+            </div>
+          </fieldset>
+        </form>
+        {% endif  %}
+
+      </div><!-- /.modal-body -->
+
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->

@@ -1,14 +1,35 @@
-FROM node:8.11.2
+FROM node:10.16.1-stretch-slim as builder
 
-ARG NODE_ENV="production"
-
-ENV CROWI_VERSION v1.7.9
-ENV NODE_ENV ${NODE_ENV}
+ENV CROWI_VERSION v1.8.0
+ENV MONGOMS_DOWNLOAD_MIRROR https://downloads.mongodb.org
 
 WORKDIR /crowi
 
-ADD . /crowi
-RUN npm install --update npm@5 -g
-RUN npm install --unsafe-perm
+ADD ./package.json ./package-lock.json ./
+RUN npm ci
 
-CMD npm run start
+ADD . .
+RUN npm run build
+
+RUN rm -rf lib client
+
+# Remove devDependencies if NODE_ENV is production
+# TODO: verify that crowi can boot normally without devDependencies
+#ARG NODE_ENV="production"
+#ENV NODE_ENV ${NODE_ENV}
+#RUN npm prune
+
+FROM node:10.16.1-stretch-slim
+
+ARG NODE_ENV="production"
+
+ENV CROWI_VERSION v1.8.0
+ENV NODE_ENV ${NODE_ENV}
+
+USER node
+
+WORKDIR /crowi
+
+COPY --from=builder --chown=node:node /crowi /crowi
+
+CMD node .
