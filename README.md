@@ -1,10 +1,14 @@
-<div style="align: center">
+<div align=center>
 ![Crowi](http://res.cloudinary.com/hrscywv4p/image/upload/c_limit,f_auto,h_900,q_80,w_1200/v1/199673/https_www_filepicker_io_api_file_VpYEP32ZQyCZ85u6XCXo_zskpra.png)
+</div>
 
+<div align=center>
 Crowi - Empower the team with sharing your knowledge.
 ================================================================
+</div>
 
 
+<div align=center>
 [![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.9)
 
 [![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
