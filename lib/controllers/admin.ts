@@ -10,6 +10,7 @@ export default (crowi: Crowi) => {
   const Config = models.Config
   const MAX_PAGE_LIST = 5
   const actions = {} as any
+  actions.api = {} as any
 
   const searchEvent = crowi.event('Search')
 
