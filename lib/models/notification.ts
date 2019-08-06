@@ -24,7 +24,7 @@ export interface NotificationDocument extends Document {
 
 export interface NotificationModel extends Model<NotificationDocument> {
   findLatestNotificationsByUser(user: Types.ObjectId, skip: number, offset: number): Promise<NotificationDocument[]>
-  upsertByActivity(user: Types.ObjectId, sameActivities: Types.ObjectId[], activity: any): Promise<NotificationDocument | null>
+  upsertByActivity(user: Types.ObjectId, activity: ActivityDocument, createdAt?: Date | null): Promise<NotificationDocument | null>
   removeActivity(activity: any): any
   removeEmpty(): Query<any>
   read(user: UserDocument): Promise<Query<any>>
@@ -104,7 +104,7 @@ export default (crowi: Crowi) => {
   }
 
   notificationSchema.statics.upsertByActivity = async function(user, activity, createdAt = null) {
-    const { _id: activityId, targetModel, target, action } = activity as any as ActivityDocument
+    const { _id: activityId, targetModel, target, action } = activity
 
     const now = createdAt || Date.now()
     const lastWeek = moment(now).subtract(7, 'days')
