@@ -1,11 +1,12 @@
 import path from 'path'
 import Crowi from 'server/crowi'
 import { ROOT_DIR } from '../setup'
+import Searcher from 'server/util/search'
 
 describe('Search client', () => {
   const crowi = new Crowi(ROOT_DIR, process.env)
   const searcherUri = 'http://127.0.0.1:19200/crowi'
-  const searcher = new (require(path.join(crowi.libDir, 'util', 'search')))(crowi, searcherUri)
+  const searcher = new Searcher(crowi, searcherUri)
 
   describe('SearchClient.parseUri', () => {
     test('should return host and indexName', () => {

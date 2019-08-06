@@ -1,21 +1,23 @@
 FROM node:10.16.0-stretch-slim as builder
 
-ARG NODE_ENV="production"
-
 ENV CROWI_VERSION v1.8.0
-ENV NODE_ENV ${NODE_ENV}
 ENV MONGOMS_DOWNLOAD_MIRROR https://downloads.mongodb.org
 
 WORKDIR /crowi
 
 ADD ./package.json ./package-lock.json ./
-RUN SKIP_POSTINSTALL=true npm install
+RUN npm ci
 
 ADD . .
+RUN npm run build
 
-# Run postinstall manually
-RUN npm run postinstall
+RUN rm -rf lib client
 
+# Remove devDependencies if NODE_ENV is production
+# TODO: verify that crowi can boot normally without devDependencies
+#ARG NODE_ENV="production"
+#ENV NODE_ENV ${NODE_ENV}
+#RUN npm prune
 
 FROM node:10.16.0-stretch-slim
 
@@ -30,4 +32,4 @@ WORKDIR /crowi
 
 COPY --from=builder --chown=node:node /crowi /crowi
 
-CMD npm run start
+CMD node .
