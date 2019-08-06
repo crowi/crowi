@@ -1,7 +1,7 @@
-import React from 'react'
-import PropTypes from 'prop-types'
-
+import React, { FC } from 'react'
 import CommentList from './CommentList'
+import Crowi from 'client/util/Crowi'
+import { Comment } from 'client/types/crowi'
 
 function NewerCommentList({ crowi, comments, revisionId }) {
   if (!comments.length) return null
@@ -29,7 +29,13 @@ function OlderCommentList({ crowi, comments, revisionId }) {
   )
 }
 
-function CommentLists({ crowi, comments, revisionId }) {
+interface Props {
+  crowi: Crowi
+  comments: { newer: Comment[]; current: Comment[]; older: Comment[] }
+  revisionId: string
+}
+
+const CommentLists: FC<Props> = ({ crowi, comments, revisionId }) => {
   const { newer, current, older } = comments
   return (
     <div className="page-comments-list">
@@ -38,12 +44,6 @@ function CommentLists({ crowi, comments, revisionId }) {
       <OlderCommentList crowi={crowi} comments={older} revisionId={revisionId} />
     </div>
   )
-}
-
-CommentLists.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  comments: PropTypes.object.isRequired,
-  revisionId: PropTypes.string.isRequired,
 }
 
 export default CommentLists
