@@ -19,6 +19,7 @@ interface State {
 
 export default class NotificationPage extends React.Component<Props, State> {
   limit: number
+
   offset: number
 
   constructor(props: Props) {
