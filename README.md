@@ -1,16 +1,20 @@
-![Crowi](http://res.cloudinary.com/hrscywv4p/image/upload/c_limit,f_auto,h_900,q_80,w_1200/v1/199673/https_www_filepicker_io_api_file_VpYEP32ZQyCZ85u6XCXo_zskpra.png)
+<div align=center>
+  <img src="http://res.cloudinary.com/hrscywv4p/image/upload/c_limit,f_auto,h_900,q_80,w_1200/v1/199673/https_www_filepicker_io_api_file_VpYEP32ZQyCZ85u6XCXo_zskpra.png" alt="Crowi logo">
+</div>
 
-Crowi - Empower the team with sharing your knowledge.
-================================================================
+<h1 align=center>Crowi</h1>
+<p align=center>Empower the team with sharing your knowledge.</p>
 
+<div align=center>
 
-[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.8)
+<a href="https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.9"><img src="https://www.herokucdn.com/deploy/button.png" alt="Delpoy"></a>
 
-[![Circle CI](https://circleci.com/gh/crowi/crowi.svg?style=svg)](https://circleci.com/gh/crowi/crowi)
-[![Codecov](https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg)](https://codecov.io/gh/crowi/crowi)
-[![Docker Pulls](https://img.shields.io/docker/pulls/crowi/crowi.svg)](https://hub.docker.com/r/crowi/crowi)
-[![Join the community on Spectrum](https://withspectrum.github.io/badge/badge.svg)](https://spectrum.chat/crowi)
-
+<br>
+<a href="https://circleci.com/gh/crowi/crowi"><img src="https://circleci.com/gh/crowi/crowi.svg?style=svg" alt="Circle CI"></a>
+<a href="https://codecov.io/gh/crowi/crowi"><img src="https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg" alt="Codecov"></a>
+<a href="https://hub.docker.com/r/crowi/crowi"><img src="https://img.shields.io/docker/pulls/crowi/crowi.svg" alt="Docker Pulls"></a>
+<a href="https://spectrum.chat/crowi"><img src="https://withspectrum.github.io/badge/badge.svg" alt="Join the community on Spectrum"></a>
+</div>
 
 Crowi is a **Markdown Wiki** like:
 
@@ -60,6 +64,7 @@ or please write `.env`.
 
 
 * `PORT`: Server port. default: `3000`.
+* `BASE_URL`: Server base URL (e.g. https://demo.crowi.wiki/). If this env is not set, it is detected by accessing URL.
 * `NODE_ENV`: `production` OR `development`.
 * `MONGO_URI`: URI to connect to MongoDB. This parameter is also by `MONGOHQ_URL` OR `MONGOLAB_URI`.
 * `REDIS_URL`: URI to connect to Redis (used for session store and socket.io). This parameter is also by `REDISTOGO_URL`.

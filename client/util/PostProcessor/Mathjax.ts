@@ -2,7 +2,9 @@ import Crowi from '../Crowi'
 
 export default class Mathjax {
   crowi: Crowi
+
   defaultUrl: string
+
   mathJaxConfigured: boolean
 
   constructor(crowi: Crowi) {

@@ -5,14 +5,12 @@ jobs:
     docker:
       - image: node:10.16.0
         environment:
-          NODE_ENV: development
-          MONGO_URI: mongodb://localhost:27017/crowi
           REDIS_URL: redis://localhost:6379/crowi
-          ELASTICSEARCH_URI: //localhost:9200/
           PLANTUML_URI: //localhost:8080
           FILE_UPLOAD: local
           MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
-      - image: mongo:3.6.13
+          MONGOMS_DISABLE_POSTINSTALL: 1
+      - image: circleci/redis:5.0.5
     steps:
       - checkout
       - setup_remote_docker:
@@ -20,12 +18,12 @@ jobs:
       - restore_cache:
           keys:
             - node_modules_{{ checksum "package-lock.json" }}
-            - mongo_binaries_{{ checksum "test/mongo-environment.js" }}
+            - mongo_binaries_{{ checksum "test/crowi-environment.js" }}
       - run: npm install
       - save_cache:
           key: node_modules_{{ checksum "package-lock.json" }}
           paths:
-            - /home/node/app/node_modules
+            - ./node_modules
       - run: npm run type-check
       - run: npm run lint
       - run: npm run build
@@ -34,7 +32,7 @@ jobs:
           file: coverage/clover.xml
           when: on_success
       - save_cache:
-          key: mongo_binaries_{{ checksum "test/mongo-environment.js" }}
+          key: mongo_binaries_{{ checksum "test/crowi-environment.js" }}
           paths:
             - /root/.mongo-binaries
 workflows:
