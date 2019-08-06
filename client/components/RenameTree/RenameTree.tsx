@@ -92,8 +92,8 @@ class RenameTree extends React.Component<Props, State> {
       if (parents.length === 0) {
         return generateNode(path, name)
       }
-      let parent = parents[0]
-      let children = tree[parent].children
+      const parent = parents[0]
+      const children = tree[parent].children
       name = path.replace(parent, '')
       return {
         ...tree,
@@ -239,7 +239,7 @@ class RenameTree extends React.Component<Props, State> {
 
   handleError(error: Error) {
     const { info } = error
-    let newState = { renamable: false, error: error.message, removing: false }
+    const newState = { renamable: false, error: error.message, removing: false }
     if (info && Object.keys(info).length > 0) {
       const { errors }: { errors: Errors } = info
       const { newPath } = this.state

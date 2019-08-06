@@ -30,6 +30,13 @@ export default class PageListMeta extends React.Component<Props> {
     return ''
   }
 
+  isPublic(page) {
+    const GRANT_PUBLIC = 1
+    const { grant } = page
+
+    return !grant || grant == GRANT_PUBLIC
+  }
+
   render() {
     // TODO isPortal()
     const page = this.props.page
@@ -71,9 +78,14 @@ export default class PageListMeta extends React.Component<Props> {
       )
     }
 
+    let lockIcon
+    if (!this.isPublic(page)) {
+      lockIcon = <Icon name="lock" />
+    }
+
     return (
       <span className="page-list-meta">
-        {portalLabel} {commentCount} {likerCount} {bookmarkCount}
+        {portalLabel} {commentCount} {likerCount} {bookmarkCount} {lockIcon}
       </span>
     )
   }

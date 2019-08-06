@@ -51,9 +51,6 @@
   "plugins": ["@typescript-eslint", "react", "prettier", "jest"],
   "globals": {
     "jest/globals": true,
-    "ROOT_DIR": true,
-    "MODEL_DIR": true,
-    "testDBUtil": true,
     "hljs": true,
     "inlineAttachment": true,
     "crowi": true,
@@ -62,12 +59,13 @@
   },
   "overrides": [
     {
-      "files": "*.test.js",
+      "files": ["*.test.ts", "test/*.ts", "test/*.js"],
       "rules": {
         "handle-callback-err": "off",
         "no-redeclare": "off",
         "no-unused-expressions": "off",
-        "no-unused-vars": "off"
+        "no-unused-vars": "off",
+        "no-undef": "off"
       }
     },
     {
