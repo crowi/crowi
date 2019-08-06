@@ -1,2 +1,11 @@
 data
 node_modules
+.git
+
+public/js/*
+public/css/*
+public/uploads/*
+dist
+
+Dockerfile
+.dockerignore

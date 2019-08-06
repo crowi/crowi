@@ -1,0 +1,17 @@
+.backlink {
+  .backlink-list {
+    .backlink-item {
+      list-style-type: none;
+      .backlink-link {
+        .backlink-picture {
+        }
+        .backlink-path {
+          margin-left: 0.5em;
+        }
+      }
+    }
+  }
+  .backlink-readmore {
+    padding-left: 1em;
+  }
+}

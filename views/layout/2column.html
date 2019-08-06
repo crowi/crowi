@@ -1,0 +1,56 @@
+{% extends 'layout.html' %}
+
+{% block layout_sidebar %}
+
+<a href="" class="layout-control" id="toggle-sidebar"><i class="mdi mdi-chevron-right"></i></a>
+<aside class="sidebar col-md-3 d-print-none">
+
+  {% block side_header %}
+  {% endblock %}
+
+  <div class="side-content">
+    {% block side_content %}
+    {% endblock %}
+  </div>
+
+  {% block side_footer %}
+  {% endblock %}
+
+  <div id="footer-container" class="footer">
+    <footer class="">
+      <p>
+      <a href="" data-target="#help-modal" data-toggle="modal"><i class="mdi mdi-help-circle"></i> {{ t('Help') }}</a>
+      &copy; {{ now|date('Y') }} {{ config.crowi['app:title']|default('Crowi') }} <img src="/logo/100x11_g.png" alt="powered by Crowi"> </p>
+    </footer>
+  </div>
+</aside>
+
+{% endblock %} {# layout_sidebar #}
+
+{% block layout_main %}
+<div id="main" class="main {% if page %}{{ css.grant(page) }}{% endif %} {% block main_css_class %}{% endblock %}">
+  {% if page && page.grant != 1 %}
+  <p class="page-grant">
+    <i class="mdi mdi-lock"></i> {{ consts.pageGrants[page.grant] }} ({{ t('Browsing of this page is restricted') }})
+  </p>
+  {% endif %}
+  {% if page && page.grant == 2 %}
+  <p class="alert alert-info">
+    {{ t('Shareable Link') }}
+    <input type="text" class="copy-link form-control" value="{{ baseUrl }}/{{ page._id.toString() }}" readonly>
+  </p>
+  {% endif %}
+  <article>
+    {% block content_head %}
+    {% endblock %}
+
+    {% block content_main %}
+    //
+    {% endblock content_main %}
+
+    {% block content_footer %}
+    {% endblock %}
+  </article>
+</div>
+
+{% endblock %} {# layout_main #}

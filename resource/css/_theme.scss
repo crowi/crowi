@@ -1,0 +1,14 @@
+$primary: #43676b;
+
+//$crowiHeaderBackground: darken($primary, 15%);
+$crowiHeaderBackground: rgb(38, 58, 60);
+$crowiHeaderHeight: 58px;
+
+$crowiFooterBackground: $crowiHeaderBackground;
+$crowiFooterHeight: 34px;
+
+$crowiAsideBackground: rgb(248, 249, 250);
+
+$font-size-base: 0.9rem !default; // Assumes the browser default, typically `16px`
+$font-family-base: 'Open Sans', 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+

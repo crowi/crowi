@@ -1,0 +1,59 @@
+<ul class="page-list-ul">
+{% for data in pages %}
+
+{% if pagePropertyName %}
+  {% set page = data[pagePropertyName] %}
+{% else %}
+  {% set page = data %}
+{% endif %}
+
+<li>
+  <img src="{{ page.revision.author|picture }}" class="picture picture-rounded">
+  <a href="{{ page.path }}"
+    class="page-list-link"
+    data-path="{{ page.path }}"
+    data-short-path="{{ page.path|path2name }}">{{ page.path }}
+  </a>
+  <span class="page-list-meta">
+    {% if page.isPortal() %}
+      <span class="badge badge-info">PORTAL</span>
+    {% endif  %}
+
+    {% if page.commentCount > 0 %}
+    <span>
+      <i class="mdi mdi-comment"></i>{{ page.commentCount }}
+    </span>
+    {% endif  %}
+
+    {% if page.liker.length > 0 %}
+    <span class="page-list-liker" data-count="{{ page.liker.length }}">
+      <i class="mdi mdi-thumb-up"></i>{{ page.liker.length }}
+    </span>
+    {% endif  %}
+
+    {% if viewConfig.seener_threshold and page.seenUsers.length >= viewConfig.seener_threshold %}
+    <span class="page-list-seer" data-count="{{ page.seenUsers.length }}">
+      <i class="mdi mdi-paw"></i>{{ page.seenUsers.length }}
+    </span>
+    {% endif  %}
+
+    {% if !page.isPublic() %}
+    <span>
+      <i class="mdi mdi-lock"></i>
+    </span>
+    {% endif %}
+  </span>
+</li>
+{% endfor %}
+</ul>
+
+{% if pager %}
+<ul class="pagination">
+  {% if pager.prev !== null %}
+    <li class="page-item prev"><a class="page-link" href="{{ path }}?offset={{ pager.prev }}"><i class="mdi mdi-arrow-left"></i> Prev</a></li>
+  {% endif %}
+  {% if pager.next %}
+    <li class="page-item next"><a class="page-link" href="{{ path }}?offset={{ pager.next }}">Next <i class="mdi mdi-arrow-right"></i></a></li>
+  {% endif %}
+</ul>
+{% endif %}
