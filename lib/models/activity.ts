@@ -197,15 +197,7 @@ export default (crowi: Crowi) => {
     try {
       const notificationUsers = await savedActivity.getNotificationTargetUsers()
 
-<<<<<<< HEAD:lib/models/activity.js
       return Promise.all(notificationUsers.map(user => Notification.upsertByActivity(user, savedActivity)))
-=======
-      const notificationPromises = notificationUsers.map(user => {
-        const filteredActivities = sameActivities.filter(({ user: sameActionUser }) => user.toString() !== sameActionUser.toString())
-        return Notification.upsertByActivity(user, (filteredActivities as any) as Types.ObjectId[], savedActivity)
-      })
-      return Promise.all(notificationPromises)
->>>>>>> master:lib/models/activity.ts
     } catch (err) {
       debug(err)
     }
