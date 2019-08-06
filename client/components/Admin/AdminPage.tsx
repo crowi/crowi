@@ -27,7 +27,7 @@ export const AdminContext = createContext<AdminContext>({
   settingForm: {},
   registrationMode: '',
   isUploadable: false,
-} as AdminContext)
+} as any as AdminContext)
 
 function useSearchConfig(crowi: Crowi) {
   const [searchConfigured, setSearchConfigured] = useState(false)
