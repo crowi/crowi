@@ -232,20 +232,16 @@ class Crowi {
         useNewUrlParser: true,
         useFindAndModify: false,
       }
-      mongoose.connect(
-        mongoUri,
-        mongooseOptions,
-        e => {
-          if (e) {
-            debug('DB Connect Error: ', e)
-            debug('DB Connect Error: ', mongoUri)
-            return reject(new Error("Cann't connect to Database Server."))
-          }
+      mongoose.connect(mongoUri, mongooseOptions, e => {
+        if (e) {
+          debug('DB Connect Error: ', e)
+          debug('DB Connect Error: ', mongoUri)
+          return reject(new Error("Cann't connect to Database Server."))
+        }
 
-          this.mongoose = mongoose
-          return resolve(mongoose)
-        },
-      )
+        this.mongoose = mongoose
+        return resolve(mongoose)
+      })
     })
   }
 

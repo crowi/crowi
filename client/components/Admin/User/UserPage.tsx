@@ -82,19 +82,13 @@ function useFetchUsers(crowi, setFailure, clearStatus) {
 
   const move = page => setPage(page)
 
-  useEffect(
-    () => {
-      fetchUsers()
-    },
-    [page],
-  )
+  useEffect(() => {
+    fetchUsers()
+  }, [page])
 
-  useEffect(
-    () => {
-      fetchUsers({ page: 0 })
-    },
-    [search],
-  )
+  useEffect(() => {
+    fetchUsers({ page: 0 })
+  }, [search])
 
   return [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] as const
 }
