@@ -1,16 +1,21 @@
-import React from 'react'
-import PropTypes from 'prop-types'
-
+import React, { FC } from 'react'
 import UserPicture from 'components/User/UserPicture'
 import CommentBody from './CommentBody'
+import Crowi from 'client/util/Crowi'
 
-function CommentItem({ crowi, revisionId, comment }) {
+interface Props {
+  crowi: Crowi
+  revisionId: string
+  comment: Record<string, any>
+}
+
+const CommentItem: FC<Props> = ({ crowi, revisionId, comment }) => {
   const { revision, creator, comment: commentBody, createdAt } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
 
   const classNames = ['page-comment']
-  const me = crowi.getUser().id
-  if (me === creator._id) {
+  const me = crowi.getUser() || {}
+  if (me.id === creator._id) {
     classNames.push('page-comment-me')
   }
   if (revision !== revisionId) {
@@ -32,12 +37,6 @@ function CommentItem({ crowi, revisionId, comment }) {
       </div>
     </div>
   )
-}
-
-CommentItem.propTypes = {
-  crowi: PropTypes.object.isRequired,
-  revisionId: PropTypes.string.isRequired,
-  comment: PropTypes.object.isRequired,
 }
 
 export default CommentItem

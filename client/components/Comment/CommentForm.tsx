@@ -1,8 +1,13 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { FC, useState } from 'react'
 import { Input, Button } from 'reactstrap'
 
-function CommentForm({ posting, message, postComment }) {
+interface Props {
+  posting: boolean
+  message: string
+  postComment: (comment: string) => Promise<void>
+}
+
+const CommentForm: FC<Props> = ({ posting, message, postComment }) => {
   const [comment, setComment] = useState('')
 
   const onClick = () => {
@@ -25,12 +30,6 @@ function CommentForm({ posting, message, postComment }) {
       </div>
     </div>
   )
-}
-
-CommentForm.propTypes = {
-  posting: PropTypes.bool.isRequired,
-  message: PropTypes.string.isRequired,
-  postComment: PropTypes.func.isRequired,
 }
 
 export default CommentForm
