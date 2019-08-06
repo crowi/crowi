@@ -5,6 +5,7 @@ import moment from 'moment'
 
 const debug = Debug('crowi:lib:search')
 
+// TODO: replace to class
 function SearchClient(this: any, crowi, esUri) {
   this.DEFAULT_OFFSET = 0
   this.DEFAULT_LIMIT = 50
@@ -855,4 +856,4 @@ SearchClient.prototype.syncBookmarkChanged = async function(pageId) {
     .catch(err => debug('ES Error', err))
 }
 
-module.exports = SearchClient
+export default SearchClient
