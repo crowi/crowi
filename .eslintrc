@@ -39,6 +39,7 @@
     "node/no-deprecated-api": "off",
     "prettier/prettier": "error",
     "react/prefer-stateless-function": "off",
+    "react/prop-types": "off",
     "require-jsdoc": "off",
     "standard/no-callback-literal": "off",
     "valid-jsdoc": "off"
