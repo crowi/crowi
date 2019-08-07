@@ -5,10 +5,10 @@ ENV MONGOMS_DOWNLOAD_MIRROR https://downloads.mongodb.org
 
 WORKDIR /crowi
 
-ADD ./package.json ./package-lock.json ./
+COPY ./package.json ./package-lock.json ./
 RUN npm ci
 
-ADD . .
+COPY . .
 RUN npm run build
 
 RUN rm -rf lib client
@@ -32,4 +32,4 @@ WORKDIR /crowi
 
 COPY --from=builder --chown=node:node /crowi /crowi
 
-CMD node .
+CMD ["node", "."]
