@@ -32,6 +32,14 @@ export default class PageTOC extends React.Component<Props, State> {
 
   render() {
     const tocList = this.generateToc()
-    return <div className="page-toc-list">{tocList}</div>
+    return (
+      <div className="page-toc-list">
+        <ul>
+          <li>Markdown Model</li>
+          <li>hoge</li>
+          <li>fuga</li>
+        </ul>
+      </div>
+    )
   }
 }
