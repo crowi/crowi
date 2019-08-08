@@ -1,14 +1,55 @@
 .crowi { // {{{
   &.main-container { // {{{
+    border-top: solid 3px $crowiHeaderBackground;
+    border-image: linear-gradient(90deg,
+      $crowiHeaderBackground,
+      lighten(saturate(adjust-hue($crowiHeaderBackground, -60deg), 25%), 30%),
+      lighten(saturate(adjust-hue($crowiHeaderBackground, 25deg), 25%), 40%),
+      lighten($crowiHeaderBackground, 40%)
+    ) 3;
+
+    .v2-crowi-header, .v2-contents-container {
+      transition: .2s ease;
+      left: 0;
+    }
+
+    // TODO: move those kind of logic to components and styled-component
+    // sm menu opened
+    &.side-menu-open {
+      .v2-crowi-header {
+        position: absolute;
+        width: calc(100% - 300px);
+        left: 300px;
+        overflow: hidden;
+      }
+    .v2-contents-container {
+        position: absolute;
+        width: calc(100% - 300px);
+        left: 300px;
+        box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
+        z-index: 1000;
+        overflow: hidden;
+      }
+
+      .v2-crowi-global-menu {
+        @include media-breakpoint-down(sm) {
+          display: block;
+          position: fixed;
+          z-index: 990;
+          width: 300px;
+          height: 100vh;
+          background: #fcfcfc;
+        }
+      }
+    }
+
+    // not opened
+    .v2-crowi-global-menu {
+      display: none;
+    }
+
     .v2-crowi-header { // {{{
       z-index: 1040;
-      border-top: solid 3px $crowiHeaderBackground;
-      border-image: linear-gradient(90deg,
-        $crowiHeaderBackground,
-        lighten(saturate(adjust-hue($crowiHeaderBackground, -60deg), 25%), 30%),
-        lighten(saturate(adjust-hue($crowiHeaderBackground, 25deg), 25%), 40%),
-        lighten($crowiHeaderBackground, 40%)
-      ) 3;
       box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.4);
       background: #fff;
       height: $crowiHeaderHeight;
@@ -16,13 +57,46 @@
       padding: 0;
 
       .navbar-brand {
-        margin-left: 1rem;
-        font-weight: 600;
-        img {
-          display: inline;
-          margin-right: 8px;
+        @include media-breakpoint-down(sm) {
+          display: none;
         }
       }
+
+      .crowi-menu-main {
+      }
+      @include media-breakpoint-down(sm) {
+        .crowi-menu-sm { // for moblie
+          display: flex;
+          padding-top: 0.33125rem;
+          padding-bottom: 0.33125rem;
+          margin-left: 1rem;
+          margin-right: 1rem;
+          font-size: 1.1rem;
+          a {
+            cursor: pointer;
+          }
+        }
+        .crowi-menu-md { // for pc
+          display: none;
+        }
+      }
+      @include media-breakpoint-up(md) {
+        .crowi-menu-sm { // for moblie
+          display: none;
+        }
+        .crowi-menu-md { // for pc
+          display: flex;
+        }
+      }
+
+        .navbar-brand {
+          margin-left: 1rem;
+          font-weight: 600;
+          img {
+            display: inline;
+            margin-right: 8px;
+          }
+        }
 
       .navbar-nav {
         padding-left: 1rem;
@@ -50,7 +124,7 @@
 
       .dropdown-menu {
         border: none;
-        box-shadow: 0px 0px 0px 2px rgba(0, 0, 0, 0.05), 0px 4px 6px rgba(0, 0, 0, 0.1), 0px 8px 20px rgba(0, 0, 0, 0.2);
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1), 0px 8px 20px rgba(0, 0, 0, 0.2);
       }
 
       .header-user {
