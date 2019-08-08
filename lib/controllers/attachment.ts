@@ -125,12 +125,12 @@ export default (crowi: Crowi, app: Express) => {
       const fileName = tmpFile.filename + tmpFile.originalname
       const fileType = tmpFile.mimetype
       const fileSize = tmpFile.size
-      const page = pageData._id
+      const pageId = pageData._id
       const creator = req.user.id
       const fileFormat = fileType
 
       try {
-        const filePath = Attachment.createAttachmentFilePath(pageData._id, fileName, fileType)
+        const filePath = Attachment.createAttachmentFilePath(pageId, fileName, fileType)
         const tmpFileStream = fs.createReadStream(tmpPath, {
           flags: 'r',
           mode: 666,
@@ -141,7 +141,7 @@ export default (crowi: Crowi, app: Express) => {
         debug('Uploaded data is: ', data)
 
         // TODO size
-        const attachment = await Attachment.create({ page, creator, filePath, originalName, fileName, fileFormat, fileSize })
+        const attachment = await Attachment.create({ pageId, creator, filePath, originalName, fileName, fileFormat, fileSize })
         let fileUrl = attachment.fileUrl
         const config = crowi.getConfig()
 
@@ -151,8 +151,8 @@ export default (crowi: Crowi, app: Express) => {
         }
 
         const result = {
-          page: page.toObject(),
-          attachment: data.toObject(),
+          page: pageData.toObject(),
+          attachment: attachment.toObject(),
           url: fileUrl,
           pageCreated: pageCreated,
         }
