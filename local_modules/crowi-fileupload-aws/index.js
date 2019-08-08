@@ -64,11 +64,13 @@ module.exports = function(crowi) {
     const s3 = S3Factory()
     const awsConfig = getAwsConfig()
 
-    var params = { Bucket: awsConfig.bucket }
-    params.ContentType = contentType
-    params.Key = filePath
-    params.Body = fileStream
-    params.ACL = 'public-read'
+    const params = {
+      Bucket: awsConfig.bucket,
+      ContentType: contentType,
+      Key: filePath,
+      Body: fileStream,
+      ACL: 'public-read',
+    }
 
     return new Promise(function(resolve, reject) {
       s3.putObject(params, function(err, data) {
