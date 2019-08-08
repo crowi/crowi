@@ -2,6 +2,7 @@ import { Express } from 'express'
 import Crowi from 'server/crowi'
 import swig from 'swig'
 import swigFilters from 'swig/lib/filters'
+import moment from 'moment'
 
 export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
