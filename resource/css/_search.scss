@@ -78,10 +78,14 @@
 
 .search-suggest {
   max-width: 500px;
+  @include media-breakpoint-down(sm) {
+    left: 3.6rem;
+  }
   position: absolute;
-  box-shadow: $box-shadow-sm;
   margin-top: 2px;
   border-top: solid 1px #ccc;
+  border: none;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1), 0px 8px 20px rgba(0, 0, 0, 0.2);
 
   .searching {
     color: #666;
