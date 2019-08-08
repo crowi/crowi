@@ -46,7 +46,12 @@
       }
       .search-top-input {
         transition: width ease .5s;
-        max-width: 200px;
+        @include media-breakpoint-down(sm) {
+          max-width: none !important;
+        }
+        @include media-breakpoint-up(md) {
+          max-width: 200px;
+        }
         border-top-right-radius: 20px;
         border-bottom-right-radius: 20px;
         padding-left: 0;
