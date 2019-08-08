@@ -96,12 +96,14 @@
       </a>
 
       <div class="dropdown-menu dropdown-menu-right">
-        <div class="dropdown-item d-flex">
-          <div class="p-2 header-user-picture">
-            <img src="{{ user|picture }}" class="picture picture-rounded" />
+        <div class="dropdown-item text-center text-muted">
+          <div class="text-center header-user-picture">
+            <a href="{{ userPageRoot(user) }}">
+              <img src="{{ user|picture }}" class="picture picture-rounded" />
+            </a>
           </div>
-          <div class="flex-grow-1 header-user-container">
-            <a href="/user/{{ user.username }}" id="link-mypage" class="nav-link">
+          <div class="text-center header-user-container">
+            <a href="{{ userPageRoot(user) }}" id="link-mypage" class="nav-link">
               <span class="header-user-name">{{ user.name }}</span><br>
               <span class="header-user-username">@{{ user.username }}</span><br/>
 
@@ -119,8 +121,8 @@
         </div>
         <div class="dropdown-divider"></div>
         <a class="dropdown-item" href="/me"><i class="mdi mdi-cogs"></i> {{ t('User Settings') }}</a>
-        <a class="dropdown-item" href="/me"><i class="mdi mdi-star"></i> {{ t('Bookmarks') }}</a>
-        <a class="dropdown-item" href="/me"><i class="mdi mdi-"></i> {{ t('Created pages') }}</a>
+        <a class="dropdown-item" href="{{ userPageRoot(user) }}/bookmarks"><i class="mdi mdi-star"></i> {{ t('Bookmarks') }}</a>
+        <a class="dropdown-item" href="{{ userPageRoot(user) }}/recent-create"><i class="mdi mdi-pencil-outline"></i> {{ t('Created pages') }}</a>
         <div class="dropdown-divider"></div>
         <a class="dropdown-item" href="/trash/"><i class="mdi mdi-trash-can-outline"></i> {{ t('Deleted Pages') }}</a>
         <div class="dropdown-divider"></div>
