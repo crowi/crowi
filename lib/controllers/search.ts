@@ -79,7 +79,7 @@ export default (crowi: Crowi) => {
 
       return res.json(ApiResponse.success({ meta, searchResult, data }))
     } catch (err) {
-      debug('Error on earching:', err)
+      debug('Error on searching:', err)
       return res.json(ApiResponse.error(err))
     }
   }
