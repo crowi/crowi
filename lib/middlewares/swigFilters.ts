@@ -2,30 +2,12 @@ import { Express } from 'express'
 import Crowi from 'server/crowi'
 import swig from 'swig'
 import swigFilters from 'swig/lib/filters'
+import path2name from 'common/functions/path2name'
 
 export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
-    swig.setFilter('path2name', function(string) {
-      const name = string
-
-      // /.../YYYY/MM/DD 形式のページ
-      if (name.match(/^.*?([^/]+\/\d{4}\/\d{2}\/\d{2})\/?$/)) {
-        return name.replace(/^.*?([^/]+\/\d{4}\/\d{2}\/\d{2})\/?$/, '$1')
-      }
-
-      // /.../YYYY/MM 形式のページ
-      if (name.match(/^.*?([^/]+\/\d{4}\/\d{2})\/?$/)) {
-        return name.replace(/^.*?([^/]+\/\d{4}\/\d{2})\/?$/, '$1')
-      }
-
-      // /.../YYYY 形式のページ
-      if (name.match(/^.*?([^/]+\/\d{4})\/?$/)) {
-        return name.replace(/^.*?([^/]+\/\d{4})\/?$/, '$1')
-      }
-
-      // ページの末尾を拾う
-      const suffix = name.replace(/.+\/(.+)?$/, '$1')
-      return suffix || name
+    swig.setFilter('path2name', function(path) {
+      return path2name(path)
     })
 
     swig.setFilter('normalizeDateInPath', function(path) {
