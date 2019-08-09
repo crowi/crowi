@@ -1,9 +1,11 @@
 import Crowi from 'server/crowi'
 import ApiResponse from '../util/apiResponse'
 import ApiPaginate from '../util/apiPaginate'
+import Debug from 'debug'
+
+const debug = Debug('crowi:routes:search')
 
 export default (crowi: Crowi) => {
-  // var debug = Debug('crowi:routes:search')
   const Page = crowi.model('Page')
   const actions = {} as any
   const api = (actions.api = {} as any)
@@ -77,6 +79,7 @@ export default (crowi: Crowi) => {
 
       return res.json(ApiResponse.success({ meta, searchResult, data }))
     } catch (err) {
+      debug('Error on searching:', err)
       return res.json(ApiResponse.error(err))
     }
   }
