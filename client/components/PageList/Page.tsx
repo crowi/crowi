@@ -26,13 +26,17 @@ export default class Page extends React.Component<Props> {
     const link = linkTo === '' ? page.path : linkTo
     const active = this.props.isActive ? 'active' : ''
     return (
-      <li className={`page-list-li ${active}`} {...props}>
+      <li className={`d-flex flex-row page-list-li ${active}`} {...props}>
+        <div className="page-user-picture">
+          <UserPicture user={page.revision.author} />
+        </div>
+        <div className="page-list-link-outer">
+          <a className="page-list-link" href={link}>
+            <PagePath page={page} excludePathString={excludePathString} />
+            <PageListMeta page={page} />
+          </a>
+        </div>
         {children}
-        <UserPicture user={page.revision.author} />
-        <a className="page-list-link" href={link}>
-          <PagePath page={page} excludePathString={excludePathString} />
-        </a>
-        <PageListMeta page={page} />
       </li>
     )
   }
