@@ -1,8 +1,14 @@
 import React, { FC, useState, useEffect } from 'react'
+import styled from 'styled-components'
 import CommentLists from './CommentLists'
 import CommentForm from './CommentForm'
 import Crowi from 'client/util/Crowi'
+import { CommonProps } from 'client/types/component'
 import { Comment as CommentType } from 'client/types/crowi'
+
+const PageComments = styled.div<Props>`
+  margin: 8px 0 0 0;
+`
 
 function useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage) {
   const [comments, setComments] = useState<{
@@ -62,7 +68,7 @@ function usePostComment(crowi, pageId, revisionId, fetchComments) {
   return [{ posting, message }, { postComment }] as const
 }
 
-interface Props {
+type Props = CommonProps & {
   crowi: Crowi
   pageId: string | null
   revisionId: string | null
@@ -70,7 +76,8 @@ interface Props {
   isSharePage: boolean
 }
 
-const Comment: FC<Props> = ({ crowi, pageId, revisionId, revisionCreatedAt, isSharePage }) => {
+const Comment: FC<Props> = props => {
+  const { crowi, pageId, revisionId, revisionCreatedAt, isSharePage, ...others } = props
   const [comments, fetchComments] = useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage)
   const [{ posting, message }, { postComment }] = usePostComment(crowi, pageId, revisionId, fetchComments)
 
@@ -79,10 +86,10 @@ const Comment: FC<Props> = ({ crowi, pageId, revisionId, revisionCreatedAt, isSh
   }, [])
 
   return !isSharePage ? (
-    <div className="page-comments">
+    <PageComments {...others}>
       <CommentForm posting={posting} message={message} postComment={postComment} />
       <CommentLists crowi={crowi} comments={comments} revisionId={revisionId} />
-    </div>
+    </PageComments>
   ) : null
 }
 

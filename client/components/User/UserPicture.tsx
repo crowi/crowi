@@ -1,7 +1,8 @@
 import React from 'react'
 import { User } from 'client/types/crowi'
+import { CommonProps } from 'client/types/component'
 
-interface Props {
+type Props = CommonProps & {
   user: User | undefined
   size: string
 }
@@ -24,7 +25,11 @@ export default class UserPicture extends React.Component<Props> {
   }
 
   getClassName() {
-    const className = ['picture', 'picture-rounded']
+    const className = this.props.className ? [] : ([] as string[])
+
+    className.push('picture')
+    className.push('picture-rounded')
+
     if (this.props.size) {
       className.push('picture-' + this.props.size)
     }
@@ -33,8 +38,8 @@ export default class UserPicture extends React.Component<Props> {
   }
 
   render() {
-    const user = this.props.user
+    const { user, size, className, ...props } = this.props
 
-    return <img src={this.getUserPicture(user)} alt={user ? user.username : ''} className={this.getClassName()} />
+    return <img src={this.getUserPicture(user)} alt={user ? user.username : ''} className={this.getClassName()} {...props} />
   }
 }
