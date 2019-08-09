@@ -25,6 +25,7 @@
         "client": "./client",
         "components": "./client/components",
         "server": "./lib",
+        "common": "./common",
         "locales": "./locales"
       }
     }]
