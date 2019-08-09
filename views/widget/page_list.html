@@ -7,42 +7,50 @@
   {% set page = data %}
 {% endif %}
 
-<li>
-  <img src="{{ page.revision.author|picture }}" class="picture picture-rounded">
-  <a href="{{ page.path }}"
-    class="page-list-link"
-    data-path="{{ page.path }}"
-    data-short-path="{{ page.path|path2name }}">{{ page.path }}
-  </a>
-  <span class="page-list-meta">
-    {% if page.isPortal() %}
-      <span class="badge badge-info">PORTAL</span>
-    {% endif  %}
+<li class="d-flex flex-row">
+  <div class="page-user-picture">
+    <img src="{{ page.revision.author|picture }}" class="picture picture-rounded">
+  </div>
+  <div class="page-list-link-outer">
+    <a href="{{ page.path }}" class="page-list-link">
+      <span class="page-list-link-path"
+        data-path="{{ page.path }}"
+        data-short-path="{{ page.path|path2name }}"
+        >
+        {{ page.path }}
+      </span>
 
-    {% if page.commentCount > 0 %}
-    <span>
-      <i class="mdi mdi-comment"></i>{{ page.commentCount }}
-    </span>
-    {% endif  %}
+      <span class="page-list-meta">
+        {% if page.isPortal() %}
+          <span class="badge badge-info">PORTAL</span>
+        {% endif  %}
 
-    {% if page.liker.length > 0 %}
-    <span class="page-list-liker" data-count="{{ page.liker.length }}">
-      <i class="mdi mdi-thumb-up"></i>{{ page.liker.length }}
-    </span>
-    {% endif  %}
+        {% if page.commentCount > 0 %}
+        <span>
+          <i class="mdi mdi-comment"></i>{{ page.commentCount }}
+        </span>
+        {% endif  %}
 
-    {% if viewConfig.seener_threshold and page.seenUsers.length >= viewConfig.seener_threshold %}
-    <span class="page-list-seer" data-count="{{ page.seenUsers.length }}">
-      <i class="mdi mdi-paw"></i>{{ page.seenUsers.length }}
-    </span>
-    {% endif  %}
+        {% if page.liker.length > 0 %}
+        <span class="page-list-liker" data-count="{{ page.liker.length }}">
+          <i class="mdi mdi-thumb-up"></i>{{ page.liker.length }}
+        </span>
+        {% endif  %}
 
-    {% if !page.isPublic() %}
-    <span>
-      <i class="mdi mdi-lock"></i>
-    </span>
-    {% endif %}
-  </span>
+        {% if viewConfig.seener_threshold and page.seenUsers.length >= viewConfig.seener_threshold %}
+        <span class="page-list-seer" data-count="{{ page.seenUsers.length }}">
+          <i class="mdi mdi-paw"></i>{{ page.seenUsers.length }}
+        </span>
+        {% endif  %}
+
+        {% if !page.isPublic() %}
+        <span>
+          <i class="mdi mdi-lock"></i>
+        </span>
+        {% endif %}
+      </span>
+    </a>
+  </div>
 </li>
 {% endfor %}
 </ul>

@@ -21,8 +21,12 @@
         width: calc(100% - 300px);
         left: 300px;
         overflow: hidden;
+
+        .search-top {
+          display: none;
+        }
       }
-    .v2-contents-container {
+      .v2-contents-container {
         position: absolute;
         width: calc(100% - 300px);
         left: 300px;
@@ -167,11 +171,11 @@
       padding: 0; // cancel bootstrap padding
 
       .header-wrap {
-        padding: 16px 16px 0 16px;
+        padding: 1em 1em 0 1em;
       }
 
       .content-main {
-        padding: 16px;
+        padding: 1em;
       }
     }
 
