@@ -111,7 +111,7 @@ export default class SearchForm extends React.Component<Props, State> {
           value={this.state.keyword}
           onFocus={this.handleFocus}
           onChange={this.handleChange}
-          style={{ maxWidth: this.props.focused ? 'none' : '200px' }}
+          style={{ maxWidth: this.props.focused ? 'none' : '240px' }}
         />
       </form>
     )
