@@ -1,16 +1,25 @@
 import React, { FC } from 'react'
+import styled from 'styled-components'
+import { CommonProps } from 'client/types/component'
 
-interface Props {
+const PageCommentBody = styled.div<Props>`
+  padding: 8px 0;
+  word-wrap: break-word;
+`
+
+type Props = CommonProps & {
   comment: string
 }
 
-const CommentBody: FC<Props> = ({ comment }) => {
+const CommentBody: FC<Props> = props => {
+  const { comment, ...others } = props
+
   return (
-    <div className="page-comment-body">
+    <PageCommentBody {...others}>
       {comment.split(/(\r\n|\r|\n)/g).map((line, i) => (
         <React.Fragment key={i}>{/(\r\n|\r|\n)/.test(line) ? <br /> : line}</React.Fragment>
       ))}
-    </div>
+    </PageCommentBody>
   )
 }
 
