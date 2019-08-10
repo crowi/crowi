@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, FC } from 'react'
 import { NavLink } from 'react-router-dom'
 
+import Icon from 'components/common/Icon'
 import { AdminContext } from 'components/Admin/AdminPage'
 
 const Navigation: FC<{}> = () => {
@@ -32,7 +33,7 @@ const Navigation: FC<{}> = () => {
         ({ key, to, icon, name, exact = false, show = true }) =>
           show && (
             <NavLink key={key} className="nav-link" to={to} exact={exact} activeClassName="active">
-              <i className={`mdi ${icon}`} /> {name}
+              <Icon name={icon} /> {name}
             </NavLink>
           ),
       )}
