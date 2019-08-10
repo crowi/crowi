@@ -4,6 +4,8 @@ const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin')
 
 const isProduction = process.env.NODE_ENV === 'production'
 
+const ROOT = path.join(__dirname, '/../../')
+
 const extractSass = new ExtractTextPlugin({
   filename: '[name].css',
 })
@@ -15,7 +17,7 @@ const config = {
     'crowi-reveal': './resource/css/crowi-reveal.scss',
   },
   output: {
-    path: path.join(__dirname, '/../public/css'),
+    path: path.join(ROOT, 'public/css'),
     filename: '[name].css',
   },
   devtool: 'source-map',
@@ -50,6 +52,10 @@ const config = {
     ],
   },
   plugins: [extractSass, ...(isProduction ? [new OptimizeCssAssetsPlugin()] : [])],
+  stats: {
+    colors: true,
+    errorDetails: true,
+  },
 }
 
 module.exports = config

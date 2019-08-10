@@ -1,0 +1,7 @@
+{
+  "execMap": {
+    "ts": "ts-node --files -r tsconfig-paths/register --project tsconfig.server.json"
+  },
+  "watch": ["lib/", "locales/"],
+  "ext": "ts,tsx,js,jsx,json"
+}
