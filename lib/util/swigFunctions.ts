@@ -47,6 +47,11 @@ export default (crowi: Crowi, app: Express, req, locals) => {
     return Config.isUploadable(config)
   }
 
+  locals.isExternalShareEnabled = function() {
+    var config = crowi.getConfig()
+    return config.crowi['app:externalShare']
+  }
+
   locals.parentPath = function(path) {
     if (path == '/') {
       return path
