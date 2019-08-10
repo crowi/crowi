@@ -17,7 +17,7 @@ function NewerCommentList({ crowi, comments, revisionId }) {
 }
 
 function OlderCommentList({ crowi, comments, revisionId }) {
-  if (comments.length) return null
+  if (!comments.length) return null
 
   return (
     <>
