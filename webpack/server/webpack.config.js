@@ -20,7 +20,7 @@ const config = {
   resolve: {
     plugins: [new TsconfigPathsPlugin({ configFile: path.join(ROOT, 'tsconfig.server.json') })],
     modules: ['./node_modules'],
-    extensions: ['.ts', '.jsx', '.json'],
+    extensions: ['.ts', '.js', '.json'],
   },
   module: {
     rules: [
