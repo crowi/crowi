@@ -32,4 +32,4 @@ WORKDIR /crowi
 
 COPY --from=builder --chown=node:node /crowi /crowi
 
-CMD ["npm", "run", "start"]
+CMD ["npm", "start"]
