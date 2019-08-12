@@ -56,14 +56,16 @@ function SearchClient(this: any, crowi, esUri) {
   this.registerUpdateEvent()
 }
 
-SearchClient.prototype.selectMappingFile = function() {
+SearchClient.prototype.requireMappingFile = function() {
+  const { resourceDir } = this.crowi
+
   if ('analysis-kuromoji' in this.esPlugins) {
-    return 'mappings-kuromoji.json'
+    return require(resourceDir + 'search/mappings-kuromoji.json')
   }
   if ('analysis-sudachi' in this.esPlugins) {
-    return 'mappings-sudachi.json'
+    return require(resourceDir + 'search/mappings-sudachi.json')
   }
-  return 'mappings.json'
+  return require(resourceDir + 'search/mappings.json')
 }
 
 SearchClient.prototype.checkESVersion = async function() {
@@ -135,9 +137,7 @@ SearchClient.prototype.createIndexName = function() {
 
 SearchClient.prototype.createIndex = async function(index) {
   await this.checkESVersion()
-  const mappingDir = this.crowi.resourceDir + 'search'
-  const mappingFile = path.join(mappingDir, this.selectMappingFile())
-  const body = require(mappingFile)
+  const body = this.requireMappingFile()
 
   return this.client.indices.create({ index, body })
 }

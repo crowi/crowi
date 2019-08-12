@@ -3,7 +3,7 @@ const webpack = require('webpack')
 const CopyWebpackPlugin = require('copy-webpack-plugin')
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin')
 
-const ROOT = path.join(__dirname, '/../')
+const ROOT = path.join(__dirname, '/../../')
 
 const config = {
   mode: process.env.NODE_ENV,
@@ -63,6 +63,10 @@ const config = {
     ]),
     new ForkTsCheckerWebpackPlugin(),
   ],
+  stats: {
+    colors: true,
+    errorDetails: true,
+  },
 }
 
 module.exports = config
