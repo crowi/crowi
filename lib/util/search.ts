@@ -2,6 +2,7 @@ import path from 'path'
 import elasticsearch from 'elasticsearch'
 import Debug from 'debug'
 import moment from 'moment'
+import fs from 'fs'
 
 const debug = Debug('crowi:lib:search')
 
@@ -59,13 +60,14 @@ function SearchClient(this: any, crowi, esUri) {
 SearchClient.prototype.requireMappingFile = function() {
   const { resourceDir } = this.crowi
 
+  let fileName = path.join(resourceDir + 'search/mappings.json')
   if ('analysis-kuromoji' in this.esPlugins) {
-    return require(resourceDir + 'search/mappings-kuromoji.json')
+    fileName = path.join(resourceDir + 'search/mappings-kuromoji.json')
   }
   if ('analysis-sudachi' in this.esPlugins) {
-    return require(resourceDir + 'search/mappings-sudachi.json')
+    fileName = path.join(resourceDir + 'search/mappings-sudachi.json')
   }
-  return require(resourceDir + 'search/mappings.json')
+  return JSON.parse(fs.readFileSync(fileName).toString())
 }
 
 SearchClient.prototype.checkESVersion = async function() {
