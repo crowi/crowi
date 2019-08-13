@@ -35,61 +35,59 @@
     }
   },
   "mappings": {
-    "pages": {
-      "properties": {
-        "path": {
-          "type": "text",
-          "fields": {
-            "raw": {
-              "type": "text",
-              "analyzer": "keyword"
-            },
-            "ja": {
-              "type": "text",
-              "analyzer": "kuromoji"
-            },
-            "en": {
-              "type": "text",
-              "analyzer": "english"
-            }
+    "properties": {
+      "path": {
+        "type": "text",
+        "fields": {
+          "raw": {
+            "type": "text",
+            "analyzer": "keyword"
+          },
+          "ja": {
+            "type": "text",
+            "analyzer": "kuromoji"
+          },
+          "en": {
+            "type": "text",
+            "analyzer": "english"
           }
-        },
-        "body": {
-          "type": "text",
-          "fields": {
-            "ja": {
-              "type": "text",
-              "analyzer": "kuromoji"
-            },
-            "en": {
-              "type": "text",
-              "analyzer": "english"
-            }
-          }
-        },
-        "username": {
-          "type": "keyword"
-        },
-        "grant": {
-          "type": "integer"
-        },
-        "comment_count": {
-          "type": "integer"
-        },
-        "bookmark_count": {
-          "type": "integer"
-        },
-        "like_count": {
-          "type": "integer"
-        },
-        "created_at": {
-          "type": "date",
-          "format": "dateOptionalTime"
-        },
-        "updated_at": {
-          "type": "date",
-          "format": "dateOptionalTime"
         }
+      },
+      "body": {
+        "type": "text",
+        "fields": {
+          "ja": {
+            "type": "text",
+            "analyzer": "kuromoji"
+          },
+          "en": {
+            "type": "text",
+            "analyzer": "english"
+          }
+        }
+      },
+      "username": {
+        "type": "keyword"
+      },
+      "grant": {
+        "type": "integer"
+      },
+      "comment_count": {
+        "type": "integer"
+      },
+      "bookmark_count": {
+        "type": "integer"
+      },
+      "like_count": {
+        "type": "integer"
+      },
+      "created_at": {
+        "type": "date",
+        "format": "dateOptionalTime"
+      },
+      "updated_at": {
+        "type": "date",
+        "format": "dateOptionalTime"
       }
     }
   }

@@ -262,7 +262,6 @@ SearchClient.prototype.prepareBodyForUpdate = function(body, page, index = null)
   var command = {
     update: {
       _index: index || this.indexNames.current,
-      _type: 'pages',
       _id: page._id.toString(),
     },
   }
@@ -292,7 +291,6 @@ SearchClient.prototype.prepareBodyForCreate = function(body, page, index = null)
   var command = {
     index: {
       _index: index || this.indexNames.current,
-      _type: 'pages',
       _id: page._id.toString(),
     },
   }
@@ -322,7 +320,6 @@ SearchClient.prototype.prepareBodyForDelete = function(body, page, index = null)
   var command = {
     delete: {
       _index: index || this.indexNames.current,
-      _type: 'pages',
       _id: page._id.toString(),
     },
   }
@@ -481,7 +478,6 @@ SearchClient.prototype.createSearchQuerySortedByUpdatedAt = function(option) {
   // default is only id field, sorted by updated_at
   var query = {
     index: this.indexNames.current,
-    type: 'pages',
     body: {
       sort: [{ updated_at: { order: 'desc' } }],
       query: {}, // query
@@ -502,7 +498,6 @@ SearchClient.prototype.createSearchQuerySortedByScore = function(option) {
   // sort by score
   var query = {
     index: this.indexNames.current,
-    type: 'pages',
     body: {
       sort: [{ _score: { order: 'desc' } }],
       query: {}, // query
