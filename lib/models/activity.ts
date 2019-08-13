@@ -14,12 +14,10 @@ export interface ActivityDocument extends Document {
   eventModel: string
   createdAt: Date
 
-  getSameActivities(): Promise<ActivityDocument[]>
   getNotificationTargetUsers(): Promise<any[]>
 }
 
 export interface ActivityModel extends Model<ActivityDocument> {
-  getSameActivities(parameters: any): Promise<ActivityDocument>
   createByParameters(parameters: any): Promise<ActivityDocument>
   removeByParameters(parameters: any): any
   createByPageComment(comment: any): Promise<ActivityDocument>
@@ -166,17 +164,6 @@ export default (crowi: Crowi) => {
     return activities.map(({ user }) => user).filter((user, i, self) => self.indexOf(user) === i)
   }
 
-  activitySchema.methods.getSameActivities = function() {
-    const { target, action } = this
-    const query = { target, action }
-    const limit = 1000
-
-    return Activity.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .exec()
-  }
-
   activitySchema.methods.getNotificationTargetUsers = async function() {
     const User = crowi.model('User')
     const Watcher = crowi.model('Watcher')
@@ -208,13 +195,9 @@ export default (crowi: Crowi) => {
   activitySchema.post('save', async function(savedActivity: ActivityDocument) {
     const Notification = crowi.model('Notification')
     try {
-      const [notificationUsers, sameActivities] = await Promise.all([savedActivity.getNotificationTargetUsers(), savedActivity.getSameActivities()])
+      const notificationUsers = await savedActivity.getNotificationTargetUsers()
 
-      const notificationPromises = notificationUsers.map(user => {
-        const filteredActivities = sameActivities.filter(({ user: sameActionUser }) => user.toString() !== sameActionUser.toString())
-        return Notification.upsertByActivity(user, (filteredActivities as any) as Types.ObjectId[], savedActivity)
-      })
-      return Promise.all(notificationPromises)
+      return Promise.all(notificationUsers.map(user => Notification.upsertByActivity(user, savedActivity)))
     } catch (err) {
       debug(err)
     }
