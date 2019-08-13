@@ -675,8 +675,6 @@ SearchClient.prototype.filterPagesByUser = function(query, user) {
       should: [{ match: { grant: Page.GRANT_RESTRICTED } }, { match: { grant: Page.GRANT_SPECIFIED } }, { match: { grant: Page.GRANT_OWNER } }],
     },
   })
-
-  console.log(query.body.query.bool.must_not[0].bool)
 }
 
 SearchClient.prototype.appendFunctionScore = function(query) {
