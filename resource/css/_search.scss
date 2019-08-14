@@ -225,15 +225,32 @@
 
 // Smartphone and Tablet
 @include media-breakpoint-down(sm) {
+  .content-main {
+    max-width: 100vw;
+  }
+
+  .search-toolbar {
+    margin: 0;
+    padding: 0 0 1em;
+    .search-keyword {
+      display: none;
+    }
+  }
+
   .search-result {
     .search-result-content {
       .search-result-page {
+        > h2 {
+          word-break: break-all;
+          padding-top: 1em;
+        }
         .wiki {
           h1, h2, h3, h4, h5, h6 {
             font-size: medium;
           }
           height: 250px;
           overflow: scroll;
+          word-break: break-all;
         }
       }
     }
