@@ -48,161 +48,173 @@
     </a>
   </nav>
 
-  <div class="card">
-    <div class="card-body">
-      <div class="d-flex">
+  <div class="menu-user-profile">
+    <div class="d-flex  justify-content-between">
+      <div class="menu-user-picture">
         <a href="{{ userPageRoot(user) }}">
-          <img src="{{ user|picture }}" class="picture picture-rounded" /> <span class="text-muted">@{{ user.username }}</span><br>
-        </a>
-        <a href="/me/notifications" class="nav-link">
-          <i class="mdi mdi-bell"></i>
+          <img src="{{ user|picture }}" class="picture picture-rounded" />
         </a>
       </div>
-
-      <div class="text-center">
-        <button class="btn btn-primary create-page-button" data-target="#create-page" data-toggle="modal">
+      <div class="">
+        <a href="/me/notifications" class="">
+          <i class="mdi mdi-bell"></i>
+        </a>
+        <button class="btn btn-outline-secondary create-page-button" data-target="#create-page" data-toggle="modal">
           <i class="mdi mdi-pencil-outline"></i> {{ t('New') }}
         </button>
       </div>
     </div>
+
+    <div class="menu-user-names">
+      <a href="{{ userPageRoot(user) }}">
+        <span class="menu-user-name">{{ user.name }}</span><br />
+        <span class="menu-user-username">@{{ user.username }}</span>
+      </a>
+    </div>
   </div>
 
-  <ul class="list-group list-group-flush">
-    <li class="list-group-item">
+  <ul class="menu-list">
+    <li class="">
       <a class="" href="/me"><i class="mdi mdi-cogs"></i> {{ t('User Settings') }}</a>
     </li>
-    <li class="list-group-item">
+    <li class="">
       <a class="" href="{{ userPageRoot(user) }}/bookmarks"><i class="mdi mdi-star"></i> {{ t('Bookmarks') }}</a>
     </li>
-    <li class="list-group-item">
+    <li class="">
       <a class="" href="{{ userPageRoot(user) }}/recent-create"><i class="mdi mdi-pencil-outline"></i> {{ t('Created pages') }}</a>
     </li>
-    <li class="list-group-item">
+    <li class="divider"></li>
+    <li class="">
       <a class="" href="/trash/"><i class="mdi mdi-trash-can-outline"></i> {{ t('Deleted Pages') }}</a>
     </li>
-    <li class="list-group-item">
+    <li class="divider"></li>
+    <li class="">
       <a class="" href="/logout"><i class="mdi mdi-logout"></i> {{ t('Sign out') }}</a>
     </li>
   </ul>
 </div>
-<nav class="v2-crowi-header navbar navbar-expand-md" role="navigation">
-  <div class="crowi-menu-main col-md-7 col-lg-8 p-2 d-flex">
 
-    {# mobile menu #}
-    <div class="crowi-menu-sm" id="crowi-menu-trigger">
-    </div>
-    <a class="navbar-brand" href="/">
-      <img alt="Crowi" src="/logo/32x32i.png" width="16">
-      <span class="crowi-wiki-title">{% block title %}{{ config.crowi['app:title']|default('Crowi') }}{% endblock %}</span>
-    </a>
+<div class="v2-container">
+  <div class="v2-container-backdrop"></div>
+  <nav class="v2-crowi-header navbar navbar-expand-md" role="navigation">
+    <div class="crowi-menu-main col-md-7 col-lg-8 p-2 d-flex">
 
-    {% if searchConfigured() %}
-    <div class="search-top " role="search" id="search-top">
-      <div class="search-box"> {# placeholder for react #}
-        <form class="search-form input-group search-top-input-group">
-          <div class="input-group-prepend">
-            <span class="input-group-text"><i class="mdi mdi-magnify" style="font-size: 1em;"></i></span>
-          </div>
-          <input
-              type="text"
-              placeholder="Search ... Page title and content"
-              class="search-top-input form-control" name="q" disabled="disabled">
-        </form>
+      {# mobile menu #}
+      <div class="crowi-menu-sm" id="crowi-menu-trigger">
       </div>
-    </div>
-    {% endif %}
-  </div>
-
-  {# pc menu #}
-  <ul class="crowi-menu-md navbar-nav col-md-5 col-lg-4 p-2 justify-content-end">
-    {% if config.crowi['app:confidential'] && config.crowi['app:confidential'] != '' %}
-    <li class="nav-item confidential">
-      <a href="#">{{ config.crowi['app:confidential'] }}</a>
-    </li>
-    {% endif %}
-
-    {% if user and user.admin %}
-    <li class="nav-item">
-      <a href="/admin" class="nav-link">
-        <i class="mdi mdi-cube"></i> {{ t('Admin') }}
-      </a>
-    </li>
-    {% endif %}
-
-    <li class="nav-item">
-      <button class="btn btn-primary create-page-button" data-target="#create-page" data-toggle="modal">
-        <i class="mdi mdi-pencil-outline"></i> {{ t('New') }}
-      </button>
-    </li>
-    <li class="nav-item nav-divider">
-    </li>
-
-    <li class="nav-item header-notification" id="header-notification">
-      <a href="#" class="nav-link">
-        <i class="mdi mdi-bell"></i>
-      </a>
-    </li>
-    <li class="nav-item header-user dropdown" id="login-user">
-      <a href="#" id="nav-dropdown-menu" class="nav-link dropdown-toggle" data-toggle="dropdown" role="button">
-        <img src="{{ user|picture }}" class="picture picture-rounded" width="25" />
+      <a class="navbar-brand" href="/">
+        <img alt="Crowi" src="/logo/32x32i.png" width="16">
+        <span class="crowi-wiki-title">{% block title %}{{ config.crowi['app:title']|default('Crowi') }}{% endblock %}</span>
       </a>
 
-      <div class="dropdown-menu dropdown-menu-right">
-        <div class="dropdown-item text-center text-muted">
-          <div class="text-center header-user-picture">
-            <a href="{{ userPageRoot(user) }}">
-              <img src="{{ user|picture }}" class="picture picture-rounded" />
-            </a>
-          </div>
-          <div class="text-center header-user-container">
-            <a href="{{ userPageRoot(user) }}" id="link-mypage" class="nav-link">
-              <span class="header-user-name">{{ user.name }}</span><br>
-              <span class="header-user-username">@{{ user.username }}</span><br/>
-
-              <span class="header-user-email"><i class="mdi mdi-email"></i> {{ user.email }}</span>
-              {% if user.googleId || user.githubId %}
-                {% if user.googleId %}
-                <span class="header-user-socialid"><i class="mdi mdi-google" /></i></span>
-                {% endif %}
-                {% if user.githubId %}
-                <span class="header-user-socialid"><i class="mdi mdi-github-box"></i></span>
-                {% endif %}
-              {% endif %}
-            </a>
-          </div>
+      {% if searchConfigured() %}
+      <div class="search-top " role="search" id="search-top">
+        <div class="search-box"> {# placeholder for react #}
+          <form class="search-form input-group search-top-input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text"><i class="mdi mdi-magnify" style="font-size: 1em;"></i></span>
+            </div>
+            <input
+                type="text"
+                placeholder="Search ... Page title and content"
+                class="search-top-input form-control" name="q" disabled="disabled">
+          </form>
         </div>
-        <div class="dropdown-divider"></div>
-        <a class="dropdown-item" href="/me"><i class="mdi mdi-cogs"></i> {{ t('User Settings') }}</a>
-        <a class="dropdown-item" href="{{ userPageRoot(user) }}/bookmarks"><i class="mdi mdi-star"></i> {{ t('Bookmarks') }}</a>
-        <a class="dropdown-item" href="{{ userPageRoot(user) }}/recent-create"><i class="mdi mdi-pencil-outline"></i> {{ t('Created pages') }}</a>
-        <div class="dropdown-divider"></div>
-        <a class="dropdown-item" href="/trash/"><i class="mdi mdi-trash-can-outline"></i> {{ t('Deleted Pages') }}</a>
-        <div class="dropdown-divider"></div>
-        <a class="dropdown-item" href="/logout"><i class="mdi mdi-logout"></i> {{ t('Sign out') }}</a>
       </div>
-    </li>
-  </ul>
-</nav>
+      {% endif %}
+    </div>
 
-{% include '../modal/create_page.html' %}
-{% endblock  %} {# layout_head_nav #}
+    {# pc menu #}
+    <ul class="crowi-menu-md navbar-nav col-md-5 col-lg-4 p-2 justify-content-end">
+      {% if config.crowi['app:confidential'] && config.crowi['app:confidential'] != '' %}
+      <li class="nav-item confidential">
+        <a href="#">{{ config.crowi['app:confidential'] }}</a>
+      </li>
+      {% endif %}
 
-{% block layout_container %}
+      {% if user and user.admin %}
+      <li class="nav-item">
+        <a href="/admin" class="nav-link">
+          <i class="mdi mdi-cube"></i> {{ t('Admin') }}
+        </a>
+      </li>
+      {% endif %}
 
-<div class="v2-contents-container container-fluid">
-  <div class="row">
+      <li class="nav-item">
+        <button class="btn btn-primary create-page-button" data-target="#create-page" data-toggle="modal">
+          <i class="mdi mdi-pencil-outline"></i> {{ t('New') }}
+        </button>
+      </li>
+      <li class="nav-item nav-divider">
+      </li>
 
-    {% block layout_sidebar %}
-    {% endblock %} {# layout_sidebar #}
+      <li class="nav-item header-notification" id="header-notification">
+        <a href="#" class="nav-link">
+          <i class="mdi mdi-bell"></i>
+        </a>
+      </li>
+      <li class="nav-item header-user dropdown" id="login-user">
+        <a href="#" id="nav-dropdown-menu" class="nav-link dropdown-toggle" data-toggle="dropdown" role="button">
+          <img src="{{ user|picture }}" class="picture picture-rounded" width="25" />
+        </a>
 
-    {% block layout_main %}
-    {% endblock %} {# layout_main #}
+        <div class="dropdown-menu dropdown-menu-right">
+          <div class="dropdown-item text-center text-muted">
+            <div class="text-center header-user-picture">
+              <a href="{{ userPageRoot(user) }}">
+                <img src="{{ user|picture }}" class="picture picture-rounded" />
+              </a>
+            </div>
+            <div class="text-center header-user-container">
+              <a href="{{ userPageRoot(user) }}" id="link-mypage" class="nav-link">
+                <span class="header-user-name">{{ user.name }}</span><br>
+                <span class="header-user-username">@{{ user.username }}</span><br/>
 
-    {% block footer %}
-    {% endblock %}
+                <span class="header-user-email"><i class="mdi mdi-email"></i> {{ user.email }}</span>
+                {% if user.googleId || user.githubId %}
+                  {% if user.googleId %}
+                  <span class="header-user-socialid"><i class="mdi mdi-google" /></i></span>
+                  {% endif %}
+                  {% if user.githubId %}
+                  <span class="header-user-socialid"><i class="mdi mdi-github-box"></i></span>
+                  {% endif %}
+                {% endif %}
+              </a>
+            </div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item" href="/me"><i class="mdi mdi-cogs"></i> {{ t('User Settings') }}</a>
+          <a class="dropdown-item" href="{{ userPageRoot(user) }}/bookmarks"><i class="mdi mdi-star"></i> {{ t('Bookmarks') }}</a>
+          <a class="dropdown-item" href="{{ userPageRoot(user) }}/recent-create"><i class="mdi mdi-pencil-outline"></i> {{ t('Created pages') }}</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item" href="/trash/"><i class="mdi mdi-trash-can-outline"></i> {{ t('Deleted Pages') }}</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item" href="/logout"><i class="mdi mdi-logout"></i> {{ t('Sign out') }}</a>
+        </div>
+      </li>
+    </ul>
+  </nav>
 
-  </div> {# /.row #}
-</div> {# /.container-fluid #}
+  {% include '../modal/create_page.html' %}
+  {% endblock  %} {# layout_head_nav #}
+
+  {% block layout_container %}
+
+  <div class="v2-contents-container container-fluid">
+    <div class="row">
+
+      {% block layout_sidebar %}
+      {% endblock %} {# layout_sidebar #}
+
+      {% block layout_main %}
+      {% endblock %} {# layout_main #}
+
+      {% block footer %}
+      {% endblock %}
+
+    </div> {# /.row #}
+  </div> {# /.container-fluid #}
+</div>
 
 {% endblock layout_container %}
 

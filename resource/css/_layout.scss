@@ -8,31 +8,41 @@
       lighten($crowiHeaderBackground, 40%)
     ) 3;
 
-    .v2-crowi-header, .v2-contents-container {
+    .v2-container {
+      position: absolute;
       transition: .2s ease;
       left: 0;
+
+      .v2-container-backdrop {
+        display: none;
+        position: absolute;
+        height: 100vh;
+        width: 100%;
+      }
     }
 
     // TODO: move those kind of logic to components and styled-component
     // sm menu opened
     &.side-menu-open {
-      .v2-crowi-header {
-        position: absolute;
+      .v2-container {
         width: calc(100% - 300px);
         left: 300px;
+        height: 100vh;
         overflow: hidden;
-
-        .search-top {
-          display: none;
-        }
-      }
-      .v2-contents-container {
-        position: absolute;
-        width: calc(100% - 300px);
-        left: 300px;
         box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
         z-index: 1000;
         overflow: hidden;
+
+        .v2-container-backdrop {
+          display: block;
+          background-color: rgba(0, 0, 0, .1);
+          z-index: 1090;
+        }
+      }
+      .v2-crowi-header {
+        .search-top {
+          display: none;
+        }
       }
 
       .v2-crowi-global-menu {
@@ -43,6 +53,45 @@
           width: 300px;
           height: 100vh;
           background: #fcfcfc;
+
+          .menu-user-profile {
+            padding: 1em;
+
+            .picture {
+              width: 48px;
+              height: 48px;
+            }
+
+            .menu-user-names {
+              padding-top: 1em;
+              padding-bottom: 1em;
+
+              .menu-user-name {
+                font-size: 1.2em;
+                font-weight: 600;
+              }
+              .menu-user-username {
+                font-size: .9em;
+                color: #777;
+              }
+            }
+          }
+
+          .menu-list {
+            position: relative;
+            width: calc(100% - 1em);
+            padding-left: 1em;
+
+            li {
+              list-style: none;
+              padding-bottom: .4em;
+
+              &.divider {
+                border-bottom: solid 1px #f0f0f0;
+                margin-bottom: .4em;
+              }
+            }
+          }
         }
       }
     }
