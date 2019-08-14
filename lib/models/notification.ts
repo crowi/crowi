@@ -1,6 +1,7 @@
 import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, Query, model } from 'mongoose'
 import Debug from 'debug'
+import moment from 'moment'
 import ActivityDefine from '../util/activityDefine'
 import { ActivityDocument } from './activity'
 import { UserDocument } from './user'
@@ -23,7 +24,7 @@ export interface NotificationDocument extends Document {
 
 export interface NotificationModel extends Model<NotificationDocument> {
   findLatestNotificationsByUser(user: Types.ObjectId, skip: number, offset: number): Promise<NotificationDocument[]>
-  upsertByActivity(user: Types.ObjectId, sameActivities: Types.ObjectId[], activity: any): Promise<NotificationDocument | null>
+  upsertByActivity(user: Types.ObjectId, activity: ActivityDocument, createdAt?: Date | null): Promise<NotificationDocument | null>
   removeActivity(activity: any): any
   removeEmpty(): Query<any>
   read(user: UserDocument): Promise<Query<any>>
@@ -84,11 +85,11 @@ export default (crowi: Crowi) => {
     return Activity.getActionUsersFromActivities((this.activities as any) as ActivityDocument[])
   })
   const transform = (doc, ret) => {
-    delete ret.activities
+    // delete ret.activities
   }
   notificationSchema.set('toObject', { virtuals: true, transform })
   notificationSchema.set('toJSON', { virtuals: true, transform })
-  notificationSchema.index({ user: 1, target: 1, action: 1, createdAt: 1 }, { unique: true })
+  notificationSchema.index({ user: 1, target: 1, action: 1, createdAt: 1 })
 
   notificationSchema.statics.findLatestNotificationsByUser = function(user, limit, offset) {
     limit = limit || 10
@@ -102,18 +103,20 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  notificationSchema.statics.upsertByActivity = async function(user, sameActivities, activity) {
-    const { targetModel, target, action } = activity
+  notificationSchema.statics.upsertByActivity = async function(user, activity, createdAt = null) {
+    const { _id: activityId, targetModel, target, action } = activity
 
-    const query = { user, target, action }
+    const now = createdAt || Date.now()
+    const lastWeek = moment(now).subtract(7, 'days')
+    const query = { user, target, action, createdAt: { $gt: lastWeek } }
     const parameters = {
       user,
       targetModel,
       target,
       action,
-      activities: sameActivities,
       status: STATUS_UNREAD,
-      createdAt: Date.now(),
+      createdAt: now,
+      $addToSet: { activities: activityId },
     }
 
     const options = {

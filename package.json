@@ -1,7 +1,7 @@
 {
   "name": "crowi",
   "version": "1.8.0-dev",
-  "main": "dist/app.js",
+  "main": "lib/app.ts",
   "description": "The simple & powerful Wiki",
   "tags": [
     "wiki",
@@ -120,10 +120,13 @@
     "socket.io-redis": "^5.2.0",
     "style-loader": "^0.23.1",
     "swig": "~1.4.0",
+    "ts-loader": "^6.0.4",
     "tsconfig-paths": "^3.8.0",
+    "tsconfig-paths-webpack-plugin": "^3.2.0",
     "uuid": "^3.3.2",
     "webpack": "^4.16.1",
     "webpack-cli": "^3.1.0",
+    "webpack-node-externals": "^1.7.2",
     "yaml-loader": "^0.5.0"
   },
   "devDependencies": {
@@ -182,22 +185,23 @@
     "supertest": "^4.0.2",
     "ts-jest": "^24.0.2",
     "ts-node": "^8.3.0",
-    "typescript": "^3.4.5"
+    "typescript": "^3.5.3"
   },
   "license": "MIT",
   "scripts": {
-    "start": "ts-node --files -r tsconfig-paths/register --project tsconfig.server.json lib/app.ts",
+    "start": "node dist/server/app.js",
     "dev": "concurrently --kill-others 'npm run dev:server' 'npm run dev:client' 'npm run watch'",
-    "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon --watch ./lib/ --watch ./locales/ --ext 'ts,tsx,js,jsx,json' --exec npm run start",
-    "dev:client": "NODE_ENV=development webpack --progress --profile --colors --display-error-details --watch --config tools/webpack.config.js",
+    "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon lib/app.ts",
+    "dev:client": "NODE_ENV=development webpack --progress --profile --watch --config webpack/client/webpack.config.js",
     "format": "eslint --fix '**/*.{ts,tsx,js,jsx}'",
     "lint": "eslint '**/*.{ts,tsx,js,jsx}'",
     "test": "DEBUG= jest --maxWorkers=5",
     "coverage": "npm test -- --coverage",
     "build": "run-s build:*",
-    "build:server": "babel --no-babelrc --config-file ./.server.babelrc lib --out-dir dist --extensions '.ts'",
+    "build:server": "npm run prod:server",
     "build:client": "npm run prod:client",
-    "prod:client": "NODE_ENV=production webpack --bail --colors --display-error-details --config tools/webpack.config.js",
+    "prod:server": "NODE_ENV=production webpack --bail --config webpack/server/webpack.config.js",
+    "prod:client": "NODE_ENV=production webpack --bail --config webpack/client/webpack.config.js",
     "type-check": "tsc --noEmit",
     "type-check:watch": "npm run type-check -- --watch",
     "webpack": "webpack",
