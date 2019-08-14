@@ -1,4 +1,4 @@
-FROM node:10.16.1-stretch-slim as builder
+FROM node:10.16.2-stretch-slim as builder
 
 ENV CROWI_VERSION v1.8.0
 ENV MONGOMS_DOWNLOAD_MIRROR https://downloads.mongodb.org
@@ -19,7 +19,7 @@ RUN rm -rf lib client
 #ENV NODE_ENV ${NODE_ENV}
 #RUN npm prune
 
-FROM node:10.16.1-stretch-slim
+FROM node:10.16.2-stretch-slim
 
 ARG NODE_ENV="production"
 
@@ -32,4 +32,4 @@ WORKDIR /crowi
 
 COPY --from=builder --chown=node:node /crowi /crowi
 
-CMD ["node", "."]
+CMD ["npm", "start"]

@@ -5,7 +5,6 @@ export default (crowi: Crowi) => {
 
   // var debug = Debug('crowi:lib:fileUploader')
   var method = crowi.env.FILE_UPLOAD || 'aws'
-  var lib = '../../local_modules/crowi-fileupload-' + method
 
-  return require(lib)(crowi)
+  return require('../../local_modules/crowi-fileupload-' + method + '/index.js')(crowi)
 }
