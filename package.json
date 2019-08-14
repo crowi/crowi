@@ -72,7 +72,7 @@
     "elasticsearch": "~15.1.1",
     "emojify.js": "^1.1.0",
     "errorhandler": "^1.5.1",
-    "eventemitter3": "^3.1.2",
+    "eventemitter3": "^4.0.0",
     "express": "^4.17.1",
     "express-form": "~0.12.0",
     "express-session": "^1.16.2",
