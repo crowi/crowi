@@ -406,6 +406,13 @@
   }
 }
 
+// smartphone input size adjustment
+@include media-breakpoint-down(md) {
+  input {
+    font-size: 1rem;
+  }
+}
+
 // {{{ printable style
 @media print {
   .crowi.main-container {
