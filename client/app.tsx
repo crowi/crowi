@@ -99,15 +99,26 @@ const closeSideMenuHandler = e => {
   Emitter.emit('closeSideMenu')
 }
 Emitter.on('sideMenuHandle', isOpen => {
-  const elem = document.getElementById('crowi-main-container')
+  const closeTriggerElements = ['crowi-global-menu', 'v2-container-backdrop']
+  const containerElement = document.getElementById('crowi-main-container')
   const menuClassName = ' side-menu-open'
-  if (elem) {
+  if (containerElement) {
     if (isOpen) {
-      elem.className += menuClassName
-      elem.addEventListener('click', closeSideMenuHandler)
+      containerElement.className += menuClassName
+      for (const elemName of closeTriggerElements) {
+        const e = document.getElementById(elemName)
+        if (e) {
+          e.addEventListener('click', closeSideMenuHandler)
+        }
+      }
     } else {
-      elem.className = elem.className.replace(menuClassName, '')
-      elem.removeEventListener('click', closeSideMenuHandler)
+      containerElement.className = containerElement.className.replace(menuClassName, '')
+      for (const elemName of closeTriggerElements) {
+        const e = document.getElementById(elemName)
+        if (e) {
+          e.removeEventListener('click', closeSideMenuHandler)
+        }
+      }
     }
   }
 })
