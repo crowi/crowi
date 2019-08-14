@@ -408,8 +408,8 @@
 
 // smartphone input size adjustment
 @include media-breakpoint-down(md) {
-  input {
-    font-size: 1rem;
+  input[type=text], textarea {
+    font-size: 1rem !important;
   }
 }
 
