@@ -797,6 +797,8 @@ export default (crowi: Crowi) => {
     const data = await page.save()
 
     debug('Page.updateGrant, saved grantedUsers.', (data && data.path) || {})
+
+    return data
   }
 
   // Instance method でいいのでは
