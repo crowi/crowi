@@ -196,24 +196,23 @@
   </nav>
 
   {% include '../modal/create_page.html' %}
-  {% endblock  %} {# layout_head_nav #}
+{% endblock layout_head_nav %}
 
-  {% block layout_container %}
+{% block layout_container %}
 
-  <div class="v2-contents-container container-fluid">
-    <div class="row">
+<div class="v2-contents-container container-fluid">
+  <div class="row align-items-center">
 
-      {% block layout_sidebar %}
-      {% endblock %} {# layout_sidebar #}
+    {% block layout_sidebar %}
+    {% endblock %} {# layout_sidebar #}
 
-      {% block layout_main %}
-      {% endblock %} {# layout_main #}
+    {% block layout_main %}
+    {% endblock %} {# layout_main #}
 
-      {% block footer %}
-      {% endblock %}
+    {% block footer %}
+    {% endblock %}
 
-    </div> {# /.row #}
-  </div> {# /.container-fluid #}
+  </div> {# /.row #}
 </div>
 
 {% endblock layout_container %}
