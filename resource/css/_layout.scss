@@ -117,6 +117,8 @@
       }
 
       .crowi-menu-main {
+        display: flex;
+        flex: 1;
       }
       @include media-breakpoint-down(sm) {
         .crowi-menu-sm { // for moblie
