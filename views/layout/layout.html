@@ -97,10 +97,10 @@
 <div class="v2-container">
   <div class="v2-container-backdrop" id="v2-container-backdrop"></div>
   <nav class="v2-crowi-header navbar navbar-expand-md" role="navigation">
-    <div class="crowi-menu-main col-md-7 col-lg-8 p-2 d-flex">
+    <div class="crowi-menu-main p-2">
 
       {# mobile menu #}
-      <div class="crowi-menu-sm" id="crowi-menu-trigger">
+      <div class="crowi-menu-sm" id="side-menu-trigger">
       </div>
       <a class="navbar-brand" href="/">
         <img alt="Crowi" src="/logo/32x32i.png" width="16">
@@ -110,9 +110,9 @@
       {% if searchConfigured() %}
       <div class="search-top " role="search" id="search-top">
         <div class="search-box"> {# placeholder for react #}
-          <form class="search-form input-group search-top-input-group">
-            <div class="input-group-prepend">
-              <span class="input-group-text"><i class="mdi mdi-magnify" style="font-size: 1em;"></i></span>
+          <form class="search-form search-top-input-group">
+            <div class="search-top-icon">
+              <i class="mdi mdi-magnify" style="font-size: 1em;"></i>
             </div>
             <input
                 type="text"
@@ -125,7 +125,7 @@
     </div>
 
     {# pc menu #}
-    <ul class="crowi-menu-md navbar-nav col-md-5 col-lg-4 p-2 justify-content-end">
+    <ul class="crowi-menu-md navbar-nav p-2">
       {% if config.crowi['app:confidential'] && config.crowi['app:confidential'] != '' %}
       <li class="nav-item confidential">
         <a href="#">{{ config.crowi['app:confidential'] }}</a>
