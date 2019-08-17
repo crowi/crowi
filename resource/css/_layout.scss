@@ -30,8 +30,7 @@
         left: 300px;
         height: 100vh;
         overflow: hidden;
-        box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
-        z-index: 1000;
+        z-index: 990;
         overflow: hidden;
 
         .v2-container-backdrop {
@@ -50,7 +49,8 @@
         @include media-breakpoint-down(sm) {
           display: block;
           position: fixed;
-          z-index: 990;
+          box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
+          z-index: 1000;
           width: 300px;
           height: 100vh;
           background: #fcfcfc;
