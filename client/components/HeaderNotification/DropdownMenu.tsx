@@ -31,7 +31,6 @@ export default class DropdownMenu extends React.Component<Props> {
 
     return (
       <Menu tag="ul" right>
-        <li className="notification-arrow" />
         {listView}
         <li>
           <a href="/me/notifications" className="notification-see-all">
