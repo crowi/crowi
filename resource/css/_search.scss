@@ -47,6 +47,10 @@
         align-items: center;
         width: 32px;
         height: 100%;
+
+        svg {
+          margin-top: 0;
+        }
       }
 
       .search-top-icon {
