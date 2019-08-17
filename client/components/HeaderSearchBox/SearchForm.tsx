@@ -95,11 +95,9 @@ export default class SearchForm extends React.Component<Props, State> {
     const formClear = this.getFormClearComponent()
 
     return (
-      <form action="/_search" className="search-form input-group search-top-input-group" onSubmit={this.handleSubmit}>
-        <div className="input-group-prepend">
-          <span className="input-group-text">
-            <Icon name="magnify" />
-          </span>
+      <form action="/_search" className="search-form search-top-input-group" onSubmit={this.handleSubmit}>
+        <div className="search-top-icon">
+          <Icon name="magnify" />
         </div>
         {this.props.focused && formClear}
         <input
@@ -111,7 +109,7 @@ export default class SearchForm extends React.Component<Props, State> {
           value={this.state.keyword}
           onFocus={this.handleFocus}
           onChange={this.handleChange}
-          style={{ maxWidth: this.props.focused ? 'none' : '240px' }}
+          style={{ maxWidth: this.props.focused ? 'none' : '300px' }}
         />
       </form>
     )
