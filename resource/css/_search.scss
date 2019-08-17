@@ -38,15 +38,19 @@
       position: relative;
       margin: 0;
 
-      .search-top-icon {
+      .search-top-icon,
+      .search-top-clear {
         position: absolute;
-        left: 6px;
         z-index: 10;
         display: flex;
         justify-content: center;
         align-items: center;
         width: 32px;
         height: 100%;
+      }
+
+      .search-top-icon {
+        left: 6px;
         pointer-events: none;
       }
 
@@ -54,6 +58,9 @@
         transition: width ease .5s;
         @include media-breakpoint-down(sm) {
           max-width: none !important;
+        }
+        @include media-breakpoint-up(md) {
+          max-width: 300px;
         }
         border-radius: 20px;
         padding-left: 40px;
@@ -68,15 +75,7 @@
       }
 
       .search-top-clear {
-        display: inline-block;
-        position: absolute;
-        right: 0;
-        z-index: 10;
-        width: 30px;
-        height: 30px;
-        top: 4px;
-        line-height: 30px;
-        text-align: center;
+        right: 6px;
         color: #ccc;
       }
     }
