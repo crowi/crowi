@@ -52,16 +52,12 @@ export default class SearchForm extends React.Component<Props, State> {
     }
   }
 
-  getFormClearComponent() {
-    if (this.state.keyword !== '') {
-      return (
-        <a className="search-top-clear" onClick={this.clearForm}>
-          <Icon name="close-circle" />
-        </a>
-      )
-    } else {
-      return ''
-    }
+  renderClearForm() {
+    return (
+      <a className="search-top-clear" onClick={this.clearForm}>
+        <Icon name="close-circle" />
+      </a>
+    )
   }
 
   clearForm() {
@@ -92,16 +88,16 @@ export default class SearchForm extends React.Component<Props, State> {
   }
 
   render() {
-    const formClear = this.getFormClearComponent()
+    const showClearForm = this.props.focused && this.state.keyword !== ''
+    const focusedStyles = this.props.focused ? { maxWidth: 'none' } : {}
+    const formClearStyles = showClearForm ? { paddingRight: 40 } : {}
 
     return (
-      <form action="/_search" className="search-form input-group search-top-input-group" onSubmit={this.handleSubmit}>
-        <div className="input-group-prepend">
-          <span className="input-group-text">
-            <Icon name="magnify" />
-          </span>
+      <form action="/_search" className="search-form search-top-input-group" onSubmit={this.handleSubmit}>
+        <div className="search-top-icon">
+          <Icon name="magnify" />
         </div>
-        {this.props.focused && formClear}
+        {showClearForm && this.renderClearForm()}
         <input
           autoComplete="off"
           type="text"
@@ -111,7 +107,7 @@ export default class SearchForm extends React.Component<Props, State> {
           value={this.state.keyword}
           onFocus={this.handleFocus}
           onChange={this.handleChange}
-          style={{ maxWidth: this.props.focused ? 'none' : '240px' }}
+          style={{ ...focusedStyles, ...formClearStyles }}
         />
       </form>
     )

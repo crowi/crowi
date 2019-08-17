@@ -9,7 +9,7 @@ import CrowiRenderer from './util/CrowiRenderer'
 import CrowiAuth from './util/CrowiAuth'
 import Emitter from './emitter'
 
-import CrowiMenuTrigger from 'components/CrowiMenuTrigger'
+import SideMenuTrigger from 'components/SideMenuTrigger'
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'
 import PageListSearch from 'components/PageListSearch'
@@ -64,7 +64,7 @@ window.crowiAuth = crowiAuth
 
 const me = $('body').data('me')
 const componentMappings = {
-  'crowi-menu-trigger': <CrowiMenuTrigger crowi={crowi} />,
+  'side-menu-trigger': <SideMenuTrigger crowi={crowi} />,
   'search-top': <HeaderSearchBox crowi={crowi} />,
   'search-page': <SearchPage crowi={crowi} />,
   'page-list-search': <PageListSearch crowi={crowi} />,
