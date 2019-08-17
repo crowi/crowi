@@ -14,7 +14,7 @@ interface State {
   menuOpen: boolean
 }
 
-export default class CrowiMenuTrigger extends React.Component<Props, State> {
+export default class SideMenuTrigger extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
