@@ -97,7 +97,7 @@
 <div class="v2-container">
   <div class="v2-container-backdrop" id="v2-container-backdrop"></div>
   <nav class="v2-crowi-header navbar navbar-expand-md" role="navigation">
-    <div class="crowi-menu-main col-md-7 col-lg-8 p-2 d-flex">
+    <div class="crowi-menu-main p-2">
 
       {# mobile menu #}
       <div class="crowi-menu-sm" id="crowi-menu-trigger">
@@ -125,7 +125,7 @@
     </div>
 
     {# pc menu #}
-    <ul class="crowi-menu-md navbar-nav col-md-5 col-lg-4 p-2 justify-content-end">
+    <ul class="crowi-menu-md navbar-nav p-2">
       {% if config.crowi['app:confidential'] && config.crowi['app:confidential'] != '' %}
       <li class="nav-item confidential">
         <a href="#">{{ config.crowi['app:confidential'] }}</a>
