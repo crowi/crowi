@@ -27,6 +27,8 @@ import AdminShare from 'components/Admin/Share/AdminShare'
 import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
 import Comment from 'components/Comment/Comment'
 
+import hydrateComponents from './hydrateComponents'
+
 i18n()
 
 moment.locale(navigator.userLanguage || navigator.language)
@@ -94,6 +96,8 @@ Object.entries(componentMappings).forEach(([key, component]) => {
     ReactDOM.render(component, elem)
   }
 })
+
+hydrateComponents()
 
 // うわーもうー
 $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {
