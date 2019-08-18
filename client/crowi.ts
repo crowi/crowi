@@ -372,7 +372,7 @@ $(function() {
   })
 
   // list-link
-  $('.page-list-link').each(function() {
+  $('.page-list-link-path').each(function() {
     const $link = $(this)
     const path = $link.attr('data-path')
     const shortPath = $link.attr('data-short-path') || ''

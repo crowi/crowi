@@ -24,29 +24,29 @@
     > li {
       list-style: none;
       line-height: 1.8em;
+      margin-bottom: .3em;
 
-      .page-list-option {
-        float: right;
-        margin-left: 4px;
-      }
-
-      .picture {
-        width: 16px;
-        height: 16px;
-      }
-
-      > a {
-        display: inline;
-        padding: 0 4px;
-        font-size: 1.1em;
-        color: #666;
-
-        strong {
-          color: #333;
+      .page-user-picture {
+        margin-right: .3em;
+        .picture {
+          width: 16px;
+          height: 16px;
         }
-      }
 
-      > span.page-list-meta {
+      }
+      .page-list-link-outer {
+        word-break: break-all;
+
+        a {
+          display: block;
+          padding: 0 4px;
+          font-size: 1.1em;
+          color: #888;
+
+          strong {
+            color: #333;
+          }
+        }
       }
     }
   }
@@ -73,15 +73,24 @@
   }
 
   &:not(:first-child) {
-    margin-top: 16px;
+    margin-top: 1.5em;
   }
 
   h6 {
     display: flex;
+    max-height: 1rem;
+    font-weight: bold;
+    color: #888;
+
+    > svg {
+      margin-right: .2em;
+    }
+
 
     > i {
       width: 14px;
       margin-right: 8px;
+      font-weight: normal;
     }
 
     .title {
@@ -98,9 +107,9 @@
   }
 
   .page-list {
-    margin-left: 22px;
 
     .page-list-ul {
+      width: 100%;
       margin-bottom: 0;
     }
   }

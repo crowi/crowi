@@ -1,17 +1,17 @@
+.notification-list-ul {
+  margin: 0;
+  padding: 0;
 
-.notification-list {
-  .notification-list-ul {
-    margin: 0;
-    padding: 0;
+  .notification-list-li {
+    list-style-type: none;
 
-    .notification-list-li {
-      list-style-type: none;
+    &:not(:last-child) {
+      border-bottom: 1px solid $border-color;
     }
   }
 }
 
 .notification-box {
-  border-bottom: 0.5px solid #ccc;
   background-color: #fff;
   cursor: pointer;
   padding: 0.5em 1em;
@@ -59,7 +59,7 @@
 .navbar-nav > .header-notification {
   > div.notification-wrapper {
     > a {
-      line-height: 20px;
+      line-height: 22px;
       position: relative;
       display: block;
       color: #ccc;
@@ -87,17 +87,6 @@
       width: 400px;
       font-size: small;
       top: 90%;
-
-      .notification-arrow {
-        background: #fff;
-        width: 10px;
-        height: 10px;
-        position: absolute;
-        right: 10px;
-        top: -4px;
-        transform: rotate(45deg);
-        border-radius: 2px;
-      }
 
       .notification-loader {
         padding: 8px 0;
