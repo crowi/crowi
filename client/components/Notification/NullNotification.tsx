@@ -1,11 +1,12 @@
 import React from 'react'
+import styled from 'styled-components'
 
-export default class NullNotification extends React.Component {
-  render() {
-    return (
-      <li className="notification-list-li">
-        <div className="notification-box">You had no notifications, yet.</div>
-      </li>
-    )
-  }
-}
+const StyledNullNotification = styled.li`
+  padding: 1em;
+  list-style-type: none;
+  text-align: center;
+`
+
+const NullNotification = () => <StyledNullNotification>You had no notifications, yet.</StyledNullNotification>
+
+export default NullNotification
