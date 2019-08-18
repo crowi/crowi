@@ -1,5 +1,6 @@
 import React, { FC } from 'react'
 import CommentList from './CommentList'
+import Icon from 'components/Common/Icon'
 import Crowi from 'client/util/Crowi'
 import { Comment } from 'client/types/crowi'
 
@@ -10,7 +11,7 @@ function NewerCommentList({ crowi, comments, revisionId }) {
     <>
       <CommentList className="collapse" id="page-comments-list-newer" crowi={crowi} comments={comments} revisionId={revisionId} />
       <a className="text-center" data-toggle="collapse" href="#page-comments-list-newer">
-        <i className="fa fa-angle-double-up" /> Comments for Newer Revision <i className="fa fa-angle-double-up" />
+        <Icon name="chevron-double-up" /> Comments for Newer Revision <Icon name="chevron-double-up" />
       </a>
     </>
   )
@@ -22,7 +23,7 @@ function OlderCommentList({ crowi, comments, revisionId }) {
   return (
     <>
       <a className="text-center" data-toggle="collapse" href="#page-comments-list-older">
-        <i className="fa fa-angle-double-down" /> Comments for Older Revision <i className="fa fa-angle-double-down" />
+        <Icon name="chevron-double-down" /> Comments for Older Revision <Icon name="chevron-double-down" />
       </a>
       <CommentList className="collapse in" id="page-comments-list-older" crowi={crowi} comments={comments} revisionId={revisionId} />
     </>
