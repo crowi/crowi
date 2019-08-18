@@ -24,6 +24,7 @@ import NotificationPage from 'components/NotificationPage'
 import HeaderNotification from 'components/HeaderNotification'
 import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
+import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 
 i18n()
@@ -32,9 +33,13 @@ moment.locale(navigator.userLanguage || navigator.language)
 
 const mainContent = document.querySelector('#content-main')
 let pageId: string | null = null
+let revisionId: string | null = null
+let revisionCreatedAt: string | null = null
 let pageContent: string | null = null
 if (mainContent !== null) {
   pageId = mainContent.getAttribute('data-page-id')
+  revisionId = mainContent.getAttribute('data-page-revision-id')
+  revisionCreatedAt = mainContent.getAttribute('data-page-revision-created')
   const rawText = document.getElementById('raw-text-original')
   if (rawText) {
     pageContent = rawText.innerHTML
@@ -72,7 +77,6 @@ const componentMappings = {
   'notification-page': <NotificationPage crowi={crowi} />,
 
   // 'revision-history': <PageHistory pageId={pageId} />,
-  // 'page-comment': <PageComment />,
   'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
   'seen-user-list': <SeenUserList crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
@@ -80,6 +84,7 @@ const componentMappings = {
   'secret-keyword-form-container': <SecretKeywordFormContainer crowi={crowi} />,
   'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare crowi={crowi} />,
+  'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
   'admin-page': <AdminPage crowi={crowi} />,
 }
 
