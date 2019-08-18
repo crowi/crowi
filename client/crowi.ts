@@ -191,9 +191,6 @@ $(function() {
   const crowiRenderer = window.crowiRenderer
 
   var pageId = $('#content-main').data('page-id')
-  var revisionId = $('#content-main').data('page-revision-id')
-  var revisionCreatedAt = $('#content-main').data('page-revision-created')
-  var currentUser = (crowi.getUser() || {}).id
   var isSeen = $('#content-main').data('page-is-seen')
   var pagePath = $('#content-main').data('path')
   var isSharePage = !!$('#content-main').data('is-share-page')
@@ -627,107 +624,6 @@ $(function() {
         return false
       })
     }
-
-    // omg
-    function createCommentHTML(revision, creator, comment, commentedAt) {
-      var $comment = $('<div>')
-      var $commentImage = $('<img class="picture picture-rounded">').attr('src', Crowi.userPicture(creator))
-      var $commentCreator = $('<div class="page-comment-creator">').text(creator.username)
-
-      var $commentRevision = $('<a class="page-comment-revision badge">')
-        .attr('href', '?revision=' + revision)
-        .text(revision.substr(0, 8))
-      if (revision !== revisionId) {
-        $commentRevision.addClass('badge-secondary')
-      } else {
-        $commentRevision.addClass('badge-primary')
-      }
-
-      var $commentMeta = $('<div class="page-comment-meta">')
-        .text(commentedAt + ' ')
-        .append($commentRevision)
-
-      var $commentBody = $('<div class="page-comment-body">').html(comment.replace(/(\r\n|\r|\n)/g, '<br>'))
-
-      var $commentMain = $('<div class="page-comment-main">')
-        .append($commentCreator)
-        .append($commentBody)
-        .append($commentMeta)
-
-      $comment.addClass('page-comment')
-      if (creator._id === currentUser) {
-        $comment.addClass('page-comment-me')
-      }
-      if (revision !== revisionId) {
-        $comment.addClass('page-comment-old')
-      }
-      $comment.append($commentImage).append($commentMain)
-
-      return $comment
-    }
-
-    // get comments
-    if (!isSharePage) {
-      var $pageCommentList = $('.page-comments-list')
-      var $pageCommentListNewer = $('#page-comments-list-newer')
-      var $pageCommentListCurrent = $('#page-comments-list-current')
-      var $pageCommentListOlder = $('#page-comments-list-older')
-      var hasNewer = false
-      var hasOlder = false
-      $.get('/_api/comments.get', { page_id: pageId }, function(res) {
-        if (res.ok) {
-          var comments = res.comments
-          $.each(comments, function(i, comment) {
-            var commentContent = createCommentHTML(comment.revision, comment.creator, comment.comment, comment.createdAt)
-            if (comment.revision == revisionId) {
-              $pageCommentListCurrent.append(commentContent)
-            } else {
-              if (Date.parse(comment.createdAt) / 1000 > revisionCreatedAt) {
-                $pageCommentListNewer.append(commentContent)
-                hasNewer = true
-              } else {
-                $pageCommentListOlder.append(commentContent)
-                hasOlder = true
-              }
-            }
-          })
-        }
-      })
-        .fail(function(data) {})
-        .always(function() {
-          if (!hasNewer) {
-            $('.page-comments-list-toggle-newer').hide()
-          }
-          if (!hasOlder) {
-            $pageCommentListOlder.addClass('collapse')
-            $('.page-comments-list-toggle-older').hide()
-          }
-        })
-    }
-
-    // post comment event
-    $('#page-comment-form').on('submit', function() {
-      var $button = $('#comment-form-button')
-      $button.attr('disabled', 'disabled')
-      $.post('/_api/comments.add', $(this).serialize(), function(data) {
-        $button.removeAttr('disabled')
-        if (data.ok) {
-          var comment = data.comment
-
-          $pageCommentList.prepend(createCommentHTML(comment.revision, comment.creator, comment.comment, comment.createdAt))
-          $('#comment-form-comment').val('')
-          $('#comment-form-message').text('')
-        } else {
-          $('#comment-form-message').text(data.error)
-        }
-      }).fail(function(data) {
-        if (data.status !== 200) {
-          $('#comment-form-message').text(data.statusText)
-        }
-      })
-
-      return false
-    })
 
     const AddToLikers = function(users) {
       $.each(users, function(i, user) {
