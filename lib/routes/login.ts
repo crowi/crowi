@@ -8,6 +8,7 @@ export default (crowi: Crowi, app: Express, form) => {
 
   router.get('/login/error/:reason', Login.error)
   router.get('/login', ApplicationInstalled, Login.login)
+  router.get('/register', ApplicationInstalled, Login.register)
   router.get('/login/invited', Login.invited)
   router.post('/login/activateInvited', form.invited, csrf, Login.invited)
   router.post('/login', form.login, csrf, Login.login)

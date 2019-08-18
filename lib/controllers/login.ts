@@ -435,7 +435,7 @@ export default (crowi: Crowi, app: Express) => {
       const toConnect = !!targetUser
       const locals = { isRegistering, toConnect, targetUser, ...socialSession }
 
-      return res.render('login', locals)
+      return res.render('register', locals)
     }
   }
 

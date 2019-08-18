@@ -288,14 +288,40 @@
     lighten($crowiHeaderBackground, 40%),
   );
   background-size: 200% 200%;
-  animation: LoginScreenBackgroundGradients 30s ease infinite;
+  @include media-breakpoint-up(md) {
+    animation: LoginScreenBackgroundGradients 20s ease infinite;
+  }
 
 
   > .container-fluid {
     height: 100vh;
   }
   > .container-fluid > .row {
-    flex-direction: column;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    @media (max-height: 823px) {
+      height: calc(100% - 69px); // scrollbar etc.
+    }
+
+    .v2-single-page-container {
+      padding: 2em;
+      margin-top: calc(-66px - 2em);
+      @media (max-height: 823px) {
+        margin-top: 0;
+        h1.register-page {
+          display: none;
+        }
+      }
+
+      @include media-breakpoint-up(md) {
+        width: 560px;
+      }
+      @include media-breakpoint-down(sm) {
+        padding: 1em;
+        width: 100%;
+      }
+    }
   }
 
   .installer-header {
@@ -315,55 +341,41 @@
   }
 
   h1.login-page {
-    margin-top: 80px;
     color: #fff;
     font-size: 1.6em;
     padding: 10px;
+    margin-bottom: 2em;
     text-align: center;
-    text-shadow: 0px 0px 6px rgba(0,0,0,.5);
+    text-shadow: 0px 1px 8px rgba(0,0,0,.2);
     line-height: 100%;
   }
 
 
-  .login-dialog-container {
+  .login-dialog {
+    position: relative;
+    padding: 2em;
+    background: #fff;
+    box-shadow: 0 1px 40px 0 rgba(0,0,0,0.3);
+    border-radius: 3px;
 
-    margin: 0 auto;
-
-    .login-dialog {
-      position: relative;
-
-      form {
-        margin-top: 10px;
-        .input-group {
-          margin-bottom: 10px;
-        }
-      }
-
-      .login-dialog-inner, .register-dialog-inner {
-        top: 0;
-        left: 0;
-        padding: 42px 48px;
-        background: #fff;
-        position: absolute;
-        margin-bottom: 40px;
-        width: 100%;
-
-        box-shadow: 0 1px 40px 0 rgba(0,0,0,0.3);
-        border-radius: 3px;
-
-        h2 {
-          margin: 0 0 28px;
-          font-size: 1.3em;
-          text-align: center;
-        }
-      }
-
-      p.bottom-text {
-        text-align: right;
-        margin: 20px 0 0;
+    form {
+      margin-top: 10px;
+      .input-group {
+        margin-bottom: 10px;
       }
     }
 
+
+    h2 {
+      margin: 0 0 28px;
+      font-size: 1.3em;
+      text-align: center;
+    }
+
+    p.bottom-text {
+      text-align: right;
+      margin: 20px 0 0;
+    }
   }
 
 

@@ -1,0 +1,124 @@
+{% extends 'layout/single-nologin.html' %}
+
+{% block html_title %}{{ t('page_login.sign_in') }} 揃 {% endblock %}
+
+{% block content_main %}
+
+<div class="v2-single-page-container">
+
+  <h1 class="login-page register-page">
+    {% if config.crowi['app:title'] == 'Crowi' %}
+      <img src="/logo/135x32.png" alt="Crowi">
+    {% else %}
+      {{ config.crowi['app:title'] }}<br>
+      <img src="/logo/100x11_w.png" alt="powered by Crowi">
+    {% endif %}
+  </h1>
+
+{% if config.crowi['security:registrationMode'] != 'Closed' %}
+<div class="login-dialog">
+
+  <h2>{{ t('page_register.sign_up') }}</h2>
+
+  {% if config.crowi['security:registrationMode'] == 'Restricted' %}
+  <p class="alert alert-warning">
+    {{ t('page_register.notice.restricted') }}<br>
+    {{ t('page_register.notice.restricted_defail') }}
+  </p>
+  {% endif %}
+
+  {% if issuerName %}
+    <div class="user-card">
+      <div class="user-card-image">
+        <img src="{% if socialImage %}{{ socialImage }}{% else %}/images/userpicture.png{% endif %}" class="picture picture-rounded picture-lg">
+      </div>
+      <div class="user-card-body">
+        <h4>{{ socialName }}</h4>
+        <code>{{ socialEmail }}</code>
+      </div>
+    </div>
+    <div class="alert alert-info">
+      <p>{{ t('page_register.notice.register_with_this', issuerName) }}<p>
+      <p>{{ t('page_register.notice.social_account_continue') }}</p>
+    </div>
+  {% endif %}
+
+  <div id="register-form-errors">
+    {% set message = req.flash('registerWarningMessage') %}
+    {% if message.length %}
+    <div class="alert alert-danger">
+      {% for msg in message %}
+      {{ msg }}<br>
+      {% endfor  %}
+    </div>
+    {% endif %}
+
+    {% if req.form.errors.length > 0 %}
+    <div class="alert alert-danger">
+      <ul>
+      {% for error in req.form.errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+  <form role="form" method="post" action="/register" id="register-form">
+    <input type="hidden" class="form-control" name="registerForm[googleId]" value="{{ googleId|default(req.body.registerForm.googleId) }}">
+    <input type="hidden" class="form-control" name="registerForm[githubId]" value="{{ githubId|default(req.body.registerForm.githubId) }}">
+
+    <label>{{ t('User ID') }}</label>
+    <div class="input-group" id="input-group-username">
+      <span class="input-group-prepend"><span class="input-group-text"><strong>@</strong></span></span>
+      <input type="text" class="form-control" placeholder="{{ t('page_register.example') }}: taroyama" name="registerForm[username]" value="{{ req.body.registerForm.username }}" required>
+    </div>
+    <p class="help-block">
+    <span id="help-block-username" class="text-danger"></span>
+    {{ t('page_register.form_help.user_id') }}
+    </p>
+
+    <label>{{ t('Name') }}</label>
+    <div class="input-group">
+      <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-account"></i></span></span>
+      <input type="text" class="form-control" placeholder="{{ t('page_register.example') }}: {{ t('page_register.taro_yamada') }}" name="registerForm[name]" value="{{ socialName|default(req.body.registerForm.name) }}" required>
+    </div>
+
+    <label>{{ t('Email') }}</label>
+    <div class="input-group">
+      <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-email"></i></span></span>
+      <input type="email" class="form-control" placeholder="E-mail" name="registerForm[email]" value="{{ socialEmail|default(req.body.registerForm.email) }}" required>
+    </div>
+    {% if config.crowi['security:registrationWhiteList'] && config.crowi['security:registrationWhiteList'].length %}
+    <p class="help-block">
+      {{ t('page_register.form_help.email') }}
+    </p>
+    <ul>
+      {% for em in config.crowi['security:registrationWhiteList'] %}
+      <li><code>{{ em }}</code></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <label>{{ t('Password') }}</label>
+    <div class="input-group">
+      <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-key"></i></span></span>
+      <input type="password" class="form-control" placeholder="Password" name="registerForm[password]" required>
+    </div>
+    <p class="help-block">
+      {{ t('page_register.form_help.password') }}
+    </p>
+
+    {% if socialImage %}
+      <input type="hidden" name="registerForm[socialImage]" value="{{ socialImage }}">
+    {% endif  %}
+    <input type="hidden" name="_csrf" value="{{ csrf() }}">
+    <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('page_register.sign_up') }}">
+  </form>
+
+  <p class="bottom-text"><a href="/login"><i class="mdi mdi-login"></i> {{ t('page_register.sign_in_is_here') }}</a></p>
+</div>
+{% endif %} {# if registrationMode == Closed #}
+
+
+{% endblock content_main %}

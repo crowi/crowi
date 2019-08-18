@@ -4,20 +4,18 @@
 
 {% block content_main %}
 
-<h1 class="login-page">
-  {% if config.crowi['app:title'] == 'Crowi' %}
-    <img src="/logo/135x32.png" alt="Crowi">
-  {% else %}
-    {{ config.crowi['app:title'] }}<br>
-    <img src="/logo/100x11_w.png" alt="powered by Crowi">
-  {% endif %}
-</h1>
+<div class="v2-single-page-container">
 
-<div class="login-dialog-container flip-container col-md-5">
+  <h1 class="login-page">
+    {% if config.crowi['app:title'] == 'Crowi' %}
+      <img src="/logo/135x32.png" alt="Crowi">
+    {% else %}
+      {{ config.crowi['app:title'] }}<br>
+      <img src="/logo/100x11_w.png" alt="powered by Crowi">
+    {% endif %}
+  </h1>
 
-<div class="login-dialog" id="login-dialog">
-
-  <div class="login-dialog-inner front">
+  <div class="login-dialog" id="login-dialog">
     {% if reason === 'registered'%}
 
       <h2>登録完了</h2>
@@ -48,8 +46,6 @@
     {% endif %}
 
   </div>
-
-</div>
 
 </div>
 
