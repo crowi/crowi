@@ -93,8 +93,13 @@ module.exports = {
       testMatch: ['<rootDir>/test/**/*.test.ts'],
     },
     {
-      displayName: 'client',
-      testMatch: ['<rootDir>/client/**/*.test.(ts|tsx)'],
+      displayName: 'client/ts',
+      testMatch: ['<rootDir>/client/**/*.test.ts'],
+    },
+    {
+      displayName: 'client/tsx',
+      setupFilesAfterEnv: ['./client/test/setup.ts'],
+      testMatch: ['<rootDir>/client/**/*.test.tsx'],
     },
   ],
 
