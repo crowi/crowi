@@ -418,12 +418,13 @@ export default (crowi: Crowi) => {
       return page._id
     })
 
-    const pages = Page.findListByPageIds(pageIds, { limit: 100 }) // limit => if the pagIds is greater than 100, ignore
-    pages.forEach(page => {
-      Object.assign(pageIdObjectArray[pageIdMappings[String(page._id)]], page._doc)
-    })
+    const pages = await Page.findListByPageIds(pageIds, { limit: 100 }) // limit => if the pagIds is greater than 100, ignore
 
-    return pageIdMappings
+    for (const p of pages) {
+      Object.assign(pageIdObjectArray[pageIdMappings[String(p._id)]], p._doc)
+    }
+
+    return pageIdObjectArray
   }
 
   pageSchema.statics.updateCommentCount = function(page, num) {
@@ -796,6 +797,8 @@ export default (crowi: Crowi) => {
     const data = await page.save()
 
     debug('Page.updateGrant, saved grantedUsers.', (data && data.path) || {})
+
+    return data
   }
 
   // Instance method でいいのでは
@@ -1023,7 +1026,7 @@ export default (crowi: Crowi) => {
 
     if (createRedirectPage) {
       var body = 'redirect ' + newPagePath
-      return Page.create(path, body, user, { redirectTo: newPagePath })
+      return Page.createPage(path, body, user, { redirectTo: newPagePath })
     }
     pageEvent.emit('update', pageData, user) // update as renamed page
     return data

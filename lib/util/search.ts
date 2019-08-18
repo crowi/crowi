@@ -2,6 +2,7 @@ import path from 'path'
 import elasticsearch from 'elasticsearch'
 import Debug from 'debug'
 import moment from 'moment'
+import fs from 'fs'
 
 const debug = Debug('crowi:lib:search')
 
@@ -56,14 +57,17 @@ function SearchClient(this: any, crowi, esUri) {
   this.registerUpdateEvent()
 }
 
-SearchClient.prototype.selectMappingFile = function() {
+SearchClient.prototype.requireMappingFile = function() {
+  const { resourceDir } = this.crowi
+
+  let fileName = path.join(resourceDir + 'search/mappings.json')
   if ('analysis-kuromoji' in this.esPlugins) {
-    return 'mappings-kuromoji.json'
+    fileName = path.join(resourceDir + 'search/mappings-kuromoji.json')
   }
   if ('analysis-sudachi' in this.esPlugins) {
-    return 'mappings-sudachi.json'
+    fileName = path.join(resourceDir + 'search/mappings-sudachi.json')
   }
-  return 'mappings.json'
+  return JSON.parse(fs.readFileSync(fileName).toString())
 }
 
 SearchClient.prototype.checkESVersion = async function() {
@@ -135,9 +139,7 @@ SearchClient.prototype.createIndexName = function() {
 
 SearchClient.prototype.createIndex = async function(index) {
   await this.checkESVersion()
-  const mappingDir = this.crowi.resourceDir + 'search'
-  const mappingFile = path.join(mappingDir, this.selectMappingFile())
-  const body = require(mappingFile)
+  const body = this.requireMappingFile()
 
   return this.client.indices.create({ index, body })
 }
@@ -675,8 +677,6 @@ SearchClient.prototype.filterPagesByUser = function(query, user) {
       should: [{ match: { grant: Page.GRANT_RESTRICTED } }, { match: { grant: Page.GRANT_SPECIFIED } }, { match: { grant: Page.GRANT_OWNER } }],
     },
   })
-
-  console.log(query.body.query.bool.must_not[0].bool)
 }
 
 SearchClient.prototype.appendFunctionScore = function(query) {
