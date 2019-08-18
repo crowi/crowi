@@ -14,6 +14,7 @@ import FileAccessRightOrLoginRequired from './fileAccessRightOrLoginRequired'
 import I18next from './i18next'
 import LoginChecker from './loginChecker'
 import LoginRequired from './loginRequired'
+import SsrContext from './ssrContext'
 import SwigFilters from './swigFilters'
 import SwigFunctions from './swigFunctions'
 
@@ -31,6 +32,7 @@ export default (crowi: Crowi, app: Express) => ({
   I18next: I18next(crowi, app),
   LoginChecker: LoginChecker(crowi, app),
   LoginRequired: LoginRequired(crowi),
+  SsrContext: SsrContext(),
   SwigFilters: SwigFilters(crowi, app),
   SwigFunctions: SwigFunctions(crowi, app),
 })

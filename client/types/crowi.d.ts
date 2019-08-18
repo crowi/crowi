@@ -1,5 +1,3 @@
-import { access } from 'fs'
-
 export interface Attachment {
   _id: string
   page: Page
@@ -84,4 +82,14 @@ export interface User {
   image: string
   name: string
   username: string
+}
+
+export interface Comment {
+  _id: string
+  page: string
+  creator: string
+  revision: string
+  comment: string
+  commentPosition: number
+  createdAt: string
 }

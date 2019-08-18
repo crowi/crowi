@@ -83,4 +83,5 @@ export default (crowi: Crowi, app: Express) => {
 
   app.use(middlewares.I18next)
   app.use(middlewares.ClientContext)
+  app.use(middlewares.SsrContext)
 }
