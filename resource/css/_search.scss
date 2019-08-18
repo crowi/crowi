@@ -89,7 +89,9 @@
 .search-suggest {
   max-width: 500px;
   @include media-breakpoint-down(sm) {
-    left: 3.6rem;
+    left: 1em;
+    width: calc(100% - 2em);
+    max-width: none;
   }
   position: absolute;
   margin-top: 2px;
@@ -257,18 +259,6 @@
           overflow: scroll;
           word-break: break-all;
         }
-      }
-    }
-  }
-}
-
-// Smartphone
-@include media-breakpoint-down(xs) {
-  .search-top {
-    .search-box {
-      .search-suggest {
-        left: 2%;
-        width: 94%;
       }
     }
   }
