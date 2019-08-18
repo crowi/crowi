@@ -27,21 +27,13 @@ import Searcher from 'server/util/search'
 
 const pkg = require('../../package.json')
 
-type Models = {
-  [K in keyof typeof models]: ReturnType<typeof models[K]>
-}
+type Models = { [K in keyof typeof models]: ReturnType<typeof models[K]> }
 
-type Events = {
-  [K in keyof typeof events]: InstanceType<typeof events[K]>
-}
+type Events = { [K in keyof typeof events]: InstanceType<typeof events[K]> }
 
-type Middlewares = {
-  [K in keyof ReturnType<typeof middlewares>]: ReturnType<typeof middlewares>[K]
-}
+type Middlewares = { [K in keyof ReturnType<typeof middlewares>]: ReturnType<typeof middlewares>[K] }
 
-type Controllers = {
-  [K in keyof ReturnType<typeof controllers>]: ReturnType<typeof controllers>[K]
-}
+type Controllers = { [K in keyof ReturnType<typeof controllers>]: ReturnType<typeof controllers>[K] }
 
 const debug = Debug('crowi:crowi')
 
