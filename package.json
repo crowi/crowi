@@ -160,6 +160,8 @@
     "babel-eslint": "~10.0.2",
     "babel-jest": "~24.8.0",
     "concurrently": "~4.1.1",
+    "enzyme": "^3.10.0",
+    "enzyme-adapter-react-16": "^1.14.0",
     "eslint": "~6.0.1",
     "eslint-config-prettier": "~6.0.0",
     "eslint-config-standard": "~13.0.1",
