@@ -446,6 +446,16 @@ input.searching {
   }
 }
 
+.dropdown-menu-buttons {
+  display: flex;
+  flex-direction: column;
+
+  & > button {
+    margin: 0.5rem 1rem;
+  }
+}
+
+
 // import
 @import '../../node_modules/highlight.js/styles/tomorrow-night.css';
 @import '../../node_modules/diff2html/dist/diff2html.css';

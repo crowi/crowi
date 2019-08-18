@@ -12,7 +12,7 @@
     "prettier",
     "prettier/@typescript-eslint",
     "prettier/standard",
-    "prettier/react"
+    "prettier/react",
   ],
   "env": {
     "browser": true,

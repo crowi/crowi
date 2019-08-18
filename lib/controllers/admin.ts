@@ -10,6 +10,7 @@ export default (crowi: Crowi) => {
   const Config = models.Config
   const MAX_PAGE_LIST = 5
   const actions = {} as any
+  actions.api = {} as any
 
   const searchEvent = crowi.event('Search')
 
@@ -77,36 +78,28 @@ export default (crowi: Crowi) => {
   }
 
   actions.index = function(req, res) {
-    const { version: crowiVersion } = crowi
+    return res.render('admin/index')
+  }
+
+  actions.api.index = function(req, res) {
     const searcher = crowi.getSearcher()
-    let searchInfo = {}
 
-    if (searcher) {
-      searchInfo = {
-        host: searcher.host,
-        indexName: searcher.indexNames.base,
-        esVersion: searcher.esVersion,
-      }
-    }
-
-    return res.render('admin/index', {
-      crowiVersion,
-      searchInfo,
-    })
+    return res.json(ApiResponse.success({ searchConfigured: !!searcher }))
   }
 
-  actions.app = {}
-  actions.app.index = function(req, res) {
-    const settingForm = req.config.crowi
+  actions.api.app = {}
+  actions.api.app.index = async function(req, res) {
+    const config = crowi.getConfig()
+    const settingForm = config.crowi
+    const registrationMode = Config.getRegistrationModeLabels()
+    const isUploadable = Config.isUploadable(config)
 
-    return res.render('admin/app', { settingForm })
+    return res.json(ApiResponse.success({ settingForm, registrationMode, isUploadable }))
   }
 
-  actions.app.settingUpdate = function(req, res) {}
-
-  // app.get('/admin/notification'               , admin.notification.index);
   actions.notification = {}
-  actions.notification.index = function(req, res) {
+  actions.api.notification = {}
+  actions.api.notification.index = async function(req, res) {
     const config = crowi.getConfig()
     const UpdatePost = crowi.model('UpdatePost')
     const hasSlackConfig = Config.hasSlackConfig(config)
@@ -115,45 +108,28 @@ export default (crowi: Crowi) => {
     const appUrl = config.crowi['app:url']
 
     const defaultSlackSetting = { 'slack:clientId': '', 'slack:clientSecret': '' }
-    let slackSetting = hasSlackConfig ? config.notification : defaultSlackSetting
+    const slackSetting = hasSlackConfig ? config.notification : defaultSlackSetting
     const slackAuthUrl = hasSlackConfig ? slack.getAuthorizeURL() : ''
 
-    if (req.session.slackSetting) {
-      slackSetting = req.session.slackSetting
-      req.session.slackSetting = null
-    }
-
-    UpdatePost.findAll().then(function(settings) {
-      return res.render('admin/notification', {
-        settings,
-        slackSetting,
-        hasSlackConfig,
-        hasSlackToken,
-        slackAuthUrl,
-        appUrl,
-      })
-    })
+    const settings = await UpdatePost.findAll()
+    return res.json(ApiResponse.success({ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl }))
   }
 
-  // app.post('/admin/notification/slackSetting' , admin.notification.slackauth);
-  actions.notification.slackSetting = async function(req, res) {
-    var slackSetting = req.form.slackSetting
+  actions.api.notification.slackSetting = async function(req, res) {
+    const { slackSetting } = req.form
 
-    req.session.slackSetting = slackSetting
-    if (req.form.isValid) {
+    if (!req.form.isValid) {
+      return res.json(ApiResponse.error(req.form.errors.join('\n')))
+    }
+
+    try {
       await Config.updateConfigByNamespace('notification', slackSetting)
-      req.session.slackSetting = null
-
-      await crowi.setupSlack()
-      req.flash('successMessage', ['Updated Slack setting.'])
-      return res.redirect('/admin/notification')
-    } else {
-      req.flash('errorMessage', req.form.errors)
-      return res.redirect('/admin/notification')
+      return res.json(ApiResponse.success({ message: 'Updated Slack setting.' }))
+    } catch (err) {
+      return res.json(ApiResponse.error(err.message))
     }
   }
 
-  // app.get('/admin/notification/slackAuth'     , admin.notification.slackauth);
   actions.notification.slackAuth = async function(req, res) {
     const code = req.query.code
 
@@ -178,20 +154,11 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.search = {}
-  actions.search.index = function(req, res) {
-    var search = crowi.getSearcher()
+  actions.api.search = {}
+  actions.api.search.buildIndex = async function(req, res) {
+    const search = crowi.getSearcher()
     if (!search) {
-      return res.redirect('/admin')
-    }
-
-    return res.render('admin/search', {})
-  }
-
-  actions.search.buildIndex = async function(req, res) {
-    var search = crowi.getSearcher()
-    if (!search) {
-      return res.redirect('/admin')
+      return res.json(ApiResponse.error('Searcher is not ready.'))
     }
 
     searchEvent.on('addPageProgress', (total, current, skip) => {
@@ -210,12 +177,12 @@ export default (crowi: Crowi) => {
         debug('Error caught.', err)
       })
 
-    req.flash('successMessage', 'Now re-building index ... this takes a while.')
-    return res.redirect('/admin/search')
+    return res.json(ApiResponse.success({ message: 'Now re-building index ... this takes a while.' }))
   }
 
   actions.user = {}
-  actions.user.index = function(req, res) {
+  actions.api.user = {}
+  actions.api.user.index = function(req, res) {
     var page = parseInt(req.query.page) || 1
 
     // uq means user query
@@ -238,99 +205,94 @@ export default (crowi: Crowi) => {
     User.findUsersWithPagination({ page: page }, query, (err, result) => {
       if (err) {
         debug(err)
-        return res.render('admin/users', {
-          users: [],
-          pager: null,
-          uq: uq,
-          error: err.message,
-        })
+        return res.json(
+          ApiResponse.success({
+            users: [],
+            pager: null,
+            uq: uq,
+            error: err.message,
+          }),
+        )
       }
 
       const pager = createPager(result.total, result.limit, result.page, result.pages, MAX_PAGE_LIST)
 
-      return res.render('admin/users', {
-        users: result.docs,
-        pager: pager,
-        uq,
-      })
+      return res.json(
+        ApiResponse.success({
+          users: result.docs,
+          pager: pager,
+          uq,
+        }),
+      )
     })
   }
 
-  actions.user.invite = function(req, res) {
-    var form = req.form.inviteForm
-    var toSendEmail = form.sendEmail || false
-    if (req.form.isValid) {
-      User.createUsersByInvitation(form.emailList.split('\n'), toSendEmail, function(err, userList) {
-        if (err) {
-          req.flash('errorMessage', req.form.errors.join('\n'))
-        } else {
-          req.flash('createdUser', userList)
-        }
-        return res.redirect('/admin/users')
-      })
-    } else {
-      req.flash('errorMessage', req.form.errors.join('\n'))
-      return res.redirect('/admin/users')
+  actions.api.user.invite = function(req, res) {
+    const { emailList, sendEmail } = req.form.inviteForm
+    const toSendEmail = sendEmail || false
+
+    if (!req.form.isValid) {
+      return res.json(ApiResponse.error(req.form.errors.join('\n')))
     }
+
+    User.createUsersByInvitation(emailList.split('\n'), toSendEmail, function(err, userList) {
+      if (err === null) {
+        return res.json(ApiResponse.success({ userList }))
+      }
+      debug(err, userList)
+      return res.json(ApiResponse.error('招待に失敗しました。'))
+    })
   }
 
-  actions.user.makeAdmin = function(req, res) {
+  actions.api.user.makeAdmin = function(req, res) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).makeAdmin(function(err, userData) {
         if (err === null) {
-          req.flash('successMessage', userData.name + 'さんのアカウントを管理者に設定しました。')
-        } else {
-          req.flash('errorMessage', '更新に失敗しました。')
-          debug(err, userData)
+          return res.json(ApiResponse.success({ message: `${userData.name}さんのアカウントを管理者に設定しました。` }))
         }
-        return res.redirect('/admin/users')
+        debug(err, userData)
+        return res.json(ApiResponse.error('更新に失敗しました。'))
       })
     })
   }
 
-  actions.user.removeFromAdmin = function(req, res) {
+  actions.api.user.removeFromAdmin = function(req, res) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).removeFromAdmin(function(err, userData) {
         if (err === null) {
-          req.flash('successMessage', userData.name + 'さんのアカウントを管理者から外しました。')
-        } else {
-          req.flash('errorMessage', '更新に失敗しました。')
-          debug(err, userData)
+          return res.json(ApiResponse.success({ message: `${userData.name}さんのアカウントを管理者から外しました。` }))
         }
-        return res.redirect('/admin/users')
+        debug(err, userData)
+        return res.json(ApiResponse.error('更新に失敗しました。'))
       })
     })
   }
 
-  actions.user.activate = function(req, res) {
+  actions.api.user.activate = function(req, res) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).statusActivate(function(err, userData) {
         if (err === null) {
-          req.flash('successMessage', userData.name + 'さんのアカウントを承認しました')
-        } else {
-          req.flash('errorMessage', '更新に失敗しました。')
-          debug(err, userData)
+          return res.json(ApiResponse.success({ message: `${userData.name}さんのアカウントを承認しました。` }))
         }
-        return res.redirect('/admin/users')
+        debug(err, userData)
+        return res.json(ApiResponse.error('更新に失敗しました。'))
       })
     })
   }
 
-  actions.user.suspend = function(req, res) {
+  actions.api.user.suspend = function(req, res) {
     var id = req.params.id
 
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).statusSuspend(function(err, userData) {
         if (err === null) {
-          req.flash('successMessage', userData.name + 'さんのアカウントを利用停止にしました')
-        } else {
-          req.flash('errorMessage', '更新に失敗しました。')
-          debug(err, userData)
+          return res.json(ApiResponse.success({ message: `${userData.name}さんのアカウントを利用停止にしました。` }))
         }
-        return res.redirect('/admin/users')
+        debug(err, userData)
+        return res.json(ApiResponse.error('更新に失敗しました。'))
       })
     })
   }
@@ -356,8 +318,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  // app.post('/_api/admin/users.resetPassword' , admin.api.usersResetPassword);
-  actions.user.resetPassword = function(req, res) {
+  actions.api.user.resetPassword = function(req, res) {
     const id = req.body.user_id
     const User = crowi.model('User')
 
@@ -371,7 +332,7 @@ export default (crowi: Crowi) => {
       })
   }
 
-  actions.user.updateEmail = async function(req, res) {
+  actions.api.user.updateEmail = async function(req, res) {
     const { user_id: id, email } = req.body
     const User = crowi.model('User')
 
@@ -386,13 +347,22 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.share = {}
-  actions.share.index = function(req, res) {
-    return res.render('admin/share', {})
+  actions.api.top = {}
+  actions.api.top.index = function(req, res) {
+    const { version: crowiVersion } = crowi
+    const searcher = crowi.getSearcher()
+    const searchInfo = searcher
+      ? {
+          host: searcher.host,
+          indexName: searcher.indexName,
+          esVersion: searcher.esVersion,
+        }
+      : {}
+
+    return res.json(ApiResponse.success({ crowiVersion, searchInfo }))
   }
 
-  actions.api = {}
-  actions.api.appSetting = function(req, res) {
+  actions.api.postSettings = function(req, res) {
     const form = req.form.settingForm
 
     if (req.form.isValid) {
@@ -418,7 +388,6 @@ export default (crowi: Crowi) => {
     }
   }
 
-  // app.post('/_api/admin/notifications.add'    , admin.api.notificationAdd);
   actions.api.notificationAdd = function(req, res) {
     var UpdatePost = crowi.model('UpdatePost')
     var pathPattern = req.body.pathPattern
@@ -511,18 +480,13 @@ export default (crowi: Crowi) => {
     )
   }
 
-  actions.backlink = {}
-  actions.backlink.index = function(req, res) {
-    return res.render('admin/backlink')
-  }
-
-  actions.backlink.buildBacklinks = function(req, res) {
+  actions.api.backlink = {}
+  actions.api.backlink.buildBacklinks = function(req, res) {
     const Backlink = crowi.model('Backlink')
     // In background
     Backlink.createByAllPages()
 
-    req.flash('successMessage', 'Now re-building backlinks ... this takes a while.')
-    return res.redirect('/admin/backlink')
+    return res.json(ApiResponse.success({ message: 'Now re-building backlinks ... this takes a while.' }))
   }
 
   return actions

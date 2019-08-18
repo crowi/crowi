@@ -16,6 +16,9 @@ Admin: 管理
 New: 作成
 Update: 更新
 Update Page: ページを更新
+Submit: 送信
+Save: 保存
+Add: 追加
 Warning: 注意
 List View: リスト表示
 Timeline View: タイムライン表示
@@ -223,8 +226,113 @@ search:
     results: '{{value}} 件'
 
 admin:
+  app:
+    legend: アプリ設定
+    title: Wikiの名前
+    title_description: ヘッダーやHTMLタイトルに使用されるWikiの名前を変更できます。
+    confidential: コンフィデンシャル表示
+    confidential_placeholder: '例: 社外秘'
+    confidential_description: ここに入力した内容は、ヘッダー等に表示されます。
+    allow_upload_file: 画像以外のファイルアップロードを許可
+    allow_upload_file_description1: ファイルアップロードの設定を有効にしている場合にのみ、選択可能です。
+    allow_upload_file_description2: 許可をしている場合、画像以外のファイルをページに添付可能になります。
+  aws:
+    legend: AWS 設定
+    tips1: AWS にアクセスするための設定を行います。AWS の設定を完了させると、ファイルアップロード機能、プロフィール写真機能などが有効になります。
+    tips2: また、SMTP の設定が無い場合、SES を利用したメール送信が行われます。FromメールアドレスのVerify、プロダクション利用設定をする必要があります。
+    notice: この設定を途中で変更すると、これまでにアップロードしたファイル等へのアクセスができなくなりますのでご注意下さい。
+    region: リージョン
+    bucket: バケット名
+    access_key_id: Access Key ID
+    secret_access_key: Secret Access Key
+  github:
+    legend: GitHub 設定
+    tips1: GitHub プロジェクトの設定をすると、GitHub アカウントにコネクトして登録やログインが可能になります。
+    tips2: また、Organizationを指定した場合は、その組織に所属するアカウントのみがコネクトできるようになります。
+    client_id: Client ID
+    client_secret: Client Secret
+    organization: Organization
+  google:
+    legend: Google 設定
+    tips: Google プロジェクトの設定をすると、Google アカウントにコネクトして登録やログインが可能になります。
+    client_id: Client ID
+    client_secret: Client Secret
+  mail:
+    legend: メールの設定
+    tips1: SMTPの設定がされている場合、それが利用されます。SMTP設定がなく、AWSの設定がある場合、SESでの送信を試みます。
+    tips2: どちらの設定もない場合、メールは送信されません。
+    from: Fromアドレス
+    from_placeholder: '例: mail@crowi.wiki'
+    smtp: SMTP設定
+    host: ホスト
+    port: ポート
+    user: ユーザー
+    password: パスワード
+  security:
+    legend: セキュリティ設定
+    basic_auth: Basic認証
+    id: ID
+    password: パスワード
+    tips1: Basic認証を設定すると、ページ全体に共通の認証がかかります。
+    tips2: IDとパスワードは暗号化されずに送信されるのでご注意下さい。
+    restriction: 登録の制限
+    restriction_description: ここに入力した内容は、ヘッダー等に表示されます。
+    whitelist: 登録許可メールアドレスのホワイトリスト
+    whitelist_placeholder: '例: mail@crowi.wiki'
+    whitelist_description1: 登録可能なメールアドレスを制限することができます。例えば、会社で使う場合、<1>@crowi.wiki</1>などと記載すると、その会社のメールアドレスを持っている人のみ登録可能になります。
+    whitelist_description2: 1行に1メールアドレス入力してください。
+  backlink:
+    legend: バックリンク構築
+    build: Build Now
+    build_description1: Force rebuild backlinks.
+    build_description2: Click "Build Now" to delete all backlinks and create backlinks by all pages.
+    build_description3: This may take a while.
+  notification:
+    settings:
+      legend: Slack アプリ 設定
+      client_id: Client ID
+      client_secret: Client Secret
+    patterns:
+      legend: デフォルトの通知パターンの設定
+      pattern: Pattern
+      channel: Channel
+      operation: Operation
+      path_pattern_description: Path name of wiki. Pattern expression with <1>*</1> can be used.
+      channel_description: Slack channel name. Without <1>#</1>.
+    instructions:
+      basic:
+        legend: How to configure Slack app for Crowi
+        description: Register Crowi as a Slack application, the notification feature for Slack can be enabled.
+        steps:
+          - title: 1. Register Slack App
+            description: 'Create App from <1>this link</1>, and fill the form out as below:'
+          - title: 2. Get <1>clientId</1> and <3>clientSecret</3>
+          - title: 3. After <1>clientId</1> and <3>clientSecret</3> set, click "Connect to Slack" button to start OAuth process.
+            description: Click "Connect to Slack" button to start OAuth process.
+          - title: 4. Configure Slack on this notification setting screen
+        unfurl:
+          legend: How to enable unfurling links feature
+          steps:
+            - title: 1. Subscribe events from Slack
+              description: 'Fill the form in <1>Features > Event Subscriptions</1> out as below:'
+  search:
+    legend: インデックス構築
+    build: Build Now
+    build_description1: Force rebuild index.
+    build_description2: Click "Build Now" to delete all backlinks and create backlinks by all pages.
+    build_description3: This may take a while.
   share:
-    enable_external_share: 'Wikiページの外部ユーザーへの共有を有効にする。'
+    legend: 外部共有設定
+    enable_external_share: Wikiページの外部ユーザーへの共有を有効にする。
+  user:
+    legend: ユーザー一覧
+    user_id: ユーザーID
+    name: 名前
+    email: メールアドレス
+    created_at: 作成日
+    status: ステータス
+    operation: 操作
+    not_found: ユーザーが見つかりませんでした
 
 Portalize: ポータル化
 portalize:

@@ -24,8 +24,8 @@ import NotificationPage from 'components/NotificationPage'
 import HeaderNotification from 'components/HeaderNotification'
 import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
-import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
 import Comment from 'components/Comment/Comment'
+import AdminPage from 'components/Admin/AdminPage'
 
 import hydrateComponents from './hydrateComponents'
 
@@ -51,7 +51,7 @@ if (mainContent !== null) {
 const getTextContent = (element: HTMLElement | null) => (element ? element.textContent : null)
 
 const { user = {} } = JSON.parse(getTextContent(document.getElementById('user-context-hydrate')) || '{}')
-const csrfToken = $('#content-main').data('csrftoken')
+const csrfToken = $('#content-main').data('csrftoken') || $('#admin-page').data('csrftoken')
 // FIXME
 const crowi = new Crowi({ user, csrfToken }, window)
 window.crowi = crowi
@@ -86,8 +86,8 @@ const componentMappings = {
   'secret-keyword-form-container': <SecretKeywordFormContainer crowi={crowi} />,
   'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare crowi={crowi} />,
-  'admin-rebuild-search': <AdminRebuildSearch crowi={crowi} />,
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
+  'admin-page': <AdminPage crowi={crowi} />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {
