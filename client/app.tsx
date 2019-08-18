@@ -100,7 +100,6 @@ Object.entries(componentMappings).forEach(([key, component]) => {
   }
 })
 
-
 // TODO: remove this logic after migrate to React
 const closeSideMenuHandler = e => {
   Emitter.emit('closeSideMenu')
@@ -131,7 +130,6 @@ Emitter.on('sideMenuHandle', isOpen => {
 })
 
 hydrateComponents()
-
 
 // うわーもうー
 $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {
