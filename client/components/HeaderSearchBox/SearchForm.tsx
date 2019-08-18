@@ -8,6 +8,7 @@ interface Props {
   isSearchPage: boolean
   pollInterval?: number
   keyword: string
+  focused: boolean
 }
 
 interface State {
@@ -51,16 +52,12 @@ export default class SearchForm extends React.Component<Props, State> {
     }
   }
 
-  getFormClearComponent() {
-    if (this.state.keyword !== '') {
-      return (
-        <a className="search-top-clear" onClick={this.clearForm}>
-          <Icon name="close-circle" />
-        </a>
-      )
-    } else {
-      return ''
-    }
+  renderClearForm() {
+    return (
+      <a className="search-top-clear" onClick={this.clearForm}>
+        <Icon name="close-circle" />
+      </a>
+    )
   }
 
   clearForm() {
@@ -91,26 +88,27 @@ export default class SearchForm extends React.Component<Props, State> {
   }
 
   render() {
-    const formClear = this.getFormClearComponent()
+    const showClearForm = this.props.focused && this.state.keyword !== ''
+    const focusedStyles = this.props.focused ? { maxWidth: 'none' } : {}
+    const formClearStyles = showClearForm ? { paddingRight: 40 } : {}
 
     return (
-      <form action="/_search" className="search-form input-group search-top-input-group" onSubmit={this.handleSubmit}>
+      <form action="/_search" className="search-form search-top-input-group" onSubmit={this.handleSubmit}>
+        <div className="search-top-icon">
+          <Icon name="magnify" />
+        </div>
+        {showClearForm && this.renderClearForm()}
         <input
           autoComplete="off"
           type="text"
           className="search-top-input form-control"
-          placeholder="Search ... Page Title (Path) and Content"
+          placeholder="Search ... Page title and content"
           name="q"
           value={this.state.keyword}
           onFocus={this.handleFocus}
           onChange={this.handleChange}
+          style={{ ...focusedStyles, ...formClearStyles }}
         />
-        <div className="input-group-append">
-          {formClear}
-          <button type="submit" className="btn btn-light">
-            <Icon className="search-top-icon" name="magnify" />
-          </button>
-        </div>
       </form>
     )
   }

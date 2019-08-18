@@ -7,7 +7,9 @@ import moment from 'moment'
 import Crowi from './util/Crowi'
 import CrowiRenderer from './util/CrowiRenderer'
 import CrowiAuth from './util/CrowiAuth'
+import Emitter from './emitter'
 
+import SideMenuTrigger from 'components/SideMenuTrigger'
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'
 import PageListSearch from 'components/PageListSearch'
@@ -69,6 +71,7 @@ window.crowiAuth = crowiAuth
 
 const me = $('body').data('me')
 const componentMappings = {
+  'side-menu-trigger': <SideMenuTrigger crowi={crowi} />,
   'search-top': <HeaderSearchBox crowi={crowi} />,
   'search-page': <SearchPage crowi={crowi} />,
   'page-list-search': <PageListSearch crowi={crowi} />,
@@ -94,6 +97,35 @@ Object.entries(componentMappings).forEach(([key, component]) => {
   const elem = document.getElementById(key)
   if (elem) {
     ReactDOM.render(component, elem)
+  }
+})
+
+// TODO: remove this logic after migrate to React
+const closeSideMenuHandler = e => {
+  Emitter.emit('closeSideMenu')
+}
+Emitter.on('sideMenuHandle', isOpen => {
+  const closeTriggerElements = ['crowi-global-menu', 'v2-container-backdrop']
+  const containerElement = document.getElementById('crowi-main-container')
+  const menuClassName = ' side-menu-open'
+  if (containerElement) {
+    if (isOpen) {
+      containerElement.className += menuClassName
+      for (const elemName of closeTriggerElements) {
+        const e = document.getElementById(elemName)
+        if (e) {
+          e.addEventListener('click', closeSideMenuHandler)
+        }
+      }
+    } else {
+      containerElement.className = containerElement.className.replace(menuClassName, '')
+      for (const elemName of closeTriggerElements) {
+        const e = document.getElementById(elemName)
+        if (e) {
+          e.removeEventListener('click', closeSideMenuHandler)
+        }
+      }
+    }
   }
 })
 

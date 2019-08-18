@@ -21,7 +21,10 @@
     }
 
     article .header-wrap {
-      width: 100%;
+      width: 100vw;
+      @include media-breakpoint-up(md) {
+        width: 100%;
+      }
 
       p.stopper {
         display: none;
@@ -176,7 +179,7 @@
     color: #333;
     height: 100%;
     right: 0;
-    top: 0;
+    top: 3px;
     overflow: auto;
     border-left: solid 1px #ccc;
     background: $crowiAsideBackground;

@@ -1,95 +1,233 @@
 .crowi { // {{{
   &.main-container { // {{{
+    border-top: solid 3px $crowiHeaderBackground;
+    border-image: linear-gradient(90deg,
+      $crowiHeaderBackground,
+      lighten(saturate(adjust-hue($crowiHeaderBackground, -60deg), 25%), 30%),
+      lighten(saturate(adjust-hue($crowiHeaderBackground, 25deg), 25%), 40%),
+      lighten($crowiHeaderBackground, 40%)
+    ) 3;
 
-    .crowi-header { // {{{
+    .v2-container {
+      width: 100%;
+      position: absolute;
+      transition: .2s ease;
+      left: 0;
+
+      .v2-container-backdrop {
+        display: none;
+        position: absolute;
+        height: 100vh;
+        width: 100%;
+      }
+    }
+
+    // TODO: move those kind of logic to components and styled-component
+    // sm menu opened
+    &.side-menu-open {
+      .v2-container {
+        width: calc(100% - 300px);
+        left: 300px;
+        height: 100vh;
+        overflow: hidden;
+        z-index: 990;
+        overflow: hidden;
+
+        .v2-container-backdrop {
+          display: block;
+          background-color: rgba(0, 0, 0, .1);
+          z-index: 1090;
+        }
+      }
+      .v2-crowi-header {
+        .search-top {
+          display: none;
+        }
+      }
+
+      .v2-crowi-global-menu {
+        @include media-breakpoint-down(sm) {
+          display: block;
+          position: fixed;
+          box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
+          z-index: 1000;
+          width: 300px;
+          height: 100vh;
+          background: #fcfcfc;
+
+          .menu-user-profile {
+            padding: 1em;
+
+            .picture {
+              width: 48px;
+              height: 48px;
+            }
+
+            .menu-user-names {
+              padding-top: 1em;
+              padding-bottom: 1em;
+
+              .menu-user-name {
+                font-size: 1.2em;
+                font-weight: 600;
+              }
+              .menu-user-username {
+                font-size: .9em;
+                color: #777;
+              }
+            }
+          }
+
+          .menu-list {
+            position: relative;
+            width: calc(100% - 1em);
+            padding-left: 1em;
+
+            li {
+              list-style: none;
+              padding-bottom: .4em;
+
+              &.divider {
+                border-bottom: solid 1px #f0f0f0;
+                margin-bottom: .4em;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // not opened
+    .v2-crowi-global-menu {
+      display: none;
+    }
+
+    .v2-crowi-header { // {{{
       z-index: 1040;
-      background: $crowiHeaderBackground;
+      box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.4);
+      background: #fff;
       height: $crowiHeaderHeight;
+      color: #333;
       padding: 0;
-      box-shadow: 0 3px 10px 0px rgba(0,0,0,.3);
-      flex-wrap: nowrap;
 
       .navbar-brand {
-        margin-left: 1rem;
-        font-weight: bold;
-        img {
-          display: inline;
-          margin-right: 8px;
-        }
-      }
-
-      .navbar-toggler {
-        border: 1px solid #ddd;
-        color: #ccc;
-        line-height: unset;
-        margin-right: 1rem;
-      }
-
-      .navbar-collapse {
-        background: $crowiHeaderBackground;
-        flex-grow: 0;
-
         @include media-breakpoint-down(sm) {
-          position: absolute;
-          top: $crowiHeaderHeight;
-          width: 100vw;
+          display: none;
         }
       }
 
-      .navbar-brand,
-      .navbar-nav > li > a {
-        color: #ccc;
-        &:hover {
-          color: #aaa;
+      .crowi-menu-main {
+        display: flex;
+        flex: 1;
+      }
+      @include media-breakpoint-down(sm) {
+        .crowi-menu-sm { // for moblie
+          display: flex;
+          padding-top: 0.33125rem;
+          padding-bottom: 0.33125rem;
+          margin-left: 1rem;
+          margin-right: 1rem;
+          font-size: 1.1rem;
+          a {
+            cursor: pointer;
+          }
+        }
+        .crowi-menu-md { // for pc
+          display: none;
         }
       }
+      @include media-breakpoint-up(md) {
+        .crowi-menu-sm { // for moblie
+          display: none;
+        }
+        .crowi-menu-md { // for pc
+          display: flex;
+        }
+      }
+
+        .navbar-brand {
+          margin-left: 1rem;
+          font-weight: 600;
+          img {
+            display: inline;
+            margin-right: 8px;
+          }
+        }
 
       .navbar-nav {
         padding-left: 1rem;
         padding-right: 1rem;
+        color: $primary;
+      }
 
-        @include media-breakpoint-up(sm) {
-          align-items: center;
+      .nav-divider {
+        border-right: solid 1px #ccc;
+        margin-right: 10px;
+        margin-left: 20px;
+        height: 30px;
+        margin-top: 6px;
+      }
 
-          .nav-item > button {
-            margin: 0 $nav-link-padding-x;
-          }
-        }
-
-        .dropdown-toggle:after {
-          display: none;
-        }
-
-        .confidential {
-          a {
-            display: inline-block;
-            border: solid 2px #f00;
-            background: #fff;
-            color: #f00;
-            font-weight: bold;
-            padding: 10px;
-
-            @include media-breakpoint-down(sm) {
-              margin-bottom: 1rem;
-            }
-
-            @include media-breakpoint-up(sm) {
-              margin-left: 1rem;
-            }
-          }
+      .confidential {
+        a {
+          display: inline-block;
+          border: dotted 1px #f00;
+          color: #f00;
+          font-weight: bold;
+          padding: 7px;
         }
       }
-    } // }}}
 
+      .dropdown-menu {
+        border: none;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1), 0px 8px 20px rgba(0, 0, 0, 0.2);
+      }
+
+      .header-user {
+        .dropdown-item:active {
+          background: inherit;
+          color: inherit;
+        }
+        .dropdown-toggle::after {
+          // don't show caret
+          display: none;
+        }
+        .dropdown-item {
+          a {
+            display: block;
+          }
+        }
+
+        .dropdown-menu-right {
+          .picture {
+            width: 48px;
+            height: 48px;
+          }
+
+          .header-user-name {
+            font-weight: 600;
+          }
+          .header-user-username, .header-user-email, .header-user-socialid {
+            color: #777;
+          }
+        }
+
+      }
+    } // }}}
+  } // }}}
+} // }}}
+
+.crowi { // {{{
+  &.main-container { // {{{
     .main {
       padding: 0; // cancel bootstrap padding
 
       .header-wrap {
-        padding: 16px 16px 0 16px;
+        padding: 1em 1em 0 1em;
       }
 
       .content-main {
-        padding: 16px;
+        padding: 1em;
       }
     }
 
@@ -270,8 +408,16 @@
   }
 }
 
-@media print { // {{{ printable style
-  .crowi.main-container { // {{{
+// smartphone input size adjustment
+@include media-breakpoint-down(md) {
+  input[type=text], textarea {
+    font-size: 1rem !important;
+  }
+}
+
+// {{{ printable style
+@media print {
+  .crowi.main-container {
     padding: 30px;
 
     a:after {
@@ -310,8 +456,6 @@
         margin-top: 32px;
         color: #666;
       }
-
-
     }
   }
 } // }}}

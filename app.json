@@ -1,5 +1,5 @@
 {
-  "stack": "heroku-16",
+  "stack": "heroku-18",
   "name": "Crowi",
   "description": "The simple & powerful Wiki",
   "keywords": [
@@ -18,7 +18,8 @@
     "PASSWORD_SEED": {
       "description": "A password seed is used by password hash generator. ",
       "generator": "secret"
-    }
+    },
+    "MONGOMS_DISABLE_POSTINSTALL": 1
   },
   "addons": [
     "mongolab",

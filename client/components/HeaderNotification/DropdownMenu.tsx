@@ -30,14 +30,12 @@ export default class DropdownMenu extends React.Component<Props> {
     }
 
     return (
-      <Menu tag="ul" right>
-        <li className="notification-arrow" />
-        {listView}
-        <li>
-          <a href="/me/notifications" className="notification-see-all">
-            See All
-          </a>
-        </li>
+      <Menu right>
+        <ul className="notification-list-ul">{listView}</ul>
+        <div className="dropdown-divider"></div>
+        <a href="/me/notifications" className="notification-see-all">
+          See All
+        </a>
       </Menu>
     )
   }
