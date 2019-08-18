@@ -1,11 +1,13 @@
 import Crowi from 'server/crowi'
 import { Express } from 'express'
+import ssr from './ssr'
 
-export default (crowi: Crowi, app: Express, req, locals) => {
+export default (crowi: Crowi, app: Express, req, res) => {
   // const debug = Debug('crowi:lib:swigFunctions')
   const Page = crowi.model('Page')
   const Config = crowi.model('Config')
   const User = crowi.model('User')
+  const { locals } = res
 
   // token getter
   locals.csrf = function() {
@@ -149,4 +151,6 @@ export default (crowi: Crowi, app: Express, req, locals) => {
       return ''
     },
   }
+
+  locals.Component = ssr(res)
 }
