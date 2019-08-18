@@ -4,7 +4,7 @@ import functions from '../util/swigFunctions'
 
 export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
-    functions(crowi, app, req, res.locals)
+    functions(crowi, app, req, res)
     next()
   }
 }
