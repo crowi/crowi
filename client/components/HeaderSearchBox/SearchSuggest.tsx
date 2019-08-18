@@ -84,6 +84,7 @@ class SearchSuggest extends React.Component<Props> {
         </div>
       )
     }
+
     if (searchError !== null) {
       return (
         <div>
@@ -91,9 +92,11 @@ class SearchSuggest extends React.Component<Props> {
         </div>
       )
     }
+
     if (numberOfResults === 0) {
       return <div>No results for &quot;{searchingKeyword}&quot;.</div>
     }
+
     return [
       this.renderList(t('page_types.portal'), 'file-document-box-multiple-outline', 'portal', portalPages),
       this.renderList(t('page_types.public'), 'file-document-box-outline', 'public', publicPages),
@@ -103,6 +106,7 @@ class SearchSuggest extends React.Component<Props> {
 
   render() {
     const { focused } = this.props
+
     if (!focused) {
       return <div />
     }
