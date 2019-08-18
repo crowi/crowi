@@ -26,6 +26,8 @@ import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import AdminRebuildSearch from 'components/Admin/AdminRebuildSearch'
 
+import hydrateComponents from './hydrateComponents'
+
 i18n()
 
 moment.locale(navigator.userLanguage || navigator.language)
@@ -89,6 +91,8 @@ Object.entries(componentMappings).forEach(([key, component]) => {
     ReactDOM.render(component, elem)
   }
 })
+
+hydrateComponents()
 
 // うわーもうー
 $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {
