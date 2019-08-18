@@ -4,14 +4,14 @@
 
   .notification-list-li {
     list-style-type: none;
+
+    &:not(:last-child) {
+      border-bottom: 1px solid $border-color;
+    }
   }
 }
 
 .notification-box {
-  :not(:last-child) {
-    border-bottom: 1px solid $border-color;
-  }
-
   background-color: #fff;
   cursor: pointer;
   padding: 0.5em 1em;
