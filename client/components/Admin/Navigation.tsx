@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, FC } from 'react'
 import { NavLink } from 'react-router-dom'
 
-import Icon from 'components/common/Icon'
+import Icon from 'components/Common/Icon'
 import { AdminContext } from 'components/Admin/AdminPage'
 
 const Navigation: FC<{}> = () => {
