@@ -1,9 +1,30 @@
 import React from 'react'
+import styled from 'styled-components'
 import Notification from '../Notification/Notification'
 import NullNotification from '../Notification/NullNotification'
 import Icon from '../Common/Icon'
-import { DropdownMenu as Menu } from 'reactstrap'
+import { DropdownMenu as Menu, DropdownItem } from 'reactstrap'
 import { Notification as NotificationType } from 'client/types/crowi'
+
+const StyledDropdownMenu = styled(Menu)`
+  width: 400px;
+  font-size: small;
+`
+
+const Loader = styled.li`
+  padding: 8px 0;
+  text-align: center;
+`
+
+const NotificationList = styled.ul`
+  margin: 0;
+  padding: 0;
+`
+
+const SeeAll = styled.a`
+  display: block;
+  text-align: center;
+`
 
 interface Props {
   loaded: boolean
@@ -13,30 +34,24 @@ interface Props {
 
 export default class DropdownMenu extends React.Component<Props> {
   render() {
-    let listView
-
-    if (!this.props.loaded) {
-      listView = (
-        <li className="notification-loader">
-          <Icon name="pulse" spin={true} />
-        </li>
-      )
-    } else if (this.props.notifications.length <= 0) {
-      listView = <NullNotification />
-    } else {
-      listView = this.props.notifications.map(notification => {
-        return <Notification key={'notification:header:' + notification._id} notification={notification} onClickHandler={this.props.notificationClickHandler} />
-      })
-    }
+    const { loaded, notifications, notificationClickHandler } = this.props
 
     return (
-      <Menu right>
-        <ul className="notification-list-ul">{listView}</ul>
-        <div className="dropdown-divider"></div>
-        <a href="/me/notifications" className="notification-see-all">
-          See All
-        </a>
-      </Menu>
+      <StyledDropdownMenu right>
+        <NotificationList>
+          {!loaded ? (
+            <Loader>
+              <Icon name="loading" spin />
+            </Loader>
+          ) : notifications.length <= 0 ? (
+            <NullNotification />
+          ) : (
+            notifications.map(notification => <Notification key={notification._id} notification={notification} onClick={notificationClickHandler} />)
+          )}
+        </NotificationList>
+        <DropdownItem divider />
+        <SeeAll href="/me/notifications">See All</SeeAll>
+      </StyledDropdownMenu>
     )
   }
 }
