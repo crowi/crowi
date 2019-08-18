@@ -3,7 +3,6 @@ import crowi from 'client/util/Crowi'
 import crowiAuth from 'client/util/CrowiAuth'
 import crowiRenderer from 'client/util/CrowiRenderer'
 import JQuery from 'jquery'
-import { any } from 'prop-types'
 
 declare global {
   interface Window {
