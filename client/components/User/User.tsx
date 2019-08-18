@@ -1,6 +1,14 @@
 import React from 'react'
+import styled from 'styled-components'
 import UserPicture from './UserPicture'
 import { User as UserType } from 'client/types/crowi'
+
+const StyledUser = styled.span`
+  img.picture,
+  span {
+    margin-right: 4px;
+  }
+`
 
 interface Props {
   user: UserType
@@ -19,14 +27,14 @@ export default class User extends React.Component<Props> {
     const name = this.props.name
 
     return (
-      <span className="user-component">
+      <StyledUser>
         <a href={userLink}>
           <UserPicture user={user} />
 
-          {username && <span className="user-component-username">@{user.username}</span>}
-          {name && <span className="user-component-name">({user.name})</span>}
+          {username && <span>@{user.username}</span>}
+          {name && <span>({user.name})</span>}
         </a>
-      </span>
+      </StyledUser>
     )
   }
 }
