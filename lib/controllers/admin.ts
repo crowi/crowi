@@ -78,7 +78,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.index = function(req, res) {
-    return res.render('admin/index')
+    return res.render('admin')
   }
 
   actions.api.index = function(req, res) {
