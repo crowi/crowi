@@ -88,7 +88,7 @@ export default (crowi: Crowi, app: Express) => {
   app.post('/_api/me/picture/upload', loginRequired, uploads.single('userPicture'), me.api.uploadPicture)
   app.post('/_api/slack/event', slack.api.handleEvent)
 
-  app.post('/_/edit', form.revision, loginRequired, csrf, page.pageEdit)
+  app.get('/:id/edit', loginRequired, page.pageEditShow)
   app.get('/trash/$', loginRequired, page.deletedPageListShow)
   app.get('/trash/*/$', loginRequired, page.deletedPageListShow)
   app.get('/*/$', loginRequired, encodeSpace, page.pageListShow)

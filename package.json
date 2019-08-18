@@ -111,6 +111,7 @@
     "react": "^16.8.1",
     "react-dom": "^16.8.1",
     "react-i18next": "^10.11.2",
+    "react-markdown": "^4.1.0",
     "react-router-dom": "^4.3.1",
     "reactstrap": "^8.0.1",
     "redis": "~2.6.5",

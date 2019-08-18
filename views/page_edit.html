@@ -1,0 +1,17 @@
+{% extends 'layout/single.html' %}
+
+{% block html_title %}{{ path }}{% endblock %}
+
+{% block layout_head_nav %}
+{% endblock layout_head_nav %}
+
+{% block layout_container %}
+<div id="content-main" class="" data-page-id="{{ pageId }}" data-csrftoken="{{ csrf() }}">
+  <div id="edit-page">
+  </div>
+</div>
+{% endblock layout_container %}
+
+{% block footer %}
+{% endblock footer %}
+

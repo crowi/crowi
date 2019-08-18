@@ -279,6 +279,11 @@ export default (crowi: Crowi) => {
     }
   }
 
+  actions.pageEditShow = function(req, res) {
+    return res.render('page_edit', { pageId: req.params.id })
+  }
+
+  // Will be deprecated on this PR.
   actions.pageEdit = function(req, res) {
     var pageForm = req.body.pageForm
     var body = pageForm.body

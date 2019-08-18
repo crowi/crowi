@@ -54,7 +54,7 @@
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
-            <i class="mdi mdi-star-outlin"></i>
+            <i class="mdi mdi-star-outline"></i>
           </a>
         </span>
       </div>
@@ -90,12 +90,6 @@
       <a class="nav-link" href="#" onclick="history.back();"><i class="mdi mdi-close"></i> {{ t('Cancel') }}</a>
     </li>
   </ul>
-  <div class="tab-content">
-    <div class="edit-form">
-    {% include '_form.html' %}
-    </div>
-  </div>
-
   {% else %}
 
   {% if page.isDeleted() %}
@@ -140,7 +134,7 @@
     </li>
 
     <li class="nav-item">
-      <a class="nav-link {% if req.body.pageForm %}active{% endif %}" href="#edit-form" data-toggle="tab"><i class="mdi mdi-square-edit-outline"></i> {{ t('Edit') }}</a>
+      <a class="btn btn-outline-primary btn-sm" href="/{{ page._id.toString() }}/edit"><i class="mdi mdi-square-edit-outline"></i> {{ t('Edit') }}</a>
     </li>
 
     {% if page %}
@@ -229,7 +223,6 @@
     {# edit form #}
     {% if not page.isDeleted() %}
     <div class="edit-form tab-pane {% if req.body.pageForm %}active{% endif %}" id="edit-form">
-      {% include '_form.html' %}
     </div>
     {% endif %}
 

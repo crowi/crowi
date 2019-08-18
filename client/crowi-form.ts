@@ -48,7 +48,7 @@ $(function() {
   })
 
   // preview watch
-  var originalContent = $('#form-body').val()
+  var originalContent = $('#form-body').html()
 
   // restore draft
   // とりあえず、originalContent がない場合のみ復元する。(それ以外の場合は後で考える)
@@ -62,7 +62,7 @@ $(function() {
   var prevContent = originalContent
 
   function renderPreview() {
-    var content = <string>$('#form-body').val()
+    var content = <string>$('#form-body').html()
     var previewBody = $('#preview-body')
     var previewBodyElement = <HTMLDivElement>previewBody[0]
     var parsedHTML = crowiRenderer.render(content, previewBodyElement)
@@ -72,7 +72,7 @@ $(function() {
   // for initialize preview
   renderPreview()
   setInterval(function() {
-    var content = $('#form-body').val()
+    var content = $('#form-body').html()
     if (prevContent != content) {
       renderPreview()
       prevContent = content
@@ -342,7 +342,7 @@ $(function() {
 
   // markdown helper inspired by 'esarea'.
   // see: https://github.com/fukayatsu/esarea
-  $('textarea#form-body').on('keydown', function(event) {
+  $('#form-body').on('keydown', function(event) {
     switch (event.which || event.keyCode) {
       case 9:
         handleTabKey(event)
@@ -432,7 +432,7 @@ $(function() {
     }
   }
 
-  var $inputForm = $('form.uploadable textarea#form-body')
+  var $inputForm = $('form.uploadable #form-body')
   if ($inputForm.length > 0) {
     var csrfToken = $('form.uploadable input#edit-form-csrf').val()
     var pageId = $('#content-main').data('page-id') || 0
@@ -488,10 +488,10 @@ $(function() {
 
     bindInlineAttachment($inputForm, attachmentOption)
 
-    $('textarea#form-body').on('dragenter dragover', function() {
+    $('#form-body').on('dragenter dragover', function() {
       $(this).addClass('dragover')
     })
-    $('textarea#form-body').on('drop dragleave dragend', function() {
+    $('#form-body').on('drop dragleave dragend', function() {
       $(this).removeClass('dragover')
     })
   }
