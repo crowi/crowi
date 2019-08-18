@@ -42,6 +42,9 @@ code {
   font-size: 1.12em;
   vertical-align: -0.05em;
 }
+.input-group .input-group-text .mdi {
+  font-size: 1em;
+}
 
 .meta {
   margin-top: 0;
@@ -265,38 +268,6 @@ footer {
   display: none;
 }
 
-// components
-.flip-container { // {{{
-  perspective: 1000;
-
-  .flipper {
-    .front, .back {
-      -webkit-backface-visibility: hidden;
-      backface-visibility: hidden;
-      transition: 0.4s;
-      -webkit-transform-style: preserve-3d;
-      transform-style: preserve-3d;
-    }
-
-    .front {
-      z-index: 2;
-    }
-
-    .back {
-    }
-
-    .back,
-    &.to-flip .front {
-      -webkit-transform: rotateY(180deg);
-      transform: rotateY(180deg);
-    }
-
-    &.to-flip .back {
-      -webkit-transform: rotateY(0);
-      transform: rotateY(0);
-    }
-  }
-} // }}}
 
 // buttons
 
