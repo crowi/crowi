@@ -10,6 +10,7 @@ interface Props extends WithTranslation {
 
 interface State {
   pages: []
+  loading: boolean
 }
 
 class RecentlyViewedPageList extends React.Component<Props, State> {
@@ -18,26 +19,25 @@ class RecentlyViewedPageList extends React.Component<Props, State> {
 
     this.state = {
       pages: [],
+      loading: true,
     }
   }
 
   async componentDidMount() {
     const { pages } = await this.props.crowi.apiGet('/user/recentlyViewed', {})
-    this.setState({ pages })
+    this.setState({ pages, loading: false })
   }
 
   render() {
     const { t } = this.props
-    const { pages } = this.state
+    const { pages, loading } = this.state
     return (
-      pages.length > 0 && (
-        <div className="grouped-page-list">
-          <h6>
-            <Icon name="history" /> <span className="title">{t('Recently Viewed Pages')}</span>
-          </h6>
-          <ListView pages={pages} />
-        </div>
-      )
+      <div className="grouped-page-list">
+        <h6>
+          <Icon name="history" /> <span className="title">{t('Recently Viewed Pages')}</span>
+        </h6>
+        {loading ? <Icon name="loading" spin /> : pages.length === 0 ? 'No recently viewed pages' : <ListView pages={pages} />}
+      </div>
     )
   }
 }
