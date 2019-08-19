@@ -59,7 +59,7 @@
     "connect-redis": "^3.4.1",
     "consolidate": "^0.15.1",
     "cookie-parser": "^1.4.4",
-    "copy-webpack-plugin": "^4.6.0",
+    "copy-webpack-plugin": "^5.0.4",
     "csrf": "~3.1.0",
     "css-loader": "^3.0.0",
     "csstype": "^2.5.8",
