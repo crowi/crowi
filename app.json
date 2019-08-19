@@ -19,7 +19,7 @@
       "description": "A password seed is used by password hash generator. ",
       "generator": "secret"
     },
-    "MONGOMS_DISABLE_POSTINSTALL": 1
+    "MONGOMS_DISABLE_POSTINSTALL": "1"
   },
   "addons": [
     "mongolab",
