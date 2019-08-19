@@ -34,7 +34,7 @@
     width: 100%;
 
     // for SearchSuggest
-    @include media-breakpoint-up(md) {
+    @include media-breakpoint-up(lg) {
       position: relative;
     }
 
@@ -93,7 +93,7 @@
 
 .search-suggest {
   width: 100%;
-  @include media-breakpoint-down(sm) {
+  @include media-breakpoint-down(md) {
     left: 1em;
     width: calc(100% - 2em);
   }
