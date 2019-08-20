@@ -299,12 +299,12 @@
       lighten(saturate(adjust-hue($crowiHeaderBackground, 10deg), 20%), 30%)
     )
   ;
-  background-size: 200% 200%;
   border-image: none;
   border-top: none;
+  background-size: 100% 100%;
   @include media-breakpoint-up(md) {
     animation: LoginScreenBackgroundGradients 20s linear infinite;
-    background-size: 100% 100%;
+    background-size: 200% 200%;
   }
 
 
