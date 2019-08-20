@@ -1,4 +1,5 @@
 bin
+dist
 client/thirdparty-js
 node_modules
 package-lock.json

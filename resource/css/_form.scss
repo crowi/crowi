@@ -108,9 +108,9 @@
 } // }}}
 
 .crowi.main-container .main .content-main.content-form {
-  h1, h2, h3, h4, h5, h6,
+  h1, h2, h3,
   fieldset > legend {
-    &:not(.modal-title) {
+    &:not(.modal-title):not(.dropdown-header) {
       padding-left: 0.5rem;
       padding-bottom: 0.5rem;
       margin-bottom: 1.5rem;
