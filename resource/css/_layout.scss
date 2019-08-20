@@ -305,6 +305,10 @@
   @include media-breakpoint-up(md) {
     animation: LoginScreenBackgroundGradients 20s linear infinite;
     background-size: 200% 200%;
+
+    @media (max-height: 823px) {
+      animation: none;
+    }
   }
 
 
