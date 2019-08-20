@@ -1,41 +1,88 @@
 import React, { FC } from 'react'
+import styled, { css } from 'styled-components'
 import UserPicture from 'components/User/UserPicture'
 import CommentBody from './CommentBody'
+import * as styles from 'client/constants/styles'
+import { CommonProps } from 'client/types/component'
 import Crowi from 'client/util/Crowi'
 
-interface Props {
+type PageCommentContainerProps = Props & {
+  isOwn: boolean
+  isOld: boolean
+}
+
+const PageCommentContainer = styled.div<PageCommentContainerProps>`
+  display: flex;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: solid 1px #ccc;
+
+  ${({ isOwn }: PageCommentContainerProps) =>
+    isOwn &&
+    css`
+      color: ${styles.header.background};
+    `}
+
+  ${({ isOld }: PageCommentContainerProps) =>
+    isOld &&
+    css`
+      opacity: 0.7;
+
+      &:hover {
+        opacity: 1;
+      }
+    `}
+`
+
+const CommentUserPicture = styled(UserPicture)`
+  width: 24px;
+  height: 24px;
+`
+
+const PageComment = styled.div`
+  margin-left: 16px;
+`
+
+const CommentCreator = styled.div`
+  font-weight: bold;
+`
+
+const CommentMeta = styled.div`
+  color: #aaa;
+  font-size: 0.9em;
+`
+
+const CommentAt = styled.span`
+  margin-right: 0.5em;
+`
+
+type Props = CommonProps & {
   crowi: Crowi
   revisionId: string | null
   comment: Record<string, any>
 }
 
-const CommentItem: FC<Props> = ({ crowi, revisionId, comment }) => {
+const CommentItem: FC<Props> = props => {
+  const { crowi, revisionId, comment, ...others } = props
   const { revision, creator, comment: commentBody, createdAt } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
 
-  const classNames = ['page-comment']
   const me = crowi.getUser() || {}
-  if (me.id === creator._id) {
-    classNames.push('page-comment-me')
-  }
-  if (revision !== revisionId) {
-    classNames.push('page-comment-old')
-  }
 
   return (
-    <div className={classNames.join(' ')}>
-      <UserPicture user={creator} />
-      <div className="page-comment-main">
-        <div className="page-comment-creator">{creator.username}</div>
+    <PageCommentContainer isOwn={me.id === creator._id} isOld={revision !== revisionId} {...others}>
+      <CommentUserPicture user={creator} />
+      <PageComment>
+        <CommentCreator>{creator.username}</CommentCreator>
         <CommentBody comment={commentBody} />
-        <div className="page-comment-meta">
-          <span className="page-comment-at">{createdAt}</span>
-          <a className={`page-comment-revision badge ${badgeType}`} href={`?revision=${revision}`}>
+        <CommentMeta>
+          <CommentAt>{createdAt}</CommentAt>
+          <a className={`badge ${badgeType}`} href={`?revision=${revision}`}>
             {revision.substr(0, 8)}
           </a>
-        </div>
-      </div>
-    </div>
+        </CommentMeta>
+      </PageComment>
+    </PageCommentContainer>
   )
 }
 

@@ -1,4 +1,19 @@
 import React from 'react'
+import styled from 'styled-components'
+
+const StyledPager = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 10px 0;
+`
+
+const PagerButton = styled.div`
+  width: 50%;
+  margin: 0;
+  text-align: center;
+  font-size: small;
+`
 
 interface Props {
   hasPrev: boolean
@@ -23,31 +38,22 @@ export default class Pager extends React.Component<Props> {
     this.props.handleNextClick()
   }
 
-  renderPrev() {
-    if (this.props.hasPrev) {
-      return <a onClick={this.handleOnPrevClick.bind(this)}>Prev</a>
-    }
-
-    return null
-  }
-
-  renderNext() {
-    if (this.props.hasNext) {
-      return <a onClick={this.handleOnNextClick.bind(this)}>Next</a>
-    }
-
-    return null
-  }
-
   render() {
-    const next = this.renderNext()
-    const prev = this.renderPrev()
+    const { hasPrev, hasNext } = this.props
 
     return (
-      <div className="notification-pager">
-        <div className="pager pager-prev">{prev}</div>
-        <div className="pager pager-next">{next}</div>
-      </div>
+      <StyledPager>
+        {hasPrev && (
+          <PagerButton>
+            <a onClick={this.handleOnPrevClick.bind(this)}>Prev</a>
+          </PagerButton>
+        )}
+        {hasNext && (
+          <PagerButton>
+            <a onClick={this.handleOnNextClick.bind(this)}>Next</a>
+          </PagerButton>
+        )}
+      </StyledPager>
     )
   }
 }

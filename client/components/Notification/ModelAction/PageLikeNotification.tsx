@@ -1,5 +1,5 @@
 import React from 'react'
-import NotificationContent from '../NotificationContent'
+import NotificationItem from '../NotificationItem'
 import PagePath from 'components/PageList/PagePath'
 import { Notification } from 'client/types/crowi'
 
@@ -14,11 +14,11 @@ export default class PageLikeNotification extends React.Component<Props> {
     const notification = this.props.notification
 
     return (
-      <NotificationContent {...this.props} icon="thumb-up">
+      <NotificationItem {...this.props} icon="thumb-up">
         <span>
           <b>{this.props.actionUsers}</b> liked <PagePath page={notification.target} />
         </span>
-      </NotificationContent>
+      </NotificationItem>
     )
   }
 }

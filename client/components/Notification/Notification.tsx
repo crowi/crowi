@@ -8,12 +8,12 @@ import { Notification as NotificationType } from 'client/types/crowi'
 
 interface Props {
   notification: NotificationType
-  onClickHandler: Function
+  onClick: Function
 }
 
 export default class Notification extends React.Component<Props> {
-  onClickHandler() {
-    this.props.onClickHandler(this.props.notification)
+  onClick() {
+    this.props.onClick(this.props.notification)
   }
 
   getActionUsers() {
@@ -57,9 +57,9 @@ export default class Notification extends React.Component<Props> {
 
     switch (componentName) {
       case 'Page:COMMENT':
-        return <PageCommentNotification {...props} onClick={this.onClickHandler.bind(this)} />
+        return <PageCommentNotification {...props} onClick={this.onClick.bind(this)} />
       case 'Page:LIKE':
-        return <PageLikeNotification {...props} onClick={this.onClickHandler.bind(this)} />
+        return <PageLikeNotification {...props} onClick={this.onClick.bind(this)} />
       default:
     }
 
