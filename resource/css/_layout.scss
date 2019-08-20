@@ -280,17 +280,31 @@
 }
 
 .crowi.single.nologin { // {{{
-  //background: lighten($crowiHeaderBackground, 15%);
+  background: lighten($crowiHeaderBackground, 15%);
   height: 100vh;
-  background: $crowiHeaderBackground linear-gradient(135deg,
-    $crowiHeaderBackground,
-    lighten(saturate(adjust-hue($crowiHeaderBackground, 15deg), 25%), 30%),
-    lighten($crowiHeaderBackground, 40%),
-  );
+  background:
+    linear-gradient(215deg,
+      lighten($crowiHeaderBackground, 30%),
+      lighten(saturate(adjust-hue($crowiHeaderBackground, 15deg), 25%), 10%),
+      $crowiHeaderBackground
+    ),
+    linear-gradient(135deg,
+      $crowiHeaderBackground,
+      lighten(saturate(adjust-hue($crowiHeaderBackground, 15deg), 25%), 50%),
+      lighten($crowiHeaderBackground, 20%)
+    ),
+    linear-gradient(335deg,
+      lighten($crowiHeaderBackground, 60%),
+      $crowiHeaderBackground,
+      lighten(saturate(adjust-hue($crowiHeaderBackground, 10deg), 20%), 30%)
+    )
+  ;
   background-size: 200% 200%;
   border-image: none;
+  border-top: none;
   @include media-breakpoint-up(md) {
-    animation: LoginScreenBackgroundGradients 20s ease infinite;
+    animation: LoginScreenBackgroundGradients 20s linear infinite;
+    background-size: 100% 100%;
   }
 
 
