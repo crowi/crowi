@@ -1,20 +1,21 @@
 import React, { FC } from 'react'
 import CommentItem from './CommentItem'
 import Crowi from 'client/util/Crowi'
+import { CommonProps } from 'client/types/component'
 import { Comment } from 'client/types/crowi'
 
-interface Props {
-  id?: string
-  className?: string
+type Props = CommonProps & {
   children?: React.ReactNode
   crowi: Crowi
   comments: Comment[]
   revisionId: string | null
 }
 
-const CommentList: FC<Props> = ({ crowi, comments, revisionId, ...props }) => {
+const CommentList: FC<Props> = props => {
+  const { crowi, comments, revisionId, ...others } = props
+
   return (
-    <div {...props}>
+    <div {...others}>
       {comments.map(comment => (
         <CommentItem key={comment._id} crowi={crowi} comment={comment} revisionId={revisionId} />
       ))}

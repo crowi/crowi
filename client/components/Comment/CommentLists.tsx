@@ -1,8 +1,17 @@
 import React, { FC } from 'react'
+import styled from 'styled-components'
 import CommentList from './CommentList'
 import Icon from 'components/Common/Icon'
 import Crowi from 'client/util/Crowi'
 import { Comment } from 'client/types/crowi'
+
+const ToggleCommentList = styled.a`
+  text-align: center;
+  display: block;
+  margin: 8px;
+  font-size: 0.9em;
+  color: #999;
+`
 
 function NewerCommentList({ crowi, comments, revisionId }) {
   if (!comments.length) return null
@@ -39,7 +48,7 @@ interface Props {
 const CommentLists: FC<Props> = ({ crowi, comments, revisionId }) => {
   const { newer, current, older } = comments
   return (
-    <div className="page-comments-list">
+    <div>
       <NewerCommentList crowi={crowi} comments={newer} revisionId={revisionId} />
       <CommentList crowi={crowi} comments={current} revisionId={revisionId} />
       <OlderCommentList crowi={crowi} comments={older} revisionId={revisionId} />
