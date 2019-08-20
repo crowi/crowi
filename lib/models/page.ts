@@ -1026,7 +1026,7 @@ export default (crowi: Crowi) => {
 
     if (createRedirectPage) {
       var body = 'redirect ' + newPagePath
-      return Page.create(path, body, user, { redirectTo: newPagePath })
+      return Page.createPage(path, body, user, { redirectTo: newPagePath })
     }
     pageEvent.emit('update', pageData, user) // update as renamed page
     return data

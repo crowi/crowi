@@ -230,6 +230,9 @@
 <script type="application/json" id="user-context-hydrate">
   {{ user_context|json|safe }}
 </script>
+<script type="application/json" id="ssr-context-hydrate">
+{{ ssr_context|json|safe }}
+</script>
 
 <script src="{{ assets('/js/app.js') }}"></script>
 <script src="{{ assets('/js/crowi.js') }}"></script>

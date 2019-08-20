@@ -12,7 +12,7 @@
     "prettier",
     "prettier/@typescript-eslint",
     "prettier/standard",
-    "prettier/react"
+    "prettier/react",
   ],
   "env": {
     "browser": true,
@@ -39,6 +39,7 @@
     "node/no-deprecated-api": "off",
     "prettier/prettier": "error",
     "react/prefer-stateless-function": "off",
+    "react/prop-types": "off",
     "require-jsdoc": "off",
     "standard/no-callback-literal": "off",
     "valid-jsdoc": "off"
@@ -48,7 +49,7 @@
       "version": "16.7"
     }
   },
-  "plugins": ["@typescript-eslint", "react", "prettier", "jest"],
+  "plugins": ["@typescript-eslint", "react", "prettier", "jest", "react-hooks"],
   "globals": {
     "jest/globals": true,
     "hljs": true,

@@ -28,6 +28,7 @@
         "common": "./common",
         "locales": "./locales"
       }
-    }]
+    }],
+    "babel-plugin-styled-components"
   ]
 }

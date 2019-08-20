@@ -20,12 +20,12 @@ const config = {
   resolve: {
     plugins: [new TsconfigPathsPlugin({ configFile: path.join(ROOT, 'tsconfig.server.json') })],
     modules: ['./node_modules'],
-    extensions: ['.ts', '.js', '.json'],
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
   },
   module: {
     rules: [
       {
-        test: /\.(js|ts)$/,
+        test: /.(ts|js)x?$/,
         exclude: /node_modules/,
         loader: 'ts-loader',
         options: {
