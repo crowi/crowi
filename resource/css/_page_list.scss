@@ -80,6 +80,7 @@
     display: flex;
     font-weight: bold;
     color: #888;
+    max-height: 1.2rem; // fix height for mobile safari
 
     > svg {
       margin-right: .2em;
