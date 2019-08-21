@@ -412,16 +412,6 @@ $(function() {
     }
   })
 
-  // login
-  $('#register').on('click', function() {
-    $('#login-dialog').addClass('to-flip')
-    return false
-  })
-  $('#login').on('click', function() {
-    $('#login-dialog').removeClass('to-flip')
-    return false
-  })
-
   $('#register-form input[name="registerForm[username]"]').change(function(e) {
     var username = $(this).val()
     $('#input-group-username').removeClass('has-error')
