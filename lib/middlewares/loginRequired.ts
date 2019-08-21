@@ -1,14 +1,17 @@
 import Crowi from 'server/crowi'
 import auth from '../util/auth'
+import Debug from 'debug'
 
 export default (crowi: Crowi) => {
+  const debug = Debug('crowi:middlewares:loginRequired')
+
   return async (req, res, next) => {
     const User = crowi.model('User')
     const config = crowi.getConfig()
-    const { path = '', originalUrl } = req
+    const { originalUrl } = req
     const query = originalUrl === '/' ? '' : `?continue=${originalUrl}`
-    const isAuthPage = path.startsWith('/me/auth/')
-    const isAPI = path.startsWith('/_api/')
+    const isAuthPage = originalUrl.startsWith('/me/auth/')
+    const isAPI = originalUrl.startsWith('/_api/')
 
     if (!isAuthPage && auth.isAccessTokenExpired(req)) {
       const success = await auth.reauth(req, config)
