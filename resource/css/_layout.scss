@@ -1,6 +1,6 @@
 .crowi { // {{{
   &.main-container { // {{{
-    border-top: solid 3px $crowiHeaderBackground;
+    border-top: solid $crowiTopBorderHeight $crowiHeaderBackground;
     border-image: linear-gradient(90deg,
       $crowiHeaderBackground,
       lighten(saturate(adjust-hue($crowiHeaderBackground, -60deg), 25%), 30%),
@@ -28,7 +28,7 @@
       .v2-container {
         width: calc(100% - 300px);
         left: 300px;
-        height: 100vh;
+        height: calc(100vh - $crowiTopBorderHeight);
         overflow: hidden;
         z-index: 990;
         overflow: hidden;
