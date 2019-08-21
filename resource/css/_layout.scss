@@ -456,7 +456,7 @@
 
 // smartphone input size adjustment
 @include media-breakpoint-down(md) {
-  input[type=text], textarea {
+  input[type=password], input[type=text], textarea {
     font-size: 1rem !important;
   }
 }
