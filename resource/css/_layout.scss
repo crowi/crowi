@@ -24,29 +24,29 @@
 
     // TODO: move those kind of logic to components and styled-component
     // sm menu opened
-    &.side-menu-open {
-      .v2-container {
-        width: calc(100% - 300px);
-        left: 300px;
-        height: calc(100vh - $crowiTopBorderHeight);
-        overflow: hidden;
-        z-index: 990;
-        overflow: hidden;
+    @include media-breakpoint-down(sm) {
+      &.side-menu-open {
+        .v2-container {
+          width: calc(100% - 300px);
+          left: 300px;
+          height: calc(100vh - #{$crowiTopBorderHeight});
+          overflow: hidden;
+          z-index: 990;
+          overflow: hidden;
 
-        .v2-container-backdrop {
-          display: block;
-          background-color: rgba(0, 0, 0, .1);
-          z-index: 1090;
+          .v2-container-backdrop {
+            display: block;
+            background-color: rgba(0, 0, 0, .1);
+            z-index: 1090;
+          }
         }
-      }
-      .v2-crowi-header {
-        .search-top {
-          display: none;
+        .v2-crowi-header {
+          .search-top {
+            display: none;
+          }
         }
-      }
 
-      .v2-crowi-global-menu {
-        @include media-breakpoint-down(sm) {
+        .v2-crowi-global-menu {
           display: block;
           position: fixed;
           box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
