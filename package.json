@@ -196,7 +196,7 @@
   "license": "MIT",
   "scripts": {
     "start": "node dist/server/app.js",
-    "dev": "concurrently --kill-others 'npm run dev:server' 'npm run dev:client' 'npm run watch'",
+    "dev": "concurrently --kill-others 'npm run dev:server' 'npm run dev:client' 'npm run watch' 'npm run storybook'",
     "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon lib/app.ts",
     "dev:client": "NODE_ENV=development webpack --progress --profile --watch --config webpack/client/webpack.config.js",
     "format": "eslint --fix '**/*.{ts,tsx,js,jsx}'",
