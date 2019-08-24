@@ -490,7 +490,11 @@ export default (crowi: Crowi) => {
 
   userSchema.statics.isRegisterableUsername = async function(username, callback) {
     const userData = await User.findOne({ username })
-    callback(!!userData)
+    if (userData) {
+      return callback(false)
+    }
+
+    return callback(true)
   }
 
   userSchema.statics.isRegisterable = async function(email, username, callback) {
