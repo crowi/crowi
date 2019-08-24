@@ -1,19 +1,20 @@
 <div align=center>
-  <img src="http://res.cloudinary.com/hrscywv4p/image/upload/c_limit,f_auto,h_900,q_80,w_1200/v1/199673/https_www_filepicker_io_api_file_VpYEP32ZQyCZ85u6XCXo_zskpra.png" alt="Crowi logo">
+  <img src="https://raw.githubusercontent.com/crowi/crowi/master/public/logo/800x200.png" witdh="500" alt="Crowi">
 </div>
 
 <h1 align=center>Crowi</h1>
 <p align=center>Empower the team with sharing your knowledge.</p>
 
 <div align=center>
-
-<a href="https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.9"><img src="https://www.herokucdn.com/deploy/button.png" alt="Delpoy"></a>
-
-<br>
-<a href="https://circleci.com/gh/crowi/crowi"><img src="https://circleci.com/gh/crowi/crowi.svg?style=svg" alt="Circle CI"></a>
-<a href="https://codecov.io/gh/crowi/crowi"><img src="https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg" alt="Codecov"></a>
-<a href="https://hub.docker.com/r/crowi/crowi"><img src="https://img.shields.io/docker/pulls/crowi/crowi.svg" alt="Docker Pulls"></a>
-<a href="https://spectrum.chat/crowi"><img src="https://withspectrum.github.io/badge/badge.svg" alt="Join the community on Spectrum"></a>
+  <p align=center>
+    <a href="https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.9"><img src="https://www.herokucdn.com/deploy/button.png" alt="Delpoy"></a>
+  </p>
+  <p align=center>
+    <a href="https://circleci.com/gh/crowi/crowi"><img src="https://circleci.com/gh/crowi/crowi.svg?style=svg" alt="Circle CI"></a>
+    <a href="https://codecov.io/gh/crowi/crowi"><img src="https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg" alt="Codecov"></a>
+    <a href="https://hub.docker.com/r/crowi/crowi"><img src="https://img.shields.io/docker/pulls/crowi/crowi.svg" alt="Docker Pulls"></a>
+    <a href="https://spectrum.chat/crowi"><img src="https://withspectrum.github.io/badge/badge.svg" alt="Join the community on Spectrum"></a>
+  </p>
 </div>
 
 Crowi is a **Markdown Wiki** like:
