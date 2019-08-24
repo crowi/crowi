@@ -1,5 +1,5 @@
 <div align=center>
-  <img src="https://raw.githubusercontent.com/crowi/crowi/master/public/logo/800x200.png" witdh="500" alt="Crowi">
+  <img src="https://raw.githubusercontent.com/crowi/crowi/master/public/logo/800x200.png" width="500" alt="Crowi">
 </div>
 
 <h1 align=center>Crowi</h1>
