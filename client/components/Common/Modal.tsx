@@ -9,7 +9,7 @@ export default class Modal extends React.Component<{}, State> {
     super(props)
 
     this.state = {
-      modalShown: true,
+      modalShown: false,
     }
   }
 
