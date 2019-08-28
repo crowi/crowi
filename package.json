@@ -201,7 +201,7 @@
     "dev:client": "NODE_ENV=development webpack --progress --profile --watch --config webpack/client/webpack.config.js",
     "format": "eslint --fix '**/*.{ts,tsx,js,jsx}'",
     "lint": "eslint '**/*.{ts,tsx,js,jsx}'",
-    "storybook": "start-storybook --ci -p 6001",
+    "storybook": "start-storybook --ci -s public -p 6001",
     "test": "DEBUG= jest --maxWorkers=5",
     "test:client": "DEBUG= jest client --maxWorkers=5",
     "test:server": "DEBUG= jest lib --maxWorkers=5",
