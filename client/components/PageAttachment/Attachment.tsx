@@ -18,7 +18,7 @@ export default class Attachment extends React.Component<Props> {
 
   iconNameByFormat(format: string) {
     if (format.match(/image\/.+/i)) {
-      return 'file-image'
+      return 'fileImage'
     }
 
     return 'file'
@@ -48,7 +48,7 @@ export default class Attachment extends React.Component<Props> {
         {fileInUse}
 
         <a className="text-danger attachment-delete" onClick={this._onAttachmentDeleteClicked}>
-          <Icon name="trash-can-outline" />
+          <Icon name="trashCanOutline" />
         </a>
       </li>
     )

@@ -180,7 +180,7 @@ class SettingModal extends React.Component<Props, State> {
         </ModalBody>
         <ModalFooter>
           <Button className="mr-auto" onClick={this.handleOpen} color="danger" disabled={isChanging}>
-            <Icon name={isChanging ? 'loading' : 'link-off'} spin={isChanging} /> {t('share.delete_link')}
+            <Icon name={isChanging ? 'loading' : 'linkOff'} spin={isChanging} /> {t('share.delete_link')}
           </Button>
           {this.renderResult()}
           <Button onClick={this.handleSubmit} color="primary" disabled={!this.canSubmit()}>
