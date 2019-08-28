@@ -14,7 +14,7 @@ export default class PageLikeNotification extends React.Component<Props> {
     const notification = this.props.notification
 
     return (
-      <NotificationItem {...this.props} icon="thumb-up">
+      <NotificationItem {...this.props} icon="thumbUp">
         <span>
           <b>{this.props.actionUsers}</b> liked <PagePath page={notification.target} />
         </span>
