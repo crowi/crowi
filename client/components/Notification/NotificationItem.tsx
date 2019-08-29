@@ -4,6 +4,7 @@ import { CommonProps } from 'client/types/component'
 import { Notification as NotificationType } from 'client/types/crowi'
 import { border } from 'client/constants/components'
 import NotificationItemContent from './NotificationItemContent'
+import { IconName } from 'components/Common/Icon'
 
 const StyledNotificationItem = styled.li`
   list-style-type: none;
@@ -41,7 +42,7 @@ type Props = CommonProps & {
   children: React.ReactNode
   notification: NotificationType
   onClick: () => void
-  icon: string
+  icon: IconName
 }
 
 const NotificationItem: FC<Props> = props => {

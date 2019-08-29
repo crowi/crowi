@@ -136,7 +136,7 @@ class RenameTree extends React.Component<Props, State> {
 
     const renderChanges = (path: string) => (
       <code className="changes">
-        <Icon name="arrow-right" /> {pathMap[path]}
+        <Icon name="arrowRight" /> {pathMap[path]}
       </code>
     )
 

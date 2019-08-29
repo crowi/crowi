@@ -20,7 +20,7 @@ function NewerCommentList({ crowi, comments, revisionId }) {
     <>
       <CommentList className="collapse" id="page-comments-list-newer" crowi={crowi} comments={comments} revisionId={revisionId} />
       <a className="text-center" data-toggle="collapse" href="#page-comments-list-newer">
-        <Icon name="chevron-double-up" /> Comments for Newer Revision <Icon name="chevron-double-up" />
+        <Icon name="chevronDoubleUp" /> Comments for Newer Revision <Icon name="chevronDoubleUp" />
       </a>
     </>
   )
@@ -32,7 +32,7 @@ function OlderCommentList({ crowi, comments, revisionId }) {
   return (
     <>
       <a className="text-center" data-toggle="collapse" href="#page-comments-list-older">
-        <Icon name="chevron-double-down" /> Comments for Older Revision <Icon name="chevron-double-down" />
+        <Icon name="chevronDoubleDown" /> Comments for Older Revision <Icon name="chevronDoubleDown" />
       </a>
       <CommentList className="collapse in" id="page-comments-list-older" crowi={crowi} comments={comments} revisionId={revisionId} />
     </>

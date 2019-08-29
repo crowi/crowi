@@ -55,7 +55,7 @@ export default class SearchForm extends React.Component<Props, State> {
   renderClearForm() {
     return (
       <a className="search-top-clear" onClick={this.clearForm}>
-        <Icon name="close-circle" />
+        <Icon name="closeCircle" />
       </a>
     )
   }

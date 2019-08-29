@@ -8,13 +8,13 @@ const Navigation: FC<{}> = () => {
   const { settingForm, searchConfigured } = useContext(AdminContext)
 
   const items = [
-    { key: 'index', to: '/admin', icon: 'mdi-cube', name: 'Wiki 管理トップ', title: 'Wiki管理', exact: true },
-    { key: 'app', to: '/admin/app', icon: 'mdi-cogs', name: 'アプリ設定' },
-    { key: 'notification', to: '/admin/notification', icon: 'mdi-bell', name: '通知管理' },
-    { key: 'user', to: '/admin/users', icon: 'mdi-account-group', name: 'ユーザー管理' },
-    { key: 'search', to: '/admin/search', icon: 'mdi-magnify', name: '検索管理', show: searchConfigured },
-    { key: 'share', to: '/admin/share', icon: 'mdi-open-in-new', name: '外部共有設定' },
-    { key: 'backlink', to: '/admin/backlink', icon: 'mdi-anchor', name: 'バックリンク管理' },
+    { key: 'index', to: '/admin', icon: 'cube', name: 'Wiki 管理トップ', title: 'Wiki管理', exact: true } as const,
+    { key: 'app', to: '/admin/app', icon: 'cogs', name: 'アプリ設定' } as const,
+    { key: 'notification', to: '/admin/notification', icon: 'bell', name: '通知管理' } as const,
+    { key: 'user', to: '/admin/users', icon: 'accountGroup', name: 'ユーザー管理' } as const,
+    { key: 'search', to: '/admin/search', icon: 'magnify', name: '検索管理', show: searchConfigured } as const,
+    { key: 'share', to: '/admin/share', icon: 'openInNew', name: '外部共有設定' } as const,
+    { key: 'backlink', to: '/admin/backlink', icon: 'anchor', name: 'バックリンク管理' } as const,
   ]
 
   useEffect(() => {

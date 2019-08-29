@@ -55,14 +55,11 @@ export default class BookmarkButton extends React.Component<Props, State> {
   }
 
   render() {
-    let bookmarked = ''
-    if (!this.state.bookmarked) {
-      bookmarked = '-outline'
-    }
+    const bookmarked: 'star' | 'starOutline' = this.state.bookmarked ? 'star' : 'starOutline'
 
     return (
       <a href="#" title="Bookmark" className="bookmark-link" onClick={this.handleClick}>
-        <Icon name={`star${bookmarked}`} />
+        <Icon name={bookmarked} />
       </a>
     )
   }

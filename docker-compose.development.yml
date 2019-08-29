@@ -19,6 +19,7 @@ services:
       - /root/.mongo-binaries
     ports:
       - 3000:3000
+      - 6001:6001
     links:
       - mongodb
       - elasticsearch

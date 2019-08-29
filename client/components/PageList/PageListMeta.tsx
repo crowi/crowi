@@ -61,7 +61,7 @@ export default class PageListMeta extends React.Component<Props> {
     if (page.liker.length > 0) {
       likerCount = (
         <span>
-          <Icon name="thumb-up" />
+          <Icon name="thumbUp" />
           {page.liker.length}
         </span>
       )
