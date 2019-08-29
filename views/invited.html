@@ -4,89 +4,87 @@
 
 {% block content_main %}
 
-<h1 class="login-page">
-  {% if config.crowi['app:title'] == 'Crowi' %}
-    <img src="/logo/135x32.png" alt="Crowi">
-  {% else %}
-    {{ config.crowi['app:title'] }}<br>
-    <img src="/logo/100x11_w.png" alt="powered by Crowi">
-  {% endif %}
-</h1>
+<div class="v2-single-page-container">
 
-<div class="login-dialog-container flip-container col-md-5">
+  <h1 class="login-page register-page">
+    {% if config.crowi['app:title'] == 'Crowi' %}
+      <img src="/logo/500w-inverse.png" width="250" alt="Crowi">
+    {% else %}
+      {{ config.crowi['app:title'] }}<br>
+      <img src="/logo/powered-by-crowi-inverse.png" width="100" alt="powered by Crowi">
+    {% endif %}
+  </h1>
 
-<div class="login-dialog" id="login-dialog">
+<div class="login-dialog">
 
-  <div class="login-dialog-inner front">
-    <h2>{{ t('Sign up') }}</h2>
+  <h2>{{ t('Sign up') }}</h2>
 
-    <p>
-    Welcome to {{ config.crowi['app:title'] }}!<br>
-    {{ t('page_register.note.invited') }}
+  <p>
+  Welcome to {{ config.crowi['app:title'] }}!<br>
+  {{ t('page_register.note.invited') }}
+  </p>
+
+  <div id="login-form-errors">
+    {% set message = req.flash('warningMessage') %}
+    {% if message.length %}
+    <div class="alert alert-danger">
+      {{ message }}
+    </div>
+    {% endif %}
+
+    {% if req.form.errors.length > 0 %}
+    <div class="alert alert-danger">
+      <ul>
+        {% for error in req.form.errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+  <form role="form" id="invited-form" action="/login/activateInvited" method="post">
+
+    <label>{{ t('Email') }}</label>
+    <div class="input-group">
+      <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-email"></i></span></span>
+      <input type="text" class="form-control" disabled value="{{ user.email }}">
+    </div>
+    <p class="help-block">
+    {{ t('page_register.form_help.invited_email') }}
     </p>
 
-    <div id="login-form-errors">
-      {% set message = req.flash('warningMessage') %}
-      {% if message.length %}
-      <div class="alert alert-danger">
-        {{ message }}
-      </div>
-      {% endif %}
-
-      {% if req.form.errors.length > 0 %}
-      <div class="alert alert-danger">
-        <ul>
-        {% for error in req.form.errors %}
-          <li>{{ error }}</li>
-        {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
+    <label>{{ t('User ID') }}</label>
+    <div class="input-group" id="input-group-username">
+      <span class="input-group-prepend"><span class="input-group-text"><strong>@</strong></span></span>
+      <input type="text" class="form-control" placeholder="{{ t('Example') }}: taroyama" name="invitedForm[username]" value="{{ req.body.invitedForm.username }}" required>
     </div>
-    <form role="form" id="invited-form" action="/login/activateInvited" method="post">
+    <p class="help-block">
+    <span id="help-block-username" class="text-danger"></span>
+    {{ t('page_register.form_help.user_id') }}
+    </p>
 
-      <label>{{ t('Email') }}</label>
-      <div class="input-group">
-        <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-email"></i></span></span>
-        <input type="text" class="form-control" disabled value="{{ user.email }}">
-      </div>
-      <p class="help-block">
-      {{ t('page_register.form_help.invited_email') }}
-      </p>
+    <label>{{ t('Name') }}</label>
+    <div class="input-group">
+      <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-account"></i></span></span>
+      <input type="text" class="form-control" placeholder="{{ t('Example') }}: {{ t('Taro Yamada') }}" name="invitedForm[name]" value="{{ req.body.invitedForm.name }}" required>
+    </div>
 
-      <label>{{ t('User ID') }}</label>
-      <div class="input-group" id="input-group-username">
-        <span class="input-group-prepend"><span class="input-group-text"><strong>@</strong></span></span>
-        <input type="text" class="form-control" placeholder="{{ t('Example') }}: taroyama" name="invitedForm[username]" value="{{ req.body.invitedForm.username }}" required>
-      </div>
-      <p class="help-block">
-      <span id="help-block-username" class="text-danger"></span>
-      {{ t('page_register.form_help.user_id') }}
-      </p>
+    <label>{{ t('Password') }}</label>
+    <div class="input-group">
+      <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-key"></i></span></span>
+      <input type="password" class="form-control" placeholder="Password" name="invitedForm[password]" required>
+    </div>
+    <p class="help-block">
+    {{ t('page_register.form_help.invited_password') }}<br>
+    {{ t('page_register.form_help.password') }}
+    </p>
 
-      <label>{{ t('Name') }}</label>
-      <div class="input-group">
-        <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-account"></i></span></span>
-        <input type="text" class="form-control" placeholder="{{ t('Example') }}: {{ t('Taro Yamada') }}" name="invitedForm[name]" value="{{ req.body.invitedForm.name }}" required>
-      </div>
+    <input type="hidden" name="_csrf" value="{{ csrf() }}">
+    <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('Sign up') }}">
+  </form>
 
-      <label>{{ t('Password') }}</label>
-      <div class="input-group">
-        <span class="input-group-prepend"><span class="input-group-text"><i class="mdi mdi-key"></i></span></span>
-        <input type="password" class="form-control" placeholder="Password" name="invitedForm[password]" required>
-      </div>
-      <p class="help-block">
-      {{ t('page_register.form_help.invited_password') }}<br>
-      {{ t('page_register.form_help.password') }}
-      </p>
+  <hr>
 
-      <input type="hidden" name="_csrf" value="{{ csrf() }}">
-      <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('Sign up') }}">
-    </form>
-
-    <hr>
-
-  </div>
 </div>
 
 </div>
