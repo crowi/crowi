@@ -1,6 +1,6 @@
 import React from 'react'
 import styled from 'styled-components'
-import Icon from '../Common/Icon'
+import Icon, { IconName } from '../Common/Icon'
 import UserDate from '../Common/UserDate'
 import UserPicture from '../User/UserPicture'
 import { Notification } from 'client/types/crowi'
@@ -19,7 +19,7 @@ const NotificationTime = styled.div`
 interface Props {
   children: React.ReactNode
   notification: Notification
-  icon: string
+  icon: IconName
 }
 
 export default class NotificationContent extends React.Component<Props> {

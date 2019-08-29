@@ -42,7 +42,7 @@ export default class DeleteAttachmentModal extends React.Component<Props> {
 
     return (
       <p className="attachment-delete-file">
-        <Icon name="file-outline" />
+        <Icon name="fileOutline" />
         <span>
           {attachment.originalName} uploaded by <User user={attachment.creator} username />
         </span>

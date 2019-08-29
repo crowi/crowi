@@ -64,7 +64,7 @@ export default class SearchResult extends React.Component<Props, State> {
     if (this.isError()) {
       return (
         <div>
-          <Icon name="Alert" /> Error on searching.
+          <Icon name="alert" /> Error on searching.
         </div>
       )
     }
@@ -80,7 +80,7 @@ export default class SearchResult extends React.Component<Props, State> {
       }
       return (
         <div>
-          <Icon name="emoticon-sad" /> No page found with &quot;{this.props.searchingKeyword}&quot;{under}
+          <Icon name="emoticonSad" /> No page found with &quot;{this.props.searchingKeyword}&quot;{under}
         </div>
       )
     }
@@ -98,7 +98,7 @@ export default class SearchResult extends React.Component<Props, State> {
         >
           <div className="page-list-option">
             <a href={page.path}>
-              <Icon name="arrow-right-circle" />
+              <Icon name="arrowRightCircle" />
             </a>
           </div>
         </Page>
