@@ -2,7 +2,7 @@ import React from 'react'
 import { Card } from 'reactstrap'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import queryString from 'query-string'
-import Icon from 'components/Common/Icon'
+import Icon, { IconName } from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
 import RecentlyViewedPageList from './RecentlyViewedPageList'
 import { Page } from 'client/types/crowi'
@@ -50,7 +50,7 @@ class SearchSuggest extends React.Component<Props> {
     return sum(groupedPages.map((r = []) => r.length))
   }
 
-  renderList(title: string, icon: string, type: string, pages?: Page[]) {
+  renderList(title: string, icon: IconName, type: string, pages?: Page[]) {
     const { t } = this.props
     return (
       pages &&
@@ -60,7 +60,7 @@ class SearchSuggest extends React.Component<Props> {
             <Icon name={icon} /> <span className="title">{title}</span>
             <a className="more text-muted" href={this.buildSearchUrl(type)}>
               {t('search.suggest.more')}
-              <Icon name="chevron-right" />
+              <Icon name="chevronRight" />
             </a>
           </h6>
           <ListView pages={pages} />
@@ -98,8 +98,8 @@ class SearchSuggest extends React.Component<Props> {
     }
 
     return [
-      this.renderList(t('page_types.portal'), 'file-document-box-multiple-outline', 'portal', portalPages),
-      this.renderList(t('page_types.public'), 'file-document-box-outline', 'public', publicPages),
+      this.renderList(t('page_types.portal'), 'fileDocumentBoxMultipleOutline', 'portal', portalPages),
+      this.renderList(t('page_types.public'), 'fileDocumentBoxOutline', 'public', publicPages),
       this.renderList(t('page_types.user'), 'account', 'user', userPages),
     ]
   }
