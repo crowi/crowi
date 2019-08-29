@@ -23,7 +23,7 @@ export default class PageAlert extends React.Component<Props> {
       <div className="fk-notif fk-notif-danger">
         <Icon name="alert" /> {message}{' '}
         <a href="javascript:location.reload();">
-          <Icon name="chevron-double-right" /> Load latest
+          <Icon name="chevronDoubleRight" /> Load latest
         </a>
       </div>
     )
