@@ -23,7 +23,7 @@ $(function() {
   $('#createdUserModal').modal('show')
 
   $('#admin-password-reset-modal').on('show.bs.modal', function(button) {
-    var data = $((<any>button).relatedTarget)
+    var data = $((button as any).relatedTarget)
     var userId = data.data('user-id')
     var email = data.data('user-email')
 
