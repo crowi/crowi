@@ -88,7 +88,7 @@ class RenameTree extends React.Component<Props, State> {
     let tree: Tree = {}
     const generateNode = (path: string, name: string, children = {}): Tree => ({ [path]: { path, name, children } })
     const generateRoot = (path: string) => generateNode(path, path)
-    const assignRecurcive = (tree: Tree, parents: string[], path: string, name: string = ''): Tree => {
+    const assignRecurcive = (tree: Tree, parents: string[], path: string, name = ''): Tree => {
       if (parents.length === 0) {
         return generateNode(path, name)
       }
