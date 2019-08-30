@@ -62,12 +62,12 @@ const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
 
         <FormRow>
           <Label for="awsAccessKeyId">{t('admin.aws.access_key_id')}</Label>
-          <Input id="awsAccessKeyId" value={awsAccessKeyId} onChange={e => setAwsAccessKeyId(awsAccessKeyId)} />
+          <Input id="awsAccessKeyId" value={awsAccessKeyId} onChange={e => setAwsAccessKeyId(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="awsSecretAccessKey">{t('admin.aws.secret_access_key')}</Label>
-          <Input id="awsSecretAccessKey" value={awsSecretAccessKey} onChange={e => setAwsSecretAccessKey(awsSecretAccessKey)} />
+          <Input id="awsSecretAccessKey" value={awsSecretAccessKey} onChange={e => setAwsSecretAccessKey(e.target.value)} />
         </FormRow>
 
         <FormRow>
