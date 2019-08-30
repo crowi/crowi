@@ -348,11 +348,10 @@ SearchClient.prototype.addPages = async function(pages) {
 }
 
 SearchClient.prototype.updatePages = function(pages) {
-  var self = this
   var body = []
 
-  pages.map(function(page) {
-    self.prepareBodyForUpdate(body, page)
+  pages.map(page => {
+    this.prepareBodyForUpdate(body, page)
   })
 
   debug('updatePages(): Sending Request to ES', body)
@@ -362,11 +361,10 @@ SearchClient.prototype.updatePages = function(pages) {
 }
 
 SearchClient.prototype.deletePages = function(pages) {
-  var self = this
   var body = []
 
-  pages.map(function(page) {
-    self.prepareBodyForDelete(body, page)
+  pages.map(page => {
+    this.prepareBodyForDelete(body, page)
   })
 
   debug('deletePages(): Sending Request to ES', body)
@@ -376,7 +374,6 @@ SearchClient.prototype.deletePages = function(pages) {
 }
 
 SearchClient.prototype.addAllPages = async function(index) {
-  const self = this
   const Page = this.crowi.model('Page')
   const allPageCount = await Page.allPageCount()
   const Bookmark = this.crowi.model('Bookmark')
@@ -388,7 +385,7 @@ SearchClient.prototype.addAllPages = async function(index) {
 
   return new Promise((resolve, reject) => {
     const bulkSend = body => {
-      self.client
+      this.client
         .bulk({
           body: body,
           requestTimeout: Infinity,
@@ -403,7 +400,7 @@ SearchClient.prototype.addAllPages = async function(index) {
 
     cursor
       .eachAsync(async doc => {
-        if (!doc.creator || !doc.revision || !self.shouldIndexed(doc)) {
+        if (!doc.creator || !doc.revision || !this.shouldIndexed(doc)) {
           // debug('Skipped', doc.path);
           skipped++
           return
@@ -412,7 +409,7 @@ SearchClient.prototype.addAllPages = async function(index) {
 
         const bookmarkCount = await Bookmark.countByPageId(doc._id)
         const page = { ...doc, bookmarkCount }
-        self.prepareBodyForCreate(body, page, index)
+        this.prepareBodyForCreate(body, page, index)
 
         if (body.length >= 4000) {
           // send each 2000 docs. (body has 2 elements for each data)
@@ -447,10 +444,9 @@ SearchClient.prototype.addAllPages = async function(index) {
  * }
  */
 SearchClient.prototype.search = function(query) {
-  var self = this
 
-  return new Promise(function(resolve, reject) {
-    self.client
+  return new Promise((resolve, reject) => {
+    this.client
       .search(query)
       .then(function(data) {
         var result = {
