@@ -73,7 +73,7 @@ export default class CrowiRenderer {
     return html
   }
 
-  codeRenderer(code: string, lang: string, escaped: boolean = false) {
+  codeRenderer(code: string, lang: string, escaped = false) {
     let result = ''
     let hl
 

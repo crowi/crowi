@@ -231,7 +231,7 @@ export default class Crowi {
     throw createError(error, info)
   }
 
-  static escape = (html: string, encode: boolean = false) =>
+  static escape = (html: string, encode = false) =>
     html
       .replace(!encode ? /&(?!#?\w+;)/g : /&/g, '&amp;')
       .replace(/</g, '&lt;')
