@@ -62,9 +62,9 @@ $(function() {
   var prevContent = originalContent
 
   function renderPreview() {
-    var content = <string>$('#form-body').val()
+    var content = $('#form-body').val() as string
     var previewBody = $('#preview-body')
-    var previewBodyElement = <HTMLDivElement>previewBody[0]
+    var previewBodyElement = previewBody[0] as HTMLDivElement
     var parsedHTML = crowiRenderer.render(content, previewBodyElement)
     previewBody.html(parsedHTML)
   }
@@ -88,7 +88,7 @@ $(function() {
     }
   })
   $('#form-body').on('keyup change', function(e) {
-    var content = <string>$('#form-body').val()
+    var content = $('#form-body').val() as string
     if (originalContent != content) {
       isFormChanged = true
       crowi.saveDraft(pagePath, content)
@@ -105,7 +105,7 @@ $(function() {
 
   // This is a temporary implementation until porting to React.
   var insertText = function(start, end, newText, mode) {
-    var editor = <HTMLTextAreaElement>document.querySelector('#form-body')
+    var editor = document.querySelector('#form-body') as HTMLTextAreaElement
     mode = mode || 'after'
 
     switch (mode) {
@@ -139,7 +139,7 @@ $(function() {
   var getCurrentLine = function(event) {
     var $target = $(event.target)
 
-    var text = <string>$target.val()
+    var text = $target.val() as string
     var pos = $target.selection('getPos')
     if (text === null || pos.start !== pos.end) {
       return null
@@ -164,7 +164,7 @@ $(function() {
     var $target = $(event.target)
     var currentLine = getCurrentLine(event)
     var start = currentLine ? currentLine.start : 0
-    var text = (<string>$target.val()).slice(0, start)
+    var text = ($target.val() as string).slice(0, start)
     var startPos = text.lastIndexOf('\n', start - 2) + 1
     var endPos = start
 
@@ -180,7 +180,7 @@ $(function() {
 
     var $target = $(event.target)
     var currentLine = getCurrentLine(event)
-    var text = <string>$target.val()
+    var text = $target.val() as string
     var pos = $target.selection('getPos')
 
     // When the user presses CTRL + TAB, it is a case to control the tab of the browser
@@ -286,7 +286,7 @@ $(function() {
       }
       event.preventDefault()
       var row: string[] = []
-      var cellbarMatch = <RegExpMatchArray>currentLine.text.match(/\|/g)
+      var cellbarMatch = currentLine.text.match(/\|/g) as RegExpMatchArray
       for (var i = 0; i < cellbarMatch.length; i++) {
         row.push('|')
       }
@@ -517,8 +517,8 @@ $(function() {
       return top
     }
 
-    var editor = <HTMLTextAreaElement>document.querySelector('#form-body')
-    var preview = <HTMLDivElement>document.querySelector('#preview-body')
+    var editor = document.querySelector('#form-body') as HTMLTextAreaElement
+    var preview = document.querySelector('#preview-body') as HTMLDivElement
 
     editor.addEventListener('scroll', function(event) {
       var rate = getScrollRate(this)
