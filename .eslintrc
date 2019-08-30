@@ -42,7 +42,8 @@
     "react/prop-types": "off",
     "require-jsdoc": "off",
     "standard/no-callback-literal": "off",
-    "valid-jsdoc": "off"
+    "valid-jsdoc": "off",
+    "no-var": "off"
   },
   "settings": {
     "react": {
