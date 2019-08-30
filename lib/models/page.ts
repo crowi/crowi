@@ -1101,13 +1101,12 @@ export default (crowi: Crowi) => {
   pageSchema.methods.getNotificationTargetUsers = async function() {
     var Comment = crowi.model('Comment')
     var Revision = crowi.model('Revision')
-    var self = this
 
-    const [commentCreators, revisionAuthors] = await Promise.all([Comment.findCreatorsByPage(self), Revision.findAuthorsByPage(self)])
+    const [commentCreators, revisionAuthors] = await Promise.all([Comment.findCreatorsByPage(this), Revision.findAuthorsByPage(this)])
     debug('commentCreators', commentCreators)
     debug('revisionAuthors', revisionAuthors)
 
-    const targetUsers = [self.creator].concat(commentCreators, revisionAuthors)
+    const targetUsers = [this.creator].concat(commentCreators, revisionAuthors)
     debug('targetUsers', targetUsers)
 
     var uniqueChecker = {}

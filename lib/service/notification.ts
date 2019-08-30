@@ -11,7 +11,7 @@ export default class Notification {
   }
 
   hasSlackConfig() {
-    if (!this.config.notification['slack']) {
+    if (!this.config.notification.slack) {
       return false
     }
   }

@@ -447,7 +447,7 @@ $(function() {
       .empty()
 
     const $form = $('#pictureUploadForm')
-    const formElement = <HTMLFormElement>$form[0]
+    const formElement = $form[0] as HTMLFormElement
     const formInputElement = formElement.elements[0] as HTMLInputElement
     // check cancel/abort
     if (formInputElement.files && formInputElement.files.length === 0) return
@@ -556,7 +556,7 @@ $(function() {
     }
 
     $('#pictureUploadFormProgress').html('<img src="/images/loading_s.gif"> Uploading ...')
-    $.ajax(<string>$form.attr('action'), {
+    $.ajax($form.attr('action') as string, {
       type: 'post',
       processData: false,
       contentType: false,
