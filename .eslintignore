@@ -7,3 +7,4 @@ package.json
 public
 **/*.d.ts
 coverage/
+locale/
