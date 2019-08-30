@@ -30,6 +30,7 @@
     "@typescript-eslint/no-use-before-define": "off",
     "@typescript-eslint/no-var-requires": "off",
     "@typescript-eslint/no-empty-function": "off",
+    "@typescript-eslint/ban-ts-ignore": "off",
     "eqeqeq": "off",
     "handle-callback-err": "off",
     "jest/valid-describe": "off",
