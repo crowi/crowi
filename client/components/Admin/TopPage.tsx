@@ -47,8 +47,7 @@ const TopPage: FC<{}> = () => {
           {/* TODO: multiple nodes */}
           {searchConfigured ? (
             <>
-              Configured: {host}
-              {indexName}, <strong>{esVersion}</strong>
+              Configured: {host}/{indexName}, <strong>{esVersion}</strong>
             </>
           ) : (
             'Not available.'
