@@ -32,7 +32,7 @@ export interface ShareModel extends Model<ShareDocument> {
   findShareByUuid(uuid, query?, options?): Promise<ShareDocument>
   findShareByPageId(pageId, query?, options?): Promise<ShareDocument>
   createShare(pageId: Types.ObjectId, user: Types.ObjectId): Promise<ShareDocument>
-  delete(query: object): Promise<ShareDocument | null>
+  deleteShare(query: object): Promise<ShareDocument | null>
   deleteById(id): Promise<ShareDocument | null>
   deleteByPageId(pageId): Promise<ShareDocument | null>
 
@@ -172,17 +172,17 @@ export default (crowi: Crowi) => {
     })
   }
 
-  shareSchema.statics.delete = async function(query = {}) {
+  shareSchema.statics.deleteShare = async function(query = {}) {
     const defaultQuery = { status: STATUS_ACTIVE }
     return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: STATUS_INACTIVE }, { new: true }).exec()
   }
 
   shareSchema.statics.deleteById = async function(id) {
-    return Share.delete({ _id: id })
+    return Share.deleteShare({ _id: id })
   }
 
   shareSchema.statics.deleteByPageId = async function(pageId) {
-    return Share.delete({ page: pageId })
+    return Share.deleteShare({ page: pageId })
   }
 
   shareSchema.statics.STATUS_ACTIVE = STATUS_ACTIVE
