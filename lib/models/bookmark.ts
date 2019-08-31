@@ -135,7 +135,7 @@ export default (crowi: Crowi) => {
 
   BookmarkSchema.statics.removeBookmarksByPageId = async function(pageId) {
     try {
-      const data = await Bookmark.remove({ page: pageId })
+      const data = await Bookmark.deleteMany({ page: pageId })
       BookmarkEvent.emit('delete', pageId)
       return data
     } catch (err) {

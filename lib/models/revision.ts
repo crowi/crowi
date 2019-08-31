@@ -101,7 +101,7 @@ export default (crowi: Crowi) => {
   }
 
   revisionSchema.statics.removeRevisionsByPath = function(path) {
-    return Revision.remove({ path }).exec()
+    return Revision.deleteMany({ path }).exec()
   }
 
   revisionSchema.statics.updatePath = function(pathName) {}
