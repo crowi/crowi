@@ -147,7 +147,7 @@ export default (crowi: Crowi) => {
   }
 
   notificationSchema.statics.removeEmpty = function() {
-    return Notification.remove({ activities: { $size: 0 } })
+    return Notification.deleteMany({ activities: { $size: 0 } })
   }
 
   notificationSchema.statics.read = async function(user) {

@@ -85,7 +85,7 @@ describe('Activity', function() {
     const pageId = ObjectId()
 
     beforeAll(async () => {
-      await Promise.all([User, Page, Comment, Watcher, Activity].map(model => model.remove({})))
+      await Promise.all([User, Page, Comment, Watcher, Activity].map(model => model.deleteMany({})))
 
       const users = [
         { _id: userIds[0], email: faker.internet.email(), status: User.STATUS_ACTIVE },
@@ -99,7 +99,7 @@ describe('Activity', function() {
     })
 
     afterEach(async () => {
-      await Promise.all([Watcher, Activity].map(model => model.remove({})))
+      await Promise.all([Watcher, Activity].map(model => model.deleteMany({})))
     })
 
     describe('Action User and Suspended User', () => {
