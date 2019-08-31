@@ -676,7 +676,7 @@ SearchClient.prototype.filterPagesByUser = function(query, user) {
 
 SearchClient.prototype.appendFunctionScore = function(query) {
   const User = this.crowi.model('User')
-  const count = User.count({}) || 1
+  const count = User.countDocuments({}) || 1
   // newScore = oldScore + log(1 + factor * 'bookmark_count')
   query.body.query = {
     function_score: {

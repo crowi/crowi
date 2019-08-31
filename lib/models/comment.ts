@@ -46,11 +46,11 @@ export default (crowi: Crowi) => {
   }
 
   commentSchema.statics.countCommentByPageId = function(page) {
-    return Comment.count({ page }).exec()
+    return Comment.countDocuments({ page }).exec()
   }
 
   commentSchema.statics.removeCommentsByPageId = async function(pageId) {
-    await Comment.remove({ page: pageId }).exec()
+    await Comment.deleteMany({ page: pageId }).exec()
   }
 
   commentSchema.statics.findCreatorsByPage = function(page) {

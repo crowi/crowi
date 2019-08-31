@@ -428,7 +428,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.updateCommentCount = function(page, num) {
-    return Page.update({ _id: page }, { commentCount: num }, {})
+    return Page.updateOne({ _id: page }, { commentCount: num }, {})
   }
 
   pageSchema.statics.hasPortalPage = async function(path, user, revisionId) {
@@ -530,13 +530,13 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.updateRevision = function(pageId, revisionId, cb) {
-    Page.update({ _id: pageId }, { revision: revisionId }, {}, function(err, data) {
+    Page.updateOne({ _id: pageId }, { revision: revisionId }, {}, function(err, data) {
       cb(err, data)
     })
   }
 
   pageSchema.statics.exists = async function(query) {
-    const count = await Page.count(query)
+    const count = await Page.countDocuments(query)
     return count > 0
   }
 
@@ -782,7 +782,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.updatePageProperty = function(page, updateData) {
-    return Page.update({ _id: page._id }, { $set: updateData })
+    return Page.updateOne({ _id: page._id }, { $set: updateData })
   }
 
   pageSchema.statics.updateGrant = async function(page, grant, userData) {
@@ -960,7 +960,7 @@ export default (crowi: Crowi) => {
 
     debug('Remove phisically, the page', _id)
     try {
-      await Page.remove({ _id })
+      await Page.deleteOne({ _id })
     } catch (err) {
       debug(' --> error', _id)
       throw err
@@ -1095,7 +1095,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.allPageCount = function() {
-    return Page.count({ redirectTo: null, grant: GRANT_PUBLIC }) // TODO: option にする
+    return Page.countDocuments({ redirectTo: null, grant: GRANT_PUBLIC }) // TODO: option にする
   }
 
   pageSchema.methods.getNotificationTargetUsers = async function() {
