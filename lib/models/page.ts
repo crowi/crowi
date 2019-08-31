@@ -428,7 +428,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.updateCommentCount = function(page, num) {
-    return Page.update({ _id: page }, { commentCount: num }, {})
+    return Page.updateOne({ _id: page }, { commentCount: num }, {})
   }
 
   pageSchema.statics.hasPortalPage = async function(path, user, revisionId) {
@@ -530,7 +530,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.updateRevision = function(pageId, revisionId, cb) {
-    Page.update({ _id: pageId }, { revision: revisionId }, {}, function(err, data) {
+    Page.updateOne({ _id: pageId }, { revision: revisionId }, {}, function(err, data) {
       cb(err, data)
     })
   }
@@ -782,7 +782,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.updatePageProperty = function(page, updateData) {
-    return Page.update({ _id: page._id }, { $set: updateData })
+    return Page.updateOne({ _id: page._id }, { $set: updateData })
   }
 
   pageSchema.statics.updateGrant = async function(page, grant, userData) {
