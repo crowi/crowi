@@ -231,6 +231,7 @@ class Crowi {
       const mongooseOptions = {
         useNewUrlParser: true,
         useFindAndModify: false,
+        useCreateIndex: true,
       }
       mongoose.connect(mongoUri, mongooseOptions, e => {
         if (e) {

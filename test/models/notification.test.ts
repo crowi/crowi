@@ -51,7 +51,7 @@ describe('Notification', function() {
       const target = ObjectId()
 
       beforeEach(async () => {
-        await Notification.remove({})
+        await Notification.deleteMany({})
         const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' }
         await Notification.upsertByActivity(user, activity, new Date(2018, 10, 10).getTime())
       })
@@ -59,14 +59,14 @@ describe('Notification', function() {
       it('is 1', async () => {
         const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' }
         await Notification.upsertByActivity(user, activity, new Date(2018, 10, 16).getTime())
-        const count = await Notification.count({})
+        const count = await Notification.countDocuments({})
         expect(count).toBe(1)
       })
 
       it('is 2', async () => {
         const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' }
         await Notification.upsertByActivity(user, activity, new Date(2018, 10, 17).getTime())
-        const count = await Notification.count({})
+        const count = await Notification.countDocuments({})
         expect(count).toBe(2)
       })
     })
@@ -78,7 +78,7 @@ describe('Notification', function() {
       let notificationId
 
       beforeAll(async () => {
-        await Notification.remove({})
+        await Notification.deleteMany({})
         const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
         const notification = await Notification.upsertByActivity(user, activity)
         notificationId = notification._id
@@ -97,7 +97,7 @@ describe('Notification', function() {
       let notificationId
 
       beforeAll(async () => {
-        await Notification.remove({})
+        await Notification.deleteMany({})
         const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' }
         const notification = await Notification.upsertByActivity(user, activity)
         notificationId = notification._id
@@ -115,7 +115,7 @@ describe('Notification', function() {
 
     describe('initially', () => {
       beforeAll(async () => {
-        await Notification.remove({})
+        await Notification.deleteMany({})
       })
 
       it('is zero', async () => {
