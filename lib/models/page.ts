@@ -960,7 +960,7 @@ export default (crowi: Crowi) => {
 
     debug('Remove phisically, the page', _id)
     try {
-      await Page.remove({ _id })
+      await Page.deleteOne({ _id })
     } catch (err) {
       debug(' --> error', _id)
       throw err

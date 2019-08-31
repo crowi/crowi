@@ -50,7 +50,7 @@ export default (crowi: Crowi) => {
   }
 
   commentSchema.statics.removeCommentsByPageId = async function(pageId) {
-    await Comment.remove({ page: pageId }).exec()
+    await Comment.deleteMany({ page: pageId }).exec()
   }
 
   commentSchema.statics.findCreatorsByPage = function(page) {
