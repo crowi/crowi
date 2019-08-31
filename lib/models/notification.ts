@@ -139,9 +139,8 @@ export default (crowi: Crowi) => {
     const { _id, target, action } = activity
     const query = { target, action }
     const parameters = { $pull: { activities: _id } }
-    const options = { multi: true }
 
-    const result = await Notification.update(query, parameters, options)
+    const result = await Notification.updateMany(query, parameters)
 
     await Notification.removeEmpty()
     return result
@@ -154,9 +153,8 @@ export default (crowi: Crowi) => {
   notificationSchema.statics.read = async function(user) {
     const query = { user, status: STATUS_UNREAD }
     const parameters = { status: STATUS_UNOPENED }
-    const options = { multi: true }
 
-    return Notification.update(query, parameters, options)
+    return Notification.updateMany(query, parameters)
   }
 
   notificationSchema.statics.open = async function(user, id) {
