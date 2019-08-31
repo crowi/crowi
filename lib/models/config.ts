@@ -96,7 +96,7 @@ export default (crowi: Crowi) => {
 
   // Execute only once for installing application
   configSchema.statics.applicationInstall = async function() {
-    const count = await Config.count({ ns: 'crowi' }).exec()
+    const count = await Config.countDocuments({ ns: 'crowi' }).exec()
     if (count > 0) {
       throw new Error('Application already installed')
     }
