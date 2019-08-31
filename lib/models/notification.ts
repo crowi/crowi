@@ -175,7 +175,7 @@ export default (crowi: Crowi) => {
     const query = { user, status: STATUS_UNREAD }
 
     try {
-      const count = await Notification.count(query)
+      const count = await Notification.countDocuments(query)
 
       return count
     } catch (err) {

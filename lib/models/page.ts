@@ -536,7 +536,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.exists = async function(query) {
-    const count = await Page.count(query)
+    const count = await Page.countDocuments(query)
     return count > 0
   }
 
@@ -1095,7 +1095,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.allPageCount = function() {
-    return Page.count({ redirectTo: null, grant: GRANT_PUBLIC }) // TODO: option にする
+    return Page.countDocuments({ redirectTo: null, grant: GRANT_PUBLIC }) // TODO: option にする
   }
 
   pageSchema.methods.getNotificationTargetUsers = async function() {

@@ -75,7 +75,7 @@ export default (crowi: Crowi) => {
       .exec()
       .then(bookmarks => Bookmark.populatePage(bookmarks))
 
-    const counter = Bookmark.count({ user: userId }).exec()
+    const counter = Bookmark.countDocuments({ user: userId }).exec()
 
     const [bookmarks, count] = await Promise.all([finder, counter])
 
@@ -91,7 +91,7 @@ export default (crowi: Crowi) => {
 
   // Bookmark count
   BookmarkSchema.statics.countByPageId = async function(pageId) {
-    const count = await Bookmark.count({ page: pageId })
+    const count = await Bookmark.countDocuments({ page: pageId })
 
     return count
   }

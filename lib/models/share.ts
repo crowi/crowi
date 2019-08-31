@@ -78,7 +78,7 @@ export default (crowi: Crowi) => {
   }
 
   shareSchema.statics.isExists = async function(query) {
-    const count = await this.count(query)
+    const count = await this.countDocuments(query)
     return count > 0
   }
 
