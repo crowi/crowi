@@ -354,7 +354,7 @@ export default (crowi: Crowi) => {
     const searchInfo = searcher
       ? {
           host: searcher.host,
-          indexName: searcher.indexName,
+          indexName: searcher.indexNames.base,
           esVersion: searcher.esVersion,
         }
       : {}

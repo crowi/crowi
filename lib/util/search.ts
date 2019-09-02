@@ -118,12 +118,15 @@ SearchClient.prototype.shouldIndexed = function(page) {
 // BONSAI_URL is following format:
 // => https://{ID}:{PASSWORD}@{HOST}
 SearchClient.prototype.parseUri = function(uri) {
+  if (!uri.startsWith('http')) {
+    throw new Error('URL for Elasticsearch should starts with http/https')
+  }
+
+  const esUrl = new URL(uri)
   let indexName = 'crowi'
-  let host = uri
-  let m
-  if ((m = uri.match(/^(https?:\/\/[^/]+)\/(.+)$/))) {
-    host = m[1]
-    indexName = m[2]
+  const host = `${esUrl.protocol}//${esUrl.username && esUrl.password ? `${esUrl.username}:${esUrl.password}@` : ''}${esUrl.host}`
+  if (esUrl.pathname !== '/') {
+    indexName = esUrl.pathname.substring(1)
   }
 
   return {
