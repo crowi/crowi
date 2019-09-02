@@ -23,6 +23,11 @@ describe('Search client', () => {
       res = searcher.parseUri('http://127.0.0.1:19200')
       expect(res.host).toBe('http://127.0.0.1:19200')
       expect(res.indexName).toBe('crowi')
+
+      // format of docker
+      res = searcher.parseUri('http://elasticsearch:9200/')
+      expect(res.host).toBe('http://elasticsearch:9200')
+      expect(res.indexName).toBe('crowi')
     })
   })
 
