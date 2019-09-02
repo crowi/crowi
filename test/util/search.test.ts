@@ -19,6 +19,10 @@ describe('Search client', () => {
       res = searcher.parseUri('https://user:pass@example.com:9200/crowi_search')
       expect(res.host).toBe('https://user:pass@example.com:9200')
       expect(res.indexName).toBe('crowi_search')
+
+      res = searcher.parseUri('http://127.0.0.1:19200')
+      expect(res.host).toBe('http://127.0.0.1:19200')
+      expect(res.indexName).toBe('crowi')
     })
   })
 })
