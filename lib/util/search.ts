@@ -119,7 +119,7 @@ SearchClient.prototype.shouldIndexed = function(page) {
 // => https://{ID}:{PASSWORD}@{HOST}
 SearchClient.prototype.parseUri = function(uri) {
   if (!uri.startsWith('http')) {
-    throw new Error('URL for Elasticsearch shuold starts with http/https')
+    throw new Error('URL for Elasticsearch should starts with http/https')
   }
 
   const esUrl = new URL(uri)
