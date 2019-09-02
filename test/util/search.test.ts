@@ -25,4 +25,8 @@ describe('Search client', () => {
       expect(res.indexName).toBe('crowi')
     })
   })
+
+  describe('SearchClient.parseUri error on not start with http', () => {
+    expect(() => searcher.parseUri('elasticsearch:9200/')).toThrow(/URL for Elasticsearch shuold starts with http/)
+  })
 })
