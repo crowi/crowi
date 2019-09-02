@@ -124,7 +124,7 @@ SearchClient.prototype.parseUri = function(uri) {
 
   const esUrl = new URL(uri)
   let indexName = 'crowi'
-  let host = `${esUrl.protocol}//${esUrl.username && esUrl.password ? `${esUrl.username}:${esUrl.password}@` : ''}${esUrl.host}`
+  const host = `${esUrl.protocol}//${esUrl.username && esUrl.password ? `${esUrl.username}:${esUrl.password}@` : ''}${esUrl.host}`
   if (esUrl.pathname !== '/') {
     indexName = esUrl.pathname.substring(1)
   }
