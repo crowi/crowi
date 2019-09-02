@@ -16,18 +16,18 @@ interface Props {
 
 const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
-  const [region, setRegion] = useState(settingForm['aws:region'])
-  const [bucket, setBucket] = useState(settingForm['aws:bucket'])
-  const [awsAccessKeyId, setAwsAccessKeyId] = useState(settingForm['aws:awsAccessKeyId'])
-  const [awsSecretAccessKey, setAwsSecretAccessKey] = useState(settingForm['aws:awsSecretAccessKey'])
+  const [region, setRegion] = useState(settingForm['aws:region'] || '')
+  const [bucket, setBucket] = useState(settingForm['aws:bucket'] || '')
+  const [accessKeyId, setAccessKeyId] = useState(settingForm['aws:accessKeyId'] || '')
+  const [secretAccessKey, setSecretAccessKey] = useState(settingForm['aws:secretAccessKey'] || '')
 
   const handleSubmit = e => {
     e.preventDefault()
     update({
       'aws:region': region,
       'aws:bucket': bucket,
-      'aws:awsAccessKeyId': awsAccessKeyId,
-      'aws:awsSecretAccessKey': awsSecretAccessKey,
+      'aws:accessKeyId': accessKeyId,
+      'aws:secretAccessKey': secretAccessKey,
     })
   }
 
@@ -61,13 +61,13 @@ const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
         </FormRow>
 
         <FormRow>
-          <Label for="awsAccessKeyId">{t('admin.aws.access_key_id')}</Label>
-          <Input id="awsAccessKeyId" value={awsAccessKeyId} onChange={e => setAwsAccessKeyId(awsAccessKeyId)} />
+          <Label for="accessKeyId">{t('admin.aws.access_key_id')}</Label>
+          <Input id="accessKeyId" value={accessKeyId} onChange={e => setAccessKeyId(e.target.value)} />
         </FormRow>
 
         <FormRow>
-          <Label for="awsSecretAccessKey">{t('admin.aws.secret_access_key')}</Label>
-          <Input id="awsSecretAccessKey" value={awsSecretAccessKey} onChange={e => setAwsSecretAccessKey(awsSecretAccessKey)} />
+          <Label for="secretAccessKey">{t('admin.aws.secret_access_key')}</Label>
+          <Input id="secretAccessKey" value={secretAccessKey} onChange={e => setSecretAccessKey(e.target.value)} />
         </FormRow>
 
         <FormRow>

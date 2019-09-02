@@ -285,7 +285,7 @@ admin:
     legend: Backlinks Build
     build: Build Now
     build_description1: Force rebuild backlinks.
-    build_description2: Click &quot;Build Now&quot; to delete all backlinks and create backlinks by all pages.
+    build_description2: Click "Build Now" to delete all backlinks and create backlinks by all pages.
     build_description3: This may take a while.
   notification:
     settings:
@@ -319,7 +319,7 @@ admin:
     legend: Index Build
     build: Build Now
     build_description1: Force rebuild index.
-    build_description2: Click &quot;Build Now&quot; to delete all backlinks and create backlinks by all pages.
+    build_description2: Click "Build Now" to delete all backlinks and create backlinks by all pages.
     build_description3: This may take a while.
   share:
     legend: External Share Settings
