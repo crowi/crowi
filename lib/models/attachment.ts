@@ -115,7 +115,7 @@ export default (crowi: Crowi) => {
   attachmentSchema.statics.removeAttachment = async function(attachment) {
     const filePath = attachment.filePath
 
-    await Attachment.remove({ _id: attachment._id })
+    await Attachment.deleteOne({ _id: attachment._id })
 
     const data = await fileUploader.deleteFile(attachment._id, filePath)
 

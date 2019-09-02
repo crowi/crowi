@@ -77,7 +77,7 @@ export default (crowi: Crowi) => {
   }
 
   revisionSchema.statics.updateRevisionListByPath = function(path, updateData) {
-    return Revision.update({ path: path }, { $set: updateData }, { multi: true }).exec()
+    return Revision.updateMany({ path: path }, { $set: updateData }).exec()
   }
 
   revisionSchema.statics.prepareRevision = function(pageData, body, user, options) {
@@ -101,7 +101,7 @@ export default (crowi: Crowi) => {
   }
 
   revisionSchema.statics.removeRevisionsByPath = function(path) {
-    return Revision.remove({ path }).exec()
+    return Revision.deleteMany({ path }).exec()
   }
 
   revisionSchema.statics.updatePath = function(pathName) {}

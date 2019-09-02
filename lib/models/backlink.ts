@@ -64,7 +64,8 @@ export default (crowi: Crowi) => {
   }
 
   backlinkSchema.statics.removeByPageId = function(pageId) {
-    return Backlink.remove({ fromPage: pageId })
+    // FIXME: removeByPageId is a bit confusable name. Should it removeByFromPageId ?
+    return Backlink.deleteMany({ fromPage: pageId })
   }
 
   backlinkSchema.statics.removeBySavedPage = async function(savedPage) {
@@ -72,7 +73,7 @@ export default (crowi: Crowi) => {
       fromPage: savedPage._id,
     }
 
-    await Backlink.remove(conditions)
+    await Backlink.deleteMany(conditions)
   }
 
   backlinkSchema.statics.createByParameters = async function(parameters) {
@@ -133,7 +134,7 @@ export default (crowi: Crowi) => {
       $or: [{ body: linkDetector.getLinkRegexp() }, { body: linkDetector.getPathRegexps()[0] }, { body: linkDetector.getPathRegexps()[1] }],
     } as any)
 
-    await Backlink.remove({})
+    await Backlink.deleteMany({})
 
     return Promise.all(
       revisions.map(async ({ _id: revisionId, body }) => {

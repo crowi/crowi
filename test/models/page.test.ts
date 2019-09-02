@@ -337,7 +337,7 @@ describe('Page', () => {
 
     beforeAll(async () => {
       user = createdUsers[0]
-      await Page.remove({})
+      await Page.deleteMany({})
     })
 
     describe('A page already exists in the destination', () => {
@@ -355,13 +355,13 @@ describe('Page', () => {
         })
       })
 
-      afterEach(async () => Page.remove({}))
+      afterEach(async () => Page.deleteMany({}))
     })
 
     describe('The number of pages is greater than 50', () => {
       let treeSize
       beforeEach(async () => {
-        await Page.remove({})
+        await Page.deleteMany({})
         const children = Array.from(new Array(50).keys()).map(v => `/parent/${v}`)
         const paths = ['/parent', ...children]
         treeSize = paths.length
@@ -375,12 +375,12 @@ describe('Page', () => {
         })
       })
 
-      afterEach(async () => Page.remove({}))
+      afterEach(async () => Page.deleteMany({}))
     })
 
     describe('The name of the tree starts with the name of another tree', () => {
       beforeEach(async () => {
-        await Page.remove({})
+        await Page.deleteMany({})
         const paths = ['/car', '/car/ambulance', '/car/minicar', '/car/taxi', '/carrot']
         await Fixture.generate('Page', generatePages(paths))
       })
@@ -393,12 +393,12 @@ describe('Page', () => {
         })
       })
 
-      afterEach(async () => Page.remove({}))
+      afterEach(async () => Page.deleteMany({}))
     })
 
     describe('Last updated date and time of pages', () => {
       beforeEach(async () => {
-        await Page.remove({})
+        await Page.deleteMany({})
         const paths = ['/hoge', '/hoge/huga', '/hoge/piyo']
         await Fixture.generate('Page', generatePages(paths))
       })

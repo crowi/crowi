@@ -104,7 +104,7 @@ class Crowi {
   // FIXME: util/slack に型付けたらやる
   slack: any
 
-  initialized: boolean = false
+  initialized = false
 
   constructor(rootdir: string, env: typeof process.env) {
     this.version = pkg.version
@@ -231,6 +231,7 @@ class Crowi {
       const mongooseOptions = {
         useNewUrlParser: true,
         useFindAndModify: false,
+        useCreateIndex: true,
       }
       mongoose.connect(mongoUri, mongooseOptions, e => {
         if (e) {

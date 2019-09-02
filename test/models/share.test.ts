@@ -13,21 +13,21 @@ describe('Share', () => {
     Page = crowi.model('Page')
     Share = crowi.model('Share')
 
-    await User.remove({})
+    await User.deleteMany({})
     const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() }])
     user = createdUsers[0]
 
-    await Page.remove({})
+    await Page.deleteMany({})
     createdPages = await Fixture.generate('Page', [
       { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
       { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
     ])
 
-    await Share.remove({})
+    await Share.deleteMany({})
   })
 
   afterEach(async () => {
-    await Share.remove({})
+    await Share.deleteMany({})
   })
 
   describe('.create', () => {
