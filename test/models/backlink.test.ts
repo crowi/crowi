@@ -20,8 +20,8 @@ describe('Backlink', () => {
 
   describe('.createByAllPages', () => {
     beforeAll(async () => {
-      await Page.remove({})
-      await Revision.remove({})
+      await Page.deleteMany({})
+      await Revision.deleteMany({})
       const createPath = () => '/' + faker.lorem.slug()
       const createPaths = () => [...Array(3)].map(createPath)
       const createPage = (path, body = 'test') => Page.createPage(path, body, user, {})
@@ -36,7 +36,7 @@ describe('Backlink', () => {
         createPage(srcPaths[2], `${appUrl}${destPaths[2]}`),
       ])
 
-      await Backlink.remove({})
+      await Backlink.deleteMany({})
     })
 
     test('should have all backlinks', async () => {

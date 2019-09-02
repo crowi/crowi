@@ -264,7 +264,7 @@ SearchClient.prototype.prepareBodyForUpdate = function(body, page, index = null)
     throw new Error('Body must be an array.')
   }
 
-  var command = {
+  const command = {
     update: {
       _index: index || this.indexNames.current,
       _type: 'pages',
@@ -272,7 +272,7 @@ SearchClient.prototype.prepareBodyForUpdate = function(body, page, index = null)
     },
   }
 
-  var document = {
+  const document = {
     doc: {
       path: page.path,
       body: page.revision.body,
@@ -294,7 +294,7 @@ SearchClient.prototype.prepareBodyForCreate = function(body, page, index = null)
     throw new Error('Body must be an array.')
   }
 
-  var command = {
+  const command = {
     index: {
       _index: index || this.indexNames.current,
       _type: 'pages',
@@ -303,7 +303,7 @@ SearchClient.prototype.prepareBodyForCreate = function(body, page, index = null)
   }
 
   const bookmarkCount = page.bookmarkCount || 0
-  var document = {
+  const document = {
     path: page.path,
     body: page.revision.body,
     username: page.creator.username,
@@ -324,7 +324,7 @@ SearchClient.prototype.prepareBodyForDelete = function(body, page, index = null)
     throw new Error('Body must be an array.')
   }
 
-  var command = {
+  const command = {
     delete: {
       _index: index || this.indexNames.current,
       _type: 'pages',
@@ -351,11 +351,10 @@ SearchClient.prototype.addPages = async function(pages) {
 }
 
 SearchClient.prototype.updatePages = function(pages) {
-  var self = this
-  var body = []
+  const body = []
 
-  pages.map(function(page) {
-    self.prepareBodyForUpdate(body, page)
+  pages.map(page => {
+    this.prepareBodyForUpdate(body, page)
   })
 
   debug('updatePages(): Sending Request to ES', body)
@@ -365,11 +364,10 @@ SearchClient.prototype.updatePages = function(pages) {
 }
 
 SearchClient.prototype.deletePages = function(pages) {
-  var self = this
-  var body = []
+  const body = []
 
-  pages.map(function(page) {
-    self.prepareBodyForDelete(body, page)
+  pages.map(page => {
+    this.prepareBodyForDelete(body, page)
   })
 
   debug('deletePages(): Sending Request to ES', body)
@@ -379,7 +377,6 @@ SearchClient.prototype.deletePages = function(pages) {
 }
 
 SearchClient.prototype.addAllPages = async function(index) {
-  const self = this
   const Page = this.crowi.model('Page')
   const allPageCount = await Page.allPageCount()
   const Bookmark = this.crowi.model('Bookmark')
@@ -391,7 +388,7 @@ SearchClient.prototype.addAllPages = async function(index) {
 
   return new Promise((resolve, reject) => {
     const bulkSend = body => {
-      self.client
+      this.client
         .bulk({
           body: body,
           requestTimeout: Infinity,
@@ -406,7 +403,7 @@ SearchClient.prototype.addAllPages = async function(index) {
 
     cursor
       .eachAsync(async doc => {
-        if (!doc.creator || !doc.revision || !self.shouldIndexed(doc)) {
+        if (!doc.creator || !doc.revision || !this.shouldIndexed(doc)) {
           // debug('Skipped', doc.path);
           skipped++
           return
@@ -415,7 +412,7 @@ SearchClient.prototype.addAllPages = async function(index) {
 
         const bookmarkCount = await Bookmark.countByPageId(doc._id)
         const page = { ...doc, bookmarkCount }
-        self.prepareBodyForCreate(body, page, index)
+        this.prepareBodyForCreate(body, page, index)
 
         if (body.length >= 4000) {
           // send each 2000 docs. (body has 2 elements for each data)
@@ -450,13 +447,11 @@ SearchClient.prototype.addAllPages = async function(index) {
  * }
  */
 SearchClient.prototype.search = function(query) {
-  var self = this
-
-  return new Promise(function(resolve, reject) {
-    self.client
+  return new Promise((resolve, reject) => {
+    this.client
       .search(query)
       .then(function(data) {
-        var result = {
+        const result = {
           meta: {
             took: data.took,
             total: data.hits.total,
@@ -478,13 +473,13 @@ SearchClient.prototype.search = function(query) {
 
 SearchClient.prototype.createSearchQuerySortedByUpdatedAt = function(option) {
   // getting path by default is almost for debug
-  var fields = ['path', 'bookmark_count']
+  let fields = ['path', 'bookmark_count']
   if (option) {
     fields = option.fields || fields
   }
 
   // default is only id field, sorted by updated_at
-  var query = {
+  const query = {
     index: this.indexNames.current,
     type: 'pages',
     body: {
@@ -499,13 +494,13 @@ SearchClient.prototype.createSearchQuerySortedByUpdatedAt = function(option) {
 }
 
 SearchClient.prototype.createSearchQuerySortedByScore = function(option) {
-  var fields = ['path', 'bookmark_count']
+  let fields = ['path', 'bookmark_count']
   if (option) {
     fields = option.fields || fields
   }
 
   // sort by score
-  var query = {
+  const query = {
     index: this.indexNames.current,
     type: 'pages',
     body: {
@@ -572,7 +567,7 @@ SearchClient.prototype.appendCriteriaForKeywordContains = function(query, keywor
     return query
   }
 
-  var parsedKeywords = this.getParsedKeywords(keyword)
+  const parsedKeywords = this.getParsedKeywords(keyword)
 
   if (parsedKeywords.match.length > 0) {
     query = appendMultiMatchQuery(query, 'match', parsedKeywords.match)
@@ -583,7 +578,7 @@ SearchClient.prototype.appendCriteriaForKeywordContains = function(query, keywor
   }
 
   if (parsedKeywords.phrase.length > 0) {
-    var phraseQueries: any = []
+    const phraseQueries: any = []
     parsedKeywords.phrase.forEach(function(phrase) {
       phraseQueries.push({
         multi_match: {
@@ -602,7 +597,7 @@ SearchClient.prototype.appendCriteriaForKeywordContains = function(query, keywor
   }
 
   if (parsedKeywords.not_phrase.length > 0) {
-    var notPhraseQueries: any = []
+    const notPhraseQueries: any = []
     parsedKeywords.not_phrase.forEach(function(phrase) {
       notPhraseQueries.push({
         multi_match: {
@@ -684,7 +679,7 @@ SearchClient.prototype.filterPagesByUser = function(query, user) {
 
 SearchClient.prototype.appendFunctionScore = function(query) {
   const User = this.crowi.model('User')
-  const count = User.count({}) || 1
+  const count = User.countDocuments({}) || 1
   // newScore = oldScore + log(1 + factor * 'bookmark_count')
   query.body.query = {
     function_score: {
@@ -747,17 +742,17 @@ SearchClient.prototype.searchKeywordUnderPath = function(keyword, path, user = {
 }
 
 SearchClient.prototype.getParsedKeywords = function(keyword) {
-  var matchWords: any = []
-  var notMatchWords: any = []
-  var phraseWords: any = []
-  var notPhraseWords: any = []
+  const matchWords: any = []
+  const notMatchWords: any = []
+  const phraseWords: any = []
+  const notPhraseWords: any = []
 
   keyword.trim()
   keyword = keyword.replace(/\s+/g, ' ')
 
   // First: Parse phrase keywords
-  var phraseRegExp = new RegExp(/(-?"[^"]+")/g)
-  var phrases = keyword.match(phraseRegExp)
+  const phraseRegExp = new RegExp(/(-?"[^"]+")/g)
+  const phrases = keyword.match(phraseRegExp)
 
   if (phrases !== null) {
     keyword = keyword.replace(phraseRegExp, '')

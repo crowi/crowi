@@ -86,7 +86,7 @@ export default (crowi: Crowi) => {
     const activity = await Activity.findOne(parameters)
     activityEvent.emit('remove', activity)
 
-    return Activity.remove(parameters).exec()
+    return Activity.deleteMany(parameters).exec()
   }
 
   /**
@@ -147,7 +147,7 @@ export default (crowi: Crowi) => {
     for (const activity of activities) {
       activityEvent.emit('remove', activity)
     }
-    return Activity.remove({ target: page }).exec()
+    return Activity.deleteMany({ target: page }).exec()
   }
 
   /**
