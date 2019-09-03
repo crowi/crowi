@@ -742,7 +742,7 @@ export default (crowi: Crowi) => {
         { grant: GRANT_OWNER, grantedUsers: userData._id },
       ],
     })
-      .populate({ path: 'revision', populate: { path: 'revision.author', model: 'User' } })
+      .populate({ path: 'revision', populate: { path: 'author', model: 'User' } })
       .and({
         $or: pathCondition,
       } as any)
