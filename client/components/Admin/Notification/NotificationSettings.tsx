@@ -14,8 +14,8 @@ interface Props {
 
 const NotificationSettings: FC<Props> = ({ crowi, slackSetting, fetchSettings }) => {
   const [t] = useTranslation()
-  const [clientId, setClientId] = useStateWithEffect(slackSetting['slack:clientId'])
-  const [clientSecret, setClientSecret] = useStateWithEffect(slackSetting['slack:clientSecret'])
+  const [clientId, setClientId] = useStateWithEffect(slackSetting['slack:clientId'] || '')
+  const [clientSecret, setClientSecret] = useStateWithEffect(slackSetting['slack:clientSecret'] || '')
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
 
   const handleSubmit = async e => {
