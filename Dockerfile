@@ -26,6 +26,10 @@ ARG NODE_ENV="production"
 ENV CROWI_VERSION v1.8.0
 ENV NODE_ENV ${NODE_ENV}
 
+# 'ps' command is missing in node:10.16.2-stretch-slim
+# but required by pstree.remy (used from nodemon)
+RUN apt-get update && apt-get install -y procps && apt-get clean
+
 USER node
 
 WORKDIR /crowi
