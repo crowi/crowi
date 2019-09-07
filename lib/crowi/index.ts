@@ -50,6 +50,8 @@ class Crowi {
 
   resourceDir: string
 
+  libDir: string
+
   viewsDir: string
 
   mailDir: string
@@ -114,7 +116,8 @@ class Crowi {
     this.publicDir = path.join(this.rootDir, 'public') + sep
     this.localeDir = path.join(this.rootDir, 'locales') + sep
     this.resourceDir = path.join(this.rootDir, 'resource') + sep
-    this.viewsDir = path.join(this.rootDir, 'views') + sep
+    this.libDir = path.join(this.rootDir, 'lib') + sep
+    this.viewsDir = path.join(this.libDir, 'views') + sep
     this.mailDir = path.join(this.viewsDir, 'mail') + sep
     this.tmpDir = path.join(this.rootDir, 'tmp') + sep
     this.cacheDir = path.join(this.tmpDir, 'cache')
