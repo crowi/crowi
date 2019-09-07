@@ -21,7 +21,7 @@ module.exports = {
   // collectCoverage: false,
 
   // An array of glob patterns indicating a set of files for which coverage information should be collected
-  collectCoverageFrom: ['lib/**/*.ts', '!lib/**/*.test.ts', 'client/**/*.{ts,tsx}', '!client/**/*.test.{ts,tsx}'],
+  collectCoverageFrom: ['{common,lib,client}/**/*.{ts,tsx}', '!{common,lib,client}/test', '!{common,lib,client}/**/*.test.{ts,tsx}'],
 
   // The directory where Jest should output its coverage files
   coverageDirectory: 'coverage',
@@ -86,6 +86,10 @@ module.exports = {
 
   // Run tests from one or more projects
   projects: [
+    {
+      displayName: 'common',
+      testMatch: ['<rootDir>/common/**/*.test.ts'],
+    },
     {
       displayName: 'server',
       testEnvironment: './lib/test/crowi-environment.js',
