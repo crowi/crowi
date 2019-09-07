@@ -1,4 +1,4 @@
-import { crowi } from '../setup'
+import { crowi } from 'server/test/setup'
 
 describe('UpdatePost', () => {
   let UpdatePost

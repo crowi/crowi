@@ -1,6 +1,6 @@
 import path from 'path'
 import Crowi from 'server/crowi'
-import { ROOT_DIR } from '../setup'
+import { ROOT_DIR } from 'server/test/setup'
 import Searcher from 'server/util/search'
 
 describe('Search client', () => {

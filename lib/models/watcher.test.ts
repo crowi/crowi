@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { crowi } from '../setup'
+import { crowi } from 'server/test/setup'
 
 describe('Watcher', function() {
   let Watcher

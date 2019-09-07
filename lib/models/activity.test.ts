@@ -1,6 +1,6 @@
 import faker from 'faker'
 import mongoose from 'mongoose'
-import { crowi, Fixture } from '../setup'
+import { crowi, Fixture } from 'server/test/setup'
 
 describe('Activity', function() {
   let Activity
