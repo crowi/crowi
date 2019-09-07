@@ -5,8 +5,18 @@ interface Props {
   appUrl: string
 }
 
+function getAppDomain(appUrl) {
+  const m = appUrl.match(/^https?:\/\/([^/]+)\/?.*$/)
+  if (m) {
+    return m[1]
+  }
+
+  return ''
+}
+
 const Instructions: FC<Props> = ({ appUrl }) => {
   const [t] = useTranslation()
+  const appDomain = getAppDomain(appUrl)
 
   return (
     <>
@@ -50,12 +60,6 @@ const Instructions: FC<Props> = ({ appUrl }) => {
             <code>Crowi&#39;s Slack Notification Integration</code>
           </dd>
         </div>
-        <div className="row">
-          <dt className="col-4">Long description</dt>
-          <dd className="col-8">
-            <code>Crowi&#39;s Slack Notification Integration</code>
-          </dd>
-        </div>
       </dl>
       <p>
         and <strong>Save</strong> it.
@@ -89,7 +93,7 @@ const Instructions: FC<Props> = ({ appUrl }) => {
         <div className="row">
           <dt className="col-4">Request URL</dt>
           <dd className="col-8">
-            <code>{appUrl}</code>
+            <code>{appUrl}/_api/slack/event</code>
           </dd>
         </div>
         <div className="row">
@@ -100,7 +104,9 @@ const Instructions: FC<Props> = ({ appUrl }) => {
         </div>
         <div className="row">
           <dt className="col-4">Domains</dt>
-          <dd className="col-8">Your crowi domains</dd>
+          <dd className="col-8">
+            <code>{appDomain}</code>
+          </dd>
         </div>
       </dl>
     </>

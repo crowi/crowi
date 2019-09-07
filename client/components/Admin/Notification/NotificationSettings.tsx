@@ -1,9 +1,10 @@
-import React, { useState, FC } from 'react'
+import React, { useEffect, useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import Crowi from 'client/util/Crowi'
 
 import FormRow from '../FormRow'
 import { Alert, Button, Label, Input } from 'reactstrap'
+import useStateWithEffect from 'client/hooks/useStateWithEffect'
 
 interface Props {
   crowi: Crowi
@@ -13,8 +14,8 @@ interface Props {
 
 const NotificationSettings: FC<Props> = ({ crowi, slackSetting, fetchSettings }) => {
   const [t] = useTranslation()
-  const [clientId, setClientId] = useState(slackSetting['slack:clientId'])
-  const [clientSecret, setClientSecret] = useState(slackSetting['slack:clientSecret'])
+  const [clientId, setClientId] = useStateWithEffect(slackSetting['slack:clientId'] || '')
+  const [clientSecret, setClientSecret] = useStateWithEffect(slackSetting['slack:clientSecret'] || '')
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
 
   const handleSubmit = async e => {
