@@ -1,5 +1,5 @@
 import faker from 'faker'
-import { crowi, Fixture } from '../setup'
+import { crowi, Fixture } from 'server/test/setup'
 
 describe('Share', () => {
   let User
