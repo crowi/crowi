@@ -6,7 +6,6 @@ import { getContinueUrl } from '../util/url'
 import Octokit from '@octokit/rest'
 
 const debug = Debug('crowi:lib:githubAuth')
-const octokit = new Octokit() as any
 
 export default config => {
   const lib: any = {}
@@ -22,23 +21,22 @@ export default config => {
           callbackURL: `${config.crowi['app:url']}/github/callback${callbackQuery}`,
           scope: ['user:email', 'read:org'],
         },
-        function(accessToken, refreshToken, profile, callback) {
+        async (accessToken, refreshToken, profile, callback) => {
           debug('profile', profile)
-          octokit.authenticate({ type: 'oauth', token: accessToken })
-          octokit.users
-            .getOrgs({})
-            .then(data => data.data.map(org => org.login))
-            .then(orgs => {
-              debug('crowi:orgs', orgs)
-              callback(null, {
-                token: accessToken,
-                user_id: profile.id,
-                email: profile.emails.filter(v => v.primary)[0].value,
-                name: profile.displayName || '',
-                picture: profile.photos[0].value,
-                organizations: orgs,
-              })
-            })
+          const octokit = new Octokit({ auth: accessToken })
+          const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
+          const orgNames = orgs.map(org => org.login)
+
+          debug(orgNames)
+
+          callback(null, {
+            token: accessToken,
+            user_id: profile.id,
+            email: profile.emails.filter(v => v.primary)[0].value,
+            name: profile.displayName || '',
+            picture: profile.photos[0].value,
+            organizations: orgNames,
+          })
         },
       ),
     )
@@ -55,14 +53,14 @@ export default config => {
 
   lib.reauth = async function(id, { accessToken }) {
     try {
-      octokit.authenticate({ type: 'oauth', token: accessToken })
+      const octokit = new Octokit({ auth: accessToken })
       const {
         data: { id: userId },
-      } = await octokit.users.get({})
-      const { data = [] } = await octokit.users.getOrgs({})
-      const orgs = data.map(org => org.login)
+      } = await octokit.users.getAuthenticated()
+      const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
+      const orgNames = orgs.map(org => org.login)
       const organization = config.crowi['github:organization']
-      const success = id === String(userId) && (!organization || orgs.includes(organization))
+      const success = id === String(userId) && (!organization || orgNames.includes(organization))
       const tokens = { accessToken }
       return { success, tokens }
     } catch (err) {
