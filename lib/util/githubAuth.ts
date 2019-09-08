@@ -6,7 +6,6 @@ import { getContinueUrl } from '../util/url'
 import Octokit from '@octokit/rest'
 
 const debug = Debug('crowi:lib:githubAuth')
-const octokit = new Octokit()
 
 export default config => {
   const lib: any = {}
@@ -24,7 +23,7 @@ export default config => {
         },
         async (accessToken, refreshToken, profile, callback) => {
           debug('profile', profile)
-          octokit.authenticate({ type: 'oauth', token: accessToken })
+          const octokit = new Octokit({ auth: accessToken })
           const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
           const orgNames = orgs.map(org => org.login)
 
@@ -54,7 +53,7 @@ export default config => {
 
   lib.reauth = async function(id, { accessToken }) {
     try {
-      octokit.authenticate({ type: 'oauth', token: accessToken })
+      const octokit = new Octokit({ auth: accessToken })
       const {
         data: { id: userId },
       } = await octokit.users.getAuthenticated()
