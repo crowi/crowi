@@ -1,4 +1,4 @@
-import { crowi } from '../setup'
+import { crowi } from 'server/test/setup'
 
 describe('Test for Crowi application context', () => {
   // test crowi object by environment

@@ -1,4 +1,4 @@
-import { crowi, Fixture } from '../setup'
+import { crowi, Fixture } from 'server/test/setup'
 
 describe('Page', () => {
   let Page

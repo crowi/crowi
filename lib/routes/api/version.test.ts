@@ -1,5 +1,5 @@
 import request from 'supertest'
-import { app } from '../../setup'
+import { app } from 'server/test/setup'
 
 describe('Routes /_api/versions test', () => {
   describe('/_api/versions.get', () => {
