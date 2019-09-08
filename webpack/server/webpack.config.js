@@ -34,9 +34,6 @@ const config = {
       },
     ],
   },
-  // plugins: [new webpack.ContextReplacementPlugin(/local_modules/, (context) => {
-  //   console.log(context)
-  // })],
   stats: {
     colors: true,
     errorDetails: true,
