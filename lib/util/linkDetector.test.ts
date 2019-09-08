@@ -1,5 +1,5 @@
 import LinkDetector from 'server/util/linkDetector'
-import { crowi } from '../setup'
+import { crowi } from 'server/test/setup'
 
 describe('Url test', () => {
   test('detectInternalLink', () => {

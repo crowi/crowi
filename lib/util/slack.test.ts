@@ -1,5 +1,5 @@
 import Slack from 'server/util/slack'
-import { crowi } from '../setup'
+import { crowi } from 'server/test/setup'
 
 describe('Slack Util', () => {
   let slack
