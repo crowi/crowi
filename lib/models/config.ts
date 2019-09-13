@@ -36,6 +36,7 @@ export interface ConfigModel extends Model<ConfigDocument> {
   hasSlackConfig(config: Config): boolean
   hasSlackToken(config: Config): boolean
   getLocalconfig(config: Config): object
+  migrate(): Promise<void[]>
 
   SECURITY_REGISTRATION_MODE_OPEN: string
   SECURITY_REGISTRATION_MODE_RESTRICTED: string
@@ -58,6 +59,7 @@ export default (crowi: Crowi) => {
       'app:confidential': '',
 
       'app:fileUpload': false,
+
       'app:externalShare': false,
 
       'security:registrationMode': 'Open',
@@ -66,16 +68,19 @@ export default (crowi: Crowi) => {
       'auth:requireThirdPartyAuth': false,
       'auth:disablePasswordAuth': false,
 
-      'aws:bucket': 'crowi',
-      'aws:region': 'ap-northeast-1',
-      'aws:accessKeyId': '',
-      'aws:secretAccessKey': '',
+      'upload:aws:bucket': 'crowi',
+      'upload:aws:region': 'ap-northeast-1',
+      'upload:aws:accessKeyId': '',
+      'upload:aws:secretAccessKey': '',
 
       'mail:from': '',
       'mail:smtpHost': '',
       'mail:smtpPort': '',
       'mail:smtpUser': '',
       'mail:smtpPassword': '',
+      'mail:aws:region': 'ap-northeast-1',
+      'mail:aws:accessKeyId': '',
+      'mail:aws:secretAccessKey': '',
 
       'google:clientId': '',
       'google:clientSecret': '',
@@ -178,12 +183,14 @@ export default (crowi: Crowi) => {
   }
 
   configSchema.statics.isUploadable = function(config) {
-    var method = crowi.env.FILE_UPLOAD || 'aws'
+    const method = crowi.env.FILE_UPLOAD || 'aws'
+    const isConfigured =
+      config.crowi['upload:aws:accessKeyId'] &&
+      config.crowi['upload:aws:secretAccessKey'] &&
+      config.crowi['upload:aws:region'] &&
+      config.crowi['upload:aws:bucket']
 
-    if (
-      method == 'aws' &&
-      (!config.crowi['aws:accessKeyId'] || !config.crowi['aws:secretAccessKey'] || !config.crowi['aws:region'] || !config.crowi['aws:bucket'])
-    ) {
+    if (method == 'aws' && !isConfigured) {
       return false
     }
 
@@ -252,6 +259,49 @@ export default (crowi: Crowi) => {
     }
 
     return localConfig
+  }
+
+  configSchema.statics.migrate = async function() {
+    const initialConfig = getArrayForInstalling()
+    const config = await this.loadAllConfig()
+
+    const renameKeys = {
+      crowi: [
+        ['aws:region', 'upload:aws:region'],
+        ['aws:bucket', 'upload:aws:bucket'],
+        ['aws:accessKeyId', 'upload:aws:accessKeyId'],
+        ['aws:secretAccessKey', 'upload:aws:secretAccessKey'],
+        ['aws:region', 'mail:aws:region'],
+        ['aws:accessKeyId', 'mail:aws:accessKeyId'],
+        ['aws:secretAccessKey', 'mail:aws:secretAccessKey'],
+      ],
+    }
+
+    const rename = (ns: string, from: string, to: string) => {
+      const initial = ns === 'crowi' ? initialConfig[to] : undefined
+
+      return (config[ns][to] = config[to] || config[ns][from] || initial)
+    }
+
+    await Promise.all(
+      Object.entries(renameKeys).map(([ns, keys]) =>
+        keys.map(async ([from, to]) => {
+          rename(ns, from, to)
+          await this.updateConfigByNamespace(ns, config[ns])
+        }),
+      ),
+    )
+
+    return Promise.all(
+      Object.entries(renameKeys).map(async ([ns, keys]) => {
+        await Promise.all(
+          keys.map(async ([from]) => {
+            delete config[ns][from]
+            await this.deleteOne({ key: from, ns })
+          }),
+        )
+      }),
+    )
   }
 
   configSchema.statics.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN
