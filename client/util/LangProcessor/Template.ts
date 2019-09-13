@@ -1,5 +1,5 @@
-import moment from 'moment'
 import Crowi from 'client/crowi'
+import { format } from 'date-fns'
 
 type templatePatternKey = keyof Template['templatePattern']
 
@@ -21,15 +21,15 @@ export default class Template {
   }
 
   getYear(): string {
-    return moment().format('YYYY')
+    return format(new Date(), 'yyyy')
   }
 
   getMonth(): string {
-    return moment().format('YYYY/MM')
+    return format(new Date(), 'yyyy/MM')
   }
 
   getDate(): string {
-    return moment().format('YYYY/MM/DD')
+    return format(new Date(), 'yyyy/MM/dd')
   }
 
   getUser() {
