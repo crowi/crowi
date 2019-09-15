@@ -22,7 +22,7 @@ const HelpPortal: FC<Props> = ({ crowi }) => {
   })
 
   return (
-    <Modal isOpen={show} toggle={handleClose}>
+    <Modal isOpen={show} toggle={handleClose} size="lg">
       <ModalHeader toggle={handleClose}>What is Portal?</ModalHeader>
       <ModalBody>
         <h4 className="pb-3">Portal とは</h4>
