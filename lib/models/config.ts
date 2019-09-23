@@ -23,9 +23,15 @@ export interface ConfigModel extends Model<ConfigDocument> {
   applicationInstall(): Promise<void>
   updateCache(ns: string, key: string, value: string): void
   updateCacheByNamespace(ns: string, nsConfig: Record<string, any>): void
+  copyCache(ns: string, key: string, newKey: string): void
+  deleteCache(ns: string, key: string): void
   updateByParams(ns: string, key: string, value: string): Promise<void>
   updateConfig(ns: string, key: string, value: string): Promise<void>
   updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>
+  copyByParams(ns: string, key: string, newKey: string): Promise<void>
+  copyConfig(ns: string, key: string, newKey: string): Promise<void>
+  deleteByParams(ns: string, key: string): Promise<void>
+  deleteConfig(ns: string, key: string): Promise<void>
   loadAllConfig(): Promise<object>
   isRequiredThirdPartyAuth(config: Config): boolean
   isDisabledPasswordAuth(config: Config): boolean
@@ -36,7 +42,7 @@ export interface ConfigModel extends Model<ConfigDocument> {
   hasSlackConfig(config: Config): boolean
   hasSlackToken(config: Config): boolean
   getLocalconfig(config: Config): object
-  migrate(): Promise<void[]>
+  migrate(): Promise<void>
 
   SECURITY_REGISTRATION_MODE_OPEN: string
   SECURITY_REGISTRATION_MODE_RESTRICTED: string
@@ -120,6 +126,31 @@ export default (crowi: Crowi) => {
     crowi.setConfig(config)
   }
 
+  configSchema.statics.copyCache = function(ns, key, newKey) {
+    const config = crowi.getConfig()
+
+    if (!config[ns]) {
+      config[ns] = {}
+    }
+
+    if (config[ns][newKey] === undefined && config[ns][key] !== undefined) {
+      config[ns][newKey] = config[ns][key]
+      crowi.setConfig(config)
+    }
+  }
+
+  configSchema.statics.deleteCache = function(ns, key) {
+    const config = crowi.getConfig()
+
+    if (!config[ns]) {
+      config[ns] = {}
+    }
+
+    delete config[ns][key]
+
+    crowi.setConfig(config)
+  }
+
   configSchema.statics.updateCacheByNamespace = function(ns, nsConfig) {
     const config = crowi.getConfig()
 
@@ -154,6 +185,37 @@ export default (crowi: Crowi) => {
     }
 
     Config.updateCacheByNamespace(ns, nsConfig)
+  }
+
+  configSchema.statics.copyByParams = async function(ns, key, newKey) {
+    const config = await Config.findOne({ ns, key }).exec()
+    if (config !== null) {
+      await Config.findOneAndUpdate({ ns, key: newKey }, { ns, key: newKey, value: config.value }, { upsert: true }).exec()
+    }
+  }
+
+  configSchema.statics.copyConfig = async function(ns, key, newKey) {
+    try {
+      await Config.copyByParams(ns, key, newKey)
+    } catch (err) {
+      debug('copyConfig', err)
+    }
+
+    Config.copyCache(ns, key, newKey)
+  }
+
+  configSchema.statics.deleteByParams = async function(ns, key) {
+    await Config.deleteOne({ ns, key }).exec()
+  }
+
+  configSchema.statics.deleteConfig = async function(ns, key) {
+    try {
+      await Config.deleteByParams(ns, key)
+    } catch (err) {
+      debug('deleteConfig', err)
+    }
+
+    Config.deleteCache(ns, key)
   }
 
   configSchema.statics.loadAllConfig = async function() {
@@ -262,13 +324,10 @@ export default (crowi: Crowi) => {
   }
 
   configSchema.statics.migrate = async function() {
-    const initialConfig = getArrayForInstalling()
-    const config = await this.loadAllConfig()
-
     const renameKeys = {
       crowi: [
-        ['aws:region', 'upload:aws:region'],
         ['aws:bucket', 'upload:aws:bucket'],
+        ['aws:region', 'upload:aws:region'],
         ['aws:accessKeyId', 'upload:aws:accessKeyId'],
         ['aws:secretAccessKey', 'upload:aws:secretAccessKey'],
         ['aws:region', 'mail:aws:region'],
@@ -277,31 +336,11 @@ export default (crowi: Crowi) => {
       ],
     }
 
-    const rename = (ns: string, from: string, to: string) => {
-      const initial = ns === 'crowi' ? initialConfig[to] : undefined
+    const forEachConfigs = (func: (ns: string, oldKey: string, newKey: string) => Promise<void>): Promise<void[][]> =>
+      Promise.all(Object.entries(renameKeys).map(([ns, keys]) => Promise.all(keys.map(([oldKey, newKey]) => func(ns, oldKey, newKey)))))
 
-      return (config[ns][to] = config[to] || config[ns][from] || initial)
-    }
-
-    await Promise.all(
-      Object.entries(renameKeys).map(([ns, keys]) =>
-        keys.map(async ([from, to]) => {
-          rename(ns, from, to)
-          await this.updateConfigByNamespace(ns, config[ns])
-        }),
-      ),
-    )
-
-    return Promise.all(
-      Object.entries(renameKeys).map(async ([ns, keys]) => {
-        await Promise.all(
-          keys.map(async ([from]) => {
-            delete config[ns][from]
-            await this.deleteOne({ key: from, ns })
-          }),
-        )
-      }),
-    )
+    await forEachConfigs((ns, oldKey, newKey) => Config.copyConfig(ns, oldKey, newKey))
+    await forEachConfigs((ns, oldKey) => Config.deleteConfig(ns, oldKey))
   }
 
   configSchema.statics.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN
