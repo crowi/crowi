@@ -2,6 +2,8 @@
  */
 
 import 'scrollpos-styler'
+import { alert, linkVariant } from 'components/Common/Icons'
+import renderIcon from 'common/functions/renderIcon'
 
 export default class Crowi {
   static createErrorView = (msg: string) => {
@@ -49,7 +51,7 @@ export default class Crowi {
       var id = 'head' + i++
       $(this).attr('id', id)
       $(this).addClass('revision-head')
-      $(this).append('<span class="revision-head-link"><a href="#' + id + '"><i class="mdi mdi-link-variant"></i></a></span>')
+      $(this).append(`<span class="revision-head-link"><a href="#${id}">${renderIcon(linkVariant)}</a></span>`)
     })
   }
 
@@ -269,7 +271,7 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        newPageNameCheck.html('<i class="mdi mdi-alert"></i> ' + res.error)
+        newPageNameCheck.html(`${renderIcon(alert)} ${res.error}`)
         newPageNameCheck.addClass('alert-danger')
       } else {
         var page = res.page
@@ -302,7 +304,7 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        $('#delete-errors').html('<i class="mdi mdi-alert"></i> ' + res.error)
+        $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
       } else {
         var page = res.page
@@ -320,7 +322,7 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        $('#delete-errors').html('<i class="mdi mdi-alert"></i> ' + res.error)
+        $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
       } else {
         var page = res.page
@@ -338,7 +340,7 @@ $(function() {
       dataType: 'json',
     }).done(function(res) {
       if (!res.ok) {
-        $('#delete-errors').html('<i class="mdi mdi-alert"></i> ' + res.error)
+        $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
       } else {
         var page = res.page
@@ -419,7 +421,7 @@ $(function() {
 
     $.getJSON('/_api/check_username', { username: username }, function(json) {
       if (!json.valid) {
-        $('#help-block-username').html('<i class="mdi mdi-alert"></i> This User ID is not available.<br>')
+        $('#help-block-username').html(`${renderIcon(alert)} This User ID is not available.<br>`)
         $('#input-group-username').addClass('has-error')
       }
     })
@@ -433,7 +435,7 @@ $(function() {
 
     $.getJSON('/_api/check_username', { username: username }, function(json) {
       if (!json.valid) {
-        $('#help-block-username').html('<i class="mdi mdi-alert"></i> This User ID is not available.<br>')
+        $('#help-block-username').html(`${renderIcon(alert)} This User ID is not available.<br>`)
         $('#input-group-username').addClass('has-error')
       }
     })
