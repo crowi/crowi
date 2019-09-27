@@ -11,7 +11,7 @@
   </p>
   <p align=center>
     <a href="https://circleci.com/gh/crowi/crowi"><img src="https://circleci.com/gh/crowi/crowi.svg?style=svg" alt="Circle CI"></a>
-    <a href="https://codecov.io/gh/crowi/crowi"><img src="https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg" alt="Codecov"></a>
+    <a href="https://codecov.io/gh/crowi/crowi"><a href="https://opencollective.com/crowi" alt="Financial Contributors on Open Collective"><img src="https://opencollective.com/crowi/all/badge.svg?label=financial+contributors" /></a> <img src="https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg" alt="Codecov"></a>
     <a href="https://hub.docker.com/r/crowi/crowi"><img src="https://img.shields.io/docker/pulls/crowi/crowi.svg" alt="Docker Pulls"></a>
     <a href="https://spectrum.chat/crowi"><img src="https://withspectrum.github.io/badge/badge.svg" alt="Join the community on Spectrum"></a>
   </p>
@@ -114,3 +114,33 @@ License
 
 * The MIT License (MIT)
 * See LICENSE file.
+
+## Contributors
+
+### Code Contributors
+
+This project exists thanks to all the people who contribute. [[Contribute](CONTRIBUTING.md)].
+<a href="https://github.com/crowi/crowi/graphs/contributors"><img src="https://opencollective.com/crowi/contributors.svg?width=890&button=false" /></a>
+
+### Financial Contributors
+
+Become a financial contributor and help us sustain our community. [[Contribute](https://opencollective.com/crowi/contribute)]
+
+#### Individuals
+
+<a href="https://opencollective.com/crowi"><img src="https://opencollective.com/crowi/individuals.svg?width=890"></a>
+
+#### Organizations
+
+Support this project with your organization. Your logo will show up here with a link to your website. [[Contribute](https://opencollective.com/crowi/contribute)]
+
+<a href="https://opencollective.com/crowi/organization/0/website"><img src="https://opencollective.com/crowi/organization/0/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/1/website"><img src="https://opencollective.com/crowi/organization/1/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/2/website"><img src="https://opencollective.com/crowi/organization/2/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/3/website"><img src="https://opencollective.com/crowi/organization/3/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/4/website"><img src="https://opencollective.com/crowi/organization/4/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/5/website"><img src="https://opencollective.com/crowi/organization/5/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/6/website"><img src="https://opencollective.com/crowi/organization/6/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/7/website"><img src="https://opencollective.com/crowi/organization/7/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/8/website"><img src="https://opencollective.com/crowi/organization/8/avatar.svg"></a>
+<a href="https://opencollective.com/crowi/organization/9/website"><img src="https://opencollective.com/crowi/organization/9/avatar.svg"></a>
