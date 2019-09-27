@@ -1,8 +1,6 @@
 @import 'theme';
 @import 'bootstrap.scss';
 
-@import "materialdesignicons";
-
 // crowi component
 @import 'layout';
 @import 'page';
@@ -36,13 +34,6 @@ code {
   fill: currentColor;
   width: 1.12em;
   margin-top: -2px;
-}
-.mdi {
-  font-size: 1.12em;
-  vertical-align: -0.05em;
-}
-.input-group .input-group-text .mdi {
-  font-size: 1em;
 }
 
 .mdi-svg.mdi-spin {
