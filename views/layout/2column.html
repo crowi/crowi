@@ -2,7 +2,7 @@
 
 {% block layout_sidebar %}
 
-<a href="" class="layout-control" id="toggle-sidebar"><i class="mdi mdi-chevron-right"></i></a>
+<a href="" class="layout-control" id="toggle-sidebar">{{ Icon("chevronRight") }}</a>
 <aside class="sidebar col-md-3 d-print-none">
 
   {% block side_header %}
@@ -31,7 +31,7 @@
 <div id="main" class="main {% if page %}{{ css.grant(page) }}{% endif %} {% block main_css_class %}{% endblock %}">
   {% if page && page.grant != 1 %}
   <p class="page-grant">
-    <i class="mdi mdi-lock"></i> {{ consts.pageGrants[page.grant] }} ({{ t('Browsing of this page is restricted') }})
+    {{ Icon("lock") }} {{ consts.pageGrants[page.grant] }} ({{ t('Browsing of this page is restricted') }})
   </p>
   {% endif %}
   {% if page && page.grant == 2 %}
