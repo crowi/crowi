@@ -18,8 +18,8 @@
     <div class="user-page-meta">
       <h2>{{ pageUser.name }}</h2>
       <ul>
-        <li class="user-page-username"><i class="mdi mdi-account"></i> @{{ pageUser.username }}</li>
-        <li class="user-page-email"><i class="mdi mdi-email"></i> {{ pageUser.email }}</li>
+        <li class="user-page-username">{{ Icon("account") }} @{{ pageUser.username }}</li>
+        <li class="user-page-email">{{ Icon("email") }} {{ pageUser.email }}</li>
         {% if pageUser.introduction %}
         <li class="user-page-introduction"><p>{{ pageUser.introduction|nl2br }}</p></li>
         {% endif %}
@@ -31,14 +31,14 @@
   <div class="user-page-content">
     <ul class="nav nav-tabs user-page-content-menu">
       <li class="nav-item">
-        <a class="nav-link active" href="#user-bookmark-list" data-toggle="tab"><i class="mdi mdi-star"></i> Bookmarks</a>
+        <a class="nav-link active" href="#user-bookmark-list" data-toggle="tab">{{ Icon("star") }} Bookmarks</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" href="#user-created-list" data-toggle="tab"><i class="mdi mdi-pencil-outline"></i> Recent Created</a>
+        <a class="nav-link" href="#user-created-list" data-toggle="tab">{{ Icon("pencilOutline") }} Recent Created</a>
       </li>
       {% if user._id.toString() == pageUser._id.toString() %}
       <li class="nav-item">
-        <a class="nav-link" href="/me"><i class="mdi mdi-cogs"></i> Settings</a>
+        <a class="nav-link" href="/me">{{ Icon("cogs") }} Settings</a>
       </li>
       {% endif %}
     </ul>
@@ -51,7 +51,7 @@
           {% else %}
             {% include 'widget/page_list.html' with { pages: bookmarkList, pagePropertyName: 'page' } %}
             <div class="user-page-list-additional-link">
-              <a href="/user/{{ pageUser.username }}/bookmarks"><i class="mdi mdi-chevron-double-right"></i> See bookmarks</a>
+              <a href="/user/{{ pageUser.username }}/bookmarks">{{ Icon("chevronDoubleRight") }} See bookmarks</a>
             </div>
           {% endif %}
         </div>
@@ -64,7 +64,7 @@
           {% else %}
             {% include 'widget/page_list.html' with { pages: createdList } %}
             <div class="user-page-list-additional-link">
-              <a href="/user/{{ pageUser.username }}/recent-create"><i class="mdi mdi-chevron-double-right"></i> See created pages</a>
+              <a href="/user/{{ pageUser.username }}/recent-create">{{ Icon("chevronDoubleRight") }} See created pages</a>
             </div>
           {% endif %}
         </div>
