@@ -1,7 +1,8 @@
 import React from 'react'
-import { storiesOf } from '@storybook/react'
 import Icon from './Icon'
 
-storiesOf('Common/Icon', module)
-  .add('Default', () => <Icon name="helpCircle" />)
-  .add('Spin', () => <Icon name="helpCircle" spin={true} />)
+export default { title: 'Common/Icon' }
+
+export const Default = () => <Icon name="helpCircle" />
+
+export const Spin = () => <Icon name="helpCircle" spin />
