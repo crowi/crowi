@@ -3,23 +3,33 @@
  */
 
 import { format as dateFnsFormat, Locale, parseISO, formatDistance as dateFnsFormatDistance } from 'date-fns'
-import { enGB, enUS, ja } from 'date-fns/locale'
+import { enUS, ja } from 'date-fns/locale'
 
-const locales = { enGB, enUS, ja }
+const locales = { enUS, ja } as const
 
-type DateInput = Date | string | number
+type ISO8601String = string
+type DateInput = Date | ISO8601String | number
 
-const locale: Locale = (() => {
-  // memo: may not region, but date-fns/locale has only pair of those
+let locale: Locale | undefined
+/**
+ * selectLocale: Select date-fns locale by user setting. (currently from browser locale)
+ *
+ * If there are no apporopriate locale to match user setting, use en-US locale.
+ */
+function selectLocale(): Locale {
+  // currently, the locale is uniquely determined at first run. so we can cache it.
+  if (locale) return locale
+
+  // TODO: choose language locale by crowi setting
   const [language, region] = (navigator.userLanguage || navigator.language || '').split('-')
-  return ja || locales[language + region] || locales[language] || locales.enUS
-})()
+  return (locale = locales[language + region] || locales[language] || locales.enUS)
+}
 
 function sanitizeDateInputForDateFns(input: DateInput) {
   return typeof input === 'string' ? parseISO(input) : input
 }
 
-export default function format(date: DateInput, format: string) {
+export default function format(date: DateInput, format: string, locale = selectLocale()) {
   return dateFnsFormat(sanitizeDateInputForDateFns(date), format, { locale })
 }
 
@@ -27,7 +37,7 @@ export function formatToLocaleString(date: DateInput) {
   return format(date, 'PPpp')
 }
 
-export function formatDistance(date: DateInput | number, base: DateInput) {
+export function formatDistance(date: DateInput | number, base: DateInput, locale = selectLocale()) {
   return dateFnsFormatDistance(sanitizeDateInputForDateFns(date), sanitizeDateInputForDateFns(base), { locale, addSuffix: true })
 }
 
