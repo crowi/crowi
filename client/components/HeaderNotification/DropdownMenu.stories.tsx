@@ -1,32 +1,10 @@
 import React from 'react'
 import faker from 'faker'
 import { UncontrolledDropdown, DropdownToggle } from 'reactstrap'
+import { createPage, createUser } from 'client/fixtures'
 import DropdownMenu from './DropdownMenu'
-import { Revision } from 'client/types/crowi'
 
 export default { title: 'HeaderNotification/DropdownMenu' }
-
-const createUser = () => ({
-  _id: '',
-  image: '',
-  name: faker.name.findName(),
-  username: faker.internet.userName(),
-})
-
-const createPage = () => ({
-  _id: '',
-  path: `/${faker.lorem.slug()}`,
-  revision: {} as Revision,
-  redirectTo: '',
-  status: '',
-  creator: createUser(),
-  lastUpdateUser: createUser(),
-  liker: [],
-  seenUsers: [],
-  commentCount: 0,
-  bookmarkCount: 0,
-  grant: 1,
-})
 
 const notifications = [
   {

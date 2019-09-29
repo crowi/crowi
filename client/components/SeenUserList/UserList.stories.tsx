@@ -1,15 +1,8 @@
 import React from 'react'
-import faker from 'faker'
+import { createUser } from 'client/fixtures'
 import UserList from './UserList'
 
 export default { title: 'SeenUserList/UserList' }
-
-const createUser = () => ({
-  _id: faker.random.uuid(),
-  image: '',
-  name: faker.name.findName(),
-  username: faker.internet.userName(),
-})
 
 const createUsers = (size: number) => [...Array(size)].map(createUser)
 
