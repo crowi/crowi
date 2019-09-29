@@ -1,15 +1,10 @@
 import React from 'react'
-import faker from 'faker'
+import { createUser } from 'client/fixtures'
 import User from './User'
 
 export default { title: 'User/User' }
 
-const user = {
-  _id: '',
-  image: '',
-  name: faker.name.findName(),
-  username: faker.internet.userName(),
-}
+const user = createUser()
 
 export const Default = () => <User user={user} />
 
