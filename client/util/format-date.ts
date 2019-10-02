@@ -10,37 +10,42 @@ const locales = { enUS, ja } as const
 type ISO8601String = string
 type DateInput = Date | ISO8601String | number
 
-let locale: Locale | undefined
-/**
- * selectLocale: Select date-fns locale by user setting. (currently from browser locale)
- *
- * If there are no apporopriate locale to match user setting, use en-US locale.
- */
-function selectLocale(): Locale {
-  // currently, the locale is uniquely determined at first run. so we can cache it.
-  if (locale) return locale
+export interface Environment {
+  getLocale(): Locale
+}
 
-  // TODO: choose language locale by crowi setting
-  const [language, region] = (navigator.userLanguage || navigator.language || '').split('-')
-  return (locale = locales[language + region] || locales[language] || locales.enUS)
+/**
+ * defaultEnvironment: Suggest user environment by browser setting.
+ * In the future may use environment that accepts set locale value from crowi instance.
+ */
+export const defaultEnvironment: Environment = {
+  /**
+   * getLocale: Select date-fns locale.
+   * If there are no apporopriate locale to match user setting, use en-US locale.
+   */
+  getLocale() {
+    // TODO: choose language locale by crowi setting
+    const [language, region] = (navigator.userLanguage || navigator.language || '').split('-')
+    return locales[language + region] || locales[language] || locales.enUS
+  },
 }
 
 function sanitizeDateInputForDateFns(input: DateInput) {
   return typeof input === 'string' ? parseISO(input) : input
 }
 
-export default function format(date: DateInput, format: string, locale = selectLocale()) {
-  return dateFnsFormat(sanitizeDateInputForDateFns(date), format, { locale })
+export default function format(date: DateInput, format: string, environment: Environment = defaultEnvironment) {
+  return dateFnsFormat(sanitizeDateInputForDateFns(date), format, { locale: environment.getLocale() })
 }
 
-export function formatToLocaleString(date: DateInput) {
-  return format(date, 'PPpp')
+export function formatToLocaleString(date: DateInput, environment: Environment = defaultEnvironment) {
+  return format(date, 'PPpp', environment)
 }
 
-export function formatDistance(date: DateInput | number, base: DateInput, locale = selectLocale()) {
-  return dateFnsFormatDistance(sanitizeDateInputForDateFns(date), sanitizeDateInputForDateFns(base), { locale, addSuffix: true })
+export function formatDistance(date: DateInput | number, base: DateInput, environment: Environment = defaultEnvironment) {
+  return dateFnsFormatDistance(sanitizeDateInputForDateFns(date), sanitizeDateInputForDateFns(base), { locale: environment.getLocale(), addSuffix: true })
 }
 
-export function formatDistanceFromNow(date: DateInput) {
-  return formatDistance(date, Date.now())
+export function formatDistanceFromNow(date: DateInput, environment: Environment = defaultEnvironment) {
+  return formatDistance(date, Date.now(), environment)
 }
