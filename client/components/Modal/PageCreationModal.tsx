@@ -8,6 +8,18 @@ import { dark, gray, light } from '../../constants/colors'
 import Crowi from 'client/util/Crowi'
 import Icon from '../Common/Icon'
 
+const parentPath = (path: string) => {
+  if (path === '/') {
+    return path
+  }
+
+  if (path.match(/.+\/$/)) {
+    return path
+  }
+
+  return path + '/'
+}
+
 interface Props {
   crowi: Crowi
 }
@@ -15,7 +27,7 @@ interface Props {
 const PageCreationModal: FC<Props> = ({ crowi }) => {
   const { user } = crowi
   const currentPath = location.pathname
-  const userPath = `/users/${user && user.name}/`
+  const userPath = `/user/${user && user.name}/`
   const datePath = moment(Date.now()).format('/YYYY/MM/DD/')
   const isTopPage = currentPath === '/'
 
@@ -23,38 +35,17 @@ const PageCreationModal: FC<Props> = ({ crowi }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [portalName, setPotalName] = useState<string>(t('Memo'))
   const [pageName, setPageName] = useState<string>('')
-  const [underTreePath, setUnderTreePath] = useState<string>(currentPath)
+  const [underTreePath, setUnderTreePath] = useState<string>(parentPath(currentPath))
 
   const createTodayPage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    top.location.href = `${userPath}${portalName || t('Memo')}${pageName ? datePath : datePath.slice(0, -1)}${pageName}`
+    const href = `${userPath}${portalName || t('Memo')}${pageName ? datePath : datePath.slice(0, -1)}${pageName}`
+    top.location.href = href
   }
 
   const createUnderTreePage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    let href = underTreePath
-
-    if (/^\//.test(underTreePath)) {
-      href = `/${href}`
-    }
-
-    if (/.+\/$/.test(underTreePath)) {
-      href = href.slice(0, -1)
-    }
-
-    top.location.href = href
-  }
-
-  const parentPath = (path: string) => {
-    if (path === '/') {
-      return path
-    }
-
-    if (path.match(/.+\/$/)) {
-      return path
-    }
-
-    return path + '/'
+    top.location.href = underTreePath
   }
 
   const toggle = () => {
@@ -92,7 +83,7 @@ const PageCreationModal: FC<Props> = ({ crowi }) => {
               <Form onSubmit={createUnderTreePage} inline>
                 <UnderTreePathInput
                   type="text"
-                  value={parentPath(underTreePath)}
+                  value={underTreePath}
                   onChange={(event: React.ChangeEvent<HTMLInputElement>) => setUnderTreePath(event.target.value)}
                   placeholder={t('Input page name')}
                 />
@@ -178,11 +169,6 @@ const PageNameInput = styled(BaseInput)`
 const UnderTreePathInput = styled(BaseInput)`
   flex: 1;
   margin-right: 8px;
-`
-
-const Code = styled.code`
-  background-color: #fef4f9;
-  padding: 2px 4px;
 `
 
 export default PageCreationModal
