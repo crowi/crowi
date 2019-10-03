@@ -141,9 +141,7 @@
       {% endif %}
 
       <li class="nav-item">
-        <button class="btn btn-primary create-page-button" data-target="#create-page" data-toggle="modal">
-          <i class="mdi mdi-pencil-outline"></i> {{ t('New') }}
-        </button>
+        <div id="page-creation-modal"></div>
       </li>
       <li class="nav-item nav-divider">
       </li>
@@ -195,7 +193,6 @@
     </ul>
   </nav>
 
-  {% include '../modal/create_page.html' %}
 {% endblock layout_head_nav %}
 
 {% block layout_container %}
