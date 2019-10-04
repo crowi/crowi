@@ -11,7 +11,7 @@ export default form(
   field('settingForm[mail:smtpPassword]', 'SMTPパスワード').trim(),
   field('settingForm[mail:aws:region]', 'リージョン')
     .trim()
-    .is(/^[a-z]+-[a-z]+-\d+$/, 'リージョンには、AWSリージョン名を入力してください。 例: ap-northeast-1'),
+    .is(/^[a-z]+(-[a-z]+)?-[a-z]+-\d+$/, 'リージョンには、AWSリージョン名を入力してください。 例: ap-northeast-1'),
   field('settingForm[mail:aws:accessKeyId]', 'Access Key Id')
     .trim()
     .is(/^[\da-zA-Z]+$/),
