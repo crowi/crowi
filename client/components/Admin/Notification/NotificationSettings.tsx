@@ -4,7 +4,7 @@ import Crowi from 'client/util/Crowi'
 
 import { FormRow } from 'components/Admin/FormRow'
 import { Alert, Button, Label, Input } from 'reactstrap'
-import useStateWithEffect from 'client/hooks/useStateWithEffect'
+import { useStateWithEffect } from 'client/hooks/useStateWithEffect'
 
 interface Props {
   crowi: Crowi
