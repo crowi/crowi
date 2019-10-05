@@ -1,5 +1,8 @@
 .crowi { // {{{
   &.main-container { // {{{
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     border-top: solid $crowiTopBorderHeight $crowiHeaderBackground;
     border-image: linear-gradient(90deg,
       $crowiHeaderBackground,
@@ -9,16 +12,18 @@
     ) 3;
 
     .v2-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
       width: 100%;
-      position: absolute;
-      transition: .2s ease;
-      left: 0;
 
       .v2-container-backdrop {
         display: none;
-        position: absolute;
         height: 100vh;
-        width: 100%;
+        width: 100vw;
+        transition: background-color .2s;
+        z-index: 1100;
+        position: absolute;
       }
     }
 
@@ -26,37 +31,37 @@
     // sm menu opened
     @include media-breakpoint-down(sm) {
       &.side-menu-open {
-        .v2-container {
-          width: calc(100% - 300px);
-          left: 300px;
-          height: calc(100vh - #{$crowiTopBorderHeight});
-          overflow: hidden;
-          z-index: 990;
-          overflow: hidden;
+        max-height: 100vh;
+        overflow: hidden;
 
+        .v2-container {
           .v2-container-backdrop {
             display: block;
             background-color: rgba(0, 0, 0, .1);
-            z-index: 1090;
           }
         }
-        .v2-crowi-header {
-          .search-top {
-            display: none;
+
+        .v2-crowi-global-menu-container {
+          display: block;
+          width: 300px;
+          position: fixed;
+          top: 3px;
+          bottom: 0;
+          z-index: 1200;
+          box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
+          background: #fcfcfc;
+          transform: translateX(-100%);
+          animation: slide-in .2s forwards;
+          @keyframes slide-in {
+            100% {
+              transform: translateX(0%);
+            }
           }
         }
 
         .v2-crowi-global-menu {
-          display: block;
-          position: fixed;
-          box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
-          z-index: 1000;
-          width: 300px;
-          min-height: 100vh;
-          top: 3px;
-          bottom: 0;
+          height: 100%;
           overflow-y: scroll;
-          background: #fcfcfc;
 
           .menu-user-profile {
             padding: 1em;
@@ -101,7 +106,7 @@
     }
 
     // not opened
-    .v2-crowi-global-menu {
+    .v2-crowi-global-menu-container {
       display: none;
     }
 
@@ -217,6 +222,11 @@
 
       }
     } // }}}
+
+    .v2-contents-container {
+      flex: 1;
+      display: flex;
+    }
   } // }}}
 } // }}}
 
@@ -313,11 +323,9 @@
     }
   }
 
-  > .container-fluid > .row {
-    display: flex;
+  .v2-contents-container {
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
   }
 
   .v2-single-page-container {
