@@ -1,11 +1,10 @@
 import React, { useContext, useState, useEffect, FC } from 'react'
 import Crowi from 'client/util/Crowi'
-
 import { AdminContext } from 'components/Admin/AdminPage'
-import NotificationSettings from './NotificationSettings'
-import NotificationPatterns from './NotificationPatterns'
-import Instructions from './Instructions'
-import ConnectButton from './ConnectButton'
+import { NotificationSettings } from 'components/Admin/Notification/NotificationSettings'
+import { ConnectButton } from 'components/Admin/Notification/ConnectButton'
+import { NotificationPatterns } from 'components/Admin/Notification/NotificationPatterns'
+import { Instructions } from 'components/Admin/Notification/Instructions'
 
 function useFetchNotificationSettings(crowi: Crowi) {
   const [settings, setSettings] = useState({
@@ -25,7 +24,7 @@ function useFetchNotificationSettings(crowi: Crowi) {
   return [settings, fetchSettings] as const
 }
 
-export default function NotificationPage() {
+export function NotificationPage() {
   const { crowi, loading } = useContext(AdminContext)
   const [{ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl }, fetchSettings] = useFetchNotificationSettings(crowi)
 

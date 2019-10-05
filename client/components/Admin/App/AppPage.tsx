@@ -1,12 +1,11 @@
 import React, { useContext, useState } from 'react'
-
 import { AdminContext } from 'components/Admin/AdminPage'
-import AppSettings from './AppSettings'
-import SecuritySettings from './SecuritySettings'
-import MailSettings from './MailSettings'
-import AWSSettings from './AWSSettings'
-import GoogleSettings from './GoogleSettings'
-import GitHubSettings from './GitHubSettings'
+import { AppSettings } from 'components/Admin/App/AppSettings'
+import { AWSSettings } from 'components/Admin/App/AWSSettings'
+import { GitHubSettings } from 'components/Admin/App/GitHubSettings'
+import { GoogleSettings } from 'components/Admin/App/GoogleSettings'
+import { MailSettings } from 'components/Admin/App/MailSettings'
+import { SecuritySettings } from 'components/Admin/App/SecuritySettings'
 
 function useRequest() {
   const [requesting, setRequesting] = useState(false)
@@ -35,7 +34,7 @@ function useAlert() {
   return [{ alert }, { showAlert, hideAlert }] as const
 }
 
-export default function AppPage() {
+export function AppPage() {
   const { crowi, loading, settingForm, registrationMode, isUploadable, fetchSettings } = useContext(AdminContext)
   const [{ requesting }, { executeRequest }] = useRequest()
   const [{ alert }, { showAlert, hideAlert }] = useAlert()

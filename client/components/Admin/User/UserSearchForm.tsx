@@ -6,7 +6,7 @@ interface Props {
   value: string
 }
 
-const UserSearchForm: FC<Props> = ({ handleSubmit, handleChange, value }) => {
+export const UserSearchForm: FC<Props> = ({ handleSubmit, handleChange, value }) => {
   return (
     <form className="form-group input-group col-xs-6" onSubmit={handleSubmit}>
       {/* q だと事故る (検索欄に入ってしまう) ので、uq にしてます */}
@@ -27,5 +27,3 @@ const UserSearchForm: FC<Props> = ({ handleSubmit, handleChange, value }) => {
     </form>
   )
 }
-
-export default UserSearchForm

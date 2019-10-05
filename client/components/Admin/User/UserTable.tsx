@@ -1,9 +1,8 @@
 import React, { FC } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import Pagination from 'components/Common/Pagination'
-import UserSearchForm from './UserSearchForm'
-import UserTableRow from './UserTableRow'
+import { UserSearchForm } from 'components/Admin/User/UserSearchForm'
+import { UserTableRow } from 'components/Admin/User/UserTableRow'
+import { Pagination } from 'components/Common/Pagination'
 
 export const STATUS = {
   REGISTERED: 1,
@@ -67,7 +66,7 @@ interface Props {
   changeStatus: (user: any, string: string) => void
 }
 
-const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) => {
+export const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) => {
   const [t] = useTranslation()
   const { current, count } = pagination
   const handlers = getHanlders(openResetModal, changeStatus)
@@ -104,5 +103,3 @@ const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, 
     </>
   )
 }
-
-export default UserTable

@@ -1,7 +1,7 @@
 import React, { FC } from 'react'
 import styled, { css } from 'styled-components'
-import UserPicture from 'components/User/UserPicture'
-import CommentBody from './CommentBody'
+import { UserPicture } from 'components/User/UserPicture'
+import { CommentBody } from 'components/Comment/CommentBody'
 import * as styles from 'client/constants/styles'
 import { CommonProps } from 'client/types/component'
 import Crowi from 'client/util/Crowi'
@@ -62,7 +62,7 @@ type Props = CommonProps & {
   comment: Record<string, any>
 }
 
-const CommentItem: FC<Props> = props => {
+export const CommentItem: FC<Props> = props => {
   const { crowi, revisionId, comment, ...others } = props
   const { revision, creator, comment: commentBody, createdAt } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
@@ -85,5 +85,3 @@ const CommentItem: FC<Props> = props => {
     </PageCommentContainer>
   )
 }
-
-export default CommentItem

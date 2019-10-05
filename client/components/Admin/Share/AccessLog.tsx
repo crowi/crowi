@@ -3,7 +3,7 @@ import { withTranslation, WithTranslation } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Table, Alert } from 'reactstrap'
-import Pagination from 'components/Common/Pagination'
+import { Pagination } from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
 import { ShareAccess } from 'client/types/crowi'
 
@@ -29,7 +29,7 @@ interface Record {
   date: string
 }
 
-class AccessLog extends React.Component<Props, State> {
+class AccessLogComponent extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -135,4 +135,4 @@ class AccessLog extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(AccessLog)
+export const AccessLog = withTranslation()(AccessLogComponent)

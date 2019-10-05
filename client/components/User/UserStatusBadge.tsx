@@ -31,12 +31,10 @@ interface Props {
   }
 }
 
-const UserStatusBadge: FC<Props> = ({ user }) => {
+export const UserStatusBadge: FC<Props> = ({ user }) => {
   const status = user.status in Object.values(STATUS) ? user.status : null
   if (status === null) return null
   const color = STATUS_COLORS[status]
 
   return <Badge color={color}>{STATUS_LABELS[status]}</Badge>
 }
-
-export default UserStatusBadge

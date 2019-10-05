@@ -1,11 +1,13 @@
 import React from 'react'
 
-export interface Props {
+interface Props {
   title: string
   children: React.ReactNode
 }
 
-export default class TabItem extends React.Component<Props> {
+export type TabItemProps = Props
+
+export class TabItem extends React.Component<Props> {
   static defaulProps = { title: '' }
 
   render() {

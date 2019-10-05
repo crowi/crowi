@@ -1,6 +1,6 @@
 import React from 'react'
 import Crowi from 'client/util/Crowi'
-import NotificationPage from './NotificationPage'
+import { NotificationPage } from 'components/Notification/NotificationPage'
 
 export default { title: 'NotificationPage' }
 

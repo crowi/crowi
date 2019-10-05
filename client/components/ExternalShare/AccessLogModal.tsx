@@ -3,7 +3,7 @@ import { withTranslation, WithTranslation } from 'react-i18next'
 import moment from 'moment'
 import platform from 'platform'
 import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
-import Pagination from 'components/Common/Pagination'
+import { Pagination } from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
 import { Share, ShareAccess } from 'client/types/crowi'
 
@@ -27,7 +27,7 @@ interface State {
   error: boolean
 }
 
-class AccessLogModal extends React.Component<Props, State> {
+class AccessLogModalComponent extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -130,7 +130,7 @@ class AccessLogModal extends React.Component<Props, State> {
         {accesses.length > 0 ? (
           <Table bordered hover condensed>
             {this.renderTableHeader()}
-            <tbody>{accesses.map(AccessLogModal.renderTableBody)}</tbody>
+            <tbody>{accesses.map(AccessLogModalComponent.renderTableBody)}</tbody>
           </Table>
         ) : (
           <Alert color="info">{t('No one accessed yet')}</Alert>
@@ -210,4 +210,4 @@ class AccessLogModal extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(AccessLogModal)
+export const AccessLogModal = withTranslation()(AccessLogModalComponent)

@@ -1,7 +1,8 @@
 import React, { useState, FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
 import { Alert, Button, Label, Input, FormText, FormGroup, Row, Col } from 'reactstrap'
-import FormRow from '../FormRow'
+import { Tips } from 'components/Admin/App/Tips'
+import { FormRow } from 'components/Admin/FormRow'
 
 interface Props {
   settingForm: object
@@ -14,7 +15,7 @@ interface Props {
   }
 }
 
-const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions, settingForm, update, alert }) => {
+export const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions, settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [basicName, setBasicName] = useState(settingForm['security:basicName'] || '')
   const [basicSecret, setBasicSecret] = useState(settingForm['security:basicSecret'] || '')
@@ -101,5 +102,3 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
     </form>
   )
 }
-
-export default SecuritySettings

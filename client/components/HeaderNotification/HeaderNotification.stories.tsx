@@ -1,6 +1,6 @@
 import React from 'react'
 import Crowi from 'client/util/Crowi'
-import HeaderNotification from './HeaderNotification'
+import { HeaderNotification } from 'components/HeaderNotification/HeaderNotification'
 
 export default { title: 'HeaderNotification' }
 

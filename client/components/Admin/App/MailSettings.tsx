@@ -1,8 +1,8 @@
 import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input, FormGroup, Row, Col } from 'reactstrap'
-import FormRow from '../FormRow'
-import Tips from './Tips'
+import { Tips } from 'components/Admin/App/Tips'
+import { FormRow } from 'components/Admin/FormRow'
 
 interface Props {
   settingForm: object
@@ -14,7 +14,7 @@ interface Props {
   }
 }
 
-const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
+export const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [mail, setMail] = useState(settingForm['mail:from'])
   const [host, setHost] = useState(settingForm['mail:smtpHost'] || '')
@@ -89,5 +89,3 @@ const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
     </form>
   )
 }
-
-export default MailSettings

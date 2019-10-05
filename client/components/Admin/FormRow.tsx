@@ -5,7 +5,7 @@ interface Props {
   children: ReactElement[] | ReactElement
 }
 
-const FormRow: FC<Props> = ({ children }: Props) => {
+export const FormRow: FC<Props> = ({ children }: Props) => {
   const c = React.Children.toArray(children)
   const label = c.find(({ type }) => type === Label) || null
   const input = c.find(({ type }) => type === Input || type === CustomInput) || null
@@ -25,5 +25,3 @@ const FormRow: FC<Props> = ({ children }: Props) => {
     </FormGroup>
   )
 }
-
-export default FormRow

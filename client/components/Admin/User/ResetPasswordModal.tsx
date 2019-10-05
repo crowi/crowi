@@ -8,7 +8,7 @@ interface Props {
   resetPassword: (user: any) => void
 }
 
-const ResetPasswordModal: FC<Props> = ({ isOpen, toggle, user = {}, resetPassword }) => {
+export const ResetPasswordModal: FC<Props> = ({ isOpen, toggle, user = {}, resetPassword }) => {
   const handleClick = e => {
     e.preventDefault()
     resetPassword(user)
@@ -34,5 +34,3 @@ const ResetPasswordModal: FC<Props> = ({ isOpen, toggle, user = {}, resetPasswor
     </Modal>
   )
 }
-
-export default ResetPasswordModal

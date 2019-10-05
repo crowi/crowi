@@ -22,7 +22,7 @@ function useInfo(crowi) {
   return [info, fetchInfo] as const
 }
 
-const TopPage: FC<{}> = () => {
+export const TopPage: FC<{}> = () => {
   const { crowi, searchConfigured } = useContext(AdminContext)
   const [{ crowiVersion, searchInfo }, fetchInfo] = useInfo(crowi)
   const { host, indexName, esVersion } = searchInfo
@@ -57,5 +57,3 @@ const TopPage: FC<{}> = () => {
     </>
   )
 }
-
-export default TopPage

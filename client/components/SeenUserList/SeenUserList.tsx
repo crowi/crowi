@@ -1,5 +1,5 @@
 import React from 'react'
-import UserList from './SeenUserList/UserList'
+import { UserList } from 'components/SeenUserList/UserList'
 import Crowi from 'client/util/Crowi'
 import { User } from 'client/types/crowi'
 
@@ -11,7 +11,7 @@ interface State {
   seenUsers: User[]
 }
 
-export default class SeenUserList extends React.Component<Props, State> {
+export class SeenUserList extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

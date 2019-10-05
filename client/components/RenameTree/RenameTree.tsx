@@ -1,7 +1,7 @@
 import React from 'react'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter, InputGroup, InputGroupAddon, Input, Label } from 'reactstrap'
 import { withTranslation, WithTranslation } from 'react-i18next'
-import Icon from '../Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 import Crowi from 'client/util/Crowi'
 import { Page } from 'client/types/crowi'
 
@@ -38,7 +38,7 @@ interface Errors {
   [path: string]: string[]
 }
 
-class RenameTree extends React.Component<Props, State> {
+class RenameTreeComponent extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -53,7 +53,7 @@ class RenameTree extends React.Component<Props, State> {
 
     this.state = {
       show: false,
-      newPath: RenameTree.getPath({ removeTrailingSlash: true }),
+      newPath: RenameTreeComponent.getPath({ removeTrailingSlash: true }),
       pathMap: {},
       error: null,
       errors: {},
@@ -71,7 +71,7 @@ class RenameTree extends React.Component<Props, State> {
     let path
     path = decodeURIComponent(location.pathname)
     if (removeTrailingSlash) {
-      path = RenameTree.removeTrailingSlash(path)
+      path = RenameTreeComponent.removeTrailingSlash(path)
     }
     return path
   }
@@ -113,7 +113,7 @@ class RenameTree extends React.Component<Props, State> {
           p =>
             path !== p &&
             // add '/' to check strictly: ex: '/aaa' must not be matched to '/aaa_ccc/yes'
-            path.startsWith(RenameTree.removeTrailingSlash(p) + '/') &&
+            path.startsWith(RenameTreeComponent.removeTrailingSlash(p) + '/') &&
             // no same rank
             treeName(p) !== treeName(path) &&
             !p.endsWith('/'),
@@ -192,7 +192,7 @@ class RenameTree extends React.Component<Props, State> {
   }
 
   normalizePathMap(pathMap: PathMap, newPath: string): PathMap {
-    const path = RenameTree.getPath({ removeTrailingSlash: true })
+    const path = RenameTreeComponent.getPath({ removeTrailingSlash: true })
     const portalPath = `${path}/`
     // ${pathMap} has not ${path} key if location is PageList
     pathMap[path] = newPath
@@ -203,7 +203,7 @@ class RenameTree extends React.Component<Props, State> {
   async checkTreeRenamable() {
     const { crowi } = this.props
     const { newPath } = this.state
-    const path = RenameTree.getPath({ removeTrailingSlash: true })
+    const path = RenameTreeComponent.getPath({ removeTrailingSlash: true })
     try {
       const data = await crowi.apiPost('/pages.checkTreeRenamable', { path, new_path: newPath })
       const pathMap = this.normalizePathMap(data.path_map, newPath)
@@ -216,7 +216,7 @@ class RenameTree extends React.Component<Props, State> {
   async handleSubmit() {
     const { crowi } = this.props
     const { newPath } = this.state
-    const path = RenameTree.getPath({ removeTrailingSlash: true })
+    const path = RenameTreeComponent.getPath({ removeTrailingSlash: true })
     const createRedirect = 1
     this.setState({ removing: true })
     try {
@@ -229,8 +229,8 @@ class RenameTree extends React.Component<Props, State> {
       const urls = pages.map(({ path }) => path)
       const exists = (path: string) => urls.includes(path)
       const redirect = (to: string) => () => (top.location.href = to)
-      const pageUrl = `${newPath}?redirectFrom=${RenameTree.getPath()}`
-      const listUrl = RenameTree.addTrailingSlash(newPath)
+      const pageUrl = `${newPath}?redirectFrom=${RenameTreeComponent.getPath()}`
+      const listUrl = RenameTreeComponent.addTrailingSlash(newPath)
       setTimeout(redirect(exists(newPath) ? pageUrl : listUrl), 1000)
     } catch (error) {
       this.handleError(error)
@@ -259,7 +259,7 @@ class RenameTree extends React.Component<Props, State> {
         <ModalBody>
           <div className="mb-2">
             <span className="mr-2">{t('Current page name')}</span>
-            <code>{RenameTree.getPath()}</code>
+            <code>{RenameTreeComponent.getPath()}</code>
           </div>
           <InputGroup>
             <Label for="newPath">{t('New page name')}</Label>
@@ -294,4 +294,4 @@ class RenameTree extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(RenameTree)
+export const RenameTree = withTranslation()(RenameTreeComponent)

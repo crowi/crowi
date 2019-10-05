@@ -1,7 +1,7 @@
 import React from 'react'
 import styled from 'styled-components'
-import Icon, { IconName } from './Icon'
-import * as Icons from './Icons'
+import { Icon, IconName } from 'components/Common/Icon/Icon'
+import * as Icons from 'components/Common/Icon/Icons'
 
 export default { title: 'Common/Icons' }
 

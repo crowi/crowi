@@ -9,25 +9,25 @@ import CrowiRenderer from './util/CrowiRenderer'
 import CrowiAuth from './util/CrowiAuth'
 import Emitter from './emitter'
 
-import SideMenuTrigger from 'components/SideMenuTrigger'
-import HeaderSearchBox from 'components/HeaderSearchBox'
-import SearchPage from 'components/SearchPage'
-import PageListSearch from 'components/PageListSearch'
-import PageHistory from 'components/PageHistory'
-import PageAttachment from 'components/PageAttachment'
-import PageAlerts from 'components/PageAlerts'
-import SeenUserList from 'components/SeenUserList'
-import BookmarkButton from 'components/BookmarkButton'
-import ShareBox from 'components/ExternalShare/ShareBox'
-import SecretKeywordFormContainer from 'components/ExternalShare/SecretKeywordForm/SecretKeywordFormContainer'
-import RenameTree from 'components/RenameTree/RenameTree'
-import Backlink from './components/Backlink'
-import NotificationPage from 'components/NotificationPage'
-import HeaderNotification from 'components/HeaderNotification'
-import WatchButton from 'components/Notification/WatchButton'
-import AdminShare from 'components/Admin/Share/AdminShare'
-import Comment from 'components/Comment/Comment'
-import AdminPage from 'components/Admin/AdminPage'
+import { AdminPage } from 'components/Admin/AdminPage'
+import { AdminShare } from 'components/Admin/Share/AdminShare'
+import { Backlink } from 'components/Backlink/Backlink'
+import { BookmarkButton } from 'components/BookmarkButton/BookmarkButton'
+import { Comment } from 'components/Comment/Comment'
+import { HeaderNotification } from 'components/HeaderNotification/HeaderNotification'
+import { HeaderSearchBox } from 'components/HeaderSearchBox/HeaderSearchBox'
+import { NotificationPage } from 'components/Notification/NotificationPage'
+import { PageAlerts } from 'components/PageAlerts/PageAlerts'
+import { PageAttachment } from 'components/PageAttachment/PageAttachment'
+import { PageHistory } from 'components/PageHistory/PageHistory'
+import { PageListSearch } from 'components/PageListSearch/PageListSearch'
+import { RenameTree } from 'components/RenameTree/RenameTree'
+import { SearchPage } from 'components/Admin/Search/SearchPage'
+import { SecretKeywordFormContainer } from 'components/ExternalShare/SecretKeywordForm/SecretKeywordFormContainer'
+import { SeenUserList } from 'components/SeenUserList/SeenUserList'
+import { ShareBox } from 'components/ExternalShare/ShareBox'
+import { SideMenuTrigger } from 'components/SideMenuTrigger/SideMenuTrigger'
+import { WatchButton } from 'components/Notification/WatchButton'
 
 import hydrateComponents from './hydrateComponents'
 
@@ -73,7 +73,7 @@ const me = $('body').data('me')
 const componentMappings = {
   'side-menu-trigger': <SideMenuTrigger crowi={crowi} />,
   'search-top': <HeaderSearchBox crowi={crowi} />,
-  'search-page': <SearchPage crowi={crowi} />,
+  'search-page': <SearchPage />,
   'page-list-search': <PageListSearch crowi={crowi} />,
   'page-attachment': <PageAttachment pageId={pageId} pageContent={pageContent} crowi={crowi} />,
   'page-alerts': <PageAlerts pageId={pageId} crowi={crowi} />,

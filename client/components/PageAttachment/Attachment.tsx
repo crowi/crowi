@@ -1,6 +1,6 @@
 import React from 'react'
-import Icon from 'components/Common/Icon'
-import User from 'components/User/User'
+import { Icon } from 'components/Common/Icon/Icon'
+import { User } from 'components/User/User'
 import { Attachment as AttachmentType } from 'client/types/crowi'
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onAttachmentDeleteClicked: Function
 }
 
-export default class Attachment extends React.Component<Props> {
+export class Attachment extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 

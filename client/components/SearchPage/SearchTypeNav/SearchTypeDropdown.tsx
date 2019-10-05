@@ -13,7 +13,7 @@ interface State {
   open: boolean
 }
 
-class SearchTypeDropdown extends React.Component<Props, State> {
+class SearchTypeDropdownComponent extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -47,4 +47,4 @@ class SearchTypeDropdown extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(SearchTypeDropdown)
+export const SearchTypeDropdown = withTranslation()(SearchTypeDropdownComponent)

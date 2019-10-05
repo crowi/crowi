@@ -1,8 +1,8 @@
 import React from 'react'
 import styled from 'styled-components'
-import Notification from './Notification'
-import NullNotification from './NullNotification'
-import Icon from '../Common/Icon'
+import { Notification } from 'components/Notification/Notification'
+import { NullNotification } from 'components/Notification/NullNotification'
+import { Icon } from 'components/Common/Icon/Icon'
 import { Notification as NotificationType } from 'client/types/crowi'
 
 const NotificationList = styled.ul`
@@ -16,7 +16,7 @@ interface Props {
   notificationClickHandler: Function
 }
 
-export default class ListView extends React.Component<Props> {
+export class ListView extends React.Component<Props> {
   render() {
     const { loaded, notifications, notificationClickHandler } = this.props
 

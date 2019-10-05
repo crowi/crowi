@@ -1,5 +1,5 @@
 import React from 'react'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 import { User } from 'client/types/crowi'
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   }
 }
 
-export default class PageAlert extends React.Component<Props> {
+export class PageAlert extends React.Component<Props> {
   render() {
     const user = this.props.data.user
 

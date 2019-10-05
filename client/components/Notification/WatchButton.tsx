@@ -1,7 +1,7 @@
 import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button } from 'reactstrap'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 import Crowi from 'client/util/Crowi'
 
 interface Props extends WithTranslation {
@@ -15,7 +15,7 @@ interface State {
   creationError: boolean
 }
 
-class WatchButton extends React.Component<Props, State> {
+class WatchButtonComponent extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -71,4 +71,4 @@ class WatchButton extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(WatchButton)
+export const WatchButton = withTranslation()(WatchButtonComponent)

@@ -1,6 +1,6 @@
 import React from 'react'
 import { createUser } from 'client/fixtures'
-import User from './User'
+import { User } from 'components/User/User'
 
 export default { title: 'User/User' }
 

@@ -1,6 +1,6 @@
 import React from 'react'
 import { createUser } from 'client/fixtures'
-import UserList from './UserList'
+import { UserList } from 'components/SeenUserList/UserList'
 
 export default { title: 'SeenUserList/UserList' }
 

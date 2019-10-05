@@ -1,6 +1,6 @@
 import React from 'react'
 import { mount } from 'enzyme'
-import Icon from './Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 
 describe('Icon', () => {
   describe('props', () => {

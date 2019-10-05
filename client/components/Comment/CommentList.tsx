@@ -1,5 +1,5 @@
 import React, { FC } from 'react'
-import CommentItem from './CommentItem'
+import { CommentItem } from 'components/Comment/CommentItem'
 import Crowi from 'client/util/Crowi'
 import { CommonProps } from 'client/types/component'
 import { Comment } from 'client/types/crowi'
@@ -11,7 +11,7 @@ type Props = CommonProps & {
   revisionId: string | null
 }
 
-const CommentList: FC<Props> = props => {
+export const CommentList: FC<Props> = props => {
   const { crowi, comments, revisionId, ...others } = props
 
   return (
@@ -22,5 +22,3 @@ const CommentList: FC<Props> = props => {
     </div>
   )
 }
-
-export default CommentList

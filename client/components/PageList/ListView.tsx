@@ -1,12 +1,12 @@
 import React from 'react'
-import Page from './Page'
+import { Page } from 'components/PageList/Page'
 import { Page as PageType } from 'client/types/crowi'
 
 interface Props {
   pages: PageType[]
 }
 
-export default class ListView extends React.Component<Props> {
+export class ListView extends React.Component<Props> {
   static defaultProps = { pages: [] }
 
   render() {

@@ -1,6 +1,6 @@
 import React from 'react'
 import Crowi from 'client/util/Crowi'
-import RecentlyViewedPageList from './RecentlyViewedPageList'
+import { RecentlyViewedPageList } from 'components/HeaderSearchBox/RecentlyViewedPageList'
 
 const crowi = new Crowi({ user: {}, csrfToken: '' }, window)
 

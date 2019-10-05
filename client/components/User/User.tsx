@@ -1,6 +1,6 @@
 import React from 'react'
 import styled from 'styled-components'
-import UserPicture from './UserPicture'
+import { UserPicture } from 'components/User/UserPicture'
 import { User as UserType } from 'client/types/crowi'
 
 const StyledUser = styled.span`
@@ -16,7 +16,7 @@ interface Props {
   username: boolean
 }
 
-export default class User extends React.Component<Props> {
+export class User extends React.Component<Props> {
   static defaultProps = { name: false, username: false }
 
   render() {

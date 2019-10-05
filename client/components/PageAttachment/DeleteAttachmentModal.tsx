@@ -1,8 +1,8 @@
 import React from 'react'
 import { Button, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 
-import Icon from 'components/Common/Icon'
-import User from 'components/User/User'
+import { Icon } from 'components/Common/Icon/Icon'
+import { User } from 'components/User/User'
 
 import { Attachment } from 'client/types/crowi'
 
@@ -16,7 +16,7 @@ interface Props {
   onAttachmentDeleteClickedConfirm: Function
 }
 
-export default class DeleteAttachmentModal extends React.Component<Props> {
+export class DeleteAttachmentModal extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 

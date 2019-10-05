@@ -1,5 +1,5 @@
 import React from 'react'
-import { Pagination, PaginationItem, PaginationLink } from 'reactstrap'
+import { Pagination as PaginationContainer, PaginationItem, PaginationLink } from 'reactstrap'
 
 interface Props {
   current: number
@@ -7,7 +7,7 @@ interface Props {
   onClick: Function
 }
 
-export default class PaginationWrapper extends React.Component<Props> {
+export class Pagination extends React.Component<Props> {
   onClick(i: number) {
     const { onClick } = this.props
     return (e: React.MouseEvent<HTMLElement>) => {
@@ -33,7 +33,7 @@ export default class PaginationWrapper extends React.Component<Props> {
       )
     })
     return (
-      <Pagination>
+      <PaginationContainer>
         <PaginationItem disabled={current === 1}>
           <PaginationLink previous onClick={this.onClick(1)} />
         </PaginationItem>
@@ -41,7 +41,7 @@ export default class PaginationWrapper extends React.Component<Props> {
         <PaginationItem disabled={current === count}>
           <PaginationLink next onClick={this.onClick(count)} />
         </PaginationItem>
-      </Pagination>
+      </PaginationContainer>
     )
   }
 }

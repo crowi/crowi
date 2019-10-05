@@ -13,7 +13,7 @@ interface State {
   error: boolean
 }
 
-class DeleteConfirmModal extends React.Component<Props, State> {
+class DeleteConfirmModalComponent extends React.Component<Props, State> {
   static defaultProps = { show: false }
 
   constructor(props: Props) {
@@ -58,4 +58,4 @@ class DeleteConfirmModal extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(DeleteConfirmModal)
+export const DeleteConfirmModal = withTranslation()(DeleteConfirmModalComponent)

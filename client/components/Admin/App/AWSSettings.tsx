@@ -1,8 +1,8 @@
 import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input } from 'reactstrap'
-import Tips from './Tips'
-import FormRow from '../FormRow'
+import { Tips } from 'components/Admin/App/Tips'
+import { FormRow } from 'components/Admin/FormRow'
 
 interface Props {
   settingForm: object
@@ -14,7 +14,7 @@ interface Props {
   }
 }
 
-const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
+export const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [region, setRegion] = useState(settingForm['aws:region'] || '')
   const [bucket, setBucket] = useState(settingForm['aws:bucket'] || '')
@@ -77,5 +77,3 @@ const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
     </form>
   )
 }
-
-export default AWSSettings

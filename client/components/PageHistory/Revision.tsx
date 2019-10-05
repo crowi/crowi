@@ -1,7 +1,7 @@
 import React from 'react'
-import UserDate from 'components/Common/UserDate'
-import Icon from 'components/Common/Icon'
-import UserPicture from 'components/User/UserPicture'
+import { UserDate } from 'components/Common/UserDate'
+import { Icon } from 'components/Common/Icon/Icon'
+import { UserPicture } from 'components/User/UserPicture'
 import { Revision as RevisionType } from 'client/types/crowi'
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onDiffOpenClicked: Function
 }
 
-export default class Revision extends React.Component<Props> {
+export class Revision extends React.Component<Props> {
   constructor(props: Props) {
     super(props)
 

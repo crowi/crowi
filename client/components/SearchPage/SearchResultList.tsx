@@ -1,5 +1,5 @@
 import React from 'react'
-import PageBody from 'components/Page/PageBody'
+import { PageBody } from 'components/PageBody/PageBody'
 import { Page } from 'client/types/crowi'
 
 interface Props {
@@ -7,7 +7,7 @@ interface Props {
   searchingKeyword: string
 }
 
-export default class SearchResultList extends React.Component<Props> {
+export class SearchResultList extends React.Component<Props> {
   static defaultProps = { pages: [], searchingKeyword: '' }
 
   render() {

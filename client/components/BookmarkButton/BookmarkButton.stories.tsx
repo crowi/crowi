@@ -1,6 +1,6 @@
 import React from 'react'
 import Crowi from 'client/util/Crowi'
-import BookmarkButton from './BookmarkButton'
+import { BookmarkButton } from 'components/BookmarkButton/BookmarkButton'
 
 export default { title: 'BookmarkButton' }
 

@@ -1,8 +1,6 @@
 import React from 'react'
-import faker from 'faker'
 import { createPage } from 'client/fixtures'
-import ListView from './ListView'
-import { Revision } from 'client/types/crowi'
+import { ListView } from 'components/PageList/ListView'
 
 export default { title: 'PageList/ListView' }
 

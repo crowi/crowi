@@ -1,7 +1,7 @@
 import React from 'react'
-import UserPicture from './User/UserPicture'
+import { UserPicture } from 'components/User/UserPicture'
 import Crowi from 'client/util/Crowi'
-import { Backlink as BacklinkType, User } from 'client/types/crowi'
+import { Backlink as BacklinkType } from 'client/types/crowi'
 
 interface Props {
   crowi: Crowi
@@ -16,7 +16,7 @@ interface State {
   backLinks: BacklinkType[]
 }
 
-class Backlink extends React.Component<Props, State> {
+export class Backlink extends React.Component<Props, State> {
   static defaultProps = {
     pageId: null,
     limit: 5,
@@ -129,5 +129,3 @@ class Backlink extends React.Component<Props, State> {
     )
   }
 }
-
-export default Backlink

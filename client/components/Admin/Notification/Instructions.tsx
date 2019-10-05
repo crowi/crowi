@@ -14,7 +14,7 @@ function getAppDomain(appUrl) {
   return ''
 }
 
-const Instructions: FC<Props> = ({ appUrl }) => {
+export const Instructions: FC<Props> = ({ appUrl }) => {
   const [t] = useTranslation()
   const appDomain = getAppDomain(appUrl)
 
@@ -112,5 +112,3 @@ const Instructions: FC<Props> = ({ appUrl }) => {
     </>
   )
 }
-
-export default Instructions

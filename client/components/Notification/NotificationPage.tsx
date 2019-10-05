@@ -1,8 +1,8 @@
 // This is the root component for #notification-page
 
 import React from 'react'
-import ListView from './Notification/ListView'
-import Pager from './Notification/Pager'
+import { ListView } from 'components/Notification/ListView'
+import { Pager } from 'components/Notification/Pager'
 import Crowi from 'client/util/Crowi'
 import { Notification } from 'client/types/crowi'
 
@@ -17,7 +17,7 @@ interface State {
   hasNext: boolean
 }
 
-export default class NotificationPage extends React.Component<Props, State> {
+export class NotificationPage extends React.Component<Props, State> {
   limit: number
 
   offset: number

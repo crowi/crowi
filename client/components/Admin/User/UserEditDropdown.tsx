@@ -1,6 +1,6 @@
 import React, { useState, FC } from 'react'
 import { Button, Alert, Dropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap'
-import { STATUS } from './UserTable'
+import { STATUS } from 'components/Admin/User/UserTable'
 
 function OnlyStatusFactory(user) {
   return ({ status, children }) => user.status === status && children
@@ -20,7 +20,7 @@ interface Props {
   handleClickGrantAdmin: (user: any) => void
 }
 
-const UserEditDropdown: FC<Props> = ({ me, user, ...props }) => {
+export const UserEditDropdown: FC<Props> = ({ me, user, ...props }) => {
   const { admin, username } = user
   const [open, setOpen] = useState(false)
   const {
@@ -101,5 +101,3 @@ const UserEditDropdown: FC<Props> = ({ me, user, ...props }) => {
     </Dropdown>
   )
 }
-
-export default UserEditDropdown

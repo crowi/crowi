@@ -1,5 +1,5 @@
 import React from 'react'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 
 export const components = {
   Icon,

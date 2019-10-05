@@ -1,6 +1,6 @@
 import React from 'react'
-import Icon from './Common/Icon'
-import PageRevisionList from './PageHistory/PageRevisionList'
+import { Icon } from 'components/Common/Icon/Icon'
+import { PageRevisionList } from 'components/PageHistory/PageRevisionList'
 import Crowi from 'client/util/Crowi'
 import { Revision } from 'client/types/crowi'
 
@@ -14,7 +14,7 @@ interface State {
   diffOpened: { [id: string]: boolean }
 }
 
-export default class PageHistory extends React.Component<Props, State> {
+export class PageHistory extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

@@ -11,7 +11,7 @@ interface Props {
   revisionDiffOpened: boolean
 }
 
-export default class RevisionDiff extends React.Component<Props> {
+export class RevisionDiff extends React.Component<Props> {
   render() {
     const { currentRevision, previousRevision, revisionDiffOpened } = this.props
 

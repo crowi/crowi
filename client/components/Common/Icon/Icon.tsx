@@ -1,6 +1,6 @@
 import React from 'react'
 import MDIIcon from '@mdi/react'
-import * as Icons from './Icons'
+import * as Icons from 'components/Common/Icon/Icons'
 
 export type IconName = keyof typeof Icons
 
@@ -11,7 +11,7 @@ interface Props {
   className?: string
 }
 
-export default class Icon extends React.Component<Props> {
+export class Icon extends React.Component<Props> {
   static defaultProps = { spin: false }
 
   render() {

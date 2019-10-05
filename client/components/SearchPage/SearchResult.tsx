@@ -1,7 +1,7 @@
 import React from 'react'
-import Page from 'components/PageList/Page'
-import Icon from 'components/Common/Icon'
-import SearchResultList from './SearchResultList'
+import { Page } from 'components/PageList/Page'
+import { Icon } from 'components/Common/Icon/Icon'
+import { SearchResultList } from 'components/SearchPage/SearchResultList'
 import { Page as PageType } from 'client/types/crowi'
 
 interface Props {
@@ -20,7 +20,7 @@ interface State {
 }
 
 // Search.SearchResult
-export default class SearchResult extends React.Component<Props, State> {
+export class SearchResult extends React.Component<Props, State> {
   static defaultProps = {
     tree: '',
     pages: [],

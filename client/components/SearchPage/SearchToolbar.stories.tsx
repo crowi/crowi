@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import SearchToolbar from './SearchToolbar'
+import { SearchToolbar } from 'components/SearchPage/SearchToolbar'
 
 export default { title: 'SearchPage/SearchToolbar' }
 

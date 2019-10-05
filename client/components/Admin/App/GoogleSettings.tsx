@@ -1,8 +1,8 @@
 import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input } from 'reactstrap'
-import FormRow from '../FormRow'
-import Tips from './Tips'
+import { Tips } from 'components/Admin/App/Tips'
+import { FormRow } from 'components/Admin/FormRow'
 
 interface Props {
   settingForm: object
@@ -14,7 +14,7 @@ interface Props {
   }
 }
 
-const GoogleSettings: FC<Props> = ({ settingForm, update, alert }) => {
+export const GoogleSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [clientId, setClientId] = useState(settingForm['google:clientId'])
   const [clientSecret, setClientSecret] = useState(settingForm['google:clientSecret'])
@@ -55,5 +55,3 @@ const GoogleSettings: FC<Props> = ({ settingForm, update, alert }) => {
     </form>
   )
 }
-
-export default GoogleSettings

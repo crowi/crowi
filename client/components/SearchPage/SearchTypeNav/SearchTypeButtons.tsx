@@ -8,7 +8,7 @@ interface Props {
   changeType: Function
 }
 
-class SearchTypeButtons extends React.Component<Props> {
+export class SearchTypeButtons extends React.Component<Props> {
   render() {
     const { searchTypes, activeType, changeType } = this.props
     const { key: activeKey } = activeType
@@ -25,5 +25,3 @@ class SearchTypeButtons extends React.Component<Props> {
     )
   }
 }
-
-export default SearchTypeButtons

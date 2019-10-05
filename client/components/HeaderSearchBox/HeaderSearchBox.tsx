@@ -3,8 +3,8 @@
 import React from 'react'
 import queryString from 'query-string'
 
-import SearchForm from './HeaderSearchBox/SearchForm'
-import SearchSuggest from './HeaderSearchBox/SearchSuggest'
+import { SearchForm } from 'components/HeaderSearchBox/SearchForm'
+import { SearchSuggest } from 'components/HeaderSearchBox/SearchSuggest'
 import Crowi from 'client/util/Crowi'
 
 interface Props {
@@ -20,7 +20,7 @@ interface State {
   focused: boolean
 }
 
-export default class HeaderSearchBox extends React.Component<Props, State> {
+export class HeaderSearchBox extends React.Component<Props, State> {
   public node: HTMLDivElement | null = null
 
   constructor(props: Props) {

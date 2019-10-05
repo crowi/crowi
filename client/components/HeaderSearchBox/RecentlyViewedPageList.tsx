@@ -1,7 +1,7 @@
 import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
-import Icon from 'components/Common/Icon'
-import ListView from 'components/PageList/ListView'
+import { Icon } from 'components/Common/Icon/Icon'
+import { ListView } from 'components/PageList/ListView'
 import Crowi from 'client/util/Crowi'
 
 interface Props extends WithTranslation {
@@ -13,7 +13,7 @@ interface State {
   loading: boolean
 }
 
-class RecentlyViewedPageList extends React.Component<Props, State> {
+class RecentlyViewedPageListComponent extends React.Component<Props, State> {
   constructor(props) {
     super(props)
 
@@ -42,4 +42,4 @@ class RecentlyViewedPageList extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(RecentlyViewedPageList)
+export const RecentlyViewedPageList = withTranslation()(RecentlyViewedPageListComponent)

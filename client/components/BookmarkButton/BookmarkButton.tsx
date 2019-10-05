@@ -1,5 +1,5 @@
 import React from 'react'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 import Crowi from 'client/util/Crowi'
 
 interface Props {
@@ -11,7 +11,7 @@ interface State {
   bookmarked: boolean
 }
 
-export default class BookmarkButton extends React.Component<Props, State> {
+export class BookmarkButton extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

@@ -1,7 +1,7 @@
 import React from 'react'
-import SearchTypeButtons from 'components/SearchPage/SearchTypeNav/SearchTypeButtons'
-import SearchTypeDropdown from 'components/SearchPage/SearchTypeNav/SearchTypeDropdown'
 import { SearchType } from 'components/SearchPage/SearchToolbar'
+import { SearchTypeButtons } from 'components/SearchPage/SearchTypeNav/SearchTypeButtons'
+import { SearchTypeDropdown } from 'components/SearchPage/SearchTypeNav/SearchTypeDropdown'
 
 interface Props {
   searchTypes: SearchType[]
@@ -9,7 +9,7 @@ interface Props {
   changeType: Function
 }
 
-class SearchTypeNav extends React.Component<Props> {
+export class SearchTypeNav extends React.Component<Props> {
   render() {
     return (
       <div>
@@ -19,5 +19,3 @@ class SearchTypeNav extends React.Component<Props> {
     )
   }
 }
-
-export default SearchTypeNav

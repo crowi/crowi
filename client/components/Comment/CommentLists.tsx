@@ -1,7 +1,7 @@
 import React, { FC } from 'react'
 import styled from 'styled-components'
-import CommentList from './CommentList'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
+import { CommentList } from 'components/Comment/CommentList'
 import Crowi from 'client/util/Crowi'
 import { Comment } from 'client/types/crowi'
 
@@ -45,7 +45,7 @@ interface Props {
   revisionId: string | null
 }
 
-const CommentLists: FC<Props> = ({ crowi, comments, revisionId }) => {
+export const CommentLists: FC<Props> = ({ crowi, comments, revisionId }) => {
   const { newer, current, older } = comments
   return (
     <div>
@@ -55,5 +55,3 @@ const CommentLists: FC<Props> = ({ crowi, comments, revisionId }) => {
     </div>
   )
 }
-
-export default CommentLists

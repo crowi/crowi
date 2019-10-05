@@ -1,7 +1,7 @@
 import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, Input, Alert } from 'reactstrap'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
 
@@ -15,7 +15,7 @@ interface Props extends WithTranslation {
   crowi: Crowi
 }
 
-class ShareBoxContent extends React.Component<Props> {
+class ShareBoxContentComponent extends React.Component<Props> {
   static defaultProps = { isCreated: false }
 
   inputRef?: HTMLInputElement
@@ -76,4 +76,4 @@ class ShareBoxContent extends React.Component<Props> {
   }
 }
 
-export default withTranslation()(ShareBoxContent)
+export const ShareBoxContent = withTranslation()(ShareBoxContentComponent)

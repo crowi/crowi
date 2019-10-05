@@ -23,7 +23,7 @@ interface Props {
   invite: ({ emails, sendEmail }: { emails: string; sendEmail: boolean }) => void
 }
 
-const InviteUserForm: FC<Props> = ({ invite }) => {
+export const InviteUserForm: FC<Props> = ({ invite }) => {
   const [collapse, setCollapse] = useState(false)
   const [{ emails, sendEmail }, { setEmails, setSendEmail, onSubmit }] = useForm(invite)
 
@@ -68,5 +68,3 @@ const InviteUserForm: FC<Props> = ({ invite }) => {
     </>
   )
 }
-
-export default InviteUserForm

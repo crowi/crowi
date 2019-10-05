@@ -1,7 +1,7 @@
 import React, { FC, useState, useEffect } from 'react'
 import styled from 'styled-components'
-import CommentLists from './CommentLists'
-import CommentForm from './CommentForm'
+import { CommentForm } from 'components/Comment/CommentForm'
+import { CommentLists } from 'components/Comment/CommentLists'
 import Crowi from 'client/util/Crowi'
 import { CommonProps } from 'client/types/component'
 import { Comment as CommentType } from 'client/types/crowi'
@@ -76,7 +76,7 @@ type Props = CommonProps & {
   isSharePage: boolean
 }
 
-const Comment: FC<Props> = props => {
+export const Comment: FC<Props> = props => {
   const { crowi, pageId, revisionId, revisionCreatedAt, isSharePage, ...others } = props
   const [comments, fetchComments] = useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage)
   const [{ posting, message }, { postComment }] = usePostComment(crowi, pageId, revisionId, fetchComments)
@@ -92,5 +92,3 @@ const Comment: FC<Props> = props => {
     </PageComments>
   ) : null
 }
-
-export default Comment

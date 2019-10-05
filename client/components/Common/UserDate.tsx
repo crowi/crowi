@@ -12,7 +12,7 @@ interface Props {
  *
  * display date depends on user timezone of user settings
  */
-export default class UserDate extends React.Component<Props> {
+export class UserDate extends React.Component<Props> {
   static defaultProps = { format: 'YYYY/MM/DD HH:mm:ss', className: '' }
 
   render() {

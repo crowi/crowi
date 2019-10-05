@@ -11,7 +11,7 @@ type Props = CommonProps & {
   comment: string
 }
 
-const CommentBody: FC<Props> = props => {
+export const CommentBody: FC<Props> = props => {
   const { comment, ...others } = props
 
   return (
@@ -22,5 +22,3 @@ const CommentBody: FC<Props> = props => {
     </PageCommentBody>
   )
 }
-
-export default CommentBody

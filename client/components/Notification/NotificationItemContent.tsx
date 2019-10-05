@@ -1,8 +1,8 @@
 import React from 'react'
 import styled from 'styled-components'
-import Icon, { IconName } from '../Common/Icon'
-import UserDate from '../Common/UserDate'
-import UserPicture from '../User/UserPicture'
+import { Icon, IconName } from 'components/Common/Icon/Icon'
+import { UserDate } from 'components/Common/UserDate'
+import { UserPicture } from 'components/User/UserPicture'
 import { Notification } from 'client/types/crowi'
 
 const NotificationImage = styled.div`
@@ -22,7 +22,7 @@ interface Props {
   icon: IconName
 }
 
-export default class NotificationContent extends React.Component<Props> {
+export class NotificationItemContent extends React.Component<Props> {
   static defaultProps = { icon: 'checkbox-blank-circle' }
 
   getUserImage() {

@@ -2,7 +2,7 @@ import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import moment from 'moment'
 import { Table, Alert } from 'reactstrap'
-import Pagination from 'components/Common/Pagination'
+import { Pagination } from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
 
@@ -29,7 +29,7 @@ interface Record {
   isActive: boolean
 }
 
-class ShareList extends React.Component<Props, State> {
+class ShareListComponent extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 
@@ -140,4 +140,4 @@ class ShareList extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(ShareList)
+export const ShareList = withTranslation()(ShareListComponent)

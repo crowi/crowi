@@ -1,7 +1,7 @@
 import React from 'react'
 import faker from 'faker'
 import { createPage, createUser } from 'client/fixtures'
-import PageAttachmentList from './PageAttachmentList'
+import { PageAttachmentList } from 'components/PageAttachment/PageAttachmentList'
 
 export default { title: 'PageAttachment/PageAttachmentList' }
 

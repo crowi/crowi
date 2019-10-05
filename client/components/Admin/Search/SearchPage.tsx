@@ -1,11 +1,10 @@
 import React, { useContext, useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, FormGroup, Label, FormText, Row, Col } from 'reactstrap'
-
 import { AdminContext } from 'components/Admin/AdminPage'
-import AdminRebuildSearch from './AdminRebuildSearch'
+import { AdminRebuildSearch } from 'components/Admin/Search/AdminRebuildSearch'
 
-const SearchPage: FC<{}> = () => {
+export const SearchPage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi } = useContext(AdminContext)
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
@@ -57,5 +56,3 @@ const SearchPage: FC<{}> = () => {
     </form>
   )
 }
-
-export default SearchPage

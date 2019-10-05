@@ -1,7 +1,7 @@
 import React from 'react'
 import faker from 'faker'
 import Crowi from 'client/util/Crowi'
-import CommentLists from './CommentLists'
+import { CommentLists } from 'components/Comment/CommentLists'
 
 const crowi = new Crowi({ user: {}, csrfToken: '' }, window)
 

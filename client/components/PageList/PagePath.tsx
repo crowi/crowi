@@ -7,7 +7,7 @@ interface Props {
   excludePathString: string
 }
 
-export default class PagePath extends React.Component<Props> {
+export class PagePath extends React.Component<Props> {
   static defaultProps = { page: {}, excludePathString: '' }
 
   render() {

@@ -1,7 +1,7 @@
 import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input, CustomInput, FormText } from 'reactstrap'
-import FormRow from '../FormRow'
+import { FormRow } from 'components/Admin/FormRow'
 
 interface Props {
   isUploadable: boolean
@@ -14,7 +14,7 @@ interface Props {
   }
 }
 
-const AppSettings: FC<Props> = ({ isUploadable, settingForm, update, alert }) => {
+export const AppSettings: FC<Props> = ({ isUploadable, settingForm, update, alert }) => {
   const [t] = useTranslation()
   const [title, setTitle] = useState(settingForm['app:title'])
   const [confidential, setConfidential] = useState(settingForm['app:confidential'])
@@ -78,5 +78,3 @@ const AppSettings: FC<Props> = ({ isUploadable, settingForm, update, alert }) =>
     </form>
   )
 }
-
-export default AppSettings

@@ -1,5 +1,5 @@
 import React from 'react'
-import Attachment from './Attachment'
+import { Attachment } from 'components/PageAttachment/Attachment'
 import { Attachment as AttachmentType } from 'client/types/crowi'
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   onAttachmentDeleteClicked: Function
 }
 
-export default class PageAttachmentList extends React.Component<Props> {
+export class PageAttachmentList extends React.Component<Props> {
   render() {
     if (this.props.attachments.length === 0) {
       return null

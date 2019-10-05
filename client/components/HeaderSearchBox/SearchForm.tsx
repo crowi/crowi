@@ -1,5 +1,5 @@
 import React from 'react'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 import Emitter from '../../emitter'
 
 interface Props {
@@ -17,7 +17,7 @@ interface State {
 }
 
 // Header.SearchForm
-export default class SearchForm extends React.Component<Props, State> {
+export class SearchForm extends React.Component<Props, State> {
   static defaultProps = { pollInterval: 1000 }
 
   ticker: number | undefined

@@ -8,7 +8,7 @@ type Props = CommonProps & {
 }
 
 // TODO UserComponent?
-export default class UserPicture extends React.Component<Props> {
+export class UserPicture extends React.Component<Props> {
   static defaultProps = {
     user: {},
     size: null,

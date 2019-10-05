@@ -1,7 +1,7 @@
 import React from 'react'
-import UserPicture from 'components/User/UserPicture'
-import PageListMeta from './PageListMeta'
-import PagePath from './PagePath'
+import { UserPicture } from 'components/User/UserPicture'
+import { PagePath } from 'components/PageList/PagePath'
+import { PageListMeta } from 'components/PageList/PageListMeta'
 import { Page as PageType } from 'client/types/crowi'
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
   onClick?: () => void
 }
 
-export default class Page extends React.Component<Props> {
+export class Page extends React.Component<Props> {
   static defaultProps = {
     page: {},
     linkTo: '',

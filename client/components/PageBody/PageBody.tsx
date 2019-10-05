@@ -8,7 +8,7 @@ interface Props {
   pageBody: string
 }
 
-export default class PageBody extends React.Component<Props> {
+export class PageBody extends React.Component<Props> {
   static defaultProps = { page: {}, pageBody: '' }
 
   crowiRenderer: CrowiRenderer

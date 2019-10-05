@@ -1,6 +1,6 @@
 import React from 'react'
-import PageAttachmentList from './PageAttachment/PageAttachmentList'
-import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal'
+import { PageAttachmentList } from 'components/PageAttachment/PageAttachmentList'
+import { DeleteAttachmentModal } from 'components/PageAttachment/DeleteAttachmentModal'
 import Crowi from 'client/util/Crowi'
 import { Attachment } from 'client/types/crowi'
 
@@ -18,7 +18,7 @@ interface State {
   deleteError: string
 }
 
-export default class PageAttachment extends React.Component<Props, State> {
+export class PageAttachment extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

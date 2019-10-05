@@ -1,15 +1,14 @@
 import React, { createContext, useState, useEffect, FC } from 'react'
 import { BrowserRouter as Router, Switch, Route } from 'react-router-dom'
 import Crowi from 'client/util/Crowi'
-
-import Top from './TopPage'
-import App from './App/AppPage'
-import Notification from './Notification/NotificationPage'
-import User from './User/UserPage'
-import Search from './Search/SearchPage'
-import Share from './Share/SharePage'
-import Backlink from './Backlink/BacklinkPage'
-import Navigation from './Navigation'
+import { AppPage } from 'components/Admin/App/AppPage'
+import { BacklinkPage } from 'components/Admin/Backlink/BacklinkPage'
+import { Navigation } from 'components/Admin/Navigation'
+import { NotificationPage } from 'components/Notification/NotificationPage'
+import { SearchPage } from 'components/Admin/Search/SearchPage'
+import { SharePage } from 'components/Admin/Share/SharePage'
+import { TopPage } from 'components/Admin/TopPage'
+import { UserPage } from 'components/Admin/User/UserPage'
 
 interface AdminContext {
   crowi: Crowi
@@ -55,7 +54,7 @@ interface Props {
   crowi: Crowi
 }
 
-const AdminPage: FC<Props> = ({ crowi }) => {
+export const AdminPage: FC<Props> = ({ crowi }) => {
   const [loading, setLoading] = useState(true)
   const [searchConfigured, fetchSearchConfig] = useSearchConfig(crowi)
   const [settings, fetchSettings] = useFetchSettings(crowi)
@@ -84,13 +83,13 @@ const AdminPage: FC<Props> = ({ crowi }) => {
           </div>
           <div className="col-md-9">
             <Switch>
-              <Route path="/admin" exact component={Top} />
-              <Route path="/admin/app" component={App} />
-              <Route path="/admin/notification" component={Notification} />
-              <Route path="/admin/users" component={User} />
-              <Route path="/admin/search" component={Search} />
-              <Route path="/admin/share" component={Share} />
-              <Route path="/admin/backlink" component={Backlink} />
+              <Route path="/admin" exact component={TopPage} />
+              <Route path="/admin/app" component={AppPage} />
+              <Route path="/admin/notification" component={NotificationPage} />
+              <Route path="/admin/users" component={UserPage} />
+              <Route path="/admin/search" component={SearchPage} />
+              <Route path="/admin/share" component={SharePage} />
+              <Route path="/admin/backlink" component={BacklinkPage} />
             </Switch>
           </div>
         </div>
@@ -98,5 +97,3 @@ const AdminPage: FC<Props> = ({ crowi }) => {
     </Router>
   )
 }
-
-export default AdminPage

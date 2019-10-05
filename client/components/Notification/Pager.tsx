@@ -22,7 +22,7 @@ interface Props {
   handleNextClick: Function
 }
 
-export default class Pager extends React.Component<Props> {
+export class Pager extends React.Component<Props> {
   static defaultProps = {
     hasPrev: false,
     hasNext: false,

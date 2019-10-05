@@ -1,7 +1,7 @@
 import React from 'react'
 import { Dropdown, DropdownToggle } from 'reactstrap'
-import DropdownMenu from './HeaderNotification/DropdownMenu'
-import Icon from './Common/Icon'
+import { DropdownMenu } from 'components/HeaderNotification/DropdownMenu'
+import { Icon } from 'components/Common/Icon/Icon'
 import Crowi from 'client/util/Crowi'
 import { Notification } from 'client/types/crowi'
 
@@ -17,7 +17,7 @@ interface State {
   open: boolean
 }
 
-export default class HeaderNotification extends React.Component<Props, State> {
+export class HeaderNotification extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

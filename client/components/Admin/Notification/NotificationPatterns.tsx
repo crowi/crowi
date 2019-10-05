@@ -8,7 +8,7 @@ interface Props {
   removePattern: (pattern: string) => void
 }
 
-const NotificationPatterns: FC<Props> = ({ settings, addPattern, removePattern }) => {
+export const NotificationPatterns: FC<Props> = ({ settings, addPattern, removePattern }) => {
   const [t] = useTranslation()
   const [pathPattern, setPathPattern] = useState('')
   const [channel, setChannel] = useState('')
@@ -78,5 +78,3 @@ const NotificationPatterns: FC<Props> = ({ settings, addPattern, removePattern }
     </>
   )
 }
-
-export default NotificationPatterns

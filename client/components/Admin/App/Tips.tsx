@@ -5,7 +5,7 @@ interface Props {
   children: ReactNode
 }
 
-const Tips: FC<Props> = ({ children }: Props) => {
+export const Tips: FC<Props> = ({ children }: Props) => {
   return (
     <Row>
       <Col xs={{ size: 10, offset: 1 }} className="mb-4">
@@ -16,5 +16,3 @@ const Tips: FC<Props> = ({ children }: Props) => {
     </Row>
   )
 }
-
-export default Tips

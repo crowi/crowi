@@ -1,5 +1,5 @@
 import React from 'react'
-import UserDate from './UserDate'
+import { UserDate } from 'components/Common/UserDate'
 
 export default { title: 'Common/UserDate' }
 

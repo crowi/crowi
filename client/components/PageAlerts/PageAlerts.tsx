@@ -1,5 +1,5 @@
 import React from 'react'
-import PageAlert from './PageAlerts/PageAlert'
+import { PageAlert } from 'components/PageAlerts/PageAlert'
 import Crowi from 'client/util/Crowi'
 import { User, Page } from 'client/types/crowi'
 
@@ -16,7 +16,7 @@ interface State {
   }
 }
 
-export default class PageAlerts extends React.Component<Props, State> {
+export class PageAlerts extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

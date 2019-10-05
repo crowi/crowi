@@ -1,10 +1,10 @@
 import React, { useContext, useEffect, FC } from 'react'
 import { NavLink } from 'react-router-dom'
 
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 import { AdminContext } from 'components/Admin/AdminPage'
 
-const Navigation: FC<{}> = () => {
+export const Navigation: FC<{}> = () => {
   const { settingForm, searchConfigured } = useContext(AdminContext)
 
   const items = [
@@ -40,5 +40,3 @@ const Navigation: FC<{}> = () => {
     </div>
   )
 }
-
-export default Navigation

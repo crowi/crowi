@@ -2,13 +2,12 @@ import React, { useContext, useState, useEffect, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert } from 'reactstrap'
 import queryString from 'query-string'
-
 import { AdminContext } from 'components/Admin/AdminPage'
-import UserTable from './UserTable'
-import InviteUserForm from './InviteUserForm'
-import InvitedUserModal from './InvitedUserModal'
-import ResetPasswordModal from './ResetPasswordModal'
-import ResetedPasswordModal from './ResetedPasswordModal'
+import { InvitedUserModal } from 'components/Admin/User/InvitedUserModal'
+import { InviteUserForm } from 'components/Admin/User/InviteUserForm'
+import { ResetedPasswordModal } from 'components/Admin/User/ResetedPasswordModal'
+import { ResetPasswordModal } from 'components/Admin/User/ResetPasswordModal'
+import { UserTable } from 'components/Admin/User/UserTable'
 
 function useAlerts() {
   const [success, setSuccess] = useState(null)
@@ -136,7 +135,7 @@ function useModal<T = any>(initialState: T | {} = {}) {
   return [{ isOpen, modalState }, { toggle, open, close }] as const
 }
 
-const UserPage: FC<{}> = () => {
+export const UserPage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi } = useContext(AdminContext)
   const me = crowi.getUser()
@@ -178,5 +177,3 @@ const UserPage: FC<{}> = () => {
     </>
   )
 }
-
-export default UserPage

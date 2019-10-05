@@ -2,7 +2,7 @@ import React from 'react'
 import faker from 'faker'
 import { UncontrolledDropdown, DropdownToggle } from 'reactstrap'
 import { createPage, createUser } from 'client/fixtures'
-import DropdownMenu from './DropdownMenu'
+import { DropdownMenu } from 'components/HeaderNotification/DropdownMenu'
 
 export default { title: 'HeaderNotification/DropdownMenu' }
 

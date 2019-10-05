@@ -1,6 +1,6 @@
 import React from 'react'
-import Revision from './Revision'
-import RevisionDiff from './RevisionDiff'
+import { Revision } from 'components/PageHistory/Revision'
+import { RevisionDiff } from 'components/PageHistory/RevisionDiff'
 import { Revision as RevisionType } from 'client/types/crowi'
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onDiffOpenClicked: Function
 }
 
-export default class PageRevisionList extends React.Component<Props> {
+export class PageRevisionList extends React.Component<Props> {
   render() {
     const revisions = this.props.revisions
     const revisionCount = this.props.revisions.length

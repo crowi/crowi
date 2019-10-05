@@ -1,10 +1,9 @@
 import React, { useContext, useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, FormGroup, Label, FormText, Row, Col } from 'reactstrap'
-
 import { AdminContext } from 'components/Admin/AdminPage'
 
-const BacklinkPage: FC<{}> = () => {
+export const BacklinkPage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi } = useContext(AdminContext)
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
@@ -53,5 +52,3 @@ const BacklinkPage: FC<{}> = () => {
     </form>
   )
 }
-
-export default BacklinkPage

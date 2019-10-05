@@ -6,7 +6,7 @@ interface Props {
   clear: () => void
 }
 
-const InvitedUserModal: FC<Props> = ({ users, clear }) => {
+export const InvitedUserModal: FC<Props> = ({ users, clear }) => {
   return (
     <Modal isOpen={users.length > 0} toggle={clear}>
       <ModalHeader toggle={clear}>ユーザーを招待しました</ModalHeader>
@@ -39,5 +39,3 @@ const InvitedUserModal: FC<Props> = ({ users, clear }) => {
     </Modal>
   )
 }
-
-export default InvitedUserModal

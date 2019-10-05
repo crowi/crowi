@@ -3,7 +3,7 @@
 import React from 'react'
 
 import queryString from 'query-string'
-import SearchResult from './SearchPage/SearchResult'
+import { SearchResult } from 'components/SearchPage/SearchResult'
 import Crowi from 'client/util/Crowi'
 
 interface Props {
@@ -19,7 +19,7 @@ interface State {
   searchError: Error | null
 }
 
-export default class PageListSearch extends React.Component<Props, State> {
+export class PageListSearch extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

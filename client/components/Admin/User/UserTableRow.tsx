@@ -1,9 +1,9 @@
 import React, { FC } from 'react'
 import moment from 'moment'
 import { Badge } from 'reactstrap'
-import UserPicture from 'components/User/UserPicture'
-import UserStatusBadge from 'components/User/UserStatusBadge'
-import UserEditDropdown from './UserEditDropdown'
+import { UserPicture } from 'components/User/UserPicture'
+import { UserStatusBadge } from 'components/User/UserStatusBadge'
+import { UserEditDropdown } from 'components/Admin/User/UserEditDropdown'
 
 interface Props {
   me: any
@@ -20,7 +20,7 @@ interface Props {
   handleClickGrantAdmin: (user: any) => void
 }
 
-const UserTableRow: FC<Props> = ({ me, user, ...props }) => {
+export const UserTableRow: FC<Props> = ({ me, user, ...props }) => {
   const { admin, username, name, email, createdAt } = user
   const {
     handleClickEdit,
@@ -72,5 +72,3 @@ const UserTableRow: FC<Props> = ({ me, user, ...props }) => {
     </tr>
   )
 }
-
-export default UserTableRow

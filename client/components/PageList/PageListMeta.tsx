@@ -1,12 +1,12 @@
 import React from 'react'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 import { Page } from 'client/types/crowi'
 
 interface Props {
   page: Page
 }
 
-export default class PageListMeta extends React.Component<Props> {
+export class PageListMeta extends React.Component<Props> {
   static defaultProps = { page: {} }
 
   isPortalPath(path: string) {

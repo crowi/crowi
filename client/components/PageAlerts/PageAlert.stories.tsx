@@ -1,6 +1,6 @@
 import React from 'react'
 import { createUser } from 'client/fixtures'
-import PageAlert from './PageAlert'
+import { PageAlert } from 'components/PageAlerts/PageAlert'
 
 export default { title: 'PageAlerts/PageAlert' }
 

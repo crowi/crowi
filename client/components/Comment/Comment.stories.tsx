@@ -1,6 +1,6 @@
 import React from 'react'
 import Crowi from 'client/util/Crowi'
-import Comment from './Comment'
+import { Comment } from 'components/Comment/Comment'
 
 const crowi = new Crowi({ user: {}, csrfToken: '' }, window)
 

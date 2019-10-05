@@ -5,7 +5,7 @@ interface Props {
   slackAuthUrl: string | null | undefined
 }
 
-const ConnectButton: FC<Props> = ({ hasSlackToken, slackAuthUrl }) => {
+export const ConnectButton: FC<Props> = ({ hasSlackToken, slackAuthUrl }) => {
   const url = slackAuthUrl || undefined
   return hasSlackToken ? (
     <div className="text-center">
@@ -25,5 +25,3 @@ const ConnectButton: FC<Props> = ({ hasSlackToken, slackAuthUrl }) => {
     </div>
   )
 }
-
-export default ConnectButton

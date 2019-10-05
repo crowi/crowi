@@ -1,9 +1,7 @@
 import React from 'react'
-import UserPicture from '../User/UserPicture'
-
-import PageCommentNotification from './ModelAction/PageCommentNotification'
-import PageLikeNotification from './ModelAction/PageLikeNotification'
-
+import { UserPicture } from 'components/User/UserPicture'
+import { PageCommentNotification } from 'components/Notification/ModelAction/PageCommentNotification'
+import { PageLikeNotification } from 'components/Notification/ModelAction/PageLikeNotification'
 import { Notification as NotificationType } from 'client/types/crowi'
 
 interface Props {
@@ -11,7 +9,7 @@ interface Props {
   onClick: Function
 }
 
-export default class Notification extends React.Component<Props> {
+export class Notification extends React.Component<Props> {
   onClick() {
     this.props.onClick(this.props.notification)
   }

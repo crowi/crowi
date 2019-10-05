@@ -2,9 +2,9 @@
 
 import React from 'react'
 
-import Emitter from '../emitter'
+import Emitter from '../../emitter'
 import Crowi from 'client/util/Crowi'
-import Icon from 'components/Common/Icon'
+import { Icon } from 'components/Common/Icon/Icon'
 
 interface Props {
   crowi: Crowi
@@ -14,7 +14,7 @@ interface State {
   menuOpen: boolean
 }
 
-export default class SideMenuTrigger extends React.Component<Props, State> {
+export class SideMenuTrigger extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
 

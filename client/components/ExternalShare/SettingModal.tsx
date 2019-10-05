@@ -1,7 +1,7 @@
 import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
-import Icon from 'components/Common/Icon'
-import DeleteConfirmModal from './DeleteConfirmModal'
+import { Icon } from 'components/Common/Icon/Icon'
+import { DeleteConfirmModal } from 'components/ExternalShare/DeleteConfirmModal'
 import { Button, Container, Row, Col, Label, Input, CustomInput, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
 import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
@@ -27,7 +27,7 @@ interface State {
   }
 }
 
-class SettingModal extends React.Component<Props, State> {
+class SettingModalComponent extends React.Component<Props, State> {
   static defaultProps = { show: false }
 
   constructor(props: Props) {
@@ -192,4 +192,4 @@ class SettingModal extends React.Component<Props, State> {
   }
 }
 
-export default withTranslation()(SettingModal)
+export const SettingModal = withTranslation()(SettingModalComponent)

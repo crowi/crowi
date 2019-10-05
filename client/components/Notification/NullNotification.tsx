@@ -7,6 +7,4 @@ const StyledNullNotification = styled.li`
   text-align: center;
 `
 
-const NullNotification = () => <StyledNullNotification>You had no notifications, yet.</StyledNullNotification>
-
-export default NullNotification
+export const NullNotification = () => <StyledNullNotification>You had no notifications, yet.</StyledNullNotification>

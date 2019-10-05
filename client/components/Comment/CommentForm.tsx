@@ -22,7 +22,7 @@ type Props = CommonProps & {
   postComment: (comment: string) => Promise<void>
 }
 
-const CommentForm: FC<Props> = props => {
+export const CommentForm: FC<Props> = props => {
   const { posting, message, postComment, ...others } = props
   const [comment, setComment] = useState('')
 
@@ -43,5 +43,3 @@ const CommentForm: FC<Props> = props => {
     </PageCommentForm>
   )
 }
-
-export default CommentForm

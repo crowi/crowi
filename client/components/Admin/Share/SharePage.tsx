@@ -1,11 +1,10 @@
 import React, { useContext, useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, FormGroup, CustomInput, Row, Col } from 'reactstrap'
-
 import { AdminContext } from 'components/Admin/AdminPage'
-import AdminShare from './AdminShare'
+import { AdminShare } from 'components/Admin/Share/AdminShare'
 
-const SharePage: FC<{}> = () => {
+export const SharePage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi, loading, settingForm, fetchSettings } = useContext(AdminContext)
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
@@ -69,5 +68,3 @@ const SharePage: FC<{}> = () => {
     </>
   )
 }
-
-export default SharePage

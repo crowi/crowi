@@ -2,9 +2,9 @@ import React from 'react'
 import { Card } from 'reactstrap'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import queryString from 'query-string'
-import Icon, { IconName } from 'components/Common/Icon'
-import ListView from 'components/PageList/ListView'
-import RecentlyViewedPageList from './RecentlyViewedPageList'
+import { Icon, IconName } from 'components/Common/Icon/Icon'
+import { ListView } from 'components/PageList/ListView'
+import { RecentlyViewedPageList } from 'components/HeaderSearchBox/RecentlyViewedPageList'
 import { Page } from 'client/types/crowi'
 import Crowi from 'client/util/Crowi'
 
@@ -21,7 +21,7 @@ interface Props extends WithTranslation {
   crowi: Crowi
 }
 
-class SearchSuggest extends React.Component<Props> {
+class SearchSuggestComponent extends React.Component<Props> {
   static defaultProps = {
     searchedPages: {},
     searchingKeyword: '',
@@ -119,4 +119,4 @@ class SearchSuggest extends React.Component<Props> {
   }
 }
 
-export default withTranslation()(SearchSuggest)
+export const SearchSuggest = withTranslation()(SearchSuggestComponent)

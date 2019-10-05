@@ -1,12 +1,12 @@
 import React from 'react'
-import UserPicture from 'components/User/UserPicture'
+import { UserPicture } from 'components/User/UserPicture'
 import { User } from 'client/types/crowi'
 
 interface Props {
   users: User[]
 }
 
-export default class UserList extends React.Component<Props> {
+export class UserList extends React.Component<Props> {
   static defaultProps = {
     users: [],
   }

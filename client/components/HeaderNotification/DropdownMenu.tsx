@@ -1,8 +1,8 @@
 import React from 'react'
 import styled from 'styled-components'
-import Notification from '../Notification/Notification'
-import NullNotification from '../Notification/NullNotification'
-import Icon from '../Common/Icon'
+import { Notification } from 'components/Notification/Notification'
+import { NullNotification } from 'components/Notification/NullNotification'
+import { Icon } from 'components/Common/Icon/Icon'
 import { DropdownMenu as Menu, DropdownItem } from 'reactstrap'
 import { Notification as NotificationType } from 'client/types/crowi'
 
@@ -32,7 +32,7 @@ interface Props {
   notificationClickHandler: Function
 }
 
-export default class DropdownMenu extends React.Component<Props> {
+export class DropdownMenu extends React.Component<Props> {
   render() {
     const { loaded, notifications, notificationClickHandler } = this.props
 

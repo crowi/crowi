@@ -1,6 +1,6 @@
 import React from 'react'
 import { Nav, NavItem, NavLink, TabContent, TabPane } from 'reactstrap'
-import { Props as TabItemProps } from 'client/components/Common/TabItem'
+import { TabItemProps } from 'components/Common/TabItem'
 
 interface Props {
   id?: string
@@ -12,7 +12,7 @@ interface State {
   active: number
 }
 
-export default class Tab extends React.Component<Props, State> {
+export class Tab extends React.Component<Props, State> {
   static defaultProps = { active: 1 }
 
   constructor(props: Props) {
