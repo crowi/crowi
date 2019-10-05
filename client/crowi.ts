@@ -604,9 +604,9 @@ $(function() {
     }
 
     // header
-    var $headerWrap = $('#page-header').parent()
+    var $headerWrap = $('.header-wrap')
     if ($headerWrap.length > 0) {
-      const headerHeight = $('.crowi-header').outerHeight() || 0
+      const headerHeight = $('.v2-crowi-header').outerHeight() || 0
       const pageGrantHeight = $('.page-grant').outerHeight() || 0
       $headerWrap.attr('data-sps-offset', headerHeight + pageGrantHeight)
       $('.stopper').on('click', e => {
