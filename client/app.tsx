@@ -93,7 +93,7 @@ const componentMappings = {
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
   'admin-page': <AdminPage crowi={crowi} />,
 
-  'help-portal': <HelpPortalModal crowi={crowi} />,
+  'help-portal': <HelpPortalModal />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {

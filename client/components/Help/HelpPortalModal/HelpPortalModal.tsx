@@ -1,12 +1,7 @@
 import React, { useState, useEffect, FC } from 'react'
 import { Modal, ModalHeader, ModalBody } from 'reactstrap'
-import Crowi from 'client/util/Crowi'
 
-interface Props {
-  crowi: Crowi
-}
-
-const HelpPortalModal: FC<Props> = ({ crowi }) => {
+const HelpPortalModal: FC = () => {
   const [show, setShow] = useState(false)
 
   const handleOpen = () => {
