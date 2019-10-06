@@ -45,28 +45,11 @@ const BaseInput = styled(Input)`
   }
 `
 
-const BaseButton = styled(Button)`
-  background-color: #43676b;
-  border-color: #43676b;
-  font-size: 0.9rem;
-  height: 35px;
-  &:active {
-    background-color: #2f494c;
-    border-color: #2a4144;
-  }
-  &:focus {
-    box-shadow: 0 0 0 0.2rem rgba(95, 126, 129, 0.5);
-  }
-  &:hover {
-    background-color: #345053;
-  }
-`
-
-const NewButton = styled(BaseButton)`
+const NewButton = styled(Button)`
   height: 38px;
 `
 
-const CreateButton = styled(BaseButton)`
+const CreateButton = styled(Button)`
   margin: 0 0 0 auto;
   height: 35px;
 `
@@ -98,7 +81,7 @@ interface Props {
   crowi: Crowi
 }
 
-const PageCreationModal: FC<Props> = ({ crowi }) => {
+const PageCreateModal: FC<Props> = ({ crowi }) => {
   const { user } = crowi
   const currentPath = location.pathname
   const userPath = `/user/${user && user.name}/`
@@ -128,7 +111,7 @@ const PageCreationModal: FC<Props> = ({ crowi }) => {
 
   return (
     <>
-      <NewButton onClick={toggle}>
+      <NewButton onClick={toggle} color="primary">
         <NewIcon name="pencilOutline" />
         {t('New')}
       </NewButton>
@@ -148,7 +131,7 @@ const PageCreationModal: FC<Props> = ({ crowi }) => {
                 placeholder={t('Page name (optional)')}
               />
             </TodayInputBox>
-            <CreateButton>{t('Create')}</CreateButton>
+            <CreateButton color="primary">{t('Create')}</CreateButton>
           </Form>
           {!isTopPage && (
             <>
@@ -161,7 +144,7 @@ const PageCreationModal: FC<Props> = ({ crowi }) => {
                   onChange={(event: React.ChangeEvent<HTMLInputElement>) => setUnderTreePath(event.target.value)}
                   placeholder={t('Input page name')}
                 />
-                <CreateButton>{t('Create')}</CreateButton>
+                <CreateButton color="primary">{t('Create')}</CreateButton>
               </Form>
             </>
           )}
@@ -171,4 +154,4 @@ const PageCreationModal: FC<Props> = ({ crowi }) => {
   )
 }
 
-export default PageCreationModal
+export default PageCreateModal
