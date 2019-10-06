@@ -1,16 +1,16 @@
-import React, { useState, useEffect, FC } from 'react'
+import React, { useState, useEffect, useCallback, FC } from 'react'
 import { Modal, ModalHeader, ModalBody } from 'reactstrap'
 
 const HelpPortalModal: FC = () => {
   const [show, setShow] = useState(false)
 
-  const handleOpen = () => {
+  const handleOpen = useCallback(() => {
     setShow(true)
-  }
+  }, [])
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setShow(false)
-  }
+  }, [])
 
   useEffect(() => {
     $("a[data-target='#help-portal']").on('click', handleOpen)
