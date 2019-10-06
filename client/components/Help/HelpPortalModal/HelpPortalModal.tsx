@@ -6,7 +6,7 @@ interface Props {
   crowi: Crowi
 }
 
-const HelpPortal: FC<Props> = ({ crowi }) => {
+const HelpPortalModal: FC<Props> = ({ crowi }) => {
   const [show, setShow] = useState(false)
 
   const handleOpen = () => {
@@ -77,4 +77,4 @@ const HelpPortal: FC<Props> = ({ crowi }) => {
   )
 }
 
-export default HelpPortal
+export default HelpPortalModal
