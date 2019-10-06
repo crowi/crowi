@@ -1,6 +1,6 @@
 import React from 'react'
 import { storiesOf } from '@storybook/react'
-import PageCreationModal from './PageCreationModal'
+import PageCreateModal from './PageCreateModal'
 import Crowi from 'client/util/Crowi'
 
 const crowi = {
@@ -9,4 +9,4 @@ const crowi = {
   },
 } as Crowi
 
-storiesOf('Modal/PageCreationModal', module).add('Default', () => <PageCreationModal crowi={crowi} />)
+storiesOf('Modal/PageCreateModal', module).add('Default', () => <PageCreateModal crowi={crowi} />)
