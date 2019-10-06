@@ -12,7 +12,7 @@ import Emitter from './emitter'
 import SideMenuTrigger from 'components/SideMenuTrigger'
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'
-import PageCreationModal from 'components/Modal/PageCreationModal'
+import PageCreateModal from 'client/components/Modal/PageCreateModal'
 import PageListSearch from 'components/PageListSearch'
 import PageHistory from 'components/PageHistory'
 import PageAttachment from 'components/PageAttachment'
@@ -72,7 +72,7 @@ window.crowiAuth = crowiAuth
 
 const me = $('body').data('me')
 const componentMappings = {
-  'page-creation-modal': <PageCreationModal crowi={crowi} />,
+  'page-creation-modal': <PageCreateModal crowi={crowi} />,
   'side-menu-trigger': <SideMenuTrigger crowi={crowi} />,
   'search-top': <HeaderSearchBox crowi={crowi} />,
   'search-page': <SearchPage crowi={crowi} />,
