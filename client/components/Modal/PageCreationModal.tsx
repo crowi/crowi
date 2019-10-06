@@ -20,6 +20,80 @@ const parentPath = (path: string) => {
   return path + '/'
 }
 
+const NewIcon = styled(Icon)`
+  margin-right: 3px;
+`
+
+const TodayInputBox = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  width: 100%;
+`
+
+const BaseInput = styled(Input)`
+  background-color: ${light};
+  border: none;
+  border-bottom: 1px dotted ${dark};
+  border-radius: 0;
+  font-size: 0.9rem;
+  padding: 6px;
+  &:focus {
+    background-color: ${gray[200]};
+    border-color: #7faaaf;
+    box-shadow: 0 0 0 0.2rem rgba(67, 103, 107, 0.25);
+  }
+`
+
+const BaseButton = styled(Button)`
+  background-color: #43676b;
+  border-color: #43676b;
+  font-size: 0.9rem;
+  height: 35px;
+  &:active {
+    background-color: #2f494c;
+    border-color: #2a4144;
+  }
+  &:focus {
+    box-shadow: 0 0 0 0.2rem rgba(95, 126, 129, 0.5);
+  }
+  &:hover {
+    background-color: #345053;
+  }
+`
+
+const NewButton = styled(BaseButton)`
+  height: 38px;
+`
+
+const CreateButton = styled(BaseButton)`
+  margin: 0 0 0 auto;
+  height: 35px;
+`
+
+const FormLabel = styled(Label)`
+  font-size: 18px;
+`
+
+const Path = styled.span`
+  font-size: 0.9rem;
+  padding: 6px;
+`
+
+const PortalNameInput = styled(BaseInput)`
+  max-width: 60px;
+`
+
+const PageNameInput = styled(BaseInput)`
+  flex: 1;
+  min-width: 0;
+`
+
+const UnderTreePathInput = styled(BaseInput)`
+  flex: 1;
+  margin-right: 8px;
+`
+
 interface Props {
   crowi: Crowi
 }
@@ -96,79 +170,5 @@ const PageCreationModal: FC<Props> = ({ crowi }) => {
     </>
   )
 }
-
-const NewIcon = styled(Icon)`
-  margin-right: 3px;
-`
-
-const TodayInputBox = styled.div`
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  width: 100%;
-`
-
-const BaseInput = styled(Input)`
-  background-color: ${light};
-  border: none;
-  border-bottom: 1px dotted ${dark};
-  border-radius: 0;
-  font-size: 0.9rem;
-  padding: 6px;
-  &:focus {
-    background-color: ${gray[200]};
-    border-color: #7faaaf;
-    box-shadow: 0 0 0 0.2rem rgba(67, 103, 107, 0.25);
-  }
-`
-
-const BaseButton = styled(Button)`
-  background-color: #43676b;
-  border-color: #43676b;
-  font-size: 0.9rem;
-  height: 35px;
-  &:active {
-    background-color: #2f494c;
-    border-color: #2a4144;
-  }
-  &:focus {
-    box-shadow: 0 0 0 0.2rem rgba(95, 126, 129, 0.5);
-  }
-  &:hover {
-    background-color: #345053;
-  }
-`
-
-const NewButton = styled(BaseButton)`
-  height: 38px;
-`
-
-const CreateButton = styled(BaseButton)`
-  margin: 0 0 0 auto;
-  height: 35px;
-`
-
-const FormLabel = styled(Label)`
-  font-size: 18px;
-`
-
-const Path = styled.span`
-  font-size: 0.9rem;
-  padding: 6px;
-`
-
-const PortalNameInput = styled(BaseInput)`
-  max-width: 60px;
-`
-
-const PageNameInput = styled(BaseInput)`
-  flex: 1;
-  min-width: 0;
-`
-
-const UnderTreePathInput = styled(BaseInput)`
-  flex: 1;
-  margin-right: 8px;
-`
 
 export default PageCreationModal
