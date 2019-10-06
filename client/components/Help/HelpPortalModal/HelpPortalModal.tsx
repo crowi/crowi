@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback, FC } from 'react'
 import { Modal, ModalHeader, ModalBody } from 'reactstrap'
 
-const HelpPortalModal: FC = () => {
+type Props = {
+  el: HTMLElement | null
+}
+
+const HelpPortalModal: FC<Props> = ({ el = null }) => {
   const [show, setShow] = useState(false)
 
   const handleOpen = useCallback(() => {
@@ -13,8 +17,9 @@ const HelpPortalModal: FC = () => {
   }, [])
 
   useEffect(() => {
-    $("a[data-target='#help-portal']").on('click', handleOpen)
-  }, [handleOpen])
+    const e: any = el || "a[data-target='#help-portal']"
+    $(e).on('click', handleOpen)
+  }, [el, handleOpen])
 
   return (
     <Modal isOpen={show} toggle={handleClose} size="lg">
