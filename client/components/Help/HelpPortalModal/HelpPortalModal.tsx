@@ -14,7 +14,7 @@ const HelpPortalModal: FC = () => {
 
   useEffect(() => {
     $("a[data-target='#help-portal']").on('click', handleOpen)
-  })
+  }, [handleOpen])
 
   return (
     <Modal isOpen={show} toggle={handleClose} size="lg">
