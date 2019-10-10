@@ -71,7 +71,9 @@ export default class Template {
     code = this.parseTemplateString(code)
     return `
     <div class="page-template-builder">
-    <button class="template-create-button btn btn-secondary" data-template="${templateId}" data-path="${pageName}">${renderIcon(pencilOutline)} ${pageName}</button>
+    <button class="template-create-button btn btn-secondary" data-template="${templateId}" data-path="${pageName}">${renderIcon(
+      pencilOutline,
+    )} ${pageName}</button>
       <pre><code id="${templateId}" class="lang-${lang}">${code}\n</code></pre></div>\n`
   }
 }

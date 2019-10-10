@@ -154,7 +154,7 @@ export default (crowi: Crowi, app: Express, req, res) => {
     },
   }
 
-  locals.Icon = function (name, classNames = [], attributes = '') {
+  locals.Icon = function(name, classNames = [], attributes = '') {
     const key = `mdi${name.charAt(0).toUpperCase() + name.slice(1)}`
     const path = Icons[key]
     if (!(key in Icons)) {
