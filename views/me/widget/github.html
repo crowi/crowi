@@ -3,7 +3,7 @@
   <div class="form-box">
     <form action="/me/auth/github" method="post" class="form-horizontal" role="form">
       <fieldset>
-        <legend><i class="mdi mdi-github-box"></i> {{ t('GitHub Setting') }}</legend>
+        <legend>{{ Icon("githubBox") }} {{ t('GitHub Setting') }}</legend>
 
         {% set wmessage = req.flash('warningMessage.auth.github') %}
         {% if wmessage.length %}

@@ -1,4 +1,5 @@
 import React, { FC } from 'react'
+import Icon from 'components/Common/Icon'
 
 interface Props {
   hasSlackToken: boolean | null | undefined
@@ -13,14 +14,14 @@ const ConnectButton: FC<Props> = ({ hasSlackToken, slackAuthUrl }) => {
         Crowi and Slack is already <strong>connected</strong>.You can re-connect to refresh and overwirte the token with your Slack account.
       </p>
       <a className="btn btn-secondary" href={url}>
-        <i className="mdi mdi-slack" /> Reconnect to Slack
+        <Icon name="slack" /> Reconnect to Slack
       </a>
     </div>
   ) : (
     <div className="text-center">
       <p>Slack clientId and clientSecret is configured. Now, you can connect with Slack.</p>
       <a className="btn btn-primary" href={url}>
-        <i className="mdi mdi-slack" /> Connect to Slack
+        <Icon name="slack" /> Connect to Slack
       </a>
     </div>
   )
