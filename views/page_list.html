@@ -22,9 +22,9 @@
             data-path="{{ path }}"
             id="search-listpage-input">
           <div class="input-group-append search-listpage-submit-group">
-            <a class="search-listpage-clear" id="search-listpage-clear"><i class="mdi mdi-close-circle"></i></a>
+            <a class="search-listpage-clear" id="search-listpage-clear">{{ Icon("closeCircle") }}</a>
             <button type="submit" class="btn btn-outline-secondary" id="search-listpage-submit">
-              <i class="mdi mdi-magnify"></i>
+              {{ Icon("magnify") }}
             </button>
           </div>
         </form>
@@ -39,7 +39,7 @@
             data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
             class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
-        ><i class="mdi mdi-thumb-up"></i></button>
+        >{{ Icon("thumbUp") }}</button>
       </div>
       {% endif %}
     </div>
@@ -81,7 +81,7 @@
     <li class="nav-item">
       {% if page %}
       <a class="nav-link {% if not req.body.pageForm %}active{% endif %}" href="#revision-body" data-toggle="tab">
-        <i class="mdi mdi-auto-fix"></i>
+        {{ Icon("autoFix") }}
         PORTAL
       </a>
       {% else %}
@@ -90,28 +90,28 @@
     </li>
     <li class="nav-item">
       <a class="nav-link {% if req.body.pageForm %}active{% endif %}" href="#edit-form" data-toggle="tab">
-        <i class="mdi mdi-square-edit-outline"></i> {{ t('Edit') }}
+        {{ Icon("squareEditOutline") }} {{ t('Edit') }}
       </a>
     </li>
 
     {% if not page %}
     <li class="nav-item ml-auto close-button">
       <a class="nav-link" href="#" id="portal-form-close">
-        <i class="mdi mdi-close"></i>
+        {{ Icon("close") }}
       </a>
     </li>
     {% else %}
     <li class="nav-item ml-auto">
       <a class="nav-link" href="#revision-history" data-toggle="tab">
-        <i class="mdi mdi-history"></i> History
+        {{ Icon("history") }} History
       </a>
     </li>
     <li class="nav-item dropdown">
       <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">
-        <i class="mdi mdi-dots-horizontal"></i> <span class="caret"></span>
+        {{ Icon("dotsHorizontal") }} <span class="caret"></span>
       </a>
       <div class="dropdown-menu dropdown-menu-right">
-        <a class="dropdown-item" href="#" data-target="#unportalize" data-toggle="modal"><i class="mdi mdi-file-undo"></i> {{ t('Unportalize') }}</a>
+        <a class="dropdown-item" href="#" data-target="#unportalize" data-toggle="modal">{{ Icon("fileUndo") }} {{ t('Unportalize') }}</a>
       </div>
     </li>
     {% endif %}
@@ -120,12 +120,12 @@
   <div class="tab-content">
   {% if page and not page.isLatestRevision() %}
   <div class="alert alert-warning">
-    <strong>{{ t('Warning') }}: </strong> {{ t('page.notice.version') }} <i class="mdi mdi-auto-fix"></i> <a href="{{ page.path }}">最新のポータルを表示</a>
+    <strong>{{ t('Warning') }}: </strong> {{ t('page.notice.version') }} {{ Icon("autoFix") }} <a href="{{ page.path }}">最新のポータルを表示</a>
   </div>
   {% endif %}
     <div class="tab-pane {% if not req.body.pageForm %}active{% endif %}" id="revision-body">
       <div class="wiki" id="revision-body-content">
-        <i class="mdi mdi-loading mdi-spin"></i>
+        {{ Icon("loading", ["mdi-spin"]) }}
       </div>
     </div>
 
@@ -149,10 +149,10 @@
     {% if !isTopPage() and !isTrashPage() and !isUserPageList(path) %}
       <li class="nav-item dropdown ml-auto">
         <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">
-          <i class="mdi mdi-dots-horizontal"></i> <span class="caret"></span>
+          {{ Icon("dotsHorizontal") }} <span class="caret"></span>
         </a>
         <div class="dropdown-menu dropdown-menu-right">
-          <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal"><i class="mdi mdi-folder-move"></i> {{ t('Move pages under', path|path2name ) }}</a>
+          <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal">{{ Icon("folderMove") }} {{ t('Move pages under', path|path2name ) }}</a>
         </div>
       </li>
     {% endif %}
@@ -226,7 +226,7 @@
 <div class="portal-side">
   <div class="portal-form-button">
     <button class="btn btn-primary" id="create-portal-button">Create Portal</button>
-    <p class="help-block"><a href="#" data-target="#help-portal">{{ Component('Icon', { name: "helpCircle"}) }} What is Portal?</a></p>
+    <p class="help-block"><a href="#" data-target="#help-portal">{{ Icon("helpCircle") }} What is Portal?</a></p>
   </div>
 
 </div>
