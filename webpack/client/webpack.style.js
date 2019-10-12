@@ -35,7 +35,7 @@ const config = {
               loader: 'sass-loader',
               options: {
                 sassOptions: {
-                  includePaths: ['./node_modules/bootstrap/scss', './node_modules/@mdi/font/scss', './node_modules/reveal.js/css'],
+                  includePaths: ['./node_modules/bootstrap/scss', './node_modules/reveal.js/css'],
                 },
               },
             },

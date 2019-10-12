@@ -1,6 +1,7 @@
 import React, { useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, Label, Input } from 'reactstrap'
+import Icon from 'components/Common/Icon'
 import Tips from './Tips'
 import FormRow from '../FormRow'
 
@@ -46,7 +47,7 @@ const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
           {t('admin.aws.tips2')}
           <br />
           <span className="mt-2 text-danger">
-            <i className="mdi mdi-alert" /> {t('admin.aws.notice')}
+            <Icon name="alert" /> {t('admin.aws.notice')}
           </span>
         </Tips>
 
