@@ -16,7 +16,7 @@
     <input type="hidden" name="pageForm[currentRevision]" value="{{ pageForm.currentRevision|default(page.revision._id.toString()) }}">
     <div class="form-submit-group form-group form-inline">
       {#<button class="btn btn-secondary">
-        <i class="mdi (tbd)"></i>
+        {{ Icon("tbd") }}
         ファイルを追加 ...
       </button>#}
 
@@ -26,7 +26,7 @@
           <span class="input-group-prepend">
             <span class="input-group-text">
               <label>
-                <i class="mdi mdi-slack mr-1"></i>
+                {{ Icon("slack", ["mr-1"]) }}
                 <input type="checkbox" name="pageForm[notify][slack][on]" value="1">
               </label>
             </span>

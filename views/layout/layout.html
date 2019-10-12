@@ -58,10 +58,10 @@
       </div>
       <div class="">
         <a href="/me/notifications" class="">
-          <i class="mdi mdi-bell"></i>
+          {{ Icon("bell") }}
         </a>
         <button class="btn btn-outline-secondary create-page-button" data-target="#create-page" data-toggle="modal">
-          <i class="mdi mdi-pencil-outline"></i> {{ t('New') }}
+          {{ Icon("pencilOutline") }} {{ t('New') }}
         </button>
       </div>
     </div>
@@ -76,21 +76,21 @@
 
   <ul class="menu-list">
     <li class="">
-      <a class="" href="/me"><i class="mdi mdi-cogs"></i> {{ t('User Settings') }}</a>
+      <a class="" href="/me">{{ Icon("cogs") }} {{ t('User Settings') }}</a>
     </li>
     <li class="">
-      <a class="" href="{{ userPageRoot(user) }}/bookmarks"><i class="mdi mdi-star"></i> {{ t('Bookmarks') }}</a>
+      <a class="" href="{{ userPageRoot(user) }}/bookmarks">{{ Icon("star") }} {{ t('Bookmarks') }}</a>
     </li>
     <li class="">
-      <a class="" href="{{ userPageRoot(user) }}/recent-create"><i class="mdi mdi-pencil-outline"></i> {{ t('Created pages') }}</a>
-    </li>
-    <li class="divider"></li>
-    <li class="">
-      <a class="" href="/trash/"><i class="mdi mdi-trash-can-outline"></i> {{ t('Deleted Pages') }}</a>
+      <a class="" href="{{ userPageRoot(user) }}/recent-create">{{ Icon("pencilOutline") }} {{ t('Created pages') }}</a>
     </li>
     <li class="divider"></li>
     <li class="">
-      <a class="" href="/logout"><i class="mdi mdi-logout"></i> {{ t('Sign out') }}</a>
+      <a class="" href="/trash/">{{ Icon("trashCanOutline") }} {{ t('Deleted Pages') }}</a>
+    </li>
+    <li class="divider"></li>
+    <li class="">
+      <a class="" href="/logout">{{ Icon("logout") }} {{ t('Sign out') }}</a>
     </li>
   </ul>
 </div>
@@ -114,7 +114,7 @@
         <div class="search-box"> {# placeholder for react #}
           <form class="search-form search-top-input-group">
             <div class="search-top-icon">
-              <i class="mdi mdi-magnify" style="font-size: 1em;"></i>
+              {{ Icon("magnify") }}
             </div>
             <input
                 type="text"
@@ -137,14 +137,14 @@
       {% if user and user.admin %}
       <li class="nav-item">
         <a href="/admin" class="nav-link">
-          <i class="mdi mdi-cube"></i> {{ t('Admin') }}
+          {{ Icon("cube") }} {{ t('Admin') }}
         </a>
       </li>
       {% endif %}
 
       <li class="nav-item">
         <button class="btn btn-primary create-page-button" data-target="#create-page" data-toggle="modal">
-          <i class="mdi mdi-pencil-outline"></i> {{ t('New') }}
+          {{ Icon("pencilOutline") }} {{ t('New') }}
         </button>
       </li>
       <li class="nav-item nav-divider">
@@ -152,7 +152,7 @@
 
       <li class="nav-item header-notification" id="header-notification">
         <a href="#" class="nav-link">
-          <i class="mdi mdi-bell"></i>
+          {{ Icon("bell") }}
         </a>
       </li>
       <li class="nav-item header-user dropdown" id="login-user">
@@ -172,26 +172,26 @@
                 <span class="header-user-name">{{ user.name }}</span><br>
                 <span class="header-user-username">@{{ user.username }}</span><br/>
 
-                <span class="header-user-email"><i class="mdi mdi-email"></i> {{ user.email }}</span>
+                <span class="header-user-email">{{ Icon("email") }} {{ user.email }}</span>
                 {% if user.googleId || user.githubId %}
                   {% if user.googleId %}
-                  <span class="header-user-socialid"><i class="mdi mdi-google" /></i></span>
+                  <span class="header-user-socialid">{{ Icon("google") }}</span>
                   {% endif %}
                   {% if user.githubId %}
-                  <span class="header-user-socialid"><i class="mdi mdi-github-box"></i></span>
+                  <span class="header-user-socialid">{{ Icon("githubBox") }}</span>
                   {% endif %}
                 {% endif %}
               </a>
             </div>
           </div>
           <div class="dropdown-divider"></div>
-          <a class="dropdown-item" href="/me"><i class="mdi mdi-cogs"></i> {{ t('User Settings') }}</a>
-          <a class="dropdown-item" href="{{ userPageRoot(user) }}/bookmarks"><i class="mdi mdi-star"></i> {{ t('Bookmarks') }}</a>
-          <a class="dropdown-item" href="{{ userPageRoot(user) }}/recent-create"><i class="mdi mdi-pencil-outline"></i> {{ t('Created pages') }}</a>
+          <a class="dropdown-item" href="/me">{{ Icon("cogs") }} {{ t('User Settings') }}</a>
+          <a class="dropdown-item" href="{{ userPageRoot(user) }}/bookmarks">{{ Icon("star") }} {{ t('Bookmarks') }}</a>
+          <a class="dropdown-item" href="{{ userPageRoot(user) }}/recent-create">{{ Icon("pencilOutline") }} {{ t('Created pages') }}</a>
           <div class="dropdown-divider"></div>
-          <a class="dropdown-item" href="/trash/"><i class="mdi mdi-trash-can-outline"></i> {{ t('Deleted Pages') }}</a>
+          <a class="dropdown-item" href="/trash/">{{ Icon("trashCanOutline") }} {{ t('Deleted Pages') }}</a>
           <div class="dropdown-divider"></div>
-          <a class="dropdown-item" href="/logout"><i class="mdi mdi-logout"></i> {{ t('Sign out') }}</a>
+          <a class="dropdown-item" href="/logout">{{ Icon("logout") }} {{ t('Sign out') }}</a>
         </div>
       </li>
     </ul>
