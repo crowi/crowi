@@ -6,11 +6,11 @@ const HelpPortalModal: FC = () => {
 
   const handleOpen = useCallback(() => {
     setShow(true)
-  }, [])
+  }, [setShow])
 
   const handleClose = useCallback(() => {
     setShow(false)
-  }, [])
+  }, [setShow])
 
   useEffect(() => {
     $(document).on('click', '[data-target="#help-portal"]', handleOpen)
