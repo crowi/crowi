@@ -23,9 +23,15 @@ export interface ConfigModel extends Model<ConfigDocument> {
   applicationInstall(): Promise<void>
   updateCache(ns: string, key: string, value: string): void
   updateCacheByNamespace(ns: string, nsConfig: Record<string, any>): void
+  copyCache(ns: string, key: string, newKey: string): void
+  deleteCache(ns: string, key: string): void
   updateByParams(ns: string, key: string, value: string): Promise<void>
   updateConfig(ns: string, key: string, value: string): Promise<void>
   updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>
+  copyByParams(ns: string, key: string, newKey: string): Promise<void>
+  copyConfig(ns: string, key: string, newKey: string): Promise<void>
+  deleteByParams(ns: string, key: string): Promise<void>
+  deleteConfig(ns: string, key: string): Promise<void>
   loadAllConfig(): Promise<object>
   isRequiredThirdPartyAuth(config: Config): boolean
   isDisabledPasswordAuth(config: Config): boolean
@@ -36,6 +42,7 @@ export interface ConfigModel extends Model<ConfigDocument> {
   hasSlackConfig(config: Config): boolean
   hasSlackToken(config: Config): boolean
   getLocalconfig(config: Config): object
+  migrate(): Promise<void>
 
   SECURITY_REGISTRATION_MODE_OPEN: string
   SECURITY_REGISTRATION_MODE_RESTRICTED: string
@@ -58,6 +65,7 @@ export default (crowi: Crowi) => {
       'app:confidential': '',
 
       'app:fileUpload': false,
+
       'app:externalShare': false,
 
       'security:registrationMode': 'Open',
@@ -66,16 +74,19 @@ export default (crowi: Crowi) => {
       'auth:requireThirdPartyAuth': false,
       'auth:disablePasswordAuth': false,
 
-      'aws:bucket': 'crowi',
-      'aws:region': 'ap-northeast-1',
-      'aws:accessKeyId': '',
-      'aws:secretAccessKey': '',
+      'upload:aws:bucket': 'crowi',
+      'upload:aws:region': 'ap-northeast-1',
+      'upload:aws:accessKeyId': '',
+      'upload:aws:secretAccessKey': '',
 
       'mail:from': '',
       'mail:smtpHost': '',
       'mail:smtpPort': '',
       'mail:smtpUser': '',
       'mail:smtpPassword': '',
+      'mail:aws:region': 'ap-northeast-1',
+      'mail:aws:accessKeyId': '',
+      'mail:aws:secretAccessKey': '',
 
       'google:clientId': '',
       'google:clientSecret': '',
@@ -111,6 +122,31 @@ export default (crowi: Crowi) => {
     }
 
     config[ns][key] = value
+
+    crowi.setConfig(config)
+  }
+
+  configSchema.statics.copyCache = function(ns, key, newKey) {
+    const config = crowi.getConfig()
+
+    if (!config[ns]) {
+      config[ns] = {}
+    }
+
+    if (config[ns][newKey] === undefined && config[ns][key] !== undefined) {
+      config[ns][newKey] = config[ns][key]
+      crowi.setConfig(config)
+    }
+  }
+
+  configSchema.statics.deleteCache = function(ns, key) {
+    const config = crowi.getConfig()
+
+    if (!config[ns]) {
+      config[ns] = {}
+    }
+
+    delete config[ns][key]
 
     crowi.setConfig(config)
   }
@@ -151,6 +187,37 @@ export default (crowi: Crowi) => {
     Config.updateCacheByNamespace(ns, nsConfig)
   }
 
+  configSchema.statics.copyByParams = async function(ns, key, newKey) {
+    const config = await Config.findOne({ ns, key }).exec()
+    if (config !== null) {
+      await Config.findOneAndUpdate({ ns, key: newKey }, { ns, key: newKey, value: config.value }, { upsert: true }).exec()
+    }
+  }
+
+  configSchema.statics.copyConfig = async function(ns, key, newKey) {
+    try {
+      await Config.copyByParams(ns, key, newKey)
+    } catch (err) {
+      debug('copyConfig', err)
+    }
+
+    Config.copyCache(ns, key, newKey)
+  }
+
+  configSchema.statics.deleteByParams = async function(ns, key) {
+    await Config.deleteOne({ ns, key }).exec()
+  }
+
+  configSchema.statics.deleteConfig = async function(ns, key) {
+    try {
+      await Config.deleteByParams(ns, key)
+    } catch (err) {
+      debug('deleteConfig', err)
+    }
+
+    Config.deleteCache(ns, key)
+  }
+
   configSchema.statics.loadAllConfig = async function() {
     const config = { crowi: {} }
 
@@ -178,12 +245,14 @@ export default (crowi: Crowi) => {
   }
 
   configSchema.statics.isUploadable = function(config) {
-    var method = crowi.env.FILE_UPLOAD || 'aws'
+    const method = crowi.env.FILE_UPLOAD || 'aws'
+    const isConfigured =
+      config.crowi['upload:aws:accessKeyId'] &&
+      config.crowi['upload:aws:secretAccessKey'] &&
+      config.crowi['upload:aws:region'] &&
+      config.crowi['upload:aws:bucket']
 
-    if (
-      method == 'aws' &&
-      (!config.crowi['aws:accessKeyId'] || !config.crowi['aws:secretAccessKey'] || !config.crowi['aws:region'] || !config.crowi['aws:bucket'])
-    ) {
+    if (method == 'aws' && !isConfigured) {
       return false
     }
 
@@ -252,6 +321,26 @@ export default (crowi: Crowi) => {
     }
 
     return localConfig
+  }
+
+  configSchema.statics.migrate = async function() {
+    const renameKeys = {
+      crowi: [
+        ['aws:bucket', 'upload:aws:bucket'],
+        ['aws:region', 'upload:aws:region'],
+        ['aws:accessKeyId', 'upload:aws:accessKeyId'],
+        ['aws:secretAccessKey', 'upload:aws:secretAccessKey'],
+        ['aws:region', 'mail:aws:region'],
+        ['aws:accessKeyId', 'mail:aws:accessKeyId'],
+        ['aws:secretAccessKey', 'mail:aws:secretAccessKey'],
+      ],
+    }
+
+    const forEachConfigs = (func: (ns: string, oldKey: string, newKey: string) => Promise<void>): Promise<void[][]> =>
+      Promise.all(Object.entries(renameKeys).map(([ns, keys]) => Promise.all(keys.map(([oldKey, newKey]) => func(ns, oldKey, newKey)))))
+
+    await forEachConfigs((ns, oldKey, newKey) => Config.copyConfig(ns, oldKey, newKey))
+    await forEachConfigs((ns, oldKey) => Config.deleteConfig(ns, oldKey))
   }
 
   configSchema.statics.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN

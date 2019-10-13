@@ -5,7 +5,6 @@ import AccessTokenParser from './accessTokenParser'
 import AdminRequired from './adminRequired'
 import ApplicationInstalled from './applicationInstalled'
 import ApplicationNotInstalled from './applicationNotInstalled'
-import AwsEnabled from './awsEnabled'
 import BasicAuth from './basicAuth'
 import ClientContext from './clientContext'
 import CsrfVerify from './csrfVerify'
@@ -23,7 +22,6 @@ export default (crowi: Crowi, app: Express) => ({
   AdminRequired: AdminRequired(),
   ApplicationInstalled: ApplicationInstalled(),
   ApplicationNotInstalled: ApplicationNotInstalled(),
-  AwsEnabled: AwsEnabled(),
   BasicAuth: BasicAuth(crowi, app),
   ClientContext: ClientContext(),
   CsrfVerify: CsrfVerify(crowi),

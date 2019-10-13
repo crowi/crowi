@@ -138,6 +138,7 @@ class Crowi {
     await this.setupRedisClient()
     await this.setupSessionConfig()
     await this.setupConfig()
+    await this.migrateConfig()
     await this.setupSearcher()
     await this.setupMailer()
     await this.setupSlack()
@@ -314,6 +315,12 @@ class Crowi {
     this.config = new Config(this)
 
     return this.config.load()
+  }
+
+  async migrateConfig() {
+    const Config = this.model('Config')
+
+    return Config.migrate()
   }
 
   setupSearcher() {
