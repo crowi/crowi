@@ -2,12 +2,12 @@ import form from 'express-form'
 const { field } = form
 
 export default form(
-  field('settingForm[aws:region]', 'リージョン')
+  field('settingForm[upload:aws:region]', 'リージョン')
     .trim()
-    .is(/^[a-z]+-[a-z]+-\d+$/, 'リージョンには、AWSリージョン名を入力してください。 例: ap-northeast-1'),
-  field('settingForm[aws:bucket]', 'バケット名').trim(),
-  field('settingForm[aws:accessKeyId]', 'Access Key Id')
+    .is(/^[a-z]+(-[a-z]+)?-[a-z]+-\d+$/, 'リージョンには、AWSリージョン名を入力してください。 例: ap-northeast-1'),
+  field('settingForm[upload:aws:bucket]', 'バケット名').trim(),
+  field('settingForm[upload:aws:accessKeyId]', 'Access Key Id')
     .trim()
     .is(/^[\da-zA-Z]+$/),
-  field('settingForm[aws:secretAccessKey]', 'Secret Access Key').trim(),
+  field('settingForm[upload:aws:secretAccessKey]', 'Secret Access Key').trim(),
 )

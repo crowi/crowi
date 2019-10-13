@@ -17,18 +17,18 @@ interface Props {
 
 const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [t] = useTranslation()
-  const [region, setRegion] = useState(settingForm['aws:region'] || '')
-  const [bucket, setBucket] = useState(settingForm['aws:bucket'] || '')
-  const [accessKeyId, setAccessKeyId] = useState(settingForm['aws:accessKeyId'] || '')
-  const [secretAccessKey, setSecretAccessKey] = useState(settingForm['aws:secretAccessKey'] || '')
+  const [region, setRegion] = useState(settingForm['upload:aws:region'] || '')
+  const [bucket, setBucket] = useState(settingForm['upload:aws:bucket'] || '')
+  const [accessKeyId, setAccessKeyId] = useState(settingForm['upload:aws:accessKeyId'] || '')
+  const [secretAccessKey, setSecretAccessKey] = useState(settingForm['upload:aws:secretAccessKey'] || '')
 
   const handleSubmit = e => {
     e.preventDefault()
     update({
-      'aws:region': region,
-      'aws:bucket': bucket,
-      'aws:accessKeyId': accessKeyId,
-      'aws:secretAccessKey': secretAccessKey,
+      'upload:aws:region': region,
+      'upload:aws:bucket': bucket,
+      'upload:aws:accessKeyId': accessKeyId,
+      'upload:aws:secretAccessKey': secretAccessKey,
     })
   }
 
@@ -43,8 +43,6 @@ const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
 
         <Tips>
           {t('admin.aws.tips1')}
-          <br />
-          {t('admin.aws.tips2')}
           <br />
           <span className="mt-2 text-danger">
             <Icon name="alert" /> {t('admin.aws.notice')}

@@ -264,11 +264,17 @@ admin:
     tips2: どちらの設定もない場合、メールは送信されません。
     from: Fromアドレス
     from_placeholder: '例: mail@crowi.wiki'
-    smtp: SMTP設定
-    host: ホスト
-    port: ポート
-    user: ユーザー
-    password: パスワード
+    smtp:
+      legend: SMTP設定
+      host: ホスト
+      port: ポート
+      user: ユーザー
+      password: パスワード
+    aws:
+      legend: AWS設定
+      region: リージョン
+      access_key_id: Access Key ID
+      secret_access_key: Secret Access Key
   security:
     legend: セキュリティ設定
     basic_auth: Basic認証
