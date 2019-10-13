@@ -34,11 +34,8 @@
         display: none;
       }
 
-      &.sps {
-        position: sticky;
-      }
-
       &.sps--blw {
+        position: fixed;
         width: 100vw;
         top: 0;
         left: 0;
@@ -69,7 +66,14 @@
           cursor: pointer;
         }
       }
+    }
 
+    .dummy-header-wrap {
+      display: none;
+    }
+
+    .sps--blw + .dummy-header-wrap {
+      display: block;
     }
 
     &.col-md-12 article .header-wrap.sps--blw {
@@ -145,16 +149,25 @@
     }
   } // }}}
 
+
   // {{{ grant related style
   .main.grant-restricted,
   .main.grant-specified,
   .main.grant-owner {
     background: #333;
 
-    .page-grant {
-      color: #ccc;
-      padding: 10px 16px;
-      margin: 0;
+    .page-top-info {
+      padding: 1rem 16px;
+
+      .page-grant {
+        color: #ccc;
+        margin: 0;
+      }
+
+      .alert {
+        margin-top: 0.5rem;
+        margin-bottom: 0;
+      }
     }
 
     article {
