@@ -226,7 +226,7 @@
 <div class="portal-side">
   <div class="portal-form-button">
     <button class="btn btn-primary" id="create-portal-button">Create Portal</button>
-    <p class="help-block"><a href="#" data-target="#help-portal" data-toggle="modal">{{ Icon("helpCircle") }} What is Portal?</a></p>
+    <p class="help-block"><a href="#" data-target="#help-portal">{{ Icon("helpCircle") }} What is Portal?</a></p>
   </div>
 
 </div>
@@ -238,7 +238,7 @@
 
 {% block body_end %}
 <div id="crowi-modals">
-  {% include 'modal/what_is_portal.html' %}
+  <div id="help-portal"></div>
   {% include 'modal/unportalize.html' %}
 </div>
 <div class="modal fade portal-warning-modal" id="portal-warning-modal">
