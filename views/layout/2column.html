@@ -30,15 +30,17 @@
 {% block layout_main %}
 <div id="main" class="main {% if page %}{{ css.grant(page) }}{% endif %} {% block main_css_class %}{% endblock %}">
   {% if page && page.grant != 1 %}
+  <div class="page-top-info">
   <p class="page-grant">
     {{ Icon("lock") }} {{ consts.pageGrants[page.grant] }} ({{ t('Browsing of this page is restricted') }})
   </p>
-  {% endif %}
   {% if page && page.grant == 2 %}
   <p class="alert alert-info">
     {{ t('Shareable Link') }}
     <input type="text" class="copy-link form-control" value="{{ baseUrl }}/{{ page._id.toString() }}" readonly>
   </p>
+  {% endif %}
+  </div>
   {% endif %}
   <article>
     {% block content_head %}

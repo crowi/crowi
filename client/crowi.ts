@@ -606,11 +606,23 @@ $(function() {
     }
 
     // header
-    var $headerWrap = $('#page-header').parent()
-    if ($headerWrap.length > 0) {
-      const headerHeight = $('.crowi-header').outerHeight() || 0
-      const pageGrantHeight = $('.page-grant').outerHeight() || 0
-      $headerWrap.attr('data-sps-offset', headerHeight + pageGrantHeight)
+    const $headerWrap = $('.header-wrap')
+    const $dummyHeaderWrap = $('.dummy-header-wrap')
+    if ($headerWrap.length > 0 && $dummyHeaderWrap.length > 0) {
+      const initialHeaderWrapOffset = $headerWrap.position().top
+      $headerWrap.attr('data-sps-offset', initialHeaderWrapOffset)
+
+      const initialHeaderWrapHeight = $headerWrap.outerHeight() || 0
+      $dummyHeaderWrap.css('height', initialHeaderWrapHeight)
+
+      $(window).resize(() => {
+        const headerWrapOffset = $headerWrap.position().top || $dummyHeaderWrap.position().top
+        $headerWrap.attr('data-sps-offset', headerWrapOffset)
+
+        const headerWrapHeight = $headerWrap.outerHeight() || 0
+        $dummyHeaderWrap.css('height', headerWrapHeight)
+      })
+
       $('.stopper').on('click', e => {
         $headerWrap.removeClass('sps sps--abv sps--blw')
         return false
