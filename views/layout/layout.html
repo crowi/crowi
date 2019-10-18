@@ -40,7 +40,8 @@
 
 {% block layout_head_nav %}
 
-<div class="v2-crowi-global-menu" id="crowi-global-menu">
+<div class="v2-crowi-global-menu-container" id="crowi-global-menu">
+  <div class="v2-crowi-global-menu">
   <nav class="navbar" role="navigation">
     <a class="navbar-brand" href="/">
       <img alt="Crowi" src="/logo/32x32i.png" width="16">
@@ -92,6 +93,7 @@
       <a class="" href="/logout">{{ Icon("logout") }} {{ t('Sign out') }}</a>
     </li>
   </ul>
+</div>
 </div>
 
 <div class="v2-container">
@@ -200,19 +202,15 @@
 
 {% block layout_container %}
 
-<div class="v2-contents-container container-fluid">
-  <div class="row">
+<div class="v2-contents-container">
+  {% block layout_sidebar %}
+  {% endblock %} {# layout_sidebar #}
 
-    {% block layout_sidebar %}
-    {% endblock %} {# layout_sidebar #}
+  {% block layout_main %}
+  {% endblock %} {# layout_main #}
 
-    {% block layout_main %}
-    {% endblock %} {# layout_main #}
-
-    {% block footer %}
-    {% endblock %}
-
-  </div> {# /.row #}
+  {% block footer %}
+  {% endblock %}
 </div>
 
 {% endblock layout_container %}
