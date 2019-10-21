@@ -1,7 +1,6 @@
 import React from 'react'
-import { storiesOf } from '@storybook/react'
 import PageCreateModal from './PageCreateModal'
-import Crowi from 'client/util/Crowi'
+import Crowi from '../../util/Crowi'
 import i18n from '../../i18n'
 
 i18n()
@@ -12,4 +11,6 @@ const crowi = {
   },
 } as Crowi
 
-storiesOf('Modal/PageCreateModal', module).add('Default', () => <PageCreateModal crowi={crowi} />)
+export default { title: 'Modal/PageCreateModal' }
+
+export const Default = () => <PageCreateModal crowi={crowi} />
