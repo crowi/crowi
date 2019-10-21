@@ -46,8 +46,8 @@ export default crowi => {
 
     if (!option) {
       option = {
-        accessKeyId: config.crowi['aws:accessKeyId'],
-        secretAccessKey: config.crowi['aws:secretAccessKey'],
+        accessKeyId: config.crowi['mail:aws:accessKeyId'],
+        secretAccessKey: config.crowi['mail:aws:secretAccessKey'],
       }
     }
 
@@ -66,7 +66,7 @@ export default crowi => {
     if (config.crowi['mail:smtpHost'] && config.crowi['mail:smtpPort']) {
       // SMTP 設定がある場合はそれを優先
       mailer = createSMTPClient()
-    } else if (config.crowi['aws:accessKeyId'] && config.crowi['aws:secretAccessKey']) {
+    } else if (config.crowi['mail:aws:accessKeyId'] && config.crowi['mail:aws:secretAccessKey']) {
       // AWS 設定がある場合はSESを設定
       mailer = createSESClient()
     } else {

@@ -1,8 +1,9 @@
 import React from 'react'
 import styled from 'styled-components'
-import { storiesOf } from '@storybook/react'
 import Icon, { IconName } from './Icon'
 import * as Icons from './Icons'
+
+export default { title: 'Common/Icons' }
 
 const IconList = styled.ul`
   display: flex;
@@ -50,7 +51,7 @@ const IconListText = styled.div`
   margin-top: 10px;
 `
 
-storiesOf('Common/Icons', module).add('Default', () => (
+export const Default = () => (
   <IconList>
     {Object.keys(Icons).map(name => (
       <IconListItem key={name} data-name={name}>
@@ -60,4 +61,4 @@ storiesOf('Common/Icons', module).add('Default', () => (
       </IconListItem>
     ))}
   </IconList>
-))
+)
