@@ -73,7 +73,7 @@ window.crowiAuth = crowiAuth
 
 const me = $('body').data('me')
 const componentMappings = {
-  'page-creation-modal': <PageCreateModal crowi={crowi} />,
+  'page-create-modal': <PageCreateModal crowi={crowi} />,
   'side-menu-trigger': <SideMenuTrigger crowi={crowi} />,
   'search-top': <HeaderSearchBox crowi={crowi} />,
   'search-page': <SearchPage crowi={crowi} />,

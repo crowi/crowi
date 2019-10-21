@@ -12,12 +12,7 @@ module.exports = ({ config }) => {
     options: {
       presets: [['react-app', { flow: false, typescript: true }]],
     },
-  }, {
-    test: /\.ya?ml$/,
-    exclude: /node_modules/,
-    use: ['json-loader', 'yaml-loader'],
-  }
-  );
+  });
   config.resolve.extensions.push('.ts', '.tsx')
   config.plugins.push(new webpack.ProvidePlugin({
     $: 'jquery',
