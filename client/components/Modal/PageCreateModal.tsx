@@ -1,5 +1,5 @@
 import React, { useState, FC } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useTranslation, Trans } from 'react-i18next'
 import { Button, Form, Input, Label, Modal, ModalBody, ModalHeader } from 'reactstrap'
 import moment from 'moment'
 import styled from 'styled-components'
@@ -56,6 +56,7 @@ const CreateButton = styled(Button)`
 
 const FormLabel = styled(Label)`
   font-size: 18px;
+  width: 100%;
 `
 
 const Path = styled.span`
@@ -70,6 +71,10 @@ const PortalNameInput = styled(BaseInput)`
 const PageNameInput = styled(BaseInput)`
   flex: 1;
   min-width: 0;
+`
+
+const CurrentPath = styled.code`
+  word-break: break-all;
 `
 
 const UnderTreePathInput = styled(BaseInput)`
@@ -92,7 +97,7 @@ const PageCreateModal: FC<Props> = ({ crowi }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [portalName, setPotalName] = useState<string>(t('Memo'))
   const [pageName, setPageName] = useState<string>('')
-  const [underTreePath, setUnderTreePath] = useState<string>(parentPath(currentPath))
+  const [underTreePath, setUnderTreePath] = useState<string>(decodeURI(parentPath(currentPath)))
 
   const createTodayPage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -128,7 +133,7 @@ const PageCreateModal: FC<Props> = ({ crowi }) => {
                 type="text"
                 value={pageName}
                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPageName(event.target.value)}
-                placeholder={t('Page name (optional)')}
+                placeholder={t('Input page name (optional)')}
               />
             </TodayInputBox>
             <CreateButton color="primary">{t('Create')}</CreateButton>
@@ -136,7 +141,11 @@ const PageCreateModal: FC<Props> = ({ crowi }) => {
           {!isTopPage && (
             <>
               <hr />
-              <FormLabel>{t('Create under', parentPath(currentPath))}</FormLabel>
+              <FormLabel>
+                <Trans i18nKey="Create under">
+                  Create page under: <CurrentPath>{{ path: decodeURI(parentPath(currentPath)) }}</CurrentPath>
+                </Trans>
+              </FormLabel>
               <Form onSubmit={createUnderTreePage} inline>
                 <UnderTreePathInput
                   type="text"
