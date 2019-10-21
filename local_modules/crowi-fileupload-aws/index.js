@@ -11,10 +11,10 @@ module.exports = function(crowi) {
   var getAwsConfig = function() {
     var config = crowi.getConfig()
     return {
-      accessKeyId: config.crowi['aws:accessKeyId'],
-      secretAccessKey: config.crowi['aws:secretAccessKey'],
-      region: config.crowi['aws:region'],
-      bucket: config.crowi['aws:bucket'],
+      accessKeyId: config.crowi['upload:aws:accessKeyId'],
+      secretAccessKey: config.crowi['upload:aws:secretAccessKey'],
+      region: config.crowi['upload:aws:region'],
+      bucket: config.crowi['upload:aws:bucket'],
     }
   }
 

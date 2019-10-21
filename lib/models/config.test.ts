@@ -40,4 +40,33 @@ describe('Config model test', () => {
       expect(config.plugin).toHaveProperty('other:config', 'this is data')
     })
   })
+
+  describe('.migrate', () => {
+    const bucket = 'crowi'
+    const region = 'ap-northeast-1'
+    const accessKeyId = 'XXXX'
+    const secretAccessKey = 'YYYY'
+
+    beforeAll(async () => {
+      await Fixture.generate('Config', [
+        { ns: 'crowi', key: 'aws:bucket', value: JSON.stringify(bucket) },
+        { ns: 'crowi', key: 'aws:region', value: JSON.stringify(region) },
+        { ns: 'crowi', key: 'aws:accessKeyId', value: JSON.stringify(accessKeyId) },
+        { ns: 'crowi', key: 'aws:secretAccessKey', value: JSON.stringify(secretAccessKey) },
+      ])
+    })
+
+    test('Migrate config correctly', async function() {
+      await Config.migrate()
+      const config = await Config.loadAllConfig()
+
+      expect(config.crowi).toHaveProperty('upload:aws:bucket', bucket)
+      expect(config.crowi).toHaveProperty('upload:aws:region', region)
+      expect(config.crowi).toHaveProperty('upload:aws:accessKeyId', accessKeyId)
+      expect(config.crowi).toHaveProperty('upload:aws:secretAccessKey', secretAccessKey)
+      expect(config.crowi).toHaveProperty('mail:aws:region', region)
+      expect(config.crowi).toHaveProperty('mail:aws:accessKeyId', accessKeyId)
+      expect(config.crowi).toHaveProperty('mail:aws:secretAccessKey', secretAccessKey)
+    })
+  })
 })
