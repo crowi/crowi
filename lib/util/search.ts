@@ -405,56 +405,50 @@ export default class SearchClient {
     let skipped = 0
     let total = 0
 
-    return new Promise((resolve, reject) => {
-      const bulkSend = async body => {
-        try {
-          const response: ApiResponse<BulkResponse> = await this.client.bulk({
-            body,
-            timeout: '1d',
-          })
-          const { items, errors, took } = response.body
-          debug('addAllPages add anyway (items, errors, took): ', (items || []).length, errors, took, 'ms')
-        } catch (err) {
-          debug('addAllPages error on add anyway: ', err)
-        }
+    const bulkSend = async body => {
+      try {
+        const response: ApiResponse<BulkResponse> = await this.client.bulk({
+          body,
+          timeout: '1d',
+        })
+        const { items, errors, took } = response.body
+        debug('addAllPages add anyway (items, errors, took): ', (items || []).length, errors, took, 'ms')
+      } catch (err) {
+        debug('addAllPages error on add anyway: ', err)
       }
+    }
 
-      cursor
-        .eachAsync(async doc => {
-          if (!doc.creator || !doc.revision || !this.shouldIndexed(doc)) {
-            // debug('Skipped', doc.path);
-            skipped++
-            return
-          }
-          total++
+    try {
+      await cursor.eachAsync(async doc => {
+        if (!doc.creator || !doc.revision || !this.shouldIndexed(doc)) {
+          // debug('Skipped', doc.path);
+          skipped++
+          return
+        }
+        total++
 
-          const bookmarkCount = await Bookmark.countByPageId(doc._id)
-          const page = { ...doc, bookmarkCount }
-          this.prepareBodyForCreate(body, page, index)
+        const bookmarkCount = await Bookmark.countByPageId(doc._id)
+        const page = { ...doc, bookmarkCount }
+        this.prepareBodyForCreate(body, page, index)
 
-          if (body.length >= 4000) {
-            // send each 2000 docs. (body has 2 elements for each data)
-            sent++
-            debug('Sending request (seq, total, skipped)', sent, total, skipped)
-            bulkSend(body)
-            this.searchEvent.emit('addPageProgress', allPageCount, total, skipped)
-
-            body = []
-          }
-        })
-        .then(() => {
-          // send all remaining data on body[]
-          debug('Sending last body of bulk operation:', body.length)
+        if (body.length >= 4000) {
+          // send each 2000 docs. (body has 2 elements for each data)
+          sent++
+          debug('Sending request (seq, total, skipped)', sent, total, skipped)
           bulkSend(body)
-          this.searchEvent.emit('finishAddPage', allPageCount, total, skipped)
+          this.searchEvent.emit('addPageProgress', allPageCount, total, skipped)
 
-          resolve()
-        })
-        .catch(e => {
-          debug('Error wile iterating cursor.eacnAsync()', e)
-          reject(e)
-        })
-    })
+          body = []
+        }
+      })
+      // send all remaining data on body[]
+      debug('Sending last body of bulk operation:', body.length)
+      bulkSend(body)
+      this.searchEvent.emit('finishAddPage', allPageCount, total, skipped)
+    } catch (e) {
+      debug('Error wile iterating cursor.eacnAsync()', e)
+      throw e
+    }
   }
 
   /**
@@ -800,7 +794,7 @@ export default class SearchClient {
     }
   }
 
-  syncPageCreated(page, user, bookmarkCount = 0) {
+  async syncPageCreated(page, user, bookmarkCount = 0) {
     debug('SearchClient.syncPageCreated', page.path)
 
     if (!this.shouldIndexed(page)) {
@@ -808,51 +802,47 @@ export default class SearchClient {
     }
 
     page.bookmarkCount = bookmarkCount
-    this.addPages([page])
-      .then(function(res) {
-        debug('ES Response', res)
-      })
-      .catch(function(err) {
-        debug('ES Error', err)
-      })
+    try {
+      const res = await this.addPages([page])
+      debug('ES Response', res)
+    } catch (err) {
+      debug('ES Error', err)
+    }
   }
 
-  syncPageUpdated(page, user, bookmarkCount = 0) {
+  async syncPageUpdated(page, user, bookmarkCount = 0) {
     debug('SearchClient.syncPageUpdated', page.path)
     debug('Page:', page)
     // TODO delete
     if (!this.shouldIndexed(page)) {
-      this.deletePages([page])
-        .then(function(res) {
-          debug('deletePages: ES Response', res)
-        })
-        .catch(function(err) {
-          debug('deletePages:ES Error', err)
-        })
+      try {
+        const res = await this.deletePages([page])
+        debug('deletePages: ES Response', res)
+      } catch (err) {
+        debug('deletePages: ES Error', err)
+      }
 
       return
     }
 
     page.bookmarkCount = bookmarkCount
-    this.updatePages([page])
-      .then(function(res) {
-        debug('ES Response', res)
-      })
-      .catch(function(err) {
-        debug('ES Error', err)
-      })
+    try {
+      const res = await this.updatePages([page])
+      debug('ES Response', res)
+    } catch (err) {
+      debug('ES Error', err)
+    }
   }
 
-  syncPageDeleted(page, user) {
+  async syncPageDeleted(page, user) {
     debug('SearchClient.syncPageDeleted', page.path)
 
-    this.deletePages([page])
-      .then(function(res) {
-        debug('deletePages: ES Response', res)
-      })
-      .catch(function(err) {
-        debug('deletePages:ES Error', err)
-      })
+    try {
+      const res = await this.deletePages([page])
+      debug('deletePages: ES Response', res)
+    } catch (err) {
+      debug('deletePages: ES Error', err)
+    }
   }
 
   async syncBookmarkChanged(pageId) {
@@ -862,8 +852,11 @@ export default class SearchClient {
 
     // @ts-ignore
     page.bookmarkCount = bookmarkCount
-    this.updatePages([page])
-      .then(res => debug('ES Response', res))
-      .catch(err => debug('ES Error', err))
+    try {
+      const res = await this.updatePages([page])
+      debug('ES Response', res)
+    } catch (err) {
+      debug('ES Error', err)
+    }
   }
 }
