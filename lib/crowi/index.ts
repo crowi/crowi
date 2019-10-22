@@ -23,7 +23,7 @@ import Config from '../service/config'
 import mailer from '../util/mailer'
 import slack from '../util/slack'
 import expressInit from './express-init'
-import Searcher from 'server/util/search'
+import Searcher from 'server/service/search'
 
 const pkg = require('../../package.json')
 
