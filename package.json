@@ -68,7 +68,6 @@
     "diff2html": "^2.9.0",
     "dnscache": "^1.0.2",
     "dotenv": "^8.1.0",
-    "elasticsearch": "~15.1.1",
     "emojify.js": "^1.1.0",
     "errorhandler": "^1.5.1",
     "es6": "npm:@elastic/elasticsearch@^6.8.3",

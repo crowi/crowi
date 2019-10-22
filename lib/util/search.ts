@@ -1,5 +1,5 @@
 import path from 'path'
-import elasticsearch from 'elasticsearch'
+import { Client } from 'es6'
 import Debug from 'debug'
 import moment from 'moment'
 import fs from 'fs'
@@ -48,8 +48,8 @@ function SearchClient(this: any, crowi, esUri) {
     current: `${uri.indexName}-current`,
   }
 
-  this.client = new elasticsearch.Client({
-    host: this.host,
+  this.client = new Client({
+    node: this.host,
     requestTimeout: 5000,
     // log: 'debug',
   })
