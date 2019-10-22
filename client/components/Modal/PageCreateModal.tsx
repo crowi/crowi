@@ -50,8 +50,7 @@ const NewButton = styled(Button)`
 `
 
 const CreateButton = styled(Button)`
-  margin: 0 0 0 auto;
-  height: 35px;
+  margin-left: auto;
 `
 
 const FormLabel = styled(Label)`
@@ -87,25 +86,25 @@ interface Props {
 }
 
 const PageCreateModal: FC<Props> = ({ crowi }) => {
-  const { user } = crowi
+  const user = crowi.getUser()
   const currentPath = location.pathname
   const userPath = `/user/${user && user.name}/`
   const datePath = moment(Date.now()).format('/YYYY/MM/DD/')
   const isTopPage = currentPath === '/'
 
   const [t] = useTranslation()
-  const [isOpen, setIsOpen] = useState<boolean>(false)
+  const [isOpen, setIsOpen] = useState(false)
   const [portalName, setPotalName] = useState<string>(t('Memo'))
-  const [pageName, setPageName] = useState<string>('')
-  const [underTreePath, setUnderTreePath] = useState<string>(decodeURI(parentPath(currentPath)))
+  const [pageName, setPageName] = useState('')
+  const [underTreePath, setUnderTreePath] = useState(decodeURI(parentPath(currentPath)))
 
-  const createTodayPage = async (e: React.FormEvent<HTMLFormElement>) => {
+  const createTodayPage = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const href = `${userPath}${portalName || t('Memo')}${pageName ? datePath : datePath.slice(0, -1)}${pageName}`
     top.location.href = href
   }
 
-  const createUnderTreePage = async (e: React.FormEvent<HTMLFormElement>) => {
+  const createUnderTreePage = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     top.location.href = underTreePath
   }
