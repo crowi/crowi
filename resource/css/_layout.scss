@@ -3,6 +3,7 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    border: 0;
     border-top: solid $crowiTopBorderHeight $crowiHeaderBackground;
     border-image: linear-gradient(90deg,
       $crowiHeaderBackground,
