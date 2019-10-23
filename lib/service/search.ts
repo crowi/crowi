@@ -50,7 +50,7 @@ export default class SearchClient {
   esNodeName = '-'
   esNodeNames: string[] = []
   esVersion = 'unknown'
-  esPlugins: Plugin[] = []
+  esPluginNames: string[] = []
   esUri: string
   crowi: Crowi
   searchEvent: EventEmitter
@@ -78,10 +78,10 @@ export default class SearchClient {
     const { resourceDir } = this.crowi
 
     let fileName = path.join(resourceDir + 'search/mappings.json')
-    if ('analysis-kuromoji' in this.esPlugins) {
+    if ('analysis-kuromoji' in this.esPluginNames) {
       fileName = path.join(resourceDir + 'search/mappings-kuromoji.json')
     }
-    if ('analysis-sudachi' in this.esPlugins) {
+    if ('analysis-sudachi' in this.esPluginNames) {
       fileName = path.join(resourceDir + 'search/mappings-sudachi.json')
     }
     return JSON.parse(fs.readFileSync(fileName).toString())
@@ -95,11 +95,11 @@ export default class SearchClient {
         throw new Error('no nodes info')
       }
 
-      for (const [nodeName, { version, plugins }] of Object.entries<any>(nodes.nodes)) {
+      for (const [nodeName, { version, plugins }] of Object.entries(nodes.nodes)) {
         this.esNodeName = nodeName
-        this.esNodeNames.push(nodeName)
+        this.esNodeNames = [...this.esNodeNames, nodeName]
         this.esVersion = version
-        this.esPlugins.push(plugins)
+        this.esPluginNames = [...this.esPluginNames, ...plugins.map(({ name }) => name)]
       }
     } catch (error) {
       debug('es check version error:', error)
