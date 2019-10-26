@@ -5,7 +5,7 @@ import i18n from '../../i18n'
 
 i18n()
 
-const crowi = new Crowi({ user: {}, csrfToken: '' }, window)
+const crowi = new Crowi({ user: { name: 'storybook' }, csrfToken: '' }, window)
 
 export default { title: 'Modal/PageCreateModal' }
 
