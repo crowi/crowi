@@ -57,10 +57,10 @@ describe('format-date utility', () => {
 
   describe('formatToLocaleString', () => {
     it('with ja environment', () => {
-      expect(formatToLocaleString('2019-09-29T03:01:21.200Z', jaEnvironment)).toMatchInlineSnapshot(`"2019/09/29 3:01:21"`)
+      expect(formatToLocaleString('2019-09-29T03:01:21.200Z', jaEnvironment)).toBe('2019/09/29 3:01:21')
     })
     it('with en environment', () => {
-      expect(formatToLocaleString('2019-09-29T03:01:21.200Z', enUSEnvironment)).toMatchInlineSnapshot(`"Sep 29, 2019, 3:01:21 AM"`)
+      expect(formatToLocaleString('2019-09-29T03:01:21.200Z', enUSEnvironment)).toBe('Sep 29, 2019, 3:01:21 AM')
     })
   })
 
