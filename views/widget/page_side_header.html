@@ -27,7 +27,7 @@
   <div class="like-box">
     <dl>
       <div class="row">
-        <dt class="col"><i class="mdi mdi-thumb-up"></i> {{ t('Like!') }}</dt>
+        <dt class="col">{{ Icon("thumbUp") }} {{ t('Like!') }}</dt>
         <dd class="col">
           <p class="liker-count">
           <span id="like-count">{{ page.liker.length }}</span>
@@ -35,21 +35,21 @@
             data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
             class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
-            ><i class="mdi mdi-thumb-up"></i> {{ t('Like!') }}</button>
+            >{{ Icon("thumbUp") }} {{ t('Like!') }}</button>
           </p>
           <p id="liker-list" class="liker-list" data-likers="{{ page.liker|default([])|join(',') }}">
           </p>
         </dd>
       </div>
       <div class="row">
-        <dt class="col"><i class="mdi mdi-bell"></i> {{ t('Notification') }}</dt>
+        <dt class="col">{{ Icon("bell") }} {{ t('Notification') }}</dt>
         <dd class="col">
           <div id="watch-button"></div>
           <p></p>
         </dd>
       </div>
       <div class="row">
-        <dt class="col"><i class="mdi mdi-paw"></i> {{ t('Seen by') }}</dt>
+        <dt class="col">{{ Icon("paw") }} {{ t('Seen by') }}</dt>
         <dd class="col">
           <div id="seen-user-list" data-seen-users="{{ page.seenUsers|default([])|join(',') }}"></div>
         </dd>

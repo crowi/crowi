@@ -3,7 +3,7 @@
   <div class="form-box">
     <form action="/me/auth/google" method="post" class="form-horizontal" role="form">
       <fieldset>
-        <legend><i class="mdi mdi-google"></i> {{ t('Google Setting') }}</legend>
+        <legend>{{ Icon("google") }} {{ t('Google Setting') }}</legend>
 
         {% set wmessage = req.flash('warningMessage.auth.google') %}
         {% if wmessage.length %}

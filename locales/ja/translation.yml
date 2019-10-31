@@ -7,6 +7,7 @@ Move pages under: '%s 以下を移動'
 Unlinked: リダイレクト削除
 'Like!': いいね！
 Notification: 通知
+Notifications: 通知一覧
 Watch: ウォッチする
 Watched: ウォッチ中
 Seen by: 見た人
@@ -57,7 +58,7 @@ Memo: メモ
 Input page name: ページ名を入力
 Input page name (optional): ページ名を入力(空欄OK)
 New Page: 新規ページ
-Create under: '<code>%s</code>以下に作成'
+Create under: '<1>{{ path }}</1>以下に作成'
 Table of Contents: 目次
 Public: 公開
 Anyone with the link: リンクを知っている人のみ
@@ -263,11 +264,17 @@ admin:
     tips2: どちらの設定もない場合、メールは送信されません。
     from: Fromアドレス
     from_placeholder: '例: mail@crowi.wiki'
-    smtp: SMTP設定
-    host: ホスト
-    port: ポート
-    user: ユーザー
-    password: パスワード
+    smtp:
+      legend: SMTP設定
+      host: ホスト
+      port: ポート
+      user: ユーザー
+      password: パスワード
+    aws:
+      legend: AWS設定
+      region: リージョン
+      access_key_id: Access Key ID
+      secret_access_key: Secret Access Key
   security:
     legend: セキュリティ設定
     basic_auth: Basic認証

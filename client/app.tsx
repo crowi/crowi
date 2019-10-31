@@ -11,6 +11,7 @@ import Emitter from './emitter'
 import SideMenuTrigger from 'components/SideMenuTrigger'
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'
+import PageCreateModal from 'client/components/Modal/PageCreateModal'
 import PageListSearch from 'components/PageListSearch'
 import PageHistory from 'components/PageHistory'
 import PageAttachment from 'components/PageAttachment'
@@ -27,6 +28,7 @@ import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
+import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 
 import hydrateComponents from './hydrateComponents'
 
@@ -68,6 +70,7 @@ window.crowiAuth = crowiAuth
 
 const me = $('body').data('me')
 const componentMappings = {
+  'page-create-modal': <PageCreateModal crowi={crowi} />,
   'side-menu-trigger': <SideMenuTrigger crowi={crowi} />,
   'search-top': <HeaderSearchBox crowi={crowi} />,
   'search-page': <SearchPage crowi={crowi} />,
@@ -88,6 +91,8 @@ const componentMappings = {
   'admin-share': <AdminShare crowi={crowi} />,
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
   'admin-page': <AdminPage crowi={crowi} />,
+
+  'help-portal': <HelpPortalModal />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {
