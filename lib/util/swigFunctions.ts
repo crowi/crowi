@@ -1,6 +1,8 @@
 import Crowi from 'server/crowi'
 import { Express } from 'express'
 import ssr from './ssr'
+import * as Icons from '@mdi/js'
+import renderIcon from 'common/functions/renderIcon'
 
 export default (crowi: Crowi, app: Express, req, res) => {
   // const debug = Debug('crowi:lib:swigFunctions')
@@ -150,6 +152,15 @@ export default (crowi: Crowi, app: Express, req, res) => {
       }
       return ''
     },
+  }
+
+  locals.Icon = function(name, classNames = [], attributes = '') {
+    const key = `mdi${name.charAt(0).toUpperCase() + name.slice(1)}`
+    const path = Icons[key]
+    if (!(key in Icons)) {
+      console.error(`${key} is not found.`)
+    }
+    return renderIcon(path, classNames, attributes)
   }
 
   locals.Component = ssr(res)

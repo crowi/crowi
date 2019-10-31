@@ -10,7 +10,7 @@
 <div class="header-wrap sps sps--abv">
   {% if not page.isDeleted() %}
   <header id="page-header">
-    <p class="stopper"><i class="mdi mdi-chevron-up"></i></p>
+    <p class="stopper">{{ Icon("chevronUp") }}</p>
 
 
     <div class="flex-title-line">
@@ -20,7 +20,7 @@
       {% if isExternalShareEnabled() %}
         <div id="external-share" class="flex-item-action dropdown">
           <button class="btn btn-outline-secondary" data-toggle="dropdown">
-            <i class="mdi mdi-open-in-new"></i>
+            {{ Icon("openInNew") }}
             Share
             <span class="caret"></span>
           </button>
@@ -32,7 +32,7 @@
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
-            <i class="mdi mdi-star-outline"></i>
+            {{ Icon("starOutline") }}
           </p>
         </span>
       </div>
@@ -41,7 +41,7 @@
             data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
             class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
-        ><i class="mdi mdi-thumb-up-outline"></i></button>
+        >{{ Icon("thumbUpOutline") }}</button>
       </div>
       {% endif %}
     </div>
@@ -54,7 +54,7 @@
       <div class="flex-item-action">
         <span id="bookmark-button">
           <p class="bookmark-link">
-            <i class="mdi mdi-star-outline"></i>
+            {{ Icon("starOutline") }}
           </a>
         </span>
       </div>
@@ -62,6 +62,7 @@
   </header>
   {% endif %}
 </div>
+<div class="dummy-header-wrap"></div>
 
 {% block content_head_after %}
 {% endblock %}
@@ -87,7 +88,7 @@
   <ul class="nav nav-tabs d-print-none">
     <li class="nav-item"><a class="nav-link">Create: {{ path }}</a></li>
     <li class="nav-item dropdown ml-auto">
-      <a class="nav-link" href="#" onclick="history.back();"><i class="mdi mdi-close"></i> {{ t('Cancel') }}</a>
+      <a class="nav-link" href="#" onclick="history.back();">{{ Icon("close") }} {{ t('Cancel') }}</a>
     </li>
   </ul>
   <div class="tab-content">
@@ -108,7 +109,7 @@
             <input type="hidden" name="path" value="{{ page.path }}">
             <input type="hidden" name="page_id" value="{{ page._id.toString() }}">
             <button type="submit" class="btn btn-light btn-sm">
-              <i class="mdi mdi-file-restore" aria-hidden="true"></i>
+              {{ Icon("fileRestore", [], 'aria-hidden="true"') }}
               Put Back
             </button>
           </form>
@@ -120,13 +121,13 @@
             <input type="hidden" name="page_id" value="{{ page._id.toString() }}">
             <input type="hidden" name="completely" value="true">
             <button type="submit" class="btn btn-danger btn-sm">
-              <i class="mdi mdi-delete-forever-outline" aria-hidden="true"></i>
+              {{ Icon("deleteForeverOutline", [], 'aria-hidden="true"') }}
               Delete Completely
             </button>
           </form>
         </li>
       </ul>
-      <i class="mdi mdi-trash-can-outline" aria-hidden="true"></i>
+      {{ Icon("trashCanOutline", [], 'aria-hidden="true"') }}
       This page is in the trash.<br>
       Deleted by <img src="{{ page.lastUpdateUser|picture }}" class="picture picture-sm picture-rounded"> {{ page.lastUpdateUser.name }} at {{ page.updatedAt|datetz('Y-m-d H:i:s') }}
     </div>
@@ -136,32 +137,32 @@
   {% if not page.isDeleted() %}
   <ul class="nav nav-tabs d-print-none">
     <li class="nav-item" data-toggle="tooltip" {# data-title="あなたの 確認待ち です" title="" data-placement="bottom" data-trigger="manual" data-tooltip-stay #}>
-      <a class="nav-link {% if not req.body.pageForm %}active{% endif %}" href="#revision-body" data-toggle="tab"><i class="mdi mdi-auto-fix"></i></a>
+      <a class="nav-link {% if not req.body.pageForm %}active{% endif %}" href="#revision-body" data-toggle="tab">{{ Icon("autoFix") }}</a>
     </li>
 
     <li class="nav-item">
-      <a class="nav-link {% if req.body.pageForm %}active{% endif %}" href="#edit-form" data-toggle="tab"><i class="mdi mdi-square-edit-outline"></i> {{ t('Edit') }}</a>
+      <a class="nav-link {% if req.body.pageForm %}active{% endif %}" href="#edit-form" data-toggle="tab">{{ Icon("squareEditOutline") }} {{ t('Edit') }}</a>
     </li>
 
     {% if page %}
     <li class="nav-item ml-auto">
-      <a class="nav-link" href="#revision-history" data-toggle="tab"><i class="mdi mdi-history"></i> History</a>
+      <a class="nav-link" href="#revision-history" data-toggle="tab">{{ Icon("history") }} History</a>
     </li>
     {% endif %}
     <li class="nav-item dropdown {% if not page %}ml-auto{% endif %}">
       <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">
-        <i class="mdi mdi-dots-horizontal"></i> <span class="caret"></span>
+        {{ Icon("dotsHorizontal") }} <span class="caret"></span>
       </a>
       <div class="dropdown-menu dropdown-menu-right">
         {% if !isUserPage(path) %}
-          <a class="dropdown-item" href="#" data-target="#renamePage" data-toggle="modal"><i class="mdi mdi-file-move"></i> {{ t('Move') }}</a>
-          <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal"><i class="mdi mdi-folder-move"></i> {{ t('Move pages under', path|path2name ) }}</a>
-          <a class="dropdown-item" href="#" data-target="#portalize" data-toggle="modal"><i class="mdi mdi-file-document-box-multiple-outline"></i> {{ t('Portalize') }}</a>
+          <a class="dropdown-item" href="#" data-target="#renamePage" data-toggle="modal">{{ Icon("fileMove") }} {{ t('Move') }}</a>
+          <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal">{{ Icon("folderMove") }} {{ t('Move pages under', path|path2name ) }}</a>
+          <a class="dropdown-item" href="#" data-target="#portalize" data-toggle="modal">{{ Icon("fileDocumentBoxMultipleOutline") }} {{ t('Portalize') }}</a>
         {% endif %}
-        <a class="dropdown-item" href="?presentation=1" class="toggle-presentation"><i class="mdi mdi-presentation"></i> {{ t('Presentation Mode') }} (beta)</a>
+        <a class="dropdown-item" href="?presentation=1" class="toggle-presentation">{{ Icon("presentation") }} {{ t('Presentation Mode') }} (beta)</a>
         {% if isDeletablePage() %}
           <div class="dropdown-divider"></div>
-          <a class="dropdown-item" href="#" data-target="#deletePage" data-toggle="modal"><i class="mdi mdi-trash-can-outline text-danger"></i> {{ t('Delete') }}</a>
+          <a class="dropdown-item" href="#" data-target="#deletePage" data-toggle="modal">{{ Icon("trashCanOutline", ["text-danger"]) }} {{ t('Delete') }}</a>
         {% endif %}
       </div>
     </li>
@@ -184,7 +185,7 @@
         <input type="hidden" name="path" value="{{ page.path }}">
         <input type="hidden" name="page_id" value="{{ page._id.toString() }}">
         <button type="submit" class="btn btn-light btn-sm float-right">
-          <i class="mdi mdi-link-off" aria-hidden="true"></i>
+          {{ Icon("linkOff", [], 'aria-hidden="true"') }}
           Unlink
         </button>
       </form>
@@ -203,7 +204,7 @@
 
   {% if not page.isLatestRevision() %}
   <div class="alert alert-warning">
-    <strong>{{ t('Warning') }}: </strong> {{ t('page_page.notice.version') }} <i class="mdi mdi-auto-fix"></i> <a href="{{ page.path }}">{{ t('Show latest') }}</a>
+    <strong>{{ t('Warning') }}: </strong> {{ t('page_page.notice.version') }} {{ Icon("autoFix") }} <a href="{{ page.path }}">{{ t('Show latest') }}</a>
   </div>
   {% endif %}
 

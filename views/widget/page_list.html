@@ -27,25 +27,25 @@
 
         {% if page.commentCount > 0 %}
         <span>
-          <i class="mdi mdi-comment"></i>{{ page.commentCount }}
+          {{ Icon("comment") }}{{ page.commentCount }}
         </span>
         {% endif  %}
 
         {% if page.liker.length > 0 %}
         <span class="page-list-liker" data-count="{{ page.liker.length }}">
-          <i class="mdi mdi-thumb-up"></i>{{ page.liker.length }}
+          {{ Icon("thumbUp") }}{{ page.liker.length }}
         </span>
         {% endif  %}
 
         {% if viewConfig.seener_threshold and page.seenUsers.length >= viewConfig.seener_threshold %}
         <span class="page-list-seer" data-count="{{ page.seenUsers.length }}">
-          <i class="mdi mdi-paw"></i>{{ page.seenUsers.length }}
+          {{ Icon("paw") }}{{ page.seenUsers.length }}
         </span>
         {% endif  %}
 
         {% if !page.isPublic() %}
         <span>
-          <i class="mdi mdi-lock"></i>
+          {{ Icon("lock") }}
         </span>
         {% endif %}
       </span>
@@ -58,10 +58,10 @@
 {% if pager %}
 <ul class="pagination">
   {% if pager.prev !== null %}
-    <li class="page-item prev"><a class="page-link" href="{{ path }}?offset={{ pager.prev }}"><i class="mdi mdi-arrow-left"></i> Prev</a></li>
+    <li class="page-item prev"><a class="page-link" href="{{ path }}?offset={{ pager.prev }}">{{ Icon("arrowLeft") }} Prev</a></li>
   {% endif %}
   {% if pager.next %}
-    <li class="page-item next"><a class="page-link" href="{{ path }}?offset={{ pager.next }}">Next <i class="mdi mdi-arrow-right"></i></a></li>
+    <li class="page-item next"><a class="page-link" href="{{ path }}?offset={{ pager.next }}">Next {{ Icon("arrowRight") }}</a></li>
   {% endif %}
 </ul>
 {% endif %}

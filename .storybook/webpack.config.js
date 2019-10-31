@@ -1,4 +1,11 @@
+const webpack = require('webpack');
+
 module.exports = ({ config }) => {
+  config.module.rules.push({
+    test: /\.ya?ml$/,
+    exclude: /node_modules/,
+    use: ['json-loader', 'yaml-loader'],
+  })
   config.module.rules.push({
     test: /\.(ts|tsx)$/,
     loader: require.resolve('babel-loader'),
@@ -7,5 +14,10 @@ module.exports = ({ config }) => {
     },
   });
   config.resolve.extensions.push('.ts', '.tsx')
+  config.plugins.push(new webpack.ProvidePlugin({
+    $: 'jquery',
+    jQuery: 'jquery',
+  }))
+
   return config
-};
+}

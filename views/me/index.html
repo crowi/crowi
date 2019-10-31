@@ -14,12 +14,12 @@
 <div class="content-main content-form">
 
   <ul class="nav nav-tabs">
-    <li class="nav-item"><a class="nav-link active" href="/me"><i class="mdi mdi-cogs"></i> {{ t('User Information') }}</a></li>
+    <li class="nav-item"><a class="nav-link active" href="/me">{{ Icon("cogs") }} {{ t('User Information') }}</a></li>
     {% if not config.crowi['auth:disablePasswordAuth'] %}
-    <li class="nav-item"><a class="nav-link" href="/me/password"><i class="mdi mdi-key"></i> {{ t('Password Settings') }}</a></li>
+    <li class="nav-item"><a class="nav-link" href="/me/password">{{ Icon("key") }} {{ t('Password Settings') }}</a></li>
     {% endif %}
-    <li class="nav-item"><a class="nav-link" href="/me/notifications"><i class="mdi mdi-bell"></i> Notifications</a></li>
-    <li class="nav-item"><a class="nav-link" href="/me/apiToken"><i class="mdi mdi-rocket"></i> {{ t('API Settings') }}</a></li>
+    <li class="nav-item"><a class="nav-link" href="/me/notifications">{{ Icon("bell") }} {{ t('Notifications') }}</a></li>
+    <li class="nav-item"><a class="nav-link" href="/me/apiToken">{{ Icon("rocket") }} {{ t('API Settings') }}</a></li>
   </ul>
 
   <div class="tab-content">

@@ -22,7 +22,7 @@
 
       <p class="text-center">
         {# FIXME: sized down 3x -> 1x because no longer use fa-3x, but, to be fixed#}
-        <i class="mdi mdi-emoticon-outline"></i>
+        {{ Icon("emoticonOutline") }}
       </p>
       <hr>
       <div class="alert alert-info text-center">
@@ -34,7 +34,7 @@
       <h2>ログインエラー</h2>
 
       <p class="text-center">
-        <i class="mdi mdi-emoticon-sad-outline"></i>
+        {{ Icon("emoticonSadOutline") }}
       </p>
       <hr>
       {% if reasonMessage != '' %}

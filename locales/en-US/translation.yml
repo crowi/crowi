@@ -7,6 +7,7 @@ Move pages under: 'Move pages under %s'
 Unlinked: Unlinked
 'Like!': 'Like!'
 Notification: Notification
+Notifications: Notifications
 Watch: Watch
 Watched: Watched
 Seen by: Seen by
@@ -57,7 +58,7 @@ Memo: memo
 Input page name: Input page name
 Input page name (optional): Input page name (optional)
 New Page: New Page
-Create under: 'Create page under: <code>%s</code>'
+Create under: 'Create page under: <1>{{ path }}</1>'
 Table of Contents: Table of Contents
 Public: Public
 Anyone with the link: Anyone with the link
@@ -239,7 +240,6 @@ admin:
   aws:
     legend: AWS Settings
     tips1: AWS にアクセスするための設定を行います。AWS の設定を完了させると、ファイルアップロード機能、プロフィール写真機能などが有効になります。
-    tips2: また、SMTP の設定が無い場合、SES を利用したメール送信が行われます。FromメールアドレスのVerify、プロダクション利用設定をする必要があります。
     notice: この設定を途中で変更すると、これまでにアップロードしたファイル等へのアクセスができなくなりますのでご注意下さい。
     region: リージョン
     bucket: バケット名
@@ -259,15 +259,22 @@ admin:
     client_secret: Client Secret
   mail:
     legend: Mail Settings
-    tips1: SMTPの設定がされている場合、それが利用されます。SMTP設定がなく、AWSの設定がある場合、SESでの送信を試みます。
+    tips1: SMTPの設定がされている場合、それが利用されます。SMTP設定がなく、AWSの設定がある場合、SESでの送信を試みます。SESを利用するためにはFromメールアドレスのVerify、プロダクション利用設定をする必要があります。
     tips2: どちらの設定もない場合、メールは送信されません。
     from: Fromアドレス
     from_placeholder: '例: mail@crowi.wiki'
-    smtp: SMTP設定
-    host: ホスト
-    port: ポート
-    user: ユーザー
-    password: パスワード
+    smtp:
+      legend: SMTP設定
+      smtp: SMTP設定
+      host: ホスト
+      port: ポート
+      user: ユーザー
+      password: パスワード
+    aws:
+      legend: AWS設定
+      region: リージョン
+      access_key_id: Access Key ID
+      secret_access_key: Secret Access Key
   security:
     legend: Security Settings
     basic_auth: Basic認証

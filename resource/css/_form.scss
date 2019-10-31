@@ -117,6 +117,15 @@
       border-bottom: 1px solid $border-color;
     }
   }
+
+  fieldset > fieldset > legend {
+    &:not(.modal-title):not(.dropdown-header) {
+      font-size: 1.3rem;
+      border: none;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
 }
 
 .crowi.main-container .main .page-list.content-main { // {{{ Edit Form of Page List

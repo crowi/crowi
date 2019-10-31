@@ -1,5 +1,6 @@
 import React from 'react'
 import MDIIcon from '@mdi/react'
+import classNames from 'classnames'
 import * as Icons from './Icons'
 
 export type IconName = keyof typeof Icons
@@ -15,8 +16,8 @@ export default class Icon extends React.Component<Props> {
   static defaultProps = { spin: false }
 
   render() {
-    const { name, spin, ...props } = this.props
+    const { className, name, spin, ...props } = this.props
 
-    return <MDIIcon className="mdi-svg" path={Icons[name]} spin={spin} {...props} />
+    return <MDIIcon className={classNames('mdi-svg', className)} path={Icons[name]} spin={spin} {...props} />
   }
 }
