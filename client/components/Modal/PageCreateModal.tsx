@@ -1,7 +1,7 @@
 import React, { useState, FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
 import { Button, Form, Input, Label, Modal, ModalBody, ModalHeader } from 'reactstrap'
-import moment from 'moment'
+import format from 'client/util/format-date'
 import styled from 'styled-components'
 
 import { dark, gray, light } from '../../constants/colors'
@@ -89,7 +89,7 @@ const PageCreateModal: FC<Props> = ({ crowi }) => {
   const user = crowi.getUser()
   const currentPath = location.pathname
   const userPath = `/user/${user && user.name}/`
-  const datePath = moment(Date.now()).format('/YYYY/MM/DD/')
+  const datePath = format(new Date(), '/yyyy/MM/dd/')
   const isTopPage = currentPath === '/'
 
   const [t] = useTranslation()
