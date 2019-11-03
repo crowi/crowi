@@ -5,22 +5,17 @@ import moment from 'moment'
 import fs from 'fs'
 import { EventEmitter } from 'events'
 import Crowi from 'server/crowi'
-import {
-  Plugin,
-  NodesInfoResponse,
-  CatIndicesResponse,
-  IndicesExistsAliasResponse,
-  CatAliasesResponse,
-  BulkResponse,
-  SearchResponse,
-} from 'server/types/elasticsearch'
+import { NodesInfoResponse, CatIndicesResponse, IndicesExistsAliasResponse, CatAliasesResponse, BulkResponse, SearchResponse } from 'server/types/elasticsearch'
+import { Query, SearchWithBody, FunctionScoreQueryParams } from 'server/service/elasticsearch/query'
+import { parseQuery } from 'server/service/query'
+import { TYPES } from 'server/models/page'
 
 const debug = Debug('crowi:lib:search')
 
 interface SearchOption {
   offset?: number
   limit?: number
-  type?: string
+  type?: typeof TYPES[number]
 }
 
 export default class SearchClient {
@@ -451,14 +446,26 @@ export default class SearchClient {
     }
   }
 
-  /**
-   * search returning type:
-   * {
-   *   meta: { total: Integer, results: Integer},
-   *   data: [ pages ...],
-   * }
-   */
-  async search(query) {
+  async getBookmarkCountFactor() {
+    const User = this.crowi.model('User')
+    const count = await User.countDocuments({})
+    return 10000 / (count || 1)
+  }
+
+  async getFunctionScoreQueryParams(): Promise<FunctionScoreQueryParams> {
+    const factor = await this.getBookmarkCountFactor()
+    return {
+      fieldValueFactor: {
+        field: 'bookmark_count',
+        modifier: 'log1p',
+        factor,
+        missing: 0,
+      },
+      boostMode: 'sum',
+    }
+  }
+
+  async search<T extends SearchWithBody>(query: T) {
     try {
       const response: ApiResponse<SearchResponse> = await this.client.search(query)
       const { took, hits } = response.body
@@ -476,251 +483,17 @@ export default class SearchClient {
     }
   }
 
-  createSearchQuerySortedByUpdatedAt(option) {
-    // getting path by default is almost for debug
-    let fields = ['path', 'bookmark_count']
-    if (option) {
-      fields = option.fields || fields
-    }
+  async searchKeyword<T extends { username: string }>(keyword: string, user: T, option: SearchOption = {}) {
+    const { offset: from, limit: size, type } = option
 
-    // default is only id field, sorted by updated_at
-    const query = {
-      index: this.indexNames.current,
-      type: 'pages',
-      body: {
-        sort: [{ updated_at: { order: 'desc' } }],
-        query: {}, // query
-        _source: fields,
-      },
-    }
-    this.appendResultSize(query)
-
-    return query
-  }
-
-  createSearchQuerySortedByScore(option?) {
-    let fields = ['path', 'bookmark_count']
-    if (option) {
-      fields = option.fields || fields
-    }
-
-    // sort by score
-    const query = {
-      index: this.indexNames.current,
-      type: 'pages',
-      body: {
-        sort: [{ _score: { order: 'desc' } }],
-        query: {}, // query
-        _source: fields,
-      },
-    }
-    this.appendResultSize(query)
-
-    return query
-  }
-
-  appendResultSize(query, from: number = SearchClient.DEFAULT_OFFSET, size: number = SearchClient.DEFAULT_LIMIT) {
-    query.from = from
-    query.size = size
-  }
-
-  initializeBoolQuery(query) {
-    // query is created by createSearchQuerySortedByScore() or createSearchQuerySortedByUpdatedAt()
-    if (!query.body.query.bool) {
-      query.body.query.bool = {}
-    }
-
-    const isInitialized = query => !!query && Array.isArray(query)
-
-    if (!isInitialized(query.body.query.bool.filter)) {
-      query.body.query.bool.filter = []
-    }
-    if (!isInitialized(query.body.query.bool.must)) {
-      query.body.query.bool.must = []
-    }
-    if (!isInitialized(query.body.query.bool.must_not)) {
-      query.body.query.bool.must_not = []
-    }
-    return query
-  }
-
-  appendCriteriaForKeywordContains(query, keyword) {
-    query = this.initializeBoolQuery(query)
-
-    const appendMultiMatchQuery = function(query, type, keywords) {
-      let target
-      let operator = 'and'
-      switch (type) {
-        case 'not_match':
-          target = query.body.query.bool.must_not
-          operator = 'or'
-          break
-        case 'match':
-        default:
-          target = query.body.query.bool.must
-      }
-
-      target.push({
-        multi_match: {
-          query: keywords.join(' '),
-          // TODO: By user's i18n setting, change boost or search target fields
-          fields: ['path.ja^2', 'body.ja', 'path.en^1.2', 'body.en'],
-          operator: operator,
-        },
-      })
-
-      return query
-    }
-
-    const parsedKeywords = this.getParsedKeywords(keyword)
-
-    if (parsedKeywords.match.length > 0) {
-      query = appendMultiMatchQuery(query, 'match', parsedKeywords.match)
-    }
-
-    if (parsedKeywords.not_match.length > 0) {
-      query = appendMultiMatchQuery(query, 'not_match', parsedKeywords.not_match)
-    }
-
-    if (parsedKeywords.phrase.length > 0) {
-      const phraseQueries: any = []
-      parsedKeywords.phrase.forEach(function(phrase) {
-        phraseQueries.push({
-          multi_match: {
-            query: phrase, // each phrase is quoteted words
-            type: 'phrase',
-            fields: [
-              // Not use "*.ja" fields here, because we want to analyze (parse) search words
-              'path.raw^2',
-              'body',
-            ],
-          },
-        })
-      })
-
-      query.body.query.bool.must.push(phraseQueries)
-    }
-
-    if (parsedKeywords.not_phrase.length > 0) {
-      const notPhraseQueries: any = []
-      parsedKeywords.not_phrase.forEach(function(phrase) {
-        notPhraseQueries.push({
-          multi_match: {
-            query: phrase, // each phrase is quoteted words
-            type: 'phrase',
-            fields: [
-              // Not use "*.ja" fields here, because we want to analyze (parse) search words
-              'path.raw^2',
-              'body',
-            ],
-          },
-        })
-      })
-
-      query.body.query.bool.must_not.push(notPhraseQueries)
-    }
-  }
-
-  appendCriteriaForPathFilter(query, path) {
-    query = this.initializeBoolQuery(query)
-
-    if (path.match(/\/$/)) {
-      path = path.substr(0, path.length - 1)
-    }
-    query.body.query.bool.filter.push({
-      wildcard: {
-        'path.raw': path + '/*',
-      },
-    })
-  }
-
-  filterPortalPages(query) {
-    query = this.initializeBoolQuery(query)
-
-    query.body.query.bool.must_not.push(SearchClient.queries.USER)
-    query.body.query.bool.filter.push(SearchClient.queries.PORTAL)
-  }
-
-  filterPublicPages(query) {
-    query = this.initializeBoolQuery(query)
-
-    query.body.query.bool.must_not.push(SearchClient.queries.USER)
-    query.body.query.bool.filter.push(SearchClient.queries.PUBLIC)
-  }
-
-  filterUserPages(query) {
-    query = this.initializeBoolQuery(query)
-
-    query.body.query.bool.filter.push(SearchClient.queries.USER)
-  }
-
-  filterPagesByType(query, type) {
-    const Page = this.crowi.model('Page')
-
-    switch (type) {
-      case Page.TYPE_PORTAL:
-        return this.filterPortalPages(query)
-      case Page.TYPE_PUBLIC:
-        return this.filterPublicPages(query)
-      case Page.TYPE_USER:
-        return this.filterUserPages(query)
-      default:
-        return query
-    }
-  }
-
-  filterPagesByUser(query, user) {
-    const Page = this.crowi.model('Page')
-
-    query = this.initializeBoolQuery(query)
-
-    query.body.query.bool.must_not.push({
-      bool: {
-        must_not: { match: { username: user.username } },
-        should: [{ match: { grant: Page.GRANT_RESTRICTED } }, { match: { grant: Page.GRANT_SPECIFIED } }, { match: { grant: Page.GRANT_OWNER } }],
-      },
-    })
-  }
-
-  async appendFunctionScore(query) {
-    const User = this.crowi.model('User')
-    const count = (await User.countDocuments({})) || 1
-    // newScore = oldScore + log(1 + factor * 'bookmark_count')
-    query.body.query = {
-      function_score: {
-        query: { ...query.body.query },
-        field_value_factor: {
-          field: 'bookmark_count',
-          modifier: 'log1p',
-          factor: 10000 / count,
-          missing: 0,
-        },
-        boost_mode: 'sum',
-      },
-    }
-  }
-
-  async searchKeyword(keyword, user = {}, option: SearchOption = {}) {
-    const from = option.offset
-    const size = option.limit
-    const type = option.type
-    const query = this.createSearchQuerySortedByScore()
-    this.appendCriteriaForKeywordContains(query, keyword)
-
-    this.filterPagesByType(query, type)
-    this.filterPagesByUser(query, user)
-
-    this.appendResultSize(query, from, size)
-
-    await this.appendFunctionScore(query)
-
-    // @ts-ignore
-    const bool = query.body.query.function_score.query.bool
-
-    debug('searching ...', keyword, type)
-    debug('filter', bool.filter)
-    debug('must', bool.must)
-    debug('must_not', bool.must_not)
+    const query = Query.createBaseQuery({ index: this.indexNames.current })
+      .appendPaging({ from, size })
+      .appendSort({ _score: 'desc' })
+      .filterPagesByType({ type })
+      .filterPagesByUser({ username: user.username })
+      .appendSearchQuery(parseQuery(keyword))
+      .convertToFunctionScoreQuery(await this.getFunctionScoreQueryParams())
+      .value()
 
     return this.search(query)
   }
@@ -729,69 +502,20 @@ export default class SearchClient {
     // TODO path 名だけから検索
   }
 
-  async searchKeywordUnderPath(keyword, path, user = {}, option: SearchOption = {}) {
-    const from = option.offset
-    const size = option.limit
-    const type = option.type
-    const query = this.createSearchQuerySortedByScore()
-    this.appendCriteriaForKeywordContains(query, keyword)
-    this.appendCriteriaForPathFilter(query, path)
+  async searchKeywordUnderPath<T extends { username: string }>(keyword: string, path: string, user: T, option: SearchOption = {}) {
+    const { offset: from, limit: size, type } = option
 
-    this.filterPagesByType(query, type)
-    this.filterPagesByUser(query, user)
-
-    this.appendResultSize(query, from, size)
-
-    await this.appendFunctionScore(query)
+    const query = Query.createBaseQuery({ index: this.indexNames.current })
+      .appendPaging({ from, size })
+      .appendSort({ _score: 'desc' })
+      .filterPagesByPath({ path })
+      .filterPagesByType({ type })
+      .filterPagesByUser({ username: user.username })
+      .appendSearchQuery(parseQuery(keyword))
+      .convertToFunctionScoreQuery(await this.getFunctionScoreQueryParams())
+      .value()
 
     return this.search(query)
-  }
-
-  getParsedKeywords(keyword) {
-    const matchWords: any = []
-    const notMatchWords: any = []
-    const phraseWords: any = []
-    const notPhraseWords: any = []
-
-    keyword.trim()
-    keyword = keyword.replace(/\s+/g, ' ')
-
-    // First: Parse phrase keywords
-    const phraseRegExp = new RegExp(/(-?"[^"]+")/g)
-    const phrases = keyword.match(phraseRegExp)
-
-    if (phrases !== null) {
-      keyword = keyword.replace(phraseRegExp, '')
-
-      phrases.forEach(function(phrase) {
-        phrase.trim()
-        if (phrase.match(/^-/)) {
-          notPhraseWords.push(phrase.replace(/^-/, ''))
-        } else {
-          phraseWords.push(phrase)
-        }
-      })
-    }
-
-    // Second: Parse other keywords (include minus keywords)
-    keyword.split(' ').forEach(function(word) {
-      if (word === '') {
-        return
-      }
-
-      if (word.match(/^-(.+)$/)) {
-        notMatchWords.push(RegExp.$1)
-      } else {
-        matchWords.push(word)
-      }
-    })
-
-    return {
-      match: matchWords,
-      not_match: notMatchWords,
-      phrase: phraseWords,
-      not_phrase: notPhraseWords,
-    }
   }
 
   async syncPageCreated(page, user, bookmarkCount = 0) {

@@ -1,7 +1,7 @@
 import path from 'path'
 import Crowi from 'server/crowi'
 import { ROOT_DIR } from 'server/test/setup'
-import Searcher from 'server/util/search'
+import Searcher from 'server/service/search'
 
 describe('Search client', () => {
   const crowi = new Crowi(ROOT_DIR, process.env)
