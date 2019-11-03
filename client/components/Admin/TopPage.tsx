@@ -5,7 +5,7 @@ import { AdminContext } from 'components/Admin/AdminPage'
 interface Info {
   crowiVersion: string | null
   searchInfo: {
-    host?: string
+    node?: string
     indexName?: string
     esVersion?: string
   }
@@ -25,7 +25,7 @@ function useInfo(crowi) {
 const TopPage: FC<{}> = () => {
   const { crowi, searchConfigured } = useContext(AdminContext)
   const [{ crowiVersion, searchInfo }, fetchInfo] = useInfo(crowi)
-  const { host, indexName, esVersion } = searchInfo
+  const { node, indexName, esVersion } = searchInfo
 
   useEffect(() => {
     fetchInfo()
@@ -47,7 +47,7 @@ const TopPage: FC<{}> = () => {
           {/* TODO: multiple nodes */}
           {searchConfigured ? (
             <>
-              Configured: {host}/{indexName}, <strong>{esVersion}</strong>
+              Configured: {node}/{indexName}, <strong>{esVersion}</strong>
             </>
           ) : (
             'Not available.'
