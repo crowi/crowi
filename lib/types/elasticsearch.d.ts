@@ -44,7 +44,10 @@ export type SearchResponse = {
     failed: number
   }
   hits: {
-    total: number
+    total: number | {
+      value: number
+      relation: string
+    } // 6.x.x | 7.x.x
     max_score: number | null
     hits: Record<string, {
       _index: string

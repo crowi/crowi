@@ -504,7 +504,7 @@ export default class SearchClient {
       return {
         meta: {
           took,
-          total: hits.total,
+          total: typeof hits.total === 'number' ? hits.total : hits.total.value,
           results: hits.hits.length,
         },
         data: hits.hits.map(({ _id, _score, _source }) => ({ _id, _score, _source })),
