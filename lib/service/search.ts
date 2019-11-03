@@ -1,5 +1,6 @@
 import path from 'path'
-import { Client, ApiResponse } from 'es6'
+import { Client as ES6Client, ApiResponse } from 'es6'
+import { Client as ES7Client } from 'es7'
 import Debug from 'debug'
 import moment from 'moment'
 import fs from 'fs'
@@ -50,7 +51,7 @@ export default class SearchClient {
   crowi: Crowi
   searchEvent: EventEmitter
   indexNames: { base: string; current: string }
-  client: Client
+  client: ES6Client | ES7Client
 
   constructor(crowi: Crowi, esUri: string) {
     this.esUri = esUri
@@ -63,23 +64,23 @@ export default class SearchClient {
       base: uri.indexName,
       current: `${uri.indexName}-current`,
     }
+    const requestTimeout = 5000
 
-    this.client = new Client({ node, requestTimeout: 5000 })
+    this.client = new ES6Client({ node, requestTimeout })
 
-    this.registerUpdateEvent()
+    this.initialize(node, requestTimeout)
   }
 
-  requireMappingFile() {
-    const { resourceDir } = this.crowi
-
-    let fileName = path.join(resourceDir + 'search/mappings.json')
-    if ('analysis-kuromoji' in this.esPluginNames) {
-      fileName = path.join(resourceDir + 'search/mappings-kuromoji.json')
-    }
-    if ('analysis-sudachi' in this.esPluginNames) {
-      fileName = path.join(resourceDir + 'search/mappings-sudachi.json')
-    }
-    return JSON.parse(fs.readFileSync(fileName).toString())
+  async waitES(retry = 10) {
+    return new Promise(resolve => {
+      let count = 0
+      const interval = setInterval(async () => {
+        if (++count >= retry || (await this.client.ping())) {
+          resolve()
+          clearInterval(interval)
+        }
+      }, 5000)
+    })
   }
 
   async checkESVersion() {
@@ -110,6 +111,33 @@ export default class SearchClient {
     const bookmarkEvent = this.crowi.event('Bookmark')
     bookmarkEvent.on('create', this.syncBookmarkChanged.bind(this))
     bookmarkEvent.on('delete', this.syncBookmarkChanged.bind(this))
+  }
+
+  async initialize(node: string, requestTimeout: number) {
+    await this.waitES()
+
+    await this.checkESVersion()
+
+    if (this.esVersion.startsWith('7')) {
+      this.client = new ES7Client({ node, requestTimeout })
+    }
+
+    await this.ensureAlias()
+
+    this.registerUpdateEvent()
+  }
+
+  requireMappingFile() {
+    const { resourceDir } = this.crowi
+
+    let fileName = path.join(resourceDir + 'search/mappings.json')
+    if ('analysis-kuromoji' in this.esPluginNames) {
+      fileName = path.join(resourceDir + 'search/mappings-kuromoji.json')
+    }
+    if ('analysis-sudachi' in this.esPluginNames) {
+      fileName = path.join(resourceDir + 'search/mappings-sudachi.json')
+    }
+    return JSON.parse(fs.readFileSync(fileName).toString())
   }
 
   shouldIndexed(page) {
