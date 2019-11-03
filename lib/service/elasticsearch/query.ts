@@ -1,5 +1,6 @@
 import deepmerge from 'deepmerge'
-import { Search } from 'es6/api/requestParams'
+import { Search as ES6Search } from 'es6/api/requestParams'
+import { Search as ES7Search } from 'es7/api/requestParams'
 import { TYPES, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER } from 'server/models/page'
 import { SearchQuery } from 'server/service/query'
 
@@ -30,6 +31,7 @@ export const queries = {
   },
 }
 
+export type Search<T = any> = ES6Search<T> & ES7Search<T>
 export type PickSearchBodyQuery<T extends Search<{ query: any }>> = T extends Search<{ query: infer U }> ? U : never
 export type SearchWithBody<T = any> = Search<T> & { body: T }
 
