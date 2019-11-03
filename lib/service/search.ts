@@ -134,14 +134,17 @@ export default class SearchClient {
   requireMappingFile() {
     const { resourceDir } = this.crowi
 
-    let fileName = path.join(resourceDir + 'search/mappings.json')
+    let fileName = 'mappings.json'
     if ('analysis-kuromoji' in this.esPluginNames) {
-      fileName = path.join(resourceDir + 'search/mappings-kuromoji.json')
+      fileName = 'mappings-kuromoji.json'
     }
     if ('analysis-sudachi' in this.esPluginNames) {
-      fileName = path.join(resourceDir + 'search/mappings-sudachi.json')
+      fileName = 'mappings-sudachi.json'
     }
-    return JSON.parse(fs.readFileSync(fileName).toString())
+    const dirName = this.esVersion.startsWith('7') ? 'es7' : 'es6'
+
+    const filePath = path.join(resourceDir, 'search', dirName, fileName)
+    return JSON.parse(fs.readFileSync(filePath).toString())
   }
 
   shouldIndexed(page) {
@@ -307,6 +310,10 @@ export default class SearchClient {
     return this.client.indices.updateAliases({ body: { actions } })
   }
 
+  getType() {
+    return this.esVersion.startsWith('7') ? '_doc' : 'pages'
+  }
+
   prepareBodyForUpdate(body, page, index = null) {
     if (!Array.isArray(body)) {
       throw new Error('Body must be an array.')
@@ -315,7 +322,7 @@ export default class SearchClient {
     const command = {
       update: {
         _index: index || this.indexNames.current,
-        _type: 'pages',
+        _type: this.getType(),
         _id: page._id.toString(),
       },
     }
@@ -345,7 +352,7 @@ export default class SearchClient {
     const command = {
       index: {
         _index: index || this.indexNames.current,
-        _type: 'pages',
+        _type: this.getType(),
         _id: page._id.toString(),
       },
     }
@@ -375,7 +382,7 @@ export default class SearchClient {
     const command = {
       delete: {
         _index: index || this.indexNames.current,
-        _type: 'pages',
+        _type: this.getType(),
         _id: page._id.toString(),
       },
     }
@@ -518,7 +525,7 @@ export default class SearchClient {
   async searchKeyword<T extends { username: string }>(keyword: string, user: T, option: SearchOption = {}) {
     const { offset: from, limit: size, type } = option
 
-    const query = Query.createBaseQuery({ index: this.indexNames.current })
+    const query = Query.createBaseQuery({ index: this.indexNames.current, type: this.getType() })
       .appendPaging({ from, size })
       .appendSort({ _score: 'desc' })
       .filterPagesByType({ type })
@@ -537,7 +544,7 @@ export default class SearchClient {
   async searchKeywordUnderPath<T extends { username: string }>(keyword: string, path: string, user: T, option: SearchOption = {}) {
     const { offset: from, limit: size, type } = option
 
-    const query = Query.createBaseQuery({ index: this.indexNames.current })
+    const query = Query.createBaseQuery({ index: this.indexNames.current, type: this.getType() })
       .appendPaging({ from, size })
       .appendSort({ _score: 'desc' })
       .filterPagesByPath({ path })
