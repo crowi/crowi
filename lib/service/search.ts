@@ -50,7 +50,9 @@ export default class SearchClient {
   esUri: string
   crowi: Crowi
   searchEvent: EventEmitter
+  node: string
   indexNames: { base: string; current: string }
+  requestTimeout: number
   client: ES6Client | ES7Client
 
   constructor(crowi: Crowi, esUri: string) {
@@ -60,15 +62,15 @@ export default class SearchClient {
 
     const uri = this.parseUri(this.esUri)
     const { node } = uri
+    this.node = node
     this.indexNames = {
       base: uri.indexName,
       current: `${uri.indexName}-current`,
     }
     const requestTimeout = 5000
+    this.requestTimeout = requestTimeout
 
     this.client = new ES6Client({ node, requestTimeout })
-
-    this.initialize(node, requestTimeout)
   }
 
   async waitES(retry = 10) {
@@ -113,7 +115,9 @@ export default class SearchClient {
     bookmarkEvent.on('delete', this.syncBookmarkChanged.bind(this))
   }
 
-  async initialize(node: string, requestTimeout: number) {
+  async initialize() {
+    const { node, requestTimeout } = this
+
     await this.waitES()
 
     await this.checkESVersion()
