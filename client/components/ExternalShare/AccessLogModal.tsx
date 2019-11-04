@@ -5,7 +5,7 @@ import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
 import { Share, ShareAccess } from 'client/types/crowi'
-import format, { formatToLocaleString } from 'client/util/format-date'
+import format, { formatToLocaleString } from 'client/util/formatDate'
 
 interface Props extends WithTranslation {
   show: boolean

@@ -1,4 +1,4 @@
-import { formatDistance, formatToLocaleString, defaultEnvironment, Environment } from './format-date'
+import { formatDistance, formatToLocaleString, defaultEnvironment, Environment } from './formatDate'
 import { subDays } from 'date-fns'
 import { ja, enUS } from 'date-fns/locale'
 

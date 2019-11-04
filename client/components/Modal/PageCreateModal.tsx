@@ -1,7 +1,7 @@
 import React, { useState, FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
 import { Button, Form, Input, Label, Modal, ModalBody, ModalHeader } from 'reactstrap'
-import format from 'client/util/format-date'
+import format from 'client/util/formatDate'
 import styled from 'styled-components'
 
 import { dark, gray, light } from '../../constants/colors'
