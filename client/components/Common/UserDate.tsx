@@ -1,5 +1,5 @@
 import React from 'react'
-import format, { formatDistanceFromNow } from 'client/util/format-date'
+import format, { formatDistanceFromNow } from 'client/util/formatDate'
 
 interface Props {
   dateTime: string
