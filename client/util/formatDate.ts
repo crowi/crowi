@@ -1,6 +1,6 @@
 /**
  * OPINIONED date formatter to use browser locale by default.
- * Also this treats given string as ISO8601 datetime input. date-fns dropped its behaviour.
+ * Also this treats given string as ISO8601 datetime input. date-fns reduced its function.
  */
 
 import { format as dateFnsFormat, Locale, parseISO, formatDistance as dateFnsFormatDistance } from 'date-fns'
