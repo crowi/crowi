@@ -5,6 +5,7 @@ import CommentBody from './CommentBody'
 import * as styles from 'client/constants/styles'
 import { CommonProps } from 'client/types/component'
 import Crowi from 'client/util/Crowi'
+import { formatToLocaleString } from 'client/util/formatDate'
 
 type PageCommentContainerProps = Props & {
   isOwn: boolean
@@ -76,7 +77,7 @@ const CommentItem: FC<Props> = props => {
         <CommentCreator>{creator.username}</CommentCreator>
         <CommentBody comment={commentBody} />
         <CommentMeta>
-          <CommentAt>{createdAt}</CommentAt>
+          <CommentAt>{formatToLocaleString(createdAt)}</CommentAt>
           <a className={`badge ${badgeType}`} href={`?revision=${revision}`}>
             {revision.substr(0, 8)}
           </a>
