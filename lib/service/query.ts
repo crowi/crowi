@@ -3,12 +3,12 @@ export const normalize = (query: string) => {
 }
 
 export const splitKeywordsAndPhrases = (query: string) => {
-  const phraseRegExp = /(-?"[^"]+")/g
+  const phraseRegExp = /(-?"[^"]*")/g
   const keywords = query
     .replace(phraseRegExp, '')
     .split(' ')
     .filter(Boolean)
-  const phrases = (query.match(phraseRegExp) || []).map(normalize).map(phrase => phrase.slice(1, -1))
+  const phrases = (query.match(phraseRegExp) || []).map(normalize)
   return { keywords, phrases }
 }
 
@@ -27,6 +27,10 @@ export const splitPositiveAndNegative = (queries: string[]) => {
   return { positive, negative }
 }
 
+export const unquote = (query: string) => {
+  return query.startsWith('-') ? `-${query.slice(2, -1)}` : query.slice(1, -1)
+}
+
 type PositiveAndNegative<T> = {
   positive: T
   negative: T
@@ -39,9 +43,17 @@ export type SearchQuery = {
 
 export const parseQuery = (query: string): SearchQuery => {
   const { keywords, phrases } = splitKeywordsAndPhrases(normalize(query))
+  const { positive: positiveKeywords, negative: negativeKeywords } = splitPositiveAndNegative(keywords)
+  const { positive: positivePhrases, negative: negativePhrases } = splitPositiveAndNegative(phrases)
 
   return {
-    keywords: splitPositiveAndNegative(keywords),
-    phrases: splitPositiveAndNegative(phrases),
+    keywords: {
+      positive: positiveKeywords,
+      negative: negativeKeywords,
+    },
+    phrases: {
+      positive: positivePhrases.map(unquote).filter(Boolean),
+      negative: negativePhrases.map(unquote).filter(Boolean),
+    },
   }
 }
