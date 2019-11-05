@@ -71,21 +71,25 @@ describe('Page', () => {
 
   describe('.isPublic', () => {
     describe('with a public page', () => {
-      test('should return true', done => {
-        Page.findOne({ path: '/grant/public' }, (err, page) => {
-          expect(err).toBeNull()
-          expect(page.isPublic()).toBe(true)
-          done()
+      test('should return true', () => {
+        return new Promise(resolve => {
+          Page.findOne({ path: '/grant/public' }, (err, page) => {
+            expect(err).toBeNull()
+            expect(page.isPublic()).toBe(true)
+            resolve()
+          })
         })
       })
     })
     ;['restricted', 'specified', 'owner'].forEach(grant => {
       describe('with a ' + grant + ' page', () => {
-        test('should return false', done => {
-          Page.findOne({ path: '/grant/' + grant }, (err, page) => {
-            expect(err).toBeNull()
-            expect(page.isPublic()).toBe(false)
-            done()
+        test('should return false', () => {
+          return new Promise(resolve => {
+            Page.findOne({ path: '/grant/' + grant }, (err, page) => {
+              expect(err).toBeNull()
+              expect(page.isPublic()).toBe(false)
+              resolve()
+            })
           })
         })
       })
@@ -167,30 +171,34 @@ describe('Page', () => {
 
   describe('.isCreator', () => {
     describe('with creator', () => {
-      test('should return true', done => {
-        User.findOne({ email: 'anonymous0@example.com' }, (err, user) => {
-          if (err) {
-            done(err)
-          }
+      test('should return true', () => {
+        return new Promise(resolve => {
+          User.findOne({ email: 'anonymous0@example.com' }, (err, user) => {
+            if (err) {
+              resolve(err)
+            }
 
-          Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
-            expect(page.isCreator(user)).toBe(true)
-            done()
+            Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
+              expect(page.isCreator(user)).toBe(true)
+              resolve()
+            })
           })
         })
       })
     })
 
     describe('with non-creator', () => {
-      test('should return false', done => {
-        User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
-          if (err) {
-            done(err)
-          }
+      test('should return false', () => {
+        return new Promise(resolve => {
+          User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
+            if (err) {
+              resolve(err)
+            }
 
-          Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
-            expect(page.isCreator(user)).toBe(false)
-            done()
+            Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
+              expect(page.isCreator(user)).toBe(false)
+              resolve()
+            })
           })
         })
       })
@@ -199,57 +207,63 @@ describe('Page', () => {
 
   describe('.isGrantedFor', () => {
     describe('with a granted user', () => {
-      test('should return true', done => {
-        User.findOne({ email: 'anonymous0@example.com' }, (err, user) => {
-          if (err) {
-            done(err)
-          }
-
-          Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
+      test('should return true', () => {
+        return new Promise(resolve => {
+          User.findOne({ email: 'anonymous0@example.com' }, (err, user) => {
             if (err) {
-              done(err)
+              resolve(err)
             }
 
-            expect(page.isGrantedFor(user)).toBe(true)
-            done()
+            Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
+              if (err) {
+                resolve(err)
+              }
+
+              expect(page.isGrantedFor(user)).toBe(true)
+              resolve()
+            })
           })
         })
       })
     })
 
     describe('with a public page', () => {
-      test('should return true', done => {
-        User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
-          if (err) {
-            done(err)
-          }
-
-          Page.findOne({ path: '/grant/public' }, (err, page) => {
+      test('should return true', () => {
+        return new Promise(resolve => {
+          User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
             if (err) {
-              done(err)
+              resolve(err)
             }
 
-            expect(page.isGrantedFor(user)).toBe(true)
-            done()
+            Page.findOne({ path: '/grant/public' }, (err, page) => {
+              if (err) {
+                resolve(err)
+              }
+
+              expect(page.isGrantedFor(user)).toBe(true)
+              resolve()
+            })
           })
         })
       })
     })
 
     describe('with a restricted page and an user who has no grant', () => {
-      test('should return false', done => {
-        User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
-          if (err) {
-            done(err)
-          }
-
-          Page.findOne({ path: '/grant/restricted' }, (err, page) => {
+      test('should return false', () => {
+        return new Promise(resolve => {
+          User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
             if (err) {
-              done(err)
+              resolve(err)
             }
 
-            expect(page.isGrantedFor(user)).toBe(false)
-            done()
+            Page.findOne({ path: '/grant/restricted' }, (err, page) => {
+              if (err) {
+                resolve(err)
+              }
+
+              expect(page.isGrantedFor(user)).toBe(false)
+              resolve()
+            })
           })
         })
       })
@@ -258,21 +272,25 @@ describe('Page', () => {
 
   describe('Extended field', () => {
     describe('Slack Channel.', () => {
-      test('should be empty', done => {
-        Page.findOne({ path: '/page/for/extended' }, (err, page) => {
-          expect(page.extended.hoge).toBe(1)
-          expect(page.getSlackChannel()).toBe('')
-          done()
+      test('should be empty', () => {
+        return new Promise(resolve => {
+          Page.findOne({ path: '/page/for/extended' }, (err, page) => {
+            expect(page.extended.hoge).toBe(1)
+            expect(page.getSlackChannel()).toBe('')
+            resolve()
+          })
         })
       })
 
-      test('set slack channel and should get it and should keep hoge ', done => {
-        Page.findOne({ path: '/page/for/extended' }, (err, page) => {
-          page.updateSlackChannel('slack-channel1').then(data => {
-            Page.findOne({ path: '/page/for/extended' }, (err, page) => {
-              expect(page.extended.hoge).toBe(1)
-              expect(page.getSlackChannel()).toBe('slack-channel1')
-              done()
+      test('set slack channel and should get it and should keep hoge ', () => {
+        return new Promise(resolve => {
+          Page.findOne({ path: '/page/for/extended' }, (err, page) => {
+            page.updateSlackChannel('slack-channel1').then(data => {
+              Page.findOne({ path: '/page/for/extended' }, (err, page) => {
+                expect(page.extended.hoge).toBe(1)
+                expect(page.getSlackChannel()).toBe('slack-channel1')
+                resolve()
+              })
             })
           })
         })
@@ -282,36 +300,44 @@ describe('Page', () => {
 
   describe('Normalize path', () => {
     describe('Normalize', () => {
-      test('should start with slash', done => {
-        expect(Page.normalizePath('hoge/fuga')).toBe('/hoge/fuga')
-        done()
+      test('should start with slash', () => {
+        return new Promise(resolve => {
+          expect(Page.normalizePath('hoge/fuga')).toBe('/hoge/fuga')
+          resolve()
+        })
       })
 
-      test('should trim spaces of slash', done => {
-        expect(Page.normalizePath('/ hoge / fuga')).toBe('/hoge/fuga')
-        done()
+      test('should trim spaces of slash', () => {
+        return new Promise(resolve => {
+          expect(Page.normalizePath('/ hoge / fuga')).toBe('/hoge/fuga')
+          resolve()
+        })
       })
     })
   })
 
   describe('.findPage', () => {
     describe('findPageById', () => {
-      test('should find page', done => {
-        const pageToFind = createdPages[0]
-        Page.findPageById(pageToFind._id).then(pageData => {
-          expect(pageData.path).toBe(pageToFind.path)
-          done()
+      test('should find page', () => {
+        return new Promise(resolve => {
+          const pageToFind = createdPages[0]
+          Page.findPageById(pageToFind._id).then(pageData => {
+            expect(pageData.path).toBe(pageToFind.path)
+            resolve()
+          })
         })
       })
     })
 
     describe('findPageByIdAndGrantedUser', () => {
-      test('should find page', done => {
-        const pageToFind = createdPages[0]
-        const grantedUser = createdUsers[0]
-        Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser).then(pageData => {
-          expect(pageData.path).toBe(pageToFind.path)
-          done()
+      test('should find page', () => {
+        return new Promise(resolve => {
+          const pageToFind = createdPages[0]
+          const grantedUser = createdUsers[0]
+          Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser).then(pageData => {
+            expect(pageData.path).toBe(pageToFind.path)
+            resolve()
+          })
         })
       })
 
