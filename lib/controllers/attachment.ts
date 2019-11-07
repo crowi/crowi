@@ -97,7 +97,6 @@ export default (crowi: Crowi, app: Express) => {
     const id = req.body.page_id || 0
     const path = decodeURIComponent(req.body.path) || null
     let pageCreated = false
-    const page = {}
 
     debug('id and path are: ', id, path)
 
@@ -141,7 +140,7 @@ export default (crowi: Crowi, app: Express) => {
         debug('Uploaded data is: ', data)
 
         // TODO size
-        const attachment = await Attachment.create({ pageId, creator, filePath, originalName, fileName, fileFormat, fileSize })
+        const attachment = await Attachment.create({ page: pageId, creator, filePath, originalName, fileName, fileFormat, fileSize })
         let fileUrl = attachment.fileUrl
         const config = crowi.getConfig()
 
