@@ -1,4 +1,5 @@
 import React, { FC } from 'react'
+import Icon from 'client/components/Common/Icon'
 
 interface Props {
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void
@@ -21,7 +22,7 @@ const UserSearchForm: FC<Props> = ({ handleSubmit, handleChange, value }) => {
       />
       <span className="input-group-append">
         <button type="submit" className="btn btn-outline-secondary">
-          <i className="search-top-icon mdi mdi-magnify" />
+          <Icon className="search-top-icon" name="magnify" />
         </button>
       </span>
     </form>
