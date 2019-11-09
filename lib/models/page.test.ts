@@ -71,26 +71,16 @@ describe('Page', () => {
 
   describe('.isPublic', () => {
     describe('with a public page', () => {
-      test('should return true', () => {
-        return new Promise(resolve => {
-          Page.findOne({ path: '/grant/public' }, (err, page) => {
-            expect(err).toBeNull()
-            expect(page.isPublic()).toBe(true)
-            resolve()
-          })
-        })
+      test('should return true', async () => {
+        const page = await Page.findOne({ path: '/grant/public' })
+        expect(page.isPublic()).toBe(true)
       })
     })
     ;['restricted', 'specified', 'owner'].forEach(grant => {
       describe('with a ' + grant + ' page', () => {
-        test('should return false', () => {
-          return new Promise(resolve => {
-            Page.findOne({ path: '/grant/' + grant }, (err, page) => {
-              expect(err).toBeNull()
-              expect(page.isPublic()).toBe(false)
-              resolve()
-            })
-          })
+        test('should return false', async () => {
+          const page = await Page.findOne({ path: '/grant/' + grant })
+          expect(page.isPublic()).toBe(false)
         })
       })
     })
@@ -171,129 +161,58 @@ describe('Page', () => {
 
   describe('.isCreator', () => {
     describe('with creator', () => {
-      test('should return true', () => {
-        return new Promise(resolve => {
-          User.findOne({ email: 'anonymous0@example.com' }, (err, user) => {
-            if (err) {
-              resolve(err)
-            }
+      test('should return true', async () => {
+        const page = await Page.findOne({ path: '/user/anonymous/memo' })
 
-            Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
-              expect(page.isCreator(user)).toBe(true)
-              resolve()
-            })
-          })
-        })
-      })
-    })
+        const user = await User.findOne({ email: 'anonymous0@example.com' })
+        expect(page.isCreator(user)).toBe(true)
 
-    describe('with non-creator', () => {
-      test('should return false', () => {
-        return new Promise(resolve => {
-          User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
-            if (err) {
-              resolve(err)
-            }
-
-            Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
-              expect(page.isCreator(user)).toBe(false)
-              resolve()
-            })
-          })
-        })
+        const user1 = await User.findOne({ email: 'anonymous1@example.com' })
+        expect(page.isCreator(user1)).toBe(false)
       })
     })
   })
 
   describe('.isGrantedFor', () => {
     describe('with a granted user', () => {
-      test('should return true', () => {
-        return new Promise(resolve => {
-          User.findOne({ email: 'anonymous0@example.com' }, (err, user) => {
-            if (err) {
-              resolve(err)
-            }
-
-            Page.findOne({ path: '/user/anonymous/memo' }, (err, page) => {
-              if (err) {
-                resolve(err)
-              }
-
-              expect(page.isGrantedFor(user)).toBe(true)
-              resolve()
-            })
-          })
-        })
+      test('should return true', async () => {
+        const user = await User.findOne({ email: 'anonymous0@example.com' })
+        const page = await Page.findOne({ path: '/user/anonymous/memo' })
+        expect(page.isGrantedFor(user)).toBe(true)
       })
     })
 
     describe('with a public page', () => {
-      test('should return true', () => {
-        return new Promise(resolve => {
-          User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
-            if (err) {
-              resolve(err)
-            }
-
-            Page.findOne({ path: '/grant/public' }, (err, page) => {
-              if (err) {
-                resolve(err)
-              }
-
-              expect(page.isGrantedFor(user)).toBe(true)
-              resolve()
-            })
-          })
-        })
+      test('should return true', async () => {
+        const user = await User.findOne({ email: 'anonymous1@example.com' })
+        const page = await Page.findOne({ path: '/grant/public' })
+        expect(page.isGrantedFor(user)).toBe(true)
       })
     })
 
     describe('with a restricted page and an user who has no grant', () => {
-      test('should return false', () => {
-        return new Promise(resolve => {
-          User.findOne({ email: 'anonymous1@example.com' }, (err, user) => {
-            if (err) {
-              resolve(err)
-            }
-
-            Page.findOne({ path: '/grant/restricted' }, (err, page) => {
-              if (err) {
-                resolve(err)
-              }
-
-              expect(page.isGrantedFor(user)).toBe(false)
-              resolve()
-            })
-          })
-        })
+      test('should return false', async () => {
+        const user = await User.findOne({ email: 'anonymous1@example.com' })
+        const page = await Page.findOne({ path: '/grant/restricted' })
+        expect(page.isGrantedFor(user)).toBe(false)
       })
     })
   })
 
   describe('Extended field', () => {
     describe('Slack Channel.', () => {
-      test('should be empty', () => {
-        return new Promise(resolve => {
-          Page.findOne({ path: '/page/for/extended' }, (err, page) => {
-            expect(page.extended.hoge).toBe(1)
-            expect(page.getSlackChannel()).toBe('')
-            resolve()
-          })
-        })
+      test('should be empty', async () => {
+        const page = await Page.findOne({ path: '/page/for/extended' })
+        expect(page.extended.hoge).toBe(1)
+        expect(page.getSlackChannel()).toBe('')
       })
 
-      test('set slack channel and should get it and should keep hoge ', () => {
-        return new Promise(resolve => {
-          Page.findOne({ path: '/page/for/extended' }, (err, page) => {
-            page.updateSlackChannel('slack-channel1').then(data => {
-              Page.findOne({ path: '/page/for/extended' }, (err, page) => {
-                expect(page.extended.hoge).toBe(1)
-                expect(page.getSlackChannel()).toBe('slack-channel1')
-                resolve()
-              })
-            })
-          })
-        })
+      test('set slack channel and should get it and should keep hoge ', async () => {
+        const page = await Page.findOne({ path: '/page/for/extended' })
+        await page.updateSlackChannel('slack-channel1')
+
+        expect(page.extended.hoge).toBe(1)
+        expect(page.getSlackChannel()).toBe('slack-channel1')
       })
     })
   })
@@ -301,44 +220,30 @@ describe('Page', () => {
   describe('Normalize path', () => {
     describe('Normalize', () => {
       test('should start with slash', () => {
-        return new Promise(resolve => {
-          expect(Page.normalizePath('hoge/fuga')).toBe('/hoge/fuga')
-          resolve()
-        })
+        expect(Page.normalizePath('hoge/fuga')).toBe('/hoge/fuga')
       })
 
       test('should trim spaces of slash', () => {
-        return new Promise(resolve => {
-          expect(Page.normalizePath('/ hoge / fuga')).toBe('/hoge/fuga')
-          resolve()
-        })
+        expect(Page.normalizePath('/ hoge / fuga')).toBe('/hoge/fuga')
       })
     })
   })
 
   describe('.findPage', () => {
     describe('findPageById', () => {
-      test('should find page', () => {
-        return new Promise(resolve => {
-          const pageToFind = createdPages[0]
-          Page.findPageById(pageToFind._id).then(pageData => {
-            expect(pageData.path).toBe(pageToFind.path)
-            resolve()
-          })
-        })
+      test('should find page', async () => {
+        const pageToFind = createdPages[0]
+        const page = await Page.findPageById(pageToFind._id)
+        expect(page.path).toBe(pageToFind.path)
       })
     })
 
     describe('findPageByIdAndGrantedUser', () => {
-      test('should find page', () => {
-        return new Promise(resolve => {
-          const pageToFind = createdPages[0]
-          const grantedUser = createdUsers[0]
-          Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser).then(pageData => {
-            expect(pageData.path).toBe(pageToFind.path)
-            resolve()
-          })
-        })
+      test('should find page', async () => {
+        const pageToFind = createdPages[0]
+        const grantedUser = createdUsers[0]
+        const page = await Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser)
+        expect(page.path).toBe(pageToFind.path)
       })
 
       test('should error by grant', async () => {
