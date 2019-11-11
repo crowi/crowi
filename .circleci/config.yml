@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: /home/node/app
     docker:
-      - image: node:10.16.0
+      - image: node:10.17.0
         environment:
           REDIS_URL: redis://localhost:6379/crowi
           PLANTUML_URI: //localhost:8080
@@ -18,7 +18,7 @@ jobs:
       - restore_cache:
           keys:
             - node_modules_{{ checksum "package-lock.json" }}
-            - mongo_binaries_{{ checksum "test/crowi-environment.js" }}
+            - mongo_binaries_{{ checksum "lib/test/crowi-environment.js" }}
       - run: npm install
       - save_cache:
           key: node_modules_{{ checksum "package-lock.json" }}
@@ -32,7 +32,7 @@ jobs:
           file: coverage/clover.xml
           when: on_success
       - save_cache:
-          key: mongo_binaries_{{ checksum "test/crowi-environment.js" }}
+          key: mongo_binaries_{{ checksum "lib/test/crowi-environment.js" }}
           paths:
             - /root/.mongo-binaries
 workflows:
