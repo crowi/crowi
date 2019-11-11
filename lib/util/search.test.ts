@@ -32,6 +32,8 @@ describe('Search client', () => {
   })
 
   describe('SearchClient.parseUri error on not start with http', () => {
-    expect(() => searcher.parseUri('elasticsearch:9200/')).toThrow(/URL for Elasticsearch should starts with http/)
+    test('should throw error', () => {
+      expect(() => searcher.parseUri('elasticsearch:9200/')).toThrow(/URL for Elasticsearch should starts with http/)
+    })
   })
 })
