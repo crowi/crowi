@@ -233,6 +233,7 @@ class Crowi {
         useNewUrlParser: true,
         useFindAndModify: false,
         useCreateIndex: true,
+        useUnifiedTopology: true,
       }
       mongoose.connect(mongoUri, mongooseOptions, e => {
         if (e) {
