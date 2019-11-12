@@ -20,6 +20,8 @@ describe('format-date utility', () => {
     describe('with "ja-JP" locale', () => {
       beforeEach(() => {
         languageSpy.mockReturnValue('ja-JP')
+      })
+      it('navigaror.language must be ja-JP', () => {
         expect(navigator.language).toBe('ja-JP')
       })
       it('getLocale must return ja locale', () => {
@@ -29,6 +31,8 @@ describe('format-date utility', () => {
     describe('with "ja" locale', () => {
       beforeEach(() => {
         languageSpy.mockReturnValue('ja')
+      })
+      it('navigaror.language must be ja', () => {
         expect(navigator.language).toBe('ja')
       })
       it('getLocale must return ja locale', () => {
@@ -38,6 +42,8 @@ describe('format-date utility', () => {
     describe('with "en" locale', () => {
       beforeEach(() => {
         languageSpy.mockReturnValue('en')
+      })
+      it('navigaror.language must be en', () => {
         expect(navigator.language).toBe('en')
       })
       it('getLocale must return enUS locale', () => {
@@ -47,6 +53,8 @@ describe('format-date utility', () => {
     describe('with "de-DE" locale (unsupported)', () => {
       beforeEach(() => {
         languageSpy.mockReturnValue('de-DE')
+      })
+      it('navigaror.language must be de-DE', () => {
         expect(navigator.language).toBe('de-DE')
       })
       it('getLocale must return enUS locale', () => {
