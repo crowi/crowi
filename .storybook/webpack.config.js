@@ -12,9 +12,8 @@ module.exports = ({ config }) => {
     options: {
       presets: [['react-app', { flow: false, typescript: true }]],
     },
-  })
+  });
   config.resolve.extensions.push('.ts', '.tsx')
-
   config.plugins.push(new webpack.ProvidePlugin({
     $: 'jquery',
     jQuery: 'jquery',
