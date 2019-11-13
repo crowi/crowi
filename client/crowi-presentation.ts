@@ -15,12 +15,6 @@ Reveal.initialize({
   // Optional libraries used to extend on reveal.js
   dependencies: [
     {
-      src: '/js/reveal/lib/js/classList.js',
-      condition: function() {
-        return !document.body.classList
-      },
-    },
-    {
       src: '/js/reveal/plugin/markdown/marked.js',
       condition: function() {
         return !!document.querySelector('[data-markdown]')
@@ -42,16 +36,10 @@ Reveal.initialize({
     {
       src: '/js/reveal/plugin/zoom-js/zoom.js',
       async: true,
-      condition: function() {
-        return !!document.body.classList
-      },
     },
     {
       src: '/js/reveal/plugin/notes/notes.js',
       async: true,
-      condition: function() {
-        return !!document.body.classList
-      },
     },
   ],
 })
