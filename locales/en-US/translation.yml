@@ -58,7 +58,7 @@ Memo: memo
 Input page name: Input page name
 Input page name (optional): Input page name (optional)
 New Page: New Page
-Create under: 'Create page under: <code>%s</code>'
+Create under: 'Create page under: <1>{{ path }}</1>'
 Table of Contents: Table of Contents
 Public: Public
 Anyone with the link: Anyone with the link
