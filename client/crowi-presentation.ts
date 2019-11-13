@@ -1,8 +1,6 @@
 import Reveal from 'reveal.js'
 import hljs from 'highlight.js'
 
-require('reveal.js/lib/js/html5shiv.js')
-
 window.Reveal = Reveal
 
 Reveal.initialize({
