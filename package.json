@@ -55,7 +55,7 @@
     "classnames": "^2.2.6",
     "cli": "~1.0.1",
     "colors": "^1.4.0",
-    "commander": "~2.9.0",
+    "commander": "~4.0.1",
     "connect-flash": "~0.1.1",
     "connect-redis": "^4.0.3",
     "consolidate": "^0.15.1",
