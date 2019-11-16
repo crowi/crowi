@@ -436,10 +436,11 @@ $(function() {
   if ($inputForm.length > 0) {
     var csrfToken = $('form.uploadable input#edit-form-csrf').val()
     var pageId = $('#content-main').data('page-id') || 0
+    var pagePath = $('#content-main').data('path')
     var attachmentOption: any = {
       uploadUrl: '/_api/attachments.add',
       extraParams: {
-        path: location.pathname,
+        path: pagePath,
         page_id: pageId,
         _csrf: csrfToken,
       },
