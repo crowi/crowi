@@ -8,7 +8,9 @@ import { User } from 'client/types/crowi'
 
 interface Me {
   id?: string
+  name?: string
   username?: string
+  image?: string
 }
 
 interface Context {
@@ -94,8 +96,8 @@ export default class Crowi {
   }
 
   setUser(user?: Me) {
-    const { id = '', username = '' } = user || {}
-    this.user = { id, username }
+    const { id = '', name = '', username = '', image = '' } = user || {}
+    this.user = { id, name, username, image }
   }
 
   getUser() {
