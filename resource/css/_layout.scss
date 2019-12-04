@@ -49,12 +49,11 @@
       @include media-breakpoint-down(sm) {
         .crowi-menu-sm { // for moblie
           display: flex;
-          padding-top: 0.33125rem;
-          padding-bottom: 0.33125rem;
+          align-items: center;
           margin-left: 1rem;
           margin-right: 1rem;
-          font-size: 1.1rem;
-          a {
+          > a {
+            font-size: 1.1rem;
             cursor: pointer;
           }
         }

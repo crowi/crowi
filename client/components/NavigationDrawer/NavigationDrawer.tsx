@@ -34,8 +34,21 @@ const StyledNavigationDrawer = styled.div`
   overflow-y: scroll;
 `
 
+const Brand = styled.a`
+  display: flex;
+  align-items: center;
+`
+
+const Logo = styled.img`
+  margin-right: 8px;
+`
+
 const UserProfile = styled.div`
   padding: 1em;
+`
+
+const BellIcon = styled(Icon)`
+  margin-right: 8px;
 `
 
 const Names = styled.div`
@@ -103,10 +116,10 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
       <NavigationDrawerContainer isOpen={isOpen} handleClose={handleClose}>
         <StyledNavigationDrawer>
           <nav className="navbar" role="navigation">
-            <a className="navbar-brand" href="/">
-              <img alt="Crowi" src="/logo/32x32i.png" width="16" />
+            <Brand className="navbar-brand" href="/">
+              <Logo alt="Crowi" src="/logo/32x32i.png" width="16" />
               <span className="crowi-wiki-title">{title}</span>
-            </a>
+            </Brand>
           </nav>
 
           <UserProfile>
@@ -118,7 +131,7 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
               </div>
               <div>
                 <a href="/me/notifications">
-                  <Icon name="bell" />
+                  <BellIcon name="bell" />
                 </a>
                 <Button outline color="secondary" onClick={toggleModal}>
                   <Icon name="pencilOutline" /> {t('New')}
