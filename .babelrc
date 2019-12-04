@@ -19,6 +19,7 @@
     "@babel/proposal-export-namespace-from",
     "@babel/proposal-numeric-separator",
     "@babel/proposal-throw-expressions",
+    "@babel/proposal-optional-chaining",
     ["module-resolver", {
       "root": ["."],
       "alias": {
