@@ -1,5 +1,6 @@
 import React, { FC } from 'react'
 import styled, { keyframes } from 'styled-components'
+import { Button } from 'reactstrap'
 import { useTranslation } from 'react-i18next'
 import Icon from 'client/components/Common/Icon'
 import UserPicture from 'client/components/User/UserPicture'
@@ -112,9 +113,9 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
                 <a href="/me/notifications">
                   <Icon name="bell" />
                 </a>
-                <button className="btn btn-outline-secondary create-page-button" data-target="#create-page" data-toggle="modal">
+                <Button outline color="secondary">
                   <Icon name="pencilOutline" /> {t('New')}
-                </button>
+                </Button>
               </div>
             </div>
 
