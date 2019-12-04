@@ -22,7 +22,9 @@ export default class Crowi {
   public context: Context
 
   public config: {
-    crowi?: {}
+    crowi?: {
+      title?: string
+    }
     upload?: {
       image: boolean
       file: boolean
