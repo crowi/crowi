@@ -4,6 +4,8 @@
 import 'scrollpos-styler'
 import { alert, linkVariant } from 'components/Common/Icons'
 import renderIcon from 'common/functions/renderIcon'
+import { User } from 'client/types/crowi'
+import { Me } from 'client/util/Crowi'
 
 export default class Crowi {
   static createErrorView = (msg: string) => {
@@ -116,16 +118,8 @@ export default class Crowi {
       .replace(/&quot;/g, '"')
 
   // original: middleware.swigFilter
-  static userPicture = user => {
-    if (!user) {
-      return '/images/userpicture.png'
-    }
-
-    if (user.image && user.image != '/images/userpicture.png') {
-      return user.image
-    }
-
-    return '/images/userpicture.png'
+  static userPicture = (user?: User | Me) => {
+    return user?.image || '/images/userpicture.png'
   }
 
   static modifyScrollTop = () => {
