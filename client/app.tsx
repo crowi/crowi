@@ -9,7 +9,6 @@ import CrowiRenderer from './util/CrowiRenderer'
 import CrowiAuth from './util/CrowiAuth'
 import Emitter from './emitter'
 
-import SideMenuTrigger from 'components/SideMenuTrigger'
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'
 import HeaderPageCreateModal from 'client/components/HeaderPageCreateModal/HeaderPageCreateModal'
@@ -31,6 +30,7 @@ import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 import NavigationDrawer from 'client/components/NavigationDrawer/NavigationDrawer'
+import NavigationDrawerOpener from 'client/components/NavigationDrawer/NavigationDrawerOpener'
 
 import hydrateComponents from './hydrateComponents'
 
@@ -75,7 +75,6 @@ window.crowiAuth = crowiAuth
 const me = $('body').data('me')
 const componentMappings = {
   'header-page-create-modal': <HeaderPageCreateModal crowi={crowi} />,
-  'side-menu-trigger': <SideMenuTrigger crowi={crowi} />,
   'search-top': <HeaderSearchBox crowi={crowi} />,
   'search-page': <SearchPage crowi={crowi} />,
   'page-list-search': <PageListSearch crowi={crowi} />,
@@ -96,6 +95,7 @@ const componentMappings = {
   'admin-page': <AdminPage crowi={crowi} />,
   'help-portal': <HelpPortalModal />,
   'navigation-drawer': <NavigationDrawer crowi={crowi} />,
+  'navigation-drawer-opener': <NavigationDrawerOpener crowi={crowi} />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {
