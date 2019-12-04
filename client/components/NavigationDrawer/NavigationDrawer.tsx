@@ -2,9 +2,10 @@ import React, { FC } from 'react'
 import styled, { keyframes } from 'styled-components'
 import { useTranslation } from 'react-i18next'
 import Icon from 'client/components/Common/Icon'
+import UserPicture from 'client/components/User/UserPicture'
 
 import Crowi from 'client/util/Crowi'
-import { getUserPicture, getUserPageRoot } from 'client/services/user'
+import { getUserPageRoot } from 'client/services/user'
 
 const SlideIn = keyframes`
   100% {
@@ -88,7 +89,7 @@ const NavigationDrawer: FC<Props> = ({ crowi }) => {
           <div className="d-flex justify-content-between">
             <div className="menu-user-picture">
               <a href={getUserPageRoot(user)}>
-                <img src={getUserPicture(user)} className="picture picture-rounded" />
+                <UserPicture user={user} size="lg" />
               </a>
             </div>
             <div>
