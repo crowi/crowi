@@ -6,7 +6,7 @@ import axios from 'axios'
 import io from 'socket.io-client'
 import { User } from 'client/types/crowi'
 
-interface Me {
+export interface Me {
   id?: string
   name?: string
   username?: string
