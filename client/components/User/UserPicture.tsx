@@ -1,11 +1,12 @@
 import React, { FC } from 'react'
 import classNames from 'classnames'
 import { User } from 'client/types/crowi'
+import { Me } from 'client/util/Crowi'
 import { CommonProps } from 'client/types/component'
 import { getUserPicture } from 'client/services/user'
 
 type Props = CommonProps & {
-  user: User | undefined
+  user: User | Me | undefined
   size?: 'lg' | 'sm' | 'xs'
 }
 
