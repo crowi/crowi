@@ -22,7 +22,7 @@ const NavigationDrawerContainer = styled.div<{ isOpen: boolean }>`
   top: 3px;
   left: 0;
   bottom: 0;
-  z-index: 1200;
+  z-index: 20;
   box-shadow: 0 0 20px 5px rgba(0, 0, 0, 0.1);
   background: #fcfcfc;
   transform: translateX(-100%);
@@ -88,10 +88,10 @@ const Backdrop = styled.div<{ isOpen: boolean }>`
   width: 100vw;
   transition: background-color 0.2s;
   background-color: rgba(0, 0, 0, 0.1);
-  z-index: 1100;
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 20;
 `
 
 interface Props {
@@ -113,6 +113,7 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
 
   return (
     <>
+      <Backdrop isOpen={isOpen} onClick={handleClose} />
       <NavigationDrawerContainer isOpen={isOpen} handleClose={handleClose}>
         <StyledNavigationDrawer>
           <nav className="navbar" role="navigation">
@@ -179,7 +180,6 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
           </Menu>
         </StyledNavigationDrawer>
       </NavigationDrawerContainer>
-      <Backdrop isOpen={isOpen} onClick={handleClose} />
       <PageCreateModal crowi={crowi} isOpen={isModalOpen} toggle={toggleModal} />
     </>
   )
