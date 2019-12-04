@@ -44,63 +44,10 @@
 
         .v2-crowi-global-menu-container {
           display: block;
-          width: 300px;
-          position: fixed;
-          top: 3px;
-          bottom: 0;
-          z-index: 1200;
-          box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
-          background: #fcfcfc;
-          transform: translateX(-100%);
-          animation: slide-in .2s forwards;
-          @keyframes slide-in {
-            100% {
-              transform: translateX(0%);
-            }
-          }
-        }
 
-        .v2-crowi-global-menu {
-          height: 100%;
-          overflow-y: scroll;
-
-          .menu-user-profile {
-            padding: 1em;
-
-            .picture {
-              width: 48px;
-              height: 48px;
-            }
-
-            .menu-user-names {
-              padding-top: 1em;
-              padding-bottom: 1em;
-
-              .menu-user-name {
-                font-size: 1.2em;
-                font-weight: 600;
-              }
-              .menu-user-username {
-                font-size: .9em;
-                color: #777;
-              }
-            }
-          }
-
-          .menu-list {
-            position: relative;
-            width: calc(100% - 1em);
-            padding-left: 1em;
-
-            li {
-              list-style: none;
-              padding-bottom: .4em;
-
-              &.divider {
-                border-bottom: solid 1px #f0f0f0;
-                margin-bottom: .4em;
-              }
-            }
+          .picture {
+            width: 48px;
+            height: 48px;
           }
         }
       }
