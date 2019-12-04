@@ -23,8 +23,8 @@ export default class CrowiAuth {
   }
 
   isAuthenticated(): boolean {
-    const { id = '', name = '' } = this.crowi.getUser() || {}
-    return !!(id && name)
+    const { id = '', username = '' } = this.crowi.getUser() || {}
+    return !!(id && username)
   }
 
   subscribeStorage() {
