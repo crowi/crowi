@@ -1,6 +1,7 @@
 import React from 'react'
 import { User } from 'client/types/crowi'
 import { CommonProps } from 'client/types/component'
+import { getUserPicture } from 'client/services/user'
 
 type Props = CommonProps & {
   user: User | undefined
@@ -12,16 +13,6 @@ export default class UserPicture extends React.Component<Props> {
   static defaultProps = {
     user: {},
     size: null,
-  }
-
-  getUserPicture(user: User | undefined) {
-    // from swig.setFilter('picture', function(user)
-
-    if (user && user.image && user.image != '/images/userpicture.png') {
-      return user.image
-    }
-
-    return '/images/userpicture.png'
   }
 
   getClassName() {
@@ -40,6 +31,6 @@ export default class UserPicture extends React.Component<Props> {
   render() {
     const { user, size, className, ...props } = this.props
 
-    return <img src={this.getUserPicture(user)} alt={user ? user.username : ''} className={this.getClassName()} {...props} />
+    return <img src={getUserPicture(user)} alt={user ? user.username : ''} className={this.getClassName()} {...props} />
   }
 }
