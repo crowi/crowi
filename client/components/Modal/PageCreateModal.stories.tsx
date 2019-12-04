@@ -9,4 +9,4 @@ const crowi = new Crowi({ user: { name: 'storybook' }, csrfToken: '' }, window)
 
 export default { title: 'Modal/PageCreateModal' }
 
-export const Default = () => <PageCreateModal crowi={crowi} />
+export const Default = () => <PageCreateModal crowi={crowi} isOpen={true} toggle={() => {}} />
