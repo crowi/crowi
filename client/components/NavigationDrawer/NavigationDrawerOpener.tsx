@@ -1,33 +1,44 @@
-import React, { FC, useEffect, useCallback } from 'react'
+import React, { FC, useState, useCallback } from 'react'
 
-import Emitter from '../../emitter'
 import Crowi from 'client/util/Crowi'
 import Icon from 'components/Common/Icon'
+import NavigationDrawer from 'client/components/NavigationDrawer/NavigationDrawer'
 
 interface Props {
   crowi: Crowi
 }
 
-const NavigationDrawerOpener: FC<Props> = props => {
-  const openMenu = useCallback(() => {
-    Emitter.emit('sideMenuHandle', true)
-  }, [])
+const NavigationDrawerContainer: FC<Props> = ({ crowi }) => {
+  const [isOpen, setIsOpen] = useState(false)
 
-  const closeMenu = useCallback(() => {
-    Emitter.emit('sideMenuHandle', false)
-  }, [])
+  // FIXME: Replace with React
+  const containerElement = document.getElementById('crowi-main-container')
+  const openClassName = 'navigation-drawer-open'
 
-  useEffect(() => {
-    Emitter.on('closeSideMenu', () => {
-      closeMenu()
-    })
-  })
+  const open = useCallback(() => {
+    if (containerElement) {
+      containerElement.className += ` ${openClassName}`
+    }
+
+    setIsOpen(true)
+  }, [setIsOpen])
+
+  const close = useCallback(() => {
+    if (containerElement) {
+      containerElement.className = containerElement.className.replace(` ${openClassName}`, '')
+    }
+
+    setIsOpen(false)
+  }, [setIsOpen])
 
   return (
-    <a onClick={openMenu}>
-      <Icon name="menu" />
-    </a>
+    <>
+      <a onClick={open}>
+        <Icon name="menu" />
+      </a>
+      <NavigationDrawer crowi={crowi} isOpen={isOpen} handleClose={close} />
+    </>
   )
 }
 
-export default NavigationDrawerOpener
+export default NavigationDrawerContainer

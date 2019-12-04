@@ -17,40 +17,15 @@
       display: flex;
       flex-direction: column;
       width: 100%;
-
-      .v2-container-backdrop {
-        display: none;
-        height: 100vh;
-        width: 100vw;
-        transition: background-color .2s;
-        z-index: 1100;
-        position: absolute;
-      }
     }
 
     // TODO: move those kind of logic to components and styled-component
     // sm menu opened
     @include media-breakpoint-down(sm) {
-      &.side-menu-open {
+      &.navigation-drawer-open {
         max-height: 100vh;
         overflow: hidden;
-
-        .v2-container {
-          .v2-container-backdrop {
-            display: block;
-            background-color: rgba(0, 0, 0, .1);
-          }
-        }
-
-        .v2-crowi-global-menu-container {
-          display: block;
-        }
       }
-    }
-
-    // not opened
-    .v2-crowi-global-menu-container {
-      display: none;
     }
 
     .v2-crowi-header { // {{{
