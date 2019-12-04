@@ -4,8 +4,8 @@ import { Button } from 'reactstrap'
 import styled from 'styled-components'
 
 import Crowi from 'client/util/Crowi'
-import Icon from '../common/Icon'
-import PageCreateModal from 'client/components/Modal/PageCreateModal'
+import Icon from 'components/Common/Icon'
+import PageCreateModal from 'components/Modal/PageCreateModal'
 
 const NewIcon = styled(Icon)`
   margin-right: 3px;
