@@ -30,6 +30,7 @@ import AdminShare from 'components/Admin/Share/AdminShare'
 import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
+import NavigationDrawer from 'client/components/NavigationDrawer/NavigationDrawer'
 
 import hydrateComponents from './hydrateComponents'
 
@@ -83,7 +84,6 @@ const componentMappings = {
   'rename-tree': <RenameTree crowi={crowi} />,
   'header-notification': <HeaderNotification me={me} crowi={crowi} />,
   'notification-page': <NotificationPage crowi={crowi} />,
-
   // 'revision-history': <PageHistory pageId={pageId} />,
   'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
   'seen-user-list': <SeenUserList crowi={crowi} />,
@@ -94,8 +94,8 @@ const componentMappings = {
   'admin-share': <AdminShare crowi={crowi} />,
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
   'admin-page': <AdminPage crowi={crowi} />,
-
   'help-portal': <HelpPortalModal />,
+  'navigation-drawer': <NavigationDrawer crowi={crowi} />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {

@@ -40,61 +40,7 @@
 
 {% block layout_head_nav %}
 
-<div class="v2-crowi-global-menu-container" id="crowi-global-menu">
-  <div class="v2-crowi-global-menu">
-  <nav class="navbar" role="navigation">
-    <a class="navbar-brand" href="/">
-      <img alt="Crowi" src="/logo/32x32i.png" width="16">
-      <span class="crowi-wiki-title">{% block title %}{{ config.crowi['app:title']|default('Crowi') }}{% endblock %}</span>
-    </a>
-  </nav>
-
-  <div class="menu-user-profile">
-    <div class="d-flex  justify-content-between">
-      <div class="menu-user-picture">
-        <a href="{{ userPageRoot(user) }}">
-          <img src="{{ user|picture }}" class="picture picture-rounded" />
-        </a>
-      </div>
-      <div class="">
-        <a href="/me/notifications" class="">
-          {{ Icon("bell") }}
-        </a>
-        <button class="btn btn-outline-secondary create-page-button" data-target="#create-page" data-toggle="modal">
-          {{ Icon("pencilOutline") }} {{ t('New') }}
-        </button>
-      </div>
-    </div>
-
-    <div class="menu-user-names">
-      <a href="{{ userPageRoot(user) }}">
-        <span class="menu-user-name">{{ user.name }}</span><br />
-        <span class="menu-user-username">@{{ user.username }}</span>
-      </a>
-    </div>
-  </div>
-
-  <ul class="menu-list">
-    <li class="">
-      <a class="" href="/me">{{ Icon("cogs") }} {{ t('User Settings') }}</a>
-    </li>
-    <li class="">
-      <a class="" href="{{ userPageRoot(user) }}/bookmarks">{{ Icon("star") }} {{ t('Bookmarks') }}</a>
-    </li>
-    <li class="">
-      <a class="" href="{{ userPageRoot(user) }}/recent-create">{{ Icon("pencilOutline") }} {{ t('Created pages') }}</a>
-    </li>
-    <li class="divider"></li>
-    <li class="">
-      <a class="" href="/trash/">{{ Icon("trashCanOutline") }} {{ t('Deleted Pages') }}</a>
-    </li>
-    <li class="divider"></li>
-    <li class="">
-      <a class="" href="/logout">{{ Icon("logout") }} {{ t('Sign out') }}</a>
-    </li>
-  </ul>
-</div>
-</div>
+<div id="navigation-drawer"></div>
 
 <div class="v2-container">
   <div class="v2-container-backdrop" id="v2-container-backdrop"></div>
