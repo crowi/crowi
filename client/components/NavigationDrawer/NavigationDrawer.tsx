@@ -1,9 +1,10 @@
-import React, { FC } from 'react'
+import React, { FC, useState, useCallback } from 'react'
 import styled, { keyframes } from 'styled-components'
 import { Button } from 'reactstrap'
 import { useTranslation } from 'react-i18next'
 import Icon from 'client/components/Common/Icon'
 import UserPicture from 'client/components/User/UserPicture'
+import PageCreateModal from 'client/components/Modal/PageCreateModal'
 
 import Crowi from 'client/util/Crowi'
 import { getUserPageRoot } from 'client/services/user'
@@ -91,6 +92,12 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
   const user = crowi.getUser()
   const [t] = useTranslation()
 
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  const toggleModal = useCallback(() => {
+    setIsModalOpen(!isModalOpen)
+  }, [setIsModalOpen, isModalOpen])
+
   return (
     <>
       <NavigationDrawerContainer isOpen={isOpen} handleClose={handleClose}>
@@ -113,7 +120,7 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
                 <a href="/me/notifications">
                   <Icon name="bell" />
                 </a>
-                <Button outline color="secondary">
+                <Button outline color="secondary" onClick={toggleModal}>
                   <Icon name="pencilOutline" /> {t('New')}
                 </Button>
               </div>
@@ -160,6 +167,7 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
         </StyledNavigationDrawer>
       </NavigationDrawerContainer>
       <Backdrop isOpen={isOpen} onClick={handleClose} />
+      <PageCreateModal crowi={crowi} isOpen={isModalOpen} toggle={toggleModal} />
     </>
   )
 }
