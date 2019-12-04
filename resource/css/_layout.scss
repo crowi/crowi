@@ -36,7 +36,7 @@
       color: #333;
       padding: 0;
 
-      .navbar-brand {
+      .crowi-navbar-brand {
         @include media-breakpoint-down(sm) {
           display: none;
         }
@@ -71,14 +71,13 @@
         }
       }
 
-        .navbar-brand {
-          margin-left: 1rem;
-          font-weight: 600;
-          img {
-            display: inline;
-            margin-right: 8px;
-          }
+      .crowi-navbar-brand {
+        margin-left: 1rem;
+        font-weight: 600;
+        img {
+          margin-right: 8px;
         }
+      }
 
       .navbar-nav {
         padding-left: 1rem;
