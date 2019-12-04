@@ -29,7 +29,6 @@ import AdminShare from 'components/Admin/Share/AdminShare'
 import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
-import NavigationDrawer from 'client/components/NavigationDrawer/NavigationDrawer'
 import NavigationDrawerOpener from 'client/components/NavigationDrawer/NavigationDrawerOpener'
 
 import hydrateComponents from './hydrateComponents'
@@ -94,7 +93,6 @@ const componentMappings = {
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
   'admin-page': <AdminPage crowi={crowi} />,
   'help-portal': <HelpPortalModal />,
-  'navigation-drawer': <NavigationDrawer crowi={crowi} />,
   'navigation-drawer-opener': <NavigationDrawerOpener crowi={crowi} />,
 }
 
@@ -102,35 +100,6 @@ Object.entries(componentMappings).forEach(([key, component]) => {
   const elem = document.getElementById(key)
   if (elem) {
     ReactDOM.render(component, elem)
-  }
-})
-
-// TODO: remove this logic after migrate to React
-const closeSideMenuHandler = e => {
-  Emitter.emit('closeSideMenu')
-}
-Emitter.on('sideMenuHandle', isOpen => {
-  const closeTriggerElements = ['crowi-global-menu', 'v2-container-backdrop']
-  const containerElement = document.getElementById('crowi-main-container')
-  const menuClassName = ' side-menu-open'
-  if (containerElement) {
-    if (isOpen) {
-      containerElement.className += menuClassName
-      for (const elemName of closeTriggerElements) {
-        const e = document.getElementById(elemName)
-        if (e) {
-          e.addEventListener('click', closeSideMenuHandler)
-        }
-      }
-    } else {
-      containerElement.className = containerElement.className.replace(menuClassName, '')
-      for (const elemName of closeTriggerElements) {
-        const e = document.getElementById(elemName)
-        if (e) {
-          e.removeEventListener('click', closeSideMenuHandler)
-        }
-      }
-    }
   }
 })
 

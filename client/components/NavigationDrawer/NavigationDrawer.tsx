@@ -13,11 +13,12 @@ const SlideIn = keyframes`
   }
 `
 
-const NavigationDrawerContainer = styled.div`
-  display: block;
+const NavigationDrawerContainer = styled.div<{ isOpen: boolean }>`
+  display: ${({ isOpen }) => (isOpen ? 'block' : 'none')};
   width: 300px;
   position: fixed;
   top: 3px;
+  left: 0;
   bottom: 0;
   z-index: 1200;
   box-shadow: 0 0 20px 5px rgba(0, 0, 0, 0.1);
@@ -66,82 +67,99 @@ const Divider = styled(MenuItem)`
   margin-bottom: 0.4em;
 `
 
+const Backdrop = styled.div<{ isOpen: boolean }>`
+  display: ${({ isOpen }) => (isOpen ? 'block' : 'none')};
+  height: 100vh;
+  width: 100vw;
+  transition: background-color 0.2s;
+  background-color: rgba(0, 0, 0, 0.1);
+  z-index: 1100;
+  position: absolute;
+  top: 0;
+  left: 0;
+`
+
 interface Props {
   crowi: Crowi
+  isOpen?: boolean
+  handleClose?(): void
 }
 
-const NavigationDrawer: FC<Props> = ({ crowi }) => {
+const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => {
   const { title = 'Crowi' } = crowi.getConfig().crowi || {}
   const user = crowi.getUser()
   const [t] = useTranslation()
 
   return (
-    <NavigationDrawerContainer className="v2-crowi-global-menu-container" id="crowi-global-menu">
-      <StyledNavigationDrawer>
-        <nav className="navbar" role="navigation">
-          <a className="navbar-brand" href="/">
-            <img alt="Crowi" src="/logo/32x32i.png" width="16" />
-            <span className="crowi-wiki-title">{title}</span>
-          </a>
-        </nav>
+    <>
+      <NavigationDrawerContainer isOpen={isOpen} handleClose={handleClose}>
+        <StyledNavigationDrawer>
+          <nav className="navbar" role="navigation">
+            <a className="navbar-brand" href="/">
+              <img alt="Crowi" src="/logo/32x32i.png" width="16" />
+              <span className="crowi-wiki-title">{title}</span>
+            </a>
+          </nav>
 
-        <UserProfile>
-          <div className="d-flex justify-content-between">
-            <div className="menu-user-picture">
+          <UserProfile>
+            <div className="d-flex justify-content-between">
+              <div>
+                <a href={getUserPageRoot(user)}>
+                  <UserPicture user={user} size="lg" />
+                </a>
+              </div>
+              <div>
+                <a href="/me/notifications">
+                  <Icon name="bell" />
+                </a>
+                <button className="btn btn-outline-secondary create-page-button" data-target="#create-page" data-toggle="modal">
+                  <Icon name="pencilOutline" /> {t('New')}
+                </button>
+              </div>
+            </div>
+
+            <Names>
               <a href={getUserPageRoot(user)}>
-                <UserPicture user={user} size="lg" />
+                <Name>{user?.name}</Name>
+                <br />
+                <Username>@{user?.username}</Username>
               </a>
-            </div>
-            <div>
-              <a href="/me/notifications">
-                <Icon name="bell" />
+            </Names>
+          </UserProfile>
+
+          <Menu>
+            <MenuItem>
+              <a href="/me">
+                <Icon name="cogs" /> {t('User Settings')}
               </a>
-              <button className="btn btn-outline-secondary create-page-button" data-target="#create-page" data-toggle="modal">
-                <Icon name="pencilOutline" /> {t('New')}
-              </button>
-            </div>
-          </div>
-
-          <Names>
-            <a href={getUserPageRoot(user)}>
-              <Name>{user?.name}</Name>
-              <br />
-              <Username>@{user?.username}</Username>
-            </a>
-          </Names>
-        </UserProfile>
-
-        <Menu>
-          <MenuItem>
-            <a href="/me">
-              <Icon name="cogs" /> {t('User Settings')}
-            </a>
-          </MenuItem>
-          <MenuItem>
-            <a href={`${getUserPageRoot(user)}/bookmarks`}>
-              <Icon name="star" /> {t('Bookmarks')}
-            </a>
-          </MenuItem>
-          <MenuItem>
-            <a href={`${getUserPageRoot(user)}/recent-create`}>
-              <Icon name="pencilOutline" /> {t('Created pages')}
-            </a>
-          </MenuItem>
-          <Divider />
-          <MenuItem>
-            <a href="/trash/">
-              <Icon name="trashCanOutline" /> {t('Deleted Pages')}
-            </a>
-          </MenuItem>
-          <Divider />
-          <MenuItem>
-            <a href="/logout">
-              <Icon name="logout" /> {t('Sign out')}
-            </a>
-          </MenuItem>
-        </Menu>
-      </StyledNavigationDrawer>
-    </NavigationDrawerContainer>
+            </MenuItem>
+            <MenuItem>
+              <a href={`${getUserPageRoot(user)}/bookmarks`}>
+                <Icon name="star" /> {t('Bookmarks')}
+              </a>
+            </MenuItem>
+            <MenuItem>
+              <a href={`${getUserPageRoot(user)}/recent-create`}>
+                <Icon name="pencilOutline" /> {t('Created pages')}
+              </a>
+            </MenuItem>
+            <Divider />
+            <MenuItem>
+              <a href="/trash/">
+                <Icon name="trashCanOutline" /> {t('Deleted Pages')}
+              </a>
+            </MenuItem>
+            <Divider />
+            <MenuItem>
+              <a href="/logout">
+                <Icon name="logout" /> {t('Sign out')}
+              </a>
+            </MenuItem>
+          </Menu>
+        </StyledNavigationDrawer>
+      </NavigationDrawerContainer>
+      <Backdrop isOpen={isOpen} onClick={handleClose} />
+    </>
   )
 }
 
