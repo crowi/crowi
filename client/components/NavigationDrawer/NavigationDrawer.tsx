@@ -148,7 +148,7 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
             </MenuItem>
             <MenuItem>
               <a href={`${getUserPageRoot(user)}/recent-create`}>
-                <Icon name="pencilOutline" /> {t('Created pages')}
+                <Icon name="pencilOutline" /> {t('Created Pages')}
               </a>
             </MenuItem>
             <Divider />
