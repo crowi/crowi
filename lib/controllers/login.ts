@@ -138,10 +138,7 @@ export default (crowi: Crowi, app: Express) => {
       })
       if (userData) {
         if (toConnect) {
-          await connect(
-            req,
-            userData,
-          )
+          await connect(req, userData)
         }
         return loginSuccess(req, res, userData)
       }
@@ -231,7 +228,11 @@ export default (crowi: Crowi, app: Express) => {
       req.session.github = { callbackAction: '/login/github' }
       githubAuth.authenticate(req, res, next)
     } else {
-      githubAuth.handleCallback(req, res, next)(async (err, tokenInfo) => {
+      githubAuth.handleCallback(
+        req,
+        res,
+        next,
+      )(async (err, tokenInfo) => {
         debug('handleCallback', err, tokenInfo)
         if (err) {
           return loginFailure(req, res)
@@ -298,7 +299,7 @@ export default (crowi: Crowi, app: Express) => {
             return registerFailure(t('page_register.error.already_registered_email'))
           }
         }
-        if (config.crowi['auth:disablePasswordAuth'] && (!googleId && !githubId)) {
+        if (config.crowi['auth:disablePasswordAuth'] && !googleId && !githubId) {
           return registerFailure(t('page_register.error.unavailable_password_auth'))
         }
 
