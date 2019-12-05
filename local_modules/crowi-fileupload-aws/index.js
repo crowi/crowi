@@ -105,10 +105,7 @@ module.exports = function(crowi) {
       var fileUrl = lib.generateUrl(filePath)
       debug('Load attachement file into local cache file', fileUrl, cacheFile)
       loader.get(fileUrl, function(response) {
-        response.pipe(
-          fileStream,
-          { end: false },
-        )
+        response.pipe(fileStream, { end: false })
         response.on('end', () => {
           fileStream.end()
           resolve(cacheFile)
