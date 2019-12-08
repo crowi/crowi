@@ -1,8 +1,9 @@
 import Crowi from 'server/crowi'
 import { Express } from 'express'
-import ssr from './ssr'
+import { renderComponent } from './ssr'
 import * as Icons from '@mdi/js'
 import renderIcon from 'common/functions/renderIcon'
+import { parentPath, isUserPageList, isUserPage, isTopPage, isTrashPage, userPageRoot } from './view'
 
 export default (crowi: Crowi, app: Express, req, res) => {
   // const debug = Debug('crowi:lib:swigFunctions')
@@ -56,47 +57,15 @@ export default (crowi: Crowi, app: Express, req, res) => {
     return config.crowi['app:externalShare']
   }
 
-  locals.parentPath = function(path) {
-    if (path == '/') {
-      return path
-    }
+  locals.parentPath = parentPath
 
-    if (path.match(/.+\/$/)) {
-      return path
-    }
+  locals.isUserPageList = isUserPageList
 
-    return path + '/'
-  }
+  locals.isUserPage = isUserPage
 
-  locals.isUserPageList = function(path) {
-    if (path.match(/^\/user\/[^/]+\/$/) || path.match(/^\/user\/$/)) {
-      return true
-    }
+  locals.isTopPage = () => isTopPage(req.path || '')
 
-    return false
-  }
-
-  locals.isUserPage = function(path) {
-    return path.match(/^\/user\/[^/]+$/)
-  }
-
-  locals.isTopPage = function() {
-    var path = req.path || ''
-    if (path === '/') {
-      return true
-    }
-
-    return false
-  }
-
-  locals.isTrashPage = function() {
-    var path = req.path || ''
-    if (path.match(/^\/trash\/.*/)) {
-      return true
-    }
-
-    return false
-  }
+  locals.isTrashPage = () => isTrashPage(req.path || '')
 
   locals.isDeletablePage = function() {
     var Page = crowi.model('Page')
@@ -105,12 +74,7 @@ export default (crowi: Crowi, app: Express, req, res) => {
     return Page.isDeletableName(path)
   }
 
-  locals.userPageRoot = function(user) {
-    if (!user || !user.username) {
-      return ''
-    }
-    return '/user/' + user.username
-  }
+  locals.userPageRoot = userPageRoot
 
   locals.css = {
     grant: function(pageData) {
@@ -163,5 +127,5 @@ export default (crowi: Crowi, app: Express, req, res) => {
     return renderIcon(path, classNames, attributes)
   }
 
-  locals.Component = ssr(res)
+  locals.Component = renderComponent(res)
 }
