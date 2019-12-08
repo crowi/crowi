@@ -2,7 +2,7 @@ import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 import crypto from 'crypto'
-import FileUploader from '../util/fileUploader'
+import FileUploader from '../utils/fileUploader'
 
 export interface AttachmentDocument extends Document {
   _id: Types.ObjectId

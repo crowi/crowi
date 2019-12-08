@@ -2,7 +2,7 @@ import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, Query, model } from 'mongoose'
 import Debug from 'debug'
 import moment from 'moment'
-import ActivityDefine from '../util/activityDefine'
+import ActivityDefine from '../utils/activityDefine'
 import { ActivityDocument } from './activity'
 import { UserDocument } from './user'
 

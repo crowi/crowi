@@ -1,5 +1,5 @@
 import Crowi from 'server/crowi'
-import auth from '../util/auth'
+import auth from '../utils/auth'
 import Debug from 'debug'
 
 export default (crowi: Crowi) => {

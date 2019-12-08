@@ -1,6 +1,6 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import ApiResponse from '../util/apiResponse'
+import ApiResponse from '../utils/apiResponse'
 import { PageDocument } from 'server/models/page'
 
 export default (crowi: Crowi) => {

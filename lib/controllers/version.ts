@@ -1,6 +1,6 @@
 import { Express } from 'express'
 import Crowi from 'server/crowi'
-import ApiResponse from '../util/apiResponse'
+import ApiResponse from '../utils/apiResponse'
 
 export default (crowi: Crowi, app: Express) => {
   const actions = {} as any

@@ -20,10 +20,10 @@ import controllers from 'server/controllers'
 import routes from '../routes'
 import LRU from '../service/lru'
 import Config from '../service/config'
-import mailer from '../util/mailer'
-import slack from '../util/slack'
+import mailer from '../utils/mailer'
+import slack from '../utils/slack'
 import expressInit from './express-init'
-import Searcher from 'server/util/search'
+import Searcher from 'server/utils/search'
 
 const pkg = require('../../package.json')
 
