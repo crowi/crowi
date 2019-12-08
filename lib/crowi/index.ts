@@ -54,6 +54,8 @@ class Crowi {
 
   mailDir: string
 
+  viewsDirs: string[]
+
   tmpDir: string
 
   cacheDir: string
@@ -109,6 +111,13 @@ class Crowi {
   constructor(rootdir: string, env: typeof process.env) {
     this.version = pkg.version
 
+    this.env = env
+    this.baseUrl = this.env.BASE_URL || null
+    this.node_env = this.env.NODE_ENV || 'production'
+    this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
+    this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
+    this.redisOpts = this.buildRedisOpts(this.redisUrl)
+
     this.rootDir = rootdir
     this.pluginDir = path.join(this.rootDir, 'node_modules') + sep
     this.publicDir = path.join(this.rootDir, 'public') + sep
@@ -116,17 +125,12 @@ class Crowi {
     this.resourceDir = path.join(this.rootDir, 'resource') + sep
     this.viewsDir = path.join(this.rootDir, 'views') + sep
     this.mailDir = path.join(this.viewsDir, 'mail') + sep
+    const pagesDir = path.join(this.rootDir, ...(this.node_env === 'development' ? ['lib'] : ['dist', 'server']), 'pages') + sep
+    this.viewsDirs = [this.viewsDir, pagesDir]
     this.tmpDir = path.join(this.rootDir, 'tmp') + sep
     this.cacheDir = path.join(this.tmpDir, 'cache')
 
     this.setupEvents()
-
-    this.env = env
-    this.baseUrl = this.env.BASE_URL || null
-    this.node_env = this.env.NODE_ENV || 'development'
-    this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
-    this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
-    this.redisOpts = this.buildRedisOpts(this.redisUrl)
 
     this.tokens = new Tokens()
   }
@@ -423,7 +427,7 @@ class Crowi {
       app.use(morgan('combined'))
       app.use(function(err, req, res, next) {
         res.status(500)
-        res.render('500', { error: err })
+        res.render('500.html', { error: err })
       })
     }
 
