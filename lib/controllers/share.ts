@@ -57,7 +57,7 @@ export default (crowi: Crowi) => {
 
     if (!isExternalShareEnabled()) {
       res.status(405)
-      return res.render('405')
+      return res.render('405.html')
     }
 
     try {
@@ -71,10 +71,10 @@ export default (crowi: Crowi) => {
         const page = (share.page as any) as PageDocument
         const { path = '', revision = {} } = page
 
-        return res.render('page_share', { hasSecretKeyword: true, shareId, page, path, revision })
+        return res.render('page_share.html', { hasSecretKeyword: true, shareId, page, path, revision })
       }
 
-      return res.render('page_share', { hasSecretKeyword: false, shareId })
+      return res.render('page_share.html', { hasSecretKeyword: false, shareId })
     } catch (err) {
       console.error(err)
       return res.redirect('/')

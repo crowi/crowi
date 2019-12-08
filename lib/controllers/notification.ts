@@ -8,7 +8,7 @@ export default (crowi: Crowi) => {
   actions.api = {} as any
 
   actions.notificationPage = function(req, res) {
-    return res.render('notification', {})
+    return res.render('notification.html', {})
   }
 
   /**
