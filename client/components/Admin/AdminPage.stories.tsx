@@ -1,6 +1,6 @@
 import React from 'react'
 import i18n from 'client/i18n'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import AdminPage from './AdminPage'
 
 i18n()

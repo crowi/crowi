@@ -4,7 +4,7 @@ import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGroup, FormFeedback } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 interface Props extends WithTranslation {
   crowi: Crowi

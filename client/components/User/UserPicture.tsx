@@ -1,7 +1,7 @@
 import React, { FC } from 'react'
 import classNames from 'classnames'
 import { User } from 'client/types/crowi'
-import { Me } from 'client/util/Crowi'
+import { Me } from 'client/utils/Crowi'
 import { CommonProps } from 'client/types/component'
 import { getUserPicture } from 'client/services/user'
 

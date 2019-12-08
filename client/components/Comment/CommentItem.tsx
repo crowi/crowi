@@ -4,7 +4,7 @@ import UserPicture from 'components/User/UserPicture'
 import CommentBody from './CommentBody'
 import * as styles from 'client/constants/styles'
 import { CommonProps } from 'client/types/component'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 type PageCommentContainerProps = Props & {
   isOwn: boolean

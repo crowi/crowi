@@ -1,6 +1,6 @@
 import React, { FC } from 'react'
 import CommentItem from './CommentItem'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { CommonProps } from 'client/types/component'
 import { Comment } from 'client/types/crowi'
 

@@ -1,6 +1,6 @@
 import React from 'react'
 import NavigationDrawer from './NavigationDrawer'
-import Crowi from '../../util/Crowi'
+import Crowi from '../../utils/Crowi'
 import i18n from '../../i18n'
 
 i18n()
