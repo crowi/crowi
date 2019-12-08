@@ -2,6 +2,7 @@ import Crowi from 'server/crowi'
 import Debug from 'debug'
 import ApiResponse from '../utils/apiResponse'
 import { UserDocument } from 'server/models/user'
+import { getPath, getContext } from 'server/utils/ssr'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:admin')
@@ -78,7 +79,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.index = function(req, res) {
-    return res.render('admin')
+    return res.render(getPath(crowi, 'AdminPage'), { context: getContext(crowi, req, res) })
   }
 
   actions.api.index = function(req, res) {
