@@ -1,7 +1,7 @@
 import React from 'react'
 import PageAttachmentList from './PageAttachment/PageAttachmentList'
 import DeleteAttachmentModal from './PageAttachment/DeleteAttachmentModal'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { Attachment } from 'client/types/crowi'
 
 interface Props {

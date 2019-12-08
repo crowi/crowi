@@ -1,6 +1,6 @@
 import React, { useEffect, useState, FC } from 'react'
 import { useTranslation } from 'react-i18next'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 import FormRow from '../FormRow'
 import { Alert, Button, Label, Input } from 'reactstrap'

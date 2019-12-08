@@ -1,7 +1,7 @@
 import React from 'react'
 import Icon from './Common/Icon'
 import PageRevisionList from './PageHistory/PageRevisionList'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { Revision } from 'client/types/crowi'
 
 interface Props {

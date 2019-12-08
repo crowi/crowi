@@ -1,6 +1,6 @@
 import React, { FC, useState, useCallback } from 'react'
 
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import Icon from 'components/Common/Icon'
 import NavigationDrawer from 'client/components/NavigationDrawer/NavigationDrawer'
 

@@ -2,7 +2,7 @@ import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button } from 'reactstrap'
 import Icon from 'components/Common/Icon'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 interface Props extends WithTranslation {
   pageId: string | null

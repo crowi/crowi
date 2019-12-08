@@ -6,7 +6,7 @@ import Icon from 'client/components/Common/Icon'
 import UserPicture from 'client/components/User/UserPicture'
 import PageCreateModal from 'client/components/Modal/PageCreateModal'
 
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { getUserPageRoot } from 'client/services/user'
 
 const SlideIn = keyframes`

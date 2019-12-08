@@ -5,7 +5,7 @@ import moment from 'moment'
 import styled from 'styled-components'
 
 import { dark, gray, light } from '../../constants/colors'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 const parentPath = (path: string) => {
   if (path === '/') {

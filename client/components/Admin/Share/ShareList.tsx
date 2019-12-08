@@ -3,7 +3,7 @@ import { withTranslation, WithTranslation } from 'react-i18next'
 import moment from 'moment'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { Share } from 'client/types/crowi'
 
 interface Props extends WithTranslation {

@@ -4,9 +4,9 @@ import ReactDOM from 'react-dom'
 import i18n from './i18n'
 import moment from 'moment'
 
-import Crowi from './util/Crowi'
-import CrowiRenderer from './util/CrowiRenderer'
-import CrowiAuth from './util/CrowiAuth'
+import Crowi from './utils/Crowi'
+import CrowiRenderer from './utils/CrowiRenderer'
+import CrowiAuth from './utils/CrowiAuth'
 import Emitter from './emitter'
 
 import HeaderSearchBox from 'components/HeaderSearchBox'

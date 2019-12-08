@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from 'reactstrap'
 import styled from 'styled-components'
 
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import Icon from 'components/Common/Icon'
 import PageCreateModal from 'components/Modal/PageCreateModal'
 

@@ -1,5 +1,5 @@
 import { User } from 'client/types/crowi'
-import { Me } from 'client/util/Crowi'
+import { Me } from 'client/utils/Crowi'
 
 export const getUserPicture = (user?: User | Me) => user?.image || '/images/userpicture.png'
 
