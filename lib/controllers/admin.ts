@@ -1,6 +1,6 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import ApiResponse from '../util/apiResponse'
+import ApiResponse from '../utils/apiResponse'
 import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi) => {

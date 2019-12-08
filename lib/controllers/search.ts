@@ -1,6 +1,6 @@
 import Crowi from 'server/crowi'
-import ApiResponse from '../util/apiResponse'
-import ApiPaginate from '../util/apiPaginate'
+import ApiResponse from '../utils/apiResponse'
+import ApiPaginate from '../utils/apiPaginate'
 import Debug from 'debug'
 
 const debug = Debug('crowi:routes:search')
