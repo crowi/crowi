@@ -17,7 +17,7 @@ export default (crowi: Crowi) => {
       return res.json(ApiResponse.error('Configuration of ELASTICSEARCH_URI is required.'))
     }
 
-    return res.render('search', {
+    return res.render('search.html', {
       q: keyword,
     })
   }

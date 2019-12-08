@@ -112,7 +112,7 @@ export default (crowi: Crowi, app: Express) => {
       reasonMessage = 'Wait for approved by administrators.'
     }
 
-    return res.render('login/error', {
+    return res.render('login/error.html', {
       reason: reason,
       reasonMessage: reasonMessage,
     })
@@ -136,6 +136,7 @@ export default (crowi: Crowi, app: Express) => {
       const userData = await User.findUserByEmailAndPassword(email, password).catch(err => {
         debug('on login findUserByEmailAndPassword', err)
       })
+
       if (userData) {
         if (toConnect) {
           await connect(req, userData)
@@ -169,13 +170,13 @@ export default (crowi: Crowi, app: Express) => {
         if (toConnect) {
           const locals = { toConnect, targetUser, ...socialSession }
 
-          return res.render('login', locals)
+          return res.render('login.html', locals)
         }
 
         return res.redirect('/register')
       }
 
-      return res.render('login', { continueUrl })
+      return res.render('login.html', { continueUrl })
     }
   }
 
@@ -416,7 +417,7 @@ export default (crowi: Crowi, app: Express) => {
         const isRegistering = isDisabledPasswordAuth
         const type = isRegistering ? 'warningMessage' : 'registerWarningMessage'
         req.flash(type, message)
-        return res.render('login', { isRegistering })
+        return res.render('login.html', { isRegistering })
       }
 
       if (!User.isEmailValid(socialEmail)) {
@@ -436,7 +437,7 @@ export default (crowi: Crowi, app: Express) => {
       const toConnect = !!targetUser
       const locals = { isRegistering, toConnect, targetUser, ...socialSession }
 
-      return res.render('register', locals)
+      return res.render('register.html', locals)
     }
   }
 
@@ -457,7 +458,7 @@ export default (crowi: Crowi, app: Express) => {
           user.activateInvitedUser(username, name, password, function(err, data) {
             if (err) {
               req.flash('warningMessage', 'アクティベートに失敗しました。')
-              return res.render('invited')
+              return res.render('invited.html')
             } else {
               return res.redirect('/')
             }
@@ -465,11 +466,11 @@ export default (crowi: Crowi, app: Express) => {
         } else {
           req.flash('warningMessage', '利用できないユーザーIDです。')
           debug('username', username)
-          return res.render('invited')
+          return res.render('invited.html')
         }
       })
     } else {
-      return res.render('invited', {})
+      return res.render('invited.html', {})
     }
   }
 

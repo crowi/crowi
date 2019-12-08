@@ -92,7 +92,7 @@ export default (crowi: Crowi, app: Express) => {
 
       if (!User.isEmailValid(email)) {
         req.form.errors.push("You can't update to that email address")
-        return res.render('me/index', {})
+        return res.render('me/index.html', {})
       }
 
       User.findOne({ email }, async (err, existingUserData) => {
@@ -100,7 +100,7 @@ export default (crowi: Crowi, app: Express) => {
         if (existingUserData && !existingUserData._id.equals(userData._id)) {
           debug('Email address was duplicated')
           req.form.errors.push('It can not be changed to that mail address')
-          return res.render('me/index', {})
+          return res.render('me/index.html', {})
         }
 
         try {
@@ -109,7 +109,7 @@ export default (crowi: Crowi, app: Express) => {
           Object.keys(err.errors).forEach(e => {
             req.form.errors.push(err.errors[e].message)
           })
-          return res.render('me/index', {})
+          return res.render('me/index.html', {})
         }
 
         req.i18n.changeLanguage(lang)
@@ -123,7 +123,7 @@ export default (crowi: Crowi, app: Express) => {
         req.flash('warningMessage', 'メールアドレスが設定されている必要があります')
       }
 
-      return res.render('me/index', {})
+      return res.render('me/index.html', {})
     }
   }
 
@@ -144,7 +144,7 @@ export default (crowi: Crowi, app: Express) => {
 
       if (userData.isPasswordSet() && !userData.isPasswordValid(oldPassword)) {
         req.form.errors.push('Wrong current password')
-        return res.render('me/password', {})
+        return res.render('me/password.html', {})
       }
 
       // check password confirm
@@ -156,7 +156,7 @@ export default (crowi: Crowi, app: Express) => {
             for (const [key, e] of err.errors) {
               req.form.errors.push(e.message)
             }
-            return res.render('me/password', {})
+            return res.render('me/password.html', {})
           }
 
           req.flash('successMessage', 'Password updated')
@@ -165,7 +165,7 @@ export default (crowi: Crowi, app: Express) => {
       }
     } else {
       // method GET
-      return res.render('me/password', {})
+      return res.render('me/password.html', {})
     }
   }
 
@@ -182,21 +182,21 @@ export default (crowi: Crowi, app: Express) => {
         .catch(function(err) {
           // req.flash('successMessage',);
           req.form.errors.push('Failed to update API Token')
-          return res.render('me/api_token', {})
+          return res.render('me/api_token.html', {})
         })
     } else {
-      return res.render('me/api_token', {})
+      return res.render('me/api_token.html', {})
     }
   }
 
   actions.notifications = function(req, res) {
     var renderVars = {}
 
-    return res.render('me/notifications', renderVars)
+    return res.render('me/notifications.html', renderVars)
   }
 
   actions.updates = function(req, res) {
-    res.render('me/update', {})
+    res.render('me/update.html', {})
   }
 
   actions.deletePicture = function(req, res) {
@@ -215,7 +215,7 @@ export default (crowi: Crowi, app: Express) => {
       return res.redirect(continueUrl)
     }
     req.session.callback = '/me/auth/third-party'
-    return res.render('me/auth/third-party')
+    return res.render('me/auth/third-party.html')
   }
 
   actions.authGoogle = async function(req, res) {
