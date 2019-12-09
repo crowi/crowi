@@ -1,11 +1,11 @@
-import React from 'react'
+import React, { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import Icon from 'client/components/Common/Icon'
-import { AppContext } from 'server/types/appContext'
 import { userPageRoot, picture } from 'server/utils/view'
+import { AppContext } from './App'
 
-const Header = (props: AppContext) => {
-  const { title, search, user, config } = props
+const Header = () => {
+  const { title, search, user, config } = useContext(AppContext)
   const [t] = useTranslation()
 
   return (
@@ -16,7 +16,7 @@ const Header = (props: AppContext) => {
           <img alt="Crowi" src="/logo/32x32i.png" width="16" /> <span className="crowi-wiki-title">{title}</span>
         </a>
 
-        {search.isConfigured && (
+        {search?.isConfigured && (
           <div className="search-top " role="search" id="search-top">
             {/* placeholder for react */}
             <div className="search-box">
@@ -32,7 +32,7 @@ const Header = (props: AppContext) => {
       </div>
 
       <ul className="crowi-menu-md navbar-nav p-2">
-        {config.crowi['app:confidential'] && (
+        {config?.crowi['app:confidential'] && (
           <li className="nav-item confidential">
             <a href="#">{config.crowi['app:confidential']}</a>
           </li>

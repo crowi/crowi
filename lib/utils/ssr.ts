@@ -45,7 +45,6 @@ export const getContext = (crowi: Crowi, req, res) => {
       user: JSON.stringify(res.locals.user_context),
       ssr: JSON.stringify(res.locals.ssr_context),
     },
-    i18n: req.i18n,
   }
 }
 

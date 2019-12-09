@@ -1,7 +1,5 @@
 import React, { FC } from 'react'
-import { AppContext } from 'server/types/appContext'
 import Header from '../Header'
-import { I18nextProvider } from 'react-i18next'
 
 export interface Props {
   title?: string
@@ -12,16 +10,15 @@ export interface Props {
   mainComponent?: React.ReactNode
   contentsFooterComponent?: React.ReactNode
   footerComponent?: React.ReactNode
-  context: AppContext
 }
 
 const Container = ({ show, children }) => (show ? <div className="v2-container">{children}</div> : children)
 
-const Base: FC<Props> = ({ headerComponent, sidebarComponent, mainComponent, contentsFooterComponent, footerComponent, context }) => {
+const Base: FC<Props> = ({ headerComponent, sidebarComponent, mainComponent, contentsFooterComponent, footerComponent }) => {
   return (
-    <I18nextProvider i18n={context.i18n}>
+    <>
       <Container show={!!headerComponent}>
-        {headerComponent === undefined ? <Header {...context} /> : headerComponent}
+        {headerComponent === undefined ? <Header /> : headerComponent}
         <div className="v2-contents-container">
           {sidebarComponent}
           {mainComponent}
@@ -29,7 +26,7 @@ const Base: FC<Props> = ({ headerComponent, sidebarComponent, mainComponent, con
         </div>
       </Container>
       {footerComponent}
-    </I18nextProvider>
+    </>
   )
 }
 
