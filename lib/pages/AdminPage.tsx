@@ -1,21 +1,24 @@
 import React, { FC } from 'react'
 import Document from '../components/Document'
-import Single, { Props as SingleProps } from '../components/Layout/Single'
+import Single from '../components/Layout/Single'
+import { PageProps } from 'server/types/pageProps'
+import App from 'server/components/App'
 
-type Props = SingleProps
+const AdminPage: FC<PageProps> = props => {
+  const { i18n, context } = props
 
-const AdminPage: FC<Props> = props => {
-  const { context } = props
   return (
     <Document title={`Wiki管理 · ${context.path}`} context={context}>
-      <Single context={context}>
-        <div className="header-wrap">
-          <header id="page-header">
-            <h1 className="title">Wiki管理</h1>
-          </header>
-        </div>
-        <div id="admin-page" className="content-main content-form" data-csrftoken={context.csrfToken}></div>
-      </Single>
+      <App i18n={i18n} context={context}>
+        <Single>
+          <div className="header-wrap">
+            <header id="page-header">
+              <h1 className="title">Wiki管理</h1>
+            </header>
+          </div>
+          <div id="admin-page" className="content-main content-form" data-csrftoken={context.csrfToken}></div>
+        </Single>
+      </App>
     </Document>
   )
 }

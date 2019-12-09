@@ -1,12 +1,14 @@
-import React, { FC } from 'react'
+import React, { FC, useContext } from 'react'
 import Base, { Props as BaseProps } from './Base'
 import { useTranslation } from 'react-i18next'
 import Icon from 'client/components/Common/Icon'
+import { AppContext } from '../App'
 
 export type Props = BaseProps
 
 const Single: FC<Props> = ({ children, ...baseProps }) => {
   const [t] = useTranslation()
+  const { title } = useContext(AppContext)
 
   return (
     <Base
@@ -22,7 +24,7 @@ const Single: FC<Props> = ({ children, ...baseProps }) => {
               <a href="" data-target="#help-modal" data-toggle="modal">
                 <Icon name="helpCircle" /> {t('Help')}
               </a>{' '}
-              &copy; {new Date().getFullYear()} {baseProps.context.title} <img src="/logo/powered-by-crowi.png" width="100" alt="powered by Crowi" />
+              &copy; {new Date().getFullYear()} {title} <img src="/logo/powered-by-crowi.png" width="100" alt="powered by Crowi" />
             </p>
           </footer>
         </div>
