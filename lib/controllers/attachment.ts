@@ -17,7 +17,7 @@ export default (crowi: Crowi, app: Express) => {
   actions.api = api
 
   api.redirector = function(req: Request, res: Response) {
-    var id = req.params.id
+    const id = req.params.id
 
     Attachment.findById(id)
       .then(function(data) {
@@ -29,7 +29,7 @@ export default (crowi: Crowi, app: Express) => {
           .then(fileName => {
             const encodedFileName = encodeURIComponent(data.originalName)
 
-            var deliveryFile = {
+            const deliveryFile = {
               fileName: fileName,
               options: {
                 headers: {
@@ -65,18 +65,18 @@ export default (crowi: Crowi, app: Express) => {
    * @apiParam {String} page_id
    */
   api.list = function(req: Request, res: Response) {
-    var id = req.query.page_id || null
+    const id = req.query.page_id || null
     if (!id) {
       return res.json(ApiResponse.error('Parameters page_id is required.'))
     }
 
     Attachment.getListByPageId(id).then(function(attachments) {
-      var config = crowi.getConfig()
-      var baseUrl = config.crowi['app:url'] || ''
+      const config = crowi.getConfig()
+      const baseUrl = config.crowi['app:url'] || ''
       return res.json(
         ApiResponse.success({
           attachments: attachments.map(at => {
-            var fileUrl = at.fileUrl
+            const fileUrl = at.fileUrl
             at = at.toObject()
             at.url = baseUrl + fileUrl
             return at

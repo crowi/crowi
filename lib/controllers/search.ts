@@ -12,8 +12,8 @@ export default (crowi: Crowi) => {
   const api = (actions.api = {} as any)
 
   actions.searchPage = function(req: Request, res: Response) {
-    var keyword = req.query.q || null
-    var search = crowi.getSearcher()
+    const keyword = req.query.q || null
+    const search = crowi.getSearcher()
     if (!search) {
       return res.json(ApiResponse.error('Configuration of ELASTICSEARCH_URI is required.'))
     }

@@ -61,8 +61,8 @@ export default (crowi: Crowi) => {
    * post save hook
    */
   commentSchema.post('save', function(savedComment: CommentDocument) {
-    var Page = crowi.model('Page')
-    var Activity = crowi.model('Activity')
+    const Page = crowi.model('Page')
+    const Activity = crowi.model('Activity')
 
     Comment.countCommentByPageId(savedComment.page)
       .then(function(count) {

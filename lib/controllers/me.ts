@@ -18,11 +18,11 @@ export default (crowi: Crowi, app: Express) => {
 
   api.uploadPicture = function(req: Request, res: Response) {
     const user = req.user as UserDocument
-    var fileUploader = FileUploader(crowi)
+    const fileUploader = FileUploader(crowi)
     // var storagePlugin = new pluginService('storage');
     // var storage = require('../service/storage').StorageService(config);
 
-    var tmpFile = req.file || null
+    const tmpFile = req.file || null
     if (!tmpFile) {
       return res.json({
         status: false,
@@ -30,11 +30,11 @@ export default (crowi: Crowi, app: Express) => {
       })
     }
 
-    var tmpPath = tmpFile.path
-    var name = tmpFile.filename + tmpFile.originalname
-    var ext = name.match(/(.*)(?:\.([^.]+$))/)?.[2] || ''
-    var filePath = User.createUserPictureFilePath(user, ext)
-    var acceptableFileType = /image\/.+/
+    const tmpPath = tmpFile.path
+    const name = tmpFile.filename + tmpFile.originalname
+    const ext = name.match(/(.*)(?:\.([^.]+$))/)?.[2] || ''
+    const filePath = User.createUserPictureFilePath(user, ext)
+    const acceptableFileType = /image\/.+/
 
     if (!tmpFile.mimetype.match(acceptableFileType)) {
       return res.json({
@@ -50,7 +50,7 @@ export default (crowi: Crowi, app: Express) => {
     //  'url': imageUrl,
     //  'message': '',
     // });
-    var tmpFileStream = fs.createReadStream(tmpPath, {
+    const tmpFileStream = fs.createReadStream(tmpPath, {
       flags: 'r',
       mode: 666,
       autoClose: true,
@@ -59,7 +59,7 @@ export default (crowi: Crowi, app: Express) => {
     fileUploader
       .uploadFile(filePath, tmpFile.mimetype, tmpFileStream, {})
       .then(function(data) {
-        var imageUrl = fileUploader.generateUrl(filePath)
+        const imageUrl = fileUploader.generateUrl(filePath)
         user.updateImage(imageUrl, function(err, data) {
           fs.unlink(tmpPath, function(err) {
             // エラー自体は無視
@@ -140,9 +140,9 @@ export default (crowi: Crowi, app: Express) => {
     }
 
     if (req.method == 'POST' && req.form.isValid) {
-      var newPassword = passwordForm.newPassword
-      var newPasswordConfirm = passwordForm.newPasswordConfirm
-      var oldPassword = passwordForm.oldPassword
+      const newPassword = passwordForm.newPassword
+      const newPasswordConfirm = passwordForm.newPasswordConfirm
+      const oldPassword = passwordForm.oldPassword
 
       if (user.isPasswordSet() && !user.isPasswordValid(oldPassword)) {
         req.form.errors.push('Wrong current password')
@@ -192,7 +192,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.notifications = function(req: Request, res: Response) {
-    var renderVars = {}
+    const renderVars = {}
 
     return res.render('me/notifications.html', renderVars)
   }

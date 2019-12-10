@@ -12,7 +12,7 @@
     "prettier",
     "prettier/@typescript-eslint",
     "prettier/standard",
-    "prettier/react",
+    "prettier/react"
   ],
   "env": {
     "browser": true,
@@ -44,8 +44,7 @@
     "react/prop-types": "off",
     "require-jsdoc": "off",
     "standard/no-callback-literal": "off",
-    "valid-jsdoc": "off",
-    "no-var": "off"
+    "valid-jsdoc": "off"
   },
   "settings": {
     "react": {

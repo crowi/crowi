@@ -34,7 +34,7 @@ export default (crowi: Crowi) => {
 
   // this is called to generate redirect_uri
   slack.getSlackAuthCallbackUrl = function() {
-    var config = crowi.getConfig()
+    const config = crowi.getConfig()
     // Web アクセスがきてないと app:url がセットされないので crowi.setupSlack 時にはできない
     // cli, bot 系作るときに問題なりそう
     return (config.crowi['app:url'] || '') + '/admin/notification/slackAuth'
@@ -96,8 +96,8 @@ export default (crowi: Crowi) => {
   }
 
   slack.convertMarkdownToMrkdwn = function(body) {
-    var config = crowi.getConfig()
-    var url = ''
+    const config = crowi.getConfig()
+    let url = ''
     if (config.crowi && config.crowi['app:url']) {
       url = config.crowi['app:url']
     }
@@ -112,7 +112,7 @@ export default (crowi: Crowi) => {
   }
 
   slack.prepareAttachmentTextForCreate = function(page, user) {
-    var body = page.revision.body
+    let body = page.revision.body
     if (body.length > 2000) {
       body = body.substr(0, 2000) + '...'
     }
@@ -121,7 +121,7 @@ export default (crowi: Crowi) => {
   }
 
   slack.prepareAttachmentTextForUpdate = function(page, user, previousRevision) {
-    var diffText = ''
+    let diffText = ''
 
     diff.diffLines(previousRevision.body, page.revision.body).forEach(function(line) {
       debug('diff line', line)
@@ -145,9 +145,9 @@ export default (crowi: Crowi) => {
   }
 
   slack.prepareSlackMessage = function(page, user, channel, updateType, previousRevision) {
-    var config = crowi.getConfig()
-    var url = config.crowi['app:url'] || ''
-    var body = page.revision.body
+    const config = crowi.getConfig()
+    const url = config.crowi['app:url'] || ''
+    let body = page.revision.body
 
     if (updateType == 'create') {
       body = this.prepareAttachmentTextForCreate(page, user)
@@ -155,7 +155,7 @@ export default (crowi: Crowi) => {
       body = this.prepareAttachmentTextForUpdate(page, user, previousRevision)
     }
 
-    var attachment = {
+    const attachment = {
       color: '#263a3c',
       author_name: '@' + user.username,
       author_link: url + '/user/' + user.username,
@@ -169,7 +169,7 @@ export default (crowi: Crowi) => {
       attachment.author_icon = user.image
     }
 
-    var message = {
+    const message = {
       channel: '#' + channel,
       username: 'Crowi',
       text: this.getSlackMessageText(page, user, updateType),

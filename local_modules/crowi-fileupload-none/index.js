@@ -3,8 +3,8 @@
 module.exports = function(crowi) {
   'use strict'
 
-  var debug = require('debug')('crowi:lib:fileUploaderNone')
-  var lib = {}
+  const debug = require('debug')('crowi:lib:fileUploaderNone')
+  const lib = {}
 
   lib.deleteFile = function(filePath) {
     debug('File deletion: ' + filePath)

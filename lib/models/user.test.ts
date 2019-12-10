@@ -46,7 +46,7 @@ describe('User', () => {
     describe('Get username from path', () => {
       test('found', () => {
         return new Promise(resolve => {
-          var username = null
+          let username = null
           username = User.getUsernameByPath('/user/sotarok')
           expect(username).toBe('sotarok')
 
@@ -59,7 +59,7 @@ describe('User', () => {
 
       test('not found', () => {
         return new Promise(resolve => {
-          var username = null
+          let username = null
           username = User.getUsernameByPath('/the/page/is/not/related/to/user/page')
           expect(username).toBeNull()
 

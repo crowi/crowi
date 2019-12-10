@@ -39,7 +39,7 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   }
 
   locals.slackConfigured = function() {
-    var config = crowi.getConfig()
+    const config = crowi.getConfig()
     if (Config.hasSlackToken(config)) {
       return true
     }
@@ -47,12 +47,12 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   }
 
   locals.isUploadable = function() {
-    var config = crowi.getConfig()
+    const config = crowi.getConfig()
     return Config.isUploadable(config)
   }
 
   locals.isExternalShareEnabled = function() {
-    var config = crowi.getConfig()
+    const config = crowi.getConfig()
     return config.crowi['app:externalShare']
   }
 
@@ -67,8 +67,8 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   locals.isTrashPage = () => isTrashPage(req.path || '')
 
   locals.isDeletablePage = function() {
-    var Page = crowi.model('Page')
-    var path = req.path || ''
+    const Page = crowi.model('Page')
+    const path = req.path || ''
 
     return Page.isDeletableName(path)
   }
