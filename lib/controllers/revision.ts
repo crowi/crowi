@@ -1,3 +1,4 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import ApiResponse from '../utils/apiResponse'
@@ -16,7 +17,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} revision_id Revision Id.
    */
-  actions.api.get = function(req, res) {
+  actions.api.get = function(req: Request, res: Response) {
     var revisionId = req.query.revision_id
 
     Revision.findRevision(revisionId)
@@ -39,7 +40,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id      Page Id.
    */
-  actions.api.ids = function(req, res) {
+  actions.api.ids = function(req: Request, res: Response) {
     var pageId = req.query.page_id || null
 
     if (pageId && crowi.isPageId(pageId)) {
@@ -67,7 +68,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_ids Revision Ids.
    * @apiParam {String} page_id      Page Id.
    */
-  actions.api.list = function(req, res) {
+  actions.api.list = function(req: Request, res: Response) {
     var revisionIds = (req.query.revision_ids || '').split(',')
     var pageId = req.query.page_id || null
 

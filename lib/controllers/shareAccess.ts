@@ -1,3 +1,4 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import ApiResponse from '../utils/apiResponse'
 
@@ -8,7 +9,7 @@ export default (crowi: Crowi) => {
 
   const api = (actions.api = {} as any)
 
-  api.list = async (req, res) => {
+  api.list = async (req: Request, res: Response) => {
     let { page = 1, limit = 50 } = req.query
     page = parseInt(page)
     limit = parseInt(limit)

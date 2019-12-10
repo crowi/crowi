@@ -1,3 +1,4 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import url from 'url'
@@ -10,7 +11,7 @@ export default (crowi: Crowi) => {
   const actions = {} as any
   const api = (actions.api = {} as any)
 
-  api.handleEvent = function(req, res) {
+  api.handleEvent = function(req: Request, res: Response) {
     if (req.body.type != null && req.body.type == 'url_verification') {
       verifyChallenge(req, res)
       return
@@ -26,7 +27,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  function verifyChallenge(req, res) {
+  function verifyChallenge(req: Request, res: Response) {
     res.send(req.body.challenge)
   }
 
@@ -48,7 +49,7 @@ export default (crowi: Crowi) => {
     return results
   }
 
-  async function unfurl(req, res) {
+  async function unfurl(req: Request, res: Response) {
     const { event } = req.body
     const { links, channel, message_ts: ts } = event
     const results = parseLinks(links)

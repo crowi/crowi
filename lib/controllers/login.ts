@@ -1,4 +1,4 @@
-import { Express } from 'express'
+import { Express, Request, Response, NextFunction } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import async from 'async'
@@ -38,7 +38,7 @@ export default (crowi: Crowi, app: Express) => {
     req.session.social = {}
   }
 
-  const loginSuccess = async function(req, res, userData) {
+  const loginSuccess = async function(req: Request, res: Response, userData) {
     userData = await userData.populateSecrets()
     req.user = req.session.user = userData
     if (!userData.password) {
@@ -50,7 +50,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(getContinueUrl(req))
   }
 
-  const loginFailure = function(req, res) {
+  const loginFailure = function(req: Request, res: Response) {
     req.session.auth = {}
     req.flash('warningMessage', 'Sign in failure.')
 
@@ -74,7 +74,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.googleCallback = function(req, res) {
+  actions.googleCallback = function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { query } = req
     const { code = '', state } = query
@@ -88,7 +88,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(nextAction)
   }
 
-  actions.githubCallback = function(req, res) {
+  actions.githubCallback = function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { query } = req
     const { code = '' } = query
@@ -102,7 +102,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(nextAction)
   }
 
-  actions.error = function(req, res) {
+  actions.error = function(req: Request, res: Response) {
     var reason = req.params.reason
     var reasonMessage = ''
 
@@ -118,7 +118,7 @@ export default (crowi: Crowi, app: Express) => {
     })
   }
 
-  actions.login = async function(req, res) {
+  actions.login = async function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { loginForm } = req.body
 
@@ -180,7 +180,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.loginGoogle = function(req, res) {
+  actions.loginGoogle = function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const googleAuth = GoogleAuth(config)
     const { google = {} } = req.session
@@ -218,7 +218,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.loginGitHub = function(req, res, next) {
+  actions.loginGitHub = function(req: Request, res: Response, next: NextFunction) {
     debug('Header', req.url, req.headers.referer)
     const githubAuth = GitHubAuth(config)
     const { github = {} } = req.session
@@ -260,9 +260,10 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.register = async function(req, res, next) {
+  actions.register = async function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
-    const { lang = User.LANG_EN_US } = req
+    // FIXME: lang
+    const { lang = User.LANG_EN_US } = req as any
 
     // ログイン済みならさようなら
     if (req.user) {
@@ -441,7 +442,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.invited = function(req, res) {
+  actions.invited = function(req: Request, res: Response) {
     if (!req.user) {
       return res.redirect('/login')
     }
@@ -474,7 +475,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.updateInvitedUser = function(req, res) {
+  actions.updateInvitedUser = function(req: Request, res: Response) {
     return res.redirect('/')
   }
 

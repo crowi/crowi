@@ -1,3 +1,4 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import ApiResponse from '../utils/apiResponse'
 import ApiPaginate from '../utils/apiPaginate'
@@ -10,7 +11,7 @@ export default (crowi: Crowi) => {
   const actions = {} as any
   const api = (actions.api = {} as any)
 
-  actions.searchPage = function(req, res) {
+  actions.searchPage = function(req: Request, res: Response) {
     var keyword = req.query.q || null
     var search = crowi.getSearcher()
     if (!search) {
@@ -32,7 +33,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} offset
    * @apiParam {String} limit
    */
-  api.search = async function(req, res) {
+  api.search = async function(req: Request, res: Response) {
     const { user } = req
     const { q: keyword = null, tree = null, type = null } = req.query
     let paginateOpts
