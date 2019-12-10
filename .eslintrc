@@ -33,18 +33,12 @@
     "@typescript-eslint/ban-ts-ignore": "off",
     "eqeqeq": "off",
     "handle-callback-err": "off",
-    "jest/valid-describe": "off",
     "no-console": "off",
     "no-global-assign": "off",
-    "no-inner-declarations": "off",
-    "no-redeclare": "off",
     "node/no-deprecated-api": "off",
     "prettier/prettier": "error",
-    "react/prefer-stateless-function": "off",
     "react/prop-types": "off",
-    "require-jsdoc": "off",
-    "standard/no-callback-literal": "off",
-    "valid-jsdoc": "off"
+    "standard/no-callback-literal": "off"
   },
   "settings": {
     "react": {
