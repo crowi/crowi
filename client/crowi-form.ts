@@ -10,13 +10,13 @@ $(function() {
   function FetchPagesUpdatePostAndInsert(path) {
     $.get('/_api/pages.updatePost', { path: path }, function(res) {
       if (res.ok) {
-        var $slackChannels = $('#page-form-slack-channel')
+        const $slackChannels = $('#page-form-slack-channel')
         $slackChannels.val(res.updatePost.join(','))
       }
     })
   }
 
-  var slackConfigured = $('#page-form-setting').data('slack-configured')
+  const slackConfigured = $('#page-form-setting').data('slack-configured')
 
   // for new page
   if (!pageId) {
@@ -33,8 +33,8 @@ $(function() {
     $('.content-main').addClass('on-edit')
 
     if (slackConfigured) {
-      var $slackChannels = $('#page-form-slack-channel')
-      var slackChannels = $slackChannels.val()
+      const $slackChannels = $('#page-form-slack-channel')
+      const slackChannels = $slackChannels.val()
       // if slackChannels is empty, then fetch default (admin setting)
       // if not empty, it means someone specified this setting for the page.
       if (slackChannels === '') {
@@ -48,31 +48,31 @@ $(function() {
   })
 
   // preview watch
-  var originalContent = $('#form-body').val()
+  const originalContent = $('#form-body').val()
 
   // restore draft
   // とりあえず、originalContent がない場合のみ復元する。(それ以外の場合は後で考える)
-  var draft = crowi.findDraft(pagePath)
-  var originalRevision = $('#page-form [name="pageForm[currentRevision]"]').val()
+  const draft = crowi.findDraft(pagePath)
+  const originalRevision = $('#page-form [name="pageForm[currentRevision]"]').val()
   if (!originalRevision && draft) {
     // TODO
     $('#form-body').val(draft)
   }
 
-  var prevContent = originalContent
+  let prevContent = originalContent
 
   function renderPreview() {
-    var content = $('#form-body').val() as string
-    var previewBody = $('#preview-body')
-    var previewBodyElement = previewBody[0] as HTMLDivElement
-    var parsedHTML = crowiRenderer.render(content, previewBodyElement)
+    const content = $('#form-body').val() as string
+    const previewBody = $('#preview-body')
+    const previewBodyElement = previewBody[0] as HTMLDivElement
+    const parsedHTML = crowiRenderer.render(content, previewBodyElement)
     previewBody.html(parsedHTML)
   }
 
   // for initialize preview
   renderPreview()
   setInterval(function() {
-    var content = $('#form-body').val()
+    const content = $('#form-body').val()
     if (prevContent != content) {
       renderPreview()
       prevContent = content
@@ -80,7 +80,7 @@ $(function() {
   }, 500)
 
   // edit detection
-  var isFormChanged = false
+  let isFormChanged = false
   $(window).on('beforeunload', function(e) {
     if (isFormChanged) {
       // TODO i18n
@@ -88,7 +88,7 @@ $(function() {
     }
   })
   $('#form-body').on('keyup change', function(e) {
-    var content = $('#form-body').val() as string
+    const content = $('#form-body').val() as string
     if (originalContent != content) {
       isFormChanged = true
       crowi.saveDraft(pagePath, content)
@@ -104,8 +104,8 @@ $(function() {
   })
 
   // This is a temporary implementation until porting to React.
-  var insertText = function(start, end, newText, mode) {
-    var editor = document.querySelector('#form-body') as HTMLTextAreaElement
+  const insertText = function(start, end, newText, mode) {
+    const editor = document.querySelector('#form-body') as HTMLTextAreaElement
     mode = mode || 'after'
 
     switch (mode) {
@@ -122,7 +122,7 @@ $(function() {
 
     editor.focus()
 
-    var inserted = false
+    let inserted = false
     try {
       // Chrome, Safari
       inserted = document.execCommand('insertText', false, newText)
@@ -136,17 +136,17 @@ $(function() {
     }
   }
 
-  var getCurrentLine = function(event) {
-    var $target = $(event.target)
+  const getCurrentLine = function(event) {
+    const $target = $(event.target)
 
-    var text = $target.val() as string
-    var pos = $target.selection('getPos')
+    const text = $target.val() as string
+    const pos = $target.selection('getPos')
     if (text === null || pos.start !== pos.end) {
       return null
     }
 
-    var startPos = text.lastIndexOf('\n', pos.start - 1) + 1
-    var endPos = text.indexOf('\n', pos.start)
+    const startPos = text.lastIndexOf('\n', pos.start - 1) + 1
+    let endPos = text.indexOf('\n', pos.start)
     if (endPos === -1) {
       endPos = text.length
     }
@@ -160,13 +160,13 @@ $(function() {
     }
   }
 
-  var getPrevLine = function(event) {
-    var $target = $(event.target)
-    var currentLine = getCurrentLine(event)
-    var start = currentLine ? currentLine.start : 0
-    var text = ($target.val() as string).slice(0, start)
-    var startPos = text.lastIndexOf('\n', start - 2) + 1
-    var endPos = start
+  const getPrevLine = function(event) {
+    const $target = $(event.target)
+    const currentLine = getCurrentLine(event)
+    const start = currentLine ? currentLine.start : 0
+    const text = ($target.val() as string).slice(0, start)
+    const startPos = text.lastIndexOf('\n', start - 2) + 1
+    const endPos = start
 
     return {
       text: text.slice(startPos, endPos),
@@ -240,18 +240,18 @@ $(function() {
     $target.trigger('input')
   }
 
-  var handleEnterKey = function(event) {
+  const handleEnterKey = function(event) {
     if (event.metaKey || event.ctrlKey || event.shiftKey) {
       return
     }
 
-    var currentLine = getCurrentLine(event)
+    const currentLine = getCurrentLine(event)
     if (!currentLine || currentLine.start === currentLine.caret) {
       return
     }
 
-    var $target = $(event.target)
-    var match = currentLine.text.match(/^(\s*(?:-|\+|\*|\d+\.) (?:\[(?:x| )\] )?)\s*\S/)
+    const $target = $(event.target)
+    const match = currentLine.text.match(/^(\s*(?:-|\+|\*|\d+\.) (?:\[(?:x| )\] )?)\s*\S/)
     if (match) {
       // smart indent with list
       if (currentLine.text.match(/^(\s*(?:-|\+|\*|\d+\.) (?:\[(?:x| )\] ))\s*$/)) {
@@ -260,11 +260,11 @@ $(function() {
         return
       }
       event.preventDefault()
-      var listMark = match[1].replace(/\[x\]/, '[ ]')
-      var listMarkMatch = listMark.match(/^(\s*)(\d+)\./)
+      let listMark = match[1].replace(/\[x\]/, '[ ]')
+      const listMarkMatch = listMark.match(/^(\s*)(\d+)\./)
       if (listMarkMatch) {
-        var indent = listMarkMatch[1]
-        var num = parseInt(listMarkMatch[2])
+        const indent = listMarkMatch[1]
+        const num = parseInt(listMarkMatch[2])
         if (num !== 1) {
           listMark = listMark.replace(/\s*\d+/, indent + (num + 1))
         }
@@ -272,7 +272,7 @@ $(function() {
       // $target.selection('insert', {text: "\n" + listMark, mode: 'before'});
       var pos = $target.selection('getPos')
       insertText(pos.start, pos.start, '\n' + listMark, 'replace')
-      var newPosition = pos.start + ('\n' + listMark).length
+      const newPosition = pos.start + ('\n' + listMark).length
       $target.selection('setPos', { start: newPosition, end: newPosition })
     } else if (currentLine.text.match(/^(\s*(?:-|\+|\*|\d+\.) )/)) {
       // remove list
@@ -287,12 +287,12 @@ $(function() {
         return
       }
       event.preventDefault()
-      var row: string[] = []
-      var cellbarMatch = currentLine.text.match(/\|/g) as RegExpMatchArray
-      for (var i = 0; i < cellbarMatch.length; i++) {
+      const row: string[] = []
+      const cellbarMatch = currentLine.text.match(/\|/g) as RegExpMatchArray
+      for (let i = 0; i < cellbarMatch.length; i++) {
         row.push('|')
       }
-      var prevLine = getPrevLine(event)
+      const prevLine = getPrevLine(event)
       if (!prevLine || (!currentLine.text.match(/---/) && !prevLine.text.match(/\|/g))) {
         // $target.selection('insert', {text: "\n" + row.join(' --- ') + "\n" + row.join('  '), mode: 'before'});
         var pos = $target.selection('getPos')
@@ -312,28 +312,28 @@ $(function() {
     $target.trigger('input')
   }
 
-  var handleEscapeKey = function(event) {
+  const handleEscapeKey = function(event) {
     event.preventDefault()
-    var $target = $(event.target)
+    const $target = $(event.target)
     $target.blur()
   }
 
-  var handleSpaceKey = function(event) {
+  const handleSpaceKey = function(event) {
     // keybind: alt + shift + space
     if (!(event.shiftKey && event.altKey)) {
       return
     }
-    var currentLine = getCurrentLine(event)
+    const currentLine = getCurrentLine(event)
     if (!currentLine) {
       return
     }
 
-    var $target = $(event.target)
-    var match = currentLine.text.match(/^(\s*)(-|\+|\*|\d+\.) (?:\[(x| )\] )(.*)/)
+    const $target = $(event.target)
+    const match = currentLine.text.match(/^(\s*)(-|\+|\*|\d+\.) (?:\[(x| )\] )(.*)/)
     if (match) {
       event.preventDefault()
-      var checkMark = match[3] == ' ' ? 'x' : ' '
-      var replaceTo = match[1] + match[2] + ' [' + checkMark + '] ' + match[4]
+      const checkMark = match[3] == ' ' ? 'x' : ' '
+      const replaceTo = match[1] + match[2] + ' [' + checkMark + '] ' + match[4]
       $target.selection('setPos', { start: currentLine.start, end: currentLine.end })
       // $target.selection('replace', {text: replaceTo, mode: 'keep'});
       insertText(currentLine.start, currentLine.end, replaceTo, 'replace')
@@ -362,16 +362,16 @@ $(function() {
     }
   })
 
-  var handlePasteEvent = function(event) {
-    var currentLine = getCurrentLine(event)
+  const handlePasteEvent = function(event) {
+    const currentLine = getCurrentLine(event)
 
     if (!currentLine) {
       return false
     }
-    var $target = $(event.target)
-    var pasteText = event.clipboardData.getData('text')
+    const $target = $(event.target)
+    let pasteText = event.clipboardData.getData('text')
 
-    var match = currentLine.text.match(/^(\s*(?:>|-|\+|\*|\d+\.) (?:\[(?:x| )\] )?)/)
+    const match = currentLine.text.match(/^(\s*(?:>|-|\+|\*|\d+\.) (?:\[(?:x| )\] )?)/)
     if (match) {
       if (pasteText.match(/(?:\r\n|\r|\n)/)) {
         pasteText = pasteText.replace(/(\r\n|\r|\n)/g, '$1' + match[1])
@@ -381,7 +381,7 @@ $(function() {
     // $target.selection('insert', {text: pasteText, mode: 'after'});
     insertText(currentLine.caret, currentLine.caret, pasteText, 'replace')
 
-    var newPos = currentLine.caret + pasteText.length
+    const newPos = currentLine.caret + pasteText.length
     $target.selection('setPos', { start: newPos, end: newPos })
 
     return true
@@ -396,13 +396,13 @@ $(function() {
     })
   }
 
-  var unbindInlineAttachment = function($form) {
+  const unbindInlineAttachment = function($form) {
     $form.unbind('.inlineattach')
   }
-  var bindInlineAttachment = function($form, attachmentOption) {
-    var editor = createEditorInstance($form)
-    var InlineAttachment = inlineAttachment
-    var inlineattach = new InlineAttachment(attachmentOption, editor)
+  const bindInlineAttachment = function($form, attachmentOption) {
+    const editor = createEditorInstance($form)
+    const InlineAttachment = inlineAttachment
+    const inlineattach = new InlineAttachment(attachmentOption, editor)
     $form.bind({
       'paste.inlineattach': function(e) {
         inlineattach.onPaste(e.originalEvent)
@@ -419,7 +419,7 @@ $(function() {
     })
   }
   var createEditorInstance = function($form) {
-    var $this = $form
+    const $this = $form
 
     return {
       getValue: function() {
@@ -434,12 +434,12 @@ $(function() {
     }
   }
 
-  var $inputForm = $('form.uploadable textarea#form-body')
+  const $inputForm = $('form.uploadable textarea#form-body')
   if ($inputForm.length > 0) {
-    var csrfToken = $('form.uploadable input#edit-form-csrf').val()
+    const csrfToken = $('form.uploadable input#edit-form-csrf').val()
     var pageId = $('#content-main').data('page-id') || 0
     var pagePath = $('#content-main').data('path')
-    var attachmentOption: any = {
+    const attachmentOption: any = {
       uploadUrl: '/_api/attachments.add',
       extraParams: {
         path: pagePath,
@@ -452,7 +452,7 @@ $(function() {
     }
 
     // if files upload is set
-    var { upload } = crowi.getContext()
+    const { upload } = crowi.getContext()
     if (upload.file) {
       attachmentOption.allowedTypes = '*'
     }
@@ -472,11 +472,11 @@ $(function() {
     }
 
     attachmentOption.onFileUploadResponse = function(res) {
-      var result = JSON.parse(res.response)
+      const result = JSON.parse(res.response)
 
       if (result.ok && result.pageCreated) {
-        var page = result.page
-        var pageId = page._id
+        const page = result.page
+        const pageId = page._id
 
         $('#content-main').data('page-id', page._id)
         $('#page-form [name="pageForm[currentRevision]"]').val(page.revision._id)
@@ -499,33 +499,33 @@ $(function() {
     })
   }
 
-  var enableScrollSync = function() {
-    var getMaxScrollTop = function(dom) {
-      var rect = dom.getBoundingClientRect()
+  const enableScrollSync = function() {
+    const getMaxScrollTop = function(dom) {
+      const rect = dom.getBoundingClientRect()
 
       return dom.scrollHeight - rect.height
     }
 
-    var getScrollRate = function(dom) {
-      var maxScrollTop = getMaxScrollTop(dom)
-      var rate = dom.scrollTop / maxScrollTop
+    const getScrollRate = function(dom) {
+      const maxScrollTop = getMaxScrollTop(dom)
+      const rate = dom.scrollTop / maxScrollTop
 
       return rate
     }
 
-    var getScrollTop = function(dom, rate) {
-      var maxScrollTop = getMaxScrollTop(dom)
-      var top = maxScrollTop * rate
+    const getScrollTop = function(dom, rate) {
+      const maxScrollTop = getMaxScrollTop(dom)
+      const top = maxScrollTop * rate
 
       return top
     }
 
-    var editor = document.querySelector('#form-body') as HTMLTextAreaElement
-    var preview = document.querySelector('#preview-body') as HTMLDivElement
+    const editor = document.querySelector('#form-body') as HTMLTextAreaElement
+    const preview = document.querySelector('#preview-body') as HTMLDivElement
 
     editor.addEventListener('scroll', function(event) {
-      var rate = getScrollRate(this)
-      var top = getScrollTop(preview, rate)
+      const rate = getScrollRate(this)
+      const top = getScrollTop(preview, rate)
 
       preview.scrollTop = top
     })

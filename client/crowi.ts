@@ -12,22 +12,22 @@ export default class Crowi {
   }
 
   static linkPath = (revisionPath?: string) => {
-    var $revisionPath = revisionPath || '#revision-path'
-    var $title = $($revisionPath)
-    var pathData = $('#content-main').data('path')
+    const $revisionPath = revisionPath || '#revision-path'
+    const $title = $($revisionPath)
+    const pathData = $('#content-main').data('path')
 
     if (!pathData) {
       return
     }
 
-    var realPath = pathData.trim()
+    let realPath = pathData.trim()
     if (realPath.substr(-1, 1) == '/') {
       realPath = realPath.substr(0, realPath.length - 1)
     }
 
-    var path = ''
-    var pathHtml = ''
-    var splittedPath = realPath.split(/\//)
+    let path = ''
+    let pathHtml = ''
+    const splittedPath = realPath.split(/\//)
     splittedPath.shift()
     splittedPath.forEach((sub: string) => {
       path += '/'
@@ -46,10 +46,10 @@ export default class Crowi {
 
   static correctHeaders = (contentId: string) => {
     // h1 ~ h6 の id 名を補正する
-    var $content = $(contentId || '#revision-body-content')
-    var i = 0
+    const $content = $(contentId || '#revision-body-content')
+    let i = 0
     $('h1,h2,h3,h4,h5,h6', $content).each(function() {
-      var id = 'head' + i++
+      const id = 'head' + i++
       $(this).attr('id', id)
       $(this).addClass('revision-head')
       $(this).append(`<span class="revision-head-link"><a href="#${id}">${renderIcon(linkVariant)}</a></span>`)
@@ -57,40 +57,40 @@ export default class Crowi {
   }
 
   static revisionToc = (contentId, tocId) => {
-    var $content = $(contentId || '#revision-body-content')
-    var $tocId = $(tocId || '#revision-toc')
+    const $content = $(contentId || '#revision-body-content')
+    const $tocId = $(tocId || '#revision-toc')
 
-    var $tocContent = $('<div id="revision-toc-content" class="revision-toc-content collapse"></div>')
+    const $tocContent = $('<div id="revision-toc-content" class="revision-toc-content collapse"></div>')
     $tocId.append($tocContent)
 
     $('h1', $content).each(function() {
-      var id = $(this).attr('id')
-      var title = $(this).text()
-      var selector = '#' + id + ' ~ h2:not(#' + id + ' ~ h1 ~ h2)'
+      const id = $(this).attr('id')
+      const title = $(this).text()
+      const selector = '#' + id + ' ~ h2:not(#' + id + ' ~ h1 ~ h2)'
 
-      var $toc = $('<ul></ul>')
-      var $tocLi = $('<li><a href="#' + id + '">' + title + '</a></li>')
+      const $toc = $('<ul></ul>')
+      const $tocLi = $('<li><a href="#' + id + '">' + title + '</a></li>')
 
       $tocContent.append($toc)
       $toc.append($tocLi)
 
       $(selector).each(function() {
-        var id2 = $(this).attr('id')
-        var title2 = $(this).text()
-        var selector2 = '#' + id2 + ' ~ h3:not(#' + id2 + ' ~ h2 ~ h3)'
+        const id2 = $(this).attr('id')
+        const title2 = $(this).text()
+        const selector2 = '#' + id2 + ' ~ h3:not(#' + id2 + ' ~ h2 ~ h3)'
 
-        var $toc2 = $('<ul></ul>')
-        var $tocLi2 = $('<li><a href="#' + id2 + '">' + title2 + '</a></li>')
+        const $toc2 = $('<ul></ul>')
+        const $tocLi2 = $('<li><a href="#' + id2 + '">' + title2 + '</a></li>')
 
         $tocLi.append($toc2)
         $toc2.append($tocLi2)
 
         $(selector2).each(function() {
-          var id3 = $(this).attr('id')
-          var title3 = $(this).text()
+          const id3 = $(this).attr('id')
+          const title3 = $(this).text()
 
-          var $toc3 = $('<ul></ul>')
-          var $tocLi3 = $('<li><a href="#' + id3 + '">' + title3 + '</a></li>')
+          const $toc3 = $('<ul></ul>')
+          const $tocLi3 = $('<li><a href="#' + id3 + '">' + title3 + '</a></li>')
 
           $tocLi2.append($toc3)
           $toc3.append($tocLi3)
@@ -117,31 +117,31 @@ export default class Crowi {
       .replace(/&quot;/g, '"')
 
   static modifyScrollTop = () => {
-    var offset = 10
+    const offset = 10
 
-    var hash = window.location.hash
+    const hash = window.location.hash
     if (hash === '') {
       return
     }
 
-    var pageHeader = document.querySelector('#page-header')
+    const pageHeader = document.querySelector('#page-header')
     if (!pageHeader) {
       return
     }
-    var pageHeaderRect = pageHeader.getBoundingClientRect()
+    const pageHeaderRect = pageHeader.getBoundingClientRect()
 
-    var sectionHeader = document.querySelector(hash)
+    const sectionHeader = document.querySelector(hash)
     if (sectionHeader === null) {
       return
     }
 
-    var timeout = 0
+    let timeout = 0
     if (window.scrollY === 0) {
       timeout = 200
     }
     setTimeout(() => {
       if (!sectionHeader) return
-      var sectionHeaderRect = sectionHeader.getBoundingClientRect()
+      const sectionHeaderRect = sectionHeader.getBoundingClientRect()
       if (sectionHeaderRect.top >= pageHeaderRect.bottom) {
         return
       }
@@ -151,7 +151,7 @@ export default class Crowi {
   }
 
   static findHashFromUrl = url => {
-    var match
+    let match
     if ((match = url.match(/#(.+)$/))) {
       return '#' + match[1]
     }
@@ -180,10 +180,10 @@ $(function() {
   const crowi = window.crowi
   const crowiRenderer = window.crowiRenderer
 
-  var pageId = $('#content-main').data('page-id')
-  var isSeen = $('#content-main').data('page-is-seen')
-  var pagePath = $('#content-main').data('path')
-  var isSharePage = !!$('#content-main').data('is-share-page')
+  const pageId = $('#content-main').data('page-id')
+  const isSeen = $('#content-main').data('page-is-seen')
+  const pagePath = $('#content-main').data('path')
+  const isSharePage = !!$('#content-main').data('is-share-page')
 
   Crowi.linkPath()
 
@@ -192,7 +192,7 @@ $(function() {
   $('[data-tooltip-stay]').tooltip('show')
 
   $('#toggle-sidebar').click(function(e) {
-    var $mainContainer = $('.main-container')
+    const $mainContainer = $('.main-container')
     if ($mainContainer.hasClass('aside-hidden')) {
       $('.main-container').removeClass('aside-hidden')
       $.cookie('aside-hidden', 0, { expires: 30, path: '/' })
@@ -223,7 +223,7 @@ $(function() {
         newPageNameCheck.html(`${renderIcon(alert)} ${res.error}`)
         newPageNameCheck.addClass('alert-danger')
       } else {
-        var page = res.page
+        const page = res.page
 
         newPageNameCheck.removeClass('alert-danger')
         // $('#newPageNameCheck').html('<img src="/images/loading_s.gif"> 移動しました。移動先にジャンプします。');
@@ -256,7 +256,7 @@ $(function() {
         $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
       } else {
-        var page = res.page
+        const page = res.page
         top.location.href = page.path
       }
     })
@@ -274,7 +274,7 @@ $(function() {
         $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
       } else {
-        var page = res.page
+        const page = res.page
         top.location.href = page.path
       }
     })
@@ -292,7 +292,7 @@ $(function() {
         $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
       } else {
-        var page = res.page
+        const page = res.page
         top.location.href = page.path + '?unlinked=true'
       }
     })
@@ -305,9 +305,9 @@ $(function() {
     $('.content-main').addClass('on-edit')
     $('.portal a[data-toggle="tab"][href="#edit-form"]').tab('show')
 
-    var path = $('.content-main').data('path')
+    const path = $('.content-main').data('path')
     if (path != '/' && $('.content-main').data('page-id') == '') {
-      var upperPage = path.substr(0, path.length - 1)
+      const upperPage = path.substr(0, path.length - 1)
       $.get('/_api/pages.get', { path: upperPage }, function(res) {
         if (res.ok && res.page) {
           $('#portal-warning-modal').modal('show')
@@ -336,23 +336,23 @@ $(function() {
 
   // for list page
   $('a[data-toggle="tab"][href="#view-timeline"]').on('show.bs.tab', function() {
-    var isShown = $('#view-timeline').data('shown')
+    const isShown = $('#view-timeline').data('shown')
     if (isShown == 0) {
       $('#view-timeline .timeline-body').each(function() {
-        var id = $(this).attr('id')
-        var contentId = '#' + id + ' > script'
-        var revisionBody = '#' + id + ' .revision-body'
-        var $revisionBody = $(revisionBody)
+        const id = $(this).attr('id')
+        const contentId = '#' + id + ' > script'
+        const revisionBody = '#' + id + ' .revision-body'
+        const $revisionBody = $(revisionBody)
         // var revisionPath = '#' + id + ' .revision-path'
 
-        var markdown = Crowi.unescape($(contentId).html())
-        var parsedHTML = crowiRenderer.render(markdown, $revisionBody.get(0))
+        const markdown = Crowi.unescape($(contentId).html())
+        const parsedHTML = crowiRenderer.render(markdown, $revisionBody.get(0))
         $revisionBody.html(parsedHTML)
 
         $('.template-create-button', $revisionBody).on('click', function() {
-          var path = $(this).data('path')
-          var templateId = $(this).data('template')
-          var template = $('#' + templateId).html()
+          const path = $(this).data('path')
+          const templateId = $(this).data('template')
+          const template = $('#' + templateId).html()
 
           crowi.saveDraft(path, template)
           top.location.href = path
@@ -364,7 +364,7 @@ $(function() {
   })
 
   $('#register-form input[name="registerForm[username]"]').change(function(e) {
-    var username = $(this).val()
+    const username = $(this).val()
     $('#input-group-username').removeClass('has-error')
     $('#help-block-username').html('')
 
@@ -378,7 +378,7 @@ $(function() {
 
   // omg /login/invited
   $('#invited-form input[name="invitedForm[username]"]').change(function(e) {
-    var username = $(this).val()
+    const username = $(this).val()
     $('#input-group-username').removeClass('has-error')
     $('#help-block-username').html('')
 
@@ -534,17 +534,17 @@ $(function() {
 
   if (pageId) {
     // if page exists
-    var $rawTextOriginal = $('#raw-text-original')
+    const $rawTextOriginal = $('#raw-text-original')
     if ($rawTextOriginal.length > 0) {
-      var markdown = Crowi.unescape($('#raw-text-original').html())
-      var revisionBody = $('#revision-body-content')
-      var parsedHTML = crowiRenderer.render(markdown, revisionBody.get(0))
+      const markdown = Crowi.unescape($('#raw-text-original').html())
+      const revisionBody = $('#revision-body-content')
+      const parsedHTML = crowiRenderer.render(markdown, revisionBody.get(0))
       revisionBody.html(parsedHTML)
 
       $('.template-create-button').on('click', function() {
-        var path = $(this).data('path')
-        var templateId = $(this).data('template')
-        var template = $('#' + templateId).html()
+        const path = $(this).data('path')
+        const templateId = $(this).data('template')
+        const template = $('#' + templateId).html()
 
         crowi.saveDraft(path, template)
         top.location.href = path
@@ -585,12 +585,12 @@ $(function() {
     }
 
     const CreateUserLinkWithPicture = function(user) {
-      var $userHtml = $('<a>')
+      const $userHtml = $('<a>')
       $userHtml.data('user-id', user._id)
       $userHtml.attr('href', '/user/' + user.username)
       $userHtml.attr('title', user.name)
 
-      var $userPicture = $('<img class="picture picture-xs picture-rounded">')
+      const $userPicture = $('<img class="picture picture-xs picture-rounded">')
       $userPicture.attr('alt', user.name)
       $userPicture.attr('src', getUserPicture(user))
 
@@ -614,8 +614,8 @@ $(function() {
     var $likeButton = $('.like-button')
     var $likeCount = $('#like-count')
     $likeButton.click(function() {
-      var liked = $likeButton.data('liked')
-      var token = window.APP_CONTEXT.csrfToken
+      const liked = $likeButton.data('liked')
+      const token = window.APP_CONTEXT.csrfToken
       if (!liked) {
         $.post('/_api/likes.add', { _csrf: token, page_id: pageId }, function(res) {
           if (res.ok) {
@@ -633,9 +633,9 @@ $(function() {
       return false
     })
     var $likerList = $('#liker-list')
-    var likers = $likerList.data('likers')
+    const likers = $likerList.data('likers')
     if (likers && likers.length > 0) {
-      var users = crowi.findUserByIds(likers.split(','))
+      const users = crowi.findUserByIds(likers.split(','))
       if (users) {
         AddToLikers(users)
       }
@@ -651,12 +651,12 @@ $(function() {
     }
 
     // presentation
-    var presentaionInitialized = false
-    var $b = $('body')
+    let presentaionInitialized = false
+    const $b = $('body')
 
     $(document)
       .on('click', '.toggle-presentation', function(e) {
-        var $a = $(this)
+        const $a = $(this)
 
         e.preventDefault()
         $b.toggleClass('overlay-on')
@@ -706,10 +706,10 @@ window.addEventListener('load', function(e) {
   }
 
   if ((crowi && crowi.users) || crowi.users.length == 0) {
-    var totalUsers = crowi.users.length
-    var $listLiker = $('.page-list-liker')
+    const totalUsers = crowi.users.length
+    const $listLiker = $('.page-list-liker')
     $listLiker.each(function(i, liker) {
-      var count = $(liker).data('count') || 0
+      const count = $(liker).data('count') || 0
       if (count / totalUsers > 0.05) {
         $(liker).addClass('popular-page-high')
         // 5%
@@ -721,9 +721,9 @@ window.addEventListener('load', function(e) {
         // 0.5%
       }
     })
-    var $listSeer = $('.page-list-seer')
+    const $listSeer = $('.page-list-seer')
     $listSeer.each(function(i, seer) {
-      var count = $(seer).data('count') || 0
+      const count = $(seer).data('count') || 0
       if (count / totalUsers > 0.1) {
         // 10%
         $(seer).addClass('popular-page-high')

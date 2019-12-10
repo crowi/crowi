@@ -36,7 +36,7 @@ export default (crowi: Crowi) => {
   const fileUploader = FileUploader(crowi)
 
   function generateFileHash(fileName) {
-    var hasher = crypto.createHash('md5')
+    const hasher = crypto.createHash('md5')
     hasher.update(fileName)
 
     return hasher.digest('hex')

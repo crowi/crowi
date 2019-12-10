@@ -186,7 +186,7 @@ export default (crowi: Crowi) => {
   actions.user = {}
   actions.api.user = {}
   actions.api.user.index = function(req: Request, res: Response) {
-    var page = parseInt(req.query.page) || 1
+    const page = parseInt(req.query.page) || 1
 
     // uq means user query
     // q used by search box on header
@@ -248,7 +248,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.user.makeAdmin = function(req: Request, res: Response) {
-    var id = req.params.id
+    const id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).makeAdmin(function(err, userData) {
         if (err === null) {
@@ -261,7 +261,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.user.removeFromAdmin = function(req: Request, res: Response) {
-    var id = req.params.id
+    const id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).removeFromAdmin(function(err, userData) {
         if (err === null) {
@@ -274,7 +274,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.user.activate = function(req: Request, res: Response) {
-    var id = req.params.id
+    const id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).statusActivate(function(err, userData) {
         if (err === null) {
@@ -287,7 +287,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.user.suspend = function(req: Request, res: Response) {
-    var id = req.params.id
+    const id = req.params.id
 
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).statusSuspend(function(err, userData) {
@@ -308,7 +308,7 @@ export default (crowi: Crowi) => {
   // これやったときの relation の挙動未確認
   actions.user.removeCompletely = function(req: Request, res: Response) {
     // ユーザーの物理削除
-    var id = req.params.id
+    const id = req.params.id
 
     User.removeCompletelyById(id, function(err, removed) {
       if (err) {
@@ -394,9 +394,9 @@ export default (crowi: Crowi) => {
 
   actions.api.notificationAdd = function(req: Request, res: Response) {
     const user = req.user as UserDocument
-    var UpdatePost = crowi.model('UpdatePost')
-    var pathPattern = req.body.pathPattern
-    var channel = req.body.channel
+    const UpdatePost = crowi.model('UpdatePost')
+    const pathPattern = req.body.pathPattern
+    const channel = req.body.channel
 
     debug('notification.add', pathPattern, channel)
     UpdatePost.createUpdatePost(pathPattern, channel, user._id)
@@ -472,7 +472,7 @@ export default (crowi: Crowi) => {
       option.secure = true
     }
 
-    var smtpClient = mailer.createSMTPClient(option)
+    const smtpClient = mailer.createSMTPClient(option)
     debug('mailer setup for validate SMTP setting', smtpClient)
 
     smtpClient.sendMail(

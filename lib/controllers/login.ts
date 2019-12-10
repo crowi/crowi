@@ -103,8 +103,8 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.error = function(req: Request, res: Response) {
-    var reason = req.params.reason
-    var reasonMessage = ''
+    const reason = req.params.reason
+    let reasonMessage = ''
 
     if (reason === 'suspended') {
       reasonMessage = 'This account is suspended.'
@@ -448,11 +448,11 @@ export default (crowi: Crowi, app: Express) => {
     }
 
     if (req.method == 'POST' && req.form.isValid) {
-      var user = req.user
-      var invitedForm = req.form.invitedForm || {}
-      var username = invitedForm.username
-      var name = invitedForm.name
-      var password = invitedForm.password
+      const user = req.user
+      const invitedForm = req.form.invitedForm || {}
+      const username = invitedForm.username
+      const name = invitedForm.name
+      const password = invitedForm.password
 
       User.isRegisterableUsername(username, function(creatable) {
         if (creatable) {

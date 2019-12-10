@@ -12,7 +12,7 @@ export default (crowi: Crowi, app: Express) => {
     })
 
     swig.setFilter('normalizeDateInPath', function(path) {
-      var patterns = [
+      const patterns = [
         [/20(\d{2})(\d{2})(\d{2})(.+)/g, '20$1/$2/$3/$4'],
         [/20(\d{2})(\d{2})(\d{2})/g, '20$1/$2/$3'],
         [/20(\d{2})(\d{2})(.+)/g, '20$1/$2/$3'],
@@ -23,9 +23,9 @@ export default (crowi: Crowi, app: Express) => {
         [/20(\d{2})_(\d{1,2})/g, '20$1/$2'],
       ]
 
-      for (var i = 0; i < patterns.length; i++) {
-        var mat = patterns[i][0]
-        var rep = patterns[i][1]
+      for (let i = 0; i < patterns.length; i++) {
+        const mat = patterns[i][0]
+        const rep = patterns[i][1]
         if (path.match(mat)) {
           return path.replace(mat, rep)
         }

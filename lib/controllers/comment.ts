@@ -20,8 +20,8 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_id Revision Id.
    */
   api.get = function(req: Request, res: Response) {
-    var pageId = req.query.page_id
-    var revisionId = req.query.revision_id
+    const pageId = req.query.page_id
+    const revisionId = req.query.revision_id
 
     if (revisionId) {
       return Comment.getCommentsByRevisionId(revisionId)
