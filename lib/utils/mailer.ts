@@ -14,8 +14,6 @@ export default crowi => {
   const MAIL_TEMPLATE_DIR = crowi.mailDir
 
   function createSMTPClient(option?) {
-    let client
-
     debug('createSMTPClient option', option)
     if (!option) {
       option = {
@@ -35,15 +33,13 @@ export default crowi => {
     }
     option.tls = { rejectUnauthorized: false }
 
-    client = nodemailer.createTransport(option)
+    const client = nodemailer.createTransport(option)
 
     debug('mailer set up for SMTP', client)
     return client
   }
 
   function createSESClient(option?) {
-    let client
-
     if (!option) {
       option = {
         accessKeyId: config.crowi['mail:aws:accessKeyId'],
@@ -51,7 +47,7 @@ export default crowi => {
       }
     }
 
-    client = nodemailer.createTransport(ses(option))
+    const client = nodemailer.createTransport(ses(option))
 
     debug('mailer set up for SES', client)
     return client
