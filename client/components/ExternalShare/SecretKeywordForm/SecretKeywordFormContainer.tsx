@@ -56,7 +56,7 @@ class SecretKeywordFormContainer extends React.Component<Props, State> {
   async checkSecretKeyword() {
     const { secretKeyword } = this.state
     const shareId = $('#secret-keyword-form-container').data('share-id')
-    const _csrf = $('#secret-keyword-form-container').data('csrftoken')
+    const _csrf = window.APP_CONTEXT.csrfToken
     try {
       const { hasAccessAuthority = false } = await this.props.crowi.apiPost('/shares/secretKeyword.check', {
         _csrf,

@@ -17,9 +17,9 @@ export default class PlantUML {
   }
 
   process(code: string, lang: string) {
-    const { env } = this.crowi.getConfig()
+    const { env } = this.crowi.getContext()
 
-    if (!env || !env.PLANTUML_URI) {
+    if (!env.PLANTUML_URI) {
       return `<pre class="wiki-code"><code>${CrowiUtil.escape(code)}\n</code></pre>`
     }
 

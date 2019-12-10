@@ -101,7 +101,7 @@ interface Props {
 }
 
 const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => {
-  const { title = 'Crowi' } = crowi.getConfig().crowi || {}
+  const { title = 'Crowi' } = crowi.getContext() || {}
   const user = crowi.getUser()
   const [t] = useTranslation()
 
@@ -142,9 +142,9 @@ const NavigationDrawer: FC<Props> = ({ crowi, isOpen = false, handleClose }) => 
 
             <Names>
               <a href={getUserPageRoot(user)}>
-                <Name>{user?.name}</Name>
+                <Name>{user.name}</Name>
                 <br />
-                <Username>@{user?.username}</Username>
+                <Username>@{user.username}</Username>
               </a>
             </Names>
           </UserProfile>

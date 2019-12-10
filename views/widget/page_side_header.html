@@ -32,7 +32,6 @@
           <p class="liker-count">
           <span id="like-count">{{ page.liker.length }}</span>
           <button
-            data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
             class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
             >{{ Icon("thumbUp") }} {{ t('Like!') }}</button>

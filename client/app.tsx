@@ -31,8 +31,6 @@ import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 import NavigationDrawerOpener from 'client/components/NavigationDrawer/NavigationDrawerOpener'
 
-import hydrateComponents from './hydrateComponents'
-
 i18n()
 
 moment.locale(navigator.userLanguage || navigator.language)
@@ -52,14 +50,10 @@ if (mainContent !== null) {
   }
 }
 
-const getTextContent = (element: HTMLElement | null) => (element ? element.textContent : null)
-
-const { user = {} } = JSON.parse(getTextContent(document.getElementById('user-context-hydrate')) || '{}')
-const csrfToken = $('#content-main').data('csrftoken') || $('#admin-page').data('csrftoken')
 // FIXME
-const crowi = new Crowi({ user, csrfToken }, window)
+const crowi = new Crowi(window.APP_CONTEXT, window)
 window.crowi = crowi
-crowi.setConfig(JSON.parse(getTextContent(document.getElementById('crowi-context-hydrate')) || '{}'))
+
 const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
 if (!isSharePage) {
   crowi.fetchUsers()
@@ -102,8 +96,6 @@ Object.entries(componentMappings).forEach(([key, component]) => {
     ReactDOM.render(component, elem)
   }
 })
-
-hydrateComponents()
 
 // うわーもうー
 $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {

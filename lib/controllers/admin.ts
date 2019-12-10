@@ -2,7 +2,8 @@ import Crowi from 'server/crowi'
 import Debug from 'debug'
 import ApiResponse from '../utils/apiResponse'
 import { UserDocument } from 'server/models/user'
-import { getPath, getContext } from 'server/utils/ssr'
+import { getPath } from 'server/utils/ssr'
+import { getAppContext } from 'server/utils/view'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:admin')
@@ -79,7 +80,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.index = function(req, res) {
-    return res.render(getPath(crowi, 'AdminPage'), { i18n: req.i18n, context: getContext(crowi, req, res) })
+    return res.render(getPath(crowi, 'AdminPage'), { i18n: req.i18n, context: getAppContext(crowi, req) })
   }
 
   actions.api.index = function(req, res) {

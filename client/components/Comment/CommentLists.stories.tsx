@@ -2,8 +2,11 @@ import React from 'react'
 import faker from 'faker'
 import Crowi from 'client/utils/Crowi'
 import CommentLists from './CommentLists'
+import { createAppContext } from 'client/fixtures/createAppContext'
 
-const crowi = new Crowi({ user: {}, csrfToken: '' }, window)
+const appContext = createAppContext()
+
+const crowi = new Crowi(appContext, window)
 
 export default { title: 'Comment/CommentLists' }
 
