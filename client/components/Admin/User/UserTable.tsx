@@ -53,7 +53,7 @@ function getHanlders(openResetModal, changeStatus) {
 }
 
 interface Props {
-  me: any
+  me: Me
   users: any[]
   pagination: {
     current: number

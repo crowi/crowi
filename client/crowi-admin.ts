@@ -94,7 +94,7 @@ $(function() {
     $editPanel.update.on('click', async () => {
       const id = $tr.data('user-id')
       const email = $emailInput.val()
-      const csrf = $('#admin-users-table').data('csrf')
+      const csrf = window.APP_CONTEXT.csrfToken
       const body = { user_id: id, email, _csrf: csrf }
 
       const { ok } = await window.crowi.apiPost('/admin/users.updateEmail', body)

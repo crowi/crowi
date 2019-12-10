@@ -16,7 +16,7 @@ const AdminPage: FC<PageProps> = props => {
               <h1 className="title">Wiki管理</h1>
             </header>
           </div>
-          <div id="admin-page" className="content-main content-form" data-csrftoken={context.csrfToken}></div>
+          <div id="admin-page" className="content-main content-form"></div>
         </Single>
       </App>
     </Document>

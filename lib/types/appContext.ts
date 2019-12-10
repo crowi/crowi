@@ -1,8 +1,11 @@
-import i18next from 'i18next'
-
 export type AppContext = {
   title: string
   path: string
+  url: string
+  auth: {
+    requireThirdPartyAuth: boolean
+    disablePasswordAuth: boolean
+  }
   upload: {
     image: boolean
     file: boolean
@@ -11,27 +14,24 @@ export type AppContext = {
     isConfigured: boolean
   }
   user: {
-    _id: string
+    _id: string | null
     name: string
     username: string
     image: string
-    email?: string
-    googleId?: string
-    githubId?: string
-    admin?: boolean
-  } | null
+    email: string | null
+    googleId: string | null
+    githubId: string | null
+    admin: boolean
+    language: string
+  }
   env: {
     PLANTUML_URI: string | null
     MATHJAX: string | null
   }
   config: {
-    crowi: any
+    crowi: {
+      'app:confidential': string | null
+    }
   }
   csrfToken: string
-  hydrated: {
-    local: string
-    user: string
-    ssr: string
-  }
-  i18n: i18next.i18n
 }

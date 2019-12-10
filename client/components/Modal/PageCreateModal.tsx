@@ -80,7 +80,7 @@ interface Props extends ModalProps {
 const PageCreateModal: FC<Props> = ({ crowi, fade = false, toggle, ...modalProps }) => {
   const user = crowi.getUser()
   const currentPath = location.pathname
-  const userPath = `/user/${user && user.username}/`
+  const userPath = `/user/${user.username}/`
   const datePath = moment(Date.now()).format('/YYYY/MM/DD/')
   const isTopPage = currentPath === '/'
 

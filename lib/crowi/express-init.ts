@@ -52,7 +52,6 @@ export default (crowi: Crowi, app: Express) => {
       language: User.getLanguageLabels(),
       registrationMode: Config.getRegistrationModeLabels(),
     }
-    res.locals.local_config = Config.getLocalconfig(config) // config for browser context
 
     next()
   })
@@ -101,6 +100,4 @@ export default (crowi: Crowi, app: Express) => {
   app.use(middlewares.LoginChecker)
 
   app.use(middlewares.I18next)
-  app.use(middlewares.ClientContext)
-  app.use(middlewares.SsrContext)
 }

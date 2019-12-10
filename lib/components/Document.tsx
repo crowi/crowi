@@ -42,9 +42,7 @@ const Document: FC<Props> = ({ title, bodyProps, bodyClassNames = [], context, c
       <body className={classNames('crowi', 'main-container', ...bodyClassNames)} id="crowi-main-container" {...bodyProps}>
         <div id="root">{children}</div>
       </body>
-      <script type="application/json" id="crowi-context-hydrate" dangerouslySetInnerHTML={{ __html: context.hydrated.local }} />
-      <script type="application/json" id="user-context-hydrate" dangerouslySetInnerHTML={{ __html: context.hydrated.user }} />
-      <script type="application/json" id="ssr-context-hydrate" dangerouslySetInnerHTML={{ __html: context.hydrated.ssr }} />
+      <script dangerouslySetInnerHTML={{ __html: `window.APP_CONTEXT = ${JSON.stringify(context)}` }} />
       <script src={assetPath('/js/app.js')}></script>
       <script src={assetPath('/js/crowi.js')}></script>
     </html>

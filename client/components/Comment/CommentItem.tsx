@@ -67,10 +67,10 @@ const CommentItem: FC<Props> = props => {
   const { revision, creator, comment: commentBody, createdAt } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
 
-  const me = crowi.getUser() || {}
+  const me = crowi.getUser()
 
   return (
-    <PageCommentContainer isOwn={me.id === creator._id} isOld={revision !== revisionId} {...others}>
+    <PageCommentContainer isOwn={me._id === creator._id} isOld={revision !== revisionId} {...others}>
       <CommentUserPicture user={creator} />
       <PageComment>
         <CommentCreator>{creator.username}</CommentCreator>
