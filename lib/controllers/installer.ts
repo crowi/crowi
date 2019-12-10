@@ -1,4 +1,5 @@
 import Crowi from 'server/crowi'
+import { Request, Response } from 'express'
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routes:installer')
@@ -6,11 +7,11 @@ export default (crowi: Crowi) => {
   const User = crowi.model('User')
   const actions = {} as any
 
-  actions.index = function(req, res) {
+  actions.index = function(req: Request, res: Response) {
     return res.render('installer.html')
   }
 
-  actions.createAdmin = function(req, res) {
+  actions.createAdmin = function(req: Request, res: Response) {
     var registerForm = req.body.registerForm || {}
     var language = req.language || 'en'
 

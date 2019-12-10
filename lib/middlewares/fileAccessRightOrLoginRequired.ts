@@ -1,7 +1,8 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 
 export default (crowi: Crowi) => {
-  return async function(req, res, next) {
+  return async function(req: Request, res: Response, next) {
     try {
       const Attachment = crowi.model('Attachment')
       const Share = crowi.model('Share')

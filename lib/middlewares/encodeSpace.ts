@@ -1,7 +1,8 @@
+import { Request, Response } from 'express'
 import { encodeSpace } from '../utils/path'
 
 export default () => {
-  return (req, res, next) => {
+  return (req: Request, res: Response, next) => {
     const path = decodeURIComponent(req.originalUrl || '')
     const encodedPath = encodeSpace(path)
 

@@ -1,3 +1,4 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import ApiResponse from '../utils/apiResponse'
 
@@ -16,7 +17,7 @@ export default (crowi: Crowi) => {
    * @apiParam {Number} limit
    * @apiParam {Number} offset
    */
-  actions.api.list = function(req, res) {
+  actions.api.list = function(req: Request, res: Response) {
     const pageId = req.query.page_id
     const limit = req.query.limit || 10
     const offset = req.query.offset || 0

@@ -1,10 +1,11 @@
+import { Request, Response } from 'express'
+
 export default () => {
-  return (req, res, next) => {
-    if (req.user && '_id' in req.user) {
-      if (req.user.admin) {
-        next()
-        return
-      }
+  return (req: Request, res: Response, next) => {
+    if (req.user?.admin) {
+      return next()
+    }
+    if (req.user) {
       return res.redirect('/')
     }
     return res.redirect('/login')
