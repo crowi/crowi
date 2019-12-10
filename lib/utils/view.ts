@@ -39,7 +39,7 @@ export const picture = user => {
 }
 
 const getUserContext = (req): AppContext['user'] => {
-  const { _id = null, name = '', username = '', image = '', email = null, googleId = null, githubId = null, admin = false } = req.user
+  const { _id = null, name = '', username = '', image = '', email = null, googleId = null, githubId = null, admin = false } = req.user || {}
   const { language = '' } = req.i18n || {}
   return {
     _id,
