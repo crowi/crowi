@@ -66,8 +66,8 @@ export interface UserModel extends Model<UserDocument> {
   isEmailValid(email): boolean
   isGitHubAccountValid(organizations): boolean
   findUsers(options, callback: (err: Error, userData: UserDocument[]) => void)
-  findAllUsers(option?): Promise<UserDocument[]>
-  findUsersByIds(ids, option?): Promise<UserDocument[]>
+  findAllUsers(options?): Promise<UserDocument[]>
+  findUsersByIds(ids, options?): Promise<UserDocument[]>
   findAdmins(callback: (err: Error, admins: UserDocument[]) => void): void
   findUsersWithPagination(options, query, callback): any
   findUsersByPartOfEmail(emailPart, options): any
@@ -392,11 +392,10 @@ export default (crowi: Crowi) => {
       })
   }
 
-  userSchema.statics.findAllUsers = function(option) {
-    var option = option || {}
-    const sort = option.sort || { createdAt: -1 }
-    let status = option.status || [STATUS_ACTIVE, STATUS_SUSPENDED]
-    const fields = option.fields
+  userSchema.statics.findAllUsers = function(options = {}) {
+    const sort = options.sort || { createdAt: -1 }
+    let status = options.status || [STATUS_ACTIVE, STATUS_SUSPENDED]
+    const fields = options.fields
 
     if (!Array.isArray(status)) {
       status = [status]
@@ -413,11 +412,10 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  userSchema.statics.findUsersByIds = function(ids, option) {
-    var option = option || {}
-    const sort = option.sort || { createdAt: -1 }
-    const status = option.status || STATUS_ACTIVE
-    const fields = option.fields
+  userSchema.statics.findUsersByIds = function(ids, options = {}) {
+    const sort = options.sort || { createdAt: -1 }
+    const status = options.status || STATUS_ACTIVE
+    const fields = options.fields
 
     return User.find({ _id: { $in: ids }, status: status })
       .select(fields)

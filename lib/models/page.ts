@@ -100,7 +100,7 @@ export interface PageModel extends Model<PageDocument> {
   findPageByRedirectTo(path): any
   findPagesByIds(ids): any
   findListByCreator(user, option, currentUser): any
-  getStreamOfFindAll(options): any
+  getStreamOfFindAll(options?): any
   findListByStartWith(path, userData, option): Promise<PageDocument[]>
   findChildrenByPath(path, userData, option): any
   findUnfurlablePages(type, array, grants?: number[]): any
@@ -688,8 +688,7 @@ export default (crowi: Crowi) => {
   /**
    * Bulk get (for internal only)
    */
-  pageSchema.statics.getStreamOfFindAll = function(options) {
-    var options = options || {}
+  pageSchema.statics.getStreamOfFindAll = function(options = {}) {
     const publicOnly = options.publicOnly !== false
     const criteria: any = { redirectTo: null }
 

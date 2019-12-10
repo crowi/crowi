@@ -611,8 +611,8 @@ $(function() {
     }
 
     // Like
-    var $likeButton = $('.like-button')
-    var $likeCount = $('#like-count')
+    const $likeButton = $('.like-button')
+    const $likeCount = $('#like-count')
     $likeButton.click(function() {
       const liked = $likeButton.data('liked')
       const token = window.APP_CONTEXT.csrfToken
@@ -632,7 +632,7 @@ $(function() {
 
       return false
     })
-    var $likerList = $('#liker-list')
+    const $likerList = $('#liker-list')
     const likers = $likerList.data('likers')
     if (likers && likers.length > 0) {
       const users = crowi.findUserByIds(likers.split(','))
