@@ -9,10 +9,6 @@ export default (crowi: Crowi) => {
   const actions = {} as any
   actions.api = {} as any
 
-  actions.notificationPage = function(req: Request, res: Response) {
-    return res.render('notification.html', {})
-  }
-
   /**
    * @api {get} /notifications.list
    * @apiName ListNotifications
