@@ -1,6 +1,6 @@
 import React, { FC } from 'react'
-import Document from '../components/Document'
-import Single from '../components/Layout/Single'
+import Document from 'server/components/Document'
+import Single from 'server/components/Layout/Single'
 import { PageProps } from 'server/types/pageProps'
 import App from 'server/components/App'
 
