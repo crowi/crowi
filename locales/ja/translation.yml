@@ -77,7 +77,7 @@ page_login:
   sign_up_is_here: 新規登録はこちら
   sign_in_with: '%s でログイン'
   notice:
-    email_is_used: "このメールアドレス({{ email }})は既に使用されていますが、{{ issuer }}と接続されていません。"
+    email_is_used: 'このメールアドレス({{ email }})は既に使用されていますが、{{ issuer }}と接続されていません。'
     login_to_connect: ログインすることで{{ issuer }}のアカウントと接続することができます。
 page_register:
   example: 例
@@ -132,7 +132,7 @@ Current password: 現在のパスワード
 New password: 新しいパスワード
 Re-enter new password: (確認用)
 Please set a password: パスワードを設定してください
-You can sign in with email and password: '<code>%s</code> と設定されたパスワードの組み合わせでログイン可能になります。'
+You can sign in with email and password: '<1>{{ email }}</1> と設定されたパスワードの組み合わせでログイン可能になります。'
 API Settings: API設定
 API Token Settings: API Token設定
 Current API Token: 現在のAPI Token
