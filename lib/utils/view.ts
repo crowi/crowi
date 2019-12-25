@@ -74,7 +74,12 @@ export const getAppContext = (crowi: Crowi, req): AppContext => {
     url: config.crowi['app:url'] || '',
     auth: {
       requireThirdPartyAuth: Config.isRequiredThirdPartyAuth(config),
+      canDisconnectThirdPartyId: req.user ? req.user.canDisconnectThirdPartyId() : false,
       disablePasswordAuth: Config.isDisabledPasswordAuth(config),
+      providers: {
+        google: Config.googleLoginEnabled(config),
+        github: Config.githubLoginEnabled(config),
+      },
     },
     upload: {
       image: Config.isUploadable(config),
@@ -82,6 +87,9 @@ export const getAppContext = (crowi: Crowi, req): AppContext => {
     },
     search: {
       isConfigured: !!crowi.getSearcher(),
+    },
+    security: {
+      registrationWhiteList: config.crowi['security:registrationWhiteList'] || [],
     },
     user: getUserContext(req),
     env: {

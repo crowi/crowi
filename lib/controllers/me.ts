@@ -6,6 +6,8 @@ import FileUploader from '../utils/fileUploader'
 import GoogleAuth from '../utils/googleAuth'
 import GitHubAuth from '../utils/githubAuth'
 import { UserDocument } from 'server/models/user'
+import { getPath } from 'server/utils/ssr'
+import { getAppContext } from 'server/utils/view'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:me')
@@ -89,12 +91,30 @@ export default (crowi: Crowi, app: Express) => {
     const user = req.user as UserDocument
     const { userForm } = req.body
 
+    const render = (options = { messages: {} }) =>
+      res.render(getPath(crowi, 'Me/IndexPage'), {
+        ...options,
+        i18n: req.i18n,
+        context: getAppContext(crowi, req),
+        activeItem: 'user',
+        messages: {
+          ...options.messages,
+          success: req.flash('successMessage'),
+          google: {
+            warning: req.flash('warningMessage.auth.google'),
+          },
+          github: {
+            warning: req.flash('warningMessage.auth.github'),
+          },
+        },
+      })
+
     if (req.method == 'POST' && req.form.isValid) {
       const { name, email, lang } = userForm
 
       if (!User.isEmailValid(email)) {
         req.form.errors.push("You can't update to that email address")
-        return res.render('me/index.html', {})
+        return render({ messages: { error: req.form.errors } })
       }
 
       User.findOne({ email }, async (err, existingUserData) => {
@@ -102,7 +122,7 @@ export default (crowi: Crowi, app: Express) => {
         if (existingUserData && !existingUserData._id.equals(user._id)) {
           debug('Email address was duplicated')
           req.form.errors.push('It can not be changed to that mail address')
-          return res.render('me/index.html', {})
+          return render({ messages: { error: req.form.errors } })
         }
 
         try {
@@ -111,7 +131,7 @@ export default (crowi: Crowi, app: Express) => {
           Object.keys(err.errors).forEach(e => {
             req.form.errors.push(err.errors[e].message)
           })
-          return res.render('me/index.html', {})
+          return render({ messages: { error: req.form.errors } })
         }
 
         req.i18n.changeLanguage(lang)
@@ -121,11 +141,8 @@ export default (crowi: Crowi, app: Express) => {
     } else {
       // method GET
       /// そのうちこのコードはいらなくなるはず
-      if (!user.isEmailSet()) {
-        req.flash('warningMessage', 'メールアドレスが設定されている必要があります')
-      }
 
-      return res.render('me/index.html', {})
+      return render(!user.isEmailSet() ? { messages: { warning: 'メールアドレスが設定されている必要があります' } } : undefined)
     }
   }
 
@@ -139,6 +156,15 @@ export default (crowi: Crowi, app: Express) => {
       return res.redirect('/me')
     }
 
+    const render = (options = { messages: {} }) =>
+      res.render(getPath(crowi, 'Me/PasswordPage'), {
+        ...options,
+        i18n: req.i18n,
+        context: getAppContext(crowi, req),
+        activeItem: 'password',
+        messages: { ...options.messages, success: req.flash('successMessage') },
+      })
+
     if (req.method == 'POST' && req.form.isValid) {
       const newPassword = passwordForm.newPassword
       const newPasswordConfirm = passwordForm.newPasswordConfirm
@@ -146,7 +172,7 @@ export default (crowi: Crowi, app: Express) => {
 
       if (user.isPasswordSet() && !user.isPasswordValid(oldPassword)) {
         req.form.errors.push('Wrong current password')
-        return res.render('me/password.html', {})
+        return render({ messages: { error: req.form.errors } })
       }
 
       // check password confirm
@@ -158,7 +184,7 @@ export default (crowi: Crowi, app: Express) => {
             for (const [key, e] of (err as any).errors) {
               req.form.errors.push(e.message)
             }
-            return res.render('me/password.html', {})
+            return render({ messages: { error: req.form.errors } })
           }
 
           req.flash('successMessage', 'Password updated')
@@ -167,34 +193,39 @@ export default (crowi: Crowi, app: Express) => {
       }
     } else {
       // method GET
-      return res.render('me/password.html', {})
+      return render()
     }
   }
 
-  actions.apiToken = function(req: Request, res: Response) {
+  actions.apiToken = async (req: Request, res: Response) => {
     const user = req.user as UserDocument
 
+    const render = (options = { messages: {} }) =>
+      res.render(getPath(crowi, 'Me/ApiTokenPage'), {
+        ...options,
+        i18n: req.i18n,
+        context: getAppContext(crowi, req),
+        activeItem: 'apiToken',
+        apiToken: req.user?.apiToken,
+        messages: { ...options.messages, success: req.flash('successMessage') },
+      })
+
     if (req.method == 'POST' && req.form.isValid) {
-      user
-        .updateApiToken()
-        .then(function(userData) {
-          req.flash('successMessage', 'API Token updated')
-          return res.redirect('/me/apiToken')
-        })
-        .catch(function(err) {
-          // req.flash('successMessage',);
-          req.form.errors.push('Failed to update API Token')
-          return res.render('me/api_token.html', {})
-        })
-    } else {
-      return res.render('me/api_token.html', {})
+      try {
+        await user.updateApiToken()
+        req.flash('successMessage', 'API Token updated')
+        return res.redirect('/me/apiToken')
+      } catch (err) {
+        req.form.errors.push('Failed to update API Token')
+        return render({ messages: { error: req.form.errors } })
+      }
     }
+
+    return render()
   }
 
   actions.notifications = function(req: Request, res: Response) {
-    const renderVars = {}
-
-    return res.render('me/notifications.html', renderVars)
+    return res.render(getPath(crowi, 'Me/NotificationsPage'), { i18n: req.i18n, context: getAppContext(crowi, req), activeItem: 'notifications' })
   }
 
   actions.updates = function(req: Request, res: Response) {
