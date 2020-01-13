@@ -1,10 +1,12 @@
-import React, { FC } from 'react'
+import React, { FC, useMemo } from 'react'
 import styled, { css } from 'styled-components'
 import UserPicture from 'components/User/UserPicture'
 import CommentBody from './CommentBody'
 import * as styles from 'client/constants/styles'
 import { CommonProps } from 'client/types/component'
 import Crowi from 'client/util/Crowi'
+import { formatToLocaleString, formatDistanceFromNow } from 'client/util/formatDate'
+import { Tooltip } from 'reactstrap'
 
 type PageCommentContainerProps = Props & {
   isOwn: boolean
@@ -67,6 +69,9 @@ const CommentItem: FC<Props> = props => {
   const { revision, creator, comment: commentBody, createdAt } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
 
+  const relativeCreatedAt = formatDistanceFromNow(createdAt)
+  const absoluteCreatedAt = useMemo(() => formatToLocaleString(createdAt), [createdAt])
+
   const me = crowi.getUser() || {}
 
   return (
@@ -76,7 +81,7 @@ const CommentItem: FC<Props> = props => {
         <CommentCreator>{creator.username}</CommentCreator>
         <CommentBody comment={commentBody} />
         <CommentMeta>
-          <CommentAt>{createdAt}</CommentAt>
+          <CommentAt title={absoluteCreatedAt}>{relativeCreatedAt}</CommentAt>
           <a className={`badge ${badgeType}`} href={`?revision=${revision}`}>
             {revision.substr(0, 8)}
           </a>
