@@ -1,8 +1,8 @@
 import path from 'path'
 import elasticsearch from 'elasticsearch'
 import Debug from 'debug'
-import moment from 'moment'
 import fs from 'fs'
+import { format } from 'date-fns'
 
 const debug = Debug('crowi:lib:search')
 
@@ -136,7 +136,7 @@ SearchClient.prototype.parseUri = function(uri) {
 }
 
 SearchClient.prototype.createIndexName = function() {
-  const datetime = moment().format('YYYYMMDDHHmmss')
+  const datetime = format(new Date(), 'yyyyMMddHHmmss')
   return `${this.indexNames.base}-${datetime}`
 }
 
