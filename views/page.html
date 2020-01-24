@@ -162,7 +162,7 @@
         <a class="dropdown-item toggle-presentation" href="?presentation=1">{{ Icon("presentation") }} {{ t('Presentation Mode') }} (beta)</a>
         {% if isDeletablePage() %}
           <div class="dropdown-divider"></div>
-          <a class="dropdown-item" href="#" data-target="#deletePage" data-toggle="modal">{{ Icon("trashCanOutline", ["text-danger"]) }} {{ t('Delete') }}</a>
+          <div id="page-delete-modal"></div>
         {% endif %}
       </div>
     </li>
@@ -304,7 +304,6 @@
 
 <div id="crowi-modals">
   {% include 'modal/rename.html' %}
-  {% include 'modal/delete.html' %}
   {% include 'modal/page_name_warning.html' %}
   {% include 'modal/portalize.html' %}
 </div>
