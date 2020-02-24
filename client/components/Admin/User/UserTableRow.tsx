@@ -1,9 +1,9 @@
 import React, { FC } from 'react'
-import moment from 'moment'
 import { Badge } from 'reactstrap'
 import UserPicture from 'components/User/UserPicture'
 import UserStatusBadge from 'components/User/UserStatusBadge'
 import UserEditDropdown from './UserEditDropdown'
+import format from 'client/util/formatDate'
 
 interface Props {
   me: any
@@ -55,7 +55,7 @@ const UserTableRow: FC<Props> = ({ me, user, ...props }) => {
       </td>
       <td>{name}</td>
       <td>{email}</td>
-      <td>{moment(createdAt).format('YYYY-MM-DD')}</td>
+      <td>{format(createdAt, 'yyyy-MM-dd')}</td>
       <td>
         <div className="d-inline-flex flex-column">
           <UserStatusBadge user={user} />

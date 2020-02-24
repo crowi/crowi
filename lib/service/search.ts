@@ -2,7 +2,7 @@ import path from 'path'
 import { Client as ES6Client, ApiResponse } from 'es6'
 import { Client as ES7Client } from 'es7'
 import Debug from 'debug'
-import moment from 'moment'
+import { format } from 'date-fns'
 import fs from 'fs'
 import { EventEmitter } from 'events'
 import Crowi from 'server/crowi'
@@ -179,7 +179,7 @@ export default class SearchClient {
   }
 
   createIndexName() {
-    const datetime = moment().format('YYYYMMDDHHmmss')
+    const datetime = format(new Date(), 'yyyyMMddHHmmss')
     return `${this.indexNames.base}-${datetime}`
   }
 
