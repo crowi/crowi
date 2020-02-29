@@ -29,7 +29,7 @@ import AdminShare from 'components/Admin/Share/AdminShare'
 import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
-import NavigationDrawerOpener from 'client/components/NavigationDrawer/NavigationDrawerOpener'
+import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
 
 import hydrateComponents from './hydrateComponents'
 
@@ -93,7 +93,7 @@ const componentMappings = {
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
   'admin-page': <AdminPage crowi={crowi} />,
   'help-portal': <HelpPortalModal />,
-  'navigation-drawer-opener': <NavigationDrawerOpener crowi={crowi} />,
+  'navigation-drawer-opener': <NavigationDrawerContainer crowi={crowi} />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {
