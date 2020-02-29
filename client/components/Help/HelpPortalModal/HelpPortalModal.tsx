@@ -58,7 +58,7 @@ const HelpPortalModal: FC = () => {
           プロジェクトについてのイントロや各ページへのリンク、関係者の紹介など、homepage-renewal に関する情報を掲載しておきたいと思うはずです。
         </p>
         <p>
-          Poral機能を使うと、こうしたときに、<code>/projects/homepage-renewal/</code> この{' '}
+          Portal機能を使うと、こうしたときに、<code>/projects/homepage-renewal/</code> この{' '}
           <strong>
             &quot;一覧ページ&quot; を、ページ化することができ、そこに、通常のページと同じように Markdown
             で編集したコンテンツを配置することができるようになります
