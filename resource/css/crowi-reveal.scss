@@ -1,6 +1,8 @@
 @import 'reveal.scss';
 
 .reveal {
+  display: flex;
+  align-items: center;
   font-size: 32px;
   section * {
     font-family: "Lucida Grande", "Hiragino Kaku Gothic Pro W3", Meiryo, san-serif;

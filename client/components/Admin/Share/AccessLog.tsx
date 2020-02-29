@@ -1,11 +1,11 @@
 import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
-import moment from 'moment'
 import platform from 'platform'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 import Crowi from 'client/util/Crowi'
 import { ShareAccess } from 'client/types/crowi'
+import { formatToLocaleString } from 'client/util/formatDate'
 
 interface Props extends WithTranslation {
   crowi: Crowi
@@ -97,7 +97,7 @@ class AccessLog extends React.Component<Props, State> {
             path,
             info: platform.parse ? platform.parse(userAgent) : undefined,
             remoteAddress,
-            date: moment(lastAccessedAt).format('llll'),
+            date: formatToLocaleString(lastAccessedAt),
           })
         })}
       </tbody>
