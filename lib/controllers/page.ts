@@ -82,10 +82,12 @@ export default (crowi: Crowi) => {
     const queryOptions = { offset, limit: limit + 1 }
 
     try {
-      const [portalPage, pageList] = await Promise.all([
+      const [portalPage, pageList] = (await Promise.all([
         Page.findPortalPage(path, req.user, req.query.revision),
         Page.findListByStartWith(path, req.user, queryOptions),
-      ])
+        // FIXME: A bug of Promise.all type. It was introduced by TypeScript 3.7.3.
+        // https://github.com/microsoft/TypeScript/pull/33707
+      ])) as [PageDocument | null, PageDocument[]]
 
       if (pageList.length > limit) {
         pageList.pop()

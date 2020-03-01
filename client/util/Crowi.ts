@@ -6,9 +6,11 @@ import axios from 'axios'
 import io from 'socket.io-client'
 import { User } from 'client/types/crowi'
 
-interface Me {
+export interface Me {
   id?: string
   name?: string
+  username?: string
+  image?: string
 }
 
 interface Context {
@@ -20,7 +22,9 @@ export default class Crowi {
   public context: Context
 
   public config: {
-    crowi?: {}
+    crowi?: {
+      title?: string
+    }
     upload?: {
       image: boolean
       file: boolean
@@ -94,8 +98,8 @@ export default class Crowi {
   }
 
   setUser(user?: Me) {
-    const { id = '', name = '' } = user || {}
-    this.user = { id, name }
+    const { id = '', name = '', username = '', image = '' } = user || {}
+    this.user = { id, name, username, image }
   }
 
   getUser() {
