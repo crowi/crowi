@@ -2,7 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 
 import i18n from './i18n'
-import moment from 'moment'
 
 import Crowi from './utils/Crowi'
 import CrowiRenderer from './utils/CrowiRenderer'
@@ -29,11 +28,9 @@ import AdminShare from 'components/Admin/Share/AdminShare'
 import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
-import NavigationDrawerOpener from 'client/components/NavigationDrawer/NavigationDrawerOpener'
+import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
 
 i18n()
-
-moment.locale(navigator.userLanguage || navigator.language)
 
 const mainContent = document.querySelector('#content-main')
 let pageId: string | null = null
@@ -87,7 +84,7 @@ const componentMappings = {
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
   'admin-page': <AdminPage crowi={crowi} />,
   'help-portal': <HelpPortalModal />,
-  'navigation-drawer-opener': <NavigationDrawerOpener crowi={crowi} />,
+  'navigation-drawer-opener': <NavigationDrawerContainer crowi={crowi} />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {
