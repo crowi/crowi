@@ -17,98 +17,15 @@
       display: flex;
       flex-direction: column;
       width: 100%;
-
-      .v2-container-backdrop {
-        display: none;
-        height: 100vh;
-        width: 100vw;
-        transition: background-color .2s;
-        z-index: 1100;
-        position: absolute;
-      }
     }
 
     // TODO: move those kind of logic to components and styled-component
     // sm menu opened
     @include media-breakpoint-down(sm) {
-      &.side-menu-open {
+      &.navigation-drawer-open {
         max-height: 100vh;
         overflow: hidden;
-
-        .v2-container {
-          .v2-container-backdrop {
-            display: block;
-            background-color: rgba(0, 0, 0, .1);
-          }
-        }
-
-        .v2-crowi-global-menu-container {
-          display: block;
-          width: 300px;
-          position: fixed;
-          top: 3px;
-          bottom: 0;
-          z-index: 1200;
-          box-shadow: 0 0 20px 5px rgba(0,0,0,.1);
-          background: #fcfcfc;
-          transform: translateX(-100%);
-          animation: slide-in .2s forwards;
-          @keyframes slide-in {
-            100% {
-              transform: translateX(0%);
-            }
-          }
-        }
-
-        .v2-crowi-global-menu {
-          height: 100%;
-          overflow-y: scroll;
-
-          .menu-user-profile {
-            padding: 1em;
-
-            .picture {
-              width: 48px;
-              height: 48px;
-            }
-
-            .menu-user-names {
-              padding-top: 1em;
-              padding-bottom: 1em;
-
-              .menu-user-name {
-                font-size: 1.2em;
-                font-weight: 600;
-              }
-              .menu-user-username {
-                font-size: .9em;
-                color: #777;
-              }
-            }
-          }
-
-          .menu-list {
-            position: relative;
-            width: calc(100% - 1em);
-            padding-left: 1em;
-
-            li {
-              list-style: none;
-              padding-bottom: .4em;
-
-              &.divider {
-                border-bottom: solid 1px #f0f0f0;
-                margin-bottom: .4em;
-              }
-            }
-          }
-        }
       }
-    }
-
-    // not opened
-    .v2-crowi-global-menu-container {
-      display: none;
     }
 
     .v2-crowi-header { // {{{
@@ -119,7 +36,7 @@
       color: #333;
       padding: 0;
 
-      .navbar-brand {
+      .crowi-navbar-brand {
         @include media-breakpoint-down(sm) {
           display: none;
         }
@@ -132,12 +49,11 @@
       @include media-breakpoint-down(sm) {
         .crowi-menu-sm { // for moblie
           display: flex;
-          padding-top: 0.33125rem;
-          padding-bottom: 0.33125rem;
+          align-items: center;
           margin-left: 1rem;
           margin-right: 1rem;
-          font-size: 1.1rem;
-          a {
+          > a {
+            font-size: 1.1rem;
             cursor: pointer;
           }
         }
@@ -154,14 +70,13 @@
         }
       }
 
-        .navbar-brand {
-          margin-left: 1rem;
-          font-weight: 600;
-          img {
-            display: inline;
-            margin-right: 8px;
-          }
+      .crowi-navbar-brand {
+        margin-left: 1rem;
+        font-weight: 600;
+        img {
+          margin-right: 8px;
         }
+      }
 
       .navbar-nav {
         padding-left: 1rem;

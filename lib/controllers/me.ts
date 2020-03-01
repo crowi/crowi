@@ -320,7 +320,11 @@ export default (crowi: Crowi, app: Express) => {
     const { user: userData } = req
     const callback = req.session.callback || '/me'
 
-    githubAuth.handleCallback(req, res, next)(async function(err, tokenInfo) {
+    githubAuth.handleCallback(
+      req,
+      res,
+      next,
+    )(async function(err, tokenInfo) {
       debug('err', err)
       if (err) {
         req.flash('warningMessage.auth.github', err.message)

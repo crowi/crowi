@@ -35,7 +35,7 @@ export default class PageAlerts extends React.Component<Props, State> {
       const { pageId, crowi } = this.props
       const user = crowi.getUser() || {}
 
-      if (target.username != user.name && pageId == data.page._id) {
+      if (target.username != user.username && pageId == data.page._id) {
         this.setState({
           alertAppeared: true,
           message: 'edit',
