@@ -26,7 +26,7 @@ import {
   appendPositivePhraseQuery,
   appendNegativePhraseQuery,
   appendSearchQuery,
-} from 'server/service/elasticsearch/query'
+} from 'server/util/elasticsearch/query'
 import { GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER } from 'server/models/page'
 
 describe('createBaseQuery', () => {
