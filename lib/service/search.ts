@@ -7,7 +7,7 @@ import fs from 'fs'
 import { EventEmitter } from 'events'
 import Crowi from 'server/crowi'
 import { NodesInfoResponse, CatIndicesResponse, IndicesExistsAliasResponse, CatAliasesResponse, BulkResponse, SearchResponse } from 'server/types/elasticsearch'
-import { Query, SearchWithBody, FunctionScoreQueryParams } from 'server/service/elasticsearch/query'
+import { Query, SearchWithBody, FunctionScoreQueryParams } from 'server/util/elasticsearch/query'
 import { parseQuery } from 'server/service/query'
 import { TYPES } from 'server/models/page'
 
