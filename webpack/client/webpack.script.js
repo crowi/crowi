@@ -5,6 +5,8 @@ const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin')
 
 const ROOT = path.join(__dirname, '/../../')
 
+require('dotenv').config({ path: path.join(ROOT, '.env') })
+
 const config = {
   mode: process.env.NODE_ENV,
   entry: {
@@ -61,6 +63,7 @@ const config = {
       { from: path.join(ROOT, 'node_modules/reveal.js/plugin'), to: path.join(ROOT, 'public/js/reveal/plugin/') },
     ]),
     new ForkTsCheckerWebpackPlugin(),
+    new webpack.EnvironmentPlugin(['NODE_ENV', 'SENTRY_DSN']),
   ],
   stats: {
     colors: true,

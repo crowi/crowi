@@ -76,6 +76,7 @@ or please write `.env`.
 
 Optional:
 
+* `SENTRY_DSN`: Set Setnry's DSN. You have to create your own [Sentry account](https://sentry.io/) before set this env.
 * `MATHJAX`: If set `1`, enable MathJax feature.
 * `PLANTUML_URI`: If set the url of PlantUML server, then enable PlantUML feature. e.g. `http://localhost:18080`.
 * `ENABLE_DNSCACHE`: If set `true`, Use internal DNS cache for crowi in Linux VMs. (See also: [#407](https://github.com/crowi/crowi/pull/407))

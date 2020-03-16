@@ -1,6 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 
+import * as Sentry from '@sentry/browser'
+
 import i18n from './i18n'
 
 import Crowi from './util/Crowi'
@@ -31,6 +33,13 @@ import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
 
 import hydrateComponents from './hydrateComponents'
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    environment: process.env.NODE_ENV,
+    dsn: process.env.SENTRY_DSN,
+  })
+}
 
 i18n()
 
