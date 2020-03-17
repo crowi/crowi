@@ -102,13 +102,15 @@ class AccessLogModal extends React.Component<Props, State> {
       lastAccessedAt,
     } = accesses
     const index = i + 1
-    const { name: platformName, os } = platform.parse ? platform.parse(userAgent) : { name: '', os: '' }
+    const { name: platformName, os } = platform?.parse(userAgent) || { name: '', os: { family: '', version: '' } }
     const date = formatToLocaleString(lastAccessedAt)
     return (
       <tr key={i}>
         <td>{index}</td>
         <td>{platformName}</td>
-        <td>{os}</td>
+        <td>
+          {os?.family} {os?.version}
+        </td>
         <td>{remoteAddress}</td>
         <td>{date}</td>
       </tr>
