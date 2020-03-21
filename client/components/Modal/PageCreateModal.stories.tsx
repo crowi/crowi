@@ -4,9 +4,9 @@ import Crowi from '../../utils/Crowi'
 import i18n from '../../i18n'
 import { createAppContext } from 'client/fixtures/createAppContext'
 
-i18n()
-
 const appContext = createAppContext({ user: { username: 'storybook ' } })
+
+i18n()
 
 const crowi = new Crowi(appContext, window)
 

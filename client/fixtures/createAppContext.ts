@@ -5,7 +5,7 @@ type DeepPartial<T> = {
 }
 
 export const createAppContext = (appContext: DeepPartial<AppContext> = {}) =>
-  ({
+  (window.APP_CONTEXT = {
     title: '',
     path: '',
     url: '',
