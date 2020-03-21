@@ -5,7 +5,7 @@ import CommentBody from './CommentBody'
 import * as styles from 'client/constants/styles'
 import { CommonProps } from 'client/types/component'
 import Crowi from 'client/utils/Crowi'
-import { formatToLocaleString, formatDistanceFromNow } from 'client/util/formatDate'
+import { formatToLocaleString, formatDistanceFromNow } from 'client/utils/formatDate'
 
 type PageCommentContainerProps = Props & {
   isOwn: boolean

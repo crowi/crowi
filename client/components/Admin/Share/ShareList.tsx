@@ -4,7 +4,7 @@ import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
 import Crowi from 'client/utils/Crowi'
 import { Share } from 'client/types/crowi'
-import { formatToLocaleString } from 'client/util/formatDate'
+import { formatToLocaleString } from 'client/utils/formatDate'
 
 interface Props extends WithTranslation {
   crowi: Crowi
