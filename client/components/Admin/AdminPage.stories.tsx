@@ -4,9 +4,9 @@ import Crowi from 'client/utils/Crowi'
 import AdminPage from './AdminPage'
 import { createAppContext } from 'client/fixtures/createAppContext'
 
-i18n()
-
 const appContext = createAppContext()
+
+i18n()
 
 const crowi = new Crowi(appContext, window)
 
