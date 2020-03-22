@@ -2,7 +2,7 @@ import Crowi from 'server/crowi'
 import { DeleteWriteOpResultObject } from 'mongodb'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
-import ActivityDefine from '../util/activityDefine'
+import ActivityDefine from '../utils/activityDefine'
 
 export interface ActivityDocument extends Document {
   _id: Types.ObjectId

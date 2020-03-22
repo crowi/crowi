@@ -2,7 +2,7 @@ import Debug from 'debug'
 import auth from './auth'
 import passport from 'passport'
 import { Strategy as GitHubStrategy } from 'passport-github'
-import { getContinueUrl } from '../util/url'
+import { getContinueUrl } from './url'
 import Octokit from '@octokit/rest'
 
 const debug = Debug('crowi:lib:githubAuth')

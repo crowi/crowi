@@ -3,7 +3,7 @@ import { withTranslation, WithTranslation } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import { Button, Container, Row, Col, Label, Input, CustomInput, Modal, ModalHeader, ModalBody, ModalFooter } from 'reactstrap'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { Share } from 'client/types/crowi'
 
 interface Props extends WithTranslation {

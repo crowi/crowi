@@ -6,6 +6,7 @@ import passport from 'passport'
 import session from 'express-session'
 import flash from 'connect-flash'
 import cons from 'consolidate'
+import expressReactViews from 'express-react-views'
 import Crowi from 'server/crowi'
 
 export default (crowi: Crowi, app: Express) => {
@@ -51,17 +52,34 @@ export default (crowi: Crowi, app: Express) => {
       language: User.getLanguageLabels(),
       registrationMode: Config.getRegistrationModeLabels(),
     }
-    res.locals.local_config = Config.getLocalconfig(config) // config for browser context
 
     next()
+  })
+
+  const reactViews = expressReactViews.createEngine({
+    babel:
+      env === 'development'
+        ? {
+            presets: [['@babel/env', { targets: { node: 'current' } }], '@babel/react'],
+            plugins: ['@babel/proposal-optional-chaining'],
+          }
+        : {
+            presets: [],
+            plugins: [],
+          },
+    transformViews: env === 'development',
   })
 
   app.set('port', crowi.port)
   app.use(express.static(crowi.publicDir))
   app.engine('html', cons.swig)
+  app.engine('js', reactViews)
+  app.engine('tsx', reactViews)
   app.set('view cache', false)
   app.set('view engine', 'html')
-  app.set('views', crowi.viewsDir)
+  app.set('view engine', 'js')
+  app.set('view engine', 'tsx')
+  app.set('views', crowi.viewsDirs)
   app.use(methodOverride())
   app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }))
   app.use(bodyParser.json({ limit: '50mb' }))
@@ -82,6 +100,4 @@ export default (crowi: Crowi, app: Express) => {
   app.use(middlewares.LoginChecker)
 
   app.use(middlewares.I18next)
-  app.use(middlewares.ClientContext)
-  app.use(middlewares.SsrContext)
 }

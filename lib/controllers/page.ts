@@ -1,8 +1,8 @@
 import { Types } from 'mongoose'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import ApiResponse from '../util/apiResponse'
-import { decodeSpace } from '../util/path'
+import ApiResponse from '../utils/apiResponse'
+import { decodeSpace } from '../utils/path'
 import { BookmarkDocument } from 'server/models/bookmark'
 import { PageDocument } from 'server/models/page'
 import { RevisionDocument } from 'server/models/revision'
@@ -98,7 +98,7 @@ export default (crowi: Crowi) => {
       }
 
       pagerOptions.length = pageList.length
-      res.render('page_list', {
+      res.render('page_list.html', {
         path,
         page: portalPage || null,
         pages: pageList,
@@ -141,7 +141,7 @@ export default (crowi: Crowi) => {
 
         renderVars.pager = generatePager(pagerOptions)
         renderVars.pages = pageList
-        res.render('page_list', renderVars)
+        res.render('page_list.html', renderVars)
       })
       .catch(function(err) {
         debug('Error on rendering deletedPageListShow', err)
@@ -151,7 +151,7 @@ export default (crowi: Crowi) => {
   async function renderPage(pageData, req, res) {
     // create page
     if (!pageData) {
-      return res.render('page', {
+      return res.render('page.html', {
         author: {},
         page: false,
       })
@@ -169,9 +169,9 @@ export default (crowi: Crowi) => {
       revision: pageData.revision || {},
       author: pageData.revision.author || false,
     }
-    const defaultPageTeamplate = 'page'
+    const defaultPageTeamplate = 'page.html'
 
-    res.render(req.query.presentation ? 'page_presentation' : defaultPageTeamplate, renderVars)
+    res.render(req.query.presentation ? 'page_presentation.html' : defaultPageTeamplate, renderVars)
   }
 
   actions.userPageShow = async function(req, res) {
@@ -209,7 +209,7 @@ export default (crowi: Crowi) => {
       debug('Error while loading user page.', username)
     }
 
-    return res.render('user_page', {
+    return res.render('user_page.html', {
       username,
       bookmarkList,
       createdList,
@@ -399,7 +399,7 @@ export default (crowi: Crowi) => {
         renderVars.pager = generatePager(pagerOptions)
         renderVars.bookmarks = bookmarks
 
-        return res.render('user/bookmarks', renderVars)
+        return res.render('user/bookmarks.html', renderVars)
       })
       .catch(function(err) {
         debug('Error on rendereing bookmark', err)
@@ -436,7 +436,7 @@ export default (crowi: Crowi) => {
         renderVars.pager = generatePager(pagerOptions)
         renderVars.pages = pages
 
-        return res.render('user/recent-create', renderVars)
+        return res.render('user/recent-create.html', renderVars)
       })
       .catch(function(err) {
         debug('Error on rendereing recent-created', err)

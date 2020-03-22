@@ -3,7 +3,7 @@
 import React from 'react'
 import ListView from './Notification/ListView'
 import Pager from './Notification/Pager'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { Notification } from 'client/types/crowi'
 
 interface Props {

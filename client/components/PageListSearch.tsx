@@ -4,7 +4,7 @@ import React from 'react'
 
 import queryString from 'query-string'
 import SearchResult from './SearchPage/SearchResult'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 interface Props {
   crowi: Crowi

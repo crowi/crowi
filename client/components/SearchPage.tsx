@@ -6,7 +6,7 @@ import queryString from 'query-string'
 import Emitter from '../emitter'
 import SearchToolbar from 'components/SearchPage/SearchToolbar'
 import SearchResult from './SearchPage/SearchResult'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { Page } from 'client/types/crowi'
 
 interface Props {

@@ -3,9 +3,9 @@ import ReactDOM from 'react-dom'
 
 import i18n from './i18n'
 
-import Crowi from './util/Crowi'
-import CrowiRenderer from './util/CrowiRenderer'
-import CrowiAuth from './util/CrowiAuth'
+import Crowi from './utils/Crowi'
+import CrowiRenderer from './utils/CrowiRenderer'
+import CrowiAuth from './utils/CrowiAuth'
 import Emitter from './emitter'
 
 import HeaderSearchBox from 'components/HeaderSearchBox'
@@ -30,8 +30,6 @@ import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
 
-import hydrateComponents from './hydrateComponents'
-
 i18n()
 
 const mainContent = document.querySelector('#content-main')
@@ -49,14 +47,10 @@ if (mainContent !== null) {
   }
 }
 
-const getTextContent = (element: HTMLElement | null) => (element ? element.textContent : null)
-
-const { user = {} } = JSON.parse(getTextContent(document.getElementById('user-context-hydrate')) || '{}')
-const csrfToken = $('#content-main').data('csrftoken') || $('#admin-page').data('csrftoken')
 // FIXME
-const crowi = new Crowi({ user, csrfToken }, window)
+const crowi = new Crowi(window.APP_CONTEXT, window)
 window.crowi = crowi
-crowi.setConfig(JSON.parse(getTextContent(document.getElementById('crowi-context-hydrate')) || '{}'))
+
 const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
 if (!isSharePage) {
   crowi.fetchUsers()
@@ -99,8 +93,6 @@ Object.entries(componentMappings).forEach(([key, component]) => {
     ReactDOM.render(component, elem)
   }
 })
-
-hydrateComponents()
 
 // うわーもうー
 $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {

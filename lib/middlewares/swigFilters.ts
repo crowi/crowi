@@ -3,6 +3,7 @@ import Crowi from 'server/crowi'
 import swig from 'swig'
 import swigFilters from 'swig/lib/filters'
 import path2name from 'common/functions/path2name'
+import { picture } from 'server/utils/view'
 
 export default (crowi: Crowi, app: Express) => {
   return (req, res, next) => {
@@ -63,17 +64,7 @@ export default (crowi: Crowi, app: Express) => {
       return string.replace(/[\n]+#/g, '\n\n\n#').replace(/\s(https?.+(jpe?g|png|gif))\s/, '\n\n\n![]($1)\n\n\n')
     })
 
-    swig.setFilter('picture', function(user) {
-      if (!user) {
-        return ''
-      }
-
-      if (user.image && user.image != '/images/userpicture.png') {
-        return user.image
-      } else {
-        return '/images/userpicture.png'
-      }
-    })
+    swig.setFilter('picture', picture)
 
     next()
   }

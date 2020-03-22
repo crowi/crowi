@@ -615,7 +615,7 @@ $(function() {
     var $likeCount = $('#like-count')
     $likeButton.click(function() {
       var liked = $likeButton.data('liked')
-      var token = $likeButton.data('csrftoken')
+      var token = window.APP_CONTEXT.csrfToken
       if (!liked) {
         $.post('/_api/likes.add', { _csrf: token, page_id: pageId }, function(res) {
           if (res.ok) {
