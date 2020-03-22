@@ -36,14 +36,9 @@ export default class Template {
 
   getUser() {
     // FIXME
-    const user = window.crowi.getUser()
-    const username = user ? user.name : null
+    const { username } = window.crowi.getUser()
 
-    if (!username) {
-      return ''
-    }
-
-    return `/user/${username}`
+    return username ? `/user/${username}` : ''
   }
 
   parseTemplateString(templateString: string) {

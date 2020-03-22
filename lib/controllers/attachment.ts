@@ -2,8 +2,8 @@ import { Express } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import fs from 'fs'
-import FileUploader from '../util/fileUploader'
-import ApiResponse from '../util/apiResponse'
+import FileUploader from '../utils/fileUploader'
+import ApiResponse from '../utils/apiResponse'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routs:attachment')

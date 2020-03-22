@@ -162,15 +162,8 @@
 </body>
 {% endblock html_body %}
 
-<script type="application/json" id="crowi-context-hydrate">
-  {{ local_config|json|safe }}
-</script>
-<script type="application/json" id="user-context-hydrate">
-  {{ user_context|json|safe }}
-</script>
-<script type="application/json" id="ssr-context-hydrate">
-{{ ssr_context|json|safe }}
-</script>
+
+<script>window.APP_CONTEXT = {{ appContext() | json }}</script>
 
 <script src="{{ assets('/js/app.js') }}"></script>
 <script src="{{ assets('/js/crowi.js') }}"></script>

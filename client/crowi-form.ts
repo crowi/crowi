@@ -450,8 +450,8 @@ $(function() {
     }
 
     // if files upload is set
-    var config = crowi.getConfig()
-    if (config.upload && config.upload.file) {
+    var { upload } = crowi.getContext()
+    if (upload.file) {
       attachmentOption.allowedTypes = '*'
     }
 

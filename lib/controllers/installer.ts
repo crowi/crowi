@@ -7,7 +7,7 @@ export default (crowi: Crowi) => {
   const actions = {} as any
 
   actions.index = function(req, res) {
-    return res.render('installer')
+    return res.render('installer.html')
   }
 
   actions.createAdmin = function(req, res) {
@@ -24,7 +24,7 @@ export default (crowi: Crowi) => {
         if (err) {
           req.form.errors.push('管理ユーザーの作成に失敗しました。' + err.message)
           // TODO
-          return res.render('installer')
+          return res.render('installer.html')
         }
 
         userData.makeAdmin(async function(err, userData) {
@@ -43,7 +43,7 @@ export default (crowi: Crowi) => {
         })
       })
     } else {
-      return res.render('installer')
+      return res.render('installer.html')
     }
   }
 

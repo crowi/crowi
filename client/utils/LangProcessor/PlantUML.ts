@@ -1,7 +1,7 @@
 import CrowiUtil from 'client/crowi'
 import plantuml from 'plantuml-encoder'
 import * as crypto from 'crypto'
-import crowi from 'client/util/Crowi'
+import crowi from 'client/utils/Crowi'
 
 export default class PlantUML {
   crowi: crowi
@@ -17,9 +17,9 @@ export default class PlantUML {
   }
 
   process(code: string, lang: string) {
-    const { env } = this.crowi.getConfig()
+    const { env } = this.crowi.getContext()
 
-    if (!env || !env.PLANTUML_URI) {
+    if (!env.PLANTUML_URI) {
       return `<pre class="wiki-code"><code>${CrowiUtil.escape(code)}\n</code></pre>`
     }
 

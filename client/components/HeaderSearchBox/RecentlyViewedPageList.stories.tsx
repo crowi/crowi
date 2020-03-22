@@ -1,8 +1,11 @@
 import React from 'react'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import RecentlyViewedPageList from './RecentlyViewedPageList'
+import { createAppContext } from 'client/fixtures/createAppContext'
 
-const crowi = new Crowi({ user: {}, csrfToken: '' }, window)
+const appContext = createAppContext()
+
+const crowi = new Crowi(appContext, window)
 
 export default { title: 'HeaderSearchBox/RecentlyViewedPageList' }
 

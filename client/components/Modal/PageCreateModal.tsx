@@ -1,11 +1,11 @@
 import React, { useState, FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
 import { Button, Form, Input, Label, Modal, ModalBody, ModalHeader, ModalProps } from 'reactstrap'
-import format from 'client/util/formatDate'
+import format from 'client/utils/formatDate'
 import styled from 'styled-components'
 
 import { dark, gray, light } from '../../constants/colors'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 const parentPath = (path: string) => {
   if (path === '/') {

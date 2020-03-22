@@ -1,4 +1,4 @@
-import { getContinueUrl } from 'server/util/url'
+import { getContinueUrl } from 'server/utils/url'
 
 describe('Url Util', function() {
   const req = url => ({ body: { continue: url } })

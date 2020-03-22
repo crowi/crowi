@@ -1,11 +1,14 @@
 import React from 'react'
 import PageCreateModal from './PageCreateModal'
-import Crowi from '../../util/Crowi'
+import Crowi from '../../utils/Crowi'
 import i18n from '../../i18n'
+import { createAppContext } from 'client/fixtures/createAppContext'
+
+const appContext = createAppContext({ user: { username: 'storybook ' } })
 
 i18n()
 
-const crowi = new Crowi({ user: { username: 'storybook' }, csrfToken: '' }, window)
+const crowi = new Crowi(appContext, window)
 
 export default { title: 'Modal/PageCreateModal' }
 

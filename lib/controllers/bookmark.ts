@@ -1,7 +1,7 @@
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import ApiResponse from '../util/apiResponse'
-import ApiPaginate from '../util/apiPaginate'
+import ApiResponse from '../utils/apiResponse'
+import ApiPaginate from '../utils/apiPaginate'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:bookmark')

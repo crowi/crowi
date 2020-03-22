@@ -13,9 +13,9 @@ export default class Mathjax {
 
     this.mathJaxConfigured = false
 
-    const { env } = crowi.getConfig()
+    const { env } = crowi.getContext()
 
-    if (env && env.MATHJAX) {
+    if (env.MATHJAX) {
       this.mathJaxConfigured = true
 
       if (crowi.window.MathJax) {

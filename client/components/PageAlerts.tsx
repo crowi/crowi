@@ -1,6 +1,6 @@
 import React from 'react'
 import PageAlert from './PageAlerts/PageAlert'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { User, Page } from 'client/types/crowi'
 
 interface Props {
@@ -33,7 +33,7 @@ export default class PageAlerts extends React.Component<Props, State> {
     socket.on('page edited', (data: { user: User; page: Page }) => {
       const target = data.user
       const { pageId, crowi } = this.props
-      const user = crowi.getUser() || {}
+      const user = crowi.getUser()
 
       if (target.username != user.username && pageId == data.page._id) {
         this.setState({

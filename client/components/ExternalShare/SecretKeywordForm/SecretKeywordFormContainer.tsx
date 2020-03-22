@@ -4,7 +4,7 @@ import { withTranslation, WithTranslation } from 'react-i18next'
 import { Button, InputGroup, InputGroupAddon, InputGroupText, Col, Input, FormGroup, FormFeedback } from 'reactstrap'
 
 import Icon from 'components/Common/Icon'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 interface Props extends WithTranslation {
   crowi: Crowi
@@ -56,7 +56,7 @@ class SecretKeywordFormContainer extends React.Component<Props, State> {
   async checkSecretKeyword() {
     const { secretKeyword } = this.state
     const shareId = $('#secret-keyword-form-container').data('share-id')
-    const _csrf = $('#secret-keyword-form-container').data('csrftoken')
+    const _csrf = window.APP_CONTEXT.csrfToken
     try {
       const { hasAccessAuthority = false } = await this.props.crowi.apiPost('/shares/secretKeyword.check', {
         _csrf,

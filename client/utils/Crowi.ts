@@ -5,37 +5,12 @@
 import axios from 'axios'
 import io from 'socket.io-client'
 import { User } from 'client/types/crowi'
+import { AppContext } from 'server/types/appContext'
 
-export interface Me {
-  id?: string
-  name?: string
-  username?: string
-  image?: string
-}
-
-interface Context {
-  user: Me
-  csrfToken: string
-}
+export type Me = AppContext['user']
 
 export default class Crowi {
-  public context: Context
-
-  public config: {
-    crowi?: {
-      title?: string
-    }
-    upload?: {
-      image: boolean
-      file: boolean
-    }
-    env?: {
-      PLANTUML_URI: string | null
-      MATHJAX: string | null
-    }
-  }
-
-  public csrfToken: string
+  public context: AppContext
 
   public window: Window
 
@@ -44,8 +19,6 @@ export default class Crowi {
   public document: Document
 
   public localStorage: Storage
-
-  public user?: Me
 
   public users: User[]
 
@@ -57,11 +30,8 @@ export default class Crowi {
 
   public socket: any
 
-  constructor(context: Context, window: Window) {
+  constructor(context: AppContext, window: Window) {
     this.context = context
-    this.config = {}
-    this.csrfToken = context.csrfToken
-    this.setUser(context.user)
 
     this.window = window
     this.location = window.location || {}
@@ -89,21 +59,12 @@ export default class Crowi {
     return this.context
   }
 
-  setConfig(config: {}) {
-    this.config = config
-  }
-
   getConfig() {
-    return this.config
-  }
-
-  setUser(user?: Me) {
-    const { id = '', name = '', username = '', image = '' } = user || {}
-    this.user = { id, name, username, image }
+    return this.context.config
   }
 
   getUser() {
-    return this.user
+    return this.context.user
   }
 
   getWebSocket() {
@@ -212,7 +173,7 @@ export default class Crowi {
 
   async apiPost(path: string, data: { _csrf?: string; [key: string]: any } = {}) {
     if (!data._csrf) {
-      data._csrf = this.csrfToken
+      data._csrf = this.context.csrfToken
     }
 
     return this.apiRequest('post', path, { data })

@@ -2,7 +2,7 @@ import React, { FC, useState, useEffect } from 'react'
 import styled from 'styled-components'
 import CommentLists from './CommentLists'
 import CommentForm from './CommentForm'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { CommonProps } from 'client/types/component'
 import { Comment as CommentType } from 'client/types/crowi'
 

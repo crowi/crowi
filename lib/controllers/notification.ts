@@ -1,5 +1,5 @@
 import Crowi from 'server/crowi'
-import ApiResponse from '../util/apiResponse'
+import ApiResponse from '../utils/apiResponse'
 
 export default (crowi: Crowi) => {
   // const debug = Debug('crowi:routes:notification')
@@ -8,7 +8,7 @@ export default (crowi: Crowi) => {
   actions.api = {} as any
 
   actions.notificationPage = function(req, res) {
-    return res.render('notification', {})
+    return res.render('notification.html', {})
   }
 
   /**
