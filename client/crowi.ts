@@ -244,25 +244,6 @@ $(function() {
     return false
   })
 
-  // delete
-  $('#delete-page-form').submit(function(e) {
-    $.ajax({
-      type: 'POST',
-      url: '/_api/pages.remove',
-      data: $('#delete-page-form').serialize(),
-      dataType: 'json',
-    }).done(function(res) {
-      if (!res.ok) {
-        $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
-        $('#delete-errors').addClass('alert-danger')
-      } else {
-        var page = res.page
-        top.location.href = page.path
-      }
-    })
-
-    return false
-  })
   $('#revert-delete-page-form').submit(function(e) {
     $.ajax({
       type: 'POST',
