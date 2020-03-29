@@ -29,6 +29,7 @@ import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
+import PageDeletionModal from 'client/components/Modal/PageDeletionModal/PageDeletionModal'
 
 i18n()
 
@@ -85,6 +86,7 @@ const componentMappings = {
   'admin-page': <AdminPage crowi={crowi} />,
   'help-portal': <HelpPortalModal />,
   'navigation-drawer-opener': <NavigationDrawerContainer crowi={crowi} />,
+  'react-page-deletion-modal': <PageDeletionModal crowi={crowi} pageId={pageId} revisionId={revisionId} />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {
