@@ -41,7 +41,7 @@ const PageDeletionModal: FC<Props> = ({ crowi, pageId, revisionId }) => {
   }, [handleOpen])
 
   return (
-    <Modal isOpen={show} toggle={handleClose} size="md">
+    <Modal isOpen={show} toggle={handleClose} size="md" fade={false}>
       <Form role="form" onSubmit={handleSubmit}>
         <ModalHeader toggle={handleClose}>
           <Icon name="trashCanOutline" /> Delete Page
