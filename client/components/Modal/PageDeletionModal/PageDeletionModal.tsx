@@ -11,6 +11,7 @@ type Props = {
 
 const PageDeletionModal: FC<Props> = ({ crowi, pageId, revisionId }) => {
   const [show, setShow] = useState(false)
+  const [errorMessage, setErrorMessage] = useState(null)
 
   const handleOpen = useCallback(() => {
     setShow(true)
@@ -18,6 +19,7 @@ const PageDeletionModal: FC<Props> = ({ crowi, pageId, revisionId }) => {
 
   const handleClose = useCallback(() => {
     setShow(false)
+    setErrorMessage(null)
   }, [setShow])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -31,8 +33,8 @@ const PageDeletionModal: FC<Props> = ({ crowi, pageId, revisionId }) => {
         revision_id: revisionId,
       })
       top.location.href = res.page.path
-    } catch (e) {
-      console.log(e)
+    } catch (err) {
+      setErrorMessage(err.message)
     }
   }
 
@@ -59,6 +61,13 @@ const PageDeletionModal: FC<Props> = ({ crowi, pageId, revisionId }) => {
           </FormGroup>
         </ModalBody>
         <ModalFooter>
+          {errorMessage && (
+            <p className="mr-auto">
+              <small className="alert-danger">
+                <Icon name="alert" /> {errorMessage}
+              </small>
+            </p>
+          )}
           <Button className="btn btn-danger">Delete!</Button>
         </ModalFooter>
       </Form>
