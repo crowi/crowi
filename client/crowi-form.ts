@@ -223,7 +223,7 @@ $(function() {
         const isBlankLine = !currentLine?.text
         $target.selection('replace', {
           text:
-            `${isBlankLine ? '\n' : ''}    ` +
+            isBlankLine ? '\n' : '    ' +
             $target
               .selection()
               .split('\n')
