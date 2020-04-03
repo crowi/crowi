@@ -222,12 +222,13 @@ $(function() {
         // indent
         const isBlankLine = !currentLine?.text
         $target.selection('replace', {
-          text:
-            isBlankLine ? '\n' : '    ' +
-            $target
-              .selection()
-              .split('\n')
-              .join('\n    '),
+          text: isBlankLine
+            ? '\n'
+            : '    ' +
+              $target
+                .selection()
+                .split('\n')
+                .join('\n    '),
           mode: 'before',
         })
         if (currentLine) {
