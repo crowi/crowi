@@ -1,4 +1,4 @@
-import express, { Express } from 'express'
+import express, { Express, Request, Response } from 'express'
 import bodyParser from 'body-parser'
 import cookieParser from 'cookie-parser'
 import methodOverride from 'method-override'
@@ -14,7 +14,7 @@ export default (crowi: Crowi, app: Express) => {
   const env = crowi.node_env
   const middlewares = crowi.middlewares
 
-  app.use(function(req: any, res, next) {
+  app.use(function(req: Request, res: Response, next) {
     const now = new Date()
     const config = crowi.getConfig()
     const tzoffset = -(config.crowi['app:timezone'] || 9) * 60 // for date

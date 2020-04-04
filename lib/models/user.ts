@@ -38,7 +38,7 @@ export interface UserDocument extends Document {
   setPassword(password: string): this
   isEmailSet(): boolean
   updatePassword(password: string, callback: (err: Error, userData: UserDocument) => void): any
-  updateApiToken(callback: (err: Error, userData: UserDocument) => void): any
+  updateApiToken(): Promise<UserDocument>
   updateImage(image, callback: (err: Error, userData: UserDocument) => void): any
   updateEmail(email: string): any
   deleteImage(callback): any

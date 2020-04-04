@@ -1,10 +1,10 @@
 import Crowi from 'server/crowi'
-import { Express } from 'express'
+import { Express, Request, Response } from 'express'
 import * as Icons from '@mdi/js'
 import renderIcon from 'common/functions/renderIcon'
 import { parentPath, isUserPageList, isUserPage, isTopPage, isTrashPage, userPageRoot, getAppContext } from './view'
 
-export default (crowi: Crowi, app: Express, req, res) => {
+export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   // const debug = Debug('crowi:lib:swigFunctions')
   const Page = crowi.model('Page')
   const Config = crowi.model('Config')
