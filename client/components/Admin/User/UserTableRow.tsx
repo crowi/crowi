@@ -3,7 +3,7 @@ import { Badge } from 'reactstrap'
 import UserPicture from 'components/User/UserPicture'
 import UserStatusBadge from 'components/User/UserStatusBadge'
 import UserEditDropdown from './UserEditDropdown'
-import format from 'client/util/formatDate'
+import format from 'client/utils/formatDate'
 
 interface Props {
   me: any

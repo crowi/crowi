@@ -16,7 +16,10 @@ function useForm(invite) {
     clearForm()
   }
 
-  return [{ emails, sendEmail }, { setEmails, setSendEmail, onSubmit }] as const
+  return [
+    { emails, sendEmail },
+    { setEmails, setSendEmail, onSubmit },
+  ] as const
 }
 
 interface Props {

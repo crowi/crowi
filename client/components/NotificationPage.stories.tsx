@@ -1,9 +1,12 @@
 import React from 'react'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import NotificationPage from './NotificationPage'
+import { createAppContext } from 'client/fixtures/createAppContext'
 
 export default { title: 'NotificationPage' }
 
-const crowi = new Crowi({ user: {}, csrfToken: '' }, window)
+const appContext = createAppContext()
+
+const crowi = new Crowi(appContext, window)
 
 export const Default = () => <NotificationPage crowi={crowi} />

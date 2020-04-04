@@ -1,6 +1,6 @@
-import { Express } from 'express'
+import { Express, Request, Response } from 'express'
 import Crowi from 'server/crowi'
-import ApiResponse from '../util/apiResponse'
+import ApiResponse from '../utils/apiResponse'
 
 export default (crowi: Crowi, app: Express) => {
   const actions = {} as any
@@ -11,7 +11,7 @@ export default (crowi: Crowi, app: Express) => {
   /**
    * @api {get} /users.list Get user list
    */
-  api.get = function(req, res) {
+  api.get = function(req: Request, res: Response) {
     return res.json(ApiResponse.success({ version: crowi.version }))
   }
 

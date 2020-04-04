@@ -41,7 +41,6 @@ export interface ConfigModel extends Model<ConfigDocument> {
   githubLoginEnabled(config: Config): boolean
   hasSlackConfig(config: Config): boolean
   hasSlackToken(config: Config): boolean
-  getLocalconfig(config: Config): object
   migrate(): Promise<void>
 
   SECURITY_REGISTRATION_MODE_OPEN: string
@@ -296,31 +295,6 @@ export default (crowi: Crowi) => {
     }
 
     return true
-  }
-
-  configSchema.statics.getLocalconfig = function(config) {
-    const env = crowi.getEnv()
-
-    const localConfig = {
-      crowi: {
-        title: config.crowi['app:title'],
-        url: config.crowi['app:url'] || '',
-        auth: {
-          requireThirdPartyAuth: Config.isRequiredThirdPartyAuth(config),
-          disablePasswordAuth: Config.isDisabledPasswordAuth(config),
-        },
-      },
-      upload: {
-        image: Config.isUploadable(config),
-        file: Config.fileUploadEnabled(config),
-      },
-      env: {
-        PLANTUML_URI: env.PLANTUML_URI || null,
-        MATHJAX: env.MATHJAX || null,
-      },
-    }
-
-    return localConfig
   }
 
   configSchema.statics.migrate = async function() {

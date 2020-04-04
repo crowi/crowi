@@ -1,6 +1,6 @@
 import React from 'react'
 import Icon from 'components/Common/Icon'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 interface Props {
   crowi: Crowi

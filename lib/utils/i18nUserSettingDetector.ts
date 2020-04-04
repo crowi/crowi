@@ -17,7 +17,7 @@ export default {
     return lang
   },
 
-  cacheUserlanguage(req, res, lng, options) {
+  cacheUserlanguage(req: Request, res: Response, lng, options) {
     // nothing to do
   },
 }

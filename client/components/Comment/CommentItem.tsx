@@ -4,9 +4,8 @@ import UserPicture from 'components/User/UserPicture'
 import CommentBody from './CommentBody'
 import * as styles from 'client/constants/styles'
 import { CommonProps } from 'client/types/component'
-import Crowi from 'client/util/Crowi'
-import { formatToLocaleString, formatDistanceFromNow } from 'client/util/formatDate'
-import { Tooltip } from 'reactstrap'
+import Crowi from 'client/utils/Crowi'
+import { formatToLocaleString, formatDistanceFromNow } from 'client/utils/formatDate'
 
 type PageCommentContainerProps = Props & {
   isOwn: boolean
@@ -75,7 +74,7 @@ const CommentItem: FC<Props> = props => {
   const me = crowi.getUser() || {}
 
   return (
-    <PageCommentContainer isOwn={me.id === creator._id} isOld={revision !== revisionId} {...others}>
+    <PageCommentContainer isOwn={me._id === creator._id} isOld={revision !== revisionId} {...others}>
       <CommentUserPicture user={creator} />
       <PageComment>
         <CommentCreator>{creator.username}</CommentCreator>

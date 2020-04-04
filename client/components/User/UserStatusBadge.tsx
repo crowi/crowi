@@ -27,7 +27,7 @@ export const STATUS_LABELS = {
 
 interface Props {
   user: {
-    status: (typeof STATUS)[keyof typeof STATUS] // FIXME: I want `valueof` to replace this type with `valueof STATUS`
+    status: typeof STATUS[keyof typeof STATUS] // FIXME: I want `valueof` to replace this type with `valueof STATUS`
   }
 }
 

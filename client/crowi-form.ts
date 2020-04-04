@@ -175,17 +175,17 @@ $(function() {
     }
   }
 
-  var handleTabKey = function(event) {
+  const handleTabKey = (event: JQuery.KeyDownEvent) => {
     event.preventDefault()
 
-    var $target = $(event.target)
-    var currentLine = getCurrentLine(event)
-    var text = $target.val() as string
-    var pos = $target.selection('getPos')
+    const $target = $(event.target)
+    const currentLine = getCurrentLine(event)
+    const text = $target.val() as string
+    const pos = $target.selection('getPos')
 
     // When the user presses CTRL + TAB, it is a case to control the tab of the browser
     // (for Firefox 54 on Windows)
-    if (event.ctrlKey === true) {
+    if (event.ctrlKey) {
       return
     }
 
@@ -193,17 +193,17 @@ $(function() {
       $target.selection('setPos', { start: currentLine.start, end: currentLine.end - 1 })
     }
 
-    if (event.shiftKey === true) {
+    if (event.shiftKey) {
       if (currentLine && currentLine.text.charAt(0) === '|') {
         // prev cell in table
-        var newPos = text.lastIndexOf('|', pos.start - 1)
+        const newPos = text.lastIndexOf('|', pos.start - 1)
         if (newPos > 0) {
           $target.selection('setPos', { start: newPos - 1, end: newPos - 1 })
         }
       } else {
         // re indent
-        var reindentedText = $target.selection().replace(/^ {1,4}/gm, '')
-        var reindentedCount = $target.selection().length - reindentedText.length
+        const reindentedText = $target.selection().replace(/^ {1,4}/gm, '')
+        const reindentedCount = $target.selection().length - reindentedText.length
         $target.selection('replace', { text: reindentedText, mode: 'before' })
         if (currentLine) {
           $target.selection('setPos', { start: pos.start - reindentedCount, end: pos.start - reindentedCount })
@@ -212,7 +212,7 @@ $(function() {
     } else {
       if (currentLine && currentLine.text.charAt(0) === '|') {
         // next cell in table
-        var newPos = text.indexOf('|', pos.start + 1)
+        const newPos = text.indexOf('|', pos.start + 1)
         if (newPos < 0 || newPos === text.lastIndexOf('|', currentLine.end - 1)) {
           $target.selection('setPos', { start: currentLine.end, end: currentLine.end })
         } else {
@@ -220,13 +220,15 @@ $(function() {
         }
       } else {
         // indent
+        const isBlankLine = !currentLine?.text
         $target.selection('replace', {
-          text:
-            '    ' +
-            $target
-              .selection()
-              .split('\n')
-              .join('\n    '),
+          text: isBlankLine
+            ? '\n'
+            : '    ' +
+              $target
+                .selection()
+                .split('\n')
+                .join('\n    '),
           mode: 'before',
         })
         if (currentLine) {
@@ -450,8 +452,8 @@ $(function() {
     }
 
     // if files upload is set
-    var config = crowi.getConfig()
-    if (config.upload && config.upload.file) {
+    var { upload } = crowi.getContext()
+    if (upload.file) {
       attachmentOption.allowedTypes = '*'
     }
 

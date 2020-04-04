@@ -1,5 +1,7 @@
+import { Request, Response, NextFunction } from 'express'
+
 export default () => {
-  return (req, res, next) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     var config = req.config
 
     if (Object.keys(config.crowi).length === 1) {
