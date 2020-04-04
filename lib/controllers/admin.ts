@@ -1,3 +1,4 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import ApiResponse from '../utils/apiResponse'
@@ -79,18 +80,18 @@ export default (crowi: Crowi) => {
     return pager
   }
 
-  actions.index = function(req, res) {
+  actions.index = function(req: Request, res: Response) {
     return res.render(getPath(crowi, 'AdminPage'), { i18n: req.i18n, context: getAppContext(crowi, req) })
   }
 
-  actions.api.index = function(req, res) {
+  actions.api.index = function(req: Request, res: Response) {
     const searcher = crowi.getSearcher()
 
     return res.json(ApiResponse.success({ searchConfigured: !!searcher }))
   }
 
   actions.api.app = {}
-  actions.api.app.index = async function(req, res) {
+  actions.api.app.index = async function(req: Request, res: Response) {
     const config = crowi.getConfig()
     const settingForm = config.crowi
     const registrationMode = Config.getRegistrationModeLabels()
@@ -101,7 +102,7 @@ export default (crowi: Crowi) => {
 
   actions.notification = {}
   actions.api.notification = {}
-  actions.api.notification.index = async function(req, res) {
+  actions.api.notification.index = async function(req: Request, res: Response) {
     const config = crowi.getConfig()
     const UpdatePost = crowi.model('UpdatePost')
     const hasSlackConfig = Config.hasSlackConfig(config)
@@ -117,7 +118,7 @@ export default (crowi: Crowi) => {
     return res.json(ApiResponse.success({ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl }))
   }
 
-  actions.api.notification.slackSetting = async function(req, res) {
+  actions.api.notification.slackSetting = async function(req: Request, res: Response) {
     const { slackSetting } = req.form
 
     if (!req.form.isValid) {
@@ -132,7 +133,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.notification.slackAuth = async function(req, res) {
+  actions.notification.slackAuth = async function(req: Request, res: Response) {
     const code = req.query.code
 
     if (!code || !Config.hasSlackConfig(req.config)) {
@@ -157,7 +158,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.search = {}
-  actions.api.search.buildIndex = async function(req, res) {
+  actions.api.search.buildIndex = async function(req: Request, res: Response) {
     const search = crowi.getSearcher()
     if (!search) {
       return res.json(ApiResponse.error('Searcher is not ready.'))
@@ -184,7 +185,7 @@ export default (crowi: Crowi) => {
 
   actions.user = {}
   actions.api.user = {}
-  actions.api.user.index = function(req, res) {
+  actions.api.user.index = function(req: Request, res: Response) {
     var page = parseInt(req.query.page) || 1
 
     // uq means user query
@@ -229,7 +230,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.invite = function(req, res) {
+  actions.api.user.invite = function(req: Request, res: Response) {
     const { emailList, sendEmail } = req.form.inviteForm
     const toSendEmail = sendEmail || false
 
@@ -246,7 +247,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.makeAdmin = function(req, res) {
+  actions.api.user.makeAdmin = function(req: Request, res: Response) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).makeAdmin(function(err, userData) {
@@ -259,7 +260,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.removeFromAdmin = function(req, res) {
+  actions.api.user.removeFromAdmin = function(req: Request, res: Response) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).removeFromAdmin(function(err, userData) {
@@ -272,7 +273,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.activate = function(req, res) {
+  actions.api.user.activate = function(req: Request, res: Response) {
     var id = req.params.id
     User.findById(id, function(err, userData) {
       ;(userData as UserDocument).statusActivate(function(err, userData) {
@@ -285,7 +286,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.suspend = function(req, res) {
+  actions.api.user.suspend = function(req: Request, res: Response) {
     var id = req.params.id
 
     User.findById(id, function(err, userData) {
@@ -299,13 +300,13 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.user.remove = function(req, res) {
+  actions.user.remove = function(req: Request, res: Response) {
     // 未実装
     return res.redirect('/admin/users')
   }
 
   // これやったときの relation の挙動未確認
-  actions.user.removeCompletely = function(req, res) {
+  actions.user.removeCompletely = function(req: Request, res: Response) {
     // ユーザーの物理削除
     var id = req.params.id
 
@@ -320,7 +321,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.resetPassword = function(req, res) {
+  actions.api.user.resetPassword = function(req: Request, res: Response) {
     const id = req.body.user_id
     const User = crowi.model('User')
 
@@ -334,7 +335,7 @@ export default (crowi: Crowi) => {
       })
   }
 
-  actions.api.user.updateEmail = async function(req, res) {
+  actions.api.user.updateEmail = async function(req: Request, res: Response) {
     const { user_id: id, email } = req.body
     const User = crowi.model('User')
 
@@ -350,7 +351,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.top = {}
-  actions.api.top.index = function(req, res) {
+  actions.api.top.index = function(req: Request, res: Response) {
     const { version: crowiVersion } = crowi
     const searcher = crowi.getSearcher()
     const searchInfo = searcher
@@ -364,7 +365,8 @@ export default (crowi: Crowi) => {
     return res.json(ApiResponse.success({ crowiVersion, searchInfo }))
   }
 
-  actions.api.postSettings = function(req, res) {
+  actions.api.postSettings = function(req: Request, res: Response) {
+    const user = req.user as UserDocument
     const form = req.form.settingForm
 
     if (req.form.isValid) {
@@ -381,7 +383,7 @@ export default (crowi: Crowi) => {
           return saveSetting(req, res, form)
         })
       }
-      if (form['auth:disablePasswordAuth'] && !req.user.hasValidThirdPartyId()) {
+      if (form['auth:disablePasswordAuth'] && !user.hasValidThirdPartyId()) {
         return res.json(ApiResponse.error('パスワードによるログインを禁止するには管理者が有効な外部サービスと連携している必要があります。'))
       }
       return saveSetting(req, res, form)
@@ -390,13 +392,14 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.api.notificationAdd = function(req, res) {
+  actions.api.notificationAdd = function(req: Request, res: Response) {
+    const user = req.user as UserDocument
     var UpdatePost = crowi.model('UpdatePost')
     var pathPattern = req.body.pathPattern
     var channel = req.body.channel
 
     debug('notification.add', pathPattern, channel)
-    UpdatePost.createUpdatePost(pathPattern, channel, req.user)
+    UpdatePost.createUpdatePost(pathPattern, channel, user._id)
       .then(function(doc) {
         debug('Successfully save updatePost', doc)
 
@@ -411,7 +414,7 @@ export default (crowi: Crowi) => {
   }
 
   // app.post('/_api/admin/notifications.remove' , admin.api.notificationRemove);
-  actions.api.notificationRemove = async function(req, res) {
+  actions.api.notificationRemove = async function(req: Request, res: Response) {
     const UpdatePost = crowi.model('UpdatePost')
     const id = req.body.id
 
@@ -427,7 +430,7 @@ export default (crowi: Crowi) => {
   }
 
   // app.get('/_api/admin/users.search' , admin.api.userSearch);
-  actions.api.usersSearch = function(req, res) {
+  actions.api.usersSearch = function(req: Request, res: Response) {
     const User = crowi.model('User')
     const email = req.query.email
 
@@ -483,7 +486,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.backlink = {}
-  actions.api.backlink.buildBacklinks = function(req, res) {
+  actions.api.backlink.buildBacklinks = function(req: Request, res: Response) {
     const Backlink = crowi.model('Backlink')
     // In background
     Backlink.createByAllPages()

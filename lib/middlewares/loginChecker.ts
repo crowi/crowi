@@ -1,18 +1,18 @@
-import { Express } from 'express'
+import { Express, Request, Response, NextFunction } from 'express'
 import Crowi from 'server/crowi'
 // const debug = Debug('crowi:middlewares:loginChecker')
 
 export default (crowi: Crowi, app: Express) => {
-  return (req, res, next) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     const User = crowi.model('User')
-    const csrfKey = (req.session && req.session.id) || 'anon'
+    const csrfKey = req.session?.id || 'anon'
 
-    if (req.csrfToken === null) {
+    if (!req.csrfToken) {
       req.csrfToken = crowi.getTokens().create(csrfKey)
     }
 
     // session に user object が入ってる
-    if (req.session.user && '_id' in req.session.user) {
+    if (req.session?.user && '_id' in req.session.user) {
       User.findById(req.session.user._id, '+password +apiToken', function(err, userData) {
         if (err) {
           next()
@@ -23,7 +23,7 @@ export default (crowi: Crowi, app: Express) => {
         }
       })
     } else {
-      req.user = req.session.user = false
+      req.user = req.session.user = null
       res.locals.user = req.user
       next()
     }

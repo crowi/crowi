@@ -1,3 +1,4 @@
+import { Request, Response } from 'express'
 import { Types } from 'mongoose'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
@@ -69,7 +70,8 @@ export default (crowi: Crowi) => {
   }
 
   // routing
-  actions.pageListShow = async function(req, res) {
+  actions.pageListShow = async function(req: Request, res: Response) {
+    const user = req.user as UserDocument
     const limit = 50
     const offset = parseInt(req.query.offset) || 0
     const SEENER_THRESHOLD = 10
@@ -94,7 +96,7 @@ export default (crowi: Crowi) => {
       }
 
       if (portalPage) {
-        crowi.lru.add(req.user._id.toString(), portalPage._id.toString())
+        crowi.lru.add(user._id.toString(), portalPage._id.toString())
       }
 
       pagerOptions.length = pageList.length
@@ -112,7 +114,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.deletedPageListShow = function(req, res) {
+  actions.deletedPageListShow = function(req: Request, res: Response) {
     var path = '/trash' + getPathFromRequest(req)
     var limit = 50
     var offset = parseInt(req.query.offset) || 0
@@ -148,7 +150,9 @@ export default (crowi: Crowi) => {
       })
   }
 
-  async function renderPage(pageData, req, res) {
+  async function renderPage(pageData, req: Request, res: Response) {
+    const user = req.user as UserDocument
+
     // create page
     if (!pageData) {
       return res.render('page.html', {
@@ -157,7 +161,7 @@ export default (crowi: Crowi) => {
       })
     }
 
-    crowi.lru.add(req.user._id.toString(), pageData._id.toString())
+    crowi.lru.add(user._id.toString(), pageData._id.toString())
 
     if (pageData.redirectTo) {
       return res.redirect(encodeURI(pageData.redirectTo + '?redirectFrom=' + pageData.path))
@@ -174,7 +178,8 @@ export default (crowi: Crowi) => {
     res.render(req.query.presentation ? 'page_presentation.html' : defaultPageTeamplate, renderVars)
   }
 
-  actions.userPageShow = async function(req, res) {
+  actions.userPageShow = async function(req: Request, res: Response) {
+    const user = req.user as UserDocument
     const username = req.params.username
     const path = `/user/${username}`
     res.locals.path = path
@@ -185,7 +190,7 @@ export default (crowi: Crowi) => {
     try {
       pageData = await Page.findPage(path, req.user, req.query.revision)
 
-      crowi.lru.add(req.user._id.toString(), pageData._id.toString())
+      crowi.lru.add(user._id.toString(), pageData._id.toString())
 
       if (pageData.redirectTo) {
         return res.redirect(encodeURI(pageData.redirectTo + '?redirectFrom=' + pageData.path))
@@ -221,7 +226,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.pageShow = async function(req, res) {
+  actions.pageShow = async function(req: Request, res: Response) {
     const path = getPathFromRequest(req)
 
     // FIXME: せっかく getPathFromRequest になってるのにここが生 params[0] だとダサイ
@@ -281,7 +286,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.pageEdit = function(req, res) {
+  actions.pageEdit = function(req: Request, res: Response) {
     var pageForm = req.body.pageForm
     var body = pageForm.body
     var currentRevision = pageForm.currentRevision
@@ -371,7 +376,7 @@ export default (crowi: Crowi) => {
   }
 
   // app.get( '/users/:username([^/]+)/bookmarks'      , loginRequired(crowi, app) , page.userBookmarkList);
-  actions.userBookmarkList = function(req, res) {
+  actions.userBookmarkList = function(req: Request, res: Response) {
     var username = req.params.username
     var limit = 50
     var offset = parseInt(req.query.offset) || 0
@@ -408,7 +413,7 @@ export default (crowi: Crowi) => {
   }
 
   // app.get( '/users/:username([^/]+)/recent-create' , loginRequired(crowi, app) , page.userRecentCreatedList);
-  actions.userRecentCreatedList = function(req, res) {
+  actions.userRecentCreatedList = function(req: Request, res: Response) {
     var username = req.params.username
     var limit = 50
     var offset = parseInt(req.query.offset) || 0
@@ -447,7 +452,7 @@ export default (crowi: Crowi) => {
   /**
    * redirector
    */
-  api.redirector = function(req, res) {
+  api.redirector = function(req: Request, res: Response) {
     var id = req.params.id
 
     Page.findPageById(id)
@@ -480,7 +485,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} path
    * @apiParam {String} user
    */
-  api.list = function(req, res) {
+  api.list = function(req: Request, res: Response) {
     var username = req.query.user || null
     var path = req.query.path || null
     var limit = 50
@@ -533,7 +538,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} path
    * @apiParam {String} grant
    */
-  api.create = function(req, res) {
+  api.create = function(req: Request, res: Response) {
     var body = req.body.body || null
     var pagePath = req.body.path || null
     var grant = req.body.grant || null
@@ -578,7 +583,7 @@ export default (crowi: Crowi) => {
    * - If revision_id is specified => update the page,
    * - If revision_id is not specified => force update by the new contents.
    */
-  api.update = function(req, res) {
+  api.update = function(req: Request, res: Response) {
     var pageBody = req.body.body || null
     var pageId = req.body.page_id || null
     var revisionId = req.body.revision_id || null
@@ -621,7 +626,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} path
    * @apiParam {String} revision_id
    */
-  api.get = function(req, res) {
+  api.get = function(req: Request, res: Response) {
     const pagePath = req.query.path || null
     const pageId = req.query.page_id || null // TODO: handling
     const revisionId = req.query.revision_id || null
@@ -656,7 +661,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.seen = function(req, res) {
+  api.seen = function(req: Request, res: Response) {
     var pageId = req.body.page_id
     if (!pageId) {
       return res.json(ApiResponse.error('page_id required'))
@@ -684,7 +689,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.like = function(req, res) {
+  api.like = function(req: Request, res: Response) {
     var id = req.body.page_id
 
     Page.findPageByIdAndGrantedUser(id, req.user)
@@ -708,7 +713,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.unlike = function(req, res) {
+  api.unlike = function(req: Request, res: Response) {
     var id = req.body.page_id
 
     Page.findPageByIdAndGrantedUser(id, req.user)
@@ -732,7 +737,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} path
    */
-  api.getUpdatePost = function(req, res) {
+  api.getUpdatePost = function(req: Request, res: Response) {
     var path = req.query.path
     var UpdatePost = crowi.model('UpdatePost')
 
@@ -763,7 +768,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    * @apiParam {String} revision_id
    */
-  api.remove = function(req, res) {
+  api.remove = function(req: Request, res: Response) {
     var pageId = req.body.page_id
     var previousRevision = req.body.revision_id || null
 
@@ -804,7 +809,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.revertRemove = function(req, res) {
+  api.revertRemove = function(req: Request, res: Response) {
     var pageId = req.body.page_id
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
@@ -835,7 +840,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} new_path
    * @apiParam {Bool} create_redirect
    */
-  api.rename = async function(req, res) {
+  api.rename = async function(req: Request, res: Response) {
     const { page_id: pageId, revision_id: previousRevision = null, new_path: newPath, create_redirect: createRedirect, move_trees: moveTrees } = req.body
     const newPagePath = Page.normalizePath(newPath)
     const newPageIsPortal = newPagePath.endsWith('/')
@@ -880,7 +885,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.renameTree = async function(req, res) {
+  api.renameTree = async function(req: Request, res: Response) {
     const { path, new_path: newPath, create_redirect: createRedirect = 0 } = req.body
     const options = { createRedirectPage: createRedirect }
 
@@ -902,7 +907,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.checkTreeRenamable = async function(req, res) {
+  api.checkTreeRenamable = async function(req: Request, res: Response) {
     const { path, new_path: newPath } = req.body
 
     const paths = await Page.findChildrenByPath(path, req.user, {})
@@ -926,7 +931,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    * @apiParam {String} revision_id
    */
-  api.unlink = async function(req, res) {
+  api.unlink = async function(req: Request, res: Response) {
     const { page_id: pageId } = req.body
     try {
       const page = await Page.findPageByIdAndGrantedUser(pageId, req.user)
@@ -941,9 +946,9 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.watchStatus = async function(req, res) {
+  api.watchStatus = async function(req: Request, res: Response) {
     const { page_id: pageId } = req.query
-    const { _id: userId } = req.user
+    const { _id: userId } = req.user as UserDocument
     try {
       const watcher = await Watcher.findByUserIdAndTargetId(userId, pageId)
       const getDefaultStatus = async () => {
@@ -961,9 +966,9 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.watch = async function(req, res) {
+  api.watch = async function(req: Request, res: Response) {
     const { page_id: pageId } = req.body
-    const { _id: userId } = req.user
+    const { _id: userId } = req.user as UserDocument
     const status = req.body.status ? Watcher.STATUS_WATCH : Watcher.STATUS_IGNORE
     try {
       const watcher = await Watcher.watchByPageId(userId, pageId, status)

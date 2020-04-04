@@ -1,5 +1,7 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import ApiResponse from '../utils/apiResponse'
+import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi) => {
   // const debug = Debug('crowi:routes:notification')
@@ -7,7 +9,7 @@ export default (crowi: Crowi) => {
   const actions = {} as any
   actions.api = {} as any
 
-  actions.notificationPage = function(req, res) {
+  actions.notificationPage = function(req: Request, res: Response) {
     return res.render('notification.html', {})
   }
 
@@ -18,8 +20,8 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} linit
    */
-  actions.api.list = function(req, res) {
-    const user = req.user
+  actions.api.list = function(req: Request, res: Response) {
+    const user = req.user as UserDocument
 
     let limit = 10
     if (req.query.limit) {
@@ -33,7 +35,7 @@ export default (crowi: Crowi) => {
 
     const requestLimit = limit + 1
 
-    Notification.findLatestNotificationsByUser(user, requestLimit, offset)
+    Notification.findLatestNotificationsByUser(user._id, requestLimit, offset)
       .then(function(notifications) {
         let hasPrev = false
         if (offset > 0) {
@@ -58,8 +60,8 @@ export default (crowi: Crowi) => {
       })
   }
 
-  actions.api.read = function(req, res) {
-    const user = req.user
+  actions.api.read = function(req: Request, res: Response) {
+    const user = req.user as UserDocument
 
     try {
       const notification = Notification.read(user)
@@ -70,8 +72,8 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.api.open = async function(req, res) {
-    const user = req.user
+  actions.api.open = async function(req: Request, res: Response) {
+    const user = req.user as UserDocument
     const id = req.body.id
 
     try {
@@ -83,11 +85,11 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.api.status = async function(req, res) {
-    const user = req.user
+  actions.api.status = async function(req: Request, res: Response) {
+    const user = req.user as UserDocument
 
     try {
-      const count = await Notification.getUnreadCountByUser(user)
+      const count = await Notification.getUnreadCountByUser(user._id)
       const result = { count }
       return res.json(ApiResponse.success(result))
     } catch (err) {

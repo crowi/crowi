@@ -1,7 +1,9 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import ApiResponse from '../utils/apiResponse'
 import { PageDocument } from 'server/models/page'
+import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:share')
@@ -51,7 +53,7 @@ export default (crowi: Crowi) => {
     return Boolean(config.crowi['app:externalShare'])
   }
 
-  actions.pageShow = async (req, res) => {
+  actions.pageShow = async (req: Request, res: Response) => {
     const { uuid } = req.params
     const { shareIds = [], secretKeywords = {} } = req.session
 
@@ -83,7 +85,7 @@ export default (crowi: Crowi) => {
 
   const api = (actions.api = {} as any)
 
-  api.list = async (req, res) => {
+  api.list = async (req: Request, res: Response) => {
     // list is allowed if the feature is disabled because it is used in admin page
 
     let { page_id: pageId, page = 1, limit = 50, populate_accesses: populateAccesses = false } = req.query
@@ -101,7 +103,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.get = async (req, res) => {
+  api.get = async (req: Request, res: Response) => {
     const { page_id: pageId, populate_accesses: populateAccesses = false } = req.query
 
     if (pageId === null) {
@@ -125,7 +127,9 @@ export default (crowi: Crowi) => {
    * @apiParam {String} id
    * @apiParam {String} page_id
    */
-  api.create = async (req, res) => {
+  api.create = async (req: Request, res: Response) => {
+    const user = req.user as UserDocument
+
     if (!isExternalShareEnabled()) {
       return res.status(405)
     }
@@ -137,7 +141,7 @@ export default (crowi: Crowi) => {
     }
 
     try {
-      const shareData = await Share.createShare(pageId, req.user)
+      const shareData = await Share.createShare(pageId, user._id)
       if (!shareData) {
         throw new Error('Failed to create share.')
       }
@@ -155,7 +159,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.delete = async (req, res) => {
+  api.delete = async (req: Request, res: Response) => {
     if (!isExternalShareEnabled()) {
       return res.status(405)
     }
@@ -174,7 +178,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.setSecretKeyword = async (req, res) => {
+  api.setSecretKeyword = async (req: Request, res: Response) => {
     if (!isExternalShareEnabled()) {
       return res.status(405)
     }
@@ -193,7 +197,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.checkSecretKeyword = async (req, res) => {
+  api.checkSecretKeyword = async (req: Request, res: Response) => {
     if (!isExternalShareEnabled()) {
       return res.status(405)
     }

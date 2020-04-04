@@ -1,9 +1,10 @@
-import { Express } from 'express'
+import { Express, Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import fs from 'fs'
 import FileUploader from '../utils/fileUploader'
 import ApiResponse from '../utils/apiResponse'
+import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routs:attachment')
@@ -15,7 +16,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.api = api
 
-  api.redirector = function(req, res, next) {
+  api.redirector = function(req: Request, res: Response) {
     var id = req.params.id
 
     Attachment.findById(id)
@@ -63,7 +64,7 @@ export default (crowi: Crowi, app: Express) => {
    *
    * @apiParam {String} page_id
    */
-  api.list = function(req, res) {
+  api.list = function(req: Request, res: Response) {
     var id = req.query.page_id || null
     if (!id) {
       return res.json(ApiResponse.error('Parameters page_id is required.'))
@@ -93,7 +94,8 @@ export default (crowi: Crowi, app: Express) => {
    * @apiParam {String} page_id
    * @apiParam {File} file
    */
-  api.add = async function(req, res) {
+  api.add = async function(req: Request, res: Response) {
+    const user = req.user as UserDocument
     const id = req.body.page_id || 0
     const path = decodeURIComponent(req.body.path) || null
     let pageCreated = false
@@ -113,7 +115,7 @@ export default (crowi: Crowi, app: Express) => {
           throw new Error('path required if page_id is not specified.')
         }
         debug('Create page before file upload')
-        pageData = await Page.createPage(path, '# ' + path, req.user, { grant: Page.GRANT_OWNER })
+        pageData = await Page.createPage(path, '# ' + path, user, { grant: Page.GRANT_OWNER })
         pageCreated = true
       } else {
         pageData = await Page.findPageById(id)
@@ -125,7 +127,7 @@ export default (crowi: Crowi, app: Express) => {
       const fileType = tmpFile.mimetype
       const fileSize = tmpFile.size
       const pageId = pageData._id
-      const creator = req.user.id
+      const creator = user._id
       const fileFormat = fileType
 
       try {
@@ -191,7 +193,7 @@ export default (crowi: Crowi, app: Express) => {
    *
    * @apiParam {String} attachment_id
    */
-  api.remove = function(req, res) {
+  api.remove = function(req: Request, res: Response) {
     const id = req.body.attachment_id
 
     Attachment.findById(id)
