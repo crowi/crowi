@@ -630,7 +630,10 @@ export default (crowi: Crowi) => {
         // .sort({createdAt: -1}) // TODO optionize
         .skip(offset)
         .limit(limit)
-        .populate([{ path: 'creator', model: 'User' }, { path: 'revision', model: 'Revision', populate: { path: 'author' } }])
+        .populate([
+          { path: 'creator', model: 'User' },
+          { path: 'revision', model: 'Revision', populate: { path: 'author' } },
+        ])
         .exec()
     )
   }
@@ -698,7 +701,10 @@ export default (crowi: Crowi) => {
     }
 
     return Page.find(criteria)
-      .populate([{ path: 'creator', model: 'User' }, { path: 'revision', model: 'Revision' }])
+      .populate([
+        { path: 'creator', model: 'User' },
+        { path: 'revision', model: 'Revision' },
+      ])
       .lean()
       .cursor()
   }

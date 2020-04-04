@@ -1,8 +1,9 @@
+import { Request, Response } from 'express'
 import Debug from 'debug'
 import auth from './auth'
 import passport from 'passport'
 import { Strategy as GitHubStrategy } from 'passport-github'
-import { getContinueUrl } from '../util/url'
+import { getContinueUrl } from './url'
 import Octokit from '@octokit/rest'
 
 const debug = Debug('crowi:lib:githubAuth')
@@ -42,7 +43,7 @@ export default config => {
     )
   }
 
-  lib.authenticate = function(req, res, next) {
+  lib.authenticate = function(req: Request, res: Response, next) {
     const continueUrl = getContinueUrl(req)
     const query = continueUrl === '/' ? '' : `?continue=${continueUrl}`
     useGitHubStrategy(config, query)
@@ -69,7 +70,7 @@ export default config => {
     }
   }
 
-  lib.handleCallback = function(req, res, next) {
+  lib.handleCallback = function(req: Request, res: Response, next) {
     return function(callback) {
       useGitHubStrategy(config)
       passport.authenticate('github', function(err, user, info) {

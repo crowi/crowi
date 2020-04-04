@@ -4,6 +4,7 @@
 import 'scrollpos-styler'
 import { alert, linkVariant } from 'components/Common/Icons'
 import renderIcon from 'common/functions/renderIcon'
+import { getUserPicture } from 'client/services/user'
 
 export default class Crowi {
   static createErrorView = (msg: string) => {
@@ -115,19 +116,6 @@ export default class Crowi {
       .replace(/&#39;/g, "'")
       .replace(/&quot;/g, '"')
 
-  // original: middleware.swigFilter
-  static userPicture = user => {
-    if (!user) {
-      return '/images/userpicture.png'
-    }
-
-    if (user.image && user.image != '/images/userpicture.png') {
-      return user.image
-    }
-
-    return '/images/userpicture.png'
-  }
-
   static modifyScrollTop = () => {
     var offset = 10
 
@@ -221,45 +209,6 @@ $(function() {
 
   $('.copy-link').on('click', function() {
     $(this).select()
-  })
-
-  $('#create-page').on('shown.bs.modal', function(e) {
-    // quick hack: replace from server side rendering "date" to client side "date"
-    var today = new Date()
-    var month = ('0' + (today.getMonth() + 1)).slice(-2)
-    var day = ('0' + today.getDate()).slice(-2)
-    var dateString = today.getFullYear() + '/' + month + '/' + day
-    $('#create-page-today .page-today-suffix').text('/' + dateString + '/')
-    $('#create-page-today .page-today-input2').data('prefix', '/' + dateString + '/')
-
-    $('#create-page-today .form-control.page-today-input2').focus()
-  })
-
-  $('#create-page-today').submit(function(e) {
-    var prefix1 = $('input.page-today-input1', this).data('prefix')
-    var input1 = $('input.page-today-input1', this).val()
-    var prefix2 = $('input.page-today-input2', this).data('prefix')
-    var input2 = $('input.page-today-input2', this).val()
-    if (input1 === '') {
-      prefix1 = 'メモ'
-    }
-    if (input2 === '') {
-      prefix2 = prefix2.slice(0, -1)
-    }
-    top.location.href = prefix1 + input1 + prefix2 + input2
-    return false
-  })
-
-  $('#create-page-under-tree').submit(function(e) {
-    var name = String($('input', this).val())
-    if (!name.match(/^\//)) {
-      name = '/' + name
-    }
-    if (name.match(/.+\/$/)) {
-      name = name.substr(0, name.length - 1)
-    }
-    top.location.href = name
-    return false
   })
 
   // rename
@@ -643,7 +592,7 @@ $(function() {
 
       var $userPicture = $('<img class="picture picture-xs picture-rounded">')
       $userPicture.attr('alt', user.name)
-      $userPicture.attr('src', Crowi.userPicture(user))
+      $userPicture.attr('src', getUserPicture(user))
 
       $userHtml.append($userPicture)
       return $userHtml
@@ -666,7 +615,7 @@ $(function() {
     var $likeCount = $('#like-count')
     $likeButton.click(function() {
       var liked = $likeButton.data('liked')
-      var token = $likeButton.data('csrftoken')
+      var token = window.APP_CONTEXT.csrfToken
       if (!liked) {
         $.post('/_api/likes.add', { _csrf: token, page_id: pageId }, function(res) {
           if (res.ok) {

@@ -1,4 +1,5 @@
 import Crowi from 'server/crowi'
+import { Request, Response } from 'express'
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routes:installer')
@@ -6,11 +7,11 @@ export default (crowi: Crowi) => {
   const User = crowi.model('User')
   const actions = {} as any
 
-  actions.index = function(req, res) {
-    return res.render('installer')
+  actions.index = function(req: Request, res: Response) {
+    return res.render('installer.html')
   }
 
-  actions.createAdmin = function(req, res) {
+  actions.createAdmin = function(req: Request, res: Response) {
     var registerForm = req.body.registerForm || {}
     var language = req.language || 'en'
 
@@ -24,7 +25,7 @@ export default (crowi: Crowi) => {
         if (err) {
           req.form.errors.push('管理ユーザーの作成に失敗しました。' + err.message)
           // TODO
-          return res.render('installer')
+          return res.render('installer.html')
         }
 
         userData.makeAdmin(async function(err, userData) {
@@ -43,7 +44,7 @@ export default (crowi: Crowi) => {
         })
       })
     } else {
-      return res.render('installer')
+      return res.render('installer.html')
     }
   }
 

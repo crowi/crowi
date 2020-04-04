@@ -40,71 +40,14 @@
 
 {% block layout_head_nav %}
 
-<div class="v2-crowi-global-menu-container" id="crowi-global-menu">
-  <div class="v2-crowi-global-menu">
-  <nav class="navbar" role="navigation">
-    <a class="navbar-brand" href="/">
-      <img alt="Crowi" src="/logo/32x32i.png" width="16">
-      <span class="crowi-wiki-title">{% block title %}{{ config.crowi['app:title']|default('Crowi') }}{% endblock %}</span>
-    </a>
-  </nav>
-
-  <div class="menu-user-profile">
-    <div class="d-flex  justify-content-between">
-      <div class="menu-user-picture">
-        <a href="{{ userPageRoot(user) }}">
-          <img src="{{ user|picture }}" class="picture picture-rounded" />
-        </a>
-      </div>
-      <div class="">
-        <a href="/me/notifications" class="">
-          {{ Icon("bell") }}
-        </a>
-        <button class="btn btn-outline-secondary create-page-button" data-target="#create-page" data-toggle="modal">
-          {{ Icon("pencilOutline") }} {{ t('New') }}
-        </button>
-      </div>
-    </div>
-
-    <div class="menu-user-names">
-      <a href="{{ userPageRoot(user) }}">
-        <span class="menu-user-name">{{ user.name }}</span><br />
-        <span class="menu-user-username">@{{ user.username }}</span>
-      </a>
-    </div>
-  </div>
-
-  <ul class="menu-list">
-    <li class="">
-      <a class="" href="/me">{{ Icon("cogs") }} {{ t('User Settings') }}</a>
-    </li>
-    <li class="">
-      <a class="" href="{{ userPageRoot(user) }}/bookmarks">{{ Icon("star") }} {{ t('Bookmarks') }}</a>
-    </li>
-    <li class="">
-      <a class="" href="{{ userPageRoot(user) }}/recent-create">{{ Icon("pencilOutline") }} {{ t('Created pages') }}</a>
-    </li>
-    <li class="divider"></li>
-    <li class="">
-      <a class="" href="/trash/">{{ Icon("trashCanOutline") }} {{ t('Deleted Pages') }}</a>
-    </li>
-    <li class="divider"></li>
-    <li class="">
-      <a class="" href="/logout">{{ Icon("logout") }} {{ t('Sign out') }}</a>
-    </li>
-  </ul>
-</div>
-</div>
-
 <div class="v2-container">
-  <div class="v2-container-backdrop" id="v2-container-backdrop"></div>
   <nav class="v2-crowi-header navbar navbar-expand-md" role="navigation">
     <div class="crowi-menu-main p-2">
 
       {# mobile menu #}
-      <div class="crowi-menu-sm" id="side-menu-trigger">
+      <div class="crowi-menu-sm" id="navigation-drawer-opener">
       </div>
-      <a class="navbar-brand" href="/">
+      <a class="crowi-navbar-brand navbar-brand" href="/">
         <img alt="Crowi" src="/logo/32x32i.png" width="16">
         <span class="crowi-wiki-title">{% block title %}{{ config.crowi['app:title']|default('Crowi') }}{% endblock %}</span>
       </a>
@@ -143,7 +86,7 @@
       {% endif %}
 
       <li class="nav-item">
-        <div id="page-create-modal"></div>
+        <div id="header-page-create-modal"></div>
       </li>
       <li class="nav-item nav-divider">
       </li>
@@ -185,7 +128,7 @@
           <div class="dropdown-divider"></div>
           <a class="dropdown-item" href="/me">{{ Icon("cogs") }} {{ t('User Settings') }}</a>
           <a class="dropdown-item" href="{{ userPageRoot(user) }}/bookmarks">{{ Icon("star") }} {{ t('Bookmarks') }}</a>
-          <a class="dropdown-item" href="{{ userPageRoot(user) }}/recent-create">{{ Icon("pencilOutline") }} {{ t('Created pages') }}</a>
+          <a class="dropdown-item" href="{{ userPageRoot(user) }}/recent-create">{{ Icon("pencilOutline") }} {{ t('Created Pages') }}</a>
           <div class="dropdown-divider"></div>
           <a class="dropdown-item" href="/trash/">{{ Icon("trashCanOutline") }} {{ t('Deleted Pages') }}</a>
           <div class="dropdown-divider"></div>
@@ -219,15 +162,8 @@
 </body>
 {% endblock html_body %}
 
-<script type="application/json" id="crowi-context-hydrate">
-  {{ local_config|json|safe }}
-</script>
-<script type="application/json" id="user-context-hydrate">
-  {{ user_context|json|safe }}
-</script>
-<script type="application/json" id="ssr-context-hydrate">
-{{ ssr_context|json|safe }}
-</script>
+
+<script>window.APP_CONTEXT = {{ appContext() | json }}</script>
 
 <script src="{{ assets('/js/app.js') }}"></script>
 <script src="{{ assets('/js/crowi.js') }}"></script>

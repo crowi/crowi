@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect, FC } from 'react'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 
 import { AdminContext } from 'components/Admin/AdminPage'
 import NotificationSettings from './NotificationSettings'
