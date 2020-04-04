@@ -93,7 +93,7 @@
     "jquery": "~3.4.1",
     "jquery.cookie": "~1.4.1",
     "json-loader": "^0.5.7",
-    "marked": "^0.6.3",
+    "marked": "^0.8.2",
     "method-override": "~3.0.0",
     "mkdirp": "~0.5.1",
     "mongoose": "^5.7.7",
