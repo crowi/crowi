@@ -29,7 +29,7 @@ import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
-import PageDeletionModal from 'client/components/Modal/PageDeletionModal/PageDeletionModal'
+import PageDeletionModal from 'client/components/Modal/PageDeletionModal'
 
 i18n()
 

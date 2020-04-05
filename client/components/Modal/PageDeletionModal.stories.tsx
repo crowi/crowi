@@ -1,6 +1,6 @@
 import React from 'react'
 import PageDeletionModal from './PageDeletionModal'
-import Crowi from '../../../utils/Crowi'
+import Crowi from '../../utils/Crowi'
 import { createAppContext } from 'client/fixtures/createAppContext'
 import { Button } from 'reactstrap'
 
