@@ -20,7 +20,7 @@ const PageDeletionModal: FC<Props> = ({ crowi, pageId, revisionId }) => {
   const handleClose = useCallback(() => {
     setShow(false)
     setErrorMessage(null)
-  }, [setShow])
+  }, [setShow, setErrorMessage])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
