@@ -12,7 +12,7 @@ export default (crowi: Crowi) => {
   actions.api = api
 
   api.checkUsername = function(req: Request, res: Response) {
-    var username = req.query.username
+    const username = req.query.username
 
     User.findUserByUsername(username)
       .then(function(userData) {
@@ -35,9 +35,9 @@ export default (crowi: Crowi) => {
    * @apiParam {String} user_ids
    */
   api.list = function(req: Request, res: Response) {
-    var userIds = req.query.user_ids || null // TODO: handling
+    const userIds = req.query.user_ids || null // TODO: handling
 
-    var userFetcher
+    let userFetcher
     if (!userIds || userIds.split(',').length <= 0) {
       userFetcher = User.findAllUsers()
     } else {
@@ -46,7 +46,7 @@ export default (crowi: Crowi) => {
 
     userFetcher
       .then(function(userList) {
-        var result = {
+        const result = {
           users: userList,
         }
 

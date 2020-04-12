@@ -3,12 +3,12 @@
 module.exports = function(crowi) {
   'use strict'
 
-  var debug = require('debug')('crowi:lib:fileUploaderLocal')
-  var fs = require('fs')
-  var path = require('path')
-  var mkdir = require('mkdirp')
-  var lib = {}
-  var basePath = path.posix.join(crowi.publicDir, 'uploads') // TODO: to configurable
+  const debug = require('debug')('crowi:lib:fileUploaderLocal')
+  const fs = require('fs')
+  const path = require('path')
+  const mkdir = require('mkdirp')
+  const lib = {}
+  const basePath = path.posix.join(crowi.publicDir, 'uploads') // TODO: to configurable
 
   lib.deleteFile = function(fileId, filePath) {
     debug('File deletion: ' + filePath)
@@ -27,15 +27,15 @@ module.exports = function(crowi) {
   lib.uploadFile = function(filePath, contentType, fileStream, options) {
     debug('File uploading: ' + filePath)
     return new Promise(function(resolve, reject) {
-      var localFilePath = path.posix.join(basePath, filePath)
-      var dirpath = path.posix.dirname(localFilePath)
+      const localFilePath = path.posix.join(basePath, filePath)
+      const dirpath = path.posix.dirname(localFilePath)
 
       mkdir(dirpath, function(err) {
         if (err) {
           return reject(err)
         }
 
-        var writer = fs.createWriteStream(localFilePath)
+        const writer = fs.createWriteStream(localFilePath)
 
         writer
           .on('error', function(err) {

@@ -225,7 +225,7 @@ class Crowi {
     // mongoUri = mongodb://user:password@host/dbname
     mongoose.Promise = global.Promise
 
-    var mongoUri =
+    const mongoUri =
       this.env.MONGOLAB_URI || // for B.C.
       this.env.MONGODB_URI || // MONGOLAB changes their env name
       this.env.MONGOHQ_URL ||

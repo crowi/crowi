@@ -143,7 +143,7 @@ describe('Page', () => {
 
       let forbidden: string[] = []
       forbidden = ['installer', 'register', 'login', 'logout', 'admin', 'files', 'trash', 'paste', 'comments']
-      for (var i = 0; i < forbidden.length; i++) {
+      for (let i = 0; i < forbidden.length; i++) {
         const pn = forbidden[i]
         expect(Page.isCreatableName('/' + pn + '')).toBe(false)
         expect(Page.isCreatableName('/' + pn + '/')).toBe(false)
@@ -151,7 +151,7 @@ describe('Page', () => {
       }
 
       forbidden = ['bookmarks', 'comments', 'activities', 'pages', 'recent-create', 'recent-edit']
-      for (var i = 0; i < forbidden.length; i++) {
+      for (let i = 0; i < forbidden.length; i++) {
         const pn = forbidden[i]
         expect(Page.isCreatableName('/user/aoi/' + pn)).toBe(false)
         expect(Page.isCreatableName('/user/aoi/x/' + pn)).toBe(true)

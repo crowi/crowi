@@ -12,14 +12,14 @@ export default (crowi: Crowi) => {
   }
 
   actions.createAdmin = function(req: Request, res: Response) {
-    var registerForm = req.body.registerForm || {}
-    var language = req.language || 'en'
+    const registerForm = req.body.registerForm || {}
+    const language = req.language || 'en'
 
     if (req.form.isValid) {
-      var name = registerForm.name
-      var username = registerForm.username
-      var email = registerForm.email
-      var password = registerForm.password
+      const name = registerForm.name
+      const username = registerForm.username
+      const email = registerForm.email
+      const password = registerForm.password
 
       User.createUserByEmailAndPassword(name, username, email, password, language, function(err, userData) {
         if (err) {

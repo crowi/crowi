@@ -66,8 +66,8 @@ export interface UserModel extends Model<UserDocument> {
   isEmailValid(email): boolean
   isGitHubAccountValid(organizations): boolean
   findUsers(options, callback: (err: Error, userData: UserDocument[]) => void)
-  findAllUsers(option?): Promise<UserDocument[]>
-  findUsersByIds(ids, option?): Promise<UserDocument[]>
+  findAllUsers(options?): Promise<UserDocument[]>
+  findUsersByIds(ids, options?): Promise<UserDocument[]>
   findAdmins(callback: (err: Error, admins: UserDocument[]) => void): void
   findUsersWithPagination(options, query, callback): any
   findUsersByPartOfEmail(emailPart, options): any
@@ -128,8 +128,8 @@ export default (crowi: Crowi) => {
   userEvent.on('activated', userEvent.onActivated)
 
   function decideUserStatusOnRegistration() {
-    var Config = crowi.model('Config')
-    var config = crowi.getConfig()
+    const Config = crowi.model('Config')
+    const config = crowi.getConfig()
 
     if (!config.crowi) {
       return STATUS_ACTIVE // is this ok?
@@ -148,12 +148,12 @@ export default (crowi: Crowi) => {
   }
 
   function generateRandomTempPassword() {
-    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!=-_'
-    var password = ''
-    var len = 12
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!=-_'
+    let password = ''
+    const len = 12
 
-    for (var i = 0; i < len; i++) {
-      var randomPoz = Math.floor(Math.random() * chars.length)
+    for (let i = 0; i < len; i++) {
+      const randomPoz = Math.floor(Math.random() * chars.length)
       password += chars.substring(randomPoz, randomPoz + 1)
     }
 
@@ -161,14 +161,14 @@ export default (crowi: Crowi) => {
   }
 
   function generatePassword(password) {
-    var hasher = crypto.createHash('sha256')
+    const hasher = crypto.createHash('sha256')
     hasher.update(crowi.env.PASSWORD_SEED + password)
 
     return hasher.digest('hex')
   }
 
   function generateApiToken(user) {
-    var hasher = crypto.createHash('sha256')
+    const hasher = crypto.createHash('sha256')
     hasher.update(new Date().getTime() + user._id)
 
     return hasher.digest('base64')
@@ -347,7 +347,7 @@ export default (crowi: Crowi) => {
 
   userSchema.statics.getLanguageLabels = getLanguageLabels
   userSchema.statics.getUserStatusLabels = function() {
-    var userStatus = {}
+    const userStatus = {}
     userStatus[STATUS_REGISTERED] = '承認待ち'
     userStatus[STATUS_ACTIVE] = 'Active'
     userStatus[STATUS_SUSPENDED] = 'Suspended'
@@ -358,12 +358,12 @@ export default (crowi: Crowi) => {
   }
 
   userSchema.statics.isEmailValid = function(email) {
-    var config = crowi.getConfig()
-    var whitelist = config.crowi['security:registrationWhiteList']
+    const config = crowi.getConfig()
+    const whitelist = config.crowi['security:registrationWhiteList']
 
     if (Array.isArray(whitelist) && whitelist.length > 0) {
       return config.crowi['security:registrationWhiteList'].some(function(allowedEmail) {
-        var re = new RegExp(allowedEmail + '$')
+        const re = new RegExp(allowedEmail + '$')
         return re.test(email)
       })
     }
@@ -372,16 +372,16 @@ export default (crowi: Crowi) => {
   }
 
   userSchema.statics.isGitHubAccountValid = function(organizations) {
-    var config = crowi.getConfig()
-    var org = config.crowi['github:organization']
+    const config = crowi.getConfig()
+    const org = config.crowi['github:organization']
 
-    var orgs = organizations || []
+    const orgs = organizations || []
 
     return !org || orgs.includes(org)
   }
 
   userSchema.statics.findUsers = function(options, callback) {
-    var sort = options.sort || { status: 1, createdAt: 1 }
+    const sort = options.sort || { status: 1, createdAt: 1 }
 
     this.find()
       .sort(sort)
@@ -392,11 +392,10 @@ export default (crowi: Crowi) => {
       })
   }
 
-  userSchema.statics.findAllUsers = function(option) {
-    var option = option || {}
-    var sort = option.sort || { createdAt: -1 }
-    var status = option.status || [STATUS_ACTIVE, STATUS_SUSPENDED]
-    var fields = option.fields
+  userSchema.statics.findAllUsers = function(options = {}) {
+    const sort = options.sort || { createdAt: -1 }
+    let status = options.status || [STATUS_ACTIVE, STATUS_SUSPENDED]
+    const fields = options.fields
 
     if (!Array.isArray(status)) {
       status = [status]
@@ -413,11 +412,10 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  userSchema.statics.findUsersByIds = function(ids, option) {
-    var option = option || {}
-    var sort = option.sort || { createdAt: -1 }
-    var status = option.status || STATUS_ACTIVE
-    var fields = option.fields
+  userSchema.statics.findUsersByIds = function(ids, options = {}) {
+    const sort = options.sort || { createdAt: -1 }
+    const status = options.status || STATUS_ACTIVE
+    const fields = options.fields
 
     return User.find({ _id: { $in: ids }, status: status })
       .select(fields)
@@ -433,7 +431,7 @@ export default (crowi: Crowi) => {
   }
 
   userSchema.statics.findUsersWithPagination = function(options, query, callback) {
-    var sort = options.sort || { status: 1, username: 1, createdAt: 1 }
+    const sort = options.sort || { status: 1, username: 1, createdAt: 1 }
 
     this.paginate(
       query,
@@ -498,8 +496,8 @@ export default (crowi: Crowi) => {
   }
 
   userSchema.statics.isRegisterable = async function(email, username, callback) {
-    var emailUsable = true
-    var usernameUsable = true
+    let emailUsable = true
+    let usernameUsable = true
     let userData: UserDocument | null = null
 
     // username check

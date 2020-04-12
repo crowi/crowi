@@ -8,14 +8,12 @@ const debug = Debug('crowi:lib:mailer')
 export default crowi => {
   'use strict'
 
-  var config = crowi.getConfig()
-  var mailConfig: any = {}
-  var mailer: any = {}
-  var MAIL_TEMPLATE_DIR = crowi.mailDir
+  const config = crowi.getConfig()
+  const mailConfig: any = {}
+  let mailer: any = {}
+  const MAIL_TEMPLATE_DIR = crowi.mailDir
 
   function createSMTPClient(option?) {
-    var client
-
     debug('createSMTPClient option', option)
     if (!option) {
       option = {
@@ -35,15 +33,13 @@ export default crowi => {
     }
     option.tls = { rejectUnauthorized: false }
 
-    client = nodemailer.createTransport(option)
+    const client = nodemailer.createTransport(option)
 
     debug('mailer set up for SMTP', client)
     return client
   }
 
   function createSESClient(option?) {
-    var client
-
     if (!option) {
       option = {
         accessKeyId: config.crowi['mail:aws:accessKeyId'],
@@ -51,7 +47,7 @@ export default crowi => {
       }
     }
 
-    client = nodemailer.createTransport(ses(option))
+    const client = nodemailer.createTransport(ses(option))
 
     debug('mailer set up for SES', client)
     return client
@@ -80,8 +76,8 @@ export default crowi => {
   }
 
   function setupMailConfig(overrideConfig) {
-    var c = overrideConfig
-    var mc: any = {}
+    const c = overrideConfig
+    let mc: any = {}
     mc = mailConfig
 
     mc.to = c.to
@@ -94,7 +90,7 @@ export default crowi => {
 
   function send(config, callback) {
     if (mailer) {
-      var templateVars = config.vars || {}
+      const templateVars = config.vars || {}
       return swig.renderFile(MAIL_TEMPLATE_DIR + config.template, templateVars, function(err, output) {
         if (err) {
           throw err
