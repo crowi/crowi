@@ -576,7 +576,6 @@ export default class SearchClient {
   async syncPageUpdated(page, user, bookmarkCount = 0) {
     debug('SearchClient.syncPageUpdated', page.path)
     debug('Page:', page)
-    // TODO delete
     if (!this.shouldIndexed(page)) {
       try {
         const res = await this.deletePages([page])
