@@ -128,7 +128,7 @@ export default class CrowiRenderer {
       // override
       // @ts-ignore
       marked.Lexer.lex = function(src: string, options: marked.MarkedOptions) {
-        var lexer = new marked.Lexer(options)
+        const lexer = new marked.Lexer(options)
 
         // this is maybe not an official way
         // @ts-ignore: Unofficial hack

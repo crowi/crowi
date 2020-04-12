@@ -3,13 +3,13 @@
 module.exports = function(crowi) {
   'use strict'
 
-  var aws = require('aws-sdk')
-  var fs = require('fs')
-  var path = require('path')
-  var debug = require('debug')('crowi:lib:fileUploaderAws')
-  var lib = {}
-  var getAwsConfig = function() {
-    var config = crowi.getConfig()
+  const aws = require('aws-sdk')
+  const fs = require('fs')
+  const path = require('path')
+  const debug = require('debug')('crowi:lib:fileUploaderAws')
+  const lib = {}
+  const getAwsConfig = function() {
+    const config = crowi.getConfig()
     return {
       accessKeyId: config.crowi['upload:aws:accessKeyId'],
       secretAccessKey: config.crowi['upload:aws:secretAccessKey'],
@@ -84,14 +84,14 @@ module.exports = function(crowi) {
   }
 
   lib.generateUrl = function(filePath) {
-    var awsConfig = getAwsConfig()
-    var url = 'https://' + awsConfig.bucket + '.s3.amazonaws.com/' + filePath
+    const awsConfig = getAwsConfig()
+    const url = 'https://' + awsConfig.bucket + '.s3.amazonaws.com/' + filePath
 
     return url
   }
 
   lib.findDeliveryFile = function(fileId, filePath) {
-    var cacheFile = lib.createCacheFileName(fileId)
+    const cacheFile = lib.createCacheFileName(fileId)
 
     return new Promise((resolve, reject) => {
       debug('find delivery file', cacheFile)
@@ -99,10 +99,10 @@ module.exports = function(crowi) {
         return resolve(cacheFile)
       }
 
-      var loader = require('https')
+      const loader = require('https')
 
-      var fileStream = fs.createWriteStream(cacheFile)
-      var fileUrl = lib.generateUrl(filePath)
+      const fileStream = fs.createWriteStream(cacheFile)
+      const fileUrl = lib.generateUrl(filePath)
       debug('Load attachement file into local cache file', fileUrl, cacheFile)
       loader.get(fileUrl, function(response) {
         response.pipe(fileStream, { end: false })
@@ -144,7 +144,7 @@ module.exports = function(crowi) {
   // private
   lib.shouldUpdateCacheFile = function(filePath) {
     try {
-      var stats = fs.statSync(filePath)
+      const stats = fs.statSync(filePath)
 
       if (!stats.isFile()) {
         debug('Cache file not found or the file is not a regular file.')

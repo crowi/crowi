@@ -21,7 +21,7 @@ export default (crowi: Crowi) => {
    */
   actions.api.get = function(req: Request, res: Response) {
     const user = req.user as UserDocument
-    var pageId = req.query.page_id
+    const pageId = req.query.page_id
 
     Bookmark.findByPageIdAndUserId(pageId, user._id)
       .then(function(bookmark) {
@@ -40,9 +40,9 @@ export default (crowi: Crowi) => {
    */
   actions.api.list = function(req: Request, res: Response) {
     const user = req.user as UserDocument
-    var paginateOptions = ApiPaginate.parseOptions(req.query)
+    const paginateOptions = ApiPaginate.parseOptions(req.query)
 
-    var options = Object.assign(paginateOptions, { populatePage: true })
+    const options = Object.assign(paginateOptions, { populatePage: true })
     Bookmark.findByUserId(user._id, options)
       .then(function(result) {
         return res.json(ApiResponse.success(result))
@@ -60,7 +60,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    */
   actions.api.add = async function(req: Request, res: Response) {
-    var pageId = req.body.page_id
+    const pageId = req.body.page_id
 
     try {
       const pageData = await Page.findPageByIdAndGrantedUser(pageId, req.user)
@@ -90,7 +90,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    */
   actions.api.remove = function(req: Request, res: Response) {
-    var pageId = req.body.page_id
+    const pageId = req.body.page_id
 
     Bookmark.removeBookmark(pageId, req.user)
       .then(function(data) {

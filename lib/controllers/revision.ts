@@ -18,11 +18,11 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_id Revision Id.
    */
   actions.api.get = function(req: Request, res: Response) {
-    var revisionId = req.query.revision_id
+    const revisionId = req.query.revision_id
 
     Revision.findRevision(revisionId)
       .then(function(revisionData) {
-        var result = {
+        const result = {
           revision: revisionData,
         }
         return res.json(ApiResponse.success(result))
@@ -41,7 +41,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id      Page Id.
    */
   actions.api.ids = function(req: Request, res: Response) {
-    var pageId = req.query.page_id || null
+    const pageId = req.query.page_id || null
 
     if (pageId && crowi.isPageId(pageId)) {
       Page.findPageByIdAndGrantedUser(pageId, req.user)
@@ -69,8 +69,8 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id      Page Id.
    */
   actions.api.list = function(req: Request, res: Response) {
-    var revisionIds = (req.query.revision_ids || '').split(',')
-    var pageId = req.query.page_id || null
+    const revisionIds = (req.query.revision_ids || '').split(',')
+    const pageId = req.query.page_id || null
 
     if (pageId) {
       Page.findPageByIdAndGrantedUser(pageId, req.user)

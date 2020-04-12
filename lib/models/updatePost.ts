@@ -44,14 +44,14 @@ export default (crowi: Crowi) => {
   }
 
   updatePostSchema.statics.createPrefixesByPathPattern = function(pathPattern) {
-    var patternPrefix = ['*', '*']
+    const patternPrefix = ['*', '*']
 
     // not begin with slash
     if (!pathPattern.match(/^\/.+/)) {
       return patternPrefix
     }
 
-    var pattern = pathPattern.split('/')
+    const pattern = pathPattern.split('/')
     pattern.shift()
     if (pattern[0] && pattern[0] != '*') {
       patternPrefix[0] = pattern[0]
@@ -64,7 +64,7 @@ export default (crowi: Crowi) => {
   }
 
   updatePostSchema.statics.getRegExpByPattern = function(pattern) {
-    var reg = pattern
+    let reg = pattern
     if (!reg.match(/^\/.*/)) {
       reg = '/*' + reg + '*'
     }

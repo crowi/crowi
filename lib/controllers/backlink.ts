@@ -24,7 +24,7 @@ export default (crowi: Crowi) => {
 
     Backlink.findByPageId(pageId, limit, offset)
       .then(backlinks => {
-        var result = {
+        const result = {
           data: backlinks,
         }
         return res.json(ApiResponse.success(result))
