@@ -6,7 +6,7 @@ export const splitKeywordsAndPhrases = (query: string) => {
   const phraseRegExp = /(-?"[^"]*")/g
   const keywords = query
     .replace(phraseRegExp, '')
-    .split(' ')
+    .split(/\s+/g)
     .filter(Boolean)
   const phrases = (query.match(phraseRegExp) || []).map(normalize)
   return { keywords, phrases }
