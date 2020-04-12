@@ -469,7 +469,7 @@ export default class SearchClient {
           // send each 2000 docs. (body has 2 elements for each data)
           sent++
           debug('Sending request (seq, total, skipped)', sent, total, skipped)
-          bulkSend(body)
+          await bulkSend(body)
           this.searchEvent.emit('addPageProgress', allPageCount, total, skipped)
 
           body = []
@@ -477,7 +477,7 @@ export default class SearchClient {
       })
       // send all remaining data on body[]
       debug('Sending last body of bulk operation:', body.length)
-      bulkSend(body)
+      await bulkSend(body)
       this.searchEvent.emit('finishAddPage', allPageCount, total, skipped)
     } catch (e) {
       debug('Error wile iterating cursor.eacnAsync()', e)
