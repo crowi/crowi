@@ -176,7 +176,7 @@ export default (crowi: Crowi) => {
       Watcher.getIgnorers((target as any) as Types.ObjectId),
     ])
 
-    const unique = array => Object.values(array.reduce((objects, object) => ({ ...objects, [object.toString()]: object }), {}))
+    const unique = array => Object.values(Object.fromEntries(array.map(object => [object.toString(), object])))
     const filter = (array, pull) => {
       const ids = pull.map(object => object.toString())
       return array.filter(object => !ids.includes(object.toString()))

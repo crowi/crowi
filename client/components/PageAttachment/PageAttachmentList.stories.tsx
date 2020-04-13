@@ -20,6 +20,6 @@ const createAttachment = () => ({
 
 const attachments = [...Array(5)].map(createAttachment)
 
-const inUse = attachments.reduce((object, { _id }, index) => ({ ...object, [_id]: !(index % 2) }), {} as { [id: string]: boolean })
+const inUse: Record<string, boolean> = Object.fromEntries(attachments.map(({ _id }, index) => [_id, !(index % 2)]))
 
 export const Default = () => <PageAttachmentList attachments={attachments} inUse={inUse} onAttachmentDeleteClicked={() => {}} />
