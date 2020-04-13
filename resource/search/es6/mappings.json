@@ -3,16 +3,16 @@
     "analysis": {
       "filter": {
         "english_stop": {
-          "type":       "stop",
-          "stopwords":  "_english_"
+          "type": "stop",
+          "stopwords": "_english_"
         },
         "english_stemmer": {
-          "type":       "stemmer",
-          "language":   "english"
+          "type": "stemmer",
+          "language": "english"
         },
         "english_possessive_stemmer": {
-          "type":       "stemmer",
-          "language":   "possessive_english"
+          "type": "stemmer",
+          "language": "possessive_english"
         }
       },
       "tokenizer": {
@@ -24,13 +24,8 @@
         }
       },
       "english": {
-        "tokenizer":  "ngram_tokenizer",
-        "filter": [
-          "english_possessive_stemmer",
-          "lowercase",
-          "english_stop",
-          "english_stemmer"
-        ]
+        "tokenizer": "ngram_tokenizer",
+        "filter": ["english_possessive_stemmer", "lowercase", "english_stop", "english_stemmer"]
       }
     }
   },
@@ -44,10 +39,6 @@
               "type": "text",
               "analyzer": "keyword"
             },
-            "ja": {
-              "type": "text",
-              "analyzer": "kuromoji"
-            },
             "en": {
               "type": "text",
               "analyzer": "english"
@@ -57,10 +48,6 @@
         "body": {
           "type": "text",
           "fields": {
-            "ja": {
-              "type": "text",
-              "analyzer": "kuromoji"
-            },
             "en": {
               "type": "text",
               "analyzer": "english"
