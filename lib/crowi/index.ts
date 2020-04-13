@@ -23,7 +23,7 @@ import Config from '../service/config'
 import mailer from '../utils/mailer'
 import slack from '../utils/slack'
 import expressInit from './express-init'
-import Searcher from 'server/utils/search'
+import Searcher from 'server/service/search'
 
 const pkg = require('../../package.json')
 
@@ -328,26 +328,18 @@ class Crowi {
     return Config.migrate()
   }
 
-  setupSearcher() {
+  async setupSearcher() {
     const searcherUri = this.env.ELASTICSEARCH_URI || this.env.BONSAI_URL || null
 
-    return new Promise((resolve, reject) => {
-      if (searcherUri) {
-        try {
-          this.searcher = new Searcher(this, searcherUri)
-
-          // workaround
-          setTimeout(() => {
-            this.searcher.checkESVersion()
-            this.searcher.ensureAlias()
-          }, 5000)
-        } catch (e) {
-          debug('Error on setup searcher', e)
-          this.searcher = null
-        }
+    if (searcherUri) {
+      try {
+        this.searcher = new Searcher(this, searcherUri)
+        this.searcher.initialize()
+      } catch (e) {
+        debug('Error on setup searcher', e)
+        this.searcher = null
       }
-      resolve()
-    })
+    }
   }
 
   setupMailer() {

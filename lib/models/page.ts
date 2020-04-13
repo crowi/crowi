@@ -4,18 +4,21 @@ import Debug from 'debug'
 import { RevisionDocument } from './revision'
 import { UserDocument } from './user'
 
-const GRANT_PUBLIC = 1
-const GRANT_RESTRICTED = 2
-const GRANT_SPECIFIED = 3
-const GRANT_OWNER = 4
-const PAGE_GRANT_ERROR = 1
-const STATUS_WIP = 'wip'
-const STATUS_PUBLISHED = 'published'
-const STATUS_DELETED = 'deleted'
-const STATUS_DEPRECATED = 'deprecated'
-const TYPE_PORTAL = 'portal'
-const TYPE_USER = 'user'
-const TYPE_PUBLIC = 'public'
+export const GRANT_PUBLIC = 1
+export const GRANT_RESTRICTED = 2
+export const GRANT_SPECIFIED = 3
+export const GRANT_OWNER = 4
+export const GRANTS = [GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER] as const
+export const PAGE_GRANT_ERROR = 1
+export const STATUS_WIP = 'wip'
+export const STATUS_PUBLISHED = 'published'
+export const STATUS_DELETED = 'deleted'
+export const STATUS_DEPRECATED = 'deprecated'
+export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED] as const
+export const TYPE_PORTAL = 'portal'
+export const TYPE_USER = 'user'
+export const TYPE_PUBLIC = 'public'
+export const TYPES = [TYPE_PORTAL, TYPE_USER, TYPE_PUBLIC] as const
 
 export interface PageDocument extends Document {
   _id: Types.ObjectId
