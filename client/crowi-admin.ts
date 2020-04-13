@@ -23,9 +23,9 @@ $(function() {
   $('#createdUserModal').modal('show')
 
   $('#admin-password-reset-modal').on('show.bs.modal', function(button) {
-    var data = $((button as any).relatedTarget)
-    var userId = data.data('user-id')
-    var email = data.data('user-email')
+    const data = $((button as any).relatedTarget)
+    const userId = data.data('user-id')
+    const email = data.data('user-email')
 
     $('#admin-password-reset-user').text(email)
     $('#admin-users-reset-password input[name=user_id]').val(userId)
@@ -94,7 +94,7 @@ $(function() {
     $editPanel.update.on('click', async () => {
       const id = $tr.data('user-id')
       const email = $emailInput.val()
-      const csrf = $('#admin-users-table').data('csrf')
+      const csrf = window.APP_CONTEXT.csrfToken
       const body = { user_id: id, email, _csrf: csrf }
 
       const { ok } = await window.crowi.apiPost('/admin/users.updateEmail', body)
@@ -123,7 +123,7 @@ $(function() {
         if (!status) {
           status = 'success'
         }
-        var $message = $('<p class="alert"></p>')
+        const $message = $('<p class="alert"></p>')
         $message.addClass('alert-' + status)
         $message.html(msg.replace('\n', '<br>'))
         $message.insertAfter('#' + formId + ' legend')
@@ -139,9 +139,9 @@ $(function() {
         }
       }
 
-      var $form = $(this)
-      var $id = $form.attr('id')
-      var $button = $('button', this)
+      const $form = $(this)
+      const $id = $form.attr('id')
+      const $button = $('button', this)
       $button.attr('disabled', 'disabled')
       const action = $form.attr('action')
       if (!action) return false

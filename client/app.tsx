@@ -2,17 +2,15 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 
 import i18n from './i18n'
-import moment from 'moment'
 
-import Crowi from './util/Crowi'
-import CrowiRenderer from './util/CrowiRenderer'
-import CrowiAuth from './util/CrowiAuth'
+import Crowi from './utils/Crowi'
+import CrowiRenderer from './utils/CrowiRenderer'
+import CrowiAuth from './utils/CrowiAuth'
 import Emitter from './emitter'
 
-import SideMenuTrigger from 'components/SideMenuTrigger'
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'
-import PageCreateModal from 'client/components/Modal/PageCreateModal'
+import HeaderPageCreateModal from 'client/components/HeaderPageCreateModal/HeaderPageCreateModal'
 import PageListSearch from 'components/PageListSearch'
 import PageHistory from 'components/PageHistory'
 import PageAttachment from 'components/PageAttachment'
@@ -30,12 +28,9 @@ import AdminShare from 'components/Admin/Share/AdminShare'
 import Comment from 'components/Comment/Comment'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
-
-import hydrateComponents from './hydrateComponents'
+import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
 
 i18n()
-
-moment.locale(navigator.userLanguage || navigator.language)
 
 const mainContent = document.querySelector('#content-main')
 let pageId: string | null = null
@@ -52,14 +47,10 @@ if (mainContent !== null) {
   }
 }
 
-const getTextContent = (element: HTMLElement | null) => (element ? element.textContent : null)
-
-const { user = {} } = JSON.parse(getTextContent(document.getElementById('user-context-hydrate')) || '{}')
-const csrfToken = $('#content-main').data('csrftoken') || $('#admin-page').data('csrftoken')
 // FIXME
-const crowi = new Crowi({ user, csrfToken }, window)
+const crowi = new Crowi(window.APP_CONTEXT, window)
 window.crowi = crowi
-crowi.setConfig(JSON.parse(getTextContent(document.getElementById('crowi-context-hydrate')) || '{}'))
+
 const isSharePage = !!$('#content-main').data('is-share-page') || !!$('#secret-keyword-form-container').data('share-id')
 if (!isSharePage) {
   crowi.fetchUsers()
@@ -73,8 +64,7 @@ window.crowiAuth = crowiAuth
 
 const me = $('body').data('me')
 const componentMappings = {
-  'page-create-modal': <PageCreateModal crowi={crowi} />,
-  'side-menu-trigger': <SideMenuTrigger crowi={crowi} />,
+  'header-page-create-modal': <HeaderPageCreateModal crowi={crowi} />,
   'search-top': <HeaderSearchBox crowi={crowi} />,
   'search-page': <SearchPage crowi={crowi} />,
   'page-list-search': <PageListSearch crowi={crowi} />,
@@ -83,7 +73,6 @@ const componentMappings = {
   'rename-tree': <RenameTree crowi={crowi} />,
   'header-notification': <HeaderNotification me={me} crowi={crowi} />,
   'notification-page': <NotificationPage crowi={crowi} />,
-
   // 'revision-history': <PageHistory pageId={pageId} />,
   'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
   'seen-user-list': <SeenUserList crowi={crowi} />,
@@ -94,8 +83,8 @@ const componentMappings = {
   'admin-share': <AdminShare crowi={crowi} />,
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
   'admin-page': <AdminPage crowi={crowi} />,
-
   'help-portal': <HelpPortalModal />,
+  'navigation-drawer-opener': <NavigationDrawerContainer crowi={crowi} />,
 }
 
 Object.entries(componentMappings).forEach(([key, component]) => {
@@ -104,37 +93,6 @@ Object.entries(componentMappings).forEach(([key, component]) => {
     ReactDOM.render(component, elem)
   }
 })
-
-// TODO: remove this logic after migrate to React
-const closeSideMenuHandler = e => {
-  Emitter.emit('closeSideMenu')
-}
-Emitter.on('sideMenuHandle', isOpen => {
-  const closeTriggerElements = ['crowi-global-menu', 'v2-container-backdrop']
-  const containerElement = document.getElementById('crowi-main-container')
-  const menuClassName = ' side-menu-open'
-  if (containerElement) {
-    if (isOpen) {
-      containerElement.className += menuClassName
-      for (const elemName of closeTriggerElements) {
-        const e = document.getElementById(elemName)
-        if (e) {
-          e.addEventListener('click', closeSideMenuHandler)
-        }
-      }
-    } else {
-      containerElement.className = containerElement.className.replace(menuClassName, '')
-      for (const elemName of closeTriggerElements) {
-        const e = document.getElementById(elemName)
-        if (e) {
-          e.removeEventListener('click', closeSideMenuHandler)
-        }
-      }
-    }
-  }
-})
-
-hydrateComponents()
 
 // うわーもうー
 $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {

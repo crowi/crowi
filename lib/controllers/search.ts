@@ -1,6 +1,7 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
-import ApiResponse from '../util/apiResponse'
-import ApiPaginate from '../util/apiPaginate'
+import ApiResponse from '../utils/apiResponse'
+import ApiPaginate from '../utils/apiPaginate'
 import Debug from 'debug'
 
 const debug = Debug('crowi:routes:search')
@@ -10,14 +11,14 @@ export default (crowi: Crowi) => {
   const actions = {} as any
   const api = (actions.api = {} as any)
 
-  actions.searchPage = function(req, res) {
-    var keyword = req.query.q || null
-    var search = crowi.getSearcher()
+  actions.searchPage = function(req: Request, res: Response) {
+    const keyword = req.query.q || null
+    const search = crowi.getSearcher()
     if (!search) {
       return res.json(ApiResponse.error('Configuration of ELASTICSEARCH_URI is required.'))
     }
 
-    return res.render('search', {
+    return res.render('search.html', {
       q: keyword,
     })
   }
@@ -32,7 +33,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} offset
    * @apiParam {String} limit
    */
-  api.search = async function(req, res) {
+  api.search = async function(req: Request, res: Response) {
     const { user } = req
     const { q: keyword = null, tree = null, type = null } = req.query
     let paginateOpts

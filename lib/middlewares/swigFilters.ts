@@ -1,17 +1,18 @@
-import { Express } from 'express'
+import { Express, Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import swig from 'swig'
 import swigFilters from 'swig/lib/filters'
 import path2name from 'common/functions/path2name'
+import { picture } from 'server/utils/view'
 
 export default (crowi: Crowi, app: Express) => {
-  return (req, res, next) => {
+  return (req: Request, res: Response, next) => {
     swig.setFilter('path2name', function(path) {
       return path2name(path)
     })
 
     swig.setFilter('normalizeDateInPath', function(path) {
-      var patterns = [
+      const patterns = [
         [/20(\d{2})(\d{2})(\d{2})(.+)/g, '20$1/$2/$3/$4'],
         [/20(\d{2})(\d{2})(\d{2})/g, '20$1/$2/$3'],
         [/20(\d{2})(\d{2})(.+)/g, '20$1/$2/$3'],
@@ -22,9 +23,9 @@ export default (crowi: Crowi, app: Express) => {
         [/20(\d{2})_(\d{1,2})/g, '20$1/$2'],
       ]
 
-      for (var i = 0; i < patterns.length; i++) {
-        var mat = patterns[i][0]
-        var rep = patterns[i][1]
+      for (let i = 0; i < patterns.length; i++) {
+        const mat = patterns[i][0]
+        const rep = patterns[i][1]
         if (path.match(mat)) {
           return path.replace(mat, rep)
         }
@@ -63,17 +64,7 @@ export default (crowi: Crowi, app: Express) => {
       return string.replace(/[\n]+#/g, '\n\n\n#').replace(/\s(https?.+(jpe?g|png|gif))\s/, '\n\n\n![]($1)\n\n\n')
     })
 
-    swig.setFilter('picture', function(user) {
-      if (!user) {
-        return ''
-      }
-
-      if (user.image && user.image != '/images/userpicture.png') {
-        return user.image
-      } else {
-        return '/images/userpicture.png'
-      }
-    })
+    swig.setFilter('picture', picture)
 
     next()
   }

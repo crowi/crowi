@@ -4,7 +4,7 @@ import i18next from 'i18next'
 import i18nFsBackend from 'i18next-node-fs-backend'
 import i18nSprintf from 'i18next-sprintf-postprocessor'
 import i18nMiddleware from 'i18next-express-middleware'
-import i18nUserSettingDetector from '../util/i18nUserSettingDetector'
+import i18nUserSettingDetector from '../utils/i18nUserSettingDetector'
 
 export default (crowi: Crowi, app: Express) => {
   const User = crowi.model('User')

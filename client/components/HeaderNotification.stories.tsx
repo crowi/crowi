@@ -1,9 +1,12 @@
 import React from 'react'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import HeaderNotification from './HeaderNotification'
+import { createAppContext } from 'client/fixtures/createAppContext'
 
 export default { title: 'HeaderNotification' }
 
-const crowi = new Crowi({ user: {}, csrfToken: '' }, window)
+const appContext = createAppContext()
+
+const crowi = new Crowi(appContext, window)
 
 export const Default = () => <HeaderNotification crowi={crowi} me="" />

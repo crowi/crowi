@@ -1,8 +1,6 @@
 import Reveal from 'reveal.js'
 import hljs from 'highlight.js'
 
-require('reveal.js/lib/js/html5shiv.js')
-
 window.Reveal = Reveal
 
 Reveal.initialize({
@@ -14,12 +12,6 @@ Reveal.initialize({
 
   // Optional libraries used to extend on reveal.js
   dependencies: [
-    {
-      src: '/js/reveal/lib/js/classList.js',
-      condition: function() {
-        return !document.body.classList
-      },
-    },
     {
       src: '/js/reveal/plugin/markdown/marked.js',
       condition: function() {
@@ -42,16 +34,10 @@ Reveal.initialize({
     {
       src: '/js/reveal/plugin/zoom-js/zoom.js',
       async: true,
-      condition: function() {
-        return !!document.body.classList
-      },
     },
     {
       src: '/js/reveal/plugin/notes/notes.js',
       async: true,
-      condition: function() {
-        return !!document.body.classList
-      },
     },
   ],
 })
@@ -59,7 +45,7 @@ Reveal.initialize({
 Reveal.addEventListener('ready', function(event) {
   // event.currentSlide, event.indexh, event.indexv
   $('.reveal section').each(function(e) {
-    var $self = $(this)
+    const $self = $(this)
     if ($self.children().length == 1) {
       $self.addClass('only')
     }

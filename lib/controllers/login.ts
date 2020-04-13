@@ -1,14 +1,14 @@
-import { Express } from 'express'
+import { Express, Request, Response, NextFunction } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import async from 'async'
 import url from 'url'
-import { getContinueUrl } from '../util/url'
-import auth from '../util/auth'
-import GoogleAuth from '../util/googleAuth'
-import GitHubAuth from '../util/githubAuth'
+import { getContinueUrl } from '../utils/url'
+import auth from '../utils/auth'
+import GoogleAuth from '../utils/googleAuth'
+import GitHubAuth from '../utils/githubAuth'
 import axios from 'axios'
-import FileUploader from '../util/fileUploader'
+import FileUploader from '../utils/fileUploader'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:login')
@@ -38,7 +38,7 @@ export default (crowi: Crowi, app: Express) => {
     req.session.social = {}
   }
 
-  const loginSuccess = async function(req, res, userData) {
+  const loginSuccess = async function(req: Request, res: Response, userData) {
     userData = await userData.populateSecrets()
     req.user = req.session.user = userData
     if (!userData.password) {
@@ -50,7 +50,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(getContinueUrl(req))
   }
 
-  const loginFailure = function(req, res) {
+  const loginFailure = function(req: Request, res: Response) {
     req.session.auth = {}
     req.flash('warningMessage', 'Sign in failure.')
 
@@ -74,7 +74,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.googleCallback = function(req, res) {
+  actions.googleCallback = function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { query } = req
     const { code = '', state } = query
@@ -88,7 +88,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(nextAction)
   }
 
-  actions.githubCallback = function(req, res) {
+  actions.githubCallback = function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { query } = req
     const { code = '' } = query
@@ -102,9 +102,9 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(nextAction)
   }
 
-  actions.error = function(req, res) {
-    var reason = req.params.reason
-    var reasonMessage = ''
+  actions.error = function(req: Request, res: Response) {
+    const reason = req.params.reason
+    let reasonMessage = ''
 
     if (reason === 'suspended') {
       reasonMessage = 'This account is suspended.'
@@ -112,13 +112,13 @@ export default (crowi: Crowi, app: Express) => {
       reasonMessage = 'Wait for approved by administrators.'
     }
 
-    return res.render('login/error', {
+    return res.render('login/error.html', {
       reason: reason,
       reasonMessage: reasonMessage,
     })
   }
 
-  actions.login = async function(req, res) {
+  actions.login = async function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { loginForm } = req.body
 
@@ -136,12 +136,10 @@ export default (crowi: Crowi, app: Express) => {
       const userData = await User.findUserByEmailAndPassword(email, password).catch(err => {
         debug('on login findUserByEmailAndPassword', err)
       })
+
       if (userData) {
         if (toConnect) {
-          await connect(
-            req,
-            userData,
-          )
+          await connect(req, userData)
         }
         return loginSuccess(req, res, userData)
       }
@@ -172,17 +170,17 @@ export default (crowi: Crowi, app: Express) => {
         if (toConnect) {
           const locals = { toConnect, targetUser, ...socialSession }
 
-          return res.render('login', locals)
+          return res.render('login.html', locals)
         }
 
         return res.redirect('/register')
       }
 
-      return res.render('login', { continueUrl })
+      return res.render('login.html', { continueUrl })
     }
   }
 
-  actions.loginGoogle = function(req, res) {
+  actions.loginGoogle = function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const googleAuth = GoogleAuth(config)
     const { google = {} } = req.session
@@ -220,7 +218,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.loginGitHub = function(req, res, next) {
+  actions.loginGitHub = function(req: Request, res: Response, next: NextFunction) {
     debug('Header', req.url, req.headers.referer)
     const githubAuth = GitHubAuth(config)
     const { github = {} } = req.session
@@ -231,7 +229,11 @@ export default (crowi: Crowi, app: Express) => {
       req.session.github = { callbackAction: '/login/github' }
       githubAuth.authenticate(req, res, next)
     } else {
-      githubAuth.handleCallback(req, res, next)(async (err, tokenInfo) => {
+      githubAuth.handleCallback(
+        req,
+        res,
+        next,
+      )(async (err, tokenInfo) => {
         debug('handleCallback', err, tokenInfo)
         if (err) {
           return loginFailure(req, res)
@@ -258,9 +260,10 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.register = async function(req, res, next) {
+  actions.register = async function(req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
-    const { lang = User.LANG_EN_US } = req
+    // FIXME: lang
+    const { lang = User.LANG_EN_US } = req as any
 
     // ログイン済みならさようなら
     if (req.user) {
@@ -298,7 +301,7 @@ export default (crowi: Crowi, app: Express) => {
             return registerFailure(t('page_register.error.already_registered_email'))
           }
         }
-        if (config.crowi['auth:disablePasswordAuth'] && (!googleId && !githubId)) {
+        if (config.crowi['auth:disablePasswordAuth'] && !googleId && !githubId) {
           return registerFailure(t('page_register.error.unavailable_password_auth'))
         }
 
@@ -415,7 +418,7 @@ export default (crowi: Crowi, app: Express) => {
         const isRegistering = isDisabledPasswordAuth
         const type = isRegistering ? 'warningMessage' : 'registerWarningMessage'
         req.flash(type, message)
-        return res.render('login', { isRegistering })
+        return res.render('login.html', { isRegistering })
       }
 
       if (!User.isEmailValid(socialEmail)) {
@@ -435,28 +438,28 @@ export default (crowi: Crowi, app: Express) => {
       const toConnect = !!targetUser
       const locals = { isRegistering, toConnect, targetUser, ...socialSession }
 
-      return res.render('register', locals)
+      return res.render('register.html', locals)
     }
   }
 
-  actions.invited = function(req, res) {
+  actions.invited = function(req: Request, res: Response) {
     if (!req.user) {
       return res.redirect('/login')
     }
 
     if (req.method == 'POST' && req.form.isValid) {
-      var user = req.user
-      var invitedForm = req.form.invitedForm || {}
-      var username = invitedForm.username
-      var name = invitedForm.name
-      var password = invitedForm.password
+      const user = req.user
+      const invitedForm = req.form.invitedForm || {}
+      const username = invitedForm.username
+      const name = invitedForm.name
+      const password = invitedForm.password
 
       User.isRegisterableUsername(username, function(creatable) {
         if (creatable) {
           user.activateInvitedUser(username, name, password, function(err, data) {
             if (err) {
               req.flash('warningMessage', 'アクティベートに失敗しました。')
-              return res.render('invited')
+              return res.render('invited.html')
             } else {
               return res.redirect('/')
             }
@@ -464,15 +467,15 @@ export default (crowi: Crowi, app: Express) => {
         } else {
           req.flash('warningMessage', '利用できないユーザーIDです。')
           debug('username', username)
-          return res.render('invited')
+          return res.render('invited.html')
         }
       })
     } else {
-      return res.render('invited', {})
+      return res.render('invited.html', {})
     }
   }
 
-  actions.updateInvitedUser = function(req, res) {
+  actions.updateInvitedUser = function(req: Request, res: Response) {
     return res.redirect('/')
   }
 

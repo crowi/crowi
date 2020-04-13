@@ -1,10 +1,10 @@
 import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
-import moment from 'moment'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { Share } from 'client/types/crowi'
+import { formatToLocaleString } from 'client/utils/formatDate'
 
 interface Props extends WithTranslation {
   crowi: Crowi
@@ -102,7 +102,7 @@ class ShareList extends React.Component<Props, State> {
             path,
             username,
             name,
-            date: moment(createdAt).format('llll'),
+            date: formatToLocaleString(createdAt),
             isActive: status === 'active',
           })
         })}

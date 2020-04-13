@@ -1,6 +1,6 @@
 import React from 'react'
 import UserList from './SeenUserList/UserList'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { User } from 'client/types/crowi'
 
 interface Props {

@@ -38,7 +38,6 @@
       </div>
       <div class="flex-item-action d-md-none">
         <button
-            data-csrftoken="{{ csrf() }}"
             data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
             class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
         >{{ Icon("thumbUpOutline") }}</button>
@@ -81,7 +80,6 @@
   data-page-revision-id="{% if revision %}{{ revision._id.toString() }}{% endif %}"
   data-page-revision-created="{% if revision %}{{ revision.createdAt|datetz('U') }}{% endif %}"
   data-page-is-seen="{% if page and page.isSeenUser(user) %}1{% else %}0{% endif %}"
-  data-csrftoken="{{ csrf() }}"
   >
 
   {% if not page %}
@@ -159,7 +157,7 @@
           <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal">{{ Icon("folderMove") }} {{ t('Move pages under', path|path2name ) }}</a>
           <a class="dropdown-item" href="#" data-target="#portalize" data-toggle="modal">{{ Icon("fileDocumentBoxMultipleOutline") }} {{ t('Portalize') }}</a>
         {% endif %}
-        <a class="dropdown-item" href="?presentation=1" class="toggle-presentation">{{ Icon("presentation") }} {{ t('Presentation Mode') }} (beta)</a>
+        <a class="dropdown-item toggle-presentation" href="?presentation=1">{{ Icon("presentation") }} {{ t('Presentation Mode') }} (beta)</a>
         {% if isDeletablePage() %}
           <div class="dropdown-divider"></div>
           <a class="dropdown-item" href="#" data-target="#deletePage" data-toggle="modal">{{ Icon("trashCanOutline", ["text-danger"]) }} {{ t('Delete') }}</a>

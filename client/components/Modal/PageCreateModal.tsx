@@ -1,12 +1,11 @@
 import React, { useState, FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
-import { Button, Form, Input, Label, Modal, ModalBody, ModalHeader } from 'reactstrap'
-import moment from 'moment'
+import { Button, Form, Input, Label, Modal, ModalBody, ModalHeader, ModalProps } from 'reactstrap'
+import format from 'client/utils/formatDate'
 import styled from 'styled-components'
 
 import { dark, gray, light } from '../../constants/colors'
-import Crowi from 'client/util/Crowi'
-import Icon from '../Common/Icon'
+import Crowi from 'client/utils/Crowi'
 
 const parentPath = (path: string) => {
   if (path === '/') {
@@ -19,10 +18,6 @@ const parentPath = (path: string) => {
 
   return path + '/'
 }
-
-const NewIcon = styled(Icon)`
-  margin-right: 3px;
-`
 
 const TodayInputBox = styled.div`
   display: flex;
@@ -43,10 +38,6 @@ const BaseInput = styled(Input)`
     border-color: #7faaaf;
     box-shadow: 0 0 0 0.2rem rgba(67, 103, 107, 0.25);
   }
-`
-
-const NewButton = styled(Button)`
-  height: 38px;
 `
 
 const CreateButton = styled(Button)`
@@ -81,19 +72,19 @@ const UnderTreePathInput = styled(BaseInput)`
   margin-right: 8px;
 `
 
-interface Props {
+interface Props extends ModalProps {
   crowi: Crowi
+  toggle?: React.MouseEventHandler<any>
 }
 
-const PageCreateModal: FC<Props> = ({ crowi }) => {
+const PageCreateModal: FC<Props> = ({ crowi, fade = false, toggle, ...modalProps }) => {
   const user = crowi.getUser()
   const currentPath = location.pathname
-  const userPath = `/user/${user && user.name}/`
-  const datePath = moment(Date.now()).format('/YYYY/MM/DD/')
+  const userPath = `/user/${user && user.username}/`
+  const datePath = format(new Date(), '/yyyy/MM/dd/')
   const isTopPage = currentPath === '/'
 
   const [t] = useTranslation()
-  const [isOpen, setIsOpen] = useState(false)
   const [portalName, setPotalName] = useState<string>(t('Memo'))
   const [pageName, setPageName] = useState('')
   const [underTreePath, setUnderTreePath] = useState(decodeURI(parentPath(currentPath)))
@@ -109,56 +100,46 @@ const PageCreateModal: FC<Props> = ({ crowi }) => {
     top.location.href = underTreePath
   }
 
-  const toggle = () => {
-    setIsOpen(!isOpen)
-  }
-
   return (
-    <>
-      <NewButton onClick={toggle} color="primary">
-        <NewIcon name="pencilOutline" />
-        {t('New')}
-      </NewButton>
-      <Modal isOpen={isOpen} fade={false} toggle={toggle}>
-        <ModalHeader toggle={toggle}>{t('New Page')}</ModalHeader>
-        <ModalBody>
-          <FormLabel>{t("Create today's")}</FormLabel>
-          <Form onSubmit={createTodayPage} inline>
-            <TodayInputBox>
-              <Path>{userPath}</Path>
-              <PortalNameInput type="text" value={portalName} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPotalName(event.target.value)} />
-              <Path>{datePath}</Path>
-              <PageNameInput
+    <Modal fade={fade} toggle={toggle} {...modalProps}>
+      <ModalHeader toggle={toggle}>{t('New Page')}</ModalHeader>
+      <ModalBody>
+        <FormLabel>{t("Create today's")}</FormLabel>
+        <Form onSubmit={createTodayPage} inline>
+          <TodayInputBox>
+            <Path>{userPath}</Path>
+            <PortalNameInput type="text" value={portalName} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPotalName(event.target.value)} />
+            <Path>{datePath}</Path>
+            <PageNameInput
+              type="text"
+              value={pageName}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPageName(event.target.value)}
+              placeholder={t('Input page name (optional)')}
+            />
+          </TodayInputBox>
+          <CreateButton color="primary">{t('Create')}</CreateButton>
+        </Form>
+        {!isTopPage && (
+          <>
+            <hr />
+            <FormLabel>
+              <Trans i18nKey="Create under">
+                Create page under: <CurrentPath>{{ path: decodeURI(parentPath(currentPath)) }}</CurrentPath>
+              </Trans>
+            </FormLabel>
+            <Form onSubmit={createUnderTreePage} inline>
+              <UnderTreePathInput
                 type="text"
-                value={pageName}
-                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPageName(event.target.value)}
-                placeholder={t('Input page name (optional)')}
+                value={underTreePath}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setUnderTreePath(event.target.value)}
+                placeholder={t('Input page name')}
               />
-            </TodayInputBox>
-            <CreateButton color="primary">{t('Create')}</CreateButton>
-          </Form>
-          {!isTopPage && (
-            <>
-              <hr />
-              <FormLabel>
-                <Trans i18nKey="Create under">
-                  Create page under: <CurrentPath>{{ path: decodeURI(parentPath(currentPath)) }}</CurrentPath>
-                </Trans>
-              </FormLabel>
-              <Form onSubmit={createUnderTreePage} inline>
-                <UnderTreePathInput
-                  type="text"
-                  value={underTreePath}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => setUnderTreePath(event.target.value)}
-                  placeholder={t('Input page name')}
-                />
-                <CreateButton color="primary">{t('Create')}</CreateButton>
-              </Form>
-            </>
-          )}
-        </ModalBody>
-      </Modal>
-    </>
+              <CreateButton color="primary">{t('Create')}</CreateButton>
+            </Form>
+          </>
+        )}
+      </ModalBody>
+    </Modal>
   )
 }
 

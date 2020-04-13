@@ -19,7 +19,10 @@ function useAlerts() {
     setFailure(null)
   }
 
-  return [{ success, failure }, { setSuccess, setFailure, clearStatus }] as const
+  return [
+    { success, failure },
+    { setSuccess, setFailure, clearStatus },
+  ] as const
 }
 
 function useInviteUsers(crowi, fetchUsers, setFailure, clearStatus) {
@@ -58,7 +61,10 @@ function useQuery(crowi) {
   const [page, setPage] = useState(initialPage)
   const [query, setQuery] = useState(initialQuery)
 
-  return [{ page, query }, { setPage, setQuery }] as const
+  return [
+    { page, query },
+    { setPage, setQuery },
+  ] as const
 }
 
 function useFetchUsers(crowi, setFailure, clearStatus) {
@@ -90,7 +96,10 @@ function useFetchUsers(crowi, setFailure, clearStatus) {
     fetchUsers({ page: 0 })
   }, [search])
 
-  return [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] as const
+  return [
+    { users, pagination, query },
+    { setQuery, setSearch, fetchUsers, move },
+  ] as const
 }
 
 function useChangeStatus(crowi, fetchUsers, setSuccess, setFailure, clearStatus) {
@@ -133,7 +142,10 @@ function useModal<T = any>(initialState: T | {} = {}) {
     setModalState({})
   }
 
-  return [{ isOpen, modalState }, { toggle, open, close }] as const
+  return [
+    { isOpen, modalState },
+    { toggle, open, close },
+  ] as const
 }
 
 const UserPage: FC<{}> = () => {

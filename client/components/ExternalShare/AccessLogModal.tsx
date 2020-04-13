@@ -1,11 +1,11 @@
 import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
-import moment from 'moment'
 import platform from 'platform'
 import { Modal, ModalHeader, ModalBody, Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
-import Crowi from 'client/util/Crowi'
+import Crowi from 'client/utils/Crowi'
 import { Share, ShareAccess } from 'client/types/crowi'
+import format, { formatToLocaleString } from 'client/utils/formatDate'
 
 interface Props extends WithTranslation {
   show: boolean
@@ -51,7 +51,7 @@ class AccessLogModal extends React.Component<Props, State> {
 
   renderShareInfo(uuid: string, username: string, name: string, createdAt: string, isActive: boolean) {
     const { t } = this.props
-    const date = moment(createdAt).format('llll')
+    const date = formatToLocaleString(createdAt)
     return (
       <div>
         <h4>
@@ -102,13 +102,15 @@ class AccessLogModal extends React.Component<Props, State> {
       lastAccessedAt,
     } = accesses
     const index = i + 1
-    const { name: platformName, os } = platform.parse ? platform.parse(userAgent) : { name: '', os: '' }
-    const date = moment(lastAccessedAt).format('llll')
+    const { name: platformName, os } = platform?.parse(userAgent) || { name: '', os: { family: '', version: '' } }
+    const date = formatToLocaleString(lastAccessedAt)
     return (
       <tr key={i}>
         <td>{index}</td>
         <td>{platformName}</td>
-        <td>{os}</td>
+        <td>
+          {os?.family} {os?.version}
+        </td>
         <td>{remoteAddress}</td>
         <td>{date}</td>
       </tr>

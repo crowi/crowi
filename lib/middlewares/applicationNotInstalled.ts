@@ -1,6 +1,8 @@
+import { Request, Response } from 'express'
+
 export default () => {
-  return (req, res, next) => {
-    var config = req.config
+  return (req: Request, res: Response, next) => {
+    const config = req.config
 
     if (Object.keys(config.crowi).length !== 1) {
       req.flash('errorMessage', 'Application already installed.')

@@ -4,18 +4,21 @@ import Debug from 'debug'
 import { RevisionDocument } from './revision'
 import { UserDocument } from './user'
 
-const GRANT_PUBLIC = 1
-const GRANT_RESTRICTED = 2
-const GRANT_SPECIFIED = 3
-const GRANT_OWNER = 4
-const PAGE_GRANT_ERROR = 1
-const STATUS_WIP = 'wip'
-const STATUS_PUBLISHED = 'published'
-const STATUS_DELETED = 'deleted'
-const STATUS_DEPRECATED = 'deprecated'
-const TYPE_PORTAL = 'portal'
-const TYPE_USER = 'user'
-const TYPE_PUBLIC = 'public'
+export const GRANT_PUBLIC = 1
+export const GRANT_RESTRICTED = 2
+export const GRANT_SPECIFIED = 3
+export const GRANT_OWNER = 4
+export const GRANTS = [GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER] as const
+export const PAGE_GRANT_ERROR = 1
+export const STATUS_WIP = 'wip'
+export const STATUS_PUBLISHED = 'published'
+export const STATUS_DELETED = 'deleted'
+export const STATUS_DEPRECATED = 'deprecated'
+export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED] as const
+export const TYPE_PORTAL = 'portal'
+export const TYPE_USER = 'user'
+export const TYPE_PUBLIC = 'public'
+export const TYPES = [TYPE_PORTAL, TYPE_USER, TYPE_PUBLIC] as const
 
 export interface PageDocument extends Document {
   _id: Types.ObjectId
@@ -100,7 +103,7 @@ export interface PageModel extends Model<PageDocument> {
   findPageByRedirectTo(path): any
   findPagesByIds(ids): any
   findListByCreator(user, option, currentUser): any
-  getStreamOfFindAll(options): any
+  getStreamOfFindAll(options?): any
   findListByStartWith(path, userData, option): Promise<PageDocument[]>
   findChildrenByPath(path, userData, option): any
   findUnfurlablePages(type, array, grants?: number[]): any
@@ -244,7 +247,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.isUpdatable = function(previousRevision) {
-    var revision = this.latestRevision || this.revision
+    const revision = this.latestRevision || this.revision
     if (revision != previousRevision) {
       return false
     }
@@ -266,7 +269,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.like = async function(userData) {
-    var Activity = crowi.model('Activity')
+    const Activity = crowi.model('Activity')
 
     const added = ((this.liker as any) as Types.Array<UserDocument>).addToSet(userData._id)
     if (added.length > 0) {
@@ -356,7 +359,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.getSlackChannel = function() {
-    var extended = this.get('extended')
+    const extended = this.get('extended')
     if (!extended) {
       return ''
     }
@@ -365,7 +368,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.updateSlackChannel = function(slackChannel) {
-    var extended = this.extended as any
+    const extended = this.extended as any
     extended.slack = slackChannel
 
     return this.updateExtended(extended)
@@ -450,7 +453,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.getGrantLabels = function() {
-    var grantLabels = {}
+    const grantLabels = {}
     grantLabels[GRANT_PUBLIC] = 'Public' // 公開
     grantLabels[GRANT_RESTRICTED] = 'Anyone with the link' // リンクを知っている人のみ
     // grantLabels[GRANT_SPECIFIED]  = 'Specified users only'; // 特定ユーザーのみ
@@ -485,12 +488,12 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.isDeletableName = function(path) {
-    var notDeletable = [
+    const notDeletable = [
       /^\/user\/[^/]+$/, // user page
     ]
 
-    for (var i = 0; i < notDeletable.length; i++) {
-      var pattern = notDeletable[i]
+    for (let i = 0; i < notDeletable.length; i++) {
+      const pattern = notDeletable[i]
       if (path.match(pattern)) {
         return false
       }
@@ -500,7 +503,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.isCreatableName = function(name) {
-    var forbiddenPages = [
+    const forbiddenPages = [
       /\^|\$|\*|\+|\?|#/,
       /^\/_.*/, // /_api/* and so on
       /^\/-\/.*/,
@@ -514,9 +517,9 @@ export default (crowi: Crowi) => {
       /^\/(installer|register|login|logout|admin|me|files|trash|paste|comments)(\/.*|$)/,
     ]
 
-    var isCreatable = true
+    let isCreatable = true
     forbiddenPages.forEach(function(page) {
-      var pageNameReg = new RegExp(page)
+      const pageNameReg = new RegExp(page)
       if (name.match(pageNameReg)) {
         isCreatable = false
       }
@@ -627,7 +630,10 @@ export default (crowi: Crowi) => {
         // .sort({createdAt: -1}) // TODO optionize
         .skip(offset)
         .limit(limit)
-        .populate([{ path: 'creator', model: 'User' }, { path: 'revision', model: 'Revision', populate: { path: 'author' } }])
+        .populate([
+          { path: 'creator', model: 'User' },
+          { path: 'revision', model: 'Revision', populate: { path: 'author' } },
+        ])
         .exec()
     )
   }
@@ -662,9 +668,9 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.findListByCreator = function(user, option, currentUser) {
-    var limit = option.limit || 50
-    var offset = option.offset || 0
-    var conditions: any = {
+    const limit = option.limit || 50
+    const offset = option.offset || 0
+    const conditions: any = {
       creator: user._id,
       redirectTo: null,
       $or: [{ status: null }, { status: STATUS_PUBLISHED }],
@@ -685,17 +691,19 @@ export default (crowi: Crowi) => {
   /**
    * Bulk get (for internal only)
    */
-  pageSchema.statics.getStreamOfFindAll = function(options) {
-    var options = options || {}
-    var publicOnly = options.publicOnly !== false
-    var criteria: any = { redirectTo: null }
+  pageSchema.statics.getStreamOfFindAll = function(options = {}) {
+    const publicOnly = options.publicOnly !== false
+    const criteria: any = { redirectTo: null }
 
     if (publicOnly) {
       criteria.grant = GRANT_PUBLIC
     }
 
     return Page.find(criteria)
-      .populate([{ path: 'creator', model: 'User' }, { path: 'revision', model: 'Revision' }])
+      .populate([
+        { path: 'creator', model: 'User' },
+        { path: 'revision', model: 'Revision' },
+      ])
       .lean()
       .cursor()
   }
@@ -1025,7 +1033,7 @@ export default (crowi: Crowi) => {
     pageData.path = newPagePath
 
     if (createRedirectPage) {
-      var body = 'redirect ' + newPagePath
+      const body = 'redirect ' + newPagePath
       return Page.createPage(path, body, user, { redirectTo: newPagePath })
     }
     pageEvent.emit('update', pageData, user) // update as renamed page
@@ -1099,8 +1107,8 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.getNotificationTargetUsers = async function() {
-    var Comment = crowi.model('Comment')
-    var Revision = crowi.model('Revision')
+    const Comment = crowi.model('Comment')
+    const Revision = crowi.model('Revision')
 
     const [commentCreators, revisionAuthors] = await Promise.all([Comment.findCreatorsByPage(this), Revision.findAuthorsByPage(this)])
     debug('commentCreators', commentCreators)
@@ -1109,10 +1117,10 @@ export default (crowi: Crowi) => {
     const targetUsers = [this.creator].concat(commentCreators, revisionAuthors)
     debug('targetUsers', targetUsers)
 
-    var uniqueChecker = {}
-    var uniqueUsers: Types.ObjectId[] = []
+    const uniqueChecker = {}
+    const uniqueUsers: Types.ObjectId[] = []
     targetUsers.forEach(function(user) {
-      var userId = user.toString()
+      const userId = user.toString()
       if (uniqueChecker[userId] !== 1) {
         uniqueUsers.push(user)
         uniqueChecker[userId] = 1
@@ -1124,7 +1132,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.post('save', savedPage => {
-    var Backlink = crowi.model('Backlink')
+    const Backlink = crowi.model('Backlink')
     Backlink.createBySavedPage(savedPage)
       .then(result => {
         debug(result)
