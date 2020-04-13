@@ -104,6 +104,10 @@ export default class SearchClient {
     }
   }
 
+  isES7() {
+    return this.esVersion.startsWith('7')
+  }
+
   registerUpdateEvent() {
     const pageEvent = this.crowi.event('Page')
     pageEvent.on('create', this.syncPageCreated.bind(this))
@@ -122,7 +126,7 @@ export default class SearchClient {
 
     await this.checkESVersion()
 
-    if (this.esVersion.startsWith('7')) {
+    if (this.isES7()) {
       this.client = new ES7Client({ node, requestTimeout })
     }
 
@@ -141,7 +145,7 @@ export default class SearchClient {
     if ('analysis-sudachi' in this.esPluginNames) {
       fileName = 'mappings-sudachi.json'
     }
-    const dirName = this.esVersion.startsWith('7') ? 'es7' : 'es6'
+    const dirName = this.isES7() ? 'es7' : 'es6'
 
     const filePath = path.join(resourceDir, 'search', dirName, fileName)
     return JSON.parse(fs.readFileSync(filePath).toString())
@@ -311,7 +315,7 @@ export default class SearchClient {
   }
 
   getType() {
-    return this.esVersion.startsWith('7') ? '_doc' : 'pages'
+    return this.isES7() ? '_doc' : 'pages'
   }
 
   prepareBodyForUpdate(body, page, index = null) {
