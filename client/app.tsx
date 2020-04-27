@@ -32,8 +32,6 @@ import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
 
-import hydrateComponents from './hydrateComponents'
-
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     environment: process.env.NODE_ENV,
