@@ -1,11 +1,12 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
-import auth from '../util/auth'
+import auth from '../utils/auth'
 import Debug from 'debug'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:middlewares:loginRequired')
 
-  return async (req, res, next) => {
+  return async (req: Request, res: Response, next) => {
     const User = crowi.model('User')
     const config = crowi.getConfig()
     const { originalUrl } = req

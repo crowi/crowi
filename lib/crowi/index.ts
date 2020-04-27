@@ -20,10 +20,10 @@ import controllers from 'server/controllers'
 import routes from '../routes'
 import LRU from '../service/lru'
 import Config from '../service/config'
-import mailer from '../util/mailer'
-import slack from '../util/slack'
+import mailer from '../utils/mailer'
+import slack from '../utils/slack'
 import expressInit from './express-init'
-import Searcher from 'server/util/search'
+import Searcher from 'server/service/search'
 
 const pkg = require('../../package.json')
 
@@ -53,6 +53,8 @@ class Crowi {
   viewsDir: string
 
   mailDir: string
+
+  viewsDirs: string[]
 
   tmpDir: string
 
@@ -109,6 +111,13 @@ class Crowi {
   constructor(rootdir: string, env: typeof process.env) {
     this.version = pkg.version
 
+    this.env = env
+    this.baseUrl = this.env.BASE_URL || null
+    this.node_env = this.env.NODE_ENV || 'production'
+    this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
+    this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
+    this.redisOpts = this.buildRedisOpts(this.redisUrl)
+
     this.rootDir = rootdir
     this.pluginDir = path.join(this.rootDir, 'node_modules') + sep
     this.publicDir = path.join(this.rootDir, 'public') + sep
@@ -116,17 +125,12 @@ class Crowi {
     this.resourceDir = path.join(this.rootDir, 'resource') + sep
     this.viewsDir = path.join(this.rootDir, 'views') + sep
     this.mailDir = path.join(this.viewsDir, 'mail') + sep
+    const pagesDir = path.join(this.rootDir, ...(this.node_env === 'development' ? ['lib'] : ['dist', 'server']), 'pages') + sep
+    this.viewsDirs = [this.viewsDir, pagesDir]
     this.tmpDir = path.join(this.rootDir, 'tmp') + sep
     this.cacheDir = path.join(this.tmpDir, 'cache')
 
     this.setupEvents()
-
-    this.env = env
-    this.baseUrl = this.env.BASE_URL || null
-    this.node_env = this.env.NODE_ENV || 'development'
-    this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
-    this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
-    this.redisOpts = this.buildRedisOpts(this.redisUrl)
 
     this.tokens = new Tokens()
   }
@@ -221,7 +225,7 @@ class Crowi {
     // mongoUri = mongodb://user:password@host/dbname
     mongoose.Promise = global.Promise
 
-    var mongoUri =
+    const mongoUri =
       this.env.MONGOLAB_URI || // for B.C.
       this.env.MONGODB_URI || // MONGOLAB changes their env name
       this.env.MONGOHQ_URL ||
@@ -324,26 +328,18 @@ class Crowi {
     return Config.migrate()
   }
 
-  setupSearcher() {
+  async setupSearcher() {
     const searcherUri = this.env.ELASTICSEARCH_URI || this.env.BONSAI_URL || null
 
-    return new Promise((resolve, reject) => {
-      if (searcherUri) {
-        try {
-          this.searcher = new Searcher(this, searcherUri)
-
-          // workaround
-          setTimeout(() => {
-            this.searcher.checkESVersion()
-            this.searcher.ensureAlias()
-          }, 5000)
-        } catch (e) {
-          debug('Error on setup searcher', e)
-          this.searcher = null
-        }
+    if (searcherUri) {
+      try {
+        this.searcher = new Searcher(this, searcherUri)
+        this.searcher.initialize()
+      } catch (e) {
+        debug('Error on setup searcher', e)
+        this.searcher = null
       }
-      resolve()
-    })
+    }
   }
 
   setupMailer() {
@@ -423,7 +419,7 @@ class Crowi {
       app.use(morgan('combined'))
       app.use(function(err, req, res, next) {
         res.status(500)
-        res.render('500', { error: err })
+        res.render('500.html', { error: err })
       })
     }
 

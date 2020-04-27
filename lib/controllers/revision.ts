@@ -1,6 +1,7 @@
+import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import ApiResponse from '../util/apiResponse'
+import ApiResponse from '../utils/apiResponse'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:revision')
@@ -16,12 +17,12 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} revision_id Revision Id.
    */
-  actions.api.get = function(req, res) {
-    var revisionId = req.query.revision_id
+  actions.api.get = function(req: Request, res: Response) {
+    const revisionId = req.query.revision_id
 
     Revision.findRevision(revisionId)
       .then(function(revisionData) {
-        var result = {
+        const result = {
           revision: revisionData,
         }
         return res.json(ApiResponse.success(result))
@@ -39,8 +40,8 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id      Page Id.
    */
-  actions.api.ids = function(req, res) {
-    var pageId = req.query.page_id || null
+  actions.api.ids = function(req: Request, res: Response) {
+    const pageId = req.query.page_id || null
 
     if (pageId && crowi.isPageId(pageId)) {
       Page.findPageByIdAndGrantedUser(pageId, req.user)
@@ -67,9 +68,9 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_ids Revision Ids.
    * @apiParam {String} page_id      Page Id.
    */
-  actions.api.list = function(req, res) {
-    var revisionIds = (req.query.revision_ids || '').split(',')
-    var pageId = req.query.page_id || null
+  actions.api.list = function(req: Request, res: Response) {
+    const revisionIds = (req.query.revision_ids || '').split(',')
+    const pageId = req.query.page_id || null
 
     if (pageId) {
       Page.findPageByIdAndGrantedUser(pageId, req.user)
