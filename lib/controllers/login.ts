@@ -3,12 +3,12 @@ import Crowi from 'server/crowi'
 import Debug from 'debug'
 import async from 'async'
 import url from 'url'
-import { getContinueUrl } from '../utils/url'
-import auth from '../utils/auth'
-import GoogleAuth from '../utils/googleAuth'
-import GitHubAuth from '../utils/githubAuth'
+import { getContinueUrl } from 'server/util/url'
+import auth from 'server/util/auth'
+import GoogleAuth from 'server/util/googleAuth'
+import GitHubAuth from 'server/util/githubAuth'
 import axios from 'axios'
-import FileUploader from '../utils/fileUploader'
+import FileUploader from 'server/util/fileUploader'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:login')

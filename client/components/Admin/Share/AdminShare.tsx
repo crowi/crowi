@@ -4,7 +4,7 @@ import Tab from 'components/Common/Tab'
 import TabItem from 'components/Common/TabItem'
 import ShareList from './ShareList'
 import AccessLog from './AccessLog'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 
 interface Props extends WithTranslation {
   crowi: Crowi

@@ -1,6 +1,6 @@
 import React from 'react'
 import UserPicture from './User/UserPicture'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import { Backlink as BacklinkType, User } from 'client/types/crowi'
 
 interface Props {

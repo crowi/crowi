@@ -1,5 +1,5 @@
 import React from 'react'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import BookmarkButton from './BookmarkButton'
 import { createAppContext } from 'client/fixtures/createAppContext'
 

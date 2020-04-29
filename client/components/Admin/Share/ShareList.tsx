@@ -2,9 +2,9 @@ import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import { Table, Alert } from 'reactstrap'
 import Pagination from 'components/Common/Pagination'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
-import { formatToLocaleString } from 'client/utils/formatDate'
+import { formatToLocaleString } from 'client/util/formatDate'
 
 interface Props extends WithTranslation {
   crowi: Crowi

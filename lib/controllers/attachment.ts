@@ -2,8 +2,8 @@ import { Express, Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import fs from 'fs'
-import FileUploader from '../utils/fileUploader'
-import ApiResponse from '../utils/apiResponse'
+import FileUploader from 'server/util/fileUploader'
+import ApiResponse from 'server/util/apiResponse'
 import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi, app: Express) => {

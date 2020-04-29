@@ -2,7 +2,7 @@ import React, { FC } from 'react'
 import styled from 'styled-components'
 import CommentList from './CommentList'
 import Icon from 'components/Common/Icon'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import { Comment } from 'client/types/crowi'
 
 const ToggleCommentList = styled.a`

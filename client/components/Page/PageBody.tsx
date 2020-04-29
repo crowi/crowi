@@ -1,5 +1,5 @@
 import React from 'react'
-import CrowiRenderer from 'client/utils/CrowiRenderer'
+import CrowiRenderer from 'client/util/CrowiRenderer'
 import { Page } from 'client/types/crowi'
 
 interface Props {
