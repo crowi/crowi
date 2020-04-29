@@ -10,7 +10,7 @@ type Props = {
   messages: BaseProps['messages']
 } & PageProps
 
-const ApiTokenPage: FC<Props> = props => {
+const ApiTokenPage: FC<Props> = (props) => {
   const { i18n, apiToken, hasPassword } = props
 
   return (
@@ -25,7 +25,7 @@ const ApiTokenPage: FC<Props> = props => {
               </label>
               <div className="col-6">
                 {apiToken ? (
-                  <input name="api-token" className="form-control" type="text" value={apiToken} readOnly />
+                  <input name="api-token" className="form-control" type="text" defaultValue={apiToken} readOnly />
                 ) : (
                   <p className="form-control-static">{i18n.t('page_me_apitoken.notice.apitoken_issued')}</p>
                 )}
@@ -40,7 +40,7 @@ const ApiTokenPage: FC<Props> = props => {
                   {i18n.t('page_me_apitoken.notice.update_token2')}
                 </p>
 
-                <button type="submit" value="1" name="apiTokenForm[confirm]" className="btn btn-primary">
+                <button type="submit" defaultValue="1" name="apiTokenForm[confirm]" className="btn btn-primary">
                   {i18n.t('Update API Token')}
                 </button>
               </div>

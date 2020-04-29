@@ -11,7 +11,7 @@ type Props = {
   messages: BaseProps['messages'] & { google?: { warning?: string }; github?: { warning?: string } }
 } & PageProps
 
-const IndexPage: FC<Props> = props => {
+const IndexPage: FC<Props> = (props) => {
   const { i18n, context, messages } = props
   const { user } = context
 
@@ -26,7 +26,7 @@ const IndexPage: FC<Props> = props => {
                 {i18n.t('Name')}
               </label>
               <div className="col-sm-4">
-                <input id="name" className="form-control" type="text" name="userForm[name]" value={user.name} required />
+                <input id="name" className="form-control" type="text" name="userForm[name]" defaultValue={user.name} required />
               </div>
             </div>
             <div className={classNames('form-group', 'row', user.email && 'has-error')}>
@@ -34,7 +34,7 @@ const IndexPage: FC<Props> = props => {
                 {i18n.t('Email')}
               </label>
               <div className="col-sm-4">
-                <input id="email" className="form-control" type="email" name="userForm[email]" value={user.email || ''} required />
+                <input id="email" className="form-control" type="email" name="userForm[email]" defaultValue={user.email || ''} required />
               </div>
               <div className="offset-2 col-sm-10">
                 {context.security.registrationWhiteList.length ? (
@@ -42,7 +42,7 @@ const IndexPage: FC<Props> = props => {
                     <p className="form-text text-muted">
                       {i18n.t('page_register.form_help.email')}
                       <ul>
-                        {context.security.registrationWhiteList.map(em => (
+                        {context.security.registrationWhiteList.map((em) => (
                           <li key={em}>
                             <code>{{ em }}</code>
                           </li>
@@ -63,8 +63,8 @@ const IndexPage: FC<Props> = props => {
                     id="lang-en"
                     name="userForm[lang]"
                     className="custom-control-input"
-                    value="en-US"
-                    checked={context.user.language === 'en-US'}
+                    defaultValue="en-US"
+                    defaultChecked={context.user.language === 'en-US'}
                   />
                   <label className="custom-control-label" htmlFor="lang-en">
                     {i18n.t('English')}
@@ -72,7 +72,14 @@ const IndexPage: FC<Props> = props => {
                 </div>
                 <div className="custom-control custom-radio custom-control-inline">
                   {/* FIXME: Use constants */}
-                  <input type="radio" id="lang-ja" name="userForm[lang]" className="custom-control-input" value="ja" checked={context.user.language === 'ja'} />
+                  <input
+                    type="radio"
+                    id="lang-ja"
+                    name="userForm[lang]"
+                    className="custom-control-input"
+                    defaultValue="ja"
+                    defaultChecked={context.user.language === 'ja'}
+                  />
                   <label className="custom-control-label" htmlFor="lang-ja">
                     {i18n.t('Japanese')}
                   </label>

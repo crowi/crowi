@@ -7,7 +7,7 @@ type Props = {
   warningMessage?: string
 } & PageProps
 
-const GitHubWidget: FC<Props> = props => {
+const GitHubWidget: FC<Props> = (props) => {
   const { i18n, context, warningMessage } = props
 
   return (
@@ -28,12 +28,12 @@ const GitHubWidget: FC<Props> = props => {
           type="submit"
           name="disconnectGitHub"
           className="btn btn-secondary"
-          value={i18n.t('Disconnect') as any}
+          defaultValue={i18n.t('Disconnect') as any}
           disabled={context.auth.canDisconnectThirdPartyId}
         />
       }
       disconnectMessages={[i18n.t('page_me.form_help.github_disconnect1'), i18n.t('page_me.form_help.github_disconnect2')]}
-      connectButton={<input type="submit" name="connectGitHub" className="btn btn-github" value={i18n.t('GitHub Connect') as any} />}
+      connectButton={<input type="submit" name="connectGitHub" className="btn btn-github" defaultValue={i18n.t('GitHub Connect') as any} />}
       helpMessage={i18n.t('page_me.form_help.github_connect1')}
     />
   )
