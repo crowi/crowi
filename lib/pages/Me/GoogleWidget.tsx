@@ -7,7 +7,7 @@ type Props = {
   warningMessage?: string
 } & PageProps
 
-const GoogleWidget: FC<Props> = props => {
+const GoogleWidget: FC<Props> = (props) => {
   const { i18n, context, warningMessage } = props
 
   return (
@@ -28,12 +28,12 @@ const GoogleWidget: FC<Props> = props => {
           type="submit"
           name="disconnectGoogle"
           className="btn btn-secondary"
-          value={i18n.t('Disconnect') as any}
+          defaultValue={i18n.t('Disconnect') as any}
           disabled={context.auth.canDisconnectThirdPartyId}
         />
       }
       disconnectMessages={[i18n.t('page_me.form_help.google_disconnect1'), i18n.t('page_me.form_help.google_disconnect2')]}
-      connectButton={<input type="submit" name="connectGoogle" className="btn btn-google" value={i18n.t('Google Connect') as any} />}
+      connectButton={<input type="submit" name="connectGoogle" className="btn btn-google" defaultValue={i18n.t('Google Connect') as any} />}
       helpMessage={i18n.t('page_me.form_help.google_connect1')}
     />
   )
