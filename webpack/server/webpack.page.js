@@ -10,7 +10,7 @@ const config = {
   target: 'node',
   externals: [nodeExternals()],
   entry: Object.fromEntries(
-    glob.sync(path.join(ROOT, 'lib/pages/**/*.tsx')).map(entry => [entry.replace(path.join(ROOT, 'lib'), '').replace('.tsx', '.js'), entry]),
+    glob.sync(path.join(ROOT, 'lib/pages/**/*.tsx')).map((entry) => [entry.replace(path.join(ROOT, 'lib'), '').replace('.tsx', '.js'), entry]),
   ),
   output: {
     path: path.join(ROOT, 'dist/server'),

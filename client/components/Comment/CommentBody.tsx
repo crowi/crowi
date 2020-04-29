@@ -11,7 +11,7 @@ type Props = CommonProps & {
   comment: string
 }
 
-const CommentBody: FC<Props> = props => {
+const CommentBody: FC<Props> = (props) => {
   const { comment, ...others } = props
 
   return (

@@ -45,7 +45,7 @@ interface Pipe {
   <T1, T2, T3, T4, T5, T6>(v: T1, f1: (a: T1) => T2, f2: (a: T2) => T3, f3: (a: T3) => T4, f4: (a: T4) => T5, f5: (a: T5) => T6): T6
 }
 
-export const pipe: Pipe = (v: any, ...fs: ((a: any) => any)[]) => fs.reduce((prev, next) => value => next(prev(value)))(v)
+export const pipe: Pipe = (v: any, ...fs: ((a: any) => any)[]) => fs.reduce((prev, next) => (value) => next(prev(value)))(v)
 
 export type BaseQueryParams = {
   index: string
@@ -174,16 +174,16 @@ export const appendBoolMustNotQuery = <T extends Search, U>(query: T, params: U)
 export const filterPortalPages = <T extends Search>(query: T) => {
   return pipe(
     query,
-    query => appendBoolMustNotQuery(query, queries.user),
-    query => appendBoolFilterQuery(query, queries.portal),
+    (query) => appendBoolMustNotQuery(query, queries.user),
+    (query) => appendBoolFilterQuery(query, queries.portal),
   )
 }
 
 export const filterPublicPages = <T extends Search>(query: T) => {
   return pipe(
     query,
-    query => appendBoolFilterQuery(query, queries.user),
-    query => appendBoolMustNotQuery(query, queries.portal),
+    (query) => appendBoolFilterQuery(query, queries.user),
+    (query) => appendBoolMustNotQuery(query, queries.portal),
   )
 }
 
@@ -392,10 +392,10 @@ export const appendSearchQuery = <T extends Search>(query: T, params: SearchQuer
 
   return pipe(
     query,
-    query => appendPositiveKeywordQuery(query, { keywords: keywords.positive }),
-    query => appendNegativeKeywordQuery(query, { keywords: keywords.negative }),
-    query => appendPositivePhraseQuery(query, { phrases: phrases.positive }),
-    query => appendNegativePhraseQuery(query, { phrases: phrases.negative }),
+    (query) => appendPositiveKeywordQuery(query, { keywords: keywords.positive }),
+    (query) => appendNegativeKeywordQuery(query, { keywords: keywords.negative }),
+    (query) => appendPositivePhraseQuery(query, { phrases: phrases.positive }),
+    (query) => appendNegativePhraseQuery(query, { phrases: phrases.negative }),
   )
 }
 

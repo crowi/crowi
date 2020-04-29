@@ -22,7 +22,7 @@ const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [accessKeyId, setAccessKeyId] = useState(settingForm['upload:aws:accessKeyId'] || '')
   const [secretAccessKey, setSecretAccessKey] = useState(settingForm['upload:aws:secretAccessKey'] || '')
 
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     update({
       'upload:aws:region': region,
@@ -51,22 +51,22 @@ const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
 
         <FormRow>
           <Label for="awsRegion">{t('admin.aws.region')}</Label>
-          <Input id="awsRegion" placeholder="例: ap-northeast-1" value={region} onChange={e => setRegion(e.target.value)} />
+          <Input id="awsRegion" placeholder="例: ap-northeast-1" value={region} onChange={(e) => setRegion(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="awsBucket">{t('admin.aws.bucket')}</Label>
-          <Input id="awsBucket" placeholder="例: crowi" value={bucket} onChange={e => setBucket(e.target.value)} />
+          <Input id="awsBucket" placeholder="例: crowi" value={bucket} onChange={(e) => setBucket(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="accessKeyId">{t('admin.aws.access_key_id')}</Label>
-          <Input id="accessKeyId" value={accessKeyId} onChange={e => setAccessKeyId(e.target.value)} />
+          <Input id="accessKeyId" value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="secretAccessKey">{t('admin.aws.secret_access_key')}</Label>
-          <Input id="secretAccessKey" value={secretAccessKey} onChange={e => setSecretAccessKey(e.target.value)} />
+          <Input id="secretAccessKey" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} />
         </FormRow>
 
         <FormRow>

@@ -14,20 +14,20 @@ Reveal.initialize({
   dependencies: [
     {
       src: '/js/reveal/plugin/markdown/marked.js',
-      condition: function() {
+      condition: function () {
         return !!document.querySelector('[data-markdown]')
       },
     },
     {
       src: '/js/reveal/plugin/markdown/markdown.js',
-      condition: function() {
+      condition: function () {
         return !!document.querySelector('[data-markdown]')
       },
     },
     {
       src: '/js/reveal/plugin/highlight/highlight.js',
       async: true,
-      callback: function() {
+      callback: function () {
         hljs.initHighlightingOnLoad()
       },
     },
@@ -42,9 +42,9 @@ Reveal.initialize({
   ],
 })
 
-Reveal.addEventListener('ready', function(event) {
+Reveal.addEventListener('ready', function (event) {
   // event.currentSlide, event.indexh, event.indexv
-  $('.reveal section').each(function(e) {
+  $('.reveal section').each(function (e) {
     const $self = $(this)
     if ($self.children().length == 1) {
       $self.addClass('only')

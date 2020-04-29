@@ -31,7 +31,7 @@ function useInviteUsers(crowi, fetchUsers, setFailure, clearStatus) {
   const invite = async ({ emails, sendEmail }) => {
     const emailList = emails
       .split('\n')
-      .map(s => s.trim())
+      .map((s) => s.trim())
       .filter(Boolean)
       .join('\n')
 
@@ -86,7 +86,7 @@ function useFetchUsers(crowi, setFailure, clearStatus) {
     }
   }
 
-  const move = page => setPage(page)
+  const move = (page) => setPage(page)
 
   useEffect(() => {
     fetchUsers()
@@ -133,7 +133,7 @@ function useModal<T = any>(initialState: T | {} = {}) {
   const [modalState, setModalState] = useState(initialState)
 
   const toggle = () => setModal(!isOpen)
-  const open = state => {
+  const open = (state) => {
     setModal(true)
     if (state) setModalState(state)
   }

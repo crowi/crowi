@@ -185,76 +185,76 @@ export default (crowi: Crowi) => {
     return lang
   }
 
-  userSchema.methods.isPasswordSet = function() {
+  userSchema.methods.isPasswordSet = function () {
     if (this.password) {
       return true
     }
     return false
   }
 
-  userSchema.methods.isPasswordValid = function(password) {
+  userSchema.methods.isPasswordValid = function (password) {
     return this.password == generatePassword(password)
   }
 
-  userSchema.methods.setPassword = function(password) {
+  userSchema.methods.setPassword = function (password) {
     this.password = generatePassword(password)
     return this
   }
 
-  userSchema.methods.isEmailSet = function() {
+  userSchema.methods.isEmailSet = function () {
     if (this.email) {
       return true
     }
     return false
   }
 
-  userSchema.methods.updatePassword = function(password, callback) {
+  userSchema.methods.updatePassword = function (password, callback) {
     this.setPassword(password)
-    this.save(function(err, userData) {
+    this.save(function (err, userData) {
       return callback(err, userData)
     })
   }
 
-  userSchema.methods.updateApiToken = function() {
+  userSchema.methods.updateApiToken = function () {
     this.apiToken = generateApiToken(this)
     return this.save()
   }
 
-  userSchema.methods.updateImage = function(image, callback) {
+  userSchema.methods.updateImage = function (image, callback) {
     this.image = image
-    this.save(function(err, userData) {
+    this.save(function (err, userData) {
       return callback(err, userData)
     })
   }
 
-  userSchema.methods.updateEmail = function(email) {
+  userSchema.methods.updateEmail = function (email) {
     this.email = email
     return this.save()
   }
 
-  userSchema.methods.deleteImage = function(callback) {
+  userSchema.methods.deleteImage = function (callback) {
     return this.updateImage(null, callback)
   }
 
-  userSchema.methods.updateGoogleId = function(googleId) {
+  userSchema.methods.updateGoogleId = function (googleId) {
     this.googleId = googleId
     return this.save()
   }
 
-  userSchema.methods.deleteGoogleId = function() {
+  userSchema.methods.deleteGoogleId = function () {
     return this.updateGoogleId(null)
   }
 
-  userSchema.methods.updateGitHubId = function(githubId) {
+  userSchema.methods.updateGitHubId = function (githubId) {
     this.githubId = githubId
     return this.save()
   }
 
-  userSchema.methods.deleteGitHubId = function() {
+  userSchema.methods.deleteGitHubId = function () {
     return this.updateGitHubId(null)
   }
 
-  userSchema.methods.countValidThirdPartyIds = function() {
+  userSchema.methods.countValidThirdPartyIds = function () {
     const Config = crowi.model('Config')
     const config = crowi.getConfig()
     const googleId = Config.googleLoginEnabled(config) && this.googleId
@@ -263,53 +263,53 @@ export default (crowi: Crowi) => {
     return validIds.length
   }
 
-  userSchema.methods.hasValidThirdPartyId = function() {
+  userSchema.methods.hasValidThirdPartyId = function () {
     return this.countValidThirdPartyIds() > 0
   }
 
-  userSchema.methods.canDisconnectThirdPartyId = function() {
+  userSchema.methods.canDisconnectThirdPartyId = function () {
     const Config = crowi.model('Config')
     const config = crowi.getConfig()
     return !Config.isDisabledPasswordAuth(config) || this.countValidThirdPartyIds() > 1
   }
 
-  userSchema.methods.activateInvitedUser = function(username, name, password, callback) {
+  userSchema.methods.activateInvitedUser = function (username, name, password, callback) {
     this.setPassword(password)
     this.name = name
     this.username = username
     this.status = STATUS_ACTIVE
-    this.save(function(err, userData) {
+    this.save(function (err, userData) {
       userEvent.emit('activated', userData)
       return callback(err, userData)
     })
   }
 
-  userSchema.methods.removeFromAdmin = function(callback) {
+  userSchema.methods.removeFromAdmin = function (callback) {
     debug('Remove from admin', this)
     this.admin = false
-    this.save(function(err, userData) {
+    this.save(function (err, userData) {
       return callback(err, userData)
     })
   }
 
-  userSchema.methods.makeAdmin = function(callback) {
+  userSchema.methods.makeAdmin = function (callback) {
     debug('Admin', this)
     this.admin = true
-    this.save(function(err, userData) {
+    this.save(function (err, userData) {
       return callback(err, userData)
     })
   }
 
-  userSchema.methods.statusActivate = function(callback) {
+  userSchema.methods.statusActivate = function (callback) {
     debug('Activate User', this)
     this.status = STATUS_ACTIVE
-    this.save(function(err, userData) {
+    this.save(function (err, userData) {
       userEvent.emit('activated', userData)
       return callback(err, userData)
     })
   }
 
-  userSchema.methods.statusSuspend = function(callback) {
+  userSchema.methods.statusSuspend = function (callback) {
     debug('Suspend User', this)
     this.status = STATUS_SUSPENDED
     if (this.email === undefined || this.email === null) {
@@ -324,29 +324,29 @@ export default (crowi: Crowi) => {
       // migrate old data
       this.username = '-'
     }
-    this.save(function(err, userData) {
+    this.save(function (err, userData) {
       return callback(err, userData)
     })
   }
 
-  userSchema.methods.statusDelete = function(callback) {
+  userSchema.methods.statusDelete = function (callback) {
     debug('Delete User', this)
     this.status = STATUS_DELETED
     this.password = ''
     this.email = 'deleted@deleted'
     this.googleId = null
     this.image = null
-    this.save(function(err, userData) {
+    this.save(function (err, userData) {
       return callback(err, userData)
     })
   }
 
-  userSchema.methods.populateSecrets = async function() {
+  userSchema.methods.populateSecrets = async function () {
     return User.findById(this._id, '+password +apiToken').exec()
   }
 
   userSchema.statics.getLanguageLabels = getLanguageLabels
-  userSchema.statics.getUserStatusLabels = function() {
+  userSchema.statics.getUserStatusLabels = function () {
     const userStatus = {}
     userStatus[STATUS_REGISTERED] = '承認待ち'
     userStatus[STATUS_ACTIVE] = 'Active'
@@ -357,12 +357,12 @@ export default (crowi: Crowi) => {
     return userStatus
   }
 
-  userSchema.statics.isEmailValid = function(email) {
+  userSchema.statics.isEmailValid = function (email) {
     const config = crowi.getConfig()
     const whitelist = config.crowi['security:registrationWhiteList']
 
     if (Array.isArray(whitelist) && whitelist.length > 0) {
-      return config.crowi['security:registrationWhiteList'].some(function(allowedEmail) {
+      return config.crowi['security:registrationWhiteList'].some(function (allowedEmail) {
         const re = new RegExp(allowedEmail + '$')
         return re.test(email)
       })
@@ -371,7 +371,7 @@ export default (crowi: Crowi) => {
     return true
   }
 
-  userSchema.statics.isGitHubAccountValid = function(organizations) {
+  userSchema.statics.isGitHubAccountValid = function (organizations) {
     const config = crowi.getConfig()
     const org = config.crowi['github:organization']
 
@@ -380,19 +380,19 @@ export default (crowi: Crowi) => {
     return !org || orgs.includes(org)
   }
 
-  userSchema.statics.findUsers = function(options, callback) {
+  userSchema.statics.findUsers = function (options, callback) {
     const sort = options.sort || { status: 1, createdAt: 1 }
 
     this.find()
       .sort(sort)
       .skip(options.skip || 0)
       .limit(options.limit || 21)
-      .exec(function(err, userData) {
+      .exec(function (err, userData) {
         callback(err, userData)
       })
   }
 
-  userSchema.statics.findAllUsers = function(options = {}) {
+  userSchema.statics.findAllUsers = function (options = {}) {
     const sort = options.sort || { createdAt: -1 }
     let status = options.status || [STATUS_ACTIVE, STATUS_SUSPENDED]
     const fields = options.fields
@@ -403,7 +403,7 @@ export default (crowi: Crowi) => {
 
     return User.find()
       .or(
-        status.map(s => {
+        status.map((s) => {
           return { status: s }
         }),
       )
@@ -412,7 +412,7 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  userSchema.statics.findUsersByIds = function(ids, options = {}) {
+  userSchema.statics.findUsersByIds = function (ids, options = {}) {
     const sort = options.sort || { createdAt: -1 }
     const status = options.status || STATUS_ACTIVE
     const fields = options.fields
@@ -423,20 +423,20 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  userSchema.statics.findAdmins = function(callback) {
-    this.find({ admin: true }).exec(function(err, admins) {
+  userSchema.statics.findAdmins = function (callback) {
+    this.find({ admin: true }).exec(function (err, admins) {
       debug('Admins: ', admins)
       callback(err, admins)
     })
   }
 
-  userSchema.statics.findUsersWithPagination = function(options, query, callback) {
+  userSchema.statics.findUsersWithPagination = function (options, query, callback) {
     const sort = options.sort || { status: 1, username: 1, createdAt: 1 }
 
     this.paginate(
       query,
       { page: options.page || 1, limit: options.limit || PAGE_ITEMS },
-      function(err, result) {
+      function (err, result) {
         if (err) {
           debug('Error on pagination:', err)
           return callback(err, null)
@@ -448,7 +448,7 @@ export default (crowi: Crowi) => {
     )
   }
 
-  userSchema.statics.findUsersByPartOfEmail = function(emailPart, options) {
+  userSchema.statics.findUsersByPartOfEmail = function (emailPart, options) {
     const status = options.status || null
     const emailPartRegExp = new RegExp(emailPart.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))
 
@@ -461,32 +461,32 @@ export default (crowi: Crowi) => {
     return query.limit(PAGE_ITEMS + 1).exec()
   }
 
-  userSchema.statics.findUserByUsername = function(username) {
+  userSchema.statics.findUserByUsername = function (username) {
     return User.findOne({ username }).exec()
   }
 
-  userSchema.statics.findUserByApiToken = function(apiToken) {
+  userSchema.statics.findUserByApiToken = function (apiToken) {
     return User.findOne({ apiToken }).exec()
   }
 
-  userSchema.statics.findUserByGoogleId = function(googleId) {
+  userSchema.statics.findUserByGoogleId = function (googleId) {
     return User.findOne({ googleId }).exec()
   }
 
-  userSchema.statics.findUserByGitHubId = function(githubId) {
+  userSchema.statics.findUserByGitHubId = function (githubId) {
     return User.findOne({ githubId }).exec()
   }
 
-  userSchema.statics.findUserByEmail = function(email) {
+  userSchema.statics.findUserByEmail = function (email) {
     return User.findOne({ email }).exec()
   }
 
-  userSchema.statics.findUserByEmailAndPassword = function(email, password) {
+  userSchema.statics.findUserByEmailAndPassword = function (email, password) {
     const hashedPassword = generatePassword(password)
     return User.findOne({ email, password: hashedPassword }).exec()
   }
 
-  userSchema.statics.isRegisterableUsername = async function(username, callback) {
+  userSchema.statics.isRegisterableUsername = async function (username, callback) {
     const userData = await User.findOne({ username })
     if (userData) {
       return callback(false)
@@ -495,7 +495,7 @@ export default (crowi: Crowi) => {
     return callback(true)
   }
 
-  userSchema.statics.isRegisterable = async function(email, username, callback) {
+  userSchema.statics.isRegisterable = async function (email, username, callback) {
     let emailUsable = true
     let usernameUsable = true
     let userData: UserDocument | null = null
@@ -519,8 +519,8 @@ export default (crowi: Crowi) => {
     return callback(true, {})
   }
 
-  userSchema.statics.removeCompletelyById = function(id, callback) {
-    User.findById(id, function(err, userData) {
+  userSchema.statics.removeCompletelyById = function (id, callback) {
+    User.findById(id, function (err, userData) {
       if (!userData) {
         return callback(err, null)
       }
@@ -532,7 +532,7 @@ export default (crowi: Crowi) => {
         return callback(new Error('Cannot remove completely the user whoes status is not INVITED'), null)
       }
 
-      userData.remove(function(err) {
+      userData.remove(function (err) {
         if (err) {
           return callback(err, null)
         }
@@ -542,7 +542,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  userSchema.statics.resetPasswordByRandomString = async function(id) {
+  userSchema.statics.resetPasswordByRandomString = async function (id) {
     const userData = await User.findById(id)
     if (!userData) {
       throw new Error('User not found')
@@ -557,7 +557,7 @@ export default (crowi: Crowi) => {
     return { user, newPassword }
   }
 
-  userSchema.statics.createUsersByInvitation = function(emailList, toSendEmail, callback) {
+  userSchema.statics.createUsersByInvitation = function (emailList, toSendEmail, callback) {
     const createdUserList: {
       email: string
       password: string | null
@@ -572,7 +572,7 @@ export default (crowi: Crowi) => {
 
     async.each(
       emailList,
-      function(email, next) {
+      function (email, next) {
         const newUser = new User()
         let password
 
@@ -580,7 +580,7 @@ export default (crowi: Crowi) => {
 
         // email check
         // TODO: 削除済みはチェック対象から外そう〜
-        User.findOne({ email }, function(err, user) {
+        User.findOne({ email }, function (err, user) {
           // The user is exists
           if (user) {
             createdUserList.push({ email, password: null, user: null })
@@ -588,16 +588,14 @@ export default (crowi: Crowi) => {
             return next()
           }
 
-          password = Math.random()
-            .toString(36)
-            .slice(-16)
+          password = Math.random().toString(36).slice(-16)
 
           newUser.email = email
           newUser.setPassword(password)
           newUser.createdAt = Date.now() as any
           newUser.status = STATUS_INVITED
 
-          newUser.save(function(err, user) {
+          newUser.save(function (err, user) {
             if (err) {
               createdUserList.push({ email, password: null, user: null })
               debug('save failed!! ', email)
@@ -610,7 +608,7 @@ export default (crowi: Crowi) => {
           })
         })
       },
-      function(err) {
+      function (err) {
         if (err) {
           debug('error occured while iterate email list')
         }
@@ -619,7 +617,7 @@ export default (crowi: Crowi) => {
           // TODO: メール送信部分のロジックをサービス化する
           async.each(
             createdUserList,
-            function(user, next) {
+            function (user, next) {
               if (user.password === null) {
                 return next()
               }
@@ -636,13 +634,13 @@ export default (crowi: Crowi) => {
                     appTitle: config.crowi['app:title'],
                   },
                 },
-                function(err, s) {
+                function (err, s) {
                   debug('completed to send email: ', err, s)
                   next()
                 },
               )
             },
-            function(err) {
+            function (err) {
               debug('Sending invitation email completed.', err)
             },
           )
@@ -654,7 +652,7 @@ export default (crowi: Crowi) => {
     )
   }
 
-  userSchema.statics.createUserByEmailAndPassword = function(name, username, email, password, lang, callback) {
+  userSchema.statics.createUserByEmailAndPassword = function (name, username, email, password, lang, callback) {
     const newUser = new User()
 
     newUser.name = name
@@ -665,7 +663,7 @@ export default (crowi: Crowi) => {
     newUser.createdAt = Date.now() as any
     newUser.status = decideUserStatusOnRegistration()
 
-    newUser.save(function(err, userData) {
+    newUser.save(function (err, userData) {
       if (userData.status == STATUS_ACTIVE) {
         userEvent.emit('activated', userData)
       }
@@ -673,13 +671,13 @@ export default (crowi: Crowi) => {
     })
   }
 
-  userSchema.statics.createUserPictureFilePath = function(user, ext) {
+  userSchema.statics.createUserPictureFilePath = function (user, ext) {
     ext = '.' + ext
 
     return 'user/' + user._id + ext
   }
 
-  userSchema.statics.getUsernameByPath = function(path) {
+  userSchema.statics.getUsernameByPath = function (path) {
     let username = null
     let m
     if ((m = path.match(/^\/user\/([^/]+)\/?/))) {

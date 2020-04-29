@@ -36,7 +36,7 @@ export default class PageHistory extends React.Component<Props, State> {
 
     this.props.crowi
       .apiGet('/revisions.ids', { page_id: pageId })
-      .then(res => {
+      .then((res) => {
         const rev: Revision[] = res.revisions
         const diffOpened: State['diffOpened'] = {}
         const lastId = rev.length - 1
@@ -70,7 +70,7 @@ export default class PageHistory extends React.Component<Props, State> {
           this.fetchPageRevisionBody(rev[lastId])
         }
       })
-      .catch(err => {
+      .catch((err) => {
         // do nothing
       })
   }
@@ -112,10 +112,10 @@ export default class PageHistory extends React.Component<Props, State> {
 
     this.props.crowi
       .apiGet('/revisions.get', { revision_id: revision._id })
-      .then(res => {
+      .then((res) => {
         if (res.ok) {
           this.setState({
-            revisions: this.state.revisions.map(rev => {
+            revisions: this.state.revisions.map((rev) => {
               if (rev._id == res.revision._id) {
                 return res.revision
               }
@@ -125,7 +125,7 @@ export default class PageHistory extends React.Component<Props, State> {
           })
         }
       })
-      .catch(err => {})
+      .catch((err) => {})
   }
 
   render() {

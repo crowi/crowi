@@ -5,12 +5,10 @@ export default form(
   field('pageForm.path').required(),
   field('pageForm.body')
     .required()
-    .custom(function(value) {
+    .custom(function (value) {
       return value.replace(/\r/g, '\n')
     }),
   field('pageForm.currentRevision'),
-  field('pageForm.grant')
-    .toInt()
-    .required(),
+  field('pageForm.grant').toInt().required(),
   field('pageForm.notify'),
 )

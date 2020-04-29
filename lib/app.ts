@@ -14,7 +14,4 @@ dotenv.config()
 
 const crowi = new Crowi(resolve(join(__dirname, '..')), process.env)
 
-crowi
-  .init()
-  .then(crowi.start)
-  .catch(crowi.exitOnError)
+crowi.init().then(crowi.start).catch(crowi.exitOnError)

@@ -1,7 +1,7 @@
 import { getContinueUrl } from 'server/utils/url'
 
-describe('Url Util', function() {
-  const req = url => ({ body: { continue: url } })
+describe('Url Util', function () {
+  const req = (url) => ({ body: { continue: url } })
 
   it('should return internal URL', () => {
     expect(getContinueUrl(req('/test'))).toBe('/test')

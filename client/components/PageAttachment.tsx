@@ -41,7 +41,7 @@ export default class PageAttachment extends React.Component<Props, State> {
       return
     }
 
-    this.props.crowi.apiGet('/attachments.list', { page_id: pageId }).then(res => {
+    this.props.crowi.apiGet('/attachments.list', { page_id: pageId }).then((res) => {
       const attachments: Attachment[] = res.attachments
       const inUse: State['inUse'] = {}
 
@@ -75,16 +75,16 @@ export default class PageAttachment extends React.Component<Props, State> {
 
     this.props.crowi
       .apiPost('/attachments.remove', { attachment_id: attachmentId })
-      .then(res => {
+      .then((res) => {
         this.setState({
-          attachments: this.state.attachments.filter(at => {
+          attachments: this.state.attachments.filter((at) => {
             return at._id != attachmentId
           }),
           attachmentToDelete: null,
           deleting: false,
         })
       })
-      .catch(err => {
+      .catch((err) => {
         this.setState({
           deleteError: 'Something went wrong.',
           deleting: false,

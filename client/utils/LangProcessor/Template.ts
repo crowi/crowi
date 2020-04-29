@@ -45,7 +45,7 @@ export default class Template {
     let parsed = templateString
 
     const templatePatternKeys = Object.keys(this.templatePattern) as templatePatternKey[]
-    templatePatternKeys.forEach(key => {
+    templatePatternKeys.forEach((key) => {
       const k = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const matcher = new RegExp(`{${k}}`, 'g')
       if (parsed.match(matcher)) {

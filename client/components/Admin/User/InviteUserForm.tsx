@@ -10,7 +10,7 @@ function useForm(invite) {
     setSendEmail(false)
   }
 
-  const onSubmit = e => {
+  const onSubmit = (e) => {
     e.preventDefault()
     invite({ emails, sendEmail })
     clearForm()
@@ -45,7 +45,7 @@ const InviteUserForm: FC<Props> = ({ invite }) => {
                 <Label for="emails">メールアドレス</Label>
               </Col>
               <Col xs="8">
-                <Input type="textarea" id="emails" placeholder="例: user@crowi.wiki" value={emails} onChange={e => setEmails(e.target.value)} />
+                <Input type="textarea" id="emails" placeholder="例: user@crowi.wiki" value={emails} onChange={(e) => setEmails(e.target.value)} />
                 <FormText color="muted">複数行入力で複数人招待可能</FormText>
               </Col>
             </Row>
