@@ -4,11 +4,11 @@ import auth from './auth'
 import passport from 'passport'
 import { Strategy as GitHubStrategy } from 'passport-github'
 import { getContinueUrl } from './url'
-import Octokit from '@octokit/rest'
+import { Octokit } from '@octokit/rest'
 
 const debug = Debug('crowi:lib:githubAuth')
 
-export default config => {
+export default (config) => {
   const lib: any = {}
 
   lib.PROVIDER = 'github'
@@ -26,14 +26,14 @@ export default config => {
           debug('profile', profile)
           const octokit = new Octokit({ auth: accessToken })
           const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
-          const orgNames = orgs.map(org => org.login)
+          const orgNames = orgs.map((org) => org.login)
 
           debug(orgNames)
 
           callback(null, {
             token: accessToken,
             user_id: profile.id,
-            email: profile.emails.filter(v => v.primary)[0].value,
+            email: profile.emails.filter((v) => v.primary)[0].value,
             name: profile.displayName || '',
             picture: profile.photos[0].value,
             organizations: orgNames,
@@ -43,7 +43,7 @@ export default config => {
     )
   }
 
-  lib.authenticate = function(req: Request, res: Response, next) {
+  lib.authenticate = function (req: Request, res: Response, next) {
     const continueUrl = getContinueUrl(req)
     const query = continueUrl === '/' ? '' : `?continue=${continueUrl}`
     useGitHubStrategy(config, query)
@@ -52,14 +52,14 @@ export default config => {
 
   lib.getOrganization = () => {}
 
-  lib.reauth = async function(id, { accessToken }) {
+  lib.reauth = async function (id, { accessToken }) {
     try {
       const octokit = new Octokit({ auth: accessToken })
       const {
         data: { id: userId },
       } = await octokit.users.getAuthenticated()
       const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
-      const orgNames = orgs.map(org => org.login)
+      const orgNames = orgs.map((org) => org.login)
       const organization = config.crowi['github:organization']
       const success = id === String(userId) && (!organization || orgNames.includes(organization))
       const tokens = { accessToken }
@@ -70,10 +70,10 @@ export default config => {
     }
   }
 
-  lib.handleCallback = function(req: Request, res: Response, next) {
-    return function(callback) {
+  lib.handleCallback = function (req: Request, res: Response, next) {
+    return function (callback) {
       useGitHubStrategy(config)
-      passport.authenticate('github', function(err, user, info) {
+      passport.authenticate('github', function (err, user, info) {
         if (err) {
           return callback(err, null)
         }
