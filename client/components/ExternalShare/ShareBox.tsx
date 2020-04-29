@@ -5,7 +5,7 @@ import Icon from 'components/Common/Icon'
 import ShareBoxContent from './ShareBoxContent'
 import SettingModal from './SettingModal'
 import AccessLogModal from './AccessLogModal'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import { Share } from 'client/types/crowi'
 
 interface Props extends WithTranslation {

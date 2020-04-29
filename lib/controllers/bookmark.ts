@@ -1,8 +1,8 @@
 import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import ApiResponse from '../utils/apiResponse'
-import ApiPaginate from '../utils/apiPaginate'
+import ApiResponse from 'server/util/apiResponse'
+import ApiPaginate from 'server/util/apiPaginate'
 import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi) => {

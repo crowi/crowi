@@ -1,7 +1,7 @@
 import CrowiUtil from 'client/crowi'
 import plantuml from 'plantuml-encoder'
 import * as crypto from 'crypto'
-import crowi from 'client/utils/Crowi'
+import crowi from 'client/util/Crowi'
 
 export default class PlantUML {
   crowi: crowi

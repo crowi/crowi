@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
-import auth from '../utils/auth'
+import auth from 'server/util/auth'
 import Debug from 'debug'
 
 export default (crowi: Crowi) => {

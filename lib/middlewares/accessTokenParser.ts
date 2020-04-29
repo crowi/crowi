@@ -1,7 +1,7 @@
 import { Express, Request, Response, NextFunction } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import { parseAccessToken } from '../utils/accessTokenParser'
+import { parseAccessToken } from 'server/util/accessTokenParser'
 
 const debug = Debug('crowi:middlewares:accessTokenParser')
 

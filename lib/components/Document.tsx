@@ -1,6 +1,6 @@
 import React, { FC } from 'react'
 import classNames from 'classnames'
-import { assetPath } from 'server/utils/ssr'
+import { assetPath } from 'server/util/ssr'
 import { AppContext } from 'server/types/appContext'
 
 export interface Props {

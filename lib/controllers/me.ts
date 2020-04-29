@@ -2,12 +2,12 @@ import { Express, Request, Response, NextFunction } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import fs from 'fs'
-import FileUploader from '../utils/fileUploader'
-import GoogleAuth from '../utils/googleAuth'
-import GitHubAuth from '../utils/githubAuth'
+import FileUploader from 'server/util/fileUploader'
+import GoogleAuth from 'server/util/googleAuth'
+import GitHubAuth from 'server/util/githubAuth'
 import { UserDocument } from 'server/models/user'
-import { getPath } from 'server/utils/ssr'
-import { getAppContext } from 'server/utils/view'
+import { getPath } from 'server/util/ssr'
+import { getAppContext } from 'server/util/view'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:me')

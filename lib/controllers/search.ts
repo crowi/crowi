@@ -1,9 +1,9 @@
 import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
-import ApiResponse from '../utils/apiResponse'
-import ApiPaginate from '../utils/apiPaginate'
-import { getPath } from 'server/utils/ssr'
-import { getAppContext } from 'server/utils/view'
+import ApiResponse from 'server/util/apiResponse'
+import ApiPaginate from 'server/util/apiPaginate'
+import { getPath } from 'server/util/ssr'
+import { getAppContext } from 'server/util/view'
 import Debug from 'debug'
 
 const debug = Debug('crowi:routes:search')
