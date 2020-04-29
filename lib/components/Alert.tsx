@@ -7,13 +7,13 @@ export interface Props {
 }
 
 const Alert: FC<Props> = ({ type, messages }) => {
-  return messages ? (
+  return messages && messages.length ? (
     <div className={classNames(['alert', `alert-${type}`])}>
       {typeof messages === 'string' ? (
         messages
       ) : (
         <ul>
-          {messages.map(message => (
+          {messages.map((message) => (
             <li key={message}>{message}</li>
           ))}
         </ul>
