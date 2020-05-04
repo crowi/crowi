@@ -11,7 +11,7 @@ type Props = {
   messages: BaseProps['messages'] & { google?: { warning?: string }; github?: { warning?: string } }
 } & PageProps
 
-const IndexPage: FC<Props> = (props) => {
+const IndexPage: FC<Props> = props => {
   const { i18n, context, messages } = props
   const { user } = context
 
@@ -42,7 +42,7 @@ const IndexPage: FC<Props> = (props) => {
                     <p className="form-text text-muted">
                       {i18n.t('page_register.form_help.email')}
                       <ul>
-                        {context.security.registrationWhiteList.map((em) => (
+                        {context.security.registrationWhiteList.map(em => (
                           <li key={em}>
                             <code>{{ em }}</code>
                           </li>

@@ -13,7 +13,7 @@ const Alert: FC<Props> = ({ type, messages }) => {
         messages
       ) : (
         <ul>
-          {messages.map((message) => (
+          {messages.map(message => (
             <li key={message}>{message}</li>
           ))}
         </ul>
