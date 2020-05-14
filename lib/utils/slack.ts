@@ -15,7 +15,7 @@ export default (crowi: Crowi) => {
 
   // get client with access token,
   // if access token is not fetched, return undefiend
-  slack.getClient = function() {
+  slack.getClient = function () {
     // alreay created
     if (slack.client) {
       return slack.client
@@ -33,7 +33,7 @@ export default (crowi: Crowi) => {
   }
 
   // this is called to generate redirect_uri
-  slack.getSlackAuthCallbackUrl = function() {
+  slack.getSlackAuthCallbackUrl = function () {
     const config = crowi.getConfig()
     // Web アクセスがきてないと app:url がセットされないので crowi.setupSlack 時にはできない
     // cli, bot 系作るときに問題なりそう
@@ -41,7 +41,7 @@ export default (crowi: Crowi) => {
   }
 
   // this is called to get the url for oauth screen
-  slack.getAuthorizeURL = function() {
+  slack.getAuthorizeURL = function () {
     const config = crowi.getConfig()
     if (Config.hasSlackConfig(config)) {
       const slackClientId = config.notification['slack:clientId']
@@ -55,7 +55,7 @@ export default (crowi: Crowi) => {
   }
 
   // this is called to get access token with code (oauth process)
-  slack.getOauthAccessToken = async function(code) {
+  slack.getOauthAccessToken = async function (code) {
     const client = new SlackWebClient()
 
     const config = crowi.getConfig()
@@ -78,16 +78,16 @@ export default (crowi: Crowi) => {
     return response.access_token
   }
 
-  slack.post = function(channel, text, message) {
+  slack.post = function (channel, text, message) {
     const client = slack.getClient()
 
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
       client.chat
         .postMessage({ channel, text, ...message })
-        .then(res => {
+        .then((res) => {
           resolve(res)
         })
-        .catch(err => {
+        .catch((err) => {
           debug('Post error', err)
           debug('Sent data to slack is:', message)
           return reject(err)
@@ -95,7 +95,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  slack.convertMarkdownToMrkdwn = function(body) {
+  slack.convertMarkdownToMrkdwn = function (body) {
     const config = crowi.getConfig()
     let url = ''
     if (config.crowi && config.crowi['app:url']) {
@@ -111,7 +111,7 @@ export default (crowi: Crowi) => {
     return body
   }
 
-  slack.prepareAttachmentTextForCreate = function(page, user) {
+  slack.prepareAttachmentTextForCreate = function (page, user) {
     let body = page.revision.body
     if (body.length > 2000) {
       body = body.substr(0, 2000) + '...'
@@ -120,10 +120,10 @@ export default (crowi: Crowi) => {
     return this.convertMarkdownToMrkdwn(body)
   }
 
-  slack.prepareAttachmentTextForUpdate = function(page, user, previousRevision) {
+  slack.prepareAttachmentTextForUpdate = function (page, user, previousRevision) {
     let diffText = ''
 
-    diff.diffLines(previousRevision.body, page.revision.body).forEach(function(line) {
+    diff.diffLines(previousRevision.body, page.revision.body).forEach(function (line) {
       debug('diff line', line)
       line.value.replace(/\r\n|\r/g, '\n')
       if (line.added) {
@@ -144,7 +144,7 @@ export default (crowi: Crowi) => {
     return diffText
   }
 
-  slack.prepareSlackMessage = function(page, user, channel, updateType, previousRevision) {
+  slack.prepareSlackMessage = function (page, user, channel, updateType, previousRevision) {
     const config = crowi.getConfig()
     const url = config.crowi['app:url'] || ''
     let body = page.revision.body
@@ -179,7 +179,7 @@ export default (crowi: Crowi) => {
     return message
   }
 
-  slack.getSlackMessageText = function(page, user, updateType) {
+  slack.getSlackMessageText = function (page, user, updateType) {
     let text
     const config = crowi.getConfig()
     const url = config.crowi['app:url'] || ''
@@ -194,7 +194,7 @@ export default (crowi: Crowi) => {
     return text
   }
 
-  slack.unfurl = function(channel, unfurls, ts) {
+  slack.unfurl = function (channel, unfurls, ts) {
     const client = slack.getClient()
 
     return client.chat.unfurl({ ts, channel, unfurls })

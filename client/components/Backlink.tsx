@@ -44,7 +44,7 @@ class Backlink extends React.Component<Props, State> {
         limit: this.props.limit + 1,
         offset: this.state.currentOffset,
       })
-      .then(response => {
+      .then((response) => {
         if (response.ok !== true) {
           console.log('Sorry, something went wrong.')
         } else {
@@ -56,7 +56,7 @@ class Backlink extends React.Component<Props, State> {
 
           const backLinks = this.state.backLinks
           let i = 0
-          appendBacklinks.forEach(backLink => {
+          appendBacklinks.forEach((backLink) => {
             const index = this.state.currentOffset + i
             backLinks[index] = backLink
             i++
@@ -71,7 +71,7 @@ class Backlink extends React.Component<Props, State> {
           })
         }
       })
-      .catch(err => {
+      .catch((err) => {
         console.log('Failed to fetch data of Backlinks')
         // console.log(err);
       })
@@ -102,7 +102,7 @@ class Backlink extends React.Component<Props, State> {
     if (this.state.hasNext === true) {
       return (
         <p className="backlink-readmore">
-          <a href="#" onClick={e => this.handleReadMore(e)}>
+          <a href="#" onClick={(e) => this.handleReadMore(e)}>
             Read More Backlinks
           </a>
         </p>
@@ -112,7 +112,7 @@ class Backlink extends React.Component<Props, State> {
   }
 
   render() {
-    const lists = this.state.backLinks.map(backLink => this.createList(backLink))
+    const lists = this.state.backLinks.map((backLink) => this.createList(backLink))
 
     if (lists.length === 0) {
       return null

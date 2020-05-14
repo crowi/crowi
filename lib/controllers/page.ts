@@ -26,7 +26,7 @@ export default (crowi: Crowi) => {
 
   // register page events
   const pageEvent = crowi.event('Page')
-  pageEvent.on('update', function(page, user) {
+  pageEvent.on('update', function (page, user) {
     const io = crowi.getIo()
     if (io) {
       io.sockets.emit('page edited', { page, user })
@@ -70,7 +70,7 @@ export default (crowi: Crowi) => {
   }
 
   // routing
-  actions.pageListShow = async function(req: Request, res: Response) {
+  actions.pageListShow = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const limit = 50
     const offset = parseInt(req.query.offset) || 0
@@ -114,7 +114,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.deletedPageListShow = function(req: Request, res: Response) {
+  actions.deletedPageListShow = function (req: Request, res: Response) {
     const path = '/trash' + getPathFromRequest(req)
     const limit = 50
     const offset = parseInt(req.query.offset) || 0
@@ -134,7 +134,7 @@ export default (crowi: Crowi) => {
     }
 
     Page.findListByStartWith(path, req.user, queryOptions)
-      .then(function(pageList) {
+      .then(function (pageList) {
         if (pageList.length > limit) {
           pageList.pop()
         }
@@ -145,7 +145,7 @@ export default (crowi: Crowi) => {
         renderVars.pages = pageList
         res.render('page_list.html', renderVars)
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Error on rendering deletedPageListShow', err)
       })
   }
@@ -178,7 +178,7 @@ export default (crowi: Crowi) => {
     res.render(req.query.presentation ? 'page_presentation.html' : defaultPageTeamplate, renderVars)
   }
 
-  actions.userPageShow = async function(req: Request, res: Response) {
+  actions.userPageShow = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const username = req.params.username
     const path = `/user/${username}`
@@ -226,7 +226,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.pageShow = async function(req: Request, res: Response) {
+  actions.pageShow = async function (req: Request, res: Response) {
     const path = getPathFromRequest(req)
 
     // FIXME: せっかく getPathFromRequest になってるのにここが生 params[0] だとダサイ
@@ -286,7 +286,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.pageEdit = function(req: Request, res: Response) {
+  actions.pageEdit = function (req: Request, res: Response) {
     const pageForm = req.body.pageForm
     const body = pageForm.body
     const currentRevision = pageForm.currentRevision
@@ -314,7 +314,7 @@ export default (crowi: Crowi) => {
 
     const ignoreNotFound = true
     Page.findPage(path, req.user, null, ignoreNotFound)
-      .then(function(data) {
+      .then(function (data) {
         pageData = data
 
         if (!req.form.isValid) {
@@ -337,7 +337,7 @@ export default (crowi: Crowi) => {
           return Page.createPage(path, body, req.user, { grant: grant })
         }
       })
-      .then(function(data) {
+      .then(function (data) {
         // data is a saved page data.
         pageData = data
         if (!data) {
@@ -348,16 +348,16 @@ export default (crowi: Crowi) => {
           if (notify.slack.on && notify.slack.channel) {
             data
               .updateSlackChannel(notify.slack.channel)
-              .then(function() {})
-              .catch(function() {})
+              .then(function () {})
+              .catch(function () {})
 
             if (crowi.slack) {
-              notify.slack.channel.split(',').map(function(chan) {
+              notify.slack.channel.split(',').map(function (chan) {
                 const message = crowi.slack.prepareSlackMessage(pageData, req.user, chan, updateOrCreate, previousRevision)
                 crowi.slack
                   .post(message.channel, message.text, message)
-                  .then(function() {})
-                  .catch(function() {})
+                  .then(function () {})
+                  .catch(function () {})
               })
             }
           }
@@ -365,7 +365,7 @@ export default (crowi: Crowi) => {
 
         return res.redirect(redirectPath)
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Page create or edit error.', err)
         if (pageData && !req.form.isValid) {
           return renderPage(pageData, req, res)
@@ -376,7 +376,7 @@ export default (crowi: Crowi) => {
   }
 
   // app.get( '/users/:username([^/]+)/bookmarks'      , loginRequired(crowi, app) , page.userBookmarkList);
-  actions.userBookmarkList = function(req: Request, res: Response) {
+  actions.userBookmarkList = function (req: Request, res: Response) {
     const username = req.params.username
     const limit = 50
     const offset = parseInt(req.query.offset) || 0
@@ -387,7 +387,7 @@ export default (crowi: Crowi) => {
     const queryOptions = { offset, limit: limit + 1, populatePage: true, requestUser: req.user }
 
     User.findUserByUsername(username)
-      .then(function(user) {
+      .then(function (user) {
         if (user === null) {
           throw new Error('The user not found.')
         }
@@ -395,7 +395,7 @@ export default (crowi: Crowi) => {
 
         return Bookmark.findByUser(user, queryOptions)
       })
-      .then(function(bookmarks) {
+      .then(function (bookmarks) {
         if (bookmarks.length > limit) {
           bookmarks.pop()
         }
@@ -406,14 +406,14 @@ export default (crowi: Crowi) => {
 
         return res.render('user/bookmarks.html', renderVars)
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Error on rendereing bookmark', err)
         res.redirect('/')
       })
   }
 
   // app.get( '/users/:username([^/]+)/recent-create' , loginRequired(crowi, app) , page.userRecentCreatedList);
-  actions.userRecentCreatedList = function(req: Request, res: Response) {
+  actions.userRecentCreatedList = function (req: Request, res: Response) {
     const username = req.params.username
     const limit = 50
     const offset = parseInt(req.query.offset) || 0
@@ -424,7 +424,7 @@ export default (crowi: Crowi) => {
     const queryOptions = { offset, limit: limit + 1 }
 
     User.findUserByUsername(username)
-      .then(function(user) {
+      .then(function (user) {
         if (user === null) {
           throw new Error('The user not found.')
         }
@@ -432,7 +432,7 @@ export default (crowi: Crowi) => {
 
         return Page.findListByCreator(user, queryOptions, req.user)
       })
-      .then(function(pages) {
+      .then(function (pages) {
         if (pages.length > limit) {
           pages.pop()
         }
@@ -443,7 +443,7 @@ export default (crowi: Crowi) => {
 
         return res.render('user/recent-create.html', renderVars)
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Error on rendereing recent-created', err)
         res.redirect('/')
       })
@@ -452,11 +452,11 @@ export default (crowi: Crowi) => {
   /**
    * redirector
    */
-  api.redirector = function(req: Request, res: Response) {
+  api.redirector = function (req: Request, res: Response) {
     const id = req.params.id
 
     Page.findPageById(id)
-      .then(function(pageData) {
+      .then(function (pageData) {
         const isGranted = pageData.isGrantedFor(req.user)
 
         if (pageData.grant == Page.GRANT_RESTRICTED && !isGranted) {
@@ -469,10 +469,10 @@ export default (crowi: Crowi) => {
 
         return Promise.resolve(pageData)
       })
-      .then(function(page) {
+      .then(function (page) {
         return res.redirect(encodeURI(page.path))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.redirect('/')
       })
   }
@@ -485,7 +485,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} path
    * @apiParam {String} user
    */
-  api.list = function(req: Request, res: Response) {
+  api.list = function (req: Request, res: Response) {
     const username = req.query.user || null
     const path = req.query.path || null
     const limit = 50
@@ -504,7 +504,7 @@ export default (crowi: Crowi) => {
 
     let pageFetcher
     if (path === null) {
-      pageFetcher = User.findUserByUsername(username).then(function(user) {
+      pageFetcher = User.findUserByUsername(username).then(function (user) {
         if (user === null) {
           throw new Error('The user not found.')
         }
@@ -515,7 +515,7 @@ export default (crowi: Crowi) => {
     }
 
     pageFetcher
-      .then(function(pages) {
+      .then(function (pages) {
         if (pages.length > limit) {
           pages.pop()
         }
@@ -524,7 +524,7 @@ export default (crowi: Crowi) => {
         const result = { pages }
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json(ApiResponse.error(err))
       })
   }
@@ -538,7 +538,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} path
    * @apiParam {String} grant
    */
-  api.create = function(req: Request, res: Response) {
+  api.create = function (req: Request, res: Response) {
     const body = req.body.body || null
     const pagePath = req.body.path || null
     const grant = req.body.grant || null
@@ -549,14 +549,14 @@ export default (crowi: Crowi) => {
 
     const ignoreNotFound = true
     Page.findPage(pagePath, req.user, null, ignoreNotFound)
-      .then(function(data) {
+      .then(function (data) {
         if (data !== null) {
           throw new Error('Page exists')
         }
 
         return Page.createPage(pagePath, body, req.user, { grant: grant })
       })
-      .then(function(data) {
+      .then(function (data) {
         if (!data) {
           throw new Error('Failed to create page.')
         }
@@ -564,7 +564,7 @@ export default (crowi: Crowi) => {
 
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json(ApiResponse.error(err))
       })
   }
@@ -583,7 +583,7 @@ export default (crowi: Crowi) => {
    * - If revision_id is specified => update the page,
    * - If revision_id is not specified => force update by the new contents.
    */
-  api.update = function(req: Request, res: Response) {
+  api.update = function (req: Request, res: Response) {
     const pageBody = req.body.body || null
     const pageId = req.body.page_id || null
     const revisionId = req.body.revision_id || null
@@ -594,7 +594,7 @@ export default (crowi: Crowi) => {
     }
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
-      .then(function(pageData) {
+      .then(function (pageData) {
         if (pageData && revisionId !== null && !pageData.isUpdatable(revisionId)) {
           throw new Error('Revision error.')
         }
@@ -605,13 +605,13 @@ export default (crowi: Crowi) => {
         }
         return Page.updatePage(pageData, pageBody, req.user, grantOption)
       })
-      .then(function(pageData) {
+      .then(function (pageData) {
         const result = {
           page: pageData.toObject(),
         }
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('error on _api/pages.update', err)
         return res.json(ApiResponse.error(err))
       })
@@ -626,7 +626,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} path
    * @apiParam {String} revision_id
    */
-  api.get = function(req: Request, res: Response) {
+  api.get = function (req: Request, res: Response) {
     const pagePath = req.query.path || null
     const pageId = req.query.page_id || null // TODO: handling
     const revisionId = req.query.revision_id || null
@@ -644,12 +644,12 @@ export default (crowi: Crowi) => {
     }
 
     pageFinder
-      .then(function(page) {
+      .then(function (page) {
         const result = { page }
 
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json(ApiResponse.error(err))
       })
   }
@@ -661,22 +661,22 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.seen = function(req: Request, res: Response) {
+  api.seen = function (req: Request, res: Response) {
     const pageId = req.body.page_id
     if (!pageId) {
       return res.json(ApiResponse.error('page_id required'))
     }
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
-      .then(function(page) {
+      .then(function (page) {
         return page.seen(req.user)
       })
-      .then(function(seenUser) {
+      .then(function (seenUser) {
         const result = { seenUser }
 
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Seen user update error', err)
         return res.json(ApiResponse.error(err))
       })
@@ -689,18 +689,18 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.like = function(req: Request, res: Response) {
+  api.like = function (req: Request, res: Response) {
     const id = req.body.page_id
 
     Page.findPageByIdAndGrantedUser(id, req.user)
-      .then(function(pageData) {
+      .then(function (pageData) {
         return pageData.like(req.user)
       })
-      .then(function(data) {
+      .then(function (data) {
         const result = { page: data }
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Like failed', err)
         return res.json(ApiResponse.error({}))
       })
@@ -713,18 +713,18 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.unlike = function(req: Request, res: Response) {
+  api.unlike = function (req: Request, res: Response) {
     const id = req.body.page_id
 
     Page.findPageByIdAndGrantedUser(id, req.user)
-      .then(function(pageData) {
+      .then(function (pageData) {
         return pageData.unlike(req.user)
       })
-      .then(function(data) {
+      .then(function (data) {
         const result = { page: data }
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Unlike failed', err)
         return res.json(ApiResponse.error({}))
       })
@@ -737,7 +737,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} path
    */
-  api.getUpdatePost = function(req: Request, res: Response) {
+  api.getUpdatePost = function (req: Request, res: Response) {
     const path = req.query.path
     const UpdatePost = crowi.model('UpdatePost')
 
@@ -746,15 +746,15 @@ export default (crowi: Crowi) => {
     }
 
     UpdatePost.findSettingsByPath(path)
-      .then(function(data) {
-        data = data.map(function(e) {
+      .then(function (data) {
+        data = data.map(function (e) {
           return e.channel
         })
         debug('Found updatePost data', data)
         const result = { updatePost: data }
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Error occured while get setting', err)
         return res.json(ApiResponse.error({}))
       })
@@ -768,7 +768,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    * @apiParam {String} revision_id
    */
-  api.remove = function(req: Request, res: Response) {
+  api.remove = function (req: Request, res: Response) {
     const pageId = req.body.page_id
     const previousRevision = req.body.revision_id || null
 
@@ -776,7 +776,7 @@ export default (crowi: Crowi) => {
     const isCompletely = req.body.completely !== undefined
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
-      .then(function(pageData) {
+      .then(function (pageData) {
         debug('Delete page', pageData._id, pageData.path)
 
         if (isCompletely) {
@@ -790,13 +790,13 @@ export default (crowi: Crowi) => {
         }
         return Page.deletePage(pageData, req.user)
       })
-      .then(function(page) {
+      .then(function (page) {
         debug('Page deleted', page.path)
         const result = { page }
 
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Error occured while get setting', err, err.stack)
         return res.json(ApiResponse.error('Failed to delete page.'))
       })
@@ -809,21 +809,21 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  api.revertRemove = function(req: Request, res: Response) {
+  api.revertRemove = function (req: Request, res: Response) {
     const pageId = req.body.page_id
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
-      .then(function(pageData) {
+      .then(function (pageData) {
         // TODO: これでいいんだっけ
         return Page.revertDeletedPage(pageData, req.user)
       })
-      .then(function(page) {
+      .then(function (page) {
         debug('Complete to revert deleted page', page.path)
         const result = { page }
 
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Error occured while get setting', err, err.stack)
         return res.json(ApiResponse.error('Failed to revert deleted page.'))
       })
@@ -840,7 +840,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} new_path
    * @apiParam {Bool} create_redirect
    */
-  api.rename = async function(req: Request, res: Response) {
+  api.rename = async function (req: Request, res: Response) {
     const { page_id: pageId, revision_id: previousRevision = null, new_path: newPath, create_redirect: createRedirect, move_trees: moveTrees } = req.body
     const newPagePath = Page.normalizePath(newPath)
     const newPageIsPortal = newPagePath.endsWith('/')
@@ -853,7 +853,7 @@ export default (crowi: Crowi) => {
       return res.json(ApiResponse.error(`このページ名は作成できません (${newPagePath})`))
     }
 
-    const rename = async function() {
+    const rename = async function () {
       try {
         const page = await Page.findPageById(pageId)
         if (!page.isUpdatable(previousRevision)) {
@@ -885,7 +885,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.renameTree = async function(req: Request, res: Response) {
+  api.renameTree = async function (req: Request, res: Response) {
     const { path, new_path: newPath, create_redirect: createRedirect = 0 } = req.body
     const options = { createRedirectPage: createRedirect }
 
@@ -907,7 +907,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.checkTreeRenamable = async function(req: Request, res: Response) {
+  api.checkTreeRenamable = async function (req: Request, res: Response) {
     const { path, new_path: newPath } = req.body
 
     const paths = await Page.findChildrenByPath(path, req.user, {})
@@ -931,7 +931,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    * @apiParam {String} revision_id
    */
-  api.unlink = async function(req: Request, res: Response) {
+  api.unlink = async function (req: Request, res: Response) {
     const { page_id: pageId } = req.body
     try {
       const page = await Page.findPageByIdAndGrantedUser(pageId, req.user)
@@ -946,7 +946,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.watchStatus = async function(req: Request, res: Response) {
+  api.watchStatus = async function (req: Request, res: Response) {
     const { page_id: pageId } = req.query
     const { _id: userId } = req.user as UserDocument
     try {
@@ -955,7 +955,7 @@ export default (crowi: Crowi) => {
         const page = await Page.findById(pageId)
         if (!page) throw new Error('Page not found')
         const targetUsers = await page.getNotificationTargetUsers()
-        return targetUsers.some(user => user.toString() === userId.toString())
+        return targetUsers.some((user) => user.toString() === userId.toString())
       }
       const watching = watcher ? watcher.isWatching() : await getDefaultStatus()
       const result = { watching }
@@ -966,7 +966,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  api.watch = async function(req: Request, res: Response) {
+  api.watch = async function (req: Request, res: Response) {
     const { page_id: pageId } = req.body
     const { _id: userId } = req.user as UserDocument
     const status = req.body.status ? Watcher.STATUS_WATCH : Watcher.STATUS_IGNORE

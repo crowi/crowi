@@ -29,7 +29,7 @@ describe('Backlink', () => {
       const srcPaths = createPaths()
       const appUrl = crowi.baseUrl
 
-      await Promise.all(destPaths.map(path => createPage(path)))
+      await Promise.all(destPaths.map((path) => createPage(path)))
       const pages = await Promise.all([
         createPage(srcPaths[0], `<${destPaths[0]}>`),
         createPage(srcPaths[1], `[test](${appUrl}${destPaths[1]})`),

@@ -6,7 +6,7 @@ interface Props {
 }
 
 const FormRow: FC<Props> = ({ children }: Props) => {
-  const c = React.Children.toArray(children)
+  const c = React.Children.toArray(children).filter(React.isValidElement)
   const label = c.find(({ type }) => type === Label) || null
   const input = c.find(({ type }) => type === Input || type === CustomInput) || null
   const formText = c.find(({ type }) => type === FormText) || null

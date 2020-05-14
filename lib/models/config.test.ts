@@ -3,7 +3,7 @@ import { crowi, Fixture } from 'server/test/setup'
 describe('Config model test', () => {
   let Config
 
-  beforeAll(done => {
+  beforeAll((done) => {
     Config = crowi.model('Config')
 
     const fixtures = [
@@ -14,10 +14,10 @@ describe('Config model test', () => {
     ]
 
     Fixture.generate('Config', fixtures)
-      .then(function(configs) {
+      .then(function (configs) {
         done()
       })
-      .catch(function() {
+      .catch(function () {
         done(new Error('Skip this test.'))
       })
   })
@@ -31,7 +31,7 @@ describe('Config model test', () => {
   })
 
   describe('.loadAllConfig', () => {
-    test('Get config array', async function() {
+    test('Get config array', async function () {
       const config = await Config.loadAllConfig()
       expect(config.crowi).toHaveProperty('test:test', 'crowi test value')
       expect(config.crowi).toHaveProperty('test:test2', 11111)
@@ -56,7 +56,7 @@ describe('Config model test', () => {
       ])
     })
 
-    test('Migrate config correctly', async function() {
+    test('Migrate config correctly', async function () {
       await Config.migrate()
       const config = await Config.loadAllConfig()
 

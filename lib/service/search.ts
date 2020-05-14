@@ -74,7 +74,7 @@ export default class SearchClient {
   }
 
   async waitES(retry = 10) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       let count = 0
       const interval = setInterval(async () => {
         if (++count >= retry || (await this.client.ping())) {
@@ -258,7 +258,7 @@ export default class SearchClient {
     }
 
     const indices = await this.getIndices()
-    const deleteIndices = indices.filter(index => index !== newIndexName)
+    const deleteIndices = indices.filter((index) => index !== newIndexName)
 
     // for the first time, no old indices exists
     if (deleteIndices.length === 0) {
@@ -271,7 +271,7 @@ export default class SearchClient {
   async getIndices() {
     const response: ApiResponse<CatIndicesResponse> = await this.client.cat.indices({ format: 'json' })
     const indices = response.body
-    return indices.map(({ index }) => index).filter(index => index.startsWith(this.indexNames.base))
+    return indices.map(({ index }) => index).filter((index) => index.startsWith(this.indexNames.base))
   }
 
   deleteIndices(indices) {
@@ -411,7 +411,7 @@ export default class SearchClient {
   async updatePages(pages) {
     const body = []
 
-    pages.map(page => {
+    pages.map((page) => {
       this.prepareBodyForUpdate(body, page)
     })
 
@@ -423,7 +423,7 @@ export default class SearchClient {
   deletePages(pages) {
     const body = []
 
-    pages.map(page => {
+    pages.map((page) => {
       this.prepareBodyForDelete(body, page)
     })
 
@@ -443,7 +443,7 @@ export default class SearchClient {
     let skipped = 0
     let total = 0
 
-    const bulkSend = async body => {
+    const bulkSend = async (body) => {
       try {
         const response: ApiResponse<BulkResponse> = await this.client.bulk({
           body,
@@ -457,7 +457,7 @@ export default class SearchClient {
     }
 
     try {
-      await cursor.eachAsync(async doc => {
+      await cursor.eachAsync(async (doc) => {
         if (!doc.creator || !doc.revision || !this.shouldIndexed(doc)) {
           // debug('Skipped', doc.path);
           skipped++

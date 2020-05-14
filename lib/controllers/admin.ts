@@ -80,18 +80,18 @@ export default (crowi: Crowi) => {
     return pager
   }
 
-  actions.index = function(req: Request, res: Response) {
+  actions.index = function (req: Request, res: Response) {
     return res.render(getPath(crowi, 'AdminPage'), { i18n: req.i18n, context: getAppContext(crowi, req) })
   }
 
-  actions.api.index = function(req: Request, res: Response) {
+  actions.api.index = function (req: Request, res: Response) {
     const searcher = crowi.getSearcher()
 
     return res.json(ApiResponse.success({ searchConfigured: !!searcher }))
   }
 
   actions.api.app = {}
-  actions.api.app.index = async function(req: Request, res: Response) {
+  actions.api.app.index = async function (req: Request, res: Response) {
     const config = crowi.getConfig()
     const settingForm = config.crowi
     const registrationMode = Config.getRegistrationModeLabels()
@@ -102,7 +102,7 @@ export default (crowi: Crowi) => {
 
   actions.notification = {}
   actions.api.notification = {}
-  actions.api.notification.index = async function(req: Request, res: Response) {
+  actions.api.notification.index = async function (req: Request, res: Response) {
     const config = crowi.getConfig()
     const UpdatePost = crowi.model('UpdatePost')
     const hasSlackConfig = Config.hasSlackConfig(config)
@@ -118,7 +118,7 @@ export default (crowi: Crowi) => {
     return res.json(ApiResponse.success({ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl }))
   }
 
-  actions.api.notification.slackSetting = async function(req: Request, res: Response) {
+  actions.api.notification.slackSetting = async function (req: Request, res: Response) {
     const { slackSetting } = req.form
 
     if (!req.form.isValid) {
@@ -133,7 +133,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.notification.slackAuth = async function(req: Request, res: Response) {
+  actions.notification.slackAuth = async function (req: Request, res: Response) {
     const code = req.query.code
 
     if (!code || !Config.hasSlackConfig(req.config)) {
@@ -158,7 +158,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.search = {}
-  actions.api.search.buildIndex = async function(req: Request, res: Response) {
+  actions.api.search.buildIndex = async function (req: Request, res: Response) {
     const search = crowi.getSearcher()
     if (!search) {
       return res.json(ApiResponse.error('Searcher is not ready.'))
@@ -176,7 +176,7 @@ export default (crowi: Crowi) => {
       .then(() => {
         debug('Data is successfully indexed. ------------------ ✧✧')
       })
-      .catch(err => {
+      .catch((err) => {
         debug('Error caught.', err)
       })
 
@@ -185,7 +185,7 @@ export default (crowi: Crowi) => {
 
   actions.user = {}
   actions.api.user = {}
-  actions.api.user.index = function(req: Request, res: Response) {
+  actions.api.user.index = function (req: Request, res: Response) {
     const page = parseInt(req.query.page) || 1
 
     // uq means user query
@@ -197,7 +197,7 @@ export default (crowi: Crowi) => {
 
     if (uq) {
       const $regex = uq.trim().replace(' ', '|')
-      query.$or = ['username', 'name', 'email'].map(v => ({
+      query.$or = ['username', 'name', 'email'].map((v) => ({
         [v]: {
           $regex,
           $options: 'i',
@@ -230,7 +230,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.invite = function(req: Request, res: Response) {
+  actions.api.user.invite = function (req: Request, res: Response) {
     const { emailList, sendEmail } = req.form.inviteForm
     const toSendEmail = sendEmail || false
 
@@ -238,7 +238,7 @@ export default (crowi: Crowi) => {
       return res.json(ApiResponse.error(req.form.errors.join('\n')))
     }
 
-    User.createUsersByInvitation(emailList.split('\n'), toSendEmail, function(err, userList) {
+    User.createUsersByInvitation(emailList.split('\n'), toSendEmail, function (err, userList) {
       if (err === null) {
         return res.json(ApiResponse.success({ userList }))
       }
@@ -247,10 +247,10 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.makeAdmin = function(req: Request, res: Response) {
+  actions.api.user.makeAdmin = function (req: Request, res: Response) {
     const id = req.params.id
-    User.findById(id, function(err, userData) {
-      ;(userData as UserDocument).makeAdmin(function(err, userData) {
+    User.findById(id, function (err, userData) {
+      ;(userData as UserDocument).makeAdmin(function (err, userData) {
         if (err === null) {
           return res.json(ApiResponse.success({ message: `${userData.name}さんのアカウントを管理者に設定しました。` }))
         }
@@ -260,10 +260,10 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.removeFromAdmin = function(req: Request, res: Response) {
+  actions.api.user.removeFromAdmin = function (req: Request, res: Response) {
     const id = req.params.id
-    User.findById(id, function(err, userData) {
-      ;(userData as UserDocument).removeFromAdmin(function(err, userData) {
+    User.findById(id, function (err, userData) {
+      ;(userData as UserDocument).removeFromAdmin(function (err, userData) {
         if (err === null) {
           return res.json(ApiResponse.success({ message: `${userData.name}さんのアカウントを管理者から外しました。` }))
         }
@@ -273,10 +273,10 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.activate = function(req: Request, res: Response) {
+  actions.api.user.activate = function (req: Request, res: Response) {
     const id = req.params.id
-    User.findById(id, function(err, userData) {
-      ;(userData as UserDocument).statusActivate(function(err, userData) {
+    User.findById(id, function (err, userData) {
+      ;(userData as UserDocument).statusActivate(function (err, userData) {
         if (err === null) {
           return res.json(ApiResponse.success({ message: `${userData.name}さんのアカウントを承認しました。` }))
         }
@@ -286,11 +286,11 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.suspend = function(req: Request, res: Response) {
+  actions.api.user.suspend = function (req: Request, res: Response) {
     const id = req.params.id
 
-    User.findById(id, function(err, userData) {
-      ;(userData as UserDocument).statusSuspend(function(err, userData) {
+    User.findById(id, function (err, userData) {
+      ;(userData as UserDocument).statusSuspend(function (err, userData) {
         if (err === null) {
           return res.json(ApiResponse.success({ message: `${userData.name}さんのアカウントを利用停止にしました。` }))
         }
@@ -300,17 +300,17 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.user.remove = function(req: Request, res: Response) {
+  actions.user.remove = function (req: Request, res: Response) {
     // 未実装
     return res.redirect('/admin/users')
   }
 
   // これやったときの relation の挙動未確認
-  actions.user.removeCompletely = function(req: Request, res: Response) {
+  actions.user.removeCompletely = function (req: Request, res: Response) {
     // ユーザーの物理削除
     const id = req.params.id
 
-    User.removeCompletelyById(id, function(err, removed) {
+    User.removeCompletelyById(id, function (err, removed) {
       if (err) {
         debug('Error while removing user.', err, id)
         req.flash('errorMessage', '完全な削除に失敗しました。')
@@ -321,21 +321,21 @@ export default (crowi: Crowi) => {
     })
   }
 
-  actions.api.user.resetPassword = function(req: Request, res: Response) {
+  actions.api.user.resetPassword = function (req: Request, res: Response) {
     const id = req.body.user_id
     const User = crowi.model('User')
 
     User.resetPasswordByRandomString(id)
-      .then(function(data) {
+      .then(function (data) {
         return res.json(ApiResponse.success(data))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Error on reseting password', err)
         return res.json(ApiResponse.error('Error'))
       })
   }
 
-  actions.api.user.updateEmail = async function(req: Request, res: Response) {
+  actions.api.user.updateEmail = async function (req: Request, res: Response) {
     const { user_id: id, email } = req.body
     const User = crowi.model('User')
 
@@ -351,7 +351,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.top = {}
-  actions.api.top.index = function(req: Request, res: Response) {
+  actions.api.top.index = function (req: Request, res: Response) {
     const { version: crowiVersion } = crowi
     const searcher = crowi.getSearcher()
     const searchInfo = searcher
@@ -365,7 +365,7 @@ export default (crowi: Crowi) => {
     return res.json(ApiResponse.success({ crowiVersion, searchInfo }))
   }
 
-  actions.api.postSettings = function(req: Request, res: Response) {
+  actions.api.postSettings = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const form = req.form.settingForm
 
@@ -374,7 +374,7 @@ export default (crowi: Crowi) => {
 
       // mail setting ならここで validation
       if (form['mail:from']) {
-        validateMailSetting(req, form, function(err, data) {
+        validateMailSetting(req, form, function (err, data) {
           debug('Error validate mail setting: ', err, data)
           if (err) {
             req.form.errors.push('SMTPを利用したテストメール送信に失敗しました。設定をみなおしてください。')
@@ -392,7 +392,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.api.notificationAdd = function(req: Request, res: Response) {
+  actions.api.notificationAdd = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const UpdatePost = crowi.model('UpdatePost')
     const pathPattern = req.body.pathPattern
@@ -400,21 +400,21 @@ export default (crowi: Crowi) => {
 
     debug('notification.add', pathPattern, channel)
     UpdatePost.createUpdatePost(pathPattern, channel, user._id)
-      .then(function(doc) {
+      .then(function (doc) {
         debug('Successfully save updatePost', doc)
 
         // fixme: うーん
         doc.creator = ((doc.creator as any) as UserDocument)._id.toString() as any
         return res.json(ApiResponse.success({ updatePost: doc }))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Failed to save updatePost', err)
         return res.json(ApiResponse.error())
       })
   }
 
   // app.post('/_api/admin/notifications.remove' , admin.api.notificationRemove);
-  actions.api.notificationRemove = async function(req: Request, res: Response) {
+  actions.api.notificationRemove = async function (req: Request, res: Response) {
     const UpdatePost = crowi.model('UpdatePost')
     const id = req.body.id
 
@@ -430,18 +430,18 @@ export default (crowi: Crowi) => {
   }
 
   // app.get('/_api/admin/users.search' , admin.api.userSearch);
-  actions.api.usersSearch = function(req: Request, res: Response) {
+  actions.api.usersSearch = function (req: Request, res: Response) {
     const User = crowi.model('User')
     const email = req.query.email
 
     User.findUsersByPartOfEmail(email, {})
-      .then(users => {
+      .then((users) => {
         const result = {
           data: users,
         }
         return res.json(ApiResponse.success(result))
       })
-      .catch(err => {
+      .catch((err) => {
         return res.json(ApiResponse.error())
       })
   }
@@ -486,7 +486,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.backlink = {}
-  actions.api.backlink.buildBacklinks = function(req: Request, res: Response) {
+  actions.api.backlink.buildBacklinks = function (req: Request, res: Response) {
     const Backlink = crowi.model('Backlink')
     // In background
     Backlink.createByAllPages()

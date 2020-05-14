@@ -75,14 +75,14 @@ export default (crowi: Crowi) => {
    * @param {object} parameters
    * @return {Promise}
    */
-  activitySchema.statics.createByParameters = function(parameters) {
+  activitySchema.statics.createByParameters = function (parameters) {
     return Activity.create(parameters)
   }
 
   /**
    * @param {object} parameters
    */
-  activitySchema.statics.removeByParameters = async function(parameters) {
+  activitySchema.statics.removeByParameters = async function (parameters) {
     const activity = await Activity.findOne(parameters)
     activityEvent.emit('remove', activity)
 
@@ -93,7 +93,7 @@ export default (crowi: Crowi) => {
    * @param {Comment} comment
    * @return {Promise}
    */
-  activitySchema.statics.createByPageComment = function(comment) {
+  activitySchema.statics.createByPageComment = function (comment) {
     const parameters = {
       user: comment.creator,
       targetModel: ActivityDefine.MODEL_PAGE,
@@ -111,7 +111,7 @@ export default (crowi: Crowi) => {
    * @param {User} user
    * @return {Promise}
    */
-  activitySchema.statics.createByPageLike = function(page, user) {
+  activitySchema.statics.createByPageLike = function (page, user) {
     const parameters = {
       user: user._id,
       targetModel: ActivityDefine.MODEL_PAGE,
@@ -127,7 +127,7 @@ export default (crowi: Crowi) => {
    * @param {User} user
    * @return {Promise}
    */
-  activitySchema.statics.removeByPageUnlike = function(page, user) {
+  activitySchema.statics.removeByPageUnlike = function (page, user) {
     const parameters = {
       user: user,
       targetModel: ActivityDefine.MODEL_PAGE,
@@ -142,7 +142,7 @@ export default (crowi: Crowi) => {
    * @param {Page} page
    * @return {Promise}
    */
-  activitySchema.statics.removeByPage = async function(page) {
+  activitySchema.statics.removeByPage = async function (page) {
     const activities = await Activity.find({ target: page })
     for (const activity of activities) {
       activityEvent.emit('remove', activity)
@@ -154,17 +154,15 @@ export default (crowi: Crowi) => {
    * @param {User} user
    * @return {Promise}
    */
-  activitySchema.statics.findByUser = function(user) {
-    return Activity.find({ user: user })
-      .sort({ createdAt: -1 })
-      .exec()
+  activitySchema.statics.findByUser = function (user) {
+    return Activity.find({ user: user }).sort({ createdAt: -1 }).exec()
   }
 
-  activitySchema.statics.getActionUsersFromActivities = function(activities) {
+  activitySchema.statics.getActionUsersFromActivities = function (activities) {
     return activities.map(({ user }) => user).filter((user, i, self) => self.indexOf(user) === i)
   }
 
-  activitySchema.methods.getNotificationTargetUsers = async function() {
+  activitySchema.methods.getNotificationTargetUsers = async function () {
     const User = crowi.model('User')
     const Watcher = crowi.model('Watcher')
     const { user: actionUser, targetModel, target } = this
@@ -176,10 +174,10 @@ export default (crowi: Crowi) => {
       Watcher.getIgnorers((target as any) as Types.ObjectId),
     ])
 
-    const unique = array => Object.values(array.reduce((objects, object) => ({ ...objects, [object.toString()]: object }), {}))
+    const unique = (array) => Object.values(Object.fromEntries(array.map((object) => [object.toString(), object])))
     const filter = (array, pull) => {
-      const ids = pull.map(object => object.toString())
-      return array.filter(object => !ids.includes(object.toString()))
+      const ids = pull.map((object) => object.toString())
+      return array.filter((object) => !ids.includes(object.toString()))
     }
     const notificationUsers = filter(unique([...targetUsers, ...watchUsers]), [...ignoreUsers, actionUser])
     const activeNotificationUsers = await User.find({
@@ -192,12 +190,12 @@ export default (crowi: Crowi) => {
   /**
    * saved hook
    */
-  activitySchema.post('save', async function(savedActivity: ActivityDocument) {
+  activitySchema.post('save', async function (savedActivity: ActivityDocument) {
     const Notification = crowi.model('Notification')
     try {
       const notificationUsers = await savedActivity.getNotificationTargetUsers()
 
-      return Promise.all(notificationUsers.map(user => Notification.upsertByActivity(user, savedActivity)))
+      return Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)))
     } catch (err) {
       debug(err)
     }
@@ -205,7 +203,7 @@ export default (crowi: Crowi) => {
 
   // because mongoose's 'remove' hook fired only when remove by a method of Document (not by a Model method)
   // move 'save' hook from mongoose's events to activityEvent if I have a time.
-  activityEvent.on('remove', async function(activity: ActivityDocument) {
+  activityEvent.on('remove', async function (activity: ActivityDocument) {
     const Notification = crowi.model('Notification')
 
     try {

@@ -11,7 +11,7 @@ const SharePage: FC<{}> = () => {
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
   const [externalShare, setExternalShare] = useState(Boolean(Number(settingForm['app:externalShare'])))
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     try {
@@ -48,7 +48,7 @@ const SharePage: FC<{}> = () => {
                   id="appExternalShare"
                   label={t('admin.share.enable_external_share')}
                   checked={externalShare}
-                  onChange={e => setExternalShare(!externalShare)}
+                  onChange={(e) => setExternalShare(!externalShare)}
                 />
               </Col>
             </Row>

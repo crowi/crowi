@@ -85,7 +85,7 @@ export default class SearchResult extends React.Component<Props, State> {
       )
     }
 
-    const listView = this.props.pages.map(page => {
+    const listView = this.props.pages.map((page) => {
       const pageId = '#' + page._id
       return (
         <Page

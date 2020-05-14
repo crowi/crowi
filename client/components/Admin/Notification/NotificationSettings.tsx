@@ -18,7 +18,7 @@ const NotificationSettings: FC<Props> = ({ crowi, slackSetting, fetchSettings })
   const [clientSecret, setClientSecret] = useStateWithEffect(slackSetting['slack:clientSecret'] || '')
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     try {
@@ -47,12 +47,12 @@ const NotificationSettings: FC<Props> = ({ crowi, slackSetting, fetchSettings })
 
         <FormRow>
           <Label for="slackClientId">{t('admin.notification.settings.client_id')}</Label>
-          <Input id="slackClientId" type="text" value={clientId} onChange={e => setClientId(e.target.value)} />
+          <Input id="slackClientId" type="text" value={clientId} onChange={(e) => setClientId(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="slackClientSecret">{t('admin.notification.settings.client_secret')}</Label>
-          <Input id="slackClientSecret" type="text" value={clientSecret} onChange={e => setClientSecret(e.target.value)} />
+          <Input id="slackClientSecret" type="text" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
         </FormRow>
 
         <FormRow>

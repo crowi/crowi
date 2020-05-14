@@ -48,7 +48,7 @@ export default class Crowi {
     // h1 ~ h6 の id 名を補正する
     const $content = $(contentId || '#revision-body-content')
     let i = 0
-    $('h1,h2,h3,h4,h5,h6', $content).each(function() {
+    $('h1,h2,h3,h4,h5,h6', $content).each(function () {
       const id = 'head' + i++
       $(this).attr('id', id)
       $(this).addClass('revision-head')
@@ -63,7 +63,7 @@ export default class Crowi {
     const $tocContent = $('<div id="revision-toc-content" class="revision-toc-content collapse"></div>')
     $tocId.append($tocContent)
 
-    $('h1', $content).each(function() {
+    $('h1', $content).each(function () {
       const id = $(this).attr('id')
       const title = $(this).text()
       const selector = '#' + id + ' ~ h2:not(#' + id + ' ~ h1 ~ h2)'
@@ -74,7 +74,7 @@ export default class Crowi {
       $tocContent.append($toc)
       $toc.append($tocLi)
 
-      $(selector).each(function() {
+      $(selector).each(function () {
         const id2 = $(this).attr('id')
         const title2 = $(this).text()
         const selector2 = '#' + id2 + ' ~ h3:not(#' + id2 + ' ~ h2 ~ h3)'
@@ -85,7 +85,7 @@ export default class Crowi {
         $tocLi.append($toc2)
         $toc2.append($tocLi2)
 
-        $(selector2).each(function() {
+        $(selector2).each(function () {
           const id3 = $(this).attr('id')
           const title3 = $(this).text()
 
@@ -99,13 +99,7 @@ export default class Crowi {
     })
   }
 
-  static escape = (s: string) =>
-    s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/'/g, '&#39;')
-      .replace(/"/g, '&quot;')
+  static escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;').replace(/"/g, '&quot;')
 
   static unescape = (s: string) =>
     s
@@ -150,7 +144,7 @@ export default class Crowi {
     }, timeout)
   }
 
-  static findHashFromUrl = url => {
+  static findHashFromUrl = (url) => {
     let match
     if ((match = url.match(/#(.+)$/))) {
       return '#' + match[1]
@@ -159,7 +153,7 @@ export default class Crowi {
     return ''
   }
 
-  static unhighlightSelectedSection = hash => {
+  static unhighlightSelectedSection = (hash) => {
     if (!hash || hash == '' || !hash.match(/^#head.+/)) {
       // とりあえず head* だけ (検索結果ページで副作用出た
       return true
@@ -167,7 +161,7 @@ export default class Crowi {
     $(hash).removeClass('highlighted')
   }
 
-  static highlightSelectedSection = hash => {
+  static highlightSelectedSection = (hash) => {
     if (!hash || hash == '' || !hash.match(/^#head.+/)) {
       // とりあえず head* だけ (検索結果ページで副作用出た
       return true
@@ -176,7 +170,7 @@ export default class Crowi {
   }
 }
 
-$(function() {
+$(function () {
   const crowi = window.crowi
   const crowiRenderer = window.crowiRenderer
 
@@ -191,7 +185,7 @@ $(function() {
   $('[data-toggle="tooltip"]').tooltip()
   $('[data-tooltip-stay]').tooltip('show')
 
-  $('#toggle-sidebar').click(function(e) {
+  $('#toggle-sidebar').click(function (e) {
     const $mainContainer = $('.main-container')
     if ($mainContainer.hasClass('aside-hidden')) {
       $('.main-container').removeClass('aside-hidden')
@@ -207,7 +201,7 @@ $(function() {
     $('.main-container').addClass('aside-hidden')
   }
 
-  $('.copy-link').on('click', function() {
+  $('.copy-link').on('click', function () {
     $(this).select()
   })
 
@@ -218,7 +212,7 @@ $(function() {
       url: '/_api/pages.rename',
       data,
       dataType: 'json',
-    }).done(function(res) {
+    }).done(function (res) {
       if (!res.ok) {
         newPageNameCheck.html(`${renderIcon(alert)} ${res.error}`)
         newPageNameCheck.addClass('alert-danger')
@@ -230,28 +224,28 @@ $(function() {
         // fix
         newPageNameCheck.html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.')
 
-        setTimeout(function() {
+        setTimeout(function () {
           top.location.href = page.path + '?redirectFrom=' + pagePath
         }, 1000)
       }
     })
-  $('#renamePage').on('shown.bs.modal', function(e) {
+  $('#renamePage').on('shown.bs.modal', function (e) {
     $('#newPageName').focus()
   })
-  $('#renamePageForm, #unportalize-form, #portalize-form').submit(function(e) {
+  $('#renamePageForm, #unportalize-form, #portalize-form').submit(function (e) {
     rename($(this).serialize(), $(this).find('.new-page-name-check'))
     e.preventDefault()
     return false
   })
 
   // delete
-  $('#delete-page-form').submit(function(e) {
+  $('#delete-page-form').submit(function (e) {
     $.ajax({
       type: 'POST',
       url: '/_api/pages.remove',
       data: $('#delete-page-form').serialize(),
       dataType: 'json',
-    }).done(function(res) {
+    }).done(function (res) {
       if (!res.ok) {
         $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
@@ -263,13 +257,13 @@ $(function() {
 
     return false
   })
-  $('#revert-delete-page-form').submit(function(e) {
+  $('#revert-delete-page-form').submit(function (e) {
     $.ajax({
       type: 'POST',
       url: '/_api/pages.revertRemove',
       data: $('#revert-delete-page-form').serialize(),
       dataType: 'json',
-    }).done(function(res) {
+    }).done(function (res) {
       if (!res.ok) {
         $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
@@ -281,13 +275,13 @@ $(function() {
 
     return false
   })
-  $('#unlink-page-form').submit(function(e) {
+  $('#unlink-page-form').submit(function (e) {
     $.ajax({
       type: 'POST',
       url: '/_api/pages.unlink',
       data: $('#unlink-page-form').serialize(),
       dataType: 'json',
-    }).done(function(res) {
+    }).done(function (res) {
       if (!res.ok) {
         $('#delete-errors').html(`${renderIcon(alert)} ${res.error}`)
         $('#delete-errors').addClass('alert-danger')
@@ -300,7 +294,7 @@ $(function() {
     return false
   })
 
-  $('#create-portal-button').on('click', function(e) {
+  $('#create-portal-button').on('click', function (e) {
     $('.portal').removeClass('d-none')
     $('.content-main').addClass('on-edit')
     $('.portal a[data-toggle="tab"][href="#edit-form"]').tab('show')
@@ -308,14 +302,14 @@ $(function() {
     const path = $('.content-main').data('path')
     if (path != '/' && $('.content-main').data('page-id') == '') {
       const upperPage = path.substr(0, path.length - 1)
-      $.get('/_api/pages.get', { path: upperPage }, function(res) {
+      $.get('/_api/pages.get', { path: upperPage }, function (res) {
         if (res.ok && res.page) {
           $('#portal-warning-modal').modal('show')
         }
       })
     }
   })
-  $('#portal-form-close').on('click', function(e) {
+  $('#portal-form-close').on('click', function (e) {
     $('.portal').addClass('d-none')
     $('.content-main').removeClass('on-edit')
 
@@ -323,7 +317,7 @@ $(function() {
   })
 
   // list-link
-  $('.page-list-link-path').each(function() {
+  $('.page-list-link-path').each(function () {
     const $link = $(this)
     const path = $link.attr('data-path')
     const shortPath = $link.attr('data-short-path') || ''
@@ -335,10 +329,10 @@ $(function() {
   })
 
   // for list page
-  $('a[data-toggle="tab"][href="#view-timeline"]').on('show.bs.tab', function() {
+  $('a[data-toggle="tab"][href="#view-timeline"]').on('show.bs.tab', function () {
     const isShown = $('#view-timeline').data('shown')
     if (isShown == 0) {
-      $('#view-timeline .timeline-body').each(function() {
+      $('#view-timeline .timeline-body').each(function () {
         const id = $(this).attr('id')
         const contentId = '#' + id + ' > script'
         const revisionBody = '#' + id + ' .revision-body'
@@ -349,7 +343,7 @@ $(function() {
         const parsedHTML = crowiRenderer.render(markdown, $revisionBody.get(0))
         $revisionBody.html(parsedHTML)
 
-        $('.template-create-button', $revisionBody).on('click', function() {
+        $('.template-create-button', $revisionBody).on('click', function () {
           const path = $(this).data('path')
           const templateId = $(this).data('template')
           const template = $('#' + templateId).html()
@@ -363,12 +357,12 @@ $(function() {
     }
   })
 
-  $('#register-form input[name="registerForm[username]"]').change(function(e) {
+  $('#register-form input[name="registerForm[username]"]').change(function (e) {
     const username = $(this).val()
     $('#input-group-username').removeClass('has-error')
     $('#help-block-username').html('')
 
-    $.getJSON('/_api/check_username', { username: username }, function(json) {
+    $.getJSON('/_api/check_username', { username: username }, function (json) {
       if (!json.valid) {
         $('#help-block-username').html(`${renderIcon(alert)} This User ID is not available.<br>`)
         $('#input-group-username').addClass('has-error')
@@ -377,12 +371,12 @@ $(function() {
   })
 
   // omg /login/invited
-  $('#invited-form input[name="invitedForm[username]"]').change(function(e) {
+  $('#invited-form input[name="invitedForm[username]"]').change(function (e) {
     const username = $(this).val()
     $('#input-group-username').removeClass('has-error')
     $('#help-block-username').html('')
 
-    $.getJSON('/_api/check_username', { username: username }, function(json) {
+    $.getJSON('/_api/check_username', { username: username }, function (json) {
       if (!json.valid) {
         $('#help-block-username').html(`${renderIcon(alert)} This User ID is not available.<br>`)
         $('#input-group-username').addClass('has-error')
@@ -391,11 +385,9 @@ $(function() {
   })
 
   // moved from view /me/index.html
-  $('#pictureUploadForm input[name=userPicture]').on('change', async function() {
+  $('#pictureUploadForm input[name=userPicture]').on('change', async function () {
     // clear message before process change
-    $('#pictureUploadFormMessage')
-      .removeClass()
-      .empty()
+    $('#pictureUploadFormMessage').removeClass().empty()
 
     const $form = $('#pictureUploadForm')
     const formElement = $form[0] as HTMLFormElement
@@ -423,10 +415,7 @@ $(function() {
         })
       })()
     } catch (e) {
-      $('#pictureUploadFormMessage')
-        .removeClass()
-        .addClass('alert alert-danger')
-        .html(e.message)
+      $('#pictureUploadFormMessage').removeClass().addClass('alert alert-danger').html(e.message)
       return
     }
 
@@ -480,7 +469,7 @@ $(function() {
         return canvas.convertToBlob({ type, quality })
       }
       // HTML Element
-      return new Promise(resolve => {
+      return new Promise((resolve) => {
         canvas.toBlob(resolve, type, quality)
       })
     }
@@ -495,10 +484,7 @@ $(function() {
         fd.set('userPicture', blob, pictureName + suffix)
       }
     } catch (e) {
-      $('#pictureUploadFormMessage')
-        .removeClass()
-        .addClass('alert alert-danger')
-        .html(e.message)
+      $('#pictureUploadFormMessage').removeClass().addClass('alert alert-danger').html(e.message)
       return
     }
 
@@ -513,18 +499,12 @@ $(function() {
       contentType: false,
       data: fd,
       dataType: 'json',
-      success: function(data) {
+      success: function (data) {
         if (data.status) {
           $('#settingUserPicture').attr('src', data.url + '?time=' + new Date())
-          $('#pictureUploadFormMessage')
-            .removeClass()
-            .addClass('alert alert-success')
-            .html('Updated.')
+          $('#pictureUploadFormMessage').removeClass().addClass('alert alert-success').html('Updated.')
         } else {
-          $('#pictureUploadFormMessage')
-            .removeClass()
-            .addClass('alert alert-danger')
-            .html('Failed to update profile picture.')
+          $('#pictureUploadFormMessage').removeClass().addClass('alert alert-danger').html('Failed to update profile picture.')
         }
         $('#pictureUploadFormProgress').html('')
       },
@@ -541,7 +521,7 @@ $(function() {
       const parsedHTML = crowiRenderer.render(markdown, revisionBody.get(0))
       revisionBody.html(parsedHTML)
 
-      $('.template-create-button').on('click', function() {
+      $('.template-create-button').on('click', function () {
         const path = $(this).data('path')
         const templateId = $(this).data('template')
         const template = $('#' + templateId).html()
@@ -572,19 +552,19 @@ $(function() {
         $dummyHeaderWrap.css('height', headerWrapHeight)
       })
 
-      $('.stopper').on('click', e => {
+      $('.stopper').on('click', (e) => {
         $headerWrap.removeClass('sps sps--abv sps--blw')
         return false
       })
     }
 
-    const AddToLikers = function(users) {
-      $.each(users, function(i, user) {
+    const AddToLikers = function (users) {
+      $.each(users, function (i, user) {
         $likerList.append(CreateUserLinkWithPicture(user))
       })
     }
 
-    const CreateUserLinkWithPicture = function(user) {
+    const CreateUserLinkWithPicture = function (user) {
       const $userHtml = $('<a>')
       $userHtml.data('user-id', user._id)
       $userHtml.attr('href', '/user/' + user.username)
@@ -598,13 +578,13 @@ $(function() {
       return $userHtml
     }
 
-    const MarkLiked = function() {
+    const MarkLiked = function () {
       $likeButton.addClass('active')
       $likeButton.data('liked', 1)
       $likeCount.text(parseInt($likeCount.text()) + 1)
     }
 
-    const MarkUnLiked = function() {
+    const MarkUnLiked = function () {
       $likeButton.removeClass('active')
       $likeButton.data('liked', 0)
       $likeCount.text(parseInt($likeCount.text()) - 1)
@@ -613,17 +593,17 @@ $(function() {
     // Like
     const $likeButton = $('.like-button')
     const $likeCount = $('#like-count')
-    $likeButton.click(function() {
+    $likeButton.click(function () {
       const liked = $likeButton.data('liked')
       const token = window.APP_CONTEXT.csrfToken
       if (!liked) {
-        $.post('/_api/likes.add', { _csrf: token, page_id: pageId }, function(res) {
+        $.post('/_api/likes.add', { _csrf: token, page_id: pageId }, function (res) {
           if (res.ok) {
             MarkLiked()
           }
         })
       } else {
-        $.post('/_api/likes.remove', { _csrf: token, page_id: pageId }, function(res) {
+        $.post('/_api/likes.remove', { _csrf: token, page_id: pageId }, function (res) {
           if (res.ok) {
             MarkUnLiked()
           }
@@ -642,7 +622,7 @@ $(function() {
     }
 
     if (!isSeen && !isSharePage) {
-      $.post('/_api/pages.seen', { page_id: pageId }, function(res) {
+      $.post('/_api/pages.seen', { page_id: pageId }, function (res) {
         // ignore unless response has error
         if (res.ok && res.seenUser) {
           $('#content-main').data('page-is-seen', 1)
@@ -655,7 +635,7 @@ $(function() {
     const $b = $('body')
 
     $(document)
-      .on('click', '.toggle-presentation', function(e) {
+      .on('click', '.toggle-presentation', function (e) {
         const $a = $(this)
 
         e.preventDefault()
@@ -671,28 +651,28 @@ $(function() {
             .appendTo($('#presentation-container'))
         }
       })
-      .on('click', '.fullscreen-layer', function() {
+      .on('click', '.fullscreen-layer', function () {
         $b.toggleClass('overlay-on')
       })
   } // end if pageId
 
   // hash handling
-  $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {
+  $('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function () {
     window.history.pushState('', 'History', '#revision-history')
   })
-  $('a[data-toggle="tab"][href="#edit-form"]').on('show.bs.tab', function() {
+  $('a[data-toggle="tab"][href="#edit-form"]').on('show.bs.tab', function () {
     window.history.pushState('', 'Edit', '#edit-form')
   })
-  $('a[data-toggle="tab"][href="#revision-body"]').on('show.bs.tab', function() {
+  $('a[data-toggle="tab"][href="#revision-body"]').on('show.bs.tab', function () {
     window.history.pushState('', '', location.href.replace(location.hash, ''))
   })
 
-  $(document).on('click', '#external-share .dropdown-menu', function(e) {
+  $(document).on('click', '#external-share .dropdown-menu', function (e) {
     e.stopPropagation()
   })
 })
 
-window.addEventListener('load', function(e) {
+window.addEventListener('load', function (e) {
   const crowi = window.crowi
 
   // hash on page
@@ -708,7 +688,7 @@ window.addEventListener('load', function(e) {
   if ((crowi && crowi.users) || crowi.users.length == 0) {
     const totalUsers = crowi.users.length
     const $listLiker = $('.page-list-liker')
-    $listLiker.each(function(i, liker) {
+    $listLiker.each(function (i, liker) {
       const count = $(liker).data('count') || 0
       if (count / totalUsers > 0.05) {
         $(liker).addClass('popular-page-high')
@@ -722,7 +702,7 @@ window.addEventListener('load', function(e) {
       }
     })
     const $listSeer = $('.page-list-seer')
-    $listSeer.each(function(i, seer) {
+    $listSeer.each(function (i, seer) {
       const count = $(seer).data('count') || 0
       if (count / totalUsers > 0.1) {
         // 10%
@@ -741,7 +721,7 @@ window.addEventListener('load', function(e) {
   Crowi.modifyScrollTop()
 })
 
-window.addEventListener('hashchange', function(e) {
+window.addEventListener('hashchange', function (e) {
   Crowi.unhighlightSelectedSection(Crowi.findHashFromUrl(e.oldURL))
   Crowi.highlightSelectedSection(Crowi.findHashFromUrl(e.newURL))
   Crowi.modifyScrollTop()

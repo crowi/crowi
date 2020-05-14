@@ -4,10 +4,7 @@ export const normalize = (query: string) => {
 
 export const splitKeywordsAndPhrases = (query: string) => {
   const phraseRegExp = /(-?"[^"]*")/g
-  const keywords = query
-    .replace(phraseRegExp, '')
-    .split(/\s+/g)
-    .filter(Boolean)
+  const keywords = query.replace(phraseRegExp, '').split(/\s+/g).filter(Boolean)
   const phrases = (query.match(phraseRegExp) || []).map(normalize)
   return { keywords, phrases }
 }
@@ -15,7 +12,7 @@ export const splitKeywordsAndPhrases = (query: string) => {
 export const splitPositiveAndNegative = (queries: string[]) => {
   const positive: string[] = []
   const negative: string[] = []
-  queries.forEach(query => {
+  queries.forEach((query) => {
     const isNegative = query.startsWith('-')
     const target = isNegative ? negative : positive
     const newQuery = isNegative ? query.substr(1) : query

@@ -19,18 +19,18 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  actions.api.get = function(req: Request, res: Response) {
+  actions.api.get = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const pageId = req.query.page_id
 
     Bookmark.findByPageIdAndUserId(pageId, user._id)
-      .then(function(bookmark) {
+      .then(function (bookmark) {
         debug('bookmark found', pageId, bookmark)
         const result = { bookmark }
 
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json(ApiResponse.error(err))
       })
   }
@@ -38,16 +38,16 @@ export default (crowi: Crowi) => {
   /**
    *
    */
-  actions.api.list = function(req: Request, res: Response) {
+  actions.api.list = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const paginateOptions = ApiPaginate.parseOptions(req.query)
 
     const options = Object.assign(paginateOptions, { populatePage: true })
     Bookmark.findByUserId(user._id, options)
-      .then(function(result) {
+      .then(function (result) {
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json(ApiResponse.error(err))
       })
   }
@@ -59,7 +59,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  actions.api.add = async function(req: Request, res: Response) {
+  actions.api.add = async function (req: Request, res: Response) {
     const pageId = req.body.page_id
 
     try {
@@ -89,15 +89,15 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id Page Id.
    */
-  actions.api.remove = function(req: Request, res: Response) {
+  actions.api.remove = function (req: Request, res: Response) {
     const pageId = req.body.page_id
 
     Bookmark.removeBookmark(pageId, req.user)
-      .then(function(data) {
+      .then(function (data) {
         debug('Bookmark removed.', data) // if the bookmark is not exists, this 'data' is null
         return res.json(ApiResponse.success())
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json(ApiResponse.error(err))
       })
   }

@@ -5,7 +5,7 @@ import ses from 'nodemailer-ses-transport'
 
 const debug = Debug('crowi:lib:mailer')
 
-export default crowi => {
+export default (crowi) => {
   'use strict'
 
   const config = crowi.getConfig()
@@ -91,7 +91,7 @@ export default crowi => {
   function send(config, callback) {
     if (mailer) {
       const templateVars = config.vars || {}
-      return swig.renderFile(MAIL_TEMPLATE_DIR + config.template, templateVars, function(err, output) {
+      return swig.renderFile(MAIL_TEMPLATE_DIR + config.template, templateVars, function (err, output) {
         if (err) {
           throw err
         }

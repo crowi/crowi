@@ -61,15 +61,15 @@ export default (crowi: Crowi) => {
   shareSchema.set('toJSON', { virtuals: true })
   shareSchema.plugin(mongoosePaginate)
 
-  shareSchema.methods.isActive = function() {
+  shareSchema.methods.isActive = function () {
     return this.status === STATUS_ACTIVE
   }
 
-  shareSchema.methods.isInactive = function() {
+  shareSchema.methods.isInactive = function () {
     return this.status === STATUS_INACTIVE
   }
 
-  shareSchema.methods.isCreator = function(userData) {
+  shareSchema.methods.isCreator = function (userData) {
     this.populate('creator')
     const creatorId = ((this.creator as any) as UserDocument)._id.toString()
     const userId = userData._id.toString()
@@ -77,12 +77,12 @@ export default (crowi: Crowi) => {
     return creatorId === userId
   }
 
-  shareSchema.statics.isExists = async function(query) {
+  shareSchema.statics.isExists = async function (query) {
     const count = await this.countDocuments(query)
     return count > 0
   }
 
-  shareSchema.statics.findShares = async function(query, options = {}) {
+  shareSchema.statics.findShares = async function (query, options = {}) {
     const page = options.page || 1
     const limit = options.limit || 50
     const sort = options.sort || { createdAt: -1 }
@@ -114,7 +114,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  shareSchema.statics.findShare = async function(query, options = {}) {
+  shareSchema.statics.findShare = async function (query, options = {}) {
     const Page = crowi.model('Page')
 
     const { populateAccesses = false } = options
@@ -142,18 +142,18 @@ export default (crowi: Crowi) => {
     return shareData
   }
 
-  shareSchema.statics.findShareByUuid = async function(uuid, query, options) {
+  shareSchema.statics.findShareByUuid = async function (uuid, query, options) {
     query = Object.assign({ uuid }, query !== undefined ? query : {})
     return Share.findShare(query, options)
   }
 
-  shareSchema.statics.findShareByPageId = async function(pageId, query, options) {
+  shareSchema.statics.findShareByPageId = async function (pageId, query, options) {
     query = Object.assign({ page: pageId }, query !== undefined ? query : {})
 
     return Share.findShare(query, options)
   }
 
-  shareSchema.statics.createShare = async function(pageId, user) {
+  shareSchema.statics.createShare = async function (pageId, user) {
     const isExists = await Share.isExists({
       page: pageId,
       status: STATUS_ACTIVE,
@@ -172,16 +172,16 @@ export default (crowi: Crowi) => {
     })
   }
 
-  shareSchema.statics.deleteShare = async function(query = {}) {
+  shareSchema.statics.deleteShare = async function (query = {}) {
     const defaultQuery = { status: STATUS_ACTIVE }
     return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: STATUS_INACTIVE }, { new: true }).exec()
   }
 
-  shareSchema.statics.deleteById = async function(id) {
+  shareSchema.statics.deleteById = async function (id) {
     return Share.deleteShare({ _id: id })
   }
 
-  shareSchema.statics.deleteByPageId = async function(pageId) {
+  shareSchema.statics.deleteByPageId = async function (pageId) {
     return Share.deleteShare({ page: pageId })
   }
 

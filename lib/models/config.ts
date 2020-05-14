@@ -96,7 +96,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.getRegistrationModeLabels = function() {
+  configSchema.statics.getRegistrationModeLabels = function () {
     return {
       [SECURITY_REGISTRATION_MODE_OPEN]: '公開 (だれでも登録可能)',
       [SECURITY_REGISTRATION_MODE_RESTRICTED]: '制限 (登録完了には管理者の承認が必要)',
@@ -105,7 +105,7 @@ export default (crowi: Crowi) => {
   }
 
   // Execute only once for installing application
-  configSchema.statics.applicationInstall = async function() {
+  configSchema.statics.applicationInstall = async function () {
     const count = await Config.countDocuments({ ns: 'crowi' }).exec()
     if (count > 0) {
       throw new Error('Application already installed')
@@ -113,7 +113,7 @@ export default (crowi: Crowi) => {
     await Config.updateConfigByNamespace('crowi', getArrayForInstalling())
   }
 
-  configSchema.statics.updateCache = function(ns, key, value) {
+  configSchema.statics.updateCache = function (ns, key, value) {
     const config = crowi.getConfig()
 
     if (!config[ns]) {
@@ -125,7 +125,7 @@ export default (crowi: Crowi) => {
     crowi.setConfig(config)
   }
 
-  configSchema.statics.copyCache = function(ns, key, newKey) {
+  configSchema.statics.copyCache = function (ns, key, newKey) {
     const config = crowi.getConfig()
 
     if (!config[ns]) {
@@ -138,7 +138,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.deleteCache = function(ns, key) {
+  configSchema.statics.deleteCache = function (ns, key) {
     const config = crowi.getConfig()
 
     if (!config[ns]) {
@@ -150,7 +150,7 @@ export default (crowi: Crowi) => {
     crowi.setConfig(config)
   }
 
-  configSchema.statics.updateCacheByNamespace = function(ns, nsConfig) {
+  configSchema.statics.updateCacheByNamespace = function (ns, nsConfig) {
     const config = crowi.getConfig()
 
     if (!config[ns]) {
@@ -162,11 +162,11 @@ export default (crowi: Crowi) => {
     crowi.setConfig(config)
   }
 
-  configSchema.statics.updateByParams = async function(ns, key, value) {
+  configSchema.statics.updateByParams = async function (ns, key, value) {
     await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec()
   }
 
-  configSchema.statics.updateConfig = async function(ns, key, value) {
+  configSchema.statics.updateConfig = async function (ns, key, value) {
     try {
       await Config.updateByParams(ns, key, value)
     } catch (err) {
@@ -176,7 +176,7 @@ export default (crowi: Crowi) => {
     Config.updateCache(ns, key, value)
   }
 
-  configSchema.statics.updateConfigByNamespace = async function(ns, nsConfig) {
+  configSchema.statics.updateConfigByNamespace = async function (ns, nsConfig) {
     try {
       await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)))
     } catch (err) {
@@ -186,14 +186,14 @@ export default (crowi: Crowi) => {
     Config.updateCacheByNamespace(ns, nsConfig)
   }
 
-  configSchema.statics.copyByParams = async function(ns, key, newKey) {
+  configSchema.statics.copyByParams = async function (ns, key, newKey) {
     const config = await Config.findOne({ ns, key }).exec()
     if (config !== null) {
       await Config.findOneAndUpdate({ ns, key: newKey }, { ns, key: newKey, value: config.value }, { upsert: true }).exec()
     }
   }
 
-  configSchema.statics.copyConfig = async function(ns, key, newKey) {
+  configSchema.statics.copyConfig = async function (ns, key, newKey) {
     try {
       await Config.copyByParams(ns, key, newKey)
     } catch (err) {
@@ -203,11 +203,11 @@ export default (crowi: Crowi) => {
     Config.copyCache(ns, key, newKey)
   }
 
-  configSchema.statics.deleteByParams = async function(ns, key) {
+  configSchema.statics.deleteByParams = async function (ns, key) {
     await Config.deleteOne({ ns, key }).exec()
   }
 
-  configSchema.statics.deleteConfig = async function(ns, key) {
+  configSchema.statics.deleteConfig = async function (ns, key) {
     try {
       await Config.deleteByParams(ns, key)
     } catch (err) {
@@ -217,12 +217,10 @@ export default (crowi: Crowi) => {
     Config.deleteCache(ns, key)
   }
 
-  configSchema.statics.loadAllConfig = async function() {
+  configSchema.statics.loadAllConfig = async function () {
     const config = { crowi: {} }
 
-    const doc = await Config.find()
-      .sort({ ns: 1, key: 1 })
-      .exec()
+    const doc = await Config.find().sort({ ns: 1, key: 1 }).exec()
 
     doc.forEach(({ ns, key, value }) => {
       if (!config[ns]) {
@@ -235,15 +233,15 @@ export default (crowi: Crowi) => {
     return config
   }
 
-  configSchema.statics.isRequiredThirdPartyAuth = function(config) {
+  configSchema.statics.isRequiredThirdPartyAuth = function (config) {
     return !!config.crowi['auth:requireThirdPartyAuth']
   }
 
-  configSchema.statics.isDisabledPasswordAuth = function(config) {
+  configSchema.statics.isDisabledPasswordAuth = function (config) {
     return !!config.crowi['auth:disablePasswordAuth']
   }
 
-  configSchema.statics.isUploadable = function(config) {
+  configSchema.statics.isUploadable = function (config) {
     const method = crowi.env.FILE_UPLOAD || 'aws'
     const isConfigured =
       config.crowi['upload:aws:accessKeyId'] &&
@@ -258,7 +256,7 @@ export default (crowi: Crowi) => {
     return method != 'none'
   }
 
-  configSchema.statics.fileUploadEnabled = function(config) {
+  configSchema.statics.fileUploadEnabled = function (config) {
     if (!Config.isUploadable(config)) {
       return false
     }
@@ -266,15 +264,15 @@ export default (crowi: Crowi) => {
     return config.crowi['app:fileUpload'] || false
   }
 
-  configSchema.statics.googleLoginEnabled = function(config) {
+  configSchema.statics.googleLoginEnabled = function (config) {
     return config.crowi['google:clientId'] && config.crowi['google:clientSecret']
   }
 
-  configSchema.statics.githubLoginEnabled = function(config) {
+  configSchema.statics.githubLoginEnabled = function (config) {
     return config.crowi['github:clientId'] && config.crowi['github:clientSecret']
   }
 
-  configSchema.statics.hasSlackConfig = function(config) {
+  configSchema.statics.hasSlackConfig = function (config) {
     if (!config.notification) {
       return false
     }
@@ -285,7 +283,7 @@ export default (crowi: Crowi) => {
     return true
   }
 
-  configSchema.statics.hasSlackToken = function(config) {
+  configSchema.statics.hasSlackToken = function (config) {
     if (!this.hasSlackConfig(config)) {
       return false
     }
@@ -297,7 +295,7 @@ export default (crowi: Crowi) => {
     return true
   }
 
-  configSchema.statics.migrate = async function() {
+  configSchema.statics.migrate = async function () {
     const renameKeys = {
       crowi: [
         ['aws:bucket', 'upload:aws:bucket'],

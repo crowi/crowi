@@ -14,7 +14,7 @@ export default (crowi: Crowi, app: Express) => {
   const env = crowi.node_env
   const middlewares = crowi.middlewares
 
-  app.use(function(req: Request, res: Response, next) {
+  app.use(function (req: Request, res: Response, next) {
     const now = new Date()
     const config = crowi.getConfig()
     const tzoffset = -(config.crowi['app:timezone'] || 9) * 60 // for date

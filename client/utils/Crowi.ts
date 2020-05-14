@@ -75,7 +75,7 @@ export default class Crowi {
     type keys = ['userByName', 'userById', 'users', 'draft']
     const keys: keys = ['userByName', 'userById', 'users', 'draft']
 
-    keys.forEach(key => {
+    keys.forEach((key) => {
       const keyContent = this.localStorage[key]
       if (keyContent) {
         try {
@@ -96,7 +96,7 @@ export default class Crowi {
     }
 
     this.apiGet('/users.list', {})
-      .then(data => {
+      .then((data) => {
         this.users = data.users
         this.localStorage.users = JSON.stringify(data.users)
 
@@ -115,7 +115,7 @@ export default class Crowi {
 
         this.localStorage.lastFetched = new Date()
       })
-      .catch(err => {
+      .catch((err) => {
         this.localStorage.removeItem('lastFetched')
         // ignore errors
       })
@@ -186,7 +186,7 @@ export default class Crowi {
       return error
     }
     const url = `/_api${path}`
-    const { data } = await axios({ method, url, ...payload }).catch(function() {
+    const { data } = await axios({ method, url, ...payload }).catch(function () {
       throw createError('Error')
     })
     const { ok, error, info } = data

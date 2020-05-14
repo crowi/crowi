@@ -95,6 +95,6 @@ Object.entries(componentMappings).forEach(([key, component]) => {
 })
 
 // うわーもうー
-$('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function() {
+$('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function () {
   ReactDOM.render(<PageHistory pageId={pageId} crowi={crowi} />, document.getElementById('revision-history'))
 })

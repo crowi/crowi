@@ -39,11 +39,11 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  updatePostSchema.statics.normalizeChannelName = function(channel) {
+  updatePostSchema.statics.normalizeChannelName = function (channel) {
     return channel.replace(/(#|,)/g, '')
   }
 
-  updatePostSchema.statics.createPrefixesByPathPattern = function(pathPattern) {
+  updatePostSchema.statics.createPrefixesByPathPattern = function (pathPattern) {
     const patternPrefix = ['*', '*']
 
     // not begin with slash
@@ -63,7 +63,7 @@ export default (crowi: Crowi) => {
     return patternPrefix
   }
 
-  updatePostSchema.statics.getRegExpByPattern = function(pattern) {
+  updatePostSchema.statics.getRegExpByPattern = function (pattern) {
     let reg = pattern
     if (!reg.match(/^\/.*/)) {
       reg = '/*' + reg + '*'
@@ -75,7 +75,7 @@ export default (crowi: Crowi) => {
     return new RegExp(reg)
   }
 
-  updatePostSchema.statics.findSettingsByPath = async function(path) {
+  updatePostSchema.statics.findSettingsByPath = async function (path) {
     const prefixes = UpdatePost.createPrefixesByPathPattern(path)
 
     const settings = await UpdatePost.find({
@@ -90,7 +90,7 @@ export default (crowi: Crowi) => {
       return settings
     }
 
-    const validSettings = settings.filter(setting => {
+    const validSettings = settings.filter((setting) => {
       const patternRegex = UpdatePost.getRegExpByPattern(setting.pathPattern)
       return patternRegex.test(path)
     })
@@ -98,16 +98,13 @@ export default (crowi: Crowi) => {
     return validSettings
   }
 
-  updatePostSchema.statics.findAll = function(offset = 0) {
+  updatePostSchema.statics.findAll = function (offset = 0) {
     offset = offset || 0
 
-    return UpdatePost.find()
-      .sort({ createdAt: 1 })
-      .populate('creator')
-      .exec()
+    return UpdatePost.find().sort({ createdAt: 1 }).populate('creator').exec()
   }
 
-  updatePostSchema.statics.createUpdatePost = async function(pathPattern, channel, creator) {
+  updatePostSchema.statics.createUpdatePost = async function (pathPattern, channel, creator) {
     const provider = 'slack' // now slack only
 
     const prefixes = UpdatePost.createPrefixesByPathPattern(pathPattern)
