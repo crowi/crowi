@@ -39,6 +39,11 @@ export default function NotificationPage() {
     await fetchSettings()
   }
 
+  const removeConfig = async () => {
+    await crowi.apiPost('/admin/notification/removeSlackSetting')
+    await fetchSettings()
+  }
+
   useEffect(() => {
     fetchSettings()
   }, [])
@@ -47,7 +52,7 @@ export default function NotificationPage() {
     !loading && (
       <>
         <NotificationSettings crowi={crowi} slackSetting={slackSetting} fetchSettings={fetchSettings} />
-        {slackAuthUrl && <ConnectButton hasSlackToken={hasSlackToken} slackAuthUrl={slackAuthUrl} />}
+        {slackAuthUrl && <ConnectButton hasSlackToken={hasSlackToken} slackAuthUrl={slackAuthUrl} removeConfig={removeConfig} />}
         {hasSlackConfig && <NotificationPatterns settings={settings} addPattern={addPattern} removePattern={removePattern} />}
         <Instructions appUrl={appUrl} />
       </>

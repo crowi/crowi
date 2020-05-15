@@ -26,6 +26,7 @@ export default (crowi: Crowi, app: Express, form) => {
 
   router.get('/admin/notification', Admin.api.notification.index)
   router.post('/admin/notification/slackSetting', csrf, form.admin.slackSetting, Admin.api.notification.slackSetting)
+  router.post('/admin/notification/removeSlackSetting', csrf, Admin.api.notification.removeSlackSetting)
   router.post('/admin/notification.add', csrf, Admin.api.notificationAdd)
   router.post('/admin/notification.remove', csrf, Admin.api.notificationRemove)
 
