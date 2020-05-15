@@ -127,6 +127,7 @@ export default (crowi: Crowi) => {
 
     try {
       await Config.updateConfigByNamespace('notification', slackSetting)
+      crowi.setupSlack()
       return res.json(ApiResponse.success({ message: 'Updated Slack setting.' }))
     } catch (err) {
       return res.json(ApiResponse.error(err.message))
