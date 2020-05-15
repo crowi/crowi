@@ -134,6 +134,19 @@ export default (crowi: Crowi) => {
     }
   }
 
+  actions.api.notification.removeSlackSetting = async function(req: Request, res: Response) {
+    try {
+      Config.deleteConfig('notification', 'slack:clientId')
+      Config.deleteConfig('notification', 'slack:clientSecret')
+      Config.deleteConfig('notification', 'slack:token')
+    } catch (err) {
+      return res.json(ApiResponse.error(err.message))
+    }
+
+    crowi.setupSlack()
+    return res.json(ApiResponse.success({ message: 'Successfully remove slack setting.' }))
+  }
+
   actions.notification.slackAuth = async function(req: Request, res: Response) {
     const code = req.query.code
 
