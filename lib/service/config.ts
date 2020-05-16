@@ -89,7 +89,7 @@ export default class Config {
 
           await Promise.all([this.crowi.setupSlack(), this.crowi.setupMailer()])
 
-          debug(`Config updated by ${pubSub.id}`)
+          debug(`Config updated by ${id}`)
         })
 
         subscriber.subscribe(pubSub.channel)
