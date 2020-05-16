@@ -40,7 +40,7 @@ export default function NotificationPage() {
   }
 
   const removeConfig = async () => {
-    await crowi.apiPost('/admin/notification/removeSlackSetting')
+    await crowi.apiPost('/admin/notification/slackSetting.remove')
     await fetchSettings()
   }
 
