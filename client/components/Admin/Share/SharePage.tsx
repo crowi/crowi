@@ -1,4 +1,4 @@
-import React, { useContext, useState, FC } from 'react'
+import React, { useContext, useState, useEffect, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, FormGroup, CustomInput, Row, Col } from 'reactstrap'
 
@@ -9,6 +9,7 @@ const SharePage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi, loading, settingForm, fetchSettings } = useContext(AdminContext)
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
+  console.log('settingForm', settingForm)
   const [externalShare, setExternalShare] = useState(Boolean(Number(settingForm['app:externalShare'])))
 
   const handleSubmit = async e => {
@@ -29,6 +30,10 @@ const SharePage: FC<{}> = () => {
       setTimeout(() => setAlert({ status: '', show: false, message: '' }), 5000)
     }
   }
+
+  useEffect(() => {
+    fetchSettings()
+  }, [])
 
   return loading ? null : (
     <>
