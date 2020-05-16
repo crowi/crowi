@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "target": "es2019",
+    "target": "es2018",
     "jsx": "react",
     "allowJs": true,
     "checkJs": true
