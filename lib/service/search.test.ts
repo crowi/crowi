@@ -1,4 +1,3 @@
-import path from 'path'
 import Crowi from 'server/crowi'
 import { ROOT_DIR } from 'server/test/setup'
 import Searcher from 'server/service/search'
@@ -8,7 +7,7 @@ describe('Search client', () => {
   const searcherUri = 'http://127.0.0.1:19200/crowi'
   const searcher = new Searcher(crowi, searcherUri)
 
-  describe('SearchClient.parseUri', () => {
+  describe('Search.parseUri', () => {
     test('should return node and indexName', () => {
       let res
 
@@ -31,7 +30,7 @@ describe('Search client', () => {
     })
   })
 
-  describe('SearchClient.parseUri error on not start with http', () => {
+  describe('Search.parseUri error on not start with http', () => {
     test('should throw error', () => {
       expect(() => searcher.parseUri('elasticsearch:9200/')).toThrow(/URL for Elasticsearch should starts with http/)
     })

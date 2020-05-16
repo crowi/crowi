@@ -1045,7 +1045,7 @@ export default (crowi: Crowi) => {
     replace = this.normalizePath(replace)
     const renamePath = path => path.replace(search, replace)
     // { [oldPath]: newPath }
-    return Object.fromEntries(paths.map(({ path }) => [path, renamePath(path)]))
+    return paths.map(({ path }) => [path, renamePath(path)]).reduce((l, [k, v]) => Object.assign(l, { [k]: v }), {})
   }
 
   pageSchema.statics.checkPagesRenamable = async function(paths, user) {

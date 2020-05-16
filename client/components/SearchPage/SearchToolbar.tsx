@@ -59,7 +59,7 @@ class SearchToolbar extends React.Component<Props> {
 
   getActiveType() {
     const defaultType = this.searchTypes[0]
-    const searchTypes: Record<string, SearchType> = Object.fromEntries(this.searchTypes.map(({ key, icon, name }) => [key, { key, icon, name }]))
+    const searchTypes: { [key: string]: SearchType } = this.searchTypes.reduce((object, { key, icon, name }) => ({ ...object, [key]: { key, icon, name } }), {})
     const { type: searchType } = this.props
     return searchType in searchTypes ? searchTypes[searchType] : defaultType
   }
