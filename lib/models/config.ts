@@ -26,10 +26,6 @@ export const registrationMode: Record<string, any> = {
 
 export interface ConfigModel extends Model<ConfigDocument> {
   applicationInstall(): Promise<void>
-  updateCache(ns: string, key: string, value: string): void
-  updateCacheByNamespace(ns: string, nsConfig: Record<string, any>): void
-  copyCache(ns: string, key: string, newKey: string): void
-  deleteCache(ns: string, key: string): void
   updateByParams(ns: string, key: string, value: string): Promise<void>
   updateConfig(ns: string, key: string, value: string): Promise<void>
   updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>
@@ -110,55 +106,6 @@ export default (crowi: Crowi) => {
     await Config.updateConfigByNamespace('crowi', getArrayForInstalling())
   }
 
-  configSchema.statics.updateCache = function(ns, key, value) {
-    const config = crowi.getConfig()
-
-    if (!config[ns]) {
-      config[ns] = {}
-    }
-
-    config[ns][key] = value
-
-    crowi.setConfig(config)
-  }
-
-  configSchema.statics.copyCache = function(ns, key, newKey) {
-    const config = crowi.getConfig()
-
-    if (!config[ns]) {
-      config[ns] = {}
-    }
-
-    if (config[ns][newKey] === undefined && config[ns][key] !== undefined) {
-      config[ns][newKey] = config[ns][key]
-      crowi.setConfig(config)
-    }
-  }
-
-  configSchema.statics.deleteCache = function(ns, key) {
-    const config = crowi.getConfig()
-
-    if (!config[ns]) {
-      config[ns] = {}
-    }
-
-    delete config[ns][key]
-
-    crowi.setConfig(config)
-  }
-
-  configSchema.statics.updateCacheByNamespace = function(ns, nsConfig) {
-    const config = crowi.getConfig()
-
-    if (!config[ns]) {
-      config[ns] = {}
-    }
-
-    Object.entries(nsConfig).forEach(([key, value]) => (config[ns][key] = value))
-
-    crowi.setConfig(config)
-  }
-
   configSchema.statics.updateByParams = async function(ns, key, value) {
     await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec()
   }
@@ -169,8 +116,6 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('updateConfig', err)
     }
-
-    Config.updateCache(ns, key, value)
   }
 
   configSchema.statics.updateConfigByNamespace = async function(ns, nsConfig) {
@@ -179,8 +124,6 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('updateConfigByNamespace', err)
     }
-
-    Config.updateCacheByNamespace(ns, nsConfig)
   }
 
   configSchema.statics.copyByParams = async function(ns, key, newKey) {
@@ -196,8 +139,6 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('copyConfig', err)
     }
-
-    Config.copyCache(ns, key, newKey)
   }
 
   configSchema.statics.deleteByParams = async function(ns, key) {
@@ -210,8 +151,6 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('deleteConfig', err)
     }
-
-    Config.deleteCache(ns, key)
   }
 
   configSchema.statics.loadAllConfig = async function() {
