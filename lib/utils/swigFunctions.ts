@@ -3,6 +3,7 @@ import { Express, Request, Response } from 'express'
 import * as Icons from '@mdi/js'
 import renderIcon from 'common/functions/renderIcon'
 import { parentPath, isUserPageList, isUserPage, isTopPage, isTrashPage, userPageRoot, getAppContext } from './view'
+import { hasSlackToken, googleLoginEnabled, githubLoginEnabled } from 'server/models/config'
 
 export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   // const debug = Debug('crowi:lib:swigFunctions')
@@ -23,12 +24,12 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
 
   locals.googleLoginEnabled = function() {
     const config = crowi.getConfig()
-    return Config.googleLoginEnabled(config)
+    return googleLoginEnabled(config)
   }
 
   locals.githubLoginEnabled = function() {
     const config = crowi.getConfig()
-    return Config.githubLoginEnabled(config)
+    return githubLoginEnabled(config)
   }
 
   locals.searchConfigured = function() {
@@ -40,7 +41,7 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
 
   locals.slackConfigured = function() {
     const config = crowi.getConfig()
-    if (Config.hasSlackToken(config)) {
+    if (hasSlackToken(config)) {
       return true
     }
     return false
