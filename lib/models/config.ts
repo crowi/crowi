@@ -24,6 +24,45 @@ export const registrationMode: Record<string, any> = {
   [SECURITY_REGISTRATION_MODE_CLOSED]: '非公開 (登録には管理者による招待が必要)',
 }
 
+export function isRequiredThirdPartyAuth(config) {
+  return !!config.crowi['auth:requireThirdPartyAuth']
+}
+
+export function isDisabledPasswordAuth(config) {
+  return !!config.crowi['auth:disablePasswordAuth']
+}
+
+export function googleLoginEnabled(config) {
+  return config.crowi['google:clientId'] && config.crowi['google:clientSecret']
+}
+
+export function githubLoginEnabled(config) {
+  return config.crowi['github:clientId'] && config.crowi['github:clientSecret']
+}
+
+export function hasSlackConfig(config) {
+  if (!config.notification) {
+    return false
+  }
+  if (!config.notification['slack:clientId'] || !config.notification['slack:clientSecret']) {
+    return false
+  }
+
+  return true
+}
+
+export function hasSlackToken(config) {
+  if (!hasSlackConfig(config)) {
+    return false
+  }
+
+  if (!config.notification['slack:token']) {
+    return false
+  }
+
+  return true
+}
+
 export interface ConfigModel extends Model<ConfigDocument> {
   applicationInstall(): Promise<void>
   updateByParams(ns: string, key: string, value: string): Promise<void>
@@ -171,14 +210,7 @@ export default (crowi: Crowi) => {
     return config
   }
 
-  configSchema.statics.isRequiredThirdPartyAuth = function(config) {
-    return !!config.crowi['auth:requireThirdPartyAuth']
-  }
-
-  configSchema.statics.isDisabledPasswordAuth = function(config) {
-    return !!config.crowi['auth:disablePasswordAuth']
-  }
-
+  // FIXME: export function にするためにはこの FILE_UPLOAD を crowi.env から参照してるのどうにかしないと
   configSchema.statics.isUploadable = function(config) {
     const method = crowi.env.FILE_UPLOAD || 'aws'
     const isConfigured =
@@ -200,37 +232,6 @@ export default (crowi: Crowi) => {
     }
 
     return config.crowi['app:fileUpload'] || false
-  }
-
-  configSchema.statics.googleLoginEnabled = function(config) {
-    return config.crowi['google:clientId'] && config.crowi['google:clientSecret']
-  }
-
-  configSchema.statics.githubLoginEnabled = function(config) {
-    return config.crowi['github:clientId'] && config.crowi['github:clientSecret']
-  }
-
-  configSchema.statics.hasSlackConfig = function(config) {
-    if (!config.notification) {
-      return false
-    }
-    if (!config.notification['slack:clientId'] || !config.notification['slack:clientSecret']) {
-      return false
-    }
-
-    return true
-  }
-
-  configSchema.statics.hasSlackToken = function(config) {
-    if (!this.hasSlackConfig(config)) {
-      return false
-    }
-
-    if (!config.notification['slack:token']) {
-      return false
-    }
-
-    return true
   }
 
   configSchema.statics.migrate = async function() {

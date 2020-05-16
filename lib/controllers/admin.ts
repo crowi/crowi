@@ -5,7 +5,7 @@ import ApiResponse from '../utils/apiResponse'
 import { UserDocument } from 'server/models/user'
 import { getPath } from 'server/utils/ssr'
 import { getAppContext } from 'server/utils/view'
-import { registrationMode } from 'server/models/config'
+import { registrationMode, hasSlackConfig, hasSlackToken } from 'server/models/config'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:admin')
@@ -105,17 +105,26 @@ export default (crowi: Crowi) => {
   actions.api.notification.index = async function(req: Request, res: Response) {
     const config = crowi.getConfig()
     const UpdatePost = crowi.model('UpdatePost')
-    const hasSlackConfig = Config.hasSlackConfig(config)
-    const hasSlackToken = Config.hasSlackToken(config)
+    const hasSlackConfigValue = hasSlackConfig(config)
+    const hasSlackTokenValue = hasSlackToken(config)
     const slack = crowi.slack
     const appUrl = config.crowi['app:url']
 
     const defaultSlackSetting = { 'slack:clientId': '', 'slack:clientSecret': '' }
-    const slackSetting = hasSlackConfig ? config.notification : defaultSlackSetting
-    const slackAuthUrl = hasSlackConfig ? slack.getAuthorizeURL() : ''
+    const slackSetting = hasSlackConfigValue ? config.notification : defaultSlackSetting
+    const slackAuthUrl = hasSlackTokenValue ? slack.getAuthorizeURL() : ''
 
     const settings = await UpdatePost.findAll()
-    return res.json(ApiResponse.success({ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl }))
+    return res.json(
+      ApiResponse.success({
+        settings,
+        slackSetting,
+        hasSlackConfig: hasSlackConfigValue,
+        hasSlackToken: hasSlackTokenValue,
+        slackAuthUrl,
+        appUrl,
+      }),
+    )
   }
 
   actions.api.notification.slackSetting = async function(req: Request, res: Response) {
@@ -154,7 +163,7 @@ export default (crowi: Crowi) => {
     const code = req.query.code
     const configService = crowi.getConfigService()
 
-    if (!code || !Config.hasSlackConfig(req.config)) {
+    if (!code || !hasSlackConfig(req.config)) {
       return res.redirect('/admin/notification')
     }
 

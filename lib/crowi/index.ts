@@ -20,6 +20,7 @@ import controllers from 'server/controllers'
 import routes from '../routes'
 import LRU from '../service/lru'
 import ConfigService from '../service/config'
+import { hasSlackConfig } from '../models/config'
 import mailer from '../utils/mailer'
 import slack from '../utils/slack'
 import expressInit from './express-init'
@@ -352,9 +353,8 @@ class Crowi {
 
   setupSlack() {
     const config = this.getConfig()
-    const Config = this.model('Config')
 
-    if (!Config.hasSlackConfig(config)) {
+    if (!hasSlackConfig(config)) {
       this.slack = {}
     } else {
       this.slack = slack(this)
