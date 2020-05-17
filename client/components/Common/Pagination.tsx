@@ -1,27 +1,37 @@
 import React from 'react'
 import { Pagination, PaginationItem, PaginationLink } from 'reactstrap'
 
-// it is the same as server's definition
-export interface Pager {
-  page: any
-  pagesCount: number
-  pages: number[]
-  total: number
-  previous: number | null
-  previousDots: boolean
-  next: number | null
-  nextDots: boolean
-}
+const PAGER_VIEW_COUNT = 5
 
 interface Props {
   onClick: Function
-  current?: number
-  count?: number
-  pager?: Pager
+  current: number
+  count: number
+}
+
+const createPages = function(current: number, count: number) {
+  let pageSize = PAGER_VIEW_COUNT
+  let start = current - Math.floor(PAGER_VIEW_COUNT / 2)
+
+  if (count <= PAGER_VIEW_COUNT) {
+    pageSize = count
+    start = 1
+  } else if (start <= 1) {
+    start = 1
+    if (count < PAGER_VIEW_COUNT) {
+      pageSize = count
+    }
+  } else if (start > 1) {
+    if (start > count - PAGER_VIEW_COUNT) {
+      start = count - PAGER_VIEW_COUNT + 1
+    }
+  }
+
+  return [...Array(pageSize)].map((_, i) => i + start)
 }
 
 const PaginationWrapper: React.FC<Props> = props => {
-  const { current, count, pager } = props
+  const { current, count } = props
 
   const onClick = (i?: number | null) => {
     const { onClick } = props
@@ -31,69 +41,49 @@ const PaginationWrapper: React.FC<Props> = props => {
     }
   }
 
-  // LegacyPagination
-  if (!pager) {
-    if (current && count && (current < 1 || count < 1)) {
-      return null
-    }
-
-    return (
-      <Pagination>
-        <PaginationItem disabled={current === 1}>
-          <PaginationLink previous onClick={onClick(1)} />
-        </PaginationItem>
-        {[...Array(count).keys()].map((v, k) => {
-          const page = k + 1
-          return (
-            <PaginationItem key={page} active={page === current}>
-              <PaginationLink onClick={onClick(page)}>{page}</PaginationLink>
-            </PaginationItem>
-          )
-        })}
-        <PaginationItem disabled={current === count}>
-          <PaginationLink next onClick={onClick(count)} />
-        </PaginationItem>
-      </Pagination>
-    )
+  if (current < 1 || count < 1) {
+    return null
   }
+
+  const pages: number[] = createPages(current, count)
 
   return (
     <Pagination>
-      {pager.page !== 1 && (
+      {current !== 1 && (
         <PaginationItem>
           <PaginationLink first onClick={onClick(1)} />
         </PaginationItem>
       )}
-      {pager.previous && (
+      {current !== 1 && (
         <PaginationItem>
-          <PaginationLink previous onClick={onClick(pager.previous)} />
+          <PaginationLink previous onClick={onClick(current - 1)} />
         </PaginationItem>
       )}
-      {pager.previousDots && (
+      {count > PAGER_VIEW_COUNT && current - Math.floor(PAGER_VIEW_COUNT / 2) > 1 && (
         <PaginationItem>
           <PaginationLink href="#">...</PaginationLink>
         </PaginationItem>
       )}
-      {pager.pages.map(p => {
+      {pages.map(p => {
         return (
-          <PaginationItem key={p} active={p === pager.page}>
+          <PaginationItem key={p} active={p === current}>
             <PaginationLink onClick={onClick(p)}>{p}</PaginationLink>
           </PaginationItem>
         )
       })}
-      {pager.nextDots && (
+      {count > PAGER_VIEW_COUNT && current + Math.floor(PAGER_VIEW_COUNT / 2) < count && (
         <PaginationItem>
           <PaginationLink href="#">...</PaginationLink>
         </PaginationItem>
       )}
-      {pager.next && (
+      {current !== count && (
         <PaginationItem>
-          <PaginationLink next onClick={onClick(pager.next)} />
+          <PaginationLink next onClick={onClick(current + 1)} />
         </PaginationItem>
       )}
-      {pager.page !== pager.pagesCount && (
+      {current !== count && (
         <PaginationItem>
-          <PaginationLink last onClick={onClick(pager.pagesCount)} />
+          <PaginationLink last onClick={onClick(count)} />
         </PaginationItem>
       )}
     </Pagination>
