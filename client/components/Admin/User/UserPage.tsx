@@ -70,9 +70,8 @@ function useQuery(crowi) {
 function useFetchUsers(crowi, setFailure, clearStatus) {
   const [users, setUsers] = useState([])
   const [{ page, query }, { setPage, setQuery }] = useQuery(crowi)
-  const [count, setCount] = useState(0)
   const [search, setSearch] = useState('')
-  const pagination = { current: page, count }
+  const [pager, setPager] = useState()
   const fetchUsers = async (options = {}) => {
     clearStatus(null)
 
@@ -80,7 +79,7 @@ function useFetchUsers(crowi, setFailure, clearStatus) {
       const { users, pager } = await crowi.apiGet('/admin/users', { uq: search, page, ...options })
       setUsers(users)
       setPage(pager.page)
-      setCount(pager.pagesCount)
+      setPager(pager)
     } catch ({ message }) {
       setFailure(message)
     }
@@ -97,7 +96,7 @@ function useFetchUsers(crowi, setFailure, clearStatus) {
   }, [search])
 
   return [
-    { users, pagination, query },
+    { users, pager, query },
     { setQuery, setSearch, fetchUsers, move },
   ] as const
 }
@@ -153,7 +152,7 @@ const UserPage: FC<{}> = () => {
   const { crowi } = useContext(AdminContext)
   const me = crowi.getUser()
   const [{ success, failure }, { setSuccess, setFailure, clearStatus }] = useAlerts()
-  const [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] = useFetchUsers(crowi, setFailure, clearStatus)
+  const [{ users, pager, query }, { setQuery, setSearch, fetchUsers, move }] = useFetchUsers(crowi, setFailure, clearStatus)
   const [{ invitedUsers }, { invite, clear }] = useInviteUsers(crowi, fetchUsers, setFailure, clearStatus)
 
   const [{ isOpen: isOpenResetModal, modalState: resetModalState }, { toggle: toggleResetModal, open: openResetModal, close: closeResetModal }] = useModal()
@@ -175,7 +174,7 @@ const UserPage: FC<{}> = () => {
       <UserTable
         me={me}
         users={users}
-        pagination={pagination}
+        pager={pager}
         query={query}
         setQuery={setQuery}
         search={setSearch}

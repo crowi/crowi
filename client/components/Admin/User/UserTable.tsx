@@ -1,7 +1,7 @@
 import React, { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import Pagination from 'components/Common/Pagination'
+import Pagination, { Pager } from 'components/Common/Pagination'
 import UserSearchForm from './UserSearchForm'
 import UserTableRow from './UserTableRow'
 import { Me } from 'client/utils/Crowi'
@@ -56,10 +56,7 @@ function getHanlders(openResetModal, changeStatus) {
 interface Props {
   me: Me
   users: any[]
-  pagination: {
-    current: number
-    count: number
-  }
+  pager?: Pager
   query: string
   setQuery: (query: string) => void
   search: (query: string) => void
@@ -68,9 +65,8 @@ interface Props {
   changeStatus: (user: any, string: string) => void
 }
 
-const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) => {
+const UserTable: FC<Props> = ({ me, users, pager, query, setQuery, search, move, openResetModal, changeStatus }) => {
   const [t] = useTranslation()
-  const { current, count } = pagination
   const handlers = getHanlders(openResetModal, changeStatus)
   return (
     <>
@@ -96,7 +92,7 @@ const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, 
                 ))}
               </tbody>
             </table>
-            <Pagination current={current} count={count} onClick={move} />
+            <Pagination pager={pager} onClick={move} />
           </>
         ) : (
           <p>{t('admin.user.not_found')}</p>
