@@ -9,7 +9,6 @@ const SharePage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi, loading, settingForm, fetchSettings } = useContext(AdminContext)
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
-  console.log('settingForm', settingForm)
   const [externalShare, setExternalShare] = useState(Boolean(Number(settingForm['app:externalShare'])))
 
   const handleSubmit = async e => {
