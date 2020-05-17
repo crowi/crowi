@@ -24,23 +24,23 @@ export const registrationMode: Record<string, any> = {
   [SECURITY_REGISTRATION_MODE_CLOSED]: '非公開 (登録には管理者による招待が必要)',
 }
 
-export function isRequiredThirdPartyAuth(config) {
+export function isRequiredThirdPartyAuth(config: Config): boolean {
   return !!config.crowi['auth:requireThirdPartyAuth']
 }
 
-export function isDisabledPasswordAuth(config) {
+export function isDisabledPasswordAuth(config: Config): boolean {
   return !!config.crowi['auth:disablePasswordAuth']
 }
 
-export function googleLoginEnabled(config) {
+export function googleLoginEnabled(config: Config): boolean {
   return config.crowi['google:clientId'] && config.crowi['google:clientSecret']
 }
 
-export function githubLoginEnabled(config) {
+export function githubLoginEnabled(config: Config): boolean {
   return config.crowi['github:clientId'] && config.crowi['github:clientSecret']
 }
 
-export function hasSlackConfig(config) {
+export function hasSlackConfig(config: Config): boolean {
   if (!config.notification) {
     return false
   }
@@ -51,7 +51,7 @@ export function hasSlackConfig(config) {
   return true
 }
 
-export function hasSlackToken(config) {
+export function hasSlackToken(config: Config): boolean {
   if (!hasSlackConfig(config)) {
     return false
   }
@@ -73,14 +73,8 @@ export interface ConfigModel extends Model<ConfigDocument> {
   deleteByParams(ns: string, key: string): Promise<void>
   deleteConfig(ns: string, key: string): Promise<void>
   loadAllConfig(): Promise<object>
-  isRequiredThirdPartyAuth(config: Config): boolean
-  isDisabledPasswordAuth(config: Config): boolean
   isUploadable(config: Config): boolean
   fileUploadEnabled(config: Config): boolean
-  googleLoginEnabled(config: Config): boolean
-  githubLoginEnabled(config: Config): boolean
-  hasSlackConfig(config: Config): boolean
-  hasSlackToken(config: Config): boolean
   migrate(): Promise<void>
 
   SECURITY_REGISTRATION_MODE_OPEN: string
