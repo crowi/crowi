@@ -8,19 +8,21 @@ import flash from 'connect-flash'
 import cons from 'consolidate'
 import expressReactViews from 'express-react-views'
 import Crowi from 'server/crowi'
+import { registrationMode } from 'server/models/config'
+import Debug from 'debug'
 
 export default (crowi: Crowi, app: Express) => {
-  // const debug = Debug('crowi:crowi:express-init')
+  const debug = Debug('crowi:crowi:express-init')
   const env = crowi.node_env
   const middlewares = crowi.middlewares
 
   app.use(function(req: Request, res: Response, next) {
+    debug('Route request', req.method, req.url)
     const now = new Date()
     const config = crowi.getConfig()
     const tzoffset = -(config.crowi['app:timezone'] || 9) * 60 // for date
     const Page = crowi.model('Page')
     const User = crowi.model('User')
-    const Config = crowi.model('Config')
 
     app.set('tzoffset', tzoffset)
 
@@ -50,7 +52,7 @@ export default (crowi: Crowi, app: Express) => {
       pageGrants: Page.getGrantLabels(),
       userStatus: User.getUserStatusLabels(),
       language: User.getLanguageLabels(),
-      registrationMode: Config.getRegistrationModeLabels(),
+      registrationMode,
     }
 
     next()

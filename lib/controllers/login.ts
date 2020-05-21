@@ -9,6 +9,7 @@ import GoogleAuth from '../utils/googleAuth'
 import GitHubAuth from '../utils/githubAuth'
 import axios from 'axios'
 import FileUploader from '../utils/fileUploader'
+import { isDisabledPasswordAuth } from '../models/config'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:login')
@@ -408,14 +409,12 @@ export default (crowi: Crowi, app: Express) => {
       // method GET of form is not valid
       debug('session is', req.session)
 
-      const isDisabledPasswordAuth = !!config.crowi['auth:disablePasswordAuth']
-
       const socialSession = getSocialSession(req.session)
       const { socialEmail } = socialSession
       const { github = {} } = req.session
 
       const registerFailure = message => {
-        const isRegistering = isDisabledPasswordAuth
+        const isRegistering = isDisabledPasswordAuth(config)
         const type = isRegistering ? 'warningMessage' : 'registerWarningMessage'
         req.flash(type, message)
         return res.render('login.html', { isRegistering })
