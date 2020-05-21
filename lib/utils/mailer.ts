@@ -54,7 +54,7 @@ export default crowi => {
   }
 
   function initialize() {
-    if (!config.crowi['mail:from']) {
+    if (!config.crowi || !config.crowi['mail:from']) {
       mailer = undefined
       return
     }

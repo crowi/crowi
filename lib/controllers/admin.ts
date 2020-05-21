@@ -5,6 +5,7 @@ import ApiResponse from '../utils/apiResponse'
 import { UserDocument } from 'server/models/user'
 import { getPath } from 'server/utils/ssr'
 import { getAppContext } from 'server/utils/view'
+import { registrationMode, hasSlackConfig, hasSlackToken } from 'server/models/config'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:admin')
@@ -94,7 +95,6 @@ export default (crowi: Crowi) => {
   actions.api.app.index = async function(req: Request, res: Response) {
     const config = crowi.getConfig()
     const settingForm = config.crowi
-    const registrationMode = Config.getRegistrationModeLabels()
     const isUploadable = Config.isUploadable(config)
 
     return res.json(ApiResponse.success({ settingForm, registrationMode, isUploadable }))
@@ -105,20 +105,30 @@ export default (crowi: Crowi) => {
   actions.api.notification.index = async function(req: Request, res: Response) {
     const config = crowi.getConfig()
     const UpdatePost = crowi.model('UpdatePost')
-    const hasSlackConfig = Config.hasSlackConfig(config)
-    const hasSlackToken = Config.hasSlackToken(config)
+    const hasSlackConfigValue = hasSlackConfig(config)
+    const hasSlackTokenValue = hasSlackToken(config)
     const slack = crowi.slack
     const appUrl = config.crowi['app:url']
 
     const defaultSlackSetting = { 'slack:clientId': '', 'slack:clientSecret': '' }
-    const slackSetting = hasSlackConfig ? config.notification : defaultSlackSetting
-    const slackAuthUrl = hasSlackConfig ? slack.getAuthorizeURL() : ''
+    const slackSetting = hasSlackConfigValue ? config.notification : defaultSlackSetting
+    const slackAuthUrl = hasSlackConfigValue ? slack.getAuthorizeURL() : ''
 
     const settings = await UpdatePost.findAll()
-    return res.json(ApiResponse.success({ settings, slackSetting, hasSlackConfig, hasSlackToken, slackAuthUrl, appUrl }))
+    return res.json(
+      ApiResponse.success({
+        settings,
+        slackSetting,
+        hasSlackConfig: hasSlackConfigValue,
+        hasSlackToken: hasSlackTokenValue,
+        slackAuthUrl,
+        appUrl,
+      }),
+    )
   }
 
   actions.api.notification.slackSetting = async function(req: Request, res: Response) {
+    const configService = crowi.getConfigService()
     const { slackSetting } = req.form
 
     if (!req.form.isValid) {
@@ -126,17 +136,34 @@ export default (crowi: Crowi) => {
     }
 
     try {
-      await Config.updateConfigByNamespace('notification', slackSetting)
+      await configService.saveConfig('notification', slackSetting)
+
       return res.json(ApiResponse.success({ message: 'Updated Slack setting.' }))
     } catch (err) {
       return res.json(ApiResponse.error(err.message))
     }
   }
 
+  actions.api.notification.removeSlackSetting = async function(req: Request, res: Response) {
+    const configService = crowi.getConfigService()
+
+    try {
+      await Promise.all([
+        configService.deleteConfig('notification', 'slack:clientId'),
+        configService.deleteConfig('notification', 'slack:clientSecret'),
+        configService.deleteConfig('notification', 'slack:token'),
+      ])
+    } catch (err) {
+      return res.json(ApiResponse.error(err.message))
+    }
+    return res.json(ApiResponse.success({ message: 'Successfully remove slack setting.' }))
+  }
+
   actions.notification.slackAuth = async function(req: Request, res: Response) {
     const code = req.query.code
+    const configService = crowi.getConfigService()
 
-    if (!code || !Config.hasSlackConfig(req.config)) {
+    if (!code || !hasSlackConfig(req.config)) {
       return res.redirect('/admin/notification')
     }
 
@@ -144,7 +171,8 @@ export default (crowi: Crowi) => {
     try {
       const token = await slack.getOauthAccessToken(code)
       try {
-        Config.updateConfigByNamespace('notification', { 'slack:token': token })
+        await configService.saveConfig('notification', { 'slack:token': token })
+
         req.flash('successMessage', ['Successfully Connected!'])
       } catch (err) {
         req.flash('errorMessage', ['Failed to save access_token. Please try again.'])
@@ -386,6 +414,7 @@ export default (crowi: Crowi) => {
       if (form['auth:disablePasswordAuth'] && !user.hasValidThirdPartyId()) {
         return res.json(ApiResponse.error('パスワードによるログインを禁止するには管理者が有効な外部サービスと連携している必要があります。'))
       }
+
       return saveSetting(req, res, form)
     } else {
       return res.json(ApiResponse.error(req.form.errors.join('\n')))
@@ -446,8 +475,10 @@ export default (crowi: Crowi) => {
       })
   }
 
-  function saveSetting(req, res, form) {
-    Config.updateConfigByNamespace('crowi', form)
+  async function saveSetting(req, res, form) {
+    const configService = crowi.getConfigService()
+    await configService.saveConfig('crowi', form)
+
     return res.json(ApiResponse.success())
   }
 

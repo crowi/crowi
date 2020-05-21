@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react'
+import React, { useContext, useState, useEffect } from 'react'
 
 import { AdminContext } from 'components/Admin/AdminPage'
 import AppSettings from './AppSettings'
@@ -56,6 +56,10 @@ export default function AppPage() {
     })
 
   const getProps = action => ({ update: updateSettings(action), alert: alert[action] || defaultAlert, settingForm, requesting })
+
+  useEffect(() => {
+    fetchSettings()
+  }, [])
 
   return (
     !loading && (

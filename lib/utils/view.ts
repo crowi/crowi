@@ -1,5 +1,6 @@
 import Crowi from 'server/crowi'
 import { AppContext } from 'server/types/appContext'
+import { isRequiredThirdPartyAuth, isDisabledPasswordAuth } from 'server/models/config'
 
 // Static functions related to view used by swig (functions and filters) and react
 
@@ -73,8 +74,8 @@ export const getAppContext = (crowi: Crowi, req): AppContext => {
     path: req.path || '',
     url: config.crowi['app:url'] || '',
     auth: {
-      requireThirdPartyAuth: Config.isRequiredThirdPartyAuth(config),
-      disablePasswordAuth: Config.isDisabledPasswordAuth(config),
+      requireThirdPartyAuth: isRequiredThirdPartyAuth(config),
+      disablePasswordAuth: isDisabledPasswordAuth(config),
     },
     upload: {
       image: Config.isUploadable(config),
