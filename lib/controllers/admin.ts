@@ -25,9 +25,9 @@ export default (crowi: Crowi) => {
       pages: number[]
       total: number
       previous: number | null
-      previousDots: boolean | null
+      previousDots: boolean
       next: number | null
-      nextDots: boolean | null
+      nextDots: boolean
     } = {
       page,
       pagesCount,
@@ -64,12 +64,10 @@ export default (crowi: Crowi) => {
       }
     }
 
-    pager.previousDots = null
     if (pagerMin > 1) {
       pager.previousDots = true
     }
 
-    pager.nextDots = null
     if (pagerMax < pagesCount) {
       pager.nextDots = true
     }

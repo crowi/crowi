@@ -55,45 +55,45 @@ function useInviteUsers(crowi, fetchUsers, setFailure, clearStatus) {
 function useQuery(crowi) {
   const { search = '' } = crowi.location
   const { page: p = '', uq: q = '' } = queryString.parse(search)
-  const initialPage = Array.isArray(p) ? parseInt(p[0]) : p ? parseInt(p) : 0
+  const initialPage = Array.isArray(p) ? parseInt(p[0]) : p ? parseInt(p) : 1
   const initialQuery = (Array.isArray(q) ? q[0] : q) || ''
 
-  const [page, setPage] = useState(initialPage)
+  const [currentPage, setCurrentPage] = useState(initialPage)
   const [query, setQuery] = useState(initialQuery)
 
   return [
-    { page, query },
-    { setPage, setQuery },
+    { currentPage, query },
+    { setCurrentPage, setQuery },
   ] as const
 }
 
 function useFetchUsers(crowi, setFailure, clearStatus) {
   const [users, setUsers] = useState([])
-  const [{ page, query }, { setPage, setQuery }] = useQuery(crowi)
-  const [count, setCount] = useState(0)
+  const [{ currentPage, query }, { setCurrentPage, setQuery }] = useQuery(crowi)
+  const [totalPages, setTotalPages] = useState(1)
   const [search, setSearch] = useState('')
-  const pagination = { current: page, count }
+  const pagination = { currentPage, totalPages }
   const fetchUsers = async (options = {}) => {
     clearStatus(null)
 
     try {
-      const { users, pager } = await crowi.apiGet('/admin/users', { uq: search, page, ...options })
+      const { users, pager } = await crowi.apiGet('/admin/users', { uq: search, page: currentPage, ...options })
       setUsers(users)
-      setPage(pager.page)
-      setCount(pager.pagesCount)
+      setCurrentPage(pager.page)
+      setTotalPages(pager.pagesCount)
     } catch ({ message }) {
       setFailure(message)
     }
   }
 
-  const move = page => setPage(page)
+  const move = page => setCurrentPage(page)
 
   useEffect(() => {
     fetchUsers()
-  }, [page])
+  }, [currentPage])
 
   useEffect(() => {
-    fetchUsers({ page: 0 })
+    fetchUsers({ page: 1 })
   }, [search])
 
   return [

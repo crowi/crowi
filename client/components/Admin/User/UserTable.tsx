@@ -57,8 +57,8 @@ interface Props {
   me: Me
   users: any[]
   pagination: {
-    current: number
-    count: number
+    currentPage: number
+    totalPages: number
   }
   query: string
   setQuery: (query: string) => void
@@ -70,7 +70,7 @@ interface Props {
 
 const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, move, openResetModal, changeStatus }) => {
   const [t] = useTranslation()
-  const { current, count } = pagination
+  const { currentPage, totalPages } = pagination
   const handlers = getHanlders(openResetModal, changeStatus)
   return (
     <>
@@ -96,7 +96,7 @@ const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, 
                 ))}
               </tbody>
             </table>
-            <Pagination current={current} count={count} onClick={move} />
+            <Pagination current={currentPage} count={totalPages} onClick={move} />
           </>
         ) : (
           <p>{t('admin.user.not_found')}</p>
