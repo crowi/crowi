@@ -18,13 +18,53 @@ export interface ConfigDocument extends Document {
   value: string
 }
 
+export const registrationMode: Record<string, any> = {
+  [SECURITY_REGISTRATION_MODE_OPEN]: '公開 (だれでも登録可能)',
+  [SECURITY_REGISTRATION_MODE_RESTRICTED]: '制限 (登録完了には管理者の承認が必要)',
+  [SECURITY_REGISTRATION_MODE_CLOSED]: '非公開 (登録には管理者による招待が必要)',
+}
+
+export function isRequiredThirdPartyAuth(config: Config): boolean {
+  return !!config.crowi['auth:requireThirdPartyAuth']
+}
+
+export function isDisabledPasswordAuth(config: Config): boolean {
+  return !!config.crowi['auth:disablePasswordAuth']
+}
+
+export function googleLoginEnabled(config: Config): boolean {
+  return config.crowi['google:clientId'] && config.crowi['google:clientSecret']
+}
+
+export function githubLoginEnabled(config: Config): boolean {
+  return config.crowi['github:clientId'] && config.crowi['github:clientSecret']
+}
+
+export function hasSlackConfig(config: Config): boolean {
+  if (!config.notification) {
+    return false
+  }
+  if (!config.notification['slack:clientId'] || !config.notification['slack:clientSecret']) {
+    return false
+  }
+
+  return true
+}
+
+export function hasSlackToken(config: Config): boolean {
+  if (!hasSlackConfig(config)) {
+    return false
+  }
+
+  if (!config.notification['slack:token']) {
+    return false
+  }
+
+  return true
+}
+
 export interface ConfigModel extends Model<ConfigDocument> {
-  getRegistrationModeLabels(): Record<string, any>
   applicationInstall(): Promise<void>
-  updateCache(ns: string, key: string, value: string): void
-  updateCacheByNamespace(ns: string, nsConfig: Record<string, any>): void
-  copyCache(ns: string, key: string, newKey: string): void
-  deleteCache(ns: string, key: string): void
   updateByParams(ns: string, key: string, value: string): Promise<void>
   updateConfig(ns: string, key: string, value: string): Promise<void>
   updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>
@@ -33,14 +73,8 @@ export interface ConfigModel extends Model<ConfigDocument> {
   deleteByParams(ns: string, key: string): Promise<void>
   deleteConfig(ns: string, key: string): Promise<void>
   loadAllConfig(): Promise<object>
-  isRequiredThirdPartyAuth(config: Config): boolean
-  isDisabledPasswordAuth(config: Config): boolean
   isUploadable(config: Config): boolean
   fileUploadEnabled(config: Config): boolean
-  googleLoginEnabled(config: Config): boolean
-  githubLoginEnabled(config: Config): boolean
-  hasSlackConfig(config: Config): boolean
-  hasSlackToken(config: Config): boolean
   migrate(): Promise<void>
 
   SECURITY_REGISTRATION_MODE_OPEN: string
@@ -96,14 +130,6 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.getRegistrationModeLabels = function() {
-    return {
-      [SECURITY_REGISTRATION_MODE_OPEN]: '公開 (だれでも登録可能)',
-      [SECURITY_REGISTRATION_MODE_RESTRICTED]: '制限 (登録完了には管理者の承認が必要)',
-      [SECURITY_REGISTRATION_MODE_CLOSED]: '非公開 (登録には管理者による招待が必要)',
-    }
-  }
-
   // Execute only once for installing application
   configSchema.statics.applicationInstall = async function() {
     const count = await Config.countDocuments({ ns: 'crowi' }).exec()
@@ -111,55 +137,6 @@ export default (crowi: Crowi) => {
       throw new Error('Application already installed')
     }
     await Config.updateConfigByNamespace('crowi', getArrayForInstalling())
-  }
-
-  configSchema.statics.updateCache = function(ns, key, value) {
-    const config = crowi.getConfig()
-
-    if (!config[ns]) {
-      config[ns] = {}
-    }
-
-    config[ns][key] = value
-
-    crowi.setConfig(config)
-  }
-
-  configSchema.statics.copyCache = function(ns, key, newKey) {
-    const config = crowi.getConfig()
-
-    if (!config[ns]) {
-      config[ns] = {}
-    }
-
-    if (config[ns][newKey] === undefined && config[ns][key] !== undefined) {
-      config[ns][newKey] = config[ns][key]
-      crowi.setConfig(config)
-    }
-  }
-
-  configSchema.statics.deleteCache = function(ns, key) {
-    const config = crowi.getConfig()
-
-    if (!config[ns]) {
-      config[ns] = {}
-    }
-
-    delete config[ns][key]
-
-    crowi.setConfig(config)
-  }
-
-  configSchema.statics.updateCacheByNamespace = function(ns, nsConfig) {
-    const config = crowi.getConfig()
-
-    if (!config[ns]) {
-      config[ns] = {}
-    }
-
-    Object.entries(nsConfig).forEach(([key, value]) => (config[ns][key] = value))
-
-    crowi.setConfig(config)
   }
 
   configSchema.statics.updateByParams = async function(ns, key, value) {
@@ -172,8 +149,6 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('updateConfig', err)
     }
-
-    Config.updateCache(ns, key, value)
   }
 
   configSchema.statics.updateConfigByNamespace = async function(ns, nsConfig) {
@@ -182,8 +157,6 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('updateConfigByNamespace', err)
     }
-
-    Config.updateCacheByNamespace(ns, nsConfig)
   }
 
   configSchema.statics.copyByParams = async function(ns, key, newKey) {
@@ -199,8 +172,6 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('copyConfig', err)
     }
-
-    Config.copyCache(ns, key, newKey)
   }
 
   configSchema.statics.deleteByParams = async function(ns, key) {
@@ -213,8 +184,6 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('deleteConfig', err)
     }
-
-    Config.deleteCache(ns, key)
   }
 
   configSchema.statics.loadAllConfig = async function() {
@@ -235,14 +204,7 @@ export default (crowi: Crowi) => {
     return config
   }
 
-  configSchema.statics.isRequiredThirdPartyAuth = function(config) {
-    return !!config.crowi['auth:requireThirdPartyAuth']
-  }
-
-  configSchema.statics.isDisabledPasswordAuth = function(config) {
-    return !!config.crowi['auth:disablePasswordAuth']
-  }
-
+  // FIXME: export function にするためにはこの FILE_UPLOAD を crowi.env から参照してるのどうにかしないと
   configSchema.statics.isUploadable = function(config) {
     const method = crowi.env.FILE_UPLOAD || 'aws'
     const isConfigured =
@@ -264,37 +226,6 @@ export default (crowi: Crowi) => {
     }
 
     return config.crowi['app:fileUpload'] || false
-  }
-
-  configSchema.statics.googleLoginEnabled = function(config) {
-    return config.crowi['google:clientId'] && config.crowi['google:clientSecret']
-  }
-
-  configSchema.statics.githubLoginEnabled = function(config) {
-    return config.crowi['github:clientId'] && config.crowi['github:clientSecret']
-  }
-
-  configSchema.statics.hasSlackConfig = function(config) {
-    if (!config.notification) {
-      return false
-    }
-    if (!config.notification['slack:clientId'] || !config.notification['slack:clientSecret']) {
-      return false
-    }
-
-    return true
-  }
-
-  configSchema.statics.hasSlackToken = function(config) {
-    if (!this.hasSlackConfig(config)) {
-      return false
-    }
-
-    if (!config.notification['slack:token']) {
-      return false
-    }
-
-    return true
   }
 
   configSchema.statics.migrate = async function() {

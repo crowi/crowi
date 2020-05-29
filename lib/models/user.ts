@@ -4,6 +4,7 @@ import Debug from 'debug'
 import mongoosePaginate from 'mongoose-paginate'
 import crypto from 'crypto'
 import async from 'async'
+import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth } from 'server/models/config'
 
 const STATUS_REGISTERED = 1
 const STATUS_ACTIVE = 2
@@ -255,10 +256,9 @@ export default (crowi: Crowi) => {
   }
 
   userSchema.methods.countValidThirdPartyIds = function() {
-    const Config = crowi.model('Config')
     const config = crowi.getConfig()
-    const googleId = Config.googleLoginEnabled(config) && this.googleId
-    const githubId = Config.githubLoginEnabled(config) && this.githubId
+    const googleId = googleLoginEnabled(config) && this.googleId
+    const githubId = githubLoginEnabled(config) && this.githubId
     const validIds = [googleId, githubId].filter(Boolean)
     return validIds.length
   }
@@ -268,9 +268,8 @@ export default (crowi: Crowi) => {
   }
 
   userSchema.methods.canDisconnectThirdPartyId = function() {
-    const Config = crowi.model('Config')
     const config = crowi.getConfig()
-    return !Config.isDisabledPasswordAuth(config) || this.countValidThirdPartyIds() > 1
+    return !isDisabledPasswordAuth(config) || this.countValidThirdPartyIds() > 1
   }
 
   userSchema.methods.activateInvitedUser = function(username, name, password, callback) {

@@ -19,7 +19,8 @@ import middlewares from 'server/middlewares'
 import controllers from 'server/controllers'
 import routes from '../routes'
 import LRU from '../service/lru'
-import Config from '../service/config'
+import ConfigService from '../service/config'
+import { hasSlackConfig } from '../models/config'
 import mailer from 'server/util/mailer'
 import slack from 'server/util/slack'
 import expressInit from './express-init'
@@ -175,6 +176,10 @@ class Crowi {
     return this.config.get()
   }
 
+  getConfigService(): ConfigService {
+    return this.config
+  }
+
   getBaseUrl() {
     if (this.baseUrl) {
       return this.baseUrl
@@ -317,7 +322,7 @@ class Crowi {
   }
 
   async setupConfig() {
-    this.config = new Config(this)
+    this.config = new ConfigService(this)
 
     return this.config.load()
   }
@@ -348,9 +353,8 @@ class Crowi {
 
   setupSlack() {
     const config = this.getConfig()
-    const Config = this.model('Config')
 
-    if (!Config.hasSlackConfig(config)) {
+    if (!hasSlackConfig(config)) {
       this.slack = {}
     } else {
       this.slack = slack(this)

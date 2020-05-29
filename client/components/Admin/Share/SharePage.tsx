@@ -1,4 +1,4 @@
-import React, { useContext, useState, FC } from 'react'
+import React, { useContext, useState, useEffect, FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Button, FormGroup, CustomInput, Row, Col } from 'reactstrap'
 
@@ -29,6 +29,10 @@ const SharePage: FC<{}> = () => {
       setTimeout(() => setAlert({ status: '', show: false, message: '' }), 5000)
     }
   }
+
+  useEffect(() => {
+    fetchSettings()
+  }, [])
 
   return loading ? null : (
     <>
