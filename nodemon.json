@@ -3,6 +3,6 @@
     "ts": "ts-node --files -r tsconfig-paths/register --project tsconfig.server.json"
   },
   "watch": ["common/", "lib/", "locales/"],
-  "ignore": ["test/", "*.test.ts", "*.test.tsx"],
+  "ignore": ["*.tsx", "test/", "*.test.ts"],
   "ext": "ts,tsx,js,jsx,json"
 }

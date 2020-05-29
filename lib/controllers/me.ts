@@ -11,7 +11,6 @@ import { getAppContext } from 'server/util/view'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:me')
-  const config = crowi.getConfig()
   const User = crowi.model('User')
   const actions = {} as any
   const api = {} as any
@@ -242,6 +241,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authThirdParty = function(req: Request, res: Response) {
+    const config = crowi.getConfig()
     const user = req.user as UserDocument
     const { continue: continueUrl = '/' } = req.query
 
@@ -254,6 +254,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authGoogle = async function(req: Request, res: Response) {
+    const config = crowi.getConfig()
     const googleAuth = GoogleAuth(config)
     const user = req.user as UserDocument
     const { t } = req
@@ -287,6 +288,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authGoogleCallback = function(req: Request, res: Response) {
+    const config = crowi.getConfig()
     const googleAuth = GoogleAuth(config)
     const user = req.user as UserDocument
     const callback = req.session.callback || '/me'
@@ -325,6 +327,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authGitHub = async function(req: Request, res: Response, next: NextFunction) {
+    const config = crowi.getConfig()
     const githubAuth = GitHubAuth(config)
     const user = req.user as UserDocument
     const { t } = req
@@ -353,6 +356,7 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.authGitHubCallback = function(req: Request, res: Response, next) {
+    const config = crowi.getConfig()
     const githubAuth = GitHubAuth(config)
     const user = req.user as UserDocument
     const callback = req.session.callback || '/me'

@@ -22,7 +22,7 @@ const NotificationSettings: FC<Props> = ({ crowi, slackSetting, fetchSettings })
     e.preventDefault()
 
     try {
-      const { message } = await crowi.apiPost('/admin/notification/slackSetting', {
+      const { message } = await crowi.apiPost('/admin/notification/slackSetting.add', {
         slackSetting: { 'slack:clientId': clientId, 'slack:clientSecret': clientSecret },
       })
 

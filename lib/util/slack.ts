@@ -1,4 +1,5 @@
 import Crowi from 'server/crowi'
+import { hasSlackConfig, hasSlackToken } from 'server/models/config'
 import Debug from 'debug'
 import { WebClient as SlackWebClient } from '@slack/client'
 import diff from 'diff'
@@ -24,7 +25,7 @@ export default (crowi: Crowi) => {
     const config = crowi.getConfig()
 
     let client
-    if (Config.hasSlackToken(config)) {
+    if (hasSlackToken(config)) {
       client = new SlackWebClient(config.notification['slack:token'])
       slack.client = client
     }
@@ -43,7 +44,7 @@ export default (crowi: Crowi) => {
   // this is called to get the url for oauth screen
   slack.getAuthorizeURL = function() {
     const config = crowi.getConfig()
-    if (Config.hasSlackConfig(config)) {
+    if (hasSlackConfig(config)) {
       const slackClientId = config.notification['slack:clientId']
       const redirectUri = slack.getSlackAuthCallbackUrl()
       const scope = ['chat:write:bot', 'links:write', 'links:read'].join(',')

@@ -1,15 +1,15 @@
 import path from 'path'
-import { Client as ES6Client, ApiResponse } from 'es6'
+import { Client as ES6Client } from 'es6'
 import { Client as ES7Client } from 'es7'
 import Debug from 'debug'
 import { format } from 'date-fns'
 import fs from 'fs'
 import { EventEmitter } from 'events'
 import Crowi from 'server/crowi'
-import { NodesInfoResponse, CatIndicesResponse, IndicesExistsAliasResponse, CatAliasesResponse, BulkResponse, SearchResponse } from 'server/types/elasticsearch'
 import { Query, SearchWithBody, FunctionScoreQueryParams } from 'server/util/elasticsearch/query'
 import { parseQuery } from 'server/service/query'
 import { TYPES } from 'server/models/page'
+import ElasticsearchClient from 'server/service/elasticsearch'
 
 const debug = Debug('crowi:lib:search')
 
@@ -19,7 +19,7 @@ interface SearchOption {
   type?: typeof TYPES[number]
 }
 
-export default class SearchClient {
+export default class Search {
   static DEFAULT_OFFSET = 0
   static DEFAULT_LIMIT = 50
 
@@ -53,7 +53,7 @@ export default class SearchClient {
   node: string
   indexNames: { base: string; current: string }
   requestTimeout: number
-  client: ES6Client | ES7Client
+  client: ElasticsearchClient
 
   constructor(crowi: Crowi, esUri: string) {
     this.esUri = esUri
@@ -70,7 +70,7 @@ export default class SearchClient {
     const requestTimeout = 5000
     this.requestTimeout = requestTimeout
 
-    this.client = new ES6Client({ node, requestTimeout })
+    this.client = new ElasticsearchClient(new ES6Client({ node, requestTimeout }))
   }
 
   async waitES(retry = 10) {
@@ -87,7 +87,7 @@ export default class SearchClient {
 
   async checkESVersion() {
     try {
-      const response: ApiResponse<NodesInfoResponse> = await this.client.nodes.info()
+      const response = await this.client.nodes.info()
       const nodes = response.body
       if (!nodes.nodes) {
         throw new Error('no nodes info')
@@ -127,7 +127,7 @@ export default class SearchClient {
     await this.checkESVersion()
 
     if (this.isES7()) {
-      this.client = new ES7Client({ node, requestTimeout })
+      this.client = new ElasticsearchClient(new ES7Client({ node, requestTimeout }))
     }
 
     await this.ensureAlias()
@@ -269,7 +269,7 @@ export default class SearchClient {
   }
 
   async getIndices() {
-    const response: ApiResponse<CatIndicesResponse> = await this.client.cat.indices({ format: 'json' })
+    const response = await this.client.cat.indices({ format: 'json' })
     const indices = response.body
     return indices.map(({ index }) => index).filter(index => index.startsWith(this.indexNames.base))
   }
@@ -279,14 +279,14 @@ export default class SearchClient {
   }
 
   async existsAlias() {
-    const response: ApiResponse<IndicesExistsAliasResponse> = await this.client.indices.existsAlias({ name: this.indexNames.current })
+    const response = await this.client.indices.existsAlias({ name: this.indexNames.current })
     return response.body
   }
 
   async getAlias() {
     const existsAlias = await this.existsAlias()
     if (existsAlias) {
-      const response: ApiResponse<CatAliasesResponse> = await this.client.cat.aliases({ name: this.indexNames.current, format: 'json' })
+      const response = await this.client.cat.aliases({ name: this.indexNames.current, format: 'json' })
       const aliases = response.body
       if (aliases.length > 0) {
         return aliases[0]
@@ -404,7 +404,7 @@ export default class SearchClient {
     }
 
     debug('addPages(): Sending Request to ES', body)
-    const response: ApiResponse<BulkResponse> = await this.client.bulk({ body })
+    const response = await this.client.bulk({ body })
     return response.body
   }
 
@@ -416,7 +416,7 @@ export default class SearchClient {
     })
 
     debug('updatePages(): Sending Request to ES', body)
-    const response: ApiResponse<BulkResponse> = await this.client.bulk({ body })
+    const response = await this.client.bulk({ body })
     return response.body
   }
 
@@ -445,7 +445,7 @@ export default class SearchClient {
 
     const bulkSend = async body => {
       try {
-        const response: ApiResponse<BulkResponse> = await this.client.bulk({
+        const response = await this.client.bulk({
           body,
           timeout: '1d',
         })
@@ -510,7 +510,7 @@ export default class SearchClient {
 
   async search<T extends SearchWithBody>(query: T) {
     try {
-      const response: ApiResponse<SearchResponse> = await this.client.search(query)
+      const response = await this.client.search(query)
       const { took, hits } = response.body
       return {
         meta: {
@@ -562,7 +562,7 @@ export default class SearchClient {
   }
 
   async syncPageCreated(page, user, bookmarkCount = 0) {
-    debug('SearchClient.syncPageCreated', page.path)
+    debug('Search.syncPageCreated', page.path)
 
     if (!this.shouldIndexed(page)) {
       return
@@ -578,7 +578,7 @@ export default class SearchClient {
   }
 
   async syncPageUpdated(page, user, bookmarkCount = 0) {
-    debug('SearchClient.syncPageUpdated', page.path)
+    debug('Search.syncPageUpdated', page.path)
     debug('Page:', page)
     if (!this.shouldIndexed(page)) {
       try {
@@ -601,7 +601,7 @@ export default class SearchClient {
   }
 
   async syncPageDeleted(page, user) {
-    debug('SearchClient.syncPageDeleted', page.path)
+    debug('Search.syncPageDeleted', page.path)
 
     try {
       const res = await this.deletePages([page])
