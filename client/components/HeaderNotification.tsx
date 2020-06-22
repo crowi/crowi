@@ -2,7 +2,7 @@ import React from 'react'
 import { Dropdown, DropdownToggle } from 'reactstrap'
 import DropdownMenu from './HeaderNotification/DropdownMenu'
 import Icon from './Common/Icon'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import { Notification } from 'client/types/crowi'
 
 interface Props {

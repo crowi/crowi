@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { encodeSpace } from '../utils/path'
+import { encodeSpace } from 'server/util/path'
 
 export default () => {
   return (req: Request, res: Response, next) => {

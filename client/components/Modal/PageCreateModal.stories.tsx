@@ -1,7 +1,7 @@
 import React from 'react'
 import PageCreateModal from './PageCreateModal'
-import Crowi from '../../utils/Crowi'
-import i18n from '../../i18n'
+import Crowi from 'client/util/Crowi'
+import i18n from 'client/i18n'
 import { createAppContext } from 'client/fixtures/createAppContext'
 
 const appContext = createAppContext({ user: { username: 'storybook ' } })

@@ -1,5 +1,5 @@
 import React from 'react'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import NotificationPage from './NotificationPage'
 import { createAppContext } from 'client/fixtures/createAppContext'
 

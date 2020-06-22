@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, FC } from 'react'
 import { BrowserRouter as Router, Switch, Route } from 'react-router-dom'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 
 import Top from './TopPage'
 import App from './App/AppPage'

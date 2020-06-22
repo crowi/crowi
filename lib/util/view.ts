@@ -1,6 +1,6 @@
 import Crowi from 'server/crowi'
 import { AppContext } from 'server/types/appContext'
-import { isRequiredThirdPartyAuth, isDisabledPasswordAuth } from 'server/models/config'
+import { isRequiredThirdPartyAuth, isDisabledPasswordAuth, googleLoginEnabled, githubLoginEnabled } from 'server/models/config'
 
 // Static functions related to view used by swig (functions and filters) and react
 
@@ -75,7 +75,12 @@ export const getAppContext = (crowi: Crowi, req): AppContext => {
     url: config.crowi['app:url'] || '',
     auth: {
       requireThirdPartyAuth: isRequiredThirdPartyAuth(config),
+      canDisconnectThirdPartyId: req.user ? req.user.canDisconnectThirdPartyId() : false,
       disablePasswordAuth: isDisabledPasswordAuth(config),
+      providers: {
+        google: googleLoginEnabled(config),
+        github: githubLoginEnabled(config),
+      },
     },
     upload: {
       image: Config.isUploadable(config),
@@ -83,6 +88,9 @@ export const getAppContext = (crowi: Crowi, req): AppContext => {
     },
     search: {
       isConfigured: !!crowi.getSearcher(),
+    },
+    security: {
+      registrationWhiteList: config.crowi['security:registrationWhiteList'] || [],
     },
     user: getUserContext(req),
     env: {

@@ -1,5 +1,5 @@
 import React from 'react'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import Comment from './Comment'
 import { createAppContext } from 'client/fixtures/createAppContext'
 

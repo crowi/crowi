@@ -132,7 +132,7 @@ Current password: Current password
 New password: New password
 Re-enter new password: Re-enter new password
 Please set a password: Please set a password
-You can sign in with email and password: 'You can sign in with <code>%s</code> and password'
+You can sign in with email and password: 'You can sign in with <1>{{ email }}</1> and password'
 API Settings: API Settings
 API Token Settings: API Token Settings
 Current API Token: Current API Token

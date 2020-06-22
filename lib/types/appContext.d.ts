@@ -5,6 +5,11 @@ export type AppContext = {
   auth: {
     requireThirdPartyAuth: boolean
     disablePasswordAuth: boolean
+    canDisconnectThirdPartyId: boolean
+    providers: {
+      google: boolean
+      github: boolean
+    }
   }
   upload: {
     image: boolean
@@ -12,6 +17,9 @@ export type AppContext = {
   }
   search: {
     isConfigured: boolean
+  }
+  security: {
+    registrationWhiteList: string[]
   }
   user: {
     _id: string | null

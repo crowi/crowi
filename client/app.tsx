@@ -3,10 +3,10 @@ import ReactDOM from 'react-dom'
 
 import i18n from './i18n'
 
-import Crowi from './utils/Crowi'
-import CrowiRenderer from './utils/CrowiRenderer'
-import CrowiAuth from './utils/CrowiAuth'
-import Emitter from './emitter'
+import Crowi from 'client/util/Crowi'
+import CrowiRenderer from 'client/util/CrowiRenderer'
+import CrowiAuth from 'client/util/CrowiAuth'
+import Emitter from 'client/emitter'
 
 import HeaderSearchBox from 'components/HeaderSearchBox'
 import SearchPage from 'components/SearchPage'

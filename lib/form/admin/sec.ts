@@ -1,5 +1,5 @@
 import form from 'express-form'
-import { stringToArrayFilter as stringToArray, normalizeCRLFFilter as normalizeCRLF } from 'server/utils/formUtil'
+import { stringToArrayFilter as stringToArray, normalizeCRLFFilter as normalizeCRLF } from 'server/util/formUtil'
 const { field } = form
 
 export default form(

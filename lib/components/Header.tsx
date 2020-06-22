@@ -1,7 +1,7 @@
 import React, { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import Icon from 'client/components/Common/Icon'
-import { userPageRoot, picture } from 'server/utils/view'
+import { userPageRoot, picture } from 'server/util/view'
 import { AppContext } from './App'
 
 const Header = () => {

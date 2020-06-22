@@ -1,10 +1,10 @@
 import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import ApiResponse from '../utils/apiResponse'
+import ApiResponse from 'server/util/apiResponse'
 import { UserDocument } from 'server/models/user'
-import { getPath } from 'server/utils/ssr'
-import { getAppContext } from 'server/utils/view'
+import { getPath } from 'server/util/ssr'
+import { getAppContext } from 'server/util/view'
 import { registrationMode, hasSlackConfig, hasSlackToken } from 'server/models/config'
 
 export default (crowi: Crowi) => {
