@@ -1,6 +1,6 @@
 import React from 'react'
 import faker from 'faker'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import CommentLists from './CommentLists'
 import { createAppContext } from 'client/fixtures/createAppContext'
 

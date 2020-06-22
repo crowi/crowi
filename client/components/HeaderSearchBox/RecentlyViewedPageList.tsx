@@ -2,7 +2,7 @@ import React from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import Icon from 'components/Common/Icon'
 import ListView from 'components/PageList/ListView'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 
 interface Props extends WithTranslation {
   crowi: Crowi

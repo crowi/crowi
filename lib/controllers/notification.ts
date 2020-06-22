@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
-import ApiResponse from '../utils/apiResponse'
+import ApiResponse from 'server/util/apiResponse'
 import { UserDocument } from 'server/models/user'
 
 export default (crowi: Crowi) => {
@@ -8,10 +8,6 @@ export default (crowi: Crowi) => {
   const Notification = crowi.model('Notification')
   const actions = {} as any
   actions.api = {} as any
-
-  actions.notificationPage = function(req: Request, res: Response) {
-    return res.render('notification.html', {})
-  }
 
   /**
    * @api {get} /notifications.list

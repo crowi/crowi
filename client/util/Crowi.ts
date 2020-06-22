@@ -181,7 +181,8 @@ export default class Crowi {
 
   async apiRequest(method: 'get' | 'post', path: string, payload: { params?: any; data?: any }) {
     const createError = (message: string, info = {}) => {
-      const error = new Error(message)
+      // FIXME: Create ApiError custom error
+      const error = new Error(message) as any
       error.info = info
       return error
     }

@@ -2,7 +2,7 @@ import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
 import url from 'url'
-import { decodeSpace } from '../utils/path'
+import { decodeSpace } from 'server/util/path'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:slack')

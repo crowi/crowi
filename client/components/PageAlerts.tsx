@@ -1,6 +1,6 @@
 import React from 'react'
 import PageAlert from './PageAlerts/PageAlert'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import { User, Page } from 'client/types/crowi'
 
 interface Props {

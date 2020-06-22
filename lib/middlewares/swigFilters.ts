@@ -3,7 +3,7 @@ import Crowi from 'server/crowi'
 import swig from 'swig'
 import swigFilters from 'swig/lib/filters'
 import path2name from 'common/functions/path2name'
-import { picture } from 'server/utils/view'
+import { picture } from 'server/util/view'
 
 export default (crowi: Crowi, app: Express) => {
   return (req: Request, res: Response, next) => {

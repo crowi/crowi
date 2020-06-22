@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import Debug from 'debug'
-import ApiResponse from '../utils/apiResponse'
+import ApiResponse from 'server/util/apiResponse'
 import { PageDocument } from 'server/models/page'
 import { UserDocument } from 'server/models/user'
 

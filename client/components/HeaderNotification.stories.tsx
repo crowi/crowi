@@ -1,5 +1,5 @@
 import React from 'react'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import HeaderNotification from './HeaderNotification'
 import { createAppContext } from 'client/fixtures/createAppContext'
 

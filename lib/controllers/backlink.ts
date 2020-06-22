@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
-import ApiResponse from '../utils/apiResponse'
+import ApiResponse from 'server/util/apiResponse'
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routes:backlink')

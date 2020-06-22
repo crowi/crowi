@@ -1,6 +1,6 @@
 import React from 'react'
 import i18n from 'client/i18n'
-import Crowi from 'client/utils/Crowi'
+import Crowi from 'client/util/Crowi'
 import AdminPage from './AdminPage'
 import { createAppContext } from 'client/fixtures/createAppContext'
 

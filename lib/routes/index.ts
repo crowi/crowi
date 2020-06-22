@@ -69,8 +69,6 @@ export default (crowi: Crowi, app: Express) => {
   app.get('/_r/:id([0-9a-z]{24})', loginRequired, page.api.redirector) // alias
   app.get('/files/:id([0-9a-z]{24})', fileAccessRightOrLoginRequired, attachment.api.redirector)
 
-  app.get('/_notifications', accessTokenParser, loginRequired, notification.notificationPage)
-
   app.get('/_search', loginRequired, search.searchPage)
   app.get('/_api/search', accessTokenParser, loginRequired, search.api.search)
 
