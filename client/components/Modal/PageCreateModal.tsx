@@ -1,4 +1,4 @@
-import React, { useState, FC } from 'react'
+import React, { useEffect, useRef, useState, FC } from 'react'
 import { useTranslation, Trans } from 'react-i18next'
 import { Button, Form, Input, Label, Modal, ModalBody, ModalHeader, ModalProps } from 'reactstrap'
 import format from 'client/utils/formatDate'
@@ -88,6 +88,18 @@ const PageCreateModal: FC<Props> = ({ crowi, fade = false, toggle, ...modalProps
   const [portalName, setPotalName] = useState<string>(t('Memo'))
   const [pageName, setPageName] = useState('')
   const [underTreePath, setUnderTreePath] = useState(decodeURI(parentPath(currentPath)))
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!modalProps.isOpen) return
+
+    // Input is not mounted immediately after isOpen changed true
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+      }
+    }, 100)
+  }, [modalProps.isOpen])
 
   const createTodayPage = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -111,6 +123,7 @@ const PageCreateModal: FC<Props> = ({ crowi, fade = false, toggle, ...modalProps
             <PortalNameInput type="text" value={portalName} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPotalName(event.target.value)} />
             <Path>{datePath}</Path>
             <PageNameInput
+              innerRef={inputRef}
               type="text"
               value={pageName}
               onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPageName(event.target.value)}
