@@ -1,7 +1,7 @@
 import React from 'react'
 
 import { createPatch } from 'diff'
-import { Diff2Html } from 'diff2html'
+import * as Diff2Html from 'diff2html'
 
 import { Revision } from 'client/types/crowi'
 
@@ -24,7 +24,11 @@ export default class RevisionDiff extends React.Component<Props> {
 
       const patch = createPatch(currentRevision.path, previousText, currentRevision.body, '', '')
 
-      diffViewHTML = Diff2Html.getPrettyHtml(patch)
+      const options = {
+        drawFileList: false,
+      }
+
+      diffViewHTML = Diff2Html.html(patch, options)
     }
 
     const diffView = { __html: diffViewHTML }
