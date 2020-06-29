@@ -93,7 +93,7 @@ export default class CrowiRenderer {
         result = code
       }
 
-      result = escape ? result : Crowi.escape(result, true)
+      result = escaped ? result : Crowi.escape(result, true)
 
       let citeTag = ''
       if (langFn) {
