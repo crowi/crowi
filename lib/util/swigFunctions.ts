@@ -13,33 +13,33 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   const { locals } = res
 
   // token getter
-  locals.csrf = function() {
+  locals.csrf = function () {
     return req.csrfToken
   }
 
-  locals.assets = function(file) {
+  locals.assets = function (file) {
     // tmp
     return file
   }
 
-  locals.googleLoginEnabled = function() {
+  locals.googleLoginEnabled = function () {
     const config = crowi.getConfig()
     return googleLoginEnabled(config)
   }
 
-  locals.githubLoginEnabled = function() {
+  locals.githubLoginEnabled = function () {
     const config = crowi.getConfig()
     return githubLoginEnabled(config)
   }
 
-  locals.searchConfigured = function() {
+  locals.searchConfigured = function () {
     if (crowi.getSearcher()) {
       return true
     }
     return false
   }
 
-  locals.slackConfigured = function() {
+  locals.slackConfigured = function () {
     const config = crowi.getConfig()
     if (hasSlackToken(config)) {
       return true
@@ -47,12 +47,12 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
     return false
   }
 
-  locals.isUploadable = function() {
+  locals.isUploadable = function () {
     const config = crowi.getConfig()
     return Config.isUploadable(config)
   }
 
-  locals.isExternalShareEnabled = function() {
+  locals.isExternalShareEnabled = function () {
     const config = crowi.getConfig()
     return config.crowi['app:externalShare']
   }
@@ -67,7 +67,7 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
 
   locals.isTrashPage = () => isTrashPage(req.path || '')
 
-  locals.isDeletablePage = function() {
+  locals.isDeletablePage = function () {
     const Page = crowi.model('Page')
     const path = req.path || ''
 
@@ -77,7 +77,7 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   locals.userPageRoot = userPageRoot
 
   locals.css = {
-    grant: function(pageData) {
+    grant: function (pageData) {
       if (!pageData) {
         return ''
       }
@@ -97,7 +97,7 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
       }
       return ''
     },
-    userStatus: function(user) {
+    userStatus: function (user) {
       // debug('userStatus', user._id, user.usename, user.status);
 
       switch (user.status) {
@@ -118,7 +118,7 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
     },
   }
 
-  locals.Icon = function(name, classNames = [], attributes = '') {
+  locals.Icon = function (name, classNames = [], attributes = '') {
     const key = `mdi${name.charAt(0).toUpperCase() + name.slice(1)}`
     const path = Icons[key]
     if (!(key in Icons)) {

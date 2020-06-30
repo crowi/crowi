@@ -12,7 +12,7 @@ function useRequest() {
   const [requesting, setRequesting] = useState(false)
   const startRequest = () => setRequesting(true)
   const finishRequest = () => setRequesting(false)
-  const executeRequest = async request => {
+  const executeRequest = async (request) => {
     try {
       startRequest()
       await request()
@@ -27,7 +27,7 @@ function useAlert() {
   const [alert, setAlert] = useState({})
 
   const showAlert = (action, status, message) => setAlert({ ...alert, [action]: { message, status, show: true } })
-  const hideAlert = action => {
+  const hideAlert = (action) => {
     const { message, status } = alert[action] || { message: '', status: '' }
     setAlert({ ...alert, [action]: { message, status, show: false } })
   }
@@ -41,7 +41,7 @@ export default function AppPage() {
   const [{ alert }, { showAlert, hideAlert }] = useAlert()
   const defaultAlert = { status: '', show: false, message: '' }
 
-  const updateSettings = action => params =>
+  const updateSettings = (action) => (params) =>
     executeRequest(async () => {
       try {
         await crowi.apiPost(`/admin/settings/${action}`, { settingForm: params })
@@ -55,7 +55,7 @@ export default function AppPage() {
       }
     })
 
-  const getProps = action => ({ update: updateSettings(action), alert: alert[action] || defaultAlert, settingForm, requesting })
+  const getProps = (action) => ({ update: updateSettings(action), alert: alert[action] || defaultAlert, settingForm, requesting })
 
   useEffect(() => {
     fetchSettings()

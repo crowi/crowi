@@ -53,13 +53,15 @@ const config = {
       $: 'jquery',
       jQuery: 'jquery',
     }),
-    new CopyWebpackPlugin([
-      { from: path.join(ROOT, 'node_modules/reveal.js/css'), to: path.join(ROOT, 'public/css/reveal/css') },
-      { from: path.join(ROOT, 'node_modules/reveal.js/lib/font'), to: path.join(ROOT, 'public/css/reveal/lib/font') },
-      { from: path.join(ROOT, 'node_modules/reveal.js/lib/css'), to: path.join(ROOT, 'public/js/reveal/lib/css') },
-      { from: path.join(ROOT, 'node_modules/reveal.js/lib/js'), to: path.join(ROOT, 'public/js/reveal/lib/js') },
-      { from: path.join(ROOT, 'node_modules/reveal.js/plugin'), to: path.join(ROOT, 'public/js/reveal/plugin/') },
-    ]),
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: path.join(ROOT, 'node_modules/reveal.js/css'), to: path.join(ROOT, 'public/css/reveal/css') },
+        { from: path.join(ROOT, 'node_modules/reveal.js/lib/font'), to: path.join(ROOT, 'public/css/reveal/lib/font') },
+        { from: path.join(ROOT, 'node_modules/reveal.js/lib/css'), to: path.join(ROOT, 'public/js/reveal/lib/css') },
+        { from: path.join(ROOT, 'node_modules/reveal.js/lib/js'), to: path.join(ROOT, 'public/js/reveal/lib/js') },
+        { from: path.join(ROOT, 'node_modules/reveal.js/plugin'), to: path.join(ROOT, 'public/js/reveal/plugin/') },
+      ],
+    }),
     new ForkTsCheckerWebpackPlugin(),
   ],
   stats: {

@@ -11,12 +11,12 @@ type Props = CommonProps & {
   revisionId: string | null
 }
 
-const CommentList: FC<Props> = props => {
+const CommentList: FC<Props> = (props) => {
   const { crowi, comments, revisionId, ...others } = props
 
   return (
     <div {...others}>
-      {comments.map(comment => (
+      {comments.map((comment) => (
         <CommentItem key={comment._id} crowi={crowi} comment={comment} revisionId={revisionId} />
       ))}
     </div>

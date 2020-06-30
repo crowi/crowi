@@ -244,7 +244,7 @@ class Crowi {
         useCreateIndex: true,
         useUnifiedTopology: true,
       }
-      mongoose.connect(mongoUri, mongooseOptions, e => {
+      mongoose.connect(mongoUri, mongooseOptions, (e) => {
         if (e) {
           debug('DB Connect Error: ', e)
           debug('DB Connect Error: ', mongoUri)
@@ -290,7 +290,7 @@ class Crowi {
 
   async setupModels() {
     const keys = Object.keys(models) as (keyof typeof models)[]
-    keys.forEach(key => {
+    keys.forEach((key) => {
       this.model(key, models[key](this))
     })
   }
@@ -394,7 +394,7 @@ class Crowi {
       io.adapter(socketIORedis(this.redisOpts))
       debug('Using socket.io-redis')
     }
-    io.sockets.on('connection', socket => {
+    io.sockets.on('connection', (socket) => {
       debug('Websocket CONNECTED, socket.id:', socket.id)
     })
 
@@ -421,7 +421,7 @@ class Crowi {
 
     if (env == 'production') {
       app.use(morgan('combined'))
-      app.use(function(err, req, res, next) {
+      app.use(function (err, req, res, next) {
         res.status(500)
         res.render('500.html', { error: err })
       })

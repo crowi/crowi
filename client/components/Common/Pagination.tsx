@@ -9,7 +9,7 @@ interface Props {
   count: number
 }
 
-const createPages = function(current: number, count: number) {
+const createPages = function (current: number, count: number) {
   let pageSize = PAGER_VIEW_COUNT
   let start = current - Math.floor(PAGER_VIEW_COUNT / 2)
 
@@ -30,7 +30,7 @@ const createPages = function(current: number, count: number) {
   return [...Array(pageSize)].map((_, i) => i + start)
 }
 
-const PaginationWrapper: React.FC<Props> = props => {
+const PaginationWrapper: React.FC<Props> = (props) => {
   const { current, count } = props
 
   const onClick = (i?: number | null) => {
@@ -64,7 +64,7 @@ const PaginationWrapper: React.FC<Props> = props => {
           <PaginationLink href="#">...</PaginationLink>
         </PaginationItem>
       )}
-      {pages.map(p => {
+      {pages.map((p) => {
         return (
           <PaginationItem key={p} active={p === current}>
             <PaginationLink onClick={onClick(p)}>{p}</PaginationLink>

@@ -93,7 +93,7 @@ export default class CrowiRenderer {
         result = code
       }
 
-      result = escape ? result : Crowi.escape(result, true)
+      result = escaped ? result : Crowi.escape(result, true)
 
       let citeTag = ''
       if (langFn) {
@@ -127,7 +127,7 @@ export default class CrowiRenderer {
 
       // override
       // @ts-ignore
-      marked.Lexer.lex = function(src: string, options: marked.MarkedOptions) {
+      marked.Lexer.lex = function (src: string, options: marked.MarkedOptions) {
         const lexer = new marked.Lexer(options)
 
         // this is maybe not an official way

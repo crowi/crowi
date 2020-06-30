@@ -15,7 +15,7 @@ export const STATUS = {
 }
 
 function withPreventDefault(callback) {
-  return e => {
+  return (e) => {
     e.preventDefault()
     callback(e)
   }
@@ -74,7 +74,7 @@ const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, 
   const handlers = getHanlders(openResetModal, changeStatus)
   return (
     <>
-      <UserSearchForm value={query} handleChange={e => setQuery(e.target.value)} handleSubmit={withPreventDefault(() => search(query))} />
+      <UserSearchForm value={query} handleChange={(e) => setQuery(e.target.value)} handleSubmit={withPreventDefault(() => search(query))} />
       {users !== null ? (
         users.length ? (
           <>
@@ -91,7 +91,7 @@ const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, 
                 </tr>
               </thead>
               <tbody>
-                {users.map(user => (
+                {users.map((user) => (
                   <UserTableRow key={user._id} changeStatus={changeStatus} me={me} user={user} {...handlers} />
                 ))}
               </tbody>

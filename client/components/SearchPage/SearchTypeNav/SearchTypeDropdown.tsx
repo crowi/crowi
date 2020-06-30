@@ -28,7 +28,7 @@ class SearchTypeDropdown extends React.Component<Props, State> {
 
   render() {
     const { t, searchTypes, activeType, changeType } = this.props
-    const { name: activeTypeName, icon: activeTypeIcon } = searchTypes.filter(e => e.key === activeType.key)[0]
+    const { name: activeTypeName, icon: activeTypeIcon } = searchTypes.filter((e) => e.key === activeType.key)[0]
 
     return (
       <Dropdown className="d-sm-none" isOpen={this.state.open} toggle={this.toggle}>

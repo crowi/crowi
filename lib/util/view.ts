@@ -12,7 +12,7 @@ export const parentPath = (path: string) => {
   return path + '/'
 }
 
-export const isUserPageList = path => path.match(/^\/user\/[^/]+\/$/) || path.match(/^\/user\/$/)
+export const isUserPageList = (path) => path.match(/^\/user\/[^/]+\/$/) || path.match(/^\/user\/$/)
 
 export const isUserPage = (path: string) => path.match(/^\/user\/[^/]+$/)
 
@@ -20,14 +20,14 @@ export const isTopPage = (path: string) => path === '/'
 
 export const isTrashPage = (path: string) => path.match(/^\/trash\/.*/)
 
-export const userPageRoot = user => {
+export const userPageRoot = (user) => {
   if (!user || !user.username) {
     return ''
   }
   return '/user/' + user.username
 }
 
-export const picture = user => {
+export const picture = (user) => {
   if (!user) {
     return ''
   }
@@ -55,7 +55,7 @@ const getUserContext = (req): AppContext['user'] => {
   }
 }
 
-const getConfigContext = config => {
+const getConfigContext = (config) => {
   const { crowi } = config || {}
   return {
     crowi: {

@@ -17,7 +17,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.api = api
 
-  api.uploadPicture = function(req: Request, res: Response) {
+  api.uploadPicture = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const fileUploader = FileUploader(crowi)
     // var storagePlugin = new pluginService('storage');
@@ -59,10 +59,10 @@ export default (crowi: Crowi, app: Express) => {
 
     fileUploader
       .uploadFile(filePath, tmpFile.mimetype, tmpFileStream, {})
-      .then(function(data) {
+      .then(function (data) {
         const imageUrl = fileUploader.generateUrl(filePath)
-        user.updateImage(imageUrl, function(err, data) {
-          fs.unlink(tmpPath, function(err) {
+        user.updateImage(imageUrl, function (err, data) {
+          fs.unlink(tmpPath, function (err) {
             // エラー自体は無視
             if (err) {
               debug('Error while deleting tmp file.', err)
@@ -76,7 +76,7 @@ export default (crowi: Crowi, app: Express) => {
           })
         })
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Uploading error', err)
 
         return res.json({
@@ -86,7 +86,7 @@ export default (crowi: Crowi, app: Express) => {
       })
   }
 
-  actions.index = function(req: Request, res: Response) {
+  actions.index = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const { userForm } = req.body
 
@@ -127,7 +127,7 @@ export default (crowi: Crowi, app: Express) => {
         try {
           await user.update({ name, email, lang })
         } catch (err) {
-          Object.keys(err.errors).forEach(e => {
+          Object.keys(err.errors).forEach((e) => {
             req.form.errors.push(err.errors[e].message)
           })
           return render({ messages: { error: req.form.errors } })
@@ -145,7 +145,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.password = function(req: Request, res: Response) {
+  actions.password = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const { mePassword: passwordForm } = req.body
 
@@ -178,7 +178,7 @@ export default (crowi: Crowi, app: Express) => {
       if (newPassword != newPasswordConfirm) {
         req.form.errors.push('Failed to verify passwords')
       } else {
-        user.updatePassword(newPassword, function(err, user) {
+        user.updatePassword(newPassword, function (err, user) {
           if (err) {
             for (const [key, e] of (err as any).errors) {
               req.form.errors.push(e.message)
@@ -223,24 +223,24 @@ export default (crowi: Crowi, app: Express) => {
     return render()
   }
 
-  actions.notifications = function(req: Request, res: Response) {
+  actions.notifications = function (req: Request, res: Response) {
     return res.render(getPath(crowi, 'Me/NotificationsPage'), { i18n: req.i18n, context: getAppContext(crowi, req), activeItem: 'notifications' })
   }
 
-  actions.updates = function(req: Request, res: Response) {
+  actions.updates = function (req: Request, res: Response) {
     res.render('me/update.html', {})
   }
 
-  actions.deletePicture = function(req: Request, res: Response) {
+  actions.deletePicture = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     // TODO: S3 からの削除
-    user.deleteImage(function(err, data) {
+    user.deleteImage(function (err, data) {
       req.flash('successMessage', 'Deleted profile picture')
       res.redirect('/me')
     })
   }
 
-  actions.authThirdParty = function(req: Request, res: Response) {
+  actions.authThirdParty = function (req: Request, res: Response) {
     const config = crowi.getConfig()
     const user = req.user as UserDocument
     const { continue: continueUrl = '/' } = req.query
@@ -253,7 +253,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.render('me/auth/third-party.html')
   }
 
-  actions.authGoogle = async function(req: Request, res: Response) {
+  actions.authGoogle = async function (req: Request, res: Response) {
     const config = crowi.getConfig()
     const googleAuth = GoogleAuth(config)
     const user = req.user as UserDocument
@@ -275,7 +275,7 @@ export default (crowi: Crowi, app: Express) => {
       req.flash('warningMessage.auth.google', t('page_me.can_not_disconnect'))
       return res.redirect(callback)
     } else if (toConnect) {
-      googleAuth.createAuthUrl(req, function(err, redirectUrl) {
+      googleAuth.createAuthUrl(req, function (err, redirectUrl) {
         if (err) {
           // TODO
         }
@@ -287,13 +287,13 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.authGoogleCallback = function(req: Request, res: Response) {
+  actions.authGoogleCallback = function (req: Request, res: Response) {
     const config = crowi.getConfig()
     const googleAuth = GoogleAuth(config)
     const user = req.user as UserDocument
     const callback = req.session.callback || '/me'
 
-    googleAuth.handleCallback(req, async function(err, tokenInfo) {
+    googleAuth.handleCallback(req, async function (err, tokenInfo) {
       if (err) {
         req.flash('warningMessage.auth.google', err.message) // FIXME: show library error message directly
         return res.redirect(callback) // TODO Handling
@@ -306,7 +306,7 @@ export default (crowi: Crowi, app: Express) => {
         return res.redirect(callback)
       }
 
-      const googleUser = await User.findUserByGoogleId(googleId).catch(err => {
+      const googleUser = await User.findUserByGoogleId(googleId).catch((err) => {
         debug('Failed to findUserByGoogleId', err)
       })
       if (googleUser) {
@@ -326,7 +326,7 @@ export default (crowi: Crowi, app: Express) => {
     })
   }
 
-  actions.authGitHub = async function(req: Request, res: Response, next: NextFunction) {
+  actions.authGitHub = async function (req: Request, res: Response, next: NextFunction) {
     const config = crowi.getConfig()
     const githubAuth = GitHubAuth(config)
     const user = req.user as UserDocument
@@ -355,7 +355,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.authGitHubCallback = function(req: Request, res: Response, next) {
+  actions.authGitHubCallback = function (req: Request, res: Response, next) {
     const config = crowi.getConfig()
     const githubAuth = GitHubAuth(config)
     const user = req.user as UserDocument
@@ -365,7 +365,7 @@ export default (crowi: Crowi, app: Express) => {
       req,
       res,
       next,
-    )(async function(err, tokenInfo) {
+    )(async function (err, tokenInfo) {
       debug('err', err)
       if (err) {
         req.flash('warningMessage.auth.github', err.message)
@@ -379,7 +379,7 @@ export default (crowi: Crowi, app: Express) => {
         return res.redirect(callback)
       }
 
-      const githubUser = await User.findUserByGitHubId(githubId).catch(err => {
+      const githubUser = await User.findUserByGitHubId(githubId).catch((err) => {
         debug('Failed to findUserByGitHubId', err)
       })
       if (githubUser) {

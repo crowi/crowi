@@ -30,7 +30,7 @@ export default (crowi: Crowi) => {
   shareAccessSchema.index({ share: 1, tracking: 1 }, { unique: true })
   shareAccessSchema.plugin(mongoosePaginate)
 
-  shareAccessSchema.statics.findAccesses = async function(query, options = {}) {
+  shareAccessSchema.statics.findAccesses = async function (query, options = {}) {
     const page = options.page || 1
     const limit = options.limit || 50
     const sort = options.sort || { lastAccessedAt: -1 }
@@ -53,7 +53,7 @@ export default (crowi: Crowi) => {
     })
   }
 
-  shareAccessSchema.statics.access = async function(shareId, trackingId) {
+  shareAccessSchema.statics.access = async function (shareId, trackingId) {
     const query = { share: shareId, tracking: trackingId }
     const update = { lastAccessedAt: Date.now() }
     return this.findOneAndUpdate(query, update, { upsert: true, new: true }).exec()

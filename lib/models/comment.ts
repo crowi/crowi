@@ -31,53 +31,47 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  commentSchema.statics.getCommentsByPageId = function(id) {
-    return Comment.find({ page: id })
-      .sort({ createdAt: -1 })
-      .populate('creator')
-      .exec()
+  commentSchema.statics.getCommentsByPageId = function (id) {
+    return Comment.find({ page: id }).sort({ createdAt: -1 }).populate('creator').exec()
   }
 
-  commentSchema.statics.getCommentsByRevisionId = function(id) {
-    return Comment.find({ revision: id })
-      .sort({ createdAt: -1 })
-      .populate('creator')
-      .exec()
+  commentSchema.statics.getCommentsByRevisionId = function (id) {
+    return Comment.find({ revision: id }).sort({ createdAt: -1 }).populate('creator').exec()
   }
 
-  commentSchema.statics.countCommentByPageId = function(page) {
+  commentSchema.statics.countCommentByPageId = function (page) {
     return Comment.countDocuments({ page }).exec()
   }
 
-  commentSchema.statics.removeCommentsByPageId = async function(pageId) {
+  commentSchema.statics.removeCommentsByPageId = async function (pageId) {
     await Comment.deleteMany({ page: pageId }).exec()
   }
 
-  commentSchema.statics.findCreatorsByPage = function(page) {
+  commentSchema.statics.findCreatorsByPage = function (page) {
     return Comment.distinct('creator', { page }).exec()
   }
 
   /**
    * post save hook
    */
-  commentSchema.post('save', function(savedComment: CommentDocument) {
+  commentSchema.post('save', function (savedComment: CommentDocument) {
     const Page = crowi.model('Page')
     const Activity = crowi.model('Activity')
 
     Comment.countCommentByPageId(savedComment.page)
-      .then(function(count) {
+      .then(function (count) {
         return Page.updateCommentCount(savedComment.page, count)
       })
-      .then(function(page) {
+      .then(function (page) {
         debug('CommentCount Updated', page)
       })
-      .catch(function() {})
+      .catch(function () {})
 
     Activity.createByPageComment(savedComment)
-      .then(function(activityLog) {
+      .then(function (activityLog) {
         debug('Activity created', activityLog)
       })
-      .catch(function(err) {})
+      .catch(function (err) {})
   })
 
   const Comment = model<CommentDocument, CommentModel>('Comment', commentSchema)

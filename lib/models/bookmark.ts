@@ -40,7 +40,7 @@ export default (crowi: Crowi) => {
   })
   BookmarkSchema.index({ page: 1, user: 1 }, { unique: true })
 
-  BookmarkSchema.statics.populatePage = async function(bookmarks, requestUser) {
+  BookmarkSchema.statics.populatePage = async function (bookmarks, requestUser) {
     requestUser = requestUser || null
 
     const populatedBookmarks = await Bookmark.populate(bookmarks, {
@@ -49,7 +49,7 @@ export default (crowi: Crowi) => {
     })
 
     // hmm...
-    return populatedBookmarks.filter(bookmark => {
+    return populatedBookmarks.filter((bookmark) => {
       // requestUser を指定しない場合 public のみを返す
       if (requestUser === null) {
         return bookmark.page.isPublic()
@@ -60,11 +60,11 @@ export default (crowi: Crowi) => {
   }
 
   // Bookmark チェック用
-  BookmarkSchema.statics.findByPageIdAndUserId = function(pageId, userId) {
+  BookmarkSchema.statics.findByPageIdAndUserId = function (pageId, userId) {
     return Bookmark.findOne({ page: pageId, user: userId }).exec()
   }
 
-  BookmarkSchema.statics.findByUserId = async function(userId, option) {
+  BookmarkSchema.statics.findByUserId = async function (userId, option) {
     const limit = option.limit || 50
     const offset = option.offset || 0
 
@@ -73,7 +73,7 @@ export default (crowi: Crowi) => {
       .skip(offset)
       .limit(limit)
       .exec()
-      .then(bookmarks => Bookmark.populatePage(bookmarks))
+      .then((bookmarks) => Bookmark.populatePage(bookmarks))
 
     const counter = Bookmark.countDocuments({ user: userId }).exec()
 
@@ -90,24 +90,20 @@ export default (crowi: Crowi) => {
   }
 
   // Bookmark count
-  BookmarkSchema.statics.countByPageId = async function(pageId) {
+  BookmarkSchema.statics.countByPageId = async function (pageId) {
     const count = await Bookmark.countDocuments({ page: pageId })
 
     return count
   }
 
-  BookmarkSchema.statics.findByUser = async function(user, option) {
+  BookmarkSchema.statics.findByUser = async function (user, option) {
     const requestUser = option.requestUser || null
 
     const limit = option.limit || 50
     const offset = option.offset || 0
     const populatePage = option.populatePage || false
 
-    const bookmarks = await Bookmark.find({ user: user._id })
-      .sort({ createdAt: -1 })
-      .skip(offset)
-      .limit(limit)
-      .exec()
+    const bookmarks = await Bookmark.find({ user: user._id }).sort({ createdAt: -1 }).skip(offset).limit(limit).exec()
 
     if (!populatePage) {
       return bookmarks
@@ -116,7 +112,7 @@ export default (crowi: Crowi) => {
     return Bookmark.populatePage(bookmarks, requestUser)
   }
 
-  BookmarkSchema.statics.add = async function(page, user) {
+  BookmarkSchema.statics.add = async function (page, user) {
     const newBookmark = new (Bookmark as any)({ page, user, createdAt: Date.now() })
 
     try {
@@ -133,7 +129,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  BookmarkSchema.statics.removeBookmarksByPageId = async function(pageId) {
+  BookmarkSchema.statics.removeBookmarksByPageId = async function (pageId) {
     try {
       const data = await Bookmark.deleteMany({ page: pageId })
       BookmarkEvent.emit('delete', pageId)
@@ -144,7 +140,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  BookmarkSchema.statics.removeBookmark = async function(page, user) {
+  BookmarkSchema.statics.removeBookmark = async function (page, user) {
     try {
       const data = await Bookmark.findOneAndRemove({ page, user })
       BookmarkEvent.emit('delete', page)
