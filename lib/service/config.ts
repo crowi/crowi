@@ -88,7 +88,7 @@ export default class ConfigService {
     await Promise.all([this.crowi.setupSlack(), this.crowi.setupMailer()])
   }
 
-  async saveConfig(ns: string, config: object) {
+  async saveConfig(ns: string, config: Record<string, any>) {
     debug('Save config', ns, config)
     await this.configModel.updateConfigByNamespace(ns, config)
 

@@ -2,7 +2,7 @@ export default {
   error(err?, info = {}) {
     const result: {
       ok: boolean
-      info: object
+      info: any
       error?: any
     } = {
       ok: false,
