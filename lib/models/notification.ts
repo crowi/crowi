@@ -80,7 +80,7 @@ export default (crowi: Crowi) => {
       default: Date.now,
     },
   })
-  notificationSchema.virtual('actionUsers').get(function(this: NotificationDocument) {
+  notificationSchema.virtual('actionUsers').get(function (this: NotificationDocument) {
     const Activity = crowi.model('Activity')
     return Activity.getActionUsersFromActivities((this.activities as any) as ActivityDocument[])
   })
@@ -91,7 +91,7 @@ export default (crowi: Crowi) => {
   notificationSchema.set('toJSON', { virtuals: true, transform })
   notificationSchema.index({ user: 1, target: 1, action: 1, createdAt: 1 })
 
-  notificationSchema.statics.findLatestNotificationsByUser = function(user, limit, offset) {
+  notificationSchema.statics.findLatestNotificationsByUser = function (user, limit, offset) {
     limit = limit || 10
 
     return Notification.find({ user })
@@ -103,7 +103,7 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  notificationSchema.statics.upsertByActivity = async function(user, activity, createdAt = null) {
+  notificationSchema.statics.upsertByActivity = async function (user, activity, createdAt = null) {
     const { _id: activityId, targetModel, target, action } = activity
 
     const now = createdAt || Date.now()
@@ -135,7 +135,7 @@ export default (crowi: Crowi) => {
     return notification
   }
 
-  notificationSchema.statics.removeActivity = async function(activity) {
+  notificationSchema.statics.removeActivity = async function (activity) {
     const { _id, target, action } = activity
     const query = { target, action }
     const parameters = { $pull: { activities: _id } }
@@ -146,18 +146,18 @@ export default (crowi: Crowi) => {
     return result
   }
 
-  notificationSchema.statics.removeEmpty = function() {
+  notificationSchema.statics.removeEmpty = function () {
     return Notification.deleteMany({ activities: { $size: 0 } })
   }
 
-  notificationSchema.statics.read = async function(user) {
+  notificationSchema.statics.read = async function (user) {
     const query = { user, status: STATUS_UNREAD }
     const parameters = { status: STATUS_UNOPENED }
 
     return Notification.updateMany(query, parameters)
   }
 
-  notificationSchema.statics.open = async function(user, id) {
+  notificationSchema.statics.open = async function (user, id) {
     const query = { _id: id, user: user._id }
     const parameters = { status: STATUS_OPENED }
     const options = { new: true }
@@ -169,7 +169,7 @@ export default (crowi: Crowi) => {
     return notification
   }
 
-  notificationSchema.statics.getUnreadCountByUser = async function(user) {
+  notificationSchema.statics.getUnreadCountByUser = async function (user) {
     const query = { user, status: STATUS_UNREAD }
 
     try {
@@ -182,7 +182,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  notificationEvent.on('update', user => {
+  notificationEvent.on('update', (user) => {
     const io = crowi.getIo()
     if (io) {
       io.sockets.emit('notification updated', { user })

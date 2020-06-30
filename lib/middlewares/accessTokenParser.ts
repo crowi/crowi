@@ -16,14 +16,14 @@ export default (crowi: Crowi, app: Express) => {
 
     debug('accessToken is', accessToken)
     User.findUserByApiToken(accessToken)
-      .then(function(userData) {
+      .then(function (userData) {
         req.user = userData
         req.skipCsrfVerify = true
         debug('Access token parsed: skipCsrfVerify')
 
         next()
       })
-      .catch(function(err) {
+      .catch(function (err) {
         next()
       })
   }

@@ -61,7 +61,7 @@ export default class SearchPage extends React.Component<Props, State> {
 
   buildQuery(override = {}) {
     const { searchingKeyword: q = '', searchingType: type = '' } = this.state
-    const removeEmpty = (query: any) => Object.keys(query).forEach(k => !query[k] && delete query[k])
+    const removeEmpty = (query: any) => Object.keys(query).forEach((k) => !query[k] && delete query[k])
     const query = { q, type, ...override }
     removeEmpty(query)
     return query

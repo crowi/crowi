@@ -11,18 +11,18 @@ export default (crowi: Crowi) => {
 
   actions.api = api
 
-  api.checkUsername = function(req: Request, res: Response) {
+  api.checkUsername = function (req: Request, res: Response) {
     const username = req.query.username
 
     User.findUserByUsername(username)
-      .then(function(userData) {
+      .then(function (userData) {
         if (userData) {
           return res.json({ valid: false })
         } else {
           return res.json({ valid: true })
         }
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json({ valid: true })
       })
   }
@@ -34,7 +34,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} user_ids
    */
-  api.list = function(req: Request, res: Response) {
+  api.list = function (req: Request, res: Response) {
     const userIds = req.query.user_ids || null // TODO: handling
 
     let userFetcher
@@ -45,19 +45,19 @@ export default (crowi: Crowi) => {
     }
 
     userFetcher
-      .then(function(userList) {
+      .then(function (userList) {
         const result = {
           users: userList,
         }
 
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json(ApiResponse.error(err))
       })
   }
 
-  api.getRecentlyViewedPages = async function(req: Request, res: Response) {
+  api.getRecentlyViewedPages = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const pageIds = await crowi.lru.get(user._id.toString(), 10)
     let pages = await Page.findPagesByIds(pageIds)

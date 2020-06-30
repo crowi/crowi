@@ -37,6 +37,6 @@ export const Fixture = {
       throw new Error()
     }
     const Model = conn.model(model)
-    return Promise.all(fixture.map(entity => new Model(entity).save()))
+    return Promise.all(fixture.map((entity) => new Model(entity).save()))
   },
 }

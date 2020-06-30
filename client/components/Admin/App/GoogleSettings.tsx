@@ -19,7 +19,7 @@ const GoogleSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [clientId, setClientId] = useState(settingForm['google:clientId'])
   const [clientSecret, setClientSecret] = useState(settingForm['google:clientSecret'])
 
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     update({
       'google:clientId': clientId,
@@ -40,12 +40,12 @@ const GoogleSettings: FC<Props> = ({ settingForm, update, alert }) => {
 
         <FormRow>
           <Label for="googleClientId">{t('admin.google.client_id')}</Label>
-          <Input id="googleClientId" value={clientId} onChange={e => setClientId(e.target.value)} />
+          <Input id="googleClientId" value={clientId} onChange={(e) => setClientId(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="googleClientSecret">{t('admin.google.client_secret')}</Label>
-          <Input id="googleClientSecret" value={clientSecret} onChange={e => setClientSecret(e.target.value)} />
+          <Input id="googleClientSecret" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
         </FormRow>
 
         <FormRow>

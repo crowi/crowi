@@ -14,9 +14,9 @@ export default (crowi: Crowi) => {
 
   linkDetector.getPathRegexps = () => [new RegExp('<(/[^>]+)>', 'g'), /\[(\/[^\]]+)\](?!\()/g]
 
-  linkDetector.search = function(text) {
-    const unique = function(array) {
-      return array.filter(function(x, i, self) {
+  linkDetector.search = function (text) {
+    const unique = function (array) {
+      return array.filter(function (x, i, self) {
         return self.indexOf(x) === i
       })
     }

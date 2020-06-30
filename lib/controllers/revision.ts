@@ -17,17 +17,17 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} revision_id Revision Id.
    */
-  actions.api.get = function(req: Request, res: Response) {
+  actions.api.get = function (req: Request, res: Response) {
     const revisionId = req.query.revision_id
 
     Revision.findRevision(revisionId)
-      .then(function(revisionData) {
+      .then(function (revisionData) {
         const result = {
           revision: revisionData,
         }
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         debug('Error revisios.get', err)
         return res.json(ApiResponse.error(err))
       })
@@ -40,19 +40,19 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} page_id      Page Id.
    */
-  actions.api.ids = function(req: Request, res: Response) {
+  actions.api.ids = function (req: Request, res: Response) {
     const pageId = req.query.page_id || null
 
     if (pageId && crowi.isPageId(pageId)) {
       Page.findPageByIdAndGrantedUser(pageId, req.user)
-        .then(function(pageData) {
+        .then(function (pageData) {
           debug('Page found', pageData._id, pageData.path)
           return Revision.findRevisionIdList(pageData.path)
         })
-        .then(function(revisions) {
+        .then(function (revisions) {
           return res.json(ApiResponse.success({ revisions }))
         })
-        .catch(function(err) {
+        .catch(function (err) {
           return res.json(ApiResponse.error(err))
         })
     } else {
@@ -68,28 +68,28 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_ids Revision Ids.
    * @apiParam {String} page_id      Page Id.
    */
-  actions.api.list = function(req: Request, res: Response) {
+  actions.api.list = function (req: Request, res: Response) {
     const revisionIds = (req.query.revision_ids || '').split(',')
     const pageId = req.query.page_id || null
 
     if (pageId) {
       Page.findPageByIdAndGrantedUser(pageId, req.user)
-        .then(function(pageData) {
+        .then(function (pageData) {
           debug('Page found', pageData._id, pageData.path)
           return Revision.findRevisionList(pageData.path, {})
         })
-        .then(function(revisions) {
+        .then(function (revisions) {
           return res.json(ApiResponse.success(revisions))
         })
-        .catch(function(err) {
+        .catch(function (err) {
           return res.json(ApiResponse.error(err))
         })
     } else if (revisionIds.length > 0) {
       Revision.findRevisions(revisionIds)
-        .then(function(revisions) {
+        .then(function (revisions) {
           return res.json(ApiResponse.success(revisions))
         })
-        .catch(function(err) {
+        .catch(function (err) {
           return res.json(ApiResponse.error(err))
         })
     } else {

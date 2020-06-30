@@ -19,25 +19,25 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    * @apiParam {String} revision_id Revision Id.
    */
-  api.get = function(req: Request, res: Response) {
+  api.get = function (req: Request, res: Response) {
     const pageId = req.query.page_id
     const revisionId = req.query.revision_id
 
     if (revisionId) {
       return Comment.getCommentsByRevisionId(revisionId)
-        .then(function(comments) {
+        .then(function (comments) {
           res.json(ApiResponse.success({ comments }))
         })
-        .catch(function(err) {
+        .catch(function (err) {
           res.json(ApiResponse.error(err))
         })
     }
 
     return Comment.getCommentsByPageId(pageId)
-      .then(function(comments) {
+      .then(function (comments) {
         res.json(ApiResponse.success({ comments }))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         res.json(ApiResponse.error(err))
       })
   }
@@ -52,7 +52,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} comment Comment body
    * @apiParam {Number} comment_position=-1 Line number of the comment
    */
-  api.add = async function(req: Request, res: Response) {
+  api.add = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
 
     if (!req.form.isValid) {

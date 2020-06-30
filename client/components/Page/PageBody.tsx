@@ -27,7 +27,7 @@ export default class PageBody extends React.Component<Props> {
     keywords
       .replace(/"/g, '')
       .split(' ')
-      .forEach(keyword => {
+      .forEach((keyword) => {
         if (keyword === '') {
           return
         }

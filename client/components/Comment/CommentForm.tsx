@@ -22,7 +22,7 @@ type Props = CommonProps & {
   postComment: (comment: string) => Promise<void>
 }
 
-const CommentForm: FC<Props> = props => {
+const CommentForm: FC<Props> = (props) => {
   const { posting, message, postComment, ...others } = props
   const [comment, setComment] = useState('')
 
@@ -33,7 +33,7 @@ const CommentForm: FC<Props> = props => {
 
   return (
     <PageCommentForm className="form" {...others}>
-      <CommentInput type="textarea" value={comment} onChange={e => setComment(e.target.value)} />
+      <CommentInput type="textarea" value={comment} onChange={(e) => setComment(e.target.value)} />
       <CommentSubmit>
         <span className="text-danger">{message}</span>
         <Button color="primary" size="sm" onClick={onClick} disabled={posting}>

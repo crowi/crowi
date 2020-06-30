@@ -7,7 +7,7 @@ type Props = {
   warningMessage?: string
 } & PageProps
 
-const GitHubWidget: FC<Props> = props => {
+const GitHubWidget: FC<Props> = (props) => {
   const { i18n, context, warningMessage } = props
 
   return (

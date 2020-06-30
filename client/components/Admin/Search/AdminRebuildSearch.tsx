@@ -27,14 +27,14 @@ export default class AdminRebuildSearch extends React.Component<Props, State> {
   componentDidMount() {
     const socket = this.props.crowi.getWebSocket()
 
-    socket.on('admin:addPageProgress', data => {
+    socket.on('admin:addPageProgress', (data) => {
       this.setState({
         ...data,
         isCompleted: false,
       })
     })
 
-    socket.on('admin:finishAddPage', data => {
+    socket.on('admin:finishAddPage', (data) => {
       this.setState({
         ...data,
         isCompleted: true,

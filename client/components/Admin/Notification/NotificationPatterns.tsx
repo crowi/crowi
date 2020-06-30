@@ -39,7 +39,7 @@ const NotificationPatterns: FC<Props> = ({ settings, addPattern, removePattern }
           <tbody>
             <tr>
               <td>
-                <Input value={pathPattern} placeholder="e.g. /projects/xxx/MTG/*" onChange={e => setPathPattern(e.target.value)} />
+                <Input value={pathPattern} placeholder="e.g. /projects/xxx/MTG/*" onChange={(e) => setPathPattern(e.target.value)} />
                 <FormText color="muted">
                   <Trans i18nKey="admin.notification.patterns.path_pattern_description">
                     Path name of wiki. Pattern expression with <code>*</code> can be used.
@@ -47,7 +47,7 @@ const NotificationPatterns: FC<Props> = ({ settings, addPattern, removePattern }
                 </FormText>
               </td>
               <td>
-                <Input value={channel} placeholder="e.g. project-xxx" onChange={e => setChannel(e.target.value)} />
+                <Input value={channel} placeholder="e.g. project-xxx" onChange={(e) => setChannel(e.target.value)} />
                 <FormText color="muted">
                   <Trans i18nKey="admin.notification.patterns.channel_description">
                     Slack channel name. Without <code>#</code>.

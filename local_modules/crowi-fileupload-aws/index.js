@@ -1,6 +1,6 @@
 // crowi-fileupload-aws
 
-module.exports = function(crowi) {
+module.exports = function (crowi) {
   'use strict'
 
   const aws = require('aws-sdk')
@@ -8,7 +8,7 @@ module.exports = function(crowi) {
   const path = require('path')
   const debug = require('debug')('crowi:lib:fileUploaderAws')
   const lib = {}
-  const getAwsConfig = function() {
+  const getAwsConfig = function () {
     const config = crowi.getConfig()
     return {
       accessKeyId: config.crowi['upload:aws:accessKeyId'],
@@ -36,7 +36,7 @@ module.exports = function(crowi) {
     return new aws.S3()
   }
 
-  lib.deleteFile = function(fileId, filePath) {
+  lib.deleteFile = function (fileId, filePath) {
     const s3 = S3Factory()
     const awsConfig = getAwsConfig()
 
@@ -60,7 +60,7 @@ module.exports = function(crowi) {
     })
   }
 
-  lib.uploadFile = function(filePath, contentType, fileStream, options) {
+  lib.uploadFile = function (filePath, contentType, fileStream, options) {
     const s3 = S3Factory()
     const awsConfig = getAwsConfig()
 
@@ -72,8 +72,8 @@ module.exports = function(crowi) {
       ACL: 'public-read',
     }
 
-    return new Promise(function(resolve, reject) {
-      s3.putObject(params, function(err, data) {
+    return new Promise(function (resolve, reject) {
+      s3.putObject(params, function (err, data) {
         if (err) {
           return reject(err)
         }
@@ -83,14 +83,14 @@ module.exports = function(crowi) {
     })
   }
 
-  lib.generateUrl = function(filePath) {
+  lib.generateUrl = function (filePath) {
     const awsConfig = getAwsConfig()
     const url = 'https://' + awsConfig.bucket + '.s3.amazonaws.com/' + filePath
 
     return url
   }
 
-  lib.findDeliveryFile = function(fileId, filePath) {
+  lib.findDeliveryFile = function (fileId, filePath) {
     const cacheFile = lib.createCacheFileName(fileId)
 
     return new Promise((resolve, reject) => {
@@ -104,7 +104,7 @@ module.exports = function(crowi) {
       const fileStream = fs.createWriteStream(cacheFile)
       const fileUrl = lib.generateUrl(filePath)
       debug('Load attachement file into local cache file', fileUrl, cacheFile)
-      loader.get(fileUrl, function(response) {
+      loader.get(fileUrl, function (response) {
         response.pipe(fileStream, { end: false })
         response.on('end', () => {
           fileStream.end()
@@ -114,11 +114,11 @@ module.exports = function(crowi) {
     })
   }
 
-  lib.clearCache = function(fileId) {
+  lib.clearCache = function (fileId) {
     const cacheFile = lib.createCacheFileName(fileId)
 
     new Promise((resolve, reject) => {
-      fs.unlink(cacheFile, err => {
+      fs.unlink(cacheFile, (err) => {
         if (err) {
           debug('Failed to delete cache file', err)
           // through
@@ -127,22 +127,22 @@ module.exports = function(crowi) {
         resolve()
       })
     })
-      .then(data => {
+      .then((data) => {
         // success
       })
-      .catch(err => {
+      .catch((err) => {
         debug('Failed to delete cache file (file may not exists).', err)
         // through
       })
   }
 
   // private
-  lib.createCacheFileName = function(fileId) {
+  lib.createCacheFileName = function (fileId) {
     return path.join(crowi.cacheDir, `attachment-${fileId}`)
   }
 
   // private
-  lib.shouldUpdateCacheFile = function(filePath) {
+  lib.shouldUpdateCacheFile = function (filePath) {
     try {
       const stats = fs.statSync(filePath)
 

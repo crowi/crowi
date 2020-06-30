@@ -4,12 +4,12 @@ import { app } from 'server/test/setup'
 describe('Routes /_api/versions test', () => {
   describe('/_api/versions.get', () => {
     it('should returns crowi version', () => {
-      return new Promise(resolve => {
+      return new Promise((resolve) => {
         request(app)
           .get('/_api/versions.get')
           .expect('Content-Type', /json/)
           .expect(200)
-          .then(res => {
+          .then((res) => {
             const body = res.body
 
             expect(body.ok).toBe(true)

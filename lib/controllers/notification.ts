@@ -16,7 +16,7 @@ export default (crowi: Crowi) => {
    *
    * @apiParam {String} linit
    */
-  actions.api.list = function(req: Request, res: Response) {
+  actions.api.list = function (req: Request, res: Response) {
     const user = req.user as UserDocument
 
     let limit = 10
@@ -32,7 +32,7 @@ export default (crowi: Crowi) => {
     const requestLimit = limit + 1
 
     Notification.findLatestNotificationsByUser(user._id, requestLimit, offset)
-      .then(function(notifications) {
+      .then(function (notifications) {
         let hasPrev = false
         if (offset > 0) {
           hasPrev = true
@@ -51,12 +51,12 @@ export default (crowi: Crowi) => {
 
         return res.json(ApiResponse.success(result))
       })
-      .catch(function(err) {
+      .catch(function (err) {
         return res.json(ApiResponse.error(err))
       })
   }
 
-  actions.api.read = function(req: Request, res: Response) {
+  actions.api.read = function (req: Request, res: Response) {
     const user = req.user as UserDocument
 
     try {
@@ -68,7 +68,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.api.open = async function(req: Request, res: Response) {
+  actions.api.open = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const id = req.body.id
 
@@ -81,7 +81,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  actions.api.status = async function(req: Request, res: Response) {
+  actions.api.status = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
 
     try {

@@ -83,7 +83,7 @@ export default class HeaderSearchBox extends React.Component<Props, State> {
 
     try {
       const [{ data: portalPages }, { data: publicPages }, { data: userPages }] = await Promise.all(
-        ['portal', 'public', 'user'].map(type => this.props.crowi.apiGet('/search', { q: keyword, type, limit: 10 })),
+        ['portal', 'public', 'user'].map((type) => this.props.crowi.apiGet('/search', { q: keyword, type, limit: 10 })),
       )
       this.setState({
         searchingKeyword: keyword,
@@ -103,7 +103,7 @@ export default class HeaderSearchBox extends React.Component<Props, State> {
     const { isSearchPage, searchingKeyword, searchedPages, searchError, searching, focused } = this.state
     const { crowi } = this.props
     return (
-      <div className="search-box" ref={node => (this.node = node)}>
+      <div className="search-box" ref={(node) => (this.node = node)}>
         <SearchForm
           onSearchFormChanged={this.search}
           focused={focused}

@@ -27,7 +27,7 @@ export default class ListView extends React.Component<Props> {
         ) : notifications.length <= 0 ? (
           <NullNotification />
         ) : (
-          notifications.map(notification => <Notification key={notification._id} notification={notification} onClick={notificationClickHandler} />)
+          notifications.map((notification) => <Notification key={notification._id} notification={notification} onClick={notificationClickHandler} />)
         )}
       </NotificationList>
     )

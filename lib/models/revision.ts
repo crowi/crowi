@@ -37,21 +37,19 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  revisionSchema.statics.findLatestRevision = function(path, cb) {
+  revisionSchema.statics.findLatestRevision = function (path, cb) {
     this.findOne({ path })
       .sort({ createdAt: -1 })
-      .exec(function(err, data) {
+      .exec(function (err, data) {
         cb(err, data)
       })
   }
 
-  revisionSchema.statics.findRevision = function(id) {
-    return Revision.findById(id)
-      .populate('author')
-      .exec()
+  revisionSchema.statics.findRevision = function (id) {
+    return Revision.findById(id).populate('author').exec()
   }
 
-  revisionSchema.statics.findRevisions = async function(ids) {
+  revisionSchema.statics.findRevisions = async function (ids) {
     if (!Array.isArray(ids)) {
       throw new Error('The argument was not Array.')
     }
@@ -62,25 +60,19 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  revisionSchema.statics.findRevisionIdList = function(path) {
-    return Revision.find({ path: path })
-      .select('_id author createdAt')
-      .sort({ createdAt: -1 })
-      .exec()
+  revisionSchema.statics.findRevisionIdList = function (path) {
+    return Revision.find({ path: path }).select('_id author createdAt').sort({ createdAt: -1 }).exec()
   }
 
-  revisionSchema.statics.findRevisionList = function(path, options) {
-    return Revision.find({ path: path })
-      .sort({ createdAt: -1 })
-      .populate('author')
-      .exec()
+  revisionSchema.statics.findRevisionList = function (path, options) {
+    return Revision.find({ path: path }).sort({ createdAt: -1 }).populate('author').exec()
   }
 
-  revisionSchema.statics.updateRevisionListByPath = function(path, updateData) {
+  revisionSchema.statics.updateRevisionListByPath = function (path, updateData) {
     return Revision.updateMany({ path: path }, { $set: updateData }).exec()
   }
 
-  revisionSchema.statics.prepareRevision = function(pageData, body, user, options) {
+  revisionSchema.statics.prepareRevision = function (pageData, body, user, options) {
     if (!options) {
       options = {}
     }
@@ -100,13 +92,13 @@ export default (crowi: Crowi) => {
     return newRevision
   }
 
-  revisionSchema.statics.removeRevisionsByPath = function(path) {
+  revisionSchema.statics.removeRevisionsByPath = function (path) {
     return Revision.deleteMany({ path }).exec()
   }
 
-  revisionSchema.statics.updatePath = function(pathName) {}
+  revisionSchema.statics.updatePath = function (pathName) {}
 
-  revisionSchema.statics.findAuthorsByPage = function(page) {
+  revisionSchema.statics.findAuthorsByPage = function (page) {
     return Revision.distinct('author', { path: page.path }).exec() as Promise<RevisionDocument['author'][]>
   }
 
