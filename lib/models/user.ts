@@ -62,7 +62,7 @@ export interface UserDocument extends Document {
 export interface UserModel extends Model<UserDocument> {
   paginate: any
 
-  getLanguageLabels(): object
+  getLanguageLabels(): Record<string, string>
   getUserStatusLabels(): any
   isEmailValid(email): boolean
   isGitHubAccountValid(organizations): boolean

@@ -53,7 +53,7 @@ export type BaseQueryParams = {
   fields?: string[]
 }
 
-export type BaseQueryResponse = { index: string; type: string; body: { query: {}; _source: string[] } }
+export type BaseQueryResponse = { index: string; type: string; body: { query: Record<string, any>; _source: string[] } }
 
 export const createBaseQuery = (params: BaseQueryParams): BaseQueryResponse => {
   const { index, type = defaultType, fields = defaultFields } = params
