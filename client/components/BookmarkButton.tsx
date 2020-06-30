@@ -23,7 +23,7 @@ export default class BookmarkButton extends React.Component<Props, State> {
   }
 
   componentDidMount() {
-    this.props.crowi.apiGet('/bookmarks.get', { page_id: this.props.pageId }).then(res => {
+    this.props.crowi.apiGet('/bookmarks.get', { page_id: this.props.pageId }).then((res) => {
       if (res.bookmark) {
         this.markBookmarked()
       }
@@ -36,11 +36,11 @@ export default class BookmarkButton extends React.Component<Props, State> {
     const pageId = this.props.pageId
 
     if (!this.state.bookmarked) {
-      this.props.crowi.apiPost('/bookmarks.add', { page_id: pageId }).then(res => {
+      this.props.crowi.apiPost('/bookmarks.add', { page_id: pageId }).then((res) => {
         this.markBookmarked()
       })
     } else {
-      this.props.crowi.apiPost('/bookmarks.remove', { page_id: pageId }).then(res => {
+      this.props.crowi.apiPost('/bookmarks.remove', { page_id: pageId }).then((res) => {
         this.markUnBookmarked()
       })
     }

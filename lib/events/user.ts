@@ -16,18 +16,18 @@ export default class UserEvent extends EventEmitter {
 
     const userPagePath = Page.getUserPagePath(user)
     Page.findPage(userPagePath, user, {}, false)
-      .then(function(page) {
+      .then(function (page) {
         // do nothing because user page is already exists.
       })
-      .catch(function(err) {
+      .catch(function (err) {
         const body = `# ${user.username}\nThis is ${user.username}'s page`
         // create user page
         Page.createPage(userPagePath, body, user, {})
-          .then(function(page) {
+          .then(function (page) {
             // page created
             debug('User page created', page)
           })
-          .catch(function(err) {
+          .catch(function (err) {
             debug('Failed to create user page', err)
           })
       })

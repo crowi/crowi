@@ -163,14 +163,14 @@ export default (crowi: Crowi) => {
       extended: {
         type: String,
         default: '{}',
-        get: function(data) {
+        get: function (data) {
           try {
             return JSON.parse(data)
           } catch (e) {
             return data
           }
         },
-        set: function(data) {
+        set: function (data) {
           return JSON.stringify(data)
         },
       },
@@ -186,24 +186,24 @@ export default (crowi: Crowi) => {
   pageEvent.on('create', pageEvent.onCreate)
   pageEvent.on('update', pageEvent.onUpdate)
 
-  pageSchema.methods.isWIP = function() {
+  pageSchema.methods.isWIP = function () {
     return this.status === STATUS_WIP
   }
 
-  pageSchema.methods.isPublished = function() {
+  pageSchema.methods.isPublished = function () {
     // null: this is for B.C.
     return this.status === null || this.status === STATUS_PUBLISHED
   }
 
-  pageSchema.methods.isDeleted = function() {
+  pageSchema.methods.isDeleted = function () {
     return this.status === STATUS_DELETED
   }
 
-  pageSchema.methods.isDeprecated = function() {
+  pageSchema.methods.isDeprecated = function () {
     return this.status === STATUS_DEPRECATED
   }
 
-  pageSchema.methods.isPublic = function() {
+  pageSchema.methods.isPublic = function () {
     if (!this.grant || this.grant == GRANT_PUBLIC) {
       return true
     }
@@ -211,11 +211,11 @@ export default (crowi: Crowi) => {
     return false
   }
 
-  pageSchema.methods.isPortal = function() {
+  pageSchema.methods.isPortal = function () {
     return isPortalPath(this.path)
   }
 
-  pageSchema.methods.isCreator = function(userData) {
+  pageSchema.methods.isCreator = function (userData) {
     if (this.populated('creator') && ((this.creator as any) as UserDocument)._id.toString() === userData._id.toString()) {
       return true
     } else if (this.creator.toString() === userData._id.toString()) {
@@ -225,7 +225,7 @@ export default (crowi: Crowi) => {
     return false
   }
 
-  pageSchema.methods.isGrantedFor = function(userData) {
+  pageSchema.methods.isGrantedFor = function (userData) {
     if (this.isPublic() || this.isCreator(userData)) {
       return true
     }
@@ -237,7 +237,7 @@ export default (crowi: Crowi) => {
     return false
   }
 
-  pageSchema.methods.isLatestRevision = function() {
+  pageSchema.methods.isLatestRevision = function () {
     // populate されていなくて判断できない
     if (!this.latestRevision || !this.revision) {
       return true
@@ -246,7 +246,7 @@ export default (crowi: Crowi) => {
     return this.latestRevision == (((this.revision as any) as RevisionDocument)._id.toString() as any)
   }
 
-  pageSchema.methods.isUpdatable = function(previousRevision) {
+  pageSchema.methods.isUpdatable = function (previousRevision) {
     const revision = this.latestRevision || this.revision
     if (revision != previousRevision) {
       return false
@@ -254,21 +254,21 @@ export default (crowi: Crowi) => {
     return true
   }
 
-  pageSchema.methods.isLiked = function(userData) {
-    return this.liker.some(function(likedUser) {
+  pageSchema.methods.isLiked = function (userData) {
+    return this.liker.some(function (likedUser) {
       return likedUser == userData._id.toString()
     })
   }
 
-  pageSchema.methods.isRedirectOriginPage = function() {
+  pageSchema.methods.isRedirectOriginPage = function () {
     return this.redirectTo !== null
   }
 
-  pageSchema.methods.isUnlinkable = function(userData) {
+  pageSchema.methods.isUnlinkable = function (userData) {
     return this.isRedirectOriginPage() && this.isGrantedFor(userData)
   }
 
-  pageSchema.methods.like = async function(userData) {
+  pageSchema.methods.like = async function (userData) {
     const Activity = crowi.model('Activity')
 
     const added = ((this.liker as any) as Types.Array<UserDocument>).addToSet(userData._id)
@@ -290,7 +290,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  pageSchema.methods.unlike = async function(userData) {
+  pageSchema.methods.unlike = async function (userData) {
     const Activity = crowi.model('Activity')
 
     const liker = (this.liker as any) as Types.Array<UserDocument>
@@ -313,7 +313,7 @@ export default (crowi: Crowi) => {
   }
 
   // Unlink: Remove redirect origin page
-  pageSchema.methods.unlink = async function(userData) {
+  pageSchema.methods.unlink = async function (userData) {
     const Page = crowi.model('Page')
     if (this.isUnlinkable(userData)) {
       debug('Unlink page', this._id, this.path)
@@ -329,15 +329,15 @@ export default (crowi: Crowi) => {
     }
   }
 
-  pageSchema.methods.isSeenUser = function(userData) {
+  pageSchema.methods.isSeenUser = function (userData) {
     const seenUsers = (this.seenUsers as any) as UserDocument[]
 
-    return seenUsers.some(function(seenUser) {
+    return seenUsers.some(function (seenUser) {
       return seenUser.equals(userData._id)
     })
   }
 
-  pageSchema.methods.seen = async function(userData) {
+  pageSchema.methods.seen = async function (userData) {
     const seenUsers = (this.seenUsers as any) as Types.Array<UserDocument>
 
     if (this.isSeenUser(userData)) {
@@ -358,7 +358,7 @@ export default (crowi: Crowi) => {
     return this
   }
 
-  pageSchema.methods.getSlackChannel = function() {
+  pageSchema.methods.getSlackChannel = function () {
     const extended = this.get('extended')
     if (!extended) {
       return ''
@@ -367,19 +367,19 @@ export default (crowi: Crowi) => {
     return extended.slack || ''
   }
 
-  pageSchema.methods.updateSlackChannel = function(slackChannel) {
+  pageSchema.methods.updateSlackChannel = function (slackChannel) {
     const extended = this.extended as any
     extended.slack = slackChannel
 
     return this.updateExtended(extended)
   }
 
-  pageSchema.methods.updateExtended = function(extended) {
+  pageSchema.methods.updateExtended = function (extended) {
     this.extended = extended
     return this.save()
   }
 
-  pageSchema.statics.populatePageData = function(pageData: PageDocument, revisionId) {
+  pageSchema.statics.populatePageData = function (pageData: PageDocument, revisionId) {
     pageData.latestRevision = pageData.revision
     if (revisionId) {
       pageData.revision = revisionId
@@ -396,7 +396,7 @@ export default (crowi: Crowi) => {
       .execPopulate()
   }
 
-  pageSchema.statics.populatePagesRevision = async function(pages, revisions) {
+  pageSchema.statics.populatePagesRevision = async function (pages, revisions) {
     if (pages.length !== revisions.length) {
       throw new TypeError('page.length must be equal revisions.length')
     }
@@ -410,9 +410,9 @@ export default (crowi: Crowi) => {
     return Page.populate(pages, { path: 'revision', model: 'Revision' })
   }
 
-  pageSchema.statics.populatePageListToAnyObjects = async function(pageIdObjectArray) {
+  pageSchema.statics.populatePageListToAnyObjects = async function (pageIdObjectArray) {
     const pageIdMappings = {}
-    const pageIds = pageIdObjectArray.map(function(page, idx) {
+    const pageIds = pageIdObjectArray.map(function (page, idx) {
       if (!page._id) {
         throw new Error('Pass the arg of populatePageListToAnyObjects() must have _id on each element.')
       }
@@ -430,11 +430,11 @@ export default (crowi: Crowi) => {
     return pageIdObjectArray
   }
 
-  pageSchema.statics.updateCommentCount = function(page, num) {
+  pageSchema.statics.updateCommentCount = function (page, num) {
     return Page.updateOne({ _id: page }, { commentCount: num }, {})
   }
 
-  pageSchema.statics.hasPortalPage = async function(path, user, revisionId) {
+  pageSchema.statics.hasPortalPage = async function (path, user, revisionId) {
     try {
       const page = await Page.findPage(path, user, revisionId)
       return !!page
@@ -443,7 +443,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  pageSchema.statics.findPortalPage = async function(path, user, revisionId) {
+  pageSchema.statics.findPortalPage = async function (path, user, revisionId) {
     try {
       const page = await Page.findPage(path, user, revisionId)
       return page
@@ -452,7 +452,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  pageSchema.statics.getGrantLabels = function() {
+  pageSchema.statics.getGrantLabels = function () {
     const grantLabels = {}
     grantLabels[GRANT_PUBLIC] = 'Public' // 公開
     grantLabels[GRANT_RESTRICTED] = 'Anyone with the link' // リンクを知っている人のみ
@@ -462,7 +462,7 @@ export default (crowi: Crowi) => {
     return grantLabels
   }
 
-  pageSchema.statics.normalizePath = function(path) {
+  pageSchema.statics.normalizePath = function (path) {
     if (!path.match(/^\//)) {
       path = '/' + path
     }
@@ -472,22 +472,22 @@ export default (crowi: Crowi) => {
     return path
   }
 
-  pageSchema.statics.getUserPagePath = function(user) {
+  pageSchema.statics.getUserPagePath = function (user) {
     return '/user/' + user.username
   }
 
-  pageSchema.statics.getDeletedPageName = function(path) {
+  pageSchema.statics.getDeletedPageName = function (path) {
     if (path.match('/')) {
       path = path.substr(1)
     }
     return '/trash/' + path
   }
 
-  pageSchema.statics.getRevertDeletedPageName = function(path) {
+  pageSchema.statics.getRevertDeletedPageName = function (path) {
     return path.replace('/trash', '')
   }
 
-  pageSchema.statics.isDeletableName = function(path) {
+  pageSchema.statics.isDeletableName = function (path) {
     const notDeletable = [
       /^\/user\/[^/]+$/, // user page
     ]
@@ -502,7 +502,7 @@ export default (crowi: Crowi) => {
     return true
   }
 
-  pageSchema.statics.isCreatableName = function(name) {
+  pageSchema.statics.isCreatableName = function (name) {
     const forbiddenPages = [
       /\^|\$|\*|\+|\?|#/,
       /^\/_.*/, // /_api/* and so on
@@ -518,7 +518,7 @@ export default (crowi: Crowi) => {
     ]
 
     let isCreatable = true
-    forbiddenPages.forEach(function(page) {
+    forbiddenPages.forEach(function (page) {
       const pageNameReg = new RegExp(page)
       if (name.match(pageNameReg)) {
         isCreatable = false
@@ -528,30 +528,26 @@ export default (crowi: Crowi) => {
     return isCreatable
   }
 
-  pageSchema.statics.fixToCreatableName = function(path) {
+  pageSchema.statics.fixToCreatableName = function (path) {
     return path.replace(/\/\//g, '/')
   }
 
-  pageSchema.statics.updateRevision = function(pageId, revisionId, cb) {
-    Page.updateOne({ _id: pageId }, { revision: revisionId }, {}, function(err, data) {
+  pageSchema.statics.updateRevision = function (pageId, revisionId, cb) {
+    Page.updateOne({ _id: pageId }, { revision: revisionId }, {}, function (err, data) {
       cb(err, data)
     })
   }
 
-  pageSchema.statics.exists = async function(query) {
+  pageSchema.statics.exists = async function (query) {
     const count = await Page.countDocuments(query)
     return count > 0
   }
 
-  pageSchema.statics.findUpdatedList = function(offset, limit, cb) {
-    Page.find({})
-      .sort({ updatedAt: -1 })
-      .skip(offset)
-      .limit(limit)
-      .exec()
+  pageSchema.statics.findUpdatedList = function (offset, limit, cb) {
+    Page.find({}).sort({ updatedAt: -1 }).skip(offset).limit(limit).exec()
   }
 
-  pageSchema.statics.findPageById = async function(id) {
+  pageSchema.statics.findPageById = async function (id) {
     const pageData = await Page.findOne({ _id: id })
 
     if (pageData === null) {
@@ -561,7 +557,7 @@ export default (crowi: Crowi) => {
     return Page.populatePageData(pageData, null)
   }
 
-  pageSchema.statics.findPageByIdAndGrantedUser = async function(id, userData) {
+  pageSchema.statics.findPageByIdAndGrantedUser = async function (id, userData) {
     const pageData = await Page.findPageById(id)
 
     if (userData && !pageData.isGrantedFor(userData)) {
@@ -572,7 +568,7 @@ export default (crowi: Crowi) => {
   }
 
   // find page and check if granted user
-  pageSchema.statics.findPage = async function(path, userData, revisionId, ignoreNotFound) {
+  pageSchema.statics.findPage = async function (path, userData, revisionId, ignoreNotFound) {
     const pageData = await Page.findOne({ path })
 
     if (pageData === null) {
@@ -593,7 +589,7 @@ export default (crowi: Crowi) => {
   }
 
   // find page by path
-  pageSchema.statics.findPageByPath = async function(path) {
+  pageSchema.statics.findPageByPath = async function (path) {
     const pageData = await Page.findOne({ path })
     if (pageData === null) {
       throw new Error('Page not found')
@@ -602,7 +598,7 @@ export default (crowi: Crowi) => {
     return pageData
   }
 
-  pageSchema.statics.isExistByPath = async function(path) {
+  pageSchema.statics.isExistByPath = async function (path) {
     const pageData = await Page.findOne({ path })
     if (pageData === null) {
       return false
@@ -611,7 +607,7 @@ export default (crowi: Crowi) => {
     return pageData._id
   }
 
-  pageSchema.statics.isExistById = async function(id) {
+  pageSchema.statics.isExistById = async function (id) {
     const pageData = await Page.findOne({ _id: id })
     if (pageData === null) {
       return false
@@ -620,7 +616,7 @@ export default (crowi: Crowi) => {
     return pageData._id
   }
 
-  pageSchema.statics.findListByPageIds = function(ids, options) {
+  pageSchema.statics.findListByPageIds = function (ids, options) {
     options = options || {}
     const limit = options.limit || 50
     const offset = options.skip || 0
@@ -638,7 +634,7 @@ export default (crowi: Crowi) => {
     )
   }
 
-  pageSchema.statics.findPageByRedirectTo = async function(path) {
+  pageSchema.statics.findPageByRedirectTo = async function (path) {
     const pageData = await Page.findOne({ redirectTo: path })
 
     if (pageData === null) {
@@ -648,7 +644,7 @@ export default (crowi: Crowi) => {
     return pageData
   }
 
-  pageSchema.statics.findPagesByIds = function(ids) {
+  pageSchema.statics.findPagesByIds = function (ids) {
     return Page.find({
       _id: { $in: ids },
       redirectTo: null,
@@ -667,7 +663,7 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  pageSchema.statics.findListByCreator = function(user, option, currentUser) {
+  pageSchema.statics.findListByCreator = function (user, option, currentUser) {
     const limit = option.limit || 50
     const offset = option.offset || 0
     const conditions: any = {
@@ -691,7 +687,7 @@ export default (crowi: Crowi) => {
   /**
    * Bulk get (for internal only)
    */
-  pageSchema.statics.getStreamOfFindAll = function(options = {}) {
+  pageSchema.statics.getStreamOfFindAll = function (options = {}) {
     const publicOnly = options.publicOnly !== false
     const criteria: any = { redirectTo: null }
 
@@ -715,7 +711,7 @@ export default (crowi: Crowi) => {
    * If `path` doesn't have `/` at the end, returns '{path}*'
    * e.g.
    */
-  pageSchema.statics.findListByStartWith = function(path, userData, option) {
+  pageSchema.statics.findListByStartWith = function (path, userData, option) {
     const pathCondition: Record<string, string | RegExp>[] = []
     const includeDeletedPage = option.includeDeletedPage || false
 
@@ -767,33 +763,33 @@ export default (crowi: Crowi) => {
     return q.exec()
   }
 
-  pageSchema.statics.findChildrenByPath = async function(path, userData, option) {
+  pageSchema.statics.findChildrenByPath = async function (path, userData, option) {
     path = addTrailingSlash(path)
     return Page.findListByStartWith(path, userData, { limit: 0, ...option })
   }
 
-  pageSchema.statics.findUnfurlablePages = async function(type, array, grants = [GRANT_PUBLIC, GRANT_RESTRICTED]) {
+  pageSchema.statics.findUnfurlablePages = async function (type, array, grants = [GRANT_PUBLIC, GRANT_RESTRICTED]) {
     const page = await Page.find({
       [type]: { $in: array },
-      $or: grants.map(grant => ({ grant })),
+      $or: grants.map((grant) => ({ grant })),
     })
     return page
   }
 
-  pageSchema.statics.findUnfurlablePagesByIds = async function(ids) {
+  pageSchema.statics.findUnfurlablePagesByIds = async function (ids) {
     return Page.findUnfurlablePages('_id', ids)
   }
 
-  pageSchema.statics.findUnfurlablePagesByPaths = async function(paths) {
+  pageSchema.statics.findUnfurlablePagesByPaths = async function (paths) {
     // `GRANT_RESTRICTED` pages can not be accessed using path
     return Page.findUnfurlablePages('path', paths, [GRANT_PUBLIC])
   }
 
-  pageSchema.statics.updatePageProperty = function(page, updateData) {
+  pageSchema.statics.updatePageProperty = function (page, updateData) {
     return Page.updateOne({ _id: page._id }, { $set: updateData })
   }
 
-  pageSchema.statics.updateGrant = async function(page, grant, userData) {
+  pageSchema.statics.updateGrant = async function (page, grant, userData) {
     page.grant = grant
     if (grant == GRANT_PUBLIC) {
       page.grantedUsers = []
@@ -810,7 +806,7 @@ export default (crowi: Crowi) => {
   }
 
   // Instance method でいいのでは
-  pageSchema.statics.pushToGrantedUsers = function(page, userData) {
+  pageSchema.statics.pushToGrantedUsers = function (page, userData) {
     if (!page.grantedUsers || !Array.isArray(page.grantedUsers)) {
       page.grantedUsers = []
     }
@@ -818,7 +814,7 @@ export default (crowi: Crowi) => {
     return page.save()
   }
 
-  pageSchema.statics.pushRevision = async function(pageData, newRevision, user) {
+  pageSchema.statics.pushRevision = async function (pageData, newRevision, user) {
     const isCreate = pageData.revision === undefined
     if (isCreate) {
       debug('pushRevision on Create')
@@ -841,7 +837,7 @@ export default (crowi: Crowi) => {
     return data
   }
 
-  pageSchema.statics.createPage = async function(path, body, user, options) {
+  pageSchema.statics.createPage = async function (path, body, user, options) {
     const Revision = crowi.model('Revision')
     const format = options.format || 'markdown'
     let grant = options.grant || GRANT_PUBLIC
@@ -880,7 +876,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  pageSchema.statics.updatePage = async function(pageData, body, user, options = {}) {
+  pageSchema.statics.updatePage = async function (pageData, body, user, options = {}) {
     const Revision = crowi.model('Revision')
     const Bookmark = crowi.model('Bookmark')
     const grant = options.grant || null
@@ -899,7 +895,7 @@ export default (crowi: Crowi) => {
     return pageData
   }
 
-  pageSchema.statics.deletePage = async function(pageData, user) {
+  pageSchema.statics.deletePage = async function (pageData, user) {
     const Share = crowi.model('Share')
     const newPath = Page.getDeletedPageName(pageData.path)
     if (Page.isDeletableName(pageData.path)) {
@@ -916,7 +912,7 @@ export default (crowi: Crowi) => {
     throw new Error('Page is not deletable.')
   }
 
-  pageSchema.statics.revertDeletedPage = async function(pageData, user) {
+  pageSchema.statics.revertDeletedPage = async function (pageData, user) {
     const newPath = Page.getRevertDeletedPageName(pageData.path)
 
     // 削除時、元ページの path には必ず redirectTo 付きで、ページが作成される。
@@ -940,7 +936,7 @@ export default (crowi: Crowi) => {
   /**
    * This is danger.
    */
-  pageSchema.statics.completelyDeletePage = async function(pageData, user) {
+  pageSchema.statics.completelyDeletePage = async function (pageData, user) {
     // Delete Bookmarks, Attachments, Revisions, Pages and emit delete
     const Bookmark = crowi.model('Bookmark')
     const Attachment = crowi.model('Attachment')
@@ -962,7 +958,7 @@ export default (crowi: Crowi) => {
     return pageData
   }
 
-  pageSchema.statics.removePage = async function(pageData) {
+  pageSchema.statics.removePage = async function (pageData) {
     const Revision = crowi.model('Revision')
     const { _id } = pageData
 
@@ -977,13 +973,13 @@ export default (crowi: Crowi) => {
     return pageData
   }
 
-  pageSchema.statics.removePageById = async function(pageId) {
+  pageSchema.statics.removePageById = async function (pageId) {
     const pageData = await Page.findPageById(pageId)
     await Page.removePage(pageData)
     return pageData
   }
 
-  pageSchema.statics.removePageByPath = async function(pagePath) {
+  pageSchema.statics.removePageByPath = async function (pagePath) {
     const pageData = await Page.findPageByPath(pagePath)
     await Page.removePage(pageData)
     return pageData
@@ -999,9 +995,9 @@ export default (crowi: Crowi) => {
    *
    * @param {string} pagePath
    */
-  pageSchema.statics.removeRedirectOriginPageByPath = function(pagePath) {
+  pageSchema.statics.removeRedirectOriginPageByPath = function (pagePath) {
     return Page.findPageByRedirectTo(pagePath)
-      .then(redirectOriginPageData => {
+      .then((redirectOriginPageData) => {
         // remove
         return (
           Page.removePageById(redirectOriginPageData.id)
@@ -1011,13 +1007,13 @@ export default (crowi: Crowi) => {
             })
         )
       })
-      .catch(err => {
+      .catch((err) => {
         // do nothing if origin page doesn't exist
         return Promise.resolve()
       })
   }
 
-  pageSchema.statics.rename = async function(pageData, newPagePath, user, options) {
+  pageSchema.statics.rename = async function (pageData, newPagePath, user, options) {
     const Revision = crowi.model('Revision')
     const path = pageData.path
     const createRedirectPage = options.createRedirectPage || false
@@ -1040,15 +1036,15 @@ export default (crowi: Crowi) => {
     return data
   }
 
-  pageSchema.statics.getPathMap = function(paths, search, replace) {
+  pageSchema.statics.getPathMap = function (paths, search, replace) {
     search = removeTrailingSlash(search)
     replace = this.normalizePath(replace)
-    const renamePath = path => path.replace(search, replace)
+    const renamePath = (path) => path.replace(search, replace)
     // { [oldPath]: newPath }
     return paths.map(({ path }) => [path, renamePath(path)]).reduce((l, [k, v]) => Object.assign(l, { [k]: v }), {})
   }
 
-  pageSchema.statics.checkPagesRenamable = async function(paths, user) {
+  pageSchema.statics.checkPagesRenamable = async function (paths, user) {
     let error = false
     let errors = {}
     for (const path of paths) {
@@ -1071,10 +1067,10 @@ export default (crowi: Crowi) => {
     return [error, errors]
   }
 
-  pageSchema.statics.renameTree = async function(pathMap, user, options) {
+  pageSchema.statics.renameTree = async function (pathMap, user, options) {
     const { createRedirectPage = false, preserveUpdatedAt = true } = options
     await Promise.all(
-      Object.values(pathMap).map(async newPath => {
+      Object.values(pathMap).map(async (newPath) => {
         if (await Page.exists({ path: newPath })) {
           const newPage = await Page.findPageByPath(newPath)
           if (newPage.isUnlinkable(user)) {
@@ -1102,11 +1098,11 @@ export default (crowi: Crowi) => {
     )
   }
 
-  pageSchema.statics.allPageCount = function() {
+  pageSchema.statics.allPageCount = function () {
     return Page.countDocuments({ redirectTo: null, grant: GRANT_PUBLIC }) // TODO: option にする
   }
 
-  pageSchema.methods.getNotificationTargetUsers = async function() {
+  pageSchema.methods.getNotificationTargetUsers = async function () {
     const Comment = crowi.model('Comment')
     const Revision = crowi.model('Revision')
 
@@ -1119,7 +1115,7 @@ export default (crowi: Crowi) => {
 
     const uniqueChecker = {}
     const uniqueUsers: Types.ObjectId[] = []
-    targetUsers.forEach(function(user) {
+    targetUsers.forEach(function (user) {
       const userId = user.toString()
       if (uniqueChecker[userId] !== 1) {
         uniqueUsers.push(user)
@@ -1131,13 +1127,13 @@ export default (crowi: Crowi) => {
     return uniqueUsers
   }
 
-  pageSchema.post('save', savedPage => {
+  pageSchema.post('save', (savedPage) => {
     const Backlink = crowi.model('Backlink')
     Backlink.createBySavedPage(savedPage)
-      .then(result => {
+      .then((result) => {
         debug(result)
       })
-      .catch(err => err)
+      .catch((err) => err)
   })
 
   pageSchema.statics.GRANT_PUBLIC = GRANT_PUBLIC

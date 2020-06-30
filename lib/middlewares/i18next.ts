@@ -18,7 +18,7 @@ export default (crowi: Crowi, app: Express) => {
     .init({
       // debug: (crowi.node_env === 'development'),
       fallbackLng: [User.LANG_EN_US],
-      whitelist: Object.keys(User.getLanguageLabels()).map(k => User[k]),
+      whitelist: Object.keys(User.getLanguageLabels()).map((k) => User[k]),
       backend: {
         loadPath: crowi.localeDir + '{{lng}}/translation.yml',
       },

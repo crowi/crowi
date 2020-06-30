@@ -12,7 +12,7 @@ export default (crowi: Crowi) => {
   const actions = {} as any
   const api = (actions.api = {} as any)
 
-  api.handleEvent = function(req: Request, res: Response) {
+  api.handleEvent = function (req: Request, res: Response) {
     if (req.body.type != null && req.body.type == 'url_verification') {
       verifyChallenge(req, res)
       return
@@ -56,11 +56,11 @@ export default (crowi: Crowi) => {
     const results = parseLinks(links)
     const keys = Object.keys(results)
 
-    const isObjectId = key => new RegExp('/([0-9a-fA-F]{24})').test(key)
-    const extractObjectId = key => (isObjectId(key) ? RegExp.$1 : null)
-    const isCreatablePath = key => Page.isCreatableName(key)
+    const isObjectId = (key) => new RegExp('/([0-9a-fA-F]{24})').test(key)
+    const extractObjectId = (key) => (isObjectId(key) ? RegExp.$1 : null)
+    const isCreatablePath = (key) => Page.isCreatableName(key)
 
-    const pageIds = keys.map(extractObjectId).filter(key => key !== null)
+    const pageIds = keys.map(extractObjectId).filter((key) => key !== null)
     const pagePaths = keys.filter(isCreatablePath)
 
     const getResult = ({ _id, path }) => (_id && results[`/${_id}`]) || (path && results[path])
@@ -76,11 +76,11 @@ export default (crowi: Crowi) => {
         throw pageNotFoundError
       }
 
-      const revisionIds = pages.map(page => getResult(page).revisionId)
+      const revisionIds = pages.map((page) => getResult(page).revisionId)
       const pagesData = await Page.populatePagesRevision(pages, revisionIds)
 
       const unfurls = {}
-      pagesData.forEach(page => {
+      pagesData.forEach((page) => {
         const { url } = getResult(page)
         const { path: title } = page
         const text = slack.prepareAttachmentTextForCreate(page)

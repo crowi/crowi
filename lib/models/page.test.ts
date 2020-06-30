@@ -6,7 +6,7 @@ describe('Page', () => {
   let createdPages
   let createdUsers
 
-  beforeAll(done => {
+  beforeAll((done) => {
     Page = crowi.model('Page')
     User = crowi.model('User')
 
@@ -19,7 +19,7 @@ describe('Page', () => {
 
         return Fixture.generate('User', userFixture)
       })
-      .then(testUsers => {
+      .then((testUsers) => {
         createdUsers = testUsers
         const testUser0 = testUsers[0]
 
@@ -62,7 +62,7 @@ describe('Page', () => {
           },
         ]
 
-        return Fixture.generate('Page', fixture).then(pages => {
+        return Fixture.generate('Page', fixture).then((pages) => {
           createdPages = pages
           done()
         })
@@ -76,7 +76,7 @@ describe('Page', () => {
         expect(page.isPublic()).toBe(true)
       })
     })
-    ;['restricted', 'specified', 'owner'].forEach(grant => {
+    ;['restricted', 'specified', 'owner'].forEach((grant) => {
       describe('with a ' + grant + ' page', () => {
         test('should return false', async () => {
           const page = await Page.findOne({ path: '/grant/' + grant })
@@ -258,12 +258,12 @@ describe('Page', () => {
   describe('Rename Tree', () => {
     let user
 
-    const generatePages = paths => {
+    const generatePages = (paths) => {
       const grant = Page.GRANT_PUBLIC
       const grantedUsers = [user]
       const creator = user
       const updatedAt = Date.now()
-      return paths.map(path => ({ path, grant, grantedUsers, creator, updatedAt }))
+      return paths.map((path) => ({ path, grant, grantedUsers, creator, updatedAt }))
     }
 
     beforeAll(async () => {
@@ -293,7 +293,7 @@ describe('Page', () => {
       let treeSize
       beforeEach(async () => {
         await Page.deleteMany({})
-        const children = Array.from(new Array(50).keys()).map(v => `/parent/${v}`)
+        const children = Array.from(new Array(50).keys()).map((v) => `/parent/${v}`)
         const paths = ['/parent', ...children]
         treeSize = paths.length
         await Fixture.generate('Page', generatePages(paths))
@@ -320,7 +320,7 @@ describe('Page', () => {
         test('should not contain other trees', async () => {
           const pages = await Page.findChildrenByPath('/car', user, {})
           expect(pages.length).toBe(4)
-          expect(pages.some(page => page.path === '/carrot')).toBe(false)
+          expect(pages.some((page) => page.path === '/carrot')).toBe(false)
         })
       })
 
@@ -343,7 +343,7 @@ describe('Page', () => {
 
           const renamedPages = await Page.findChildrenByPath('/huga', user, {})
 
-          const selectUpdatedAt = pages => pages.map(page => page.updatedAt)
+          const selectUpdatedAt = (pages) => pages.map((page) => page.updatedAt)
 
           expect(selectUpdatedAt(pages)).toEqual(selectUpdatedAt(renamedPages))
         })

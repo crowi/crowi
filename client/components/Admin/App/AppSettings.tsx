@@ -20,7 +20,7 @@ const AppSettings: FC<Props> = ({ isUploadable, settingForm, update, alert }) =>
   const [confidential, setConfidential] = useState(settingForm['app:confidential'])
   const [fileUpload, setFileUpload] = useState(settingForm['app:fileUpload'])
 
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     update({
       'app:title': title,
@@ -40,7 +40,7 @@ const AppSettings: FC<Props> = ({ isUploadable, settingForm, update, alert }) =>
 
         <FormRow>
           <Label for="appTitle">{t('admin.app.title')}</Label>
-          <Input id="appTitle" value={title} onChange={e => setTitle(e.target.value)} />
+          <Input id="appTitle" value={title} onChange={(e) => setTitle(e.target.value)} />
           <FormText color="muted">{t('admin.app.title_description')}</FormText>
         </FormRow>
 
@@ -49,7 +49,7 @@ const AppSettings: FC<Props> = ({ isUploadable, settingForm, update, alert }) =>
           <Input
             id="appConfidential"
             value={confidential}
-            onChange={e => setConfidential(e.target.value)}
+            onChange={(e) => setConfidential(e.target.value)}
             placeholder={t('admin.app.confidential_placeholder')}
           />
           <FormText color="muted">{t('admin.app.confidential_description')}</FormText>

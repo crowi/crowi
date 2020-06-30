@@ -7,7 +7,7 @@ type Props = {
   warningMessage?: string
 } & PageProps
 
-const GoogleWidget: FC<Props> = props => {
+const GoogleWidget: FC<Props> = (props) => {
   const { i18n, context, warningMessage } = props
 
   return (

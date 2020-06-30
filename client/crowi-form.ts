@@ -1,4 +1,4 @@
-$(function() {
+$(function () {
   const crowi = window.crowi
   const crowiRenderer = window.crowiRenderer
   const inlineAttachment = window.inlineAttachment
@@ -8,7 +8,7 @@ $(function() {
 
   // show/hide
   function FetchPagesUpdatePostAndInsert(path) {
-    $.get('/_api/pages.updatePost', { path: path }, function(res) {
+    $.get('/_api/pages.updatePost', { path: path }, function (res) {
       if (res.ok) {
         const $slackChannels = $('#page-form-slack-channel')
         $slackChannels.val(res.updatePost.join(','))
@@ -29,7 +29,7 @@ $(function() {
     }
   }
 
-  $('a[data-toggle="tab"][href="#edit-form"]').on('show.bs.tab', function() {
+  $('a[data-toggle="tab"][href="#edit-form"]').on('show.bs.tab', function () {
     $('.content-main').addClass('on-edit')
 
     if (slackConfigured) {
@@ -43,7 +43,7 @@ $(function() {
     }
   })
 
-  $('a[data-toggle="tab"][href="#edit-form"]').on('hide.bs.tab', function() {
+  $('a[data-toggle="tab"][href="#edit-form"]').on('hide.bs.tab', function () {
     $('.content-main').removeClass('on-edit')
   })
 
@@ -71,7 +71,7 @@ $(function() {
 
   // for initialize preview
   renderPreview()
-  setInterval(function() {
+  setInterval(function () {
     const content = $('#form-body').val()
     if (prevContent != content) {
       renderPreview()
@@ -81,13 +81,13 @@ $(function() {
 
   // edit detection
   let isFormChanged = false
-  $(window).on('beforeunload', function(e) {
+  $(window).on('beforeunload', function (e) {
     if (isFormChanged) {
       // TODO i18n
       return "You haven't finished your comment yet. Do you want to leave without finishing?"
     }
   })
-  $('#form-body').on('keyup change', function(e) {
+  $('#form-body').on('keyup change', function (e) {
     const content = $('#form-body').val() as string
     if (originalContent != content) {
       isFormChanged = true
@@ -97,14 +97,14 @@ $(function() {
       crowi.clearDraft(pagePath)
     }
   })
-  $('#page-form').on('submit', function(e) {
+  $('#page-form').on('submit', function (e) {
     // avoid message
     isFormChanged = false
     crowi.clearDraft(pagePath)
   })
 
   // This is a temporary implementation until porting to React.
-  const insertText = function(start, end, newText, mode) {
+  const insertText = function (start, end, newText, mode) {
     const editor = document.querySelector('#form-body') as HTMLTextAreaElement
     mode = mode || 'after'
 
@@ -136,7 +136,7 @@ $(function() {
     }
   }
 
-  const getCurrentLine = function(event) {
+  const getCurrentLine = function (event) {
     const $target = $(event.target)
 
     const text = $target.val() as string
@@ -160,7 +160,7 @@ $(function() {
     }
   }
 
-  const getPrevLine = function(event) {
+  const getPrevLine = function (event) {
     const $target = $(event.target)
     const currentLine = getCurrentLine(event)
     const start = currentLine ? currentLine.start : 0
@@ -222,13 +222,7 @@ $(function() {
         // indent
         const isBlankLine = !currentLine?.text
         $target.selection('replace', {
-          text: isBlankLine
-            ? '\n'
-            : '    ' +
-              $target
-                .selection()
-                .split('\n')
-                .join('\n    '),
+          text: isBlankLine ? '\n' : '    ' + $target.selection().split('\n').join('\n    '),
           mode: 'before',
         })
         if (currentLine) {
@@ -240,7 +234,7 @@ $(function() {
     $target.trigger('input')
   }
 
-  const handleEnterKey = function(event) {
+  const handleEnterKey = function (event) {
     if (event.metaKey || event.ctrlKey || event.shiftKey) {
       return
     }
@@ -312,13 +306,13 @@ $(function() {
     $target.trigger('input')
   }
 
-  const handleEscapeKey = function(event) {
+  const handleEscapeKey = function (event) {
     event.preventDefault()
     const $target = $(event.target)
     $target.blur()
   }
 
-  const handleSpaceKey = function(event) {
+  const handleSpaceKey = function (event) {
     // keybind: alt + shift + space
     if (!(event.shiftKey && event.altKey)) {
       return
@@ -344,7 +338,7 @@ $(function() {
 
   // markdown helper inspired by 'esarea'.
   // see: https://github.com/fukayatsu/esarea
-  $('textarea#form-body').on('keydown', function(event) {
+  $('textarea#form-body').on('keydown', function (event) {
     switch (event.which || event.keyCode) {
       case 9:
         handleTabKey(event)
@@ -362,7 +356,7 @@ $(function() {
     }
   })
 
-  const handlePasteEvent = function(event) {
+  const handlePasteEvent = function (event) {
     const currentLine = getCurrentLine(event)
 
     if (!currentLine) {
@@ -389,46 +383,46 @@ $(function() {
 
   const formBody = document.getElementById('form-body')
   if (formBody) {
-    formBody.addEventListener('paste', function(event) {
+    formBody.addEventListener('paste', function (event) {
       if (handlePasteEvent(event)) {
         event.preventDefault()
       }
     })
   }
 
-  const unbindInlineAttachment = function($form) {
+  const unbindInlineAttachment = function ($form) {
     $form.unbind('.inlineattach')
   }
-  const bindInlineAttachment = function($form, attachmentOption) {
+  const bindInlineAttachment = function ($form, attachmentOption) {
     const editor = createEditorInstance($form)
     const InlineAttachment = inlineAttachment
     const inlineattach = new InlineAttachment(attachmentOption, editor)
     $form.bind({
-      'paste.inlineattach': function(e) {
+      'paste.inlineattach': function (e) {
         inlineattach.onPaste(e.originalEvent)
       },
-      'drop.inlineattach': function(e) {
+      'drop.inlineattach': function (e) {
         e.stopPropagation()
         e.preventDefault()
         inlineattach.onDrop(e.originalEvent)
       },
-      'dragenter.inlineattach dragover.inlineattach': function(e) {
+      'dragenter.inlineattach dragover.inlineattach': function (e) {
         e.stopPropagation()
         e.preventDefault()
       },
     })
   }
-  const createEditorInstance = function($form) {
+  const createEditorInstance = function ($form) {
     const $this = $form
 
     return {
-      getValue: function() {
+      getValue: function () {
         return $this.val()
       },
-      insertValue: function(val) {
+      insertValue: function (val) {
         inlineAttachment.util.insertTextAtCursor($this[0], val)
       },
-      setValue: function(val) {
+      setValue: function (val) {
         $this.val(val)
       },
     }
@@ -457,11 +451,11 @@ $(function() {
       attachmentOption.allowedTypes = '*'
     }
 
-    attachmentOption.remoteFilename = function(file) {
+    attachmentOption.remoteFilename = function (file) {
       return file.name
     }
 
-    attachmentOption.onFileReceived = function(file) {
+    attachmentOption.onFileReceived = function (file) {
       // if not image
       if (!file.type.match(/^image\/.+$/)) {
         // modify urlText with 'a' tag
@@ -471,7 +465,7 @@ $(function() {
       }
     }
 
-    attachmentOption.onFileUploadResponse = function(res) {
+    attachmentOption.onFileUploadResponse = function (res) {
       const result = JSON.parse(res.response)
 
       if (result.ok && result.pageCreated) {
@@ -491,29 +485,29 @@ $(function() {
 
     bindInlineAttachment($inputForm, attachmentOption)
 
-    $('textarea#form-body').on('dragenter dragover', function() {
+    $('textarea#form-body').on('dragenter dragover', function () {
       $(this).addClass('dragover')
     })
-    $('textarea#form-body').on('drop dragleave dragend', function() {
+    $('textarea#form-body').on('drop dragleave dragend', function () {
       $(this).removeClass('dragover')
     })
   }
 
-  const enableScrollSync = function() {
-    const getMaxScrollTop = function(dom) {
+  const enableScrollSync = function () {
+    const getMaxScrollTop = function (dom) {
       const rect = dom.getBoundingClientRect()
 
       return dom.scrollHeight - rect.height
     }
 
-    const getScrollRate = function(dom) {
+    const getScrollRate = function (dom) {
       const maxScrollTop = getMaxScrollTop(dom)
       const rate = dom.scrollTop / maxScrollTop
 
       return rate
     }
 
-    const getScrollTop = function(dom, rate) {
+    const getScrollTop = function (dom, rate) {
       const maxScrollTop = getMaxScrollTop(dom)
       const top = maxScrollTop * rate
 
@@ -523,7 +517,7 @@ $(function() {
     const editor = document.querySelector('#form-body') as HTMLTextAreaElement
     const preview = document.querySelector('#preview-body') as HTMLDivElement
 
-    editor.addEventListener('scroll', function(event) {
+    editor.addEventListener('scroll', function (event) {
       const rate = getScrollRate(this)
       const top = getScrollTop(preview, rate)
 

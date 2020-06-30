@@ -13,7 +13,7 @@ export default (crowi: Crowi) => {
   const actions = {} as any
   const api = (actions.api = {} as any)
 
-  actions.searchPage = function(req: Request, res: Response) {
+  actions.searchPage = function (req: Request, res: Response) {
     const search = crowi.getSearcher()
     if (!search) {
       return res.json(ApiResponse.error('Configuration of ELASTICSEARCH_URI is required.'))
@@ -32,7 +32,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} offset
    * @apiParam {String} limit
    */
-  api.search = async function(req: Request, res: Response) {
+  api.search = async function (req: Request, res: Response) {
     const { user } = req
     const { q: keyword = null, tree = null, type = null } = req.query
     let paginateOpts
@@ -66,14 +66,14 @@ export default (crowi: Crowi) => {
       const pages = await Page.populatePageListToAnyObjects(searchResult)
 
       const data = pages
-        .filter(page => {
+        .filter((page) => {
           if (Object.keys(page).length < 12) {
             // FIXME: 12 is a number of columns.
             return false
           }
           return true
         })
-        .map(page => {
+        .map((page) => {
           return { ...page, bookmarkCount: (page._source && page._source.bookmark_count) || 0 }
         })
 

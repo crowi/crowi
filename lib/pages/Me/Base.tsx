@@ -24,7 +24,7 @@ export type Props = {
   }
 } & PageProps
 
-const Base: FC<Props> = props => {
+const Base: FC<Props> = (props) => {
   const { i18n, context, title, activeItem, messages, children } = props
 
   return (

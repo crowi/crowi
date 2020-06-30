@@ -24,7 +24,7 @@ function useFetchComments(crowi: Crowi, pageId: string | null, revisionId: strin
     const { ok, comments }: { ok: boolean; comments: CommentType[] } = await crowi.apiGet('/comments.get', { page_id: pageId })
     const [current, newer, older]: [CommentType[], CommentType[], CommentType[]] = [[], [], []]
     if (ok) {
-      comments.forEach(comment => {
+      comments.forEach((comment) => {
         const { revision, createdAt } = comment
         const isCurrent = revision === revisionId
         const isNewer = Date.parse(createdAt) / 1000 > Number(revisionCreatedAt)
@@ -77,7 +77,7 @@ type Props = CommonProps & {
   isSharePage: boolean
 }
 
-const Comment: FC<Props> = props => {
+const Comment: FC<Props> = (props) => {
   const { crowi, pageId, revisionId, revisionCreatedAt, isSharePage, ...others } = props
   const [comments, fetchComments] = useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage)
   const [{ posting, message }, { postComment }] = usePostComment(crowi, pageId, revisionId, fetchComments)

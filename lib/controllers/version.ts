@@ -11,7 +11,7 @@ export default (crowi: Crowi, app: Express) => {
   /**
    * @api {get} /users.list Get user list
    */
-  api.get = function(req: Request, res: Response) {
+  api.get = function (req: Request, res: Response) {
     return res.json(ApiResponse.success({ version: crowi.version }))
   }
 

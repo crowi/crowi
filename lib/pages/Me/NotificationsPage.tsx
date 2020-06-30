@@ -7,7 +7,7 @@ type Props = {
   messages: BaseProps['messages']
 } & PageProps
 
-const NotificationsPage: FC<Props> = props => {
+const NotificationsPage: FC<Props> = (props) => {
   const { i18n } = props
 
   return (

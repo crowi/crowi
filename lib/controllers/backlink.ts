@@ -17,19 +17,19 @@ export default (crowi: Crowi) => {
    * @apiParam {Number} limit
    * @apiParam {Number} offset
    */
-  actions.api.list = function(req: Request, res: Response) {
+  actions.api.list = function (req: Request, res: Response) {
     const pageId = req.query.page_id
     const limit = req.query.limit || 10
     const offset = req.query.offset || 0
 
     Backlink.findByPageId(pageId, limit, offset)
-      .then(backlinks => {
+      .then((backlinks) => {
         const result = {
           data: backlinks,
         }
         return res.json(ApiResponse.success(result))
       })
-      .catch(err => {
+      .catch((err) => {
         return res.json(ApiResponse.error(err))
       })
   }

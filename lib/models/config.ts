@@ -131,7 +131,7 @@ export default (crowi: Crowi) => {
   }
 
   // Execute only once for installing application
-  configSchema.statics.applicationInstall = async function() {
+  configSchema.statics.applicationInstall = async function () {
     const count = await Config.countDocuments({ ns: 'crowi' }).exec()
     if (count > 0) {
       throw new Error('Application already installed')
@@ -139,11 +139,11 @@ export default (crowi: Crowi) => {
     await Config.updateConfigByNamespace('crowi', getArrayForInstalling())
   }
 
-  configSchema.statics.updateByParams = async function(ns, key, value) {
+  configSchema.statics.updateByParams = async function (ns, key, value) {
     await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec()
   }
 
-  configSchema.statics.updateConfig = async function(ns, key, value) {
+  configSchema.statics.updateConfig = async function (ns, key, value) {
     try {
       await Config.updateByParams(ns, key, value)
     } catch (err) {
@@ -151,7 +151,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.updateConfigByNamespace = async function(ns, nsConfig) {
+  configSchema.statics.updateConfigByNamespace = async function (ns, nsConfig) {
     try {
       await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)))
     } catch (err) {
@@ -159,14 +159,14 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.copyByParams = async function(ns, key, newKey) {
+  configSchema.statics.copyByParams = async function (ns, key, newKey) {
     const config = await Config.findOne({ ns, key }).exec()
     if (config !== null) {
       await Config.findOneAndUpdate({ ns, key: newKey }, { ns, key: newKey, value: config.value }, { upsert: true }).exec()
     }
   }
 
-  configSchema.statics.copyConfig = async function(ns, key, newKey) {
+  configSchema.statics.copyConfig = async function (ns, key, newKey) {
     try {
       await Config.copyByParams(ns, key, newKey)
     } catch (err) {
@@ -174,11 +174,11 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.deleteByParams = async function(ns, key) {
+  configSchema.statics.deleteByParams = async function (ns, key) {
     await Config.deleteOne({ ns, key }).exec()
   }
 
-  configSchema.statics.deleteConfig = async function(ns, key) {
+  configSchema.statics.deleteConfig = async function (ns, key) {
     try {
       await Config.deleteByParams(ns, key)
     } catch (err) {
@@ -186,12 +186,10 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.loadAllConfig = async function() {
+  configSchema.statics.loadAllConfig = async function () {
     const config = { crowi: {} }
 
-    const doc = await Config.find()
-      .sort({ ns: 1, key: 1 })
-      .exec()
+    const doc = await Config.find().sort({ ns: 1, key: 1 }).exec()
 
     doc.forEach(({ ns, key, value }) => {
       if (!config[ns]) {
@@ -205,7 +203,7 @@ export default (crowi: Crowi) => {
   }
 
   // FIXME: export function にするためにはこの FILE_UPLOAD を crowi.env から参照してるのどうにかしないと
-  configSchema.statics.isUploadable = function(config) {
+  configSchema.statics.isUploadable = function (config) {
     const method = crowi.env.FILE_UPLOAD || 'aws'
     const isConfigured =
       config.crowi['upload:aws:accessKeyId'] &&
@@ -220,7 +218,7 @@ export default (crowi: Crowi) => {
     return method != 'none'
   }
 
-  configSchema.statics.fileUploadEnabled = function(config) {
+  configSchema.statics.fileUploadEnabled = function (config) {
     if (!Config.isUploadable(config)) {
       return false
     }
@@ -228,7 +226,7 @@ export default (crowi: Crowi) => {
     return config.crowi['app:fileUpload'] || false
   }
 
-  configSchema.statics.migrate = async function() {
+  configSchema.statics.migrate = async function () {
     const renameKeys = {
       crowi: [
         ['aws:bucket', 'upload:aws:bucket'],

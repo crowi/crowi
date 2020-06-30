@@ -32,7 +32,7 @@ export default (crowi: Crowi) => {
     updatedAt: { type: Date, default: Date.now, index: true },
   })
 
-  backlinkSchema.statics.findByPageId = async function(pageId, limit, offset) {
+  backlinkSchema.statics.findByPageId = async function (pageId, limit, offset) {
     limit = limit || 10
     offset = offset || 0
 
@@ -43,9 +43,7 @@ export default (crowi: Crowi) => {
     const projection = { fromPage: 1, fromRevision: 1, updatedAt: 1 }
     const options = { limit, skip: offset, sort: { updatedAt: -1 } }
 
-    const backlinks = await Backlink.find(conditions, projection, options)
-      .populate('fromPage')
-      .populate('fromRevision')
+    const backlinks = await Backlink.find(conditions, projection, options).populate('fromPage').populate('fromRevision')
 
     // populate author
     const populateOptions = {
@@ -63,12 +61,12 @@ export default (crowi: Crowi) => {
     return populatedBacklinks
   }
 
-  backlinkSchema.statics.removeByPageId = function(pageId) {
+  backlinkSchema.statics.removeByPageId = function (pageId) {
     // FIXME: removeByPageId is a bit confusable name. Should it removeByFromPageId ?
     return Backlink.deleteMany({ fromPage: pageId })
   }
 
-  backlinkSchema.statics.removeBySavedPage = async function(savedPage) {
+  backlinkSchema.statics.removeBySavedPage = async function (savedPage) {
     const conditions = {
       fromPage: savedPage._id,
     }
@@ -76,7 +74,7 @@ export default (crowi: Crowi) => {
     await Backlink.deleteMany(conditions)
   }
 
-  backlinkSchema.statics.createByParameters = async function(parameters) {
+  backlinkSchema.statics.createByParameters = async function (parameters) {
     const data = {
       page: parameters.page,
       fromPage: parameters.fromPage,
@@ -89,7 +87,7 @@ export default (crowi: Crowi) => {
   const convertLinksToPageIds = async (page, { paths, objectIds }) => {
     const Page = crowi.model('Page')
 
-    let ids = await Promise.all([...paths.map(path => Page.isExistByPath(path)), ...objectIds.map(id => Page.isExistById(id))])
+    let ids = await Promise.all([...paths.map((path) => Page.isExistByPath(path)), ...objectIds.map((id) => Page.isExistById(id))])
 
     // Make unique and remove own page
     ids = ids.filter((id, index, array) => array.indexOf(id) === index && id.toString() !== page._id.toString() && id !== false)
@@ -97,7 +95,7 @@ export default (crowi: Crowi) => {
     return ids
   }
 
-  backlinkSchema.statics.createBySavedPage = async function(savedPage) {
+  backlinkSchema.statics.createBySavedPage = async function (savedPage) {
     if (!(savedPage.revision && savedPage.revision.body)) {
       throw new Error('no revision/body in savedPage')
     }
@@ -110,7 +108,7 @@ export default (crowi: Crowi) => {
     const ids = await convertLinksToPageIds(savedPage, links)
 
     const backlinks = await Promise.all(
-      ids.map(id =>
+      ids.map((id) =>
         Backlink.createByParameters({
           page: id,
           fromPage: savedPage._id,
@@ -123,7 +121,7 @@ export default (crowi: Crowi) => {
     return backlinks
   }
 
-  backlinkSchema.statics.createByAllPages = async function() {
+  backlinkSchema.statics.createByAllPages = async function () {
     const Page = crowi.model('Page')
     const Revision = crowi.model('Revision')
 
@@ -145,7 +143,7 @@ export default (crowi: Crowi) => {
         const ids = await convertLinksToPageIds(page, links)
 
         const backlinks = await Promise.all(
-          ids.map(id =>
+          ids.map((id) =>
             Backlink.createByParameters({
               page: id,
               fromPage: pageId,

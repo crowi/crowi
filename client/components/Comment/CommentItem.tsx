@@ -63,7 +63,7 @@ type Props = CommonProps & {
   comment: Record<string, any>
 }
 
-const CommentItem: FC<Props> = props => {
+const CommentItem: FC<Props> = (props) => {
   const { crowi, revisionId, comment, ...others } = props
   const { revision, creator, comment: commentBody, createdAt } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'

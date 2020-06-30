@@ -10,7 +10,7 @@ type Props = {
   messages: BaseProps['messages']
 } & PageProps
 
-const ApiTokenPage: FC<Props> = props => {
+const ApiTokenPage: FC<Props> = (props) => {
   const { i18n, apiToken, hasPassword } = props
 
   return (

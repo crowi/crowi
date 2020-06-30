@@ -2,7 +2,7 @@ import faker from 'faker'
 import mongoose from 'mongoose'
 import { crowi, Fixture } from 'server/test/setup'
 
-describe('Activity', function() {
+describe('Activity', function () {
   let Activity
   let User
   let Page
@@ -19,9 +19,9 @@ describe('Activity', function() {
     Watcher = crowi.model('Watcher')
   })
 
-  describe('.createByParameters', function() {
-    describe('correct parameters', function() {
-      it('should create', function() {
+  describe('.createByParameters', function () {
+    describe('correct parameters', function () {
+      it('should create', function () {
         const userId = ObjectId()
         const targetId = ObjectId()
 
@@ -33,21 +33,21 @@ describe('Activity', function() {
         }
 
         return Activity.createByParameters(parameters).then(
-          function(activity) {
+          function (activity) {
             expect(activity.user).toBe(userId)
             expect(activity.target).toBe(targetId)
             expect(activity.targetModel).toBe('Page')
             expect(activity.action).toBe('COMMENT')
           },
-          function(err) {
+          function (err) {
             throw new Error(err)
           },
         )
       })
     })
 
-    describe('invalid parameters', function() {
-      it('should not create', function() {
+    describe('invalid parameters', function () {
+      it('should not create', function () {
         const userId = ObjectId()
         const targetId = ObjectId()
 
@@ -85,7 +85,7 @@ describe('Activity', function() {
     const pageId = ObjectId()
 
     beforeAll(async () => {
-      await Promise.all([User, Page, Comment, Watcher, Activity].map(model => model.deleteMany({})))
+      await Promise.all([User, Page, Comment, Watcher, Activity].map((model) => model.deleteMany({})))
 
       const users = [
         { _id: userIds[0], email: faker.internet.email(), status: User.STATUS_ACTIVE },
@@ -93,13 +93,13 @@ describe('Activity', function() {
         { _id: userIds[2], email: faker.internet.email(), status: User.STATUS_SUSPENDED },
       ]
       const pages = [{ _id: pageId, path: `/${faker.lorem.word()}`, grant: Page.GRANT_PUBLIC, creator: userIds[0] }]
-      const comments = userIds.map(userId => ({ page: pageId, creator: userId, comment: faker.lorem.word() }))
+      const comments = userIds.map((userId) => ({ page: pageId, creator: userId, comment: faker.lorem.word() }))
 
       await Promise.all([Fixture.generate('User', users), Fixture.generate('Page', pages), Fixture.generate('Comment', comments)])
     })
 
     afterEach(async () => {
-      await Promise.all([Watcher, Activity].map(model => model.deleteMany({})))
+      await Promise.all([Watcher, Activity].map((model) => model.deleteMany({})))
     })
 
     describe('Action User and Suspended User', () => {

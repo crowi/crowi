@@ -32,6 +32,7 @@
     "@typescript-eslint/no-var-requires": "off",
     "@typescript-eslint/no-empty-function": "off",
     "@typescript-eslint/ban-ts-comment": "off",
+    "@typescript-eslint/ban-types": "off",
     "eqeqeq": "off",
     "camelcase": "off",
     "handle-callback-err": "off",

@@ -11,7 +11,7 @@ export default class SearchResultList extends React.Component<Props> {
   static defaultProps = { pages: [], searchingKeyword: '' }
 
   render() {
-    const resultList = this.props.pages.map(page => {
+    const resultList = this.props.pages.map((page) => {
       const pageBody = page.revision.body
       return (
         <div id={page._id} key={page._id} className="search-result-page">

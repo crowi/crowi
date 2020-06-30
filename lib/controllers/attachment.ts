@@ -16,17 +16,17 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.api = api
 
-  api.redirector = function(req: Request, res: Response) {
+  api.redirector = function (req: Request, res: Response) {
     const id = req.params.id
 
     Attachment.findById(id)
-      .then(function(data) {
+      .then(function (data) {
         if (!data) {
           throw new Error('File not found')
         }
         // TODO: file delivery plugin for cdn
         Attachment.findDeliveryFile(data)
-          .then(fileName => {
+          .then((fileName) => {
             const encodedFileName = encodeURIComponent(data.originalName)
 
             const deliveryFile = {
@@ -46,11 +46,11 @@ export default (crowi: Crowi, app: Express) => {
               return res.sendFile(deliveryFile.fileName, deliveryFile.options)
             }
           })
-          .catch(err => {
+          .catch((err) => {
             // debug('error', err);
           })
       })
-      .catch(err => {
+      .catch((err) => {
         // debug('err', err);
         // not found
         return res.status(404).sendFile(crowi.publicDir + '/images/file-not-found.png')
@@ -64,18 +64,18 @@ export default (crowi: Crowi, app: Express) => {
    *
    * @apiParam {String} page_id
    */
-  api.list = function(req: Request, res: Response) {
+  api.list = function (req: Request, res: Response) {
     const id = req.query.page_id || null
     if (!id) {
       return res.json(ApiResponse.error('Parameters page_id is required.'))
     }
 
-    Attachment.getListByPageId(id).then(function(attachments) {
+    Attachment.getListByPageId(id).then(function (attachments) {
       const config = crowi.getConfig()
       const baseUrl = config.crowi['app:url'] || ''
       return res.json(
         ApiResponse.success({
-          attachments: attachments.map(at => {
+          attachments: attachments.map((at) => {
             const fileUrl = at.fileUrl
             at = at.toObject()
             at.url = baseUrl + fileUrl
@@ -94,7 +94,7 @@ export default (crowi: Crowi, app: Express) => {
    * @apiParam {String} page_id
    * @apiParam {File} file
    */
-  api.add = async function(req: Request, res: Response) {
+  api.add = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const id = req.body.page_id || 0
     const path = decodeURIComponent(req.body.path) || null
@@ -159,7 +159,7 @@ export default (crowi: Crowi, app: Express) => {
         }
 
         // delete anyway
-        fs.unlink(tmpPath, function(err) {
+        fs.unlink(tmpPath, function (err) {
           if (err) {
             debug('Error while deleting tmp file.')
           }
@@ -172,7 +172,7 @@ export default (crowi: Crowi, app: Express) => {
         // Remove from S3
 
         // delete anyway
-        fs.unlink(tmpPath, function(err) {
+        fs.unlink(tmpPath, function (err) {
           if (err) {
             debug('Error while deleting tmp file.')
           }
@@ -193,23 +193,23 @@ export default (crowi: Crowi, app: Express) => {
    *
    * @apiParam {String} attachment_id
    */
-  api.remove = function(req: Request, res: Response) {
+  api.remove = function (req: Request, res: Response) {
     const id = req.body.attachment_id
 
     Attachment.findById(id)
-      .then(function(attachment) {
+      .then(function (attachment) {
         if (!attachment) throw new Error('Attachment not found')
 
         Attachment.removeAttachment(attachment)
-          .then(data => {
+          .then((data) => {
             debug('removeAttachment', data)
             return res.json(ApiResponse.success({}))
           })
-          .catch(err => {
+          .catch((err) => {
             return res.status(500).json(ApiResponse.error('Error while deleting file'))
           })
       })
-      .catch(err => {
+      .catch((err) => {
         debug('Error', err)
         return res.status(404)
       })

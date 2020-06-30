@@ -14,7 +14,7 @@ export default class PageAttachmentList extends React.Component<Props> {
       return null
     }
 
-    const attachmentList = this.props.attachments.map(attachment => {
+    const attachmentList = this.props.attachments.map((attachment) => {
       return (
         <Attachment
           key={'page:attachment:' + attachment._id}

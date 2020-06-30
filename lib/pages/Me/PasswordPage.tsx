@@ -9,7 +9,7 @@ type Props = {
   messages: BaseProps['messages']
 } & PageProps
 
-const PasswordPage: FC<Props> = props => {
+const PasswordPage: FC<Props> = (props) => {
   const { i18n, context, hasPassword } = props
   const { user } = context
 

@@ -1,6 +1,6 @@
-$(function() {
-  $('#slackNotificationForm').on('submit', function(e) {
-    $.post('/_api/admin/notification.add', $(this).serialize(), function(res) {
+$(function () {
+  $('#slackNotificationForm').on('submit', function (e) {
+    $.post('/_api/admin/notification.add', $(this).serialize(), function (res) {
       if (res.ok) {
         // TODO Fix
         location.reload()
@@ -10,8 +10,8 @@ $(function() {
     return false
   })
 
-  $('form.admin-remove-updatepost').on('submit', function(e) {
-    $.post('/_api/admin/notification.remove', $(this).serialize(), function(res) {
+  $('form.admin-remove-updatepost').on('submit', function (e) {
+    $.post('/_api/admin/notification.remove', $(this).serialize(), function (res) {
       if (res.ok) {
         // TODO Fix
         location.reload()
@@ -22,7 +22,7 @@ $(function() {
 
   $('#createdUserModal').modal('show')
 
-  $('#admin-password-reset-modal').on('show.bs.modal', function(button) {
+  $('#admin-password-reset-modal').on('show.bs.modal', function (button) {
     const data = $((button as any).relatedTarget)
     const userId = data.data('user-id')
     const email = data.data('user-email')
@@ -31,8 +31,8 @@ $(function() {
     $('#admin-users-reset-password input[name=user_id]').val(userId)
   })
 
-  $('form#admin-users-reset-password').on('submit', function(e) {
-    $.post('/_api/admin/users.resetPassword', $(this).serialize(), function(res) {
+  $('form#admin-users-reset-password').on('submit', function (e) {
+    $.post('/_api/admin/users.resetPassword', $(this).serialize(), function (res) {
       if (res.ok) {
         // TODO Fix
         // location.reload();
@@ -70,7 +70,7 @@ $(function() {
     }
   }
 
-  const openPanel = $tr => {
+  const openPanel = ($tr) => {
     const $email = $tr.find('.email')
     const $emailInput = $('<input>', { type: 'text', class: 'form-control', value: $email.text(), initial: $email.text() })
 
@@ -105,7 +105,7 @@ $(function() {
     })
   }
 
-  $('#admin-users-table .edit-button').on('click', function() {
+  $('#admin-users-table .edit-button').on('click', function () {
     const $tr = $(this).closest('tr')
     if ($tr.attr('id') === 'target') {
       return
@@ -115,8 +115,8 @@ $(function() {
     openPanel($tr)
   })
 
-  $('#appSettingForm, #secSettingForm, #authSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(function() {
-    $(this).submit(function() {
+  $('#appSettingForm, #secSettingForm, #authSettingForm, #mailSettingForm, #awsSettingForm, #googleSettingForm, #githubSettingForm').each(function () {
+    $(this).submit(function () {
       function showMessage(formId, msg, status = '') {
         $('#' + formId + ' .alert').remove()
 
@@ -129,9 +129,9 @@ $(function() {
         $message.insertAfter('#' + formId + ' legend')
 
         if (status == 'success') {
-          setTimeout(function() {
+          setTimeout(function () {
             $message.fadeOut({
-              complete: function() {
+              complete: function () {
                 $message.remove()
               },
             })
@@ -145,17 +145,17 @@ $(function() {
       $button.attr('disabled', 'disabled')
       const action = $form.attr('action')
       if (!action) return false
-      $.post(action, $form.serialize(), function(data) {
+      $.post(action, $form.serialize(), function (data) {
         if (data.ok) {
           showMessage($id, 'Updated')
         } else {
           showMessage($id, data.error, 'danger')
         }
       })
-        .fail(function() {
+        .fail(function () {
           showMessage($id, 'エラーが発生しました', 'danger')
         })
-        .always(function() {
+        .always(function () {
           $button.removeAttr('disabled')
         })
       return false
