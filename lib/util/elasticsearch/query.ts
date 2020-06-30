@@ -182,7 +182,7 @@ export const filterPortalPages = <T extends Search>(query: T) => {
 export const filterPublicPages = <T extends Search>(query: T) => {
   return pipe(
     query,
-    query => appendBoolFilterQuery(query, queries.user),
+    query => appendBoolMustNotQuery(query, queries.user),
     query => appendBoolMustNotQuery(query, queries.portal),
   )
 }

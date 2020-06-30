@@ -174,8 +174,7 @@ describe('filterPortalPages', () => {
 
 describe('filterPublicPages', () => {
   it('should filter public pages', () => {
-    expect(filterPublicPages(baseQuery).body.query.bool.filter).toEqual([queries.user])
-    expect(filterPublicPages(baseQuery).body.query.bool.must_not).toEqual([queries.portal])
+    expect(filterPublicPages(baseQuery).body.query.bool.must_not).toEqual([queries.user, queries.portal])
   })
 })
 
