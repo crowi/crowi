@@ -2,7 +2,7 @@ import Crowi from 'server/crowi'
 import { hasSlackConfig, hasSlackToken } from 'server/models/config'
 import Debug from 'debug'
 import { WebClient as SlackWebClient } from '@slack/client'
-import diff from 'diff'
+import { diffLines } from 'diff'
 
 const debug = Debug('crowi:util:slack')
 
@@ -124,7 +124,7 @@ export default (crowi: Crowi) => {
   slack.prepareAttachmentTextForUpdate = function (page, user, previousRevision) {
     let diffText = ''
 
-    diff.diffLines(previousRevision.body, page.revision.body).forEach(function (line) {
+    diffLines(previousRevision.body, page.revision.body).forEach(function (line) {
       debug('diff line', line)
       line.value.replace(/\r\n|\r/g, '\n')
       if (line.added) {
