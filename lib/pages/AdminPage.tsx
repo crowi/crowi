@@ -4,7 +4,7 @@ import Single from 'server/components/Layout/Single'
 import { PageProps } from 'server/types/pageProps'
 import App from 'server/components/App'
 
-const AdminPage: FC<PageProps> = props => {
+const AdminPage: FC<PageProps> = (props) => {
   const { i18n, context } = props
 
   return (

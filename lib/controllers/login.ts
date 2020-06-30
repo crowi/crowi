@@ -20,7 +20,7 @@ export default (crowi: Crowi, app: Express) => {
   const actions = {} as any
   const isLoggedIn = auth.isLoggedIn
 
-  const getSocialSession = function(session) {
+  const getSocialSession = function (session) {
     const { google = {}, github = {} } = session
     const { id: googleId } = google
     const { id: githubId } = github
@@ -33,13 +33,13 @@ export default (crowi: Crowi, app: Express) => {
     return { googleId, githubId, socialId, socialEmail, socialName, socialImage, issuerName }
   }
 
-  const clearSession = function(req) {
+  const clearSession = function (req) {
     req.session.google = {}
     req.session.github = {}
     req.session.social = {}
   }
 
-  const loginSuccess = async function(req: Request, res: Response, userData) {
+  const loginSuccess = async function (req: Request, res: Response, userData) {
     userData = await userData.populateSecrets()
     req.user = req.session.user = userData
     if (!userData.password) {
@@ -51,7 +51,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(getContinueUrl(req))
   }
 
-  const loginFailure = function(req: Request, res: Response) {
+  const loginFailure = function (req: Request, res: Response) {
     req.session.auth = {}
     req.flash('warningMessage', 'Sign in failure.')
 
@@ -61,7 +61,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(redirectUrl)
   }
 
-  const connect = async function(req, userData) {
+  const connect = async function (req, userData) {
     const { googleId, githubId } = getSocialSession(req.session)
 
     try {
@@ -75,7 +75,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.googleCallback = function(req: Request, res: Response) {
+  actions.googleCallback = function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { query } = req
     const { code = '', state } = query
@@ -89,7 +89,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(nextAction)
   }
 
-  actions.githubCallback = function(req: Request, res: Response) {
+  actions.githubCallback = function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { query } = req
     const { code = '' } = query
@@ -103,7 +103,7 @@ export default (crowi: Crowi, app: Express) => {
     return res.redirect(nextAction)
   }
 
-  actions.error = function(req: Request, res: Response) {
+  actions.error = function (req: Request, res: Response) {
     const reason = req.params.reason
     let reasonMessage = ''
 
@@ -119,7 +119,7 @@ export default (crowi: Crowi, app: Express) => {
     })
   }
 
-  actions.login = async function(req: Request, res: Response) {
+  actions.login = async function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { loginForm } = req.body
 
@@ -134,7 +134,7 @@ export default (crowi: Crowi, app: Express) => {
       }
 
       email = toConnect ? socialEmail : email
-      const userData = await User.findUserByEmailAndPassword(email, password).catch(err => {
+      const userData = await User.findUserByEmailAndPassword(email, password).catch((err) => {
         debug('on login findUserByEmailAndPassword', err)
       })
 
@@ -161,7 +161,7 @@ export default (crowi: Crowi, app: Express) => {
       const socialSession = getSocialSession(req.session)
       const { socialId, socialEmail } = socialSession
       const targetUser = socialEmail
-        ? await User.findUserByEmail(socialEmail).catch(err => {
+        ? await User.findUserByEmail(socialEmail).catch((err) => {
             debug('Failed to findUserByEmail', err)
           })
         : null
@@ -181,7 +181,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.loginGoogle = function(req: Request, res: Response) {
+  actions.loginGoogle = function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const googleAuth = GoogleAuth(config)
     const { google = {} } = req.session
@@ -189,7 +189,7 @@ export default (crowi: Crowi, app: Express) => {
 
     debug('code', code)
     if (!code) {
-      googleAuth.createAuthUrl(req, function(err, redirectUrl) {
+      googleAuth.createAuthUrl(req, function (err, redirectUrl) {
         if (err) {
           // TODO
         }
@@ -206,7 +206,7 @@ export default (crowi: Crowi, app: Express) => {
 
         const { user_id: id, email, name, picture: image } = tokenInfo
 
-        const userData = await User.findUserByGoogleId(id).catch(err => {
+        const userData = await User.findUserByGoogleId(id).catch((err) => {
           debug('findUserByGoogleId', err)
         })
         if (userData) {
@@ -219,7 +219,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.loginGitHub = function(req: Request, res: Response, next: NextFunction) {
+  actions.loginGitHub = function (req: Request, res: Response, next: NextFunction) {
     debug('Header', req.url, req.headers.referer)
     const githubAuth = GitHubAuth(config)
     const { github = {} } = req.session
@@ -247,7 +247,7 @@ export default (crowi: Crowi, app: Express) => {
           return loginFailure(req, res)
         }
 
-        const userData = await User.findUserByGitHubId(id).catch(err => {
+        const userData = await User.findUserByGitHubId(id).catch((err) => {
           debug('findUserByGitHubId', err)
         })
         if (userData) {
@@ -261,7 +261,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.register = async function(req: Request, res: Response) {
+  actions.register = async function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     // FIXME: lang
     const { lang = User.LANG_EN_US } = req as any
@@ -284,8 +284,8 @@ export default (crowi: Crowi, app: Express) => {
       debug('registerForm', registerForm)
 
       // email と username の unique チェックする
-      User.isRegisterable(email, username, function(isRegisterable, errOn) {
-        const registerFailure = message => {
+      User.isRegisterable(email, username, function (isRegisterable, errOn) {
+        const registerFailure = (message) => {
           req.flash('registerWarningMessage', message)
           debug('isError user register error', errOn)
           return res.redirect('/register')
@@ -306,7 +306,7 @@ export default (crowi: Crowi, app: Express) => {
           return registerFailure(t('page_register.error.unavailable_password_auth'))
         }
 
-        User.createUserByEmailAndPassword(name, username, email, password, lang, async function(err, userData) {
+        User.createUserByEmailAndPassword(name, username, email, password, lang, async function (err, userData) {
           if (err) {
             req.flash('registerWarningMessage', 'Failed to register.')
             return res.redirect('/register')
@@ -314,10 +314,10 @@ export default (crowi: Crowi, app: Express) => {
             // 作成後、承認が必要なモードなら、管理者に通知する
             if (config.crowi['security:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_RESTRICTED) {
               // TODO send mail
-              User.findAdmins(function(err, admins) {
+              User.findAdmins(function (err, admins) {
                 async.each(
                   admins,
-                  function(adminUser, next) {
+                  function (adminUser, next) {
                     mailer.send(
                       {
                         to: adminUser.email,
@@ -330,13 +330,13 @@ export default (crowi: Crowi, app: Express) => {
                           appTitle: config.crowi['app:title'],
                         },
                       },
-                      function(err, s) {
+                      function (err, s) {
                         debug('completed to send email: ', err, s)
                         next()
                       },
                     )
                   },
-                  function(err) {
+                  function (err) {
                     debug('Sending invitation email completed.', err)
                   },
                 )
@@ -371,7 +371,7 @@ export default (crowi: Crowi, app: Express) => {
 
               axios
                 .get(socialImage, { responseType: 'stream' })
-                .then(function(response) {
+                .then(function (response) {
                   const type = response.headers['content-type']
                   const ext = type.replace('image/', '')
                   const filePath = User.createUserPictureFilePath(userData, ext)
@@ -381,22 +381,22 @@ export default (crowi: Crowi, app: Express) => {
                   debug('Uploading user socialImage:', filePath, type)
                   fileUploader
                     .uploadFile(filePath, type, fileStream, {})
-                    .then(function(data) {
+                    .then(function (data) {
                       const imageUrl = fileUploader.generateUrl(filePath)
                       debug('user picture uploaded', imageUrl)
-                      userData.updateImage(imageUrl, function(err, data) {
+                      userData.updateImage(imageUrl, function (err, data) {
                         if (err) {
                           debug('Error on update user image', err)
                         }
                         // DONE
                       })
                     })
-                    .catch(function(err) {
+                    .catch(function (err) {
                       // ignore
                       debug('Upload error', err)
                     })
                 })
-                .catch(function() {
+                .catch(function () {
                   // ignore
                 })
             }
@@ -413,7 +413,7 @@ export default (crowi: Crowi, app: Express) => {
       const { socialEmail } = socialSession
       const { github = {} } = req.session
 
-      const registerFailure = message => {
+      const registerFailure = (message) => {
         const isRegistering = isDisabledPasswordAuth(config)
         const type = isRegistering ? 'warningMessage' : 'registerWarningMessage'
         req.flash(type, message)
@@ -430,7 +430,7 @@ export default (crowi: Crowi, app: Express) => {
 
       const isRegistering = true
       const targetUser = socialEmail
-        ? await User.findUserByEmail(socialEmail).catch(err => {
+        ? await User.findUserByEmail(socialEmail).catch((err) => {
             debug('Failed to findUserByEmail', err)
           })
         : null
@@ -441,7 +441,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.invited = function(req: Request, res: Response) {
+  actions.invited = function (req: Request, res: Response) {
     if (!req.user) {
       return res.redirect('/login')
     }
@@ -453,9 +453,9 @@ export default (crowi: Crowi, app: Express) => {
       const name = invitedForm.name
       const password = invitedForm.password
 
-      User.isRegisterableUsername(username, function(creatable) {
+      User.isRegisterableUsername(username, function (creatable) {
         if (creatable) {
-          user.activateInvitedUser(username, name, password, function(err, data) {
+          user.activateInvitedUser(username, name, password, function (err, data) {
             if (err) {
               req.flash('warningMessage', 'アクティベートに失敗しました。')
               return res.render('invited.html')
@@ -474,7 +474,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.updateInvitedUser = function(req: Request, res: Response) {
+  actions.updateInvitedUser = function (req: Request, res: Response) {
     return res.redirect('/')
   }
 

@@ -53,7 +53,7 @@ const IconListText = styled.div`
 
 export const Default = () => (
   <IconList>
-    {Object.keys(Icons).map(name => (
+    {Object.keys(Icons).map((name) => (
       <IconListItem key={name} data-name={name}>
         <StyledIcon name={name as IconName} />
         <IconListText>{name}</IconListText>

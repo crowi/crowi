@@ -45,7 +45,7 @@ type Props = CommonProps & {
   icon: IconName
 }
 
-const NotificationItem: FC<Props> = props => {
+const NotificationItem: FC<Props> = (props) => {
   const { notification, onClick = () => {}, icon, children, ...others } = props
   const isUnread = notification && notification.status !== 'OPENED'
 

@@ -19,7 +19,7 @@ export default class Notification extends React.Component<Props> {
   getActionUsers() {
     const notification = this.props.notification
     const latestActionUsers = notification.actionUsers.slice(0, 3)
-    const latestUsers = latestActionUsers.map(user => {
+    const latestUsers = latestActionUsers.map((user) => {
       return '@' + user.username
     })
 

@@ -26,7 +26,7 @@ const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [accessKeyId, setAccessKeyId] = useState(settingForm['mail:aws:accessKeyId'] || '')
   const [secretAccessKey, setSecretAccessKey] = useState(settingForm['mail:aws:secretAccessKey'] || '')
 
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     update({
       'mail:from': mail,
@@ -60,7 +60,7 @@ const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
 
           <FormRow>
             <Label for="mailFrom">{t('admin.mail.from')}</Label>
-            <Input id="mailFrom" placeholder={t('admin.mail.from_placeholder')} value={mail} onChange={e => setMail(e.target.value)} />
+            <Input id="mailFrom" placeholder={t('admin.mail.from_placeholder')} value={mail} onChange={(e) => setMail(e.target.value)} />
           </FormRow>
 
           <FormGroup>
@@ -70,11 +70,11 @@ const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
               </Col>
               <Col xs="4">
                 <Label for="mailSmtpHost">{t('admin.mail.smtp.host')}</Label>
-                <Input id="mailSmtpHost" value={host} onChange={e => setHost(e.target.value)} />
+                <Input id="mailSmtpHost" value={host} onChange={(e) => setHost(e.target.value)} />
               </Col>
               <Col xs="2">
                 <Label for="mailSmtpPort">{t('admin.mail.smtp.port')}</Label>
-                <Input id="mailSmtpPort" value={port} onChange={e => setPort(e.target.value)} />
+                <Input id="mailSmtpPort" value={port} onChange={(e) => setPort(e.target.value)} />
               </Col>
             </Row>
           </FormGroup>
@@ -83,11 +83,11 @@ const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
             <Row>
               <Col xs={{ size: 3, offset: 4 }}>
                 <Label for="mailSmtpUser">{t('admin.mail.smtp.user')}</Label>
-                <Input id="mailSmtpUser" value={user} onChange={e => setUser(e.target.value)} />
+                <Input id="mailSmtpUser" value={user} onChange={(e) => setUser(e.target.value)} />
               </Col>
               <Col xs="3">
                 <Label for="mailSmtpPassword">{t('admin.mail.smtp.password')}</Label>
-                <Input type="password" id="mailSmtpPassword" value={password} onChange={e => setPassword(e.target.value)} />
+                <Input type="password" id="mailSmtpPassword" value={password} onChange={(e) => setPassword(e.target.value)} />
               </Col>
             </Row>
           </FormGroup>
@@ -98,17 +98,17 @@ const MailSettings: FC<Props> = ({ settingForm, update, alert }) => {
 
           <FormRow>
             <Label for="mailAwsRegion">{t('admin.mail.aws.region')}</Label>
-            <Input id="mailAwsRegion" value={region} onChange={e => setRegion(e.target.value)} />
+            <Input id="mailAwsRegion" value={region} onChange={(e) => setRegion(e.target.value)} />
           </FormRow>
 
           <FormRow>
             <Label for="mailAwsAccessKeyId">{t('admin.mail.aws.access_key_id')}</Label>
-            <Input id="mailAwsAccessKeyId" value={accessKeyId} onChange={e => setAccessKeyId(e.target.value)} />
+            <Input id="mailAwsAccessKeyId" value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} />
           </FormRow>
 
           <FormRow>
             <Label for="mailAwsSecretAccessKey">{t('admin.mail.aws.secret_access_key')}</Label>
-            <Input id="mailAwsSecretAccessKey" value={secretAccessKey} onChange={e => setSecretAccessKey(e.target.value)} />
+            <Input id="mailAwsSecretAccessKey" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} />
           </FormRow>
         </fieldset>
 

@@ -7,11 +7,11 @@ export default (crowi: Crowi) => {
   const User = crowi.model('User')
   const actions = {} as any
 
-  actions.index = function(req: Request, res: Response) {
+  actions.index = function (req: Request, res: Response) {
     return res.render('installer.html')
   }
 
-  actions.createAdmin = function(req: Request, res: Response) {
+  actions.createAdmin = function (req: Request, res: Response) {
     const registerForm = req.body.registerForm || {}
     const language = req.language || 'en'
 
@@ -21,14 +21,14 @@ export default (crowi: Crowi) => {
       const email = registerForm.email
       const password = registerForm.password
 
-      User.createUserByEmailAndPassword(name, username, email, password, language, function(err, userData) {
+      User.createUserByEmailAndPassword(name, username, email, password, language, function (err, userData) {
         if (err) {
           req.form.errors.push('管理ユーザーの作成に失敗しました。' + err.message)
           // TODO
           return res.render('installer.html')
         }
 
-        userData.makeAdmin(async function(err, userData) {
+        userData.makeAdmin(async function (err, userData) {
           if (err) return
 
           try {

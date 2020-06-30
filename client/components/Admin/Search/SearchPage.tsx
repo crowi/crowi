@@ -10,7 +10,7 @@ const SearchPage: FC<{}> = () => {
   const { crowi } = useContext(AdminContext)
   const [alert, setAlert] = useState({ status: '', show: false, message: '' })
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     try {

@@ -42,10 +42,7 @@ export default (crowi: Crowi) => {
 
   function updateShareIds(shareIds, id) {
     const unique = (id, index, array) => array.indexOf(id) === index
-    return shareIds
-      .concat(id)
-      .filter(Boolean)
-      .filter(unique)
+    return shareIds.concat(id).filter(Boolean).filter(unique)
   }
 
   function isExternalShareEnabled() {

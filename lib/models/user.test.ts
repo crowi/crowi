@@ -12,8 +12,8 @@ describe('User', () => {
   describe('Create and Find.', () => {
     describe('The user', () => {
       test('should created', () => {
-        return new Promise(resolve => {
-          User.createUserByEmailAndPassword('Aoi Miyazaki', 'aoi', 'aoi@example.com', 'hogefuga11', 'en', function(err, userData) {
+        return new Promise((resolve) => {
+          User.createUserByEmailAndPassword('Aoi Miyazaki', 'aoi', 'aoi@example.com', 'hogefuga11', 'en', function (err, userData) {
             expect(err).toBeNull()
             expect(userData).toBeInstanceOf(User)
             resolve()
@@ -22,8 +22,8 @@ describe('User', () => {
       })
 
       test('should be found by findUserByUsername', () => {
-        return new Promise(resolve => {
-          User.findUserByUsername('aoi').then(function(userData) {
+        return new Promise((resolve) => {
+          User.findUserByUsername('aoi').then(function (userData) {
             expect(userData).toBeInstanceOf(User)
             resolve()
           })
@@ -31,8 +31,8 @@ describe('User', () => {
       })
 
       test('should be found by findUsersByPartOfEmail', () => {
-        return new Promise(resolve => {
-          User.findUsersByPartOfEmail('ao', {}).then(function(userData) {
+        return new Promise((resolve) => {
+          User.findUsersByPartOfEmail('ao', {}).then(function (userData) {
             expect(userData[0]).toBeInstanceOf(User)
             expect(userData[0].email).toBe('aoi@example.com')
             resolve()
@@ -45,7 +45,7 @@ describe('User', () => {
   describe('User Utilities', () => {
     describe('Get username from path', () => {
       test('found', () => {
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
           let username = null
           username = User.getUsernameByPath('/user/sotarok')
           expect(username).toBe('sotarok')
@@ -58,7 +58,7 @@ describe('User', () => {
       })
 
       test('not found', () => {
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
           let username = null
           username = User.getUsernameByPath('/the/page/is/not/related/to/user/page')
           expect(username).toBeNull()

@@ -16,7 +16,7 @@ export default (crowi: Crowi, app: Express) => {
   const env = crowi.node_env
   const middlewares = crowi.middlewares
 
-  app.use(function(req: Request, res: Response, next) {
+  app.use(function (req: Request, res: Response, next) {
     debug('Route request', req.method, req.url)
     const now = new Date()
     const config = crowi.getConfig()

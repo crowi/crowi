@@ -20,7 +20,7 @@ const GitHubSettings: FC<Props> = ({ settingForm, update, alert }) => {
   const [clientSecret, setClientSecret] = useState(settingForm['github:clientSecret'])
   const [organization, setOrganization] = useState(settingForm['github:organization'])
 
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     update({
       'github:clientId': clientId,
@@ -46,17 +46,17 @@ const GitHubSettings: FC<Props> = ({ settingForm, update, alert }) => {
 
         <FormRow>
           <Label for="githubClientId">{t('admin.github.client_id')}</Label>
-          <Input id="githubClientId" value={clientId} onChange={e => setClientId(e.target.value)} />
+          <Input id="githubClientId" value={clientId} onChange={(e) => setClientId(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="githubClientSecret">{t('admin.github.client_secret')}</Label>
-          <Input id="githubClientSecret" value={clientSecret} onChange={e => setClientSecret(e.target.value)} />
+          <Input id="githubClientSecret" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="githubOrganization">{t('admin.github.organization')}</Label>
-          <Input id="githubOrganization" value={organization} onChange={e => setOrganization(e.target.value)} />
+          <Input id="githubOrganization" value={organization} onChange={(e) => setOrganization(e.target.value)} />
         </FormRow>
 
         <FormRow>

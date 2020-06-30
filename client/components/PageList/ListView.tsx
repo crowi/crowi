@@ -10,7 +10,7 @@ export default class ListView extends React.Component<Props> {
   static defaultProps = { pages: [] }
 
   render() {
-    const listView = this.props.pages.map(page => {
+    const listView = this.props.pages.map((page) => {
       return <Page page={page} key={'page-list:list-view:' + page._id} />
     })
 

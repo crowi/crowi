@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import { crowi } from 'server/test/setup'
 
-describe('Notification', function() {
+describe('Notification', function () {
   let Notification
 
   const ObjectId = mongoose.Types.ObjectId
@@ -10,15 +10,15 @@ describe('Notification', function() {
     Notification = crowi.model('Notification')
   })
 
-  describe('.upsertByActivity', function() {
-    describe('valid parameters', function() {
-      it('should create', async function() {
+  describe('.upsertByActivity', function () {
+    describe('valid parameters', function () {
+      it('should create', async function () {
         const userId1 = ObjectId()
         const userId2 = ObjectId()
         const targetId = ObjectId()
         const activity = { _id: ObjectId(), user: userId1, targetModel: 'Page', target: targetId, action: 'COMMENT' }
         return Notification.upsertByActivity(userId2, activity)
-          .then(function(notification) {
+          .then(function (notification) {
             expect(notification.user.toString()).toBe(userId2.toString())
             expect(notification.targetModel).toBe('Page')
             expect(notification.target.toString()).toBe(targetId.toString())
@@ -26,14 +26,14 @@ describe('Notification', function() {
             expect(notification.status).toBe(Notification.STATUS_UNREAD)
             expect(notification.activities).toHaveLength(1)
           })
-          .catch(function(err) {
+          .catch(function (err) {
             throw new Error(err)
           })
       })
     })
 
-    describe('invalid parameters', function() {
-      it('should create', function() {
+    describe('invalid parameters', function () {
+      it('should create', function () {
         const user = ObjectId()
         const activity = {
           user: ObjectId(),

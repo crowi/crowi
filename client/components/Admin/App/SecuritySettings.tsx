@@ -21,7 +21,7 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
   const [registrationMode, setRegistrationMode] = useState(settingForm['security:registrationMode'] || '')
   const [registrationWhiteList, setRegistrationWhiteList] = useState(settingForm['security:registrationWhiteList'])
 
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     update({
       'security:basicName': basicName,
@@ -47,11 +47,11 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
             </Col>
             <Col xs="3">
               <Label for="securityBasicName">{t('admin.security.id')}</Label>
-              <Input id="securityBasicName" value={basicName} onChange={e => setBasicName(e.target.value)} />
+              <Input id="securityBasicName" value={basicName} onChange={(e) => setBasicName(e.target.value)} />
             </Col>
             <Col xs="3">
               <Label for="securityBasicSecret">{t('admin.security.password')}</Label>
-              <Input id="securityBasicSecret" value={basicSecret} onChange={e => setBasicSecret(e.target.value)} />
+              <Input id="securityBasicSecret" value={basicSecret} onChange={(e) => setBasicSecret(e.target.value)} />
             </Col>
             <Col xs={{ size: 8, offset: 4 }}>
               <FormText color="muted">
@@ -65,7 +65,7 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
 
         <FormRow>
           <Label for="securityRegistrationMode">{t('admin.security.restriction')}</Label>
-          <Input type="select" id="securityRegistrationMode" value={registrationMode} onChange={e => setRegistrationMode(e.target.value)}>
+          <Input type="select" id="securityRegistrationMode" value={registrationMode} onChange={(e) => setRegistrationMode(e.target.value)}>
             {Object.entries(registrationModeOptions).map(([mode, label]) => (
               <option key={mode} value={mode}>
                 {label}
@@ -82,7 +82,7 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
             id="securityRegistrationWhiteList"
             placeholder={t('admin.security.whitelist_placeholder')}
             value={registrationWhiteList}
-            onChange={e => setRegistrationWhiteList(e.target.value)}
+            onChange={(e) => setRegistrationWhiteList(e.target.value)}
           />
           <FormText color="muted">
             <Trans i18nKey="admin.security.whitelist_description1">

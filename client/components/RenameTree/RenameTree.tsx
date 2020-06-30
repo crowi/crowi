@@ -110,7 +110,7 @@ class RenameTree extends React.Component<Props, State> {
     const getParents = (paths: string[], path: string) =>
       paths
         .filter(
-          p =>
+          (p) =>
             path !== p &&
             // add '/' to check strictly: ex: '/aaa' must not be matched to '/aaa_ccc/yes'
             path.startsWith(RenameTree.removeTrailingSlash(p) + '/') &&
@@ -155,7 +155,7 @@ class RenameTree extends React.Component<Props, State> {
       </span>
     )
 
-    const renderNode = function({ path, name, children }: Node) {
+    const renderNode = function ({ path, name, children }: Node) {
       const isRoot = name === path
       const isEmpty = (o: any) => Object.keys(o).length === 0
       const nodeErrors = getErrors(path)

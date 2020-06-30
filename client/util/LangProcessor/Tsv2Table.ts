@@ -23,7 +23,7 @@ export default class Tsv2Table {
     const headLine = codeLines[0] || ''
 
     // console.log('head', headLine);
-    headers = this.splitColums(headLine).map(col => {
+    headers = this.splitColums(headLine).map((col) => {
       return `<th>${Crowi.escape(col)}</th>`
     })
 
@@ -37,9 +37,9 @@ export default class Tsv2Table {
       codeLines.shift()
     }
 
-    const rows = codeLines.map(row => {
+    const rows = codeLines.map((row) => {
       const cols = this.splitColums(row)
-        .map(col => {
+        .map((col) => {
           return `<td>${Crowi.escape(col)}</td>`
         })
         .join('')

@@ -4,7 +4,7 @@ import { google as googleApis } from 'googleapis'
 
 const debug = Debug('crowi:lib:googleAuth')
 
-export default config => {
+export default (config) => {
   const lib: any = {}
 
   lib.PROVIDER = 'google'
@@ -16,7 +16,7 @@ export default config => {
     return new googleApis.auth.OAuth2(clientId, clientSecret, callbackUrl)
   }
 
-  lib.createAuthUrl = function(req, callback) {
+  lib.createAuthUrl = function (req, callback) {
     const oauth2Client = createOauth2Client()
     googleApis.options({ auth: oauth2Client })
 
@@ -30,7 +30,7 @@ export default config => {
     callback(null, redirectUrl)
   }
 
-  lib.refreshAccessToken = async tokens => {
+  lib.refreshAccessToken = async (tokens) => {
     const oauth2Client = createOauth2Client()
     googleApis.options({ auth: oauth2Client })
     oauth2Client.setCredentials({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken })
@@ -61,7 +61,7 @@ export default config => {
     }
   }
 
-  lib.handleCallback = function(req, callback) {
+  lib.handleCallback = function (req, callback) {
     const oauth2Client = createOauth2Client()
     googleApis.options({ auth: oauth2Client })
     const { google = {} } = req.session
@@ -72,7 +72,7 @@ export default config => {
     }
 
     debug('Request googleToken by auth code', code)
-    oauth2Client.getToken(code, function(err, tokens) {
+    oauth2Client.getToken(code, function (err, tokens) {
       debug('Result of google.getToken()', err, tokens)
       if (err) {
         return callback(new Error('[googleAuth.handleCallback] Error to get token.'), null)
@@ -83,7 +83,7 @@ export default config => {
       })
 
       const oauth2 = googleApis.oauth2('v2')
-      oauth2.userinfo.get({}, function(err, response) {
+      oauth2.userinfo.get({}, function (err, response) {
         debug('Response of oauth2.userinfo.get', err, response && response.data)
         if (err) {
           return callback(new Error('[googleAuth.handleCallback] Error while proceccing userinfo.get.'), null)

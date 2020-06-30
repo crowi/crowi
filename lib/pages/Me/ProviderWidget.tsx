@@ -14,7 +14,7 @@ type Props = {
   helpMessage: string
 } & PageProps
 
-const ProviderWidget: FC<Props> = props => {
+const ProviderWidget: FC<Props> = (props) => {
   const { i18n, context } = props
   const { warningMessage, isEnabled, action, legend, isConnected, disconnectButton, disconnectMessages, connectButton, helpMessage } = props
 
@@ -52,7 +52,7 @@ const ProviderWidget: FC<Props> = props => {
                     <>
                       <p className="form-text text-muted">{i18n.t('page_register.form_help.email')}</p>
                       <ul>
-                        {context.security.registrationWhiteList.map(em => (
+                        {context.security.registrationWhiteList.map((em) => (
                           <li key={em}>
                             <code>{em}</code>
                           </li>

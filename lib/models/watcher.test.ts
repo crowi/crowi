@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import { crowi } from 'server/test/setup'
 
-describe('Watcher', function() {
+describe('Watcher', function () {
   let Watcher
   const ObjectId = mongoose.Types.ObjectId
 
