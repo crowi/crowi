@@ -272,6 +272,7 @@ class Crowi {
       resave: false,
       saveUninitialized: true,
       cookie: {
+        httpOnly: true,
         maxAge: sessionAge,
       },
       store: undefined,
