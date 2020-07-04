@@ -19,7 +19,7 @@ const GitHubWidget: FC<Props> = (props) => {
       action="/me/auth/github"
       legend={
         <>
-          <Icon name="githubBox" /> {i18n.t('GitHub Setting')}
+          <Icon name="github" /> {i18n.t('GitHub Setting')}
         </>
       }
       isConnected={!!context.user.githubId}

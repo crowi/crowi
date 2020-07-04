@@ -39,12 +39,12 @@ class SearchToolbar extends React.Component<Props> {
       },
       {
         key: 'portal',
-        icon: <Icon name="fileDocumentBoxMultipleOutline" />,
+        icon: <Icon name="textBoxMultipleOutline" />,
         name: t('page_types.portal'),
       },
       {
         key: 'public',
-        icon: <Icon name="fileDocumentBoxOutline" />,
+        icon: <Icon name="textBoxOutline" />,
         name: t('page_types.public'),
       },
       {
