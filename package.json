@@ -20,7 +20,7 @@
     "url": "https://github.com/crowi/crowi.git"
   },
   "engines": {
-    "node": "10.x",
+    "node": "12.x",
     "npm": "6.x"
   },
   "dependencies": {
