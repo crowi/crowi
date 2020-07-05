@@ -1,6 +1,5 @@
 import express, { Express, Request, Response } from 'express'
 import bodyParser from 'body-parser'
-import cookieParser from 'cookie-parser'
 import methodOverride from 'method-override'
 import passport from 'passport'
 import session from 'express-session'
@@ -85,7 +84,6 @@ export default (crowi: Crowi, app: Express) => {
   app.use(methodOverride())
   app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }))
   app.use(bodyParser.json({ limit: '50mb' }))
-  app.use(cookieParser())
   app.use(session(crowi.sessionConfig))
 
   // Set basic auth middleware
