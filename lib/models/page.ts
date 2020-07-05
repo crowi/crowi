@@ -33,7 +33,7 @@ export interface PageDocument extends Document {
   liker: Types.ObjectId[]
   seenUsers: Types.ObjectId[]
   commentCount: number
-  extended: object
+  extended: Record<string, any>
   createdAt: Date
   updatedAt: Date
 
@@ -61,8 +61,8 @@ export interface PageDocument extends Document {
   isSeenUser(user: any): any
   seen(user: any): any
   getSlackChannel(): any
-  updateSlackChannel(slackChannel): any
-  updateExtended(extended: object): any
+  updateSlackChannel(slackChannel: string): any
+  updateExtended(extended: Record<string, any>): any
   getNotificationTargetUsers(): any
 }
 
@@ -162,15 +162,22 @@ export default (crowi: Crowi) => {
       commentCount: { type: Number, default: 0 },
       extended: {
         type: String,
-        default: '{}',
-        get: function (data) {
+        default: {},
+        get: function (data): Record<string, any> {
           try {
-            return JSON.parse(data)
+            const parsed = JSON.parse(data)
+
+            // for fixing data wile bugging.
+            // the data could be '"{}"' (parsed as '{}' so the data should be converted to empty object
+            if (typeof parsed === 'string' && parsed === '{}') {
+              return {}
+            }
+            return parsed
           } catch (e) {
             return data
           }
         },
-        set: function (data) {
+        set: function (data: Record<string, any>) {
           return JSON.stringify(data)
         },
       },
@@ -368,7 +375,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.updateSlackChannel = function (slackChannel) {
-    const extended = this.extended as any
+    const extended: Record<string, any> = this.extended
     extended.slack = slackChannel
 
     return this.updateExtended(extended)
