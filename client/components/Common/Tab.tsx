@@ -34,7 +34,7 @@ export default class Tab extends React.Component<Props, State> {
     type TabItemElement = React.ReactElement<TabItemProps>
     type T = string | false
     return React.Children.map<T, TabItemElement>(this.props.children, (child) => (React.isValidElement(child) ? child.props.title : false)).filter(
-      (title) => title !== false,
+      (title: T) => title !== false,
     )
   }
 
