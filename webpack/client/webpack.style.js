@@ -1,14 +1,10 @@
 const path = require('path')
-const ExtractTextPlugin = require('extract-text-webpack-plugin')
+const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin')
 
 const isProduction = process.env.NODE_ENV === 'production'
 
 const ROOT = path.join(__dirname, '/../../')
-
-const extractSass = new ExtractTextPlugin({
-  filename: '[name].css',
-})
 
 const config = {
   mode: process.env.NODE_ENV,
@@ -24,24 +20,23 @@ const config = {
   module: {
     rules: [
       {
-        test: /\.scss$/,
-        use: extractSass.extract({
-          use: [
-            {
-              loader: 'css-loader',
-              options: { url: false },
-            },
-            {
-              loader: 'sass-loader',
-              options: {
-                sassOptions: {
-                  includePaths: ['./node_modules/bootstrap/scss', './node_modules/reveal.js/css'],
-                },
+        test: /\.s[ac]ss$/,
+        use: [
+          'style-loader',
+          'css-loader',
+          {
+            loader: 'sass-loader',
+            options: {
+              sassOptions: {
+                includePaths: ['./node_modules/bootstrap/scss', './node_modules/reveal.js/css'],
               },
             },
-          ],
-          fallback: 'style-loader',
-        }),
+          },
+        ],
+      },
+      {
+        test: /\.css$/,
+        use: [MiniCssExtractPlugin.loader, 'css-loader'],
       },
       {
         test: /\.woff2?$|\.ttf$|\.eot$|\.svg$/,
@@ -53,11 +48,26 @@ const config = {
       },
     ],
   },
-  plugins: [extractSass, ...(isProduction ? [new OptimizeCssAssetsPlugin()] : [])],
+  plugins: [
+    new MiniCssExtractPlugin({
+      filename: '[name].css',
+    }),
+  ],
+  // optimization: {
+  //  minimizer: [...(isProduction ? [new OptimizeCssAssetsPlugin()] : [])],
+  // },
   stats: {
     colors: true,
     errorDetails: true,
   },
 }
+
+// if (isProduction) {
+//  config.optimization = {
+//    minimizer: [new OptimizeCssAssetsPlugin({
+//      filename: '[name].min.css',
+//    })],
+//  }
+// }
 
 module.exports = config
