@@ -5,6 +5,7 @@ import queryString from 'query-string'
 
 import { AdminContext } from 'components/Admin/AdminPage'
 import UserTable from './UserTable'
+import UserEditModal from './UserEditModal'
 import InviteUserForm from './InviteUserForm'
 import InvitedUserModal from './InvitedUserModal'
 import ResetPasswordModal from './ResetPasswordModal'
@@ -156,6 +157,14 @@ const UserPage: FC<{}> = () => {
   const [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] = useFetchUsers(crowi, setFailure, clearStatus)
   const [{ invitedUsers }, { invite, clear }] = useInviteUsers(crowi, fetchUsers, setFailure, clearStatus)
 
+  /* ここから */
+  const [
+    { isOpen: isOpenUserEditModal, modalState: userEditModalState },
+    { toggle: toggleUserEditModal, open: openUserEditModal, close: closeUserEditModal },
+  ] = useModal()
+  const { user: editedUser } = userEditModalState
+  /* ここまで */
+
   const [{ isOpen: isOpenResetModal, modalState: resetModalState }, { toggle: toggleResetModal, open: openResetModal, close: closeResetModal }] = useModal()
   const { user: resetUser } = resetModalState
 
@@ -180,11 +189,13 @@ const UserPage: FC<{}> = () => {
         setQuery={setQuery}
         search={setSearch}
         move={move}
+        openUserEditModal={openUserEditModal}
         openResetModal={openResetModal}
         changeStatus={changeStatus}
       />
 
       <InvitedUserModal users={invitedUsers} clear={clear} />
+      <UserEditModal isOpen={isOpenUserEditModal} toggle={toggleUserEditModal} user={editedUser} />
       <ResetPasswordModal isOpen={isOpenResetModal} toggle={toggleResetModal} user={resetUser} resetPassword={resetPassword} />
       <ResetedPasswordModal isOpen={isOpenResetedModal} toggle={toggleResetedModal} user={resetedUser} password={resetedPassword} />
     </>
