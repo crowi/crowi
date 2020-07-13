@@ -523,5 +523,19 @@ export default (crowi: Crowi) => {
     return res.json(ApiResponse.success({ message: 'Now re-building backlinks ... this takes a while.' }))
   }
 
+  actions.api.user.edit = async function (req: Request, res: Response) {
+    const { name, emailToBeChanged, currentEmail } = req.form.userEditForm
+
+    try {
+      const user = await User.findUserByEmail(currentEmail)
+      if (!user) throw new Error('User not found')
+      await user.updateName(name)
+      await user.updateEmail(emailToBeChanged)
+      return res.json(ApiResponse.success('Success update'))
+    } catch (err) {
+      return res.json(ApiResponse.error('Failed to update name or email'))
+    }
+  }
+
   return actions
 }

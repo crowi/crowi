@@ -42,6 +42,7 @@ export interface UserDocument extends Document {
   updateApiToken(): Promise<UserDocument>
   updateImage(image, callback: (err: Error, userData: UserDocument) => void): any
   updateEmail(email: string): any
+  updateName(name: string): any
   deleteImage(callback): any
   updateGoogleId(googleId): Promise<UserDocument>
   deleteGoogleId(): Promise<UserDocument>
@@ -230,6 +231,11 @@ export default (crowi: Crowi) => {
 
   userSchema.methods.updateEmail = function (email) {
     this.email = email
+    return this.save()
+  }
+
+  userSchema.methods.updateName = function (name) {
+    this.name = name
     return this.save()
   }
 
