@@ -149,6 +149,20 @@ function useModal<T = any>(initialState: T | {} = {}) {
   ] as const
 }
 
+/* ここから */
+function useEditUsers(crowi) {
+  const edit = async () => {
+    try {
+      console.log(`とらい`)
+      crowi.apiGet(`/admin/user/edit`, {})
+    } catch (err) {
+      console.log(`エラーだよ: ${err}`)
+    }
+  }
+  return edit
+}
+/* ここまで */
+
 const UserPage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi } = useContext(AdminContext)
@@ -157,6 +171,7 @@ const UserPage: FC<{}> = () => {
   const [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] = useFetchUsers(crowi, setFailure, clearStatus)
   const [{ invitedUsers }, { invite, clear }] = useInviteUsers(crowi, fetchUsers, setFailure, clearStatus)
 
+  const edit = useEditUsers(crowi)
   /* ここから */
   const [
     { isOpen: isOpenUserEditModal, modalState: userEditModalState },
@@ -195,7 +210,7 @@ const UserPage: FC<{}> = () => {
       />
 
       <InvitedUserModal users={invitedUsers} clear={clear} />
-      <UserEditModal isOpen={isOpenUserEditModal} toggle={toggleUserEditModal} user={editedUser} />
+      <UserEditModal isOpen={isOpenUserEditModal} toggle={toggleUserEditModal} edit={edit} user={editedUser} />
       <ResetPasswordModal isOpen={isOpenResetModal} toggle={toggleResetModal} user={resetUser} resetPassword={resetPassword} />
       <ResetedPasswordModal isOpen={isOpenResetedModal} toggle={toggleResetedModal} user={resetedUser} password={resetedPassword} />
     </>

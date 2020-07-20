@@ -523,5 +523,13 @@ export default (crowi: Crowi) => {
     return res.json(ApiResponse.success({ message: 'Now re-building backlinks ... this takes a while.' }))
   }
 
+  actions.api.user.edit = function (req: Request, res: Response) {
+    console.log('コントローラーが呼ばれました')
+    const value = {
+      ok: true,
+    }
+    return res.json(value)
+  }
+
   return actions
 }

@@ -4,10 +4,11 @@ import { Form, FormGroup, FormText, Input, Label, Modal, ModalHeader, ModalBody,
 interface Props {
   isOpen: boolean
   toggle: () => void
+  edit: () => void
   user: any
 }
 
-const UserEditModal: FC<Props> = ({ isOpen, toggle, user = {} }) => {
+const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, user = {} }) => {
   const [userName, setUserName] = useState()
   const [email, setEmail] = useState()
 
@@ -18,6 +19,7 @@ const UserEditModal: FC<Props> = ({ isOpen, toggle, user = {} }) => {
     setEmail(e.target.value)
   }
   const handleSubmit = (e) => {
+    edit()
     alert(`${userName} + ${email}`)
   }
   return (

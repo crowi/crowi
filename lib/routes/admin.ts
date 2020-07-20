@@ -16,6 +16,7 @@ export default (crowi: Crowi, app: Express, form) => {
   router.get('/admin/search', Admin.index)
   router.get('/admin/share', Admin.index)
   router.get('/admin/backlink', Admin.index)
+  router.get('/admin/restrue', Admin.index)
 
   return router
 }
