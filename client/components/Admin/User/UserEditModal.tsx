@@ -1,26 +1,47 @@
 import React, { useState, FC } from 'react'
 import { Form, FormGroup, FormText, Input, Label, Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'reactstrap'
 
+function useForm(edit, currentEmail) {
+  const [name, setName] = useState('')
+  const [emailToBeChanged, setEmailToBeChanged] = useState('')
+
+  const clearForm = () => {
+    setName('')
+    setEmailToBeChanged('')
+  }
+
+  const onSubmit = (e) => {
+    e.preventDefault()
+    edit({ name, emailToBeChanged, currentEmail })
+    clearForm()
+  }
+
+  return [
+    { name, emailToBeChanged },
+    { setName, setEmailToBeChanged, onSubmit },
+  ] as const
+}
+
 interface Props {
   isOpen: boolean
   toggle: () => void
-  edit: () => void
+  edit: ({ name, emailToBeChanged, currentEmail }: { name: string; emailToBeChanged: string; currentEmail: string }) => void
   user: any
 }
 
 const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, user = {} }) => {
-  const [userName, setUserName] = useState()
-  const [email, setEmail] = useState()
+  const currentEmail = user.email
+  const [{ name, emailToBeChanged }, { setName, setEmailToBeChanged, onSubmit }] = useForm(edit, currentEmail)
 
   const handleUserNameChange = (e) => {
-    setUserName(e.target.value)
+    setName(e.target.value)
   }
   const handleEmailChange = (e) => {
-    setEmail(e.target.value)
+    setEmailToBeChanged(e.target.value)
   }
   const handleSubmit = (e) => {
-    edit()
-    alert(`${userName} + ${email}`)
+    edit({ name, emailToBeChanged, currentEmail })
+    alert(`${name} + ${emailToBeChanged}`)
   }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>

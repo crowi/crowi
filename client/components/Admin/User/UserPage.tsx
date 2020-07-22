@@ -151,10 +151,11 @@ function useModal<T = any>(initialState: T | {} = {}) {
 
 /* ここから */
 function useEditUsers(crowi) {
-  const edit = async () => {
+  const edit = async ({ name, emailToBeChanged, currentEmail }) => {
     try {
       console.log(`とらい`)
       crowi.apiGet(`/admin/user/edit`, {})
+      crowi.apiPost(`/admin/user/edit`, { userEditForm: { name, emailToBeChanged, currentEmail } })
     } catch (err) {
       console.log(`エラーだよ: ${err}`)
     }

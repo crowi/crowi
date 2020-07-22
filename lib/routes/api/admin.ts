@@ -42,7 +42,7 @@ export default (crowi: Crowi, app: Express, form) => {
 
   router.post('/admin/backlink/build', csrf, Admin.api.backlink.buildBacklinks)
 
-  router.get('/admin/user/edit', Admin.api.user.edit)
+  router.post('/admin/user/edit', csrf, form.admin.userEdit, Admin.api.user.edit)
 
   return router
 }
