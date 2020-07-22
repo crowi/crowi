@@ -52,7 +52,7 @@ const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, user = {} }) => {
             <Label>
               現在のなまえ: <code>{user.name}</code>
             </Label>
-            <Input type="text" name="userName" placeholder="Please enter your new user name" onChange={handleUserNameChange} />
+            <Input type="text" name="name" placeholder="Please enter your new user name" onChange={handleUserNameChange} />
           </FormGroup>
           <FormGroup>
             <Label>
