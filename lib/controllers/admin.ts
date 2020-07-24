@@ -533,7 +533,7 @@ export default (crowi: Crowi) => {
     const user = await User.findUserByEmail(currentEmail)
     if (!user) throw new Error('User not found')
     await user.updateEmail(emailToBeChanged)
-    // await user.updateName(userName)
+    await user.updateName(name)
     return res.json(ApiResponse.success())
   }
 
