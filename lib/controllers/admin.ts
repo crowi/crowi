@@ -526,15 +526,15 @@ export default (crowi: Crowi) => {
   actions.api.user.edit = async function (req: Request, res: Response) {
     const { name, emailToBeChanged, currentEmail } = req.form.userEditForm
 
-    console.log(`名前を ${name} に、email を ${emailToBeChanged} に変更してくださいな`)
-    console.log(`今のメールアドレスは ${currentEmail} だそうですよ`)
-    console.log(req.form.userEditForm)
-
-    const user = await User.findUserByEmail(currentEmail)
-    if (!user) throw new Error('User not found')
-    await user.updateEmail(emailToBeChanged)
-    await user.updateName(name)
-    return res.json(ApiResponse.success())
+    try {
+      const user = await User.findUserByEmail(currentEmail)
+      if (!user) throw new Error('User not found')
+      await user.updateName(name)
+      await user.updateEmail(emailToBeChanged)
+      return res.json(ApiResponse.success('Success update'))
+    } catch (err) {
+      return res.json(ApiResponse.error('Failed to update name or email'))
+    }
   }
 
   return actions

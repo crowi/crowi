@@ -41,7 +41,6 @@ const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, user = {} }) => {
   }
   const handleSubmit = (e) => {
     edit({ name, emailToBeChanged, currentEmail })
-    alert(`${name} + ${emailToBeChanged}`)
   }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>

@@ -149,20 +149,17 @@ function useModal<T = any>(initialState: T | {} = {}) {
   ] as const
 }
 
-/* ここから */
-function useEditUsers(crowi) {
+function useEditUsers(crowi, setSuccess, setFailure) {
   const edit = async ({ name, emailToBeChanged, currentEmail }) => {
     try {
-      console.log(`とらい`)
-      crowi.apiGet(`/admin/user/edit`, {})
-      crowi.apiPost(`/admin/user/edit`, { userEditForm: { name, emailToBeChanged, currentEmail } })
+      const { message } = await crowi.apiPost(`/admin/user/edit`, { userEditForm: { name, emailToBeChanged, currentEmail } })
+      setSuccess(message)
     } catch (err) {
-      console.log(`エラーだよ: ${err}`)
+      setFailure(err.message)
     }
   }
   return edit
 }
-/* ここまで */
 
 const UserPage: FC<{}> = () => {
   const [t] = useTranslation()
@@ -172,14 +169,12 @@ const UserPage: FC<{}> = () => {
   const [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] = useFetchUsers(crowi, setFailure, clearStatus)
   const [{ invitedUsers }, { invite, clear }] = useInviteUsers(crowi, fetchUsers, setFailure, clearStatus)
 
-  const edit = useEditUsers(crowi)
-  /* ここから */
+  const edit = useEditUsers(crowi, setSuccess, setFailure)
   const [
     { isOpen: isOpenUserEditModal, modalState: userEditModalState },
     { toggle: toggleUserEditModal, open: openUserEditModal, close: closeUserEditModal },
   ] = useModal()
   const { user: editedUser } = userEditModalState
-  /* ここまで */
 
   const [{ isOpen: isOpenResetModal, modalState: resetModalState }, { toggle: toggleResetModal, open: openResetModal, close: closeResetModal }] = useModal()
   const { user: resetUser } = resetModalState
