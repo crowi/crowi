@@ -524,11 +524,14 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.user.edit = async function (req: Request, res: Response) {
-    const { name, emailToBeChanged, currentEmail } = req.form.userEditForm
+    const { name, emailToBeChanged, id } = req.form.userEditForm
 
     try {
-      const user = await User.findUserByEmail(currentEmail)
+      const user = await User.findById(id)
       if (!user) throw new Error('User not found')
+      const emailDuplicateCheck = await User.findUserByEmail(emailToBeChanged)
+      if (emailDuplicateCheck) throw new Error('Email duplicated')
+
       await user.updateName(name)
       await user.updateEmail(emailToBeChanged)
       return res.json(ApiResponse.success('Success update'))
