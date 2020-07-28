@@ -24,7 +24,6 @@ function withPreventDefault(callback) {
 function getHanlders(openUserEditModal, openResetModal, changeStatus) {
   return {
     handleClickEdit(user) {
-      // TODO: Implement
       openUserEditModal({ user })
     },
     handleClickResetPassword(user) {
