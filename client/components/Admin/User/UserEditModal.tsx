@@ -39,14 +39,11 @@ const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, user = {} }) => {
   const handleEmailChange = (e) => {
     setEmailToBeChanged(e.target.value)
   }
-  const handleSubmit = (e) => {
-    edit({ name, emailToBeChanged, id })
-  }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>
       <ModalHeader toggle={toggle}>ユーザー情報を編集しますか?</ModalHeader>
       <ModalBody>
-        <Form onSubmit={handleSubmit}>
+        <Form onSubmit={onSubmit}>
           <FormGroup>
             <Label>
               現在の名前: <code>{user.name}</code>
