@@ -49,15 +49,15 @@ const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, user = {} }) => {
         <Form onSubmit={handleSubmit}>
           <FormGroup>
             <Label>
-              現在のなまえ: <code>{user.name}</code>
+              現在の名前: <code>{user.name}</code>
             </Label>
-            <Input type="text" name="name" placeholder="Please enter your new user name" onChange={handleUserNameChange} />
+            <Input type="text" name="name" placeholder="新しい名前を入力してください" onChange={handleUserNameChange} />
           </FormGroup>
           <FormGroup>
             <Label>
               現在のメールアドレス: <code>{user.email}</code>
             </Label>
-            <Input type="email" name="email" placeholder="Please enter your new email address" onChange={handleEmailChange} />
+            <Input type="email" name="email" placeholder="新しいメールアドレスを入力してください" onChange={handleEmailChange} />
           </FormGroup>
           <Button type="submit" color="primary">
             実行
