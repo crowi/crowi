@@ -150,9 +150,9 @@ function useModal<T = any>(initialState: T | {} = {}) {
 }
 
 function useEditUsers(crowi, setSuccess, setFailure) {
-  const edit = async ({ name, emailToBeChanged, currentEmail }) => {
+  const edit = async ({ name, emailToBeChanged, id }) => {
     try {
-      const { message } = await crowi.apiPost(`/admin/user/edit`, { userEditForm: { name, emailToBeChanged, currentEmail } })
+      const { message } = await crowi.apiPost(`/admin/user/edit`, { userEditForm: { name, emailToBeChanged, id } })
       setSuccess(message)
     } catch (err) {
       setFailure(err.message)

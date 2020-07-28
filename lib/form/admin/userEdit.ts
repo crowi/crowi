@@ -4,5 +4,5 @@ const { field } = form
 export default form(
   field('userEditForm[name]').trim().required(),
   field('userEditForm[emailToBeChanged]').trim().required(),
-  field('userEditForm[currentEmail]').required(),
+  field('userEditForm[id]').required(),
 )
