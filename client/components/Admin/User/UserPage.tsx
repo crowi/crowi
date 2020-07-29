@@ -150,6 +150,9 @@ function useModal<T = any>(initialState: T | {} = {}) {
 }
 
 function useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal, fetchUsers) {
+  const [name, setName] = useState('')
+  const [emailToBeChanged, setEmailToBeChanged] = useState('')
+
   const edit = async ({ name, emailToBeChanged, id }) => {
     try {
       const { message } = await crowi.apiPost(`/admin/user/edit`, { userEditForm: { name, emailToBeChanged, id } })
@@ -160,7 +163,16 @@ function useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal, fetchUs
     fetchUsers()
     closeUserEditModal()
   }
-  return edit
+
+  const clearForm = () => {
+    setName('')
+    setEmailToBeChanged('')
+  }
+
+  return [
+    { name, emailToBeChanged },
+    { setName, setEmailToBeChanged, edit, clearForm },
+  ] as const
 }
 
 const UserPage: FC<{}> = () => {
@@ -176,7 +188,13 @@ const UserPage: FC<{}> = () => {
     { toggle: toggleUserEditModal, open: openUserEditModal, close: closeUserEditModal },
   ] = useModal()
   const { user: editedUser } = userEditModalState
-  const edit = useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal, fetchUsers)
+  const [{ name, emailToBeChanged }, { setName, setEmailToBeChanged, edit, clearForm }] = useEditUsers(
+    crowi,
+    setSuccess,
+    setFailure,
+    closeUserEditModal,
+    fetchUsers,
+  )
 
   const [{ isOpen: isOpenResetModal, modalState: resetModalState }, { toggle: toggleResetModal, open: openResetModal, close: closeResetModal }] = useModal()
   const { user: resetUser } = resetModalState
@@ -202,13 +220,25 @@ const UserPage: FC<{}> = () => {
         setQuery={setQuery}
         search={setSearch}
         move={move}
+        setName={setName}
+        setEmailToBeChanged={setEmailToBeChanged}
         openUserEditModal={openUserEditModal}
         openResetModal={openResetModal}
         changeStatus={changeStatus}
       />
 
       <InvitedUserModal users={invitedUsers} clear={clear} />
-      <UserEditModal isOpen={isOpenUserEditModal} toggle={toggleUserEditModal} edit={edit} user={editedUser} />
+      <UserEditModal
+        isOpen={isOpenUserEditModal}
+        toggle={toggleUserEditModal}
+        edit={edit}
+        clearForm={clearForm}
+        name={name}
+        emailToBeChanged={emailToBeChanged}
+        setName={setName}
+        setEmailToBeChanged={setEmailToBeChanged}
+        user={editedUser}
+      />
       <ResetPasswordModal isOpen={isOpenResetModal} toggle={toggleResetModal} user={resetUser} resetPassword={resetPassword} />
       <ResetedPasswordModal isOpen={isOpenResetedModal} toggle={toggleResetedModal} user={resetedUser} password={resetedPassword} />
     </>
