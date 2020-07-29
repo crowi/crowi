@@ -1,49 +1,36 @@
 import React, { useState, FC } from 'react'
-import { Form, FormGroup, FormText, Input, Label, Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'reactstrap'
-
-function useForm(edit, id) {
-  const [name, setName] = useState('')
-  const [emailToBeChanged, setEmailToBeChanged] = useState('')
-
-  const clearForm = () => {
-    setName('')
-    setEmailToBeChanged('')
-  }
-
-  const onSubmit = (e) => {
-    e.preventDefault()
-    edit({ name, emailToBeChanged, id })
-    clearForm()
-  }
-
-  return [
-    { name, emailToBeChanged },
-    { setName, setEmailToBeChanged, onSubmit },
-  ] as const
-}
+import { Form, FormGroup, Input, Label, Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'reactstrap'
 
 interface Props {
   isOpen: boolean
   toggle: () => void
   edit: ({ name, emailToBeChanged, id }: { name: string; emailToBeChanged: string; id: string }) => void
+  clearForm: () => void
+  name: string
+  emailToBeChanged: string
+  setName: (name) => void
+  setEmailToBeChanged: (emailToBeChanged) => void
   user: any
 }
 
-const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, user = {} }) => {
+const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, clearForm, name, emailToBeChanged, setName, setEmailToBeChanged, user = {} }) => {
   const id = user._id
-  const [{ name, emailToBeChanged }, { setName, setEmailToBeChanged, onSubmit }] = useForm(edit, id)
-
   const handleUserNameChange = (e) => {
     setName(e.target.value)
   }
   const handleEmailChange = (e) => {
     setEmailToBeChanged(e.target.value)
   }
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    edit({ name, emailToBeChanged, id })
+    clearForm()
+  }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>
       <ModalHeader toggle={toggle}>ユーザー情報を編集しますか?</ModalHeader>
       <ModalBody>
-        <Form onSubmit={onSubmit}>
+        <Form>
           <FormGroup>
             <Label>
               現在の名前: <code>{user.name}</code>
@@ -56,11 +43,13 @@ const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, user = {} }) => {
             </Label>
             <Input type="email" name="email" placeholder="新しいメールアドレスを入力してください" defaultValue={user.email} onChange={handleEmailChange} />
           </FormGroup>
-          <Button type="submit" color="primary">
-            実行
-          </Button>
         </Form>
       </ModalBody>
+      <ModalFooter>
+        <Button type="submit" color="primary" onClick={handleSubmit}>
+          実行
+        </Button>
+      </ModalFooter>
     </Modal>
   )
 }
