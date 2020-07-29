@@ -149,7 +149,7 @@ function useModal<T = any>(initialState: T | {} = {}) {
   ] as const
 }
 
-function useEditUsers(crowi, setSuccess, setFailure) {
+function useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal) {
   const edit = async ({ name, emailToBeChanged, id }) => {
     try {
       const { message } = await crowi.apiPost(`/admin/user/edit`, { userEditForm: { name, emailToBeChanged, id } })
@@ -157,6 +157,7 @@ function useEditUsers(crowi, setSuccess, setFailure) {
     } catch (err) {
       setFailure(err.message)
     }
+    closeUserEditModal()
   }
   return edit
 }
@@ -169,12 +170,12 @@ const UserPage: FC<{}> = () => {
   const [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] = useFetchUsers(crowi, setFailure, clearStatus)
   const [{ invitedUsers }, { invite, clear }] = useInviteUsers(crowi, fetchUsers, setFailure, clearStatus)
 
-  const edit = useEditUsers(crowi, setSuccess, setFailure)
   const [
     { isOpen: isOpenUserEditModal, modalState: userEditModalState },
     { toggle: toggleUserEditModal, open: openUserEditModal, close: closeUserEditModal },
   ] = useModal()
   const { user: editedUser } = userEditModalState
+  const edit = useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal)
 
   const [{ isOpen: isOpenResetModal, modalState: resetModalState }, { toggle: toggleResetModal, open: openResetModal, close: closeResetModal }] = useModal()
   const { user: resetUser } = resetModalState
