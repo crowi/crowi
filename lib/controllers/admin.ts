@@ -534,9 +534,9 @@ export default (crowi: Crowi) => {
 
       await user.updateName(name)
       await user.updateEmail(emailToBeChanged)
-      return res.json(ApiResponse.success('Success update'))
+      return res.json(ApiResponse.success({ message: 'Success update' }))
     } catch (err) {
-      return res.json(ApiResponse.error('Failed to update name or email'))
+      return res.json(ApiResponse.error({ message: 'Failed to update name or email' }))
     }
   }
 
