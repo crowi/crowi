@@ -4,7 +4,7 @@ import { Form, FormGroup, Input, Label, Modal, ModalHeader, ModalBody, ModalFoot
 interface Props {
   isOpen: boolean
   toggle: () => void
-  edit: ({ name, emailToBeChanged, id }: { name: string; emailToBeChanged: string; id: string }) => void
+  editUserNameAndEmail: ({ name, emailToBeChanged, id }: { name: string; emailToBeChanged: string; id: string }) => void
   clearForm: () => void
   name: string
   emailToBeChanged: string
@@ -13,7 +13,7 @@ interface Props {
   user: any
 }
 
-const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, clearForm, name, emailToBeChanged, setName, setEmailToBeChanged, user = {} }) => {
+const UserEditModal: FC<Props> = ({ isOpen, toggle, editUserNameAndEmail, clearForm, name, emailToBeChanged, setName, setEmailToBeChanged, user = {} }) => {
   const id = user._id
   const handleUserNameChange = (e) => {
     setName(e.target.value)
@@ -23,7 +23,7 @@ const UserEditModal: FC<Props> = ({ isOpen, toggle, edit, clearForm, name, email
   }
   const handleSubmit = (e) => {
     e.preventDefault()
-    edit({ name, emailToBeChanged, id })
+    editUserNameAndEmail({ name, emailToBeChanged, id })
     clearForm()
   }
   return (
