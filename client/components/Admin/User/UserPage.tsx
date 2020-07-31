@@ -153,7 +153,7 @@ function useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal, fetchUs
   const [name, setName] = useState('')
   const [emailToBeChanged, setEmailToBeChanged] = useState('')
 
-  const edit = async ({ name, emailToBeChanged, id }) => {
+  const editUserNameAndEmail = async ({ name, emailToBeChanged, id }) => {
     try {
       const { message } = await crowi.apiPost(`/admin/user/edit`, { userEditForm: { name, emailToBeChanged, id } })
       setSuccess(message)
@@ -171,7 +171,7 @@ function useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal, fetchUs
 
   return [
     { name, emailToBeChanged },
-    { setName, setEmailToBeChanged, edit, clearForm },
+    { setName, setEmailToBeChanged, editUserNameAndEmail, clearForm },
   ] as const
 }
 
@@ -188,7 +188,7 @@ const UserPage: FC<{}> = () => {
     { toggle: toggleUserEditModal, open: openUserEditModal, close: closeUserEditModal },
   ] = useModal()
   const { user: editedUser } = userEditModalState
-  const [{ name, emailToBeChanged }, { setName, setEmailToBeChanged, edit, clearForm }] = useEditUsers(
+  const [{ name, emailToBeChanged }, { setName, setEmailToBeChanged, editUserNameAndEmail, clearForm }] = useEditUsers(
     crowi,
     setSuccess,
     setFailure,
@@ -231,7 +231,7 @@ const UserPage: FC<{}> = () => {
       <UserEditModal
         isOpen={isOpenUserEditModal}
         toggle={toggleUserEditModal}
-        edit={edit}
+        editUserNameAndEmail={editUserNameAndEmail}
         clearForm={clearForm}
         name={name}
         emailToBeChanged={emailToBeChanged}
