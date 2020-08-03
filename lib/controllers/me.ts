@@ -255,7 +255,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.authGoogle = async function (req: Request, res: Response) {
     const config = crowi.getConfig()
-    const googleAuth = GoogleAuth(config)
+    const googleAuth = GoogleAuth(crowi, config)
     const user = req.user as UserDocument
     const { t } = req
     const toDisconnect = !!req.body.disconnectGoogle
@@ -289,7 +289,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.authGoogleCallback = function (req: Request, res: Response) {
     const config = crowi.getConfig()
-    const googleAuth = GoogleAuth(config)
+    const googleAuth = GoogleAuth(crowi, config)
     const user = req.user as UserDocument
     const callback = req.session.callback || '/me'
 
@@ -328,7 +328,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.authGitHub = async function (req: Request, res: Response, next: NextFunction) {
     const config = crowi.getConfig()
-    const githubAuth = GitHubAuth(config)
+    const githubAuth = GitHubAuth(crowi, config)
     const user = req.user as UserDocument
     const { t } = req
     const toDisconnect = !!req.body.disconnectGitHub
@@ -357,7 +357,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.authGitHubCallback = function (req: Request, res: Response, next) {
     const config = crowi.getConfig()
-    const githubAuth = GitHubAuth(config)
+    const githubAuth = GitHubAuth(crowi, config)
     const user = req.user as UserDocument
     const callback = req.session.callback || '/me'
 

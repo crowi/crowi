@@ -106,7 +106,7 @@ export default (crowi: Crowi) => {
     const hasSlackConfigValue = hasSlackConfig(config)
     const hasSlackTokenValue = hasSlackToken(config)
     const slack = crowi.slack
-    const appUrl = config.crowi['app:url']
+    const appUrl = crowi.getBaseUrl()
 
     const defaultSlackSetting = { 'slack:clientId': '', 'slack:clientSecret': '' }
     const slackSetting = hasSlackConfigValue ? config.notification : defaultSlackSetting

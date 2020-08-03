@@ -17,12 +17,13 @@ export default {
     const now = new Date().getTime()
     return expiryDate < now
   },
-  async reauth(req, config) {
+  async reauth(req, crowi) {
+    const config = crowi.getConfig()
     const { auth = {} } = req.session
     const { provider = '', accessToken = null, refreshToken = null } = auth
     const authServices = {
-      google: googleAuth(config),
-      github: githubAuth(config),
+      google: googleAuth(crowi, config),
+      github: githubAuth(crowi, config),
     }
     const providers = [authServices.google.PROVIDER, authServices.github.PROVIDER]
     if (providers.includes(provider)) {

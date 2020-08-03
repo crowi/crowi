@@ -72,13 +72,13 @@ export default (crowi: Crowi, app: Express) => {
 
     Attachment.getListByPageId(id).then(function (attachments) {
       const config = crowi.getConfig()
-      const baseUrl = config.crowi['app:url'] || ''
+      const baseUrl = crowi.getBaseUrl()
       return res.json(
         ApiResponse.success({
           attachments: attachments.map((at) => {
             const fileUrl = at.fileUrl
             at = at.toObject()
-            at.url = baseUrl + fileUrl
+            at.url = `${baseUrl}${fileUrl}`
             return at
           }),
         }),
@@ -148,7 +148,7 @@ export default (crowi: Crowi, app: Express) => {
 
         // isLocalUrl??
         if (!fileUrl.match(/^https?/)) {
-          fileUrl = (config.crowi['app:url'] || '') + fileUrl
+          fileUrl = `${crowi.getBaseUrl()}${fileUrl}`
         }
 
         const result = {

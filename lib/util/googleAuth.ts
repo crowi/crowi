@@ -4,7 +4,7 @@ import { google as googleApis } from 'googleapis'
 
 const debug = Debug('crowi:lib:googleAuth')
 
-export default (config) => {
+export default (crowi, config) => {
   const lib: any = {}
 
   lib.PROVIDER = 'google'
@@ -12,7 +12,7 @@ export default (config) => {
   function createOauth2Client() {
     const clientId = config.crowi['google:clientId']
     const clientSecret = config.crowi['google:clientSecret']
-    const callbackUrl = config.crowi['app:url'] + '/google/callback'
+    const callbackUrl = `${crowi.getBaseUrl()}/google/callback`
     return new googleApis.auth.OAuth2(clientId, clientSecret, callbackUrl)
   }
 

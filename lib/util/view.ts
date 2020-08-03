@@ -72,7 +72,7 @@ export const getAppContext = (crowi: Crowi, req): AppContext => {
   return {
     title: (config.crowi['app:title'] || 'Crowi') as AppContext['title'],
     path: req.path || '',
-    url: config.crowi['app:url'] || '',
+    url: crowi.getBaseUrl(),
     auth: {
       requireThirdPartyAuth: isRequiredThirdPartyAuth(config),
       canDisconnectThirdPartyId: req.user ? req.user.canDisconnectThirdPartyId() : false,

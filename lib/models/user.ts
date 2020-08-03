@@ -629,7 +629,7 @@ export default (crowi: Crowi) => {
                   vars: {
                     email: user.email,
                     password: user.password,
-                    url: config.crowi['app:url'],
+                    url: crowi.getBaseUrl(),
                     appTitle: config.crowi['app:title'],
                   },
                 },

@@ -36,9 +36,7 @@ export default (crowi: Crowi) => {
   // this is called to generate redirect_uri
   slack.getSlackAuthCallbackUrl = function () {
     const config = crowi.getConfig()
-    // Web アクセスがきてないと app:url がセットされないので crowi.setupSlack 時にはできない
-    // cli, bot 系作るときに問題なりそう
-    return (config.crowi['app:url'] || '') + '/admin/notification/slackAuth'
+    return `${crowi.getBaseUrl()}/admin/notification/slackAuth`
   }
 
   // this is called to get the url for oauth screen
@@ -98,10 +96,7 @@ export default (crowi: Crowi) => {
 
   slack.convertMarkdownToMrkdwn = function (body) {
     const config = crowi.getConfig()
-    let url = ''
-    if (config.crowi && config.crowi['app:url']) {
-      url = config.crowi['app:url']
-    }
+    const url = crowi.getBaseUrl()
 
     body = body
       .replace(/\n\*\s(.+)/g, '\n• $1')
@@ -147,7 +142,7 @@ export default (crowi: Crowi) => {
 
   slack.prepareSlackMessage = function (page, user, channel, updateType, previousRevision) {
     const config = crowi.getConfig()
-    const url = config.crowi['app:url'] || ''
+    const url = crowi.getBaseUrl()
     let body = page.revision.body
 
     if (updateType == 'create') {
@@ -183,7 +178,7 @@ export default (crowi: Crowi) => {
   slack.getSlackMessageText = function (page, user, updateType) {
     let text
     const config = crowi.getConfig()
-    const url = config.crowi['app:url'] || ''
+    const url = crowi.getBaseUrl()
 
     const pageLink = `<${url}/${page._id}|${page.path}>`
     if (updateType == 'create') {

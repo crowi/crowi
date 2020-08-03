@@ -8,7 +8,7 @@ import Octokit from '@octokit/rest'
 
 const debug = Debug('crowi:lib:githubAuth')
 
-export default (config) => {
+export default (crowi, config) => {
   const lib: any = {}
 
   lib.PROVIDER = 'github'
@@ -19,7 +19,7 @@ export default (config) => {
         {
           clientID: config.crowi['github:clientId'],
           clientSecret: config.crowi['github:clientSecret'],
-          callbackURL: `${config.crowi['app:url']}/github/callback${callbackQuery}`,
+          callbackURL: `${crowi.getBaseUrl()}/github/callback${callbackQuery}`,
           scope: ['user:email', 'read:org'],
         },
         async (accessToken, refreshToken, profile, callback) => {

@@ -28,21 +28,8 @@ export default (crowi: Crowi, app: Express) => {
     req.config = config
     req.csrfToken = null
 
-    let baseUrl = crowi.baseUrl
-    if (!baseUrl) {
-      baseUrl = (req.headers['x-forwarded-proto'] == 'https' ? 'https' : req.protocol) + '://' + req.get('host')
-    }
-
-    // FIXME:
-    // This ... is accidentally working.
-    // This `config` is now service/config object. (Originally, that was an object of configs)
-    // And service/config has crowi object on its own property.
-    // So, this config.crowi is Crowi Object and config.crowi['app:url'] means, accessing Crowi object's public property (create and assign the value)
-    // It has to be fixed to set values into service/config.
-    config.crowi['app:url'] = baseUrl
-
     res.locals.req = req
-    res.locals.baseUrl = baseUrl
+    res.locals.baseUrl = crowi.getBaseUrl()
     res.locals.config = config
     res.locals.env = env
     res.locals.now = now

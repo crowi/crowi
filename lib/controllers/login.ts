@@ -183,7 +183,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.loginGoogle = function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
-    const googleAuth = GoogleAuth(config)
+    const googleAuth = GoogleAuth(crowi, config)
     const { google = {} } = req.session
     const { authCode: code } = google
 
@@ -221,7 +221,7 @@ export default (crowi: Crowi, app: Express) => {
 
   actions.loginGitHub = function (req: Request, res: Response, next: NextFunction) {
     debug('Header', req.url, req.headers.referer)
-    const githubAuth = GitHubAuth(config)
+    const githubAuth = GitHubAuth(crowi, config)
     const { github = {} } = req.session
     const { authCode: code } = github
 
@@ -326,7 +326,7 @@ export default (crowi: Crowi, app: Express) => {
                         vars: {
                           createdUser: userData,
                           adminUser: adminUser,
-                          url: config.crowi['app:url'],
+                          url: crowi.getBaseUrl(),
                           appTitle: config.crowi['app:title'],
                         },
                       },
