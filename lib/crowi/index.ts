@@ -87,7 +87,7 @@ class Crowi {
 
   env: typeof process.env
 
-  baseUrl: string | null = null
+  baseUrl: string
 
   node_env: string
 
@@ -113,7 +113,12 @@ class Crowi {
     this.version = pkg.version
 
     this.env = env
-    this.baseUrl = this.env.BASE_URL || null
+
+    if (!this.env.BASE_URL) {
+      throw new Error('Env BASE_URL must be set.')
+    }
+    this.baseUrl = this.normalizeUrl(this.env.BASE_URL)
+
     this.node_env = this.env.NODE_ENV || 'production'
     this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
     this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
@@ -158,6 +163,13 @@ class Crowi {
     return this.initialized
   }
 
+  normalizeUrl(url) {
+    if (url.match(/\/$/)) {
+      return url.slice(0, -1)
+    }
+    return url
+  }
+
   isPageId(pageId) {
     if (!pageId) {
       return false
@@ -181,17 +193,7 @@ class Crowi {
   }
 
   getBaseUrl() {
-    if (this.baseUrl) {
-      return this.baseUrl
-    }
-    const config = this.getConfig()
-    if (config && config.crowi && config.crowi['app:url']) {
-      return config.crowi['app:url']
-    }
-
-    // This might be happend when env BASE_URL is not set and this is not an express request.
-    // While initialize express, config.crowi['app:url'] could be set be detecting accessing URL.
-    return null
+    return this.baseUrl
   }
 
   getEnv() {

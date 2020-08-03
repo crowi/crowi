@@ -65,7 +65,7 @@ or please write `.env`.
 
 
 * `PORT`: Server port. default: `3000`.
-* `BASE_URL`: Server base URL (e.g. https://demo.crowi.wiki/). If this env is not set, it is detected by accessing URL.
+* `BASE_URL`: Server base URL (e.g. https://demo.crowi.wiki/).
 * `NODE_ENV`: `production` OR `development`.
 * `MONGO_URI`: URI to connect to MongoDB. This parameter is also by `MONGOHQ_URL` OR `MONGOLAB_URI`.
 * `REDIS_URL`: URI to connect to Redis (used for session store and socket.io). This parameter is also by `REDISTOGO_URL`.

@@ -30,4 +30,15 @@ describe('Test for Crowi application context', () => {
       expect(crowi.getMongo().connection.readyState).toBe(1)
     })
   })
+
+  describe('.normalizeUrl', () => {
+    test('get normalized base url', () => {
+      // is set on setup.ts
+      expect(crowi.getBaseUrl()).toBe('http://localhost:13001/')
+    })
+    test('the url always has slash', () => {
+      expect(crowi.normalizeUrl('http://localhost:13001')).toBe('http://localhost:13001')
+      expect(crowi.normalizeUrl('http://localhost:13001/')).toBe('http://localhost:13001')
+    })
+  })
 })
