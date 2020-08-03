@@ -21,7 +21,7 @@ function withPreventDefault(callback) {
   }
 }
 
-function getHanlders(openUserEditModal, openResetModal, changeStatus) {
+function getHandlers(openUserEditModal, openResetModal, changeStatus) {
   return {
     handleClickEdit(user) {
       openUserEditModal({ user })
@@ -72,7 +72,7 @@ interface Props {
 const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, move, openUserEditModal, openResetModal, changeStatus }) => {
   const [t] = useTranslation()
   const { currentPage, totalPages } = pagination
-  const handlers = getHanlders(openUserEditModal, openResetModal, changeStatus)
+  const handlers = getHandlers(openUserEditModal, openResetModal, changeStatus)
   return (
     <>
       <UserSearchForm value={query} handleChange={(e) => setQuery(e.target.value)} handleSubmit={withPreventDefault(() => search(query))} />
