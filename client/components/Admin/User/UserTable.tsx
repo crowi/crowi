@@ -21,11 +21,9 @@ function withPreventDefault(callback) {
   }
 }
 
-function getHanlders(setName, setEmailToBeChanged, openUserEditModal, openResetModal, changeStatus) {
+function getHanlders(openUserEditModal, openResetModal, changeStatus) {
   return {
     handleClickEdit(user) {
-      setName(user.name)
-      setEmailToBeChanged(user.email)
       openUserEditModal({ user })
     },
     handleClickResetPassword(user) {
@@ -66,30 +64,15 @@ interface Props {
   setQuery: (query: string) => void
   search: (query: string) => void
   move: (page: number) => void
-  setName: (state: any) => void
-  setEmailToBeChanged: (state: any) => void
   openUserEditModal: (state: any) => void
   openResetModal: (state: any) => void
   changeStatus: (user: any, string: string) => void
 }
 
-const UserTable: FC<Props> = ({
-  me,
-  users,
-  pagination,
-  query,
-  setQuery,
-  search,
-  move,
-  setName,
-  setEmailToBeChanged,
-  openUserEditModal,
-  openResetModal,
-  changeStatus,
-}) => {
+const UserTable: FC<Props> = ({ me, users, pagination, query, setQuery, search, move, openUserEditModal, openResetModal, changeStatus }) => {
   const [t] = useTranslation()
   const { currentPage, totalPages } = pagination
-  const handlers = getHanlders(setName, setEmailToBeChanged, openUserEditModal, openResetModal, changeStatus)
+  const handlers = getHanlders(openUserEditModal, openResetModal, changeStatus)
   return (
     <>
       <UserSearchForm value={query} handleChange={(e) => setQuery(e.target.value)} handleSubmit={withPreventDefault(() => search(query))} />

@@ -221,9 +221,11 @@ const UserPage: FC<{}> = () => {
         setQuery={setQuery}
         search={setSearch}
         move={move}
-        setName={setName}
-        setEmailToBeChanged={setEmailToBeChanged}
-        openUserEditModal={openUserEditModal}
+        openUserEditModal={({ user }) => {
+          setName(user.name)
+          setEmailToBeChanged(user.email)
+          openUserEditModal({ user })
+        }}
         openResetModal={openResetModal}
         changeStatus={changeStatus}
       />
