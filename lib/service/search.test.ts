@@ -3,7 +3,7 @@ import { ROOT_DIR } from 'server/test/setup'
 import Searcher from 'server/service/search'
 
 describe('Search client', () => {
-  const crowi = new Crowi(ROOT_DIR, process.env)
+  const crowi = new Crowi(ROOT_DIR, { BASE_URL: 'http://localhost:13001', ...process.env })
   const searcherUri = 'http://127.0.0.1:19200/crowi'
   const searcher = new Searcher(crowi, searcherUri)
 
