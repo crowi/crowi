@@ -534,7 +534,7 @@ export default (crowi: Crowi) => {
         throw new Error('User not found')
       }
       const emailDuplicateUser = await User.findUserByEmail(emailToBeChanged)
-      if (emailDuplicateUser && user.equals(emailDuplicateUser)) {
+      if (emailDuplicateUser && !user.equals(emailDuplicateUser)) {
         throw new Error('Email duplicated')
       }
       await user.updateName(name)
