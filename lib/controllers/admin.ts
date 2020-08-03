@@ -367,7 +367,9 @@ export default (crowi: Crowi) => {
 
     try {
       const user = await User.findById(id)
-      if (!user) throw new Error('User not found')
+      if (!user) {
+        throw new Error('User not found')
+      }
       await user.updateEmail(email)
       return res.json(ApiResponse.success())
     } catch (err) {
@@ -528,10 +530,13 @@ export default (crowi: Crowi) => {
 
     try {
       const user = await User.findById(id)
-      if (!user) throw new Error('User not found')
-      const emailDuplicateCheck = await User.findUserByEmail(emailToBeChanged)
-      if (emailDuplicateCheck) throw new Error('Email duplicated')
-
+      if (!user) {
+        throw new Error('User not found')
+      }
+      const emailDuplicateUser = await User.findUserByEmail(emailToBeChanged)
+      if (emailDuplicateUser && user.equals(emailDuplicateUser)) {
+        throw new Error('Email duplicated')
+      }
       await user.updateName(name)
       await user.updateEmail(emailToBeChanged)
       return res.json(ApiResponse.success({ message: 'Success update' }))
