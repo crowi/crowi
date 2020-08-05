@@ -538,8 +538,7 @@ export default (crowi: Crowi) => {
       if (emailDuplicateUser && !user.equals(emailDuplicateUser)) {
         throw new Error('Email duplicated')
       }
-      await user.updateName(name)
-      await user.updateEmail(emailToBeChanged)
+      await user.updateNameAndEmail(name, emailToBeChanged)
       return res.json(ApiResponse.success({ message: 'Successfully updated' }))
     } catch (err) {
       if (err.message) {
