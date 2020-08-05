@@ -153,9 +153,10 @@ function useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal, fetchUs
   const [name, setName] = useState('')
   const [emailToBeChanged, setEmailToBeChanged] = useState('')
 
-  const editUserNameAndEmail = async ({ name, emailToBeChanged, id }) => {
+  const editUserNameAndEmail = async ({ name, emailToBeChanged, user }) => {
+    const { _id } = user
     try {
-      const { message } = await crowi.apiPost(`/admin/user/${id}/edit`, { userEditForm: { name, emailToBeChanged } })
+      const { message } = await crowi.apiPost(`/admin/user/${_id}/edit`, { userEditForm: { name, emailToBeChanged } })
       await fetchUsers()
       setSuccess(message)
     } catch (err) {
