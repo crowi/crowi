@@ -526,7 +526,8 @@ export default (crowi: Crowi) => {
   }
 
   actions.api.user.edit = async function (req: Request, res: Response) {
-    const { name, emailToBeChanged, id } = req.form.userEditForm
+    const id = req.params.id
+    const { name, emailToBeChanged } = req.form.userEditForm
 
     try {
       const user = await User.findById(id)
