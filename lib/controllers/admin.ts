@@ -367,7 +367,9 @@ export default (crowi: Crowi) => {
 
     try {
       const user = await User.findById(id)
-      if (!user) throw new Error('User not found')
+      if (!user) {
+        throw new Error('User not found')
+      }
       await user.updateEmail(email)
       return res.json(ApiResponse.success())
     } catch (err) {
@@ -521,6 +523,30 @@ export default (crowi: Crowi) => {
     Backlink.createByAllPages()
 
     return res.json(ApiResponse.success({ message: 'Now re-building backlinks ... this takes a while.' }))
+  }
+
+  actions.api.user.edit = async function (req: Request, res: Response) {
+    const id = req.params.id
+    const { name, emailToBeChanged } = req.form.userEditForm
+
+    try {
+      const user = await User.findById(id)
+      if (!user) {
+        throw new Error('User not found')
+      }
+      const emailDuplicateUser = await User.findUserByEmail(emailToBeChanged)
+      if (emailDuplicateUser && !user.equals(emailDuplicateUser)) {
+        throw new Error('Email duplicated')
+      }
+      await user.updateNameAndEmail(name, emailToBeChanged)
+      return res.json(ApiResponse.success({ message: 'Successfully updated' }))
+    } catch (err) {
+      if (err.message) {
+        return res.json(ApiResponse.error(err.message))
+      } else {
+        return res.json(ApiResponse.error('Failed to update name or email'))
+      }
+    }
   }
 
   return actions

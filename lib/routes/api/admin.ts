@@ -33,6 +33,7 @@ export default (crowi: Crowi, app: Express, form) => {
   router.get('/admin/users', Admin.api.user.index)
   router.get('/admin/users.search', Admin.api.usersSearch)
   router.post('/admin/user/invite', csrf, form.admin.userInvite, Admin.api.user.invite)
+  router.post('/admin/user/:id/edit', csrf, form.admin.userEdit, Admin.api.user.edit)
   router.post('/admin/user/:id/makeAdmin', csrf, Admin.api.user.makeAdmin)
   router.post('/admin/user/:id/removeFromAdmin', Admin.api.user.removeFromAdmin)
   router.post('/admin/user/:id/activate', csrf, Admin.api.user.activate)
