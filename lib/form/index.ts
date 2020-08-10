@@ -14,6 +14,7 @@ import aws from './admin/aws'
 import google from './admin/google'
 import github from './admin/github'
 import userInvite from './admin/userInvite'
+import userEdit from './admin/userEdit'
 import slackSetting from './admin/slackSetting'
 import share from './admin/share'
 
@@ -37,6 +38,7 @@ export default {
     google,
     github,
     userInvite,
+    userEdit,
     slackSetting,
     share,
   },

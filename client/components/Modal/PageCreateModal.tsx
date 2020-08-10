@@ -85,7 +85,7 @@ const PageCreateModal: FC<Props> = ({ crowi, fade = false, toggle, ...modalProps
   const isTopPage = currentPath === '/'
 
   const [t] = useTranslation()
-  const [portalName, setPotalName] = useState<string>(t('Memo'))
+  const [portalName, setPortalName] = useState<string>(t('Memo'))
   const [pageName, setPageName] = useState('')
   const [underTreePath, setUnderTreePath] = useState(decodeURI(parentPath(currentPath)))
   const wrapperRef = useRef<HTMLElement>(null)
@@ -116,7 +116,7 @@ const PageCreateModal: FC<Props> = ({ crowi, fade = false, toggle, ...modalProps
         <Form onSubmit={createTodayPage} inline>
           <TodayInputBox>
             <Path>{userPath}</Path>
-            <PortalNameInput type="text" value={portalName} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPotalName(event.target.value)} />
+            <PortalNameInput type="text" value={portalName} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setPortalName(event.target.value)} />
             <Path>{datePath}</Path>
             <PageNameInput
               type="text"

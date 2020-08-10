@@ -5,6 +5,7 @@ import queryString from 'query-string'
 
 import { AdminContext } from 'components/Admin/AdminPage'
 import UserTable from './UserTable'
+import UserEditModal from './UserEditModal'
 import InviteUserForm from './InviteUserForm'
 import InvitedUserModal from './InvitedUserModal'
 import ResetPasswordModal from './ResetPasswordModal'
@@ -148,6 +149,34 @@ function useModal<T = any>(initialState: T | {} = {}) {
   ] as const
 }
 
+function useEditUsers(crowi, setSuccess, setFailure, closeUserEditModal, fetchUsers) {
+  const [name, setName] = useState('')
+  const [emailToBeChanged, setEmailToBeChanged] = useState('')
+
+  const editUserNameAndEmail = async ({ name, emailToBeChanged, user }) => {
+    const { _id } = user
+    try {
+      const { message } = await crowi.apiPost(`/admin/user/${_id}/edit`, { userEditForm: { name, emailToBeChanged } })
+      await fetchUsers()
+      setSuccess(message)
+    } catch (err) {
+      await fetchUsers()
+      setFailure(err.message)
+    }
+    closeUserEditModal()
+  }
+
+  const clearForm = () => {
+    setName('')
+    setEmailToBeChanged('')
+  }
+
+  return [
+    { name, emailToBeChanged },
+    { setName, setEmailToBeChanged, editUserNameAndEmail, clearForm },
+  ] as const
+}
+
 const UserPage: FC<{}> = () => {
   const [t] = useTranslation()
   const { crowi } = useContext(AdminContext)
@@ -155,6 +184,19 @@ const UserPage: FC<{}> = () => {
   const [{ success, failure }, { setSuccess, setFailure, clearStatus }] = useAlerts()
   const [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] = useFetchUsers(crowi, setFailure, clearStatus)
   const [{ invitedUsers }, { invite, clear }] = useInviteUsers(crowi, fetchUsers, setFailure, clearStatus)
+
+  const [
+    { isOpen: isOpenUserEditModal, modalState: userEditModalState },
+    { toggle: toggleUserEditModal, open: openUserEditModal, close: closeUserEditModal },
+  ] = useModal()
+  const { user: editedUser } = userEditModalState
+  const [{ name, emailToBeChanged }, { setName, setEmailToBeChanged, editUserNameAndEmail, clearForm }] = useEditUsers(
+    crowi,
+    setSuccess,
+    setFailure,
+    closeUserEditModal,
+    fetchUsers,
+  )
 
   const [{ isOpen: isOpenResetModal, modalState: resetModalState }, { toggle: toggleResetModal, open: openResetModal, close: closeResetModal }] = useModal()
   const { user: resetUser } = resetModalState
@@ -180,11 +222,27 @@ const UserPage: FC<{}> = () => {
         setQuery={setQuery}
         search={setSearch}
         move={move}
+        openUserEditModal={({ user }) => {
+          setName(user.name)
+          setEmailToBeChanged(user.email)
+          openUserEditModal({ user })
+        }}
         openResetModal={openResetModal}
         changeStatus={changeStatus}
       />
 
       <InvitedUserModal users={invitedUsers} clear={clear} />
+      <UserEditModal
+        isOpen={isOpenUserEditModal}
+        toggle={toggleUserEditModal}
+        editUserNameAndEmail={editUserNameAndEmail}
+        clearForm={clearForm}
+        name={name}
+        emailToBeChanged={emailToBeChanged}
+        setName={setName}
+        setEmailToBeChanged={setEmailToBeChanged}
+        user={editedUser}
+      />
       <ResetPasswordModal isOpen={isOpenResetModal} toggle={toggleResetModal} user={resetUser} resetPassword={resetPassword} />
       <ResetedPasswordModal isOpen={isOpenResetedModal} toggle={toggleResetedModal} user={resetedUser} password={resetedPassword} />
     </>
