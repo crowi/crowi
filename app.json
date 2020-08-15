@@ -21,6 +21,9 @@
     },
     "MONGOMS_DISABLE_POSTINSTALL": "1"
   },
+  "scripts": {
+    "postdeploy": "./.heroku/postdeploy.sh"
+  },
   "addons": [
     "mongolab",
     "redistogo",
