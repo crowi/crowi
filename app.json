@@ -21,6 +21,15 @@
     },
     "MONGOMS_DISABLE_POSTINSTALL": "1"
   },
+  "environments": {
+    "production": {
+      "env": {
+        "BASE_URL": {
+          "description": "The URL which Crowi will run on.",
+        }
+      }
+    }
+  },
   "addons": [
     "mongolab",
     "redistogo",
