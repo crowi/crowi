@@ -6,18 +6,7 @@ import styled from 'styled-components'
 
 import { dark, gray, light } from '../../constants/colors'
 import Crowi from 'client/util/Crowi'
-
-const parentPath = (path: string) => {
-  if (path === '/') {
-    return path
-  }
-
-  if (path.match(/.+\/$/)) {
-    return path
-  }
-
-  return path + '/'
-}
+import { isUserPage, parentPath } from 'server/util/view'
 
 const TodayInputBox = styled.div`
   display: flex;
@@ -142,7 +131,9 @@ const PageCreateModal: FC<Props> = ({ crowi, fade = false, toggle, ...modalProps
                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => setUnderTreePath(event.target.value)}
                 placeholder={t('Input page name')}
               />
-              <CreateButton color="primary">{t('Create')}</CreateButton>
+              <CreateButton color="primary" disabled={isUserPage(underTreePath)}>
+                {t('Create')}
+              </CreateButton>
             </Form>
           </>
         )}
