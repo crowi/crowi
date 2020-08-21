@@ -844,11 +844,21 @@ export default (crowi: Crowi) => {
     return data
   }
 
-  pageSchema.statics.createPage = async function (path, body, user, options) {
+  pageSchema.statics.createPage = async function (path: string, body, user, options) {
     const Revision = crowi.model('Revision')
     const format = options.format || 'markdown'
     let grant = options.grant || GRANT_PUBLIC
     const redirectTo = options.redirectTo || null
+
+    const isUserPage = path.startsWith('/user')
+    if (isUserPage) {
+      const User = crowi.model('User')
+      const username = path.match(/\/user\/(?<username>.+)\/.+/)?.groups?.username
+      const userData = await User.findUserByUsername(username)
+      if (userData === null) {
+        throw new Error('Cannot create unknown user page.')
+      }
+    }
 
     // force public
     if (isPortalPath(path)) {
