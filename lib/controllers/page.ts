@@ -167,11 +167,14 @@ export default (crowi: Crowi) => {
       return res.redirect(encodeURI(pageData.redirectTo + '?redirectFrom=' + pageData.path))
     }
 
+    const isNonExistentUserTrashPage = await Page.isNonExistentUserTrashPage(pageData.path)
+
     const renderVars = {
       path: pageData.path,
       page: pageData,
       revision: pageData.revision || {},
       author: pageData.revision.author || false,
+      isNonExistentUserTrashPage,
     }
     const defaultPageTeamplate = 'page.html'
 
@@ -203,6 +206,7 @@ export default (crowi: Crowi) => {
     let pageUser: UserDocument | {} | null = {}
     let bookmarkList: BookmarkDocument[] = []
     let createdList = []
+    let isNonExistentUserPage = false
     try {
       // user いない場合
       pageUser = await User.findUserByUsername(username)
@@ -211,6 +215,7 @@ export default (crowi: Crowi) => {
         Page.findListByCreator(pageUser, { limit: 10 }, req.user),
       ])
     } catch (e) {
+      isNonExistentUserPage = true
       debug('Error while loading user page.', username)
     }
 
@@ -223,6 +228,7 @@ export default (crowi: Crowi) => {
       page: pageData,
       revision: pageData.revision || {},
       author: pageData.revision.author || false,
+      isNonExistentUserPage,
     })
   }
 
