@@ -12,13 +12,13 @@ export const parentPath = (path: string) => {
   return path + '/'
 }
 
-export const isUserPageList = (path) => path.match(/^\/user\/[^/]+\/$/) || path.match(/^\/user\/$/)
+export const isUserPageList = (path: string) => /^\/user\/[^/]+\/$/.test(path) || /^\/user\/$/.test(path)
 
-export const isUserPage = (path: string) => path.match(/^\/user\/[^/]+$/)
+export const isUserPage = (path: string) => /^\/user\/[^/]+$/.test(path)
 
 export const isTopPage = (path: string) => path === '/'
 
-export const isTrashPage = (path: string) => path.match(/^\/trash\/.*/)
+export const isTrashPage = (path: string) => /^\/trash\/.*/.test(path)
 
 export const userPageRoot = (user) => {
   if (!user || !user.username) {
