@@ -40,7 +40,7 @@
     "@babel/preset-env": "^7.10.3",
     "@babel/preset-react": "^7.10.1",
     "@babel/preset-typescript": "^7.10.1",
-    "@mdi/js": "^4.5.95",
+    "@mdi/js": "~5.5.55",
     "@mdi/react": "^1.2.1",
     "@octokit/rest": "^16.28.9",
     "@slack/client": "^5.0.2",
