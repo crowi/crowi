@@ -25,10 +25,13 @@
     "production": {
       "env": {
         "BASE_URL": {
-          "description": "The URL which Crowi will run on.",
+          "description": "The URL which Crowi will run on. (If you run heroku's default, it will be https://{appname}.herokuapp.com or you can use your original domain.)"
         }
       }
     }
+  },
+  "scripts": {
+    "postdeploy": ".heroku/postdeploy.sh"
   },
   "addons": [
     "mongolab",
