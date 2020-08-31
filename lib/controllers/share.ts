@@ -4,6 +4,8 @@ import Debug from 'debug'
 import ApiResponse from 'server/util/apiResponse'
 import { PageDocument } from 'server/models/page'
 import { UserDocument } from 'server/models/user'
+import { getPath } from 'server/util/ssr'
+import { getAppContext } from 'server/util/view'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:share')
@@ -68,12 +70,23 @@ export default (crowi: Crowi) => {
       if (hasAccessAuthority(secretKeywords, share)) {
         req.session.shareIds = updateShareIds(shareIds, uuid)
         const page = (share.page as any) as PageDocument
-        const { path = '', revision = {} } = page
 
-        return res.render('page_share.html', { hasSecretKeyword: true, shareId, page, path, revision })
+        return res.render(getPath(crowi, 'SharePage'), {
+          i18n: req.i18n,
+          context: getAppContext(crowi, req),
+          hasSecretKeyword: true,
+          shareId,
+          page,
+        })
       }
 
-      return res.render('page_share.html', { hasSecretKeyword: false, shareId })
+      return res.render(getPath(crowi, 'SharePage'), {
+        i18n: req.i18n,
+        context: getAppContext(crowi, req),
+        hasSecretKeyword: false,
+        shareId,
+        page: null,
+      })
     } catch (err) {
       console.error(err)
       return res.redirect('/')
