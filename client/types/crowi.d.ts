@@ -42,6 +42,8 @@ export interface Page {
   seenUsers: User[]
   commentCount: number
   bookmarkCount?: number
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface Revision {
