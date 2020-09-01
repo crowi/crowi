@@ -43,14 +43,6 @@ export default (crowi: Crowi, app: Express) => {
       return string.replace(/\n/g, '<br>')
     })
 
-    swig.setFilter('insertSpaceToEachSlashes', function (string) {
-      if (string == '/') {
-        return string
-      }
-
-      return string.replace(/\//g, ' / ')
-    })
-
     swig.setFilter('removeLastSlash', function (string) {
       if (string == '/') {
         return string

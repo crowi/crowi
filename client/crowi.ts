@@ -667,7 +667,7 @@ $(function () {
     window.history.pushState('', '', location.href.replace(location.hash, ''))
   })
 
-  $(document).on('click', '#external-share .dropdown-menu', function (e) {
+  $(document).on('click', '#share-box .dropdown-menu', function (e) {
     e.stopPropagation()
   })
 })

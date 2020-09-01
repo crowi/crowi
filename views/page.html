@@ -7,61 +7,8 @@
 {% block content_head_before %}
 {% endblock %}
 
-<div class="header-wrap sps sps--abv">
-  {% if not page.isDeleted() %}
-  <header id="page-header">
-    <p class="stopper">{{ Icon("chevronUp") }}</p>
-
-
-    <div class="flex-title-line">
-      <h1 class="title flex-item-title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
-      {% if page %}
-
-      {% if isExternalShareEnabled() %}
-        <div id="external-share" class="flex-item-action dropdown">
-          <button class="btn btn-outline-secondary" data-toggle="dropdown">
-            {{ Icon("openInNew") }}
-            Share
-            <span class="caret"></span>
-          </button>
-          <ul class="dropdown-menu dropdown-menu-right">
-            <li id="share-box"></li>
-          </ul>
-        </div>
-      {% endif %}
-      <div class="flex-item-action">
-        <span id="bookmark-button">
-          <p class="bookmark-link">
-            {{ Icon("starOutline") }}
-          </p>
-        </span>
-      </div>
-      <div class="flex-item-action d-md-none">
-        <button
-            data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
-            class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
-        >{{ Icon("thumbUpOutline") }}</button>
-      </div>
-      {% endif %}
-    </div>
-  </header>
-  {% else %}
-  {# trash/* #}
-  <header id="page-header">
-    <div class="flex-title-line">
-      <h1 class="title flex-item-title">{{ path|insertSpaceToEachSlashes }}</h1>
-      <div class="flex-item-action">
-        <span id="bookmark-button">
-          <p class="bookmark-link">
-            {{ Icon("starOutline") }}
-          </a>
-        </span>
-      </div>
-    </div>
-  </header>
-  {% endif %}
+<div id="page-header">
 </div>
-<div class="dummy-header-wrap"></div>
 
 {% block content_head_after %}
 {% endblock %}
@@ -133,87 +80,86 @@
   {% endif %}
 
   {% if not page.isDeleted() %}
-  <ul class="nav nav-tabs d-print-none">
-    <li class="nav-item" data-toggle="tooltip" {# data-title="あなたの 確認待ち です" title="" data-placement="bottom" data-trigger="manual" data-tooltip-stay #}>
-      <a class="nav-link {% if not req.body.pageForm %}active{% endif %}" href="#revision-body" data-toggle="tab">{{ Icon("autoFix") }}</a>
-    </li>
+  <div class="page-menu">
 
-    <li class="nav-item">
-      <a class="nav-link {% if req.body.pageForm %}active{% endif %}" href="#edit-form" data-toggle="tab">{{ Icon("squareEditOutline") }} {{ t('Edit') }}</a>
-    </li>
-
-    {% if page %}
-    <li class="nav-item ml-auto">
-      <a class="nav-link" href="#revision-history" data-toggle="tab">{{ Icon("history") }} History</a>
-    </li>
-    {% endif %}
-    <li class="nav-item dropdown {% if not page %}ml-auto{% endif %}">
-      <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#">
-        {{ Icon("dotsHorizontal") }} <span class="caret"></span>
-      </a>
-      <div class="dropdown-menu dropdown-menu-right">
-        {% if !isUserPage(path) %}
-          <a class="dropdown-item" href="#" data-target="#renamePage" data-toggle="modal">{{ Icon("fileMove") }} {{ t('Move') }}</a>
-          <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal">{{ Icon("folderMove") }} {{ t('Move pages under', path|path2name ) }}</a>
-          <a class="dropdown-item" href="#" data-target="#portalize" data-toggle="modal">{{ Icon("fileDocumentBoxMultipleOutline") }} {{ t('Portalize') }}</a>
+    <div class="btn-group page-menues" role="group">
+        <button type="button" class="btn btn-outline-primary">
+          {{ Icon("squareEditOutline") }} {{ t('Edit') }}
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-target="#revisionHistories" data-toggle="modal">
+          {{ Icon("history") }}
+        </button>
+        {% if isExternalShareEnabled() %}
+        <div class="btn-group" role="group">
+          <button type="button" class="btn btn-outline-primary share-box-toggle dropdown-toggle" data-toggle="dropdown">
+            {{ Icon("openInNew") }}
+          </button>
+          <div class="dropdown-menu dropdown-menu-right" id="share-box">
+          </div>
+        </div>
         {% endif %}
-        <a class="dropdown-item toggle-presentation" href="?presentation=1">{{ Icon("presentation") }} {{ t('Presentation Mode') }} (beta)</a>
-        {% if isDeletablePage() %}
-          <div class="dropdown-divider"></div>
-          <a class="dropdown-item" href="#" data-target="#deletePage" data-toggle="modal">{{ Icon("trashCanOutline", ["text-danger"]) }} {{ t('Delete') }}</a>
-        {% endif %}
+        <div class="btn-group" role="group">
+          <button type="button" class="btn btn-outline-primary dropdown-toggle" data-toggle="dropdown">
+            {{ Icon("dotsHorizontal") }}
+          </button>
+          <div class="dropdown-menu dropdown-menu-right">
+            {% if !isUserPage(path) %}
+              <a class="dropdown-item" href="#" data-target="#renamePage" data-toggle="modal">{{ Icon("fileMove") }} {{ t('Move') }}</a>
+              <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal">{{ Icon("folderMove") }} {{ t('Move pages under', path|path2name ) }}</a>
+              <a class="dropdown-item" href="#" data-target="#portalize" data-toggle="modal">{{ Icon("textBoxMultipleOutline") }} {{ t('Portalize') }}</a>
+            {% endif %}
+            <a class="dropdown-item toggle-presentation" href="?presentation=1">{{ Icon("presentation") }} {{ t('Presentation Mode') }} (beta)</a>
+            {% if isDeletablePage() %}
+              <div class="dropdown-divider"></div>
+              <a class="dropdown-item" href="#" data-target="#deletePage" data-toggle="modal">{{ Icon("trashCanOutline", ["text-danger"]) }} {{ t('Delete') }}</a>
+            {% endif %}
+          </div>
+        </div>
       </div>
-    </li>
-  </ul>
-  {% endif %}
-
-  <div class="tab-content wiki-content">
-  {% if req.query.renamed and not page.isDeleted() %}
-  <div class="alert alert-info alert-moved">
-    <span>
-      <strong>{{ t('Moved') }}: </strong> {{ t('page_page.notice.moved', req.query.renamed) }}
-    </span>
   </div>
   {% endif %}
-  {% if req.query.redirectFrom and not page.isDeleted() %}
-  <div class="alert alert-info alert-moved">
-    <div>
-      <form role="form" id="unlink-page-form" onsubmit="return false;">
-        <input type="hidden" name="_csrf" value="{{ csrf() }}">
-        <input type="hidden" name="path" value="{{ page.path }}">
-        <input type="hidden" name="page_id" value="{{ page._id.toString() }}">
-        <button type="submit" class="btn btn-light btn-sm float-right">
-          {{ Icon("linkOff", [], 'aria-hidden="true"') }}
-          Unlink
-        </button>
-      </form>
+
+  <div class="wiki-content">
+    {# renamed message #}
+    {% if req.query.renamed and not page.isDeleted() %}
+    <div class="alert alert-info alert-moved">
       <span>
-        <strong>{{ t('Moved') }}: </strong> {{ t('page_page.notice.moved', req.query.redirectFrom) }}
+        <strong>{{ t('Moved') }}: </strong> {{ t('page_page.notice.moved', req.query.renamed) }}
       </span>
     </div>
-  </div>
-  {% endif %}
-  {% if req.query.unlinked %}
-  <div class="alert alert-info">
-    <strong>{{ t('Unlinked') }}: </strong> {{ t('page_page.notice.unlinked') }}
-  </div>
-  {% endif %}
-
-
-  {% if not page.isLatestRevision() %}
-  <div class="alert alert-warning">
-    <strong>{{ t('Warning') }}: </strong> {{ t('page_page.notice.version') }} {{ Icon("autoFix") }} <a href="{{ page.path }}">{{ t('Show latest') }}</a>
-  </div>
-  {% endif %}
-
-{#
-  <div class="panel panel-default">
-    <div class="panel-heading">承認待ち</div>
-    <div class="panel-body">
-      ほげほげ
+    {% endif %}
+    {# redirected and show unlink menu #}
+    {% if req.query.redirectFrom and not page.isDeleted() %}
+    <div class="alert alert-info alert-moved">
+      <div>
+        <form role="form" id="unlink-page-form" onsubmit="return false;">
+          <input type="hidden" name="_csrf" value="{{ csrf() }}">
+          <input type="hidden" name="path" value="{{ page.path }}">
+          <input type="hidden" name="page_id" value="{{ page._id.toString() }}">
+          <button type="submit" class="btn btn-light btn-sm float-right">
+            {{ Icon("linkOff", [], 'aria-hidden="true"') }}
+            Unlink
+          </button>
+        </form>
+        <span>
+          <strong>{{ t('Moved') }}: </strong> {{ t('page_page.notice.moved', req.query.redirectFrom) }}
+        </span>
+      </div>
     </div>
-  </div>
-#}
+    {% endif %}
+    {# unlinked message #}
+    {% if req.query.unlinked %}
+    <div class="alert alert-info">
+      <strong>{{ t('Unlinked') }}: </strong> {{ t('page_page.notice.unlinked') }}
+    </div>
+    {% endif %}
+    {# show non-latest revision message #}
+    {% if not page.isLatestRevision() %}
+    <div class="alert alert-warning">
+      <strong>{{ t('Warning') }}: </strong> {{ t('page_page.notice.version') }} {{ Icon("autoFix") }} <a href="{{ page.path }}">{{ t('Show latest') }}</a>
+    </div>
+    {% endif %}
+
     <script type="text/template" id="raw-text-original">{{ revision.body }}</script>
 
     {# formatted text #}
@@ -235,8 +181,6 @@
     {# raw revision history #}
     {% if not page %}
     {% else %}
-    <div class="tab-pane revision-history" id="revision-history">
-    </div>
     {% endif %}
 
   </div>
@@ -301,6 +245,20 @@
 </div>
 
 <div id="crowi-modals">
+  <div class="modal revision-history-container" id="revisionHistories">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 class="modal-title">{{ t('History') }}</h4>
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="revision-history" id="revision-history">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   {% include 'modal/rename.html' %}
   {% include 'modal/delete.html' %}
   {% include 'modal/page_name_warning.html' %}

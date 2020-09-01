@@ -1,5 +1,12 @@
-#external-share .dropdown-menu {
+.share-box-toggle.dropdown-toggle::after {
+  // don't show caret
+  display: none;
+}
+
+#share-box.dropdown-menu {
   z-index: 1000;
+  border: none;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1), 0px 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .share-box {

@@ -90,22 +90,26 @@
       }
 
       .flex-title-line {
-        display: -webkit-flex;
         display: flex;
-        -webkit-align-items: center;
-        align-items:         center;
+        align-items: center;
+
+        .page-links {
+          display: none;
+        }
+        &:hover .page-links {
+          display: inline;
+        }
 
         .flex-item-title {
-          -webkit-flex-basis: auto;
           flex-basis: auto;
           margin-right: auto;
         }
         .flex-item-action {
-          -webkit-flex-basis: 2em;
           flex-basis: 2em;
           text-align: center;
           padding: 0 2px;
         }
+
       }
 
       h1 {
@@ -127,8 +131,14 @@
     .content-main {
       flex: 1;
 
-      .tab-content {
-        margin-top: 30px;
+      .page-menu {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1em;
+
+        .page-menues {
+        }
+
       }
 
       // alert component settings for trash page and moved page
@@ -323,14 +333,14 @@
   } // }}}
 
 }
-.crowi.main-container .main .content-main .revision-history { // {{{
-  h1 {
-    padding-bottom: 0.3em;
-    font-size: 2.3em;
-    font-weight: bold;
-    border-bottom: solid 1px #ccc;
-  }
 
+.crowi.main-container .modal.revision-history-container {
+  .modal-dialog {
+    max-width: 100%;
+    margin: 1em;
+  }
+}
+.crowi.main-container .main .content-main .revision-history { // {{{
 
   .revision-history-list {
     .revision-hisory-outer {

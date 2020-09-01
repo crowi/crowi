@@ -26,6 +26,7 @@ import HeaderNotification from 'components/HeaderNotification'
 import WatchButton from 'components/Notification/WatchButton'
 import AdminShare from 'components/Admin/Share/AdminShare'
 import Comment from 'components/Comment/Comment'
+import PageHeader from 'components/PageHeader'
 import AdminPage from 'components/Admin/AdminPage'
 import HelpPortalModal from 'components/Help/HelpPortalModal/HelpPortalModal'
 import NavigationDrawerContainer from 'client/components/NavigationDrawer/NavigationDrawerContainer'
@@ -73,7 +74,7 @@ const componentMappings = {
   'rename-tree': <RenameTree crowi={crowi} />,
   'header-notification': <HeaderNotification me={me} crowi={crowi} />,
   'notification-page': <NotificationPage crowi={crowi} />,
-  // 'revision-history': <PageHistory pageId={pageId} />,
+  'revision-history': <PageHistory pageId={pageId} crowi={crowi} />,
   'backlink-list': <Backlink pageId={pageId} crowi={crowi} />,
   'seen-user-list': <SeenUserList crowi={crowi} />,
   'bookmark-button': <BookmarkButton pageId={pageId} crowi={crowi} />,
@@ -82,6 +83,7 @@ const componentMappings = {
   'watch-button': <WatchButton pageId={pageId} crowi={crowi} />,
   'admin-share': <AdminShare crowi={crowi} />,
   'page-comments': <Comment crowi={crowi} pageId={pageId} revisionId={revisionId} revisionCreatedAt={revisionCreatedAt} isSharePage={isSharePage} />,
+  'page-header': <PageHeader crowi={crowi} pageId={pageId} revisionId={revisionId} />,
   'admin-page': <AdminPage crowi={crowi} />,
   'help-portal': <HelpPortalModal />,
   'navigation-drawer-opener': <NavigationDrawerContainer crowi={crowi} />,
@@ -92,9 +94,4 @@ Object.entries(componentMappings).forEach(([key, component]) => {
   if (elem) {
     ReactDOM.render(component, elem)
   }
-})
-
-// うわーもうー
-$('a[data-toggle="tab"][href="#revision-history"]').on('show.bs.tab', function () {
-  ReactDOM.render(<PageHistory pageId={pageId} crowi={crowi} />, document.getElementById('revision-history'))
 })

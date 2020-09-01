@@ -131,9 +131,6 @@ export default class PageHistory extends React.Component<Props, State> {
   render() {
     return (
       <div>
-        <h1>
-          <Icon name="history" /> History
-        </h1>
         <PageRevisionList revisions={this.state.revisions} diffOpened={this.state.diffOpened} onDiffOpenClicked={this.onDiffOpenClicked} />
       </div>
     )

@@ -20,29 +20,36 @@ class ShareBoxContent extends React.Component<Props> {
 
   inputRef?: HTMLInputElement
 
+  crowi: Crowi
+
   constructor(props: Props) {
     super(props)
 
+    this.crowi = props.crowi
     this.selectAction = this.selectAction.bind(this)
     this.createRef = this.createRef.bind(this)
     this.copyAction = this.copyAction.bind(this)
   }
 
-  selectAction() {
+  selectAction(e) {
     if (this.inputRef) {
       this.inputRef.select()
     }
+    e.stopPropagation()
   }
 
   createRef(node: HTMLInputElement) {
+    console.log('createRef', node)
     this.inputRef = node
   }
 
-  copyAction() {
+  copyAction(e) {
+    console.log('copyAction innerRef', this.inputRef)
     if (this.inputRef) {
       this.inputRef.select()
-      document.execCommand('copy')
+      this.crowi.document.execCommand('copy')
     }
+    e.stopPropagation()
   }
 
   render() {
@@ -53,7 +60,7 @@ class ShareBoxContent extends React.Component<Props> {
       return (
         <div className="share-box-content">
           <InputGroup>
-            <Input className="copy-link" defaultValue={url} readOnly onClick={this.selectAction} innerRef={this.createRef} />
+            <Input className="copy-link" value={url} readOnly onClick={this.selectAction} innerRef={this.createRef} />
             <InputGroupAddon addonType="append">
               <Button onClick={this.copyAction}>Copy</Button>
             </InputGroupAddon>
