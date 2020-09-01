@@ -58,7 +58,7 @@ div.body {
 
   h1, h2, h3, h4, h5, h6 {
     margin-top: 1.6em;
-    margin-bottom: .8em;
+    margin-bottom: .9em;
 
     &:first-child {
       margin-top: 0;
@@ -79,16 +79,24 @@ div.body {
     border-bottom: 1px solid #eee;
   }
   h3 {
+    padding-bottom: 0.3em;
     font-size: 1.5em;
-    font-weight: bold;
+    font-weight: normal;
+    border-bottom: 1px solid #eee;
   }
   h4 {
+    padding-bottom: 0.3em;
     font-size: 1.3em;
     font-weight: normal;
+    border-bottom: 1px solid #eee;
   }
   h5 {
     font-size: 1.1em;
-    font-weight: normal;
+    font-weight: bold;
+  }
+  h6 {
+    font-size: 1.0em;
+    font-weight: bold;
   }
 
   p {

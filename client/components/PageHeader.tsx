@@ -1,14 +1,57 @@
-import React, { FC, useState, useEffect } from 'react'
+import React, { FC, useState, useEffect, useRef } from 'react'
 import styled from 'styled-components'
 import Crowi from 'client/util/Crowi'
 import { CommonProps } from 'client/types/component'
 import { Page as PageType } from 'client/types/crowi'
 
+import { Tooltip, InputGroup, InputGroupAddon, Button, Input } from 'reactstrap'
+
+import Icon from 'client/components/Common/Icon'
+import BookmarkButton from './BookmarkButton'
+
+const ShareToolContainer = styled.div`
+  display: ${(props) => (props.isShareToolOpen && `block`) || `none`};
+  z-index: 1010;
+  border: none;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1), 0px 8px 20px rgba(0, 0, 0, 0.2);
+  position: absolute;
+  top: 2em;
+  background: #fff;
+  padding: 1rem;
+  border-radius: 0.25rem;
+  right: 0;
+  width: 50vw;
+  max-width: 400px;
+`
+
+const SharableValueInput = styled.div`
+  position: absolute;
+  left: -9999px;
+`
+
+const ShareTool = styled.div`
+  margin-left: 0.5em;
+  position: relative;
+  transition: 0.2s;
+  cursor: pointer;
+  flex: 1;
+
+  > button {
+    color: transparent;
+    border: none;
+    background: none;
+    margin: inherit;
+    padding: inherit;
+  }
+`
+
 const Header = styled.div<Props>`
   margin: 8px 0 0 0;
   display: flex;
+  align-items: center;
   position: relative;
   width: 100%;
+  padding: .5em 1em 1em;
 
   ${(props) =>
     props.isScrolling &&
@@ -18,14 +61,22 @@ const Header = styled.div<Props>`
       width: 100%;
     }
   `}
+
+  &:hover ${ShareTool} {
+    button {
+      color: #999;
+    }
+  }
 `
 
 const PagePath = styled.h1`
   font-size: 28px;
+  line-height: 1;
+  margin: 0;
 `
 
 const Stopper = styled.div<{ isStopperShown: boolean }>`
-  display: block;
+  display: ${(props) => (props.isStopperShown && `block`) || `none`};
   position: absolute;
   bottom: -32px;
   width: 40px;
@@ -150,11 +201,31 @@ function insertSpaceToEachSlashes(path: string): string {
   return path.replace(/\//g, ' / ')
 }
 
+function handleCopy(e: React.MouseEvent<HTMLElement, MouseEvent>, ref, crowi: Crowi) {
+  const document = crowi.document
+  ref.current.select()
+  document.execCommand('copy')
+}
+
+function buildSharableUrl(page: PageType, crowi: Crowi) {
+  const context = crowi.getContext()
+
+  return `${context.url}/${page._id}`
+}
+
 const PageHeader: FC<Props> = (props) => {
   const { crowi, pageId, revisionId, ...others } = props
   const [page, fetchPage] = useFetchPage(crowi, pageId, revisionId)
-  const [isStickyHeader, isStopperShwon, setIsStopperShown] = useStickyHeader(crowi)
+  const [isStickyHeader, isStopperShown, setIsStopperShown] = useStickyHeader(crowi)
   // const [{ posting, message }, { postComment }] = usePostComment(crowi, pageId, revisionId, fetchComments)
+
+  const [hoverShareToolCopy, setHoverShareToolCopy] = useState<boolean>(false)
+  const [hoverCopiedMessage, setHoverCopiedMessage] = useState<boolean>(false)
+  const [isShareToolOpen, setIsShareToolOpen] = useState<boolean>(false)
+
+  const defaultSharablePageRef = useRef(null)
+  let urlOnlySharablePageRef
+  let markdownSharablePageRef
 
   useEffect(() => {
     fetchPage()
@@ -164,11 +235,78 @@ const PageHeader: FC<Props> = (props) => {
     return null
   }
 
+  const toggle = () => {}
+  const dropdownOpen = false
+
   const pagePath = insertSpaceToEachSlashes(page?.path)
 
   return (
     <Header isStickyHeader={isStickyHeader} {...others}>
       <PagePath>{pagePath}</PagePath>
+
+      <ShareTool>
+        <SharableValueInput>
+          <input type="text" value={buildSharableUrl(page, crowi)} ref={defaultSharablePageRef} readOnly aria-hidden="true" tab-index="-1" />
+        </SharableValueInput>
+        <Tooltip placement="bottom" isOpen={hoverShareToolCopy} target="pageUrlCopyIcon">
+          Copy link to this page
+        </Tooltip>
+        <Tooltip placement="bottom" isOpen={hoverCopiedMessage} target="pageUrlCopyIcon">
+          Copied!
+        </Tooltip>
+        <button
+          onMouseEnter={() => {
+            setHoverShareToolCopy(true)
+          }}
+          onMouseLeave={() => {
+            setHoverShareToolCopy(false)
+          }}
+          onClick={(e) => {
+            handleCopy(e, defaultSharablePageRef, crowi)
+            setHoverShareToolCopy(false)
+            setHoverCopiedMessage(true)
+            setInterval(() => {
+              setHoverCopiedMessage(false)
+            }, 2000)
+          }}
+          id="pageUrlCopyIcon"
+        >
+          <Icon name="link" />
+        </button>
+        <button
+          onClick={() => {
+            setIsShareToolOpen(true)
+          }}
+        >
+          <Icon name="menuDown" />
+        </button>
+        <ShareToolContainer isShareToolOpen={isShareToolOpen}>
+          <InputGroup size="sm">
+            <InputGroupAddon addonType="prepend">
+              <Icon name="fileLinkOutline" />
+            </InputGroupAddon>
+            <Input placeholder="and..." />
+            <InputGroupAddon addonType="append">
+              <Button color="secondary">
+                <Icon name="contentCopy" />
+              </Button>
+            </InputGroupAddon>
+          </InputGroup>
+
+          <InputGroup size="sm">
+            <InputGroupAddon addonType="prepend">@hoge</InputGroupAddon>
+            <Input placeholder="and..." />
+            <InputGroupAddon addonType="append">
+              <Button color="secondary">
+                <Icon name="contentCopy" />
+              </Button>
+            </InputGroupAddon>
+          </InputGroup>
+        </ShareToolContainer>
+      </ShareTool>
+
+      <BookmarkButton pageId={page._id} crowi={crowi} />
+
       <Stopper isStopperShown></Stopper>
     </Header>
   )

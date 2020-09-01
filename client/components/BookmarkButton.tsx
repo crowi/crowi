@@ -1,6 +1,17 @@
 import React from 'react'
+import styled from 'styled-components'
 import Icon from 'components/Common/Icon'
 import Crowi from 'client/util/Crowi'
+
+const BookmarkButtonLink = styled.a<Props>`
+  color: #e6b422;
+  font-size: 2em;
+  line-height: 1;
+
+  &:hover {
+    color: #e6b422;
+  }
+`
 
 interface Props {
   crowi: Crowi
@@ -58,9 +69,9 @@ export default class BookmarkButton extends React.Component<Props, State> {
     const bookmarked: 'star' | 'starOutline' = this.state.bookmarked ? 'star' : 'starOutline'
 
     return (
-      <a href="#" title="Bookmark" className="bookmark-link" onClick={this.handleClick}>
+      <BookmarkButtonLink href="#" title="Bookmark" onClick={this.handleClick}>
         <Icon name={bookmarked} />
-      </a>
+      </BookmarkButtonLink>
     )
   }
 }
