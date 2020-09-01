@@ -20,6 +20,10 @@ const Header = styled.div<Props>`
   `}
 `
 
+const PagePath = styled.h1`
+  font-size: 28px;
+`
+
 const Stopper = styled.div<{ isStopperShown: boolean }>`
   display: block;
   position: absolute;
@@ -163,8 +167,8 @@ const PageHeader: FC<Props> = (props) => {
   const pagePath = insertSpaceToEachSlashes(page?.path)
 
   return (
-    <Header {...others}>
-      <header id="page-header">{pagePath}</header>
+    <Header isStickyHeader={isStickyHeader} {...others}>
+      <PagePath>{pagePath}</PagePath>
       <Stopper isStopperShown></Stopper>
     </Header>
   )
