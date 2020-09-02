@@ -10,7 +10,7 @@ import Icon from 'client/components/Common/Icon'
 import BookmarkButton from './BookmarkButton'
 
 const ShareToolContainer = styled.div`
-  display: ${(props) => (props.isShareToolOpen && `block`) || `none`};
+  display: ${(props) => (props.isShareToolOpen && `flex`) || `none`};
   z-index: 1010;
   border: none;
   box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1), 0px 8px 20px rgba(0, 0, 0, 0.2);
@@ -35,6 +35,8 @@ const ShareTool = styled.div`
   transition: 0.2s;
   cursor: pointer;
   flex: 1;
+  display: flex;
+  flex-wrap: nowrap;
 
   > button {
     color: transparent;
@@ -64,7 +66,7 @@ const Header = styled.div<Props>`
 
   &:hover ${ShareTool} {
     button {
-      color: #999;
+      color: #888;
     }
   }
 `
