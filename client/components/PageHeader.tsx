@@ -215,6 +215,57 @@ function buildSharableUrl(page: PageType, crowi: Crowi) {
   return `${context.url}/${page._id}`
 }
 
+const PathLink = styled.a<{ lastPath?: boolean }>`
+  ${(props) =>
+    props.lastPath &&
+    `
+    color: #D1E2E4;
+    opacity: .4;
+
+    &:hover {
+      color: inherit;
+    }
+  `}
+`
+
+function createPathLinks(pagePath: string) {
+  let realPath = pagePath.trim()
+  if (realPath.substr(-1, 1) == '/') {
+    realPath = realPath.substr(0, realPath.length - 1)
+  }
+
+  const pathComponents: React.ReactNode[] = []
+
+  let buildingPath = ''
+  const splittedPath = realPath.split(/\//)
+  splittedPath.shift()
+  splittedPath.map((subPath: string) => {
+    buildingPath += `/`
+    pathComponents.push(
+      <PathLink key={buildingPath} href={buildingPath}>
+        {' '}
+        /{' '}
+      </PathLink>,
+    )
+    buildingPath += subPath.replace(' ', '+')
+    pathComponents.push(
+      <PathLink key={buildingPath} href={buildingPath}>
+        {subPath}
+      </PathLink>,
+    )
+  })
+
+  buildingPath += `/`
+  pathComponents.push(
+    <PathLink lastPath key={buildingPath} href={buildingPath}>
+      {' '}
+      /{' '}
+    </PathLink>,
+  )
+
+  return pathComponents
+}
+
 const PageHeader: FC<Props> = (props) => {
   const { crowi, pageId, revisionId, ...others } = props
   const [page, fetchPage] = useFetchPage(crowi, pageId, revisionId)
@@ -244,7 +295,7 @@ const PageHeader: FC<Props> = (props) => {
 
   return (
     <Header isStickyHeader={isStickyHeader} {...others}>
-      <PagePath>{pagePath}</PagePath>
+      <PagePath>{createPathLinks(page.path)}</PagePath>
 
       <ShareTool>
         <SharableValueInput>

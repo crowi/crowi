@@ -7,42 +7,7 @@
 {% block content_head_before %}
 {% endblock %}
 
-<div class="header-wrap">
-  <header class="portal-header {% if page %}has-page{% endif %}">
-    <div class="flex-title-line">
-      <h1 class="title flex-item-title">
-        <span id="revision-path">{{ path|insertSpaceToEachSlashes }}</span>
-
-        {% if searchConfigured() && !isTopPage() && !isTrashPage() %}
-
-        <form class="input-group search-input-group d-none d-md-inline-flex" data-toggle="tooltip" data-placement="bottom" title="Search pages under '{{ path }}'" id="search-listpage-form">
-          <input
-            type="text"
-            class="search-listpage-input form-control"
-            data-path="{{ path }}"
-            id="search-listpage-input">
-          <div class="input-group-append search-listpage-submit-group">
-            <a class="search-listpage-clear" id="search-listpage-clear">{{ Icon("closeCircle") }}</a>
-            <button type="submit" class="btn btn-outline-secondary" id="search-listpage-submit">
-              {{ Icon("magnify") }}
-            </button>
-          </div>
-        </form>
-        {% endif %}
-      </h1>
-      {% if page %}
-      <div class="flex-item-action">
-        <span id="bookmark-button"></span>
-      </div>
-      <div class="flex-item-action d-md-none">
-        <button
-            data-liked="{% if page.isLiked(user) %}1{% else %}0{% endif %}"
-            class="like-button btn btn-outline-secondary btn-sm {% if page.isLiked(user) %}active{% endif %}"
-        >{{ Icon("thumbUp") }}</button>
-      </div>
-      {% endif %}
-    </div>
-  </header>
+<div id="page-header">
 </div>
 
 {% endblock %}

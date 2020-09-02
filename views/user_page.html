@@ -6,12 +6,16 @@
 
 {% if pageUser %}
 
+<div id="page-header">
+</div>
+
 <div class="header-wrap">
-  <h1 class="title" id="revision-path">{{ path|insertSpaceToEachSlashes }}</h1>
+  <h1 class="title" id="revision-path">{{ path }}</h1>
   <div class="user-page-header">
   {% if page %}
     <span id="bookmark-button"></span>
   {% endif %}
+
     <div class="float-left user-page-picture">
       <img src="{{ pageUser|picture }}" class="picture picture-rounded">
     </div>
