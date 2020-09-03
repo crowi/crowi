@@ -16,21 +16,16 @@ export default class UserEvent extends EventEmitter {
   async onActivated(user: UserDocument) {
     const Page = this.crowi.model('Page')
     const userPagePath = Page.getUserPagePath(user)
+    const page = await Page.findPage(userPagePath, user, {}, true)
 
-    try {
-      const page = await Page.findPage(userPagePath, user, {}, false)
-
-      if (page === null) {
-        throw new Error()
-      }
-
-      // User page is already exists.
-      const renamedUserPagePath = `/tmp/user-${user.username}-${Date.now()}`
-      await Page.rename(page, renamedUserPagePath, user, {})
-      await this.createUserPage(userPagePath, user)
-    } catch {
+    if (page === null) {
       await this.createUserPage(userPagePath, user)
     }
+
+    // User page created manually is already exists.
+    const renamedUserPagePath = `/tmp/user-${user.username}-${Date.now()}`
+    await Page.rename(page, renamedUserPagePath, user, {})
+    await this.createUserPage(userPagePath, user)
   }
 
   private async createUserPage(userPagePath: string, user: UserDocument) {
