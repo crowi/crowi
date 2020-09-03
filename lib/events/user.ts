@@ -20,6 +20,7 @@ export default class UserEvent extends EventEmitter {
 
     if (page === null) {
       await this.createUserPage(userPagePath, user)
+      return
     }
 
     // User page created manually is already exists.
