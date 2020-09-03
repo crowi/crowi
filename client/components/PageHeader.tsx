@@ -192,6 +192,31 @@ function useStickyHeader(crowi: Crowi) {
   const [isStickyHeader, setIsStickyHeader] = useState<boolean>(false)
   const [isStopperShown, setIsStopperShown] = useState<boolean>(true)
 
+  const [lastScrollTop, setLastScrollTop] = useState(0)
+  const [bodyOffset, setBodyOffset] = useState(crowi.document.body.getBoundingClientRect())
+  const [scrollY, setScrollY] = useState(bodyOffset.top)
+  const [scrollX, setScrollX] = useState(bodyOffset.left)
+  const [scrollDirection, setScrollDirection] = useState<'down' | 'up'>('down')
+
+  const listener = (e: Event) => {
+    setBodyOffset(crowi.document.body.getBoundingClientRect())
+    setScrollY(-bodyOffset.top)
+    setScrollX(bodyOffset.left)
+    setScrollDirection(lastScrollTop > -bodyOffset.top ? 'down' : 'up')
+    setLastScrollTop(-bodyOffset.top)
+  }
+
+  useEffect(() => {
+    crowi.window.addEventListener('scroll', listener)
+    return () => {
+      crowi.window.removeEventListener('scroll', listener)
+    }
+  })
+
+  // scrollY,
+  // scrollX,
+  // scrollDirection
+
   return [isStickyHeader, isStopperShown, setIsStopperShown]
 }
 
@@ -277,8 +302,8 @@ const PageHeader: FC<Props> = (props) => {
   const [isShareToolOpen, setIsShareToolOpen] = useState<boolean>(false)
 
   const defaultSharablePageRef = useRef(null)
-  let urlOnlySharablePageRef
-  let markdownSharablePageRef
+  const urlOnlySharablePageRef = useRef(null)
+  const markdownSharablePageRef = useRef(null)
 
   useEffect(() => {
     fetchPage()
@@ -287,9 +312,6 @@ const PageHeader: FC<Props> = (props) => {
   if (!page) {
     return null
   }
-
-  const toggle = () => {}
-  const dropdownOpen = false
 
   const pagePath = insertSpaceToEachSlashes(page?.path)
 
