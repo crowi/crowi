@@ -18,14 +18,12 @@ export default class UserEvent extends EventEmitter {
     const userPagePath = Page.getUserPagePath(user)
     const page = await Page.findPage(userPagePath, user, {}, true)
 
-    if (page === null) {
-      await this.createUserPage(userPagePath, user)
-      return
+    // User page created manually is already exists.
+    if (page !== null) {
+      const renamedUserPagePath = `/tmp/user-${user.username}-${Date.now()}`
+      await Page.rename(page, renamedUserPagePath, user, {})
     }
 
-    // User page created manually is already exists.
-    const renamedUserPagePath = `/tmp/user-${user.username}-${Date.now()}`
-    await Page.rename(page, renamedUserPagePath, user, {})
     await this.createUserPage(userPagePath, user)
   }
 
