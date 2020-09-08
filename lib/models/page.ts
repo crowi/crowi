@@ -99,6 +99,8 @@ export interface PageModel extends Model<PageDocument> {
   findPageByPath(path): Promise<PageDocument>
   isExistByPath(path): any
   isExistById(id): any
+  isNonExistentUserPage(path: string): Promise<boolean>
+  isNonExistentUserTrashPage(path: string): Promise<boolean>
   findListByPageIds(ids, options): any
   findPageByRedirectTo(path): any
   findPagesByIds(ids): any
@@ -623,6 +625,38 @@ export default (crowi: Crowi) => {
     return pageData._id
   }
 
+  pageSchema.statics.isNonExistentUserPage = async (path: string) => {
+    if (!path.startsWith('/user')) {
+      return false
+    }
+
+    const username = path.match(/^\/user\/(?<username>[^/]+)/)?.groups?.username
+    if (username === undefined) {
+      return false
+    }
+
+    const User = crowi.model('User')
+    const userData = await User.findUserByUsername(username)
+
+    return userData === null
+  }
+
+  pageSchema.statics.isNonExistentUserTrashPage = async (path: string) => {
+    if (!path.startsWith('/trash/user')) {
+      return false
+    }
+
+    const username = path.match(/^\/trash\/user\/(?<username>[^/]+)/)?.groups?.username
+    if (username === undefined) {
+      return false
+    }
+
+    const User = crowi.model('User')
+    const userData = await User.findUserByUsername(username)
+
+    return userData === null
+  }
+
   pageSchema.statics.findListByPageIds = function (ids, options) {
     options = options || {}
     const limit = options.limit || 50
@@ -844,11 +878,19 @@ export default (crowi: Crowi) => {
     return data
   }
 
-  pageSchema.statics.createPage = async function (path, body, user, options) {
+  pageSchema.statics.createPage = async function (path: string, body, user, options) {
     const Revision = crowi.model('Revision')
     const format = options.format || 'markdown'
     let grant = options.grant || GRANT_PUBLIC
     const redirectTo = options.redirectTo || null
+    const allowNonExistentUserPage = options.allowNonExistentUserPage || false
+
+    if (!allowNonExistentUserPage) {
+      const isNonExistentUserPage = await Page.isNonExistentUserPage(path)
+      if (isNonExistentUserPage) {
+        throw new Error('Cannot create non existent user page.')
+      }
+    }
 
     // force public
     if (isPortalPath(path)) {
@@ -905,7 +947,8 @@ export default (crowi: Crowi) => {
   pageSchema.statics.deletePage = async function (pageData, user) {
     const Share = crowi.model('Share')
     const newPath = Page.getDeletedPageName(pageData.path)
-    if (Page.isDeletableName(pageData.path)) {
+    const isNonExistentUserPage = await Page.isNonExistentUserPage(pageData.path)
+    if (Page.isDeletableName(pageData.path) || isNonExistentUserPage) {
       await Page.updatePageProperty(pageData, { status: STATUS_DELETED, lastUpdateUser: user })
       await Share.deleteByPageId(pageData._id)
       pageData.status = STATUS_DELETED
@@ -921,6 +964,11 @@ export default (crowi: Crowi) => {
 
   pageSchema.statics.revertDeletedPage = async function (pageData, user) {
     const newPath = Page.getRevertDeletedPageName(pageData.path)
+
+    const isNonExistentUserPage = await Page.isNonExistentUserPage(newPath)
+    if (isNonExistentUserPage) {
+      throw new Error('Cannot revert non existent user page.')
+    }
 
     // 削除時、元ページの path には必ず redirectTo 付きで、ページが作成される。
     // そのため、そいつは削除してOK
@@ -1037,7 +1085,10 @@ export default (crowi: Crowi) => {
 
     if (createRedirectPage) {
       const body = 'redirect ' + newPagePath
-      return Page.createPage(path, body, user, { redirectTo: newPagePath })
+      return Page.createPage(path, body, user, {
+        redirectTo: newPagePath,
+        allowNonExistentUserPage: true,
+      })
     }
     pageEvent.emit('update', pageData, user) // update as renamed page
     return data

@@ -101,6 +101,7 @@
   <div class="alert alert-danger alert-trash">
     <div>
       <ul class="list-inline float-right">
+        {% if !isNonExistentUserTrashPage %}
         <li class="list-inline-item">
           <form role="form" id="revert-delete-page-form" onsubmit="return false;">
             <input type="hidden" name="_csrf" value="{{ csrf() }}">
@@ -112,6 +113,7 @@
             </button>
           </form>
         </li>
+        {% endif %}
         <li class="list-inline-item">
           <form role="form" id="delete-page-form" onsubmit="return false;">
             <input type="hidden" name="_csrf" value="{{ csrf() }}">
@@ -152,13 +154,13 @@
         {{ Icon("dotsHorizontal") }} <span class="caret"></span>
       </a>
       <div class="dropdown-menu dropdown-menu-right">
-        {% if !isUserPage(path) %}
+        {% if !isUserPage(path) || isNonExistentUserPage %}
           <a class="dropdown-item" href="#" data-target="#renamePage" data-toggle="modal">{{ Icon("fileMove") }} {{ t('Move') }}</a>
           <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal">{{ Icon("folderMove") }} {{ t('Move pages under', path|path2name ) }}</a>
           <a class="dropdown-item" href="#" data-target="#portalize" data-toggle="modal">{{ Icon("fileDocumentBoxMultipleOutline") }} {{ t('Portalize') }}</a>
         {% endif %}
         <a class="dropdown-item toggle-presentation" href="?presentation=1">{{ Icon("presentation") }} {{ t('Presentation Mode') }} (beta)</a>
-        {% if isDeletablePage() %}
+        {% if isDeletablePage() || isNonExistentUserPage %}
           <div class="dropdown-divider"></div>
           <a class="dropdown-item" href="#" data-target="#deletePage" data-toggle="modal">{{ Icon("trashCanOutline", ["text-danger"]) }} {{ t('Delete') }}</a>
         {% endif %}
