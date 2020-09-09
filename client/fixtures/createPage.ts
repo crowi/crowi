@@ -16,7 +16,9 @@ export const createPage = (page: Partial<Page> = {}): Page => {
     seenUsers = [],
     commentCount = 0,
     bookmarkCount = 0,
+    createdAt = new Date(),
+    updatedAt = new Date(),
   } = page
 
-  return { _id, path, revision, redirectTo, status, creator, lastUpdateUser, liker, seenUsers, commentCount, bookmarkCount }
+  return { _id, path, revision, redirectTo, status, creator, lastUpdateUser, liker, seenUsers, commentCount, bookmarkCount, createdAt, updatedAt }
 }
