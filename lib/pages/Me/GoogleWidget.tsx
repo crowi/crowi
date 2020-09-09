@@ -29,7 +29,7 @@ const GoogleWidget: FC<Props> = (props) => {
           name="disconnectGoogle"
           className="btn btn-secondary"
           defaultValue={i18n.t('Disconnect') as any}
-          disabled={context.auth.canDisconnectThirdPartyId}
+          disabled={!context.auth.canDisconnectThirdPartyId}
         />
       }
       disconnectMessages={[i18n.t('page_me.form_help.google_disconnect1'), i18n.t('page_me.form_help.google_disconnect2')]}

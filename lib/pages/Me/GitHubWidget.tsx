@@ -29,7 +29,7 @@ const GitHubWidget: FC<Props> = (props) => {
           name="disconnectGitHub"
           className="btn btn-secondary"
           defaultValue={i18n.t('Disconnect') as any}
-          disabled={context.auth.canDisconnectThirdPartyId}
+          disabled={!context.auth.canDisconnectThirdPartyId}
         />
       }
       disconnectMessages={[i18n.t('page_me.form_help.github_disconnect1'), i18n.t('page_me.form_help.github_disconnect2')]}

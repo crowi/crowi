@@ -39,7 +39,7 @@ const ProviderWidget: FC<Props> = (props) => {
                     <br />
                     {disconnectMessages[1]}
                   </p>
-                  {context.auth.canDisconnectThirdPartyId && <p className="form-text text-muted">{i18n.t('page_me.can_not_disconnect')}</p>}
+                  {!context.auth.canDisconnectThirdPartyId && <p className="form-text text-muted">{i18n.t('page_me.can_not_disconnect')}</p>}
                 </div>
               ) : (
                 <div className="col-sm-12">

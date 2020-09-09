@@ -3,6 +3,7 @@ import React, { useContext, useState, useEffect } from 'react'
 import { AdminContext } from 'components/Admin/AdminPage'
 import AppSettings from './AppSettings'
 import SecuritySettings from './SecuritySettings'
+import AuthSettings from './AuthSettings'
 import MailSettings from './MailSettings'
 import AWSSettings from './AWSSettings'
 import GoogleSettings from './GoogleSettings'
@@ -66,6 +67,7 @@ export default function AppPage() {
       <>
         <AppSettings isUploadable={isUploadable} {...getProps('app')} />
         <SecuritySettings registrationMode={registrationMode} {...getProps('sec')} />
+        <AuthSettings {...getProps('auth')} />
         <MailSettings {...getProps('mail')} />
         <AWSSettings {...getProps('aws')} />
         <GoogleSettings {...getProps('google')} />
