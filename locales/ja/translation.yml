@@ -245,7 +245,9 @@ admin:
     tips2: また、SMTP の設定が無い場合、SES を利用したメール送信が行われます。FromメールアドレスのVerify、プロダクション利用設定をする必要があります。
     notice: この設定を途中で変更すると、これまでにアップロードしたファイル等へのアクセスができなくなりますのでご注意下さい。
     region: リージョン
+    region_placeholder: '例: ap-northeast-1'
     bucket: バケット名
+    bucket_placeholder: '例: crowi'
     access_key_id: Access Key ID
     secret_access_key: Secret Access Key
   github:
