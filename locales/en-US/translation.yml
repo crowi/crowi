@@ -231,65 +231,65 @@ search:
 admin:
   app:
     legend: App Settings
-    title: Wikiの名前
-    title_description: ヘッダーやHTMLタイトルに使用されるWikiの名前を変更できます。
-    confidential: コンフィデンシャル表示
-    confidential_placeholder: '例: 社外秘'
-    confidential_description: ここに入力した内容は、ヘッダー等に表示されます。
-    allow_upload_file: 画像以外のファイルアップロードを許可
-    allow_upload_file_description1: ファイルアップロードの設定を有効にしている場合にのみ、選択可能です。
-    allow_upload_file_description2: 許可をしている場合、画像以外のファイルをページに添付可能になります。
+    title: Name for this Wiki
+    title_description: You can rename this Wiki. The name will be displayed for headers and HTML title tag.
+    confidential: Confidential
+    confidential_placeholder: 'ex. Confidential'
+    confidential_description: You can customize confidential notification on headers.
+    allow_upload_file: Allow users upload files other than image
+    allow_upload_file_description1: You can apply this option only if you applied option which allow users upload files.
+    allow_upload_file_description2: Users can attach files other than images if you apply this option.
   aws:
     legend: AWS Settings
-    tips1: AWS にアクセスするための設定を行います。AWS の設定を完了させると、ファイルアップロード機能、プロフィール写真機能などが有効になります。
-    notice: この設定を途中で変更すると、これまでにアップロードしたファイル等へのアクセスができなくなりますのでご注意下さい。
-    region: リージョン
-    bucket: バケット名
+    tips1: You can configure your settings to access AWS. Once you complete this config, which enable file upload and profile picture feature.
+    notice: CAUTION. PLEASE NOTE THAT YOU MAY NOT ACCESS THE FILES YOU UPLOADED IF YOU CHANGE THIS SETTINGS.
+    region: Region
+    bucket: Bucket Name
     access_key_id: Access Key ID
     secret_access_key: Secret Access Key
   github:
     legend: GitHub Settings
-    tips1: GitHub プロジェクトの設定をすると、GitHub アカウントにコネクトして登録やログインが可能になります。
-    tips2: また、Organizationを指定した場合は、その組織に所属するアカウントのみがコネクトできるようになります。
+    tips1: You will be able to login or sign up with GitHub account if you set GitHub information.
+    tips2: You can restrict login with GitHub account only for the members of organization if you input the organization name in this section.
     client_id: Client ID
     client_secret: Client Secret
     organization: Organization
   google:
     legend: Google Settings
-    tips: Google プロジェクトの設定をすると、Google アカウントにコネクトして登録やログインが可能になります。
+    tips: You will be able to login or sign up with Google account if you set Google information.
     client_id: Client ID
     client_secret: Client Secret
   mail:
     legend: Mail Settings
-    tips1: SMTPの設定がされている場合、それが利用されます。SMTP設定がなく、AWSの設定がある場合、SESでの送信を試みます。SESを利用するためにはFromメールアドレスのVerify、プロダクション利用設定をする必要があります。
-    tips2: どちらの設定もない場合、メールは送信されません。
-    from: Fromアドレス
-    from_placeholder: '例: mail@crowi.wiki'
+    tips1: If you have SMTP settings in place, it will be used. If you don't have SMTP settings but you have AWS settings, it will try to send via SES. You need to verify FROM email address and enable production access.
+    tips2: Emails are not sent without either configs
+    from: From address
+    from_placeholder: 'ex. mail@crowi.wiki'
     smtp:
-      legend: SMTP設定
-      smtp: SMTP設定
-      host: ホスト
-      port: ポート
-      user: ユーザー
-      password: パスワード
+      legend: SMTP Settings
+      smtp: SMTP Settings
+      host: Host
+      port: Port
+      user: User
+      password: Password
     aws:
-      legend: AWS設定
-      region: リージョン
+      legend: AWS Settings
+      region: Region
       access_key_id: Access Key ID
       secret_access_key: Secret Access Key
   security:
     legend: Security Settings
-    basic_auth: Basic認証
+    basic_auth: Basic Authentication
     id: ID
-    password: パスワード
-    tips1: Basic認証を設定すると、ページ全体に共通の認証がかかります。
-    tips2: IDとパスワードは暗号化されずに送信されるのでご注意下さい。
-    restriction: 登録の制限
-    restriction_description: ここに入力した内容は、ヘッダー等に表示されます。
-    whitelist: 登録許可メールアドレスのホワイトリスト
-    whitelist_placeholder: '例: mail@crowi.wiki'
-    whitelist_description1: 登録可能なメールアドレスを制限することができます。例えば、会社で使う場合、<1>@crowi.wiki</1>などと記載すると、その会社のメールアドレスを持っている人のみ登録可能になります。
-    whitelist_description2: 1行に1メールアドレス入力してください。
+    password: Password
+    tips1: The basic authentication is applied to the entire page when you set up this section.
+    tips2: Please note that your ID and password will be sent unencrypted.
+    restriction: Registration restriction
+    restriction_description: The information you input here will be displayed in the header
+    whitelist: Whitelist of email addresses for registration permission
+    whitelist_placeholder: 'ex. mail@crowi.wiki'
+    whitelist_description1: You can limit the domain of email addresses that can be registered. For example, if you use crowi.wiki domain in your company, you can write <1>@crowi.wiki</1>, which means that only people with that company's email address can register.
+    whitelist_description2: Please input one email address per line.
   backlink:
     legend: Backlinks Build
     build: Build Now
@@ -332,16 +332,16 @@ admin:
     build_description3: This may take a while.
   share:
     legend: External Share Settings
-    enable_external_share: Wikiページの外部ユーザーへの共有を有効にする。
+    enable_external_share: Enable sharing Wiki pages to external users.
   user:
     legend: User List
-    user_id: ユーザーID
-    name: 名前
-    email: メールアドレス
-    created_at: 作成日
-    status: ステータス
-    operation: 操作
-    not_found: ユーザーが見つかりませんでした
+    user_id: User ID
+    name: Name
+    email: Email
+    created_at: Created
+    status: Status
+    operation: Operation
+    not_found: User Not Found
 
 Portalize: Portalize
 portalize:
