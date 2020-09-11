@@ -229,6 +229,9 @@ search:
     results: '{{value}} 件'
 
 admin:
+  top:
+    description: この画面はWiki管理者のみがアクセスできる画面です。
+    appoint_admin: 「ユーザー管理」から「管理者にする」ボタンを使ってユーザーをWiki管理者に任命することができます。
   app:
     legend: アプリ設定
     title: Wikiの名前
