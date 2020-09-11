@@ -51,12 +51,12 @@ const AWSSettings: FC<Props> = ({ settingForm, update, alert }) => {
 
         <FormRow>
           <Label for="awsRegion">{t('admin.aws.region')}</Label>
-          <Input id="awsRegion" placeholder="例: ap-northeast-1" value={region} onChange={(e) => setRegion(e.target.value)} />
+          <Input id="awsRegion" placeholder={t('admin.aws.region_placeholder')} value={region} onChange={(e) => setRegion(e.target.value)} />
         </FormRow>
 
         <FormRow>
           <Label for="awsBucket">{t('admin.aws.bucket')}</Label>
-          <Input id="awsBucket" placeholder="例: crowi" value={bucket} onChange={(e) => setBucket(e.target.value)} />
+          <Input id="awsBucket" placeholder={t('admin.aws.bucket_placeholder')} value={bucket} onChange={(e) => setBucket(e.target.value)} />
         </FormRow>
 
         <FormRow>
