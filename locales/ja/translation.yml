@@ -363,6 +363,14 @@ admin:
     status: ステータス
     operation: 操作
     not_found: ユーザーが見つかりませんでした
+    invite:
+      form:
+        collapse: 新規ユーザーの招待
+        email: メールアドレス
+        example: '例: user@crowi.wiki'
+        description: 複数行入力で複数人を招待可能
+        checkbox: 招待をメールで送信
+        submit: 招待する
 
 Portalize: ポータル化
 portalize:
