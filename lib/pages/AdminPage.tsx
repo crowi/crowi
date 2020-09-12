@@ -13,7 +13,7 @@ const AdminPage: FC<PageProps> = (props) => {
         <Single>
           <div className="header-wrap">
             <header id="page-header">
-              <h1 className="title">Wiki管理</h1>
+              <h1 className="title">{i18n.t('admin.top.title')}</h1>
             </header>
           </div>
           <div id="admin-page" className="content-main content-form"></div>

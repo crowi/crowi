@@ -230,10 +230,11 @@ search:
 
 admin:
   top:
+    title: Wiki Admin
     description: This page can only be accessed by the Wiki administrators.
     appoint_admin: You can appoint a user as a Wiki administrator using the Make Admin button in Manage User page.
   navigation:
-    top: Admin Page
+    top: Admin Info
     title: Admin Page
     app: App Settings
     notification: Notification
