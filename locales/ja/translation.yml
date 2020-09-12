@@ -371,6 +371,14 @@ admin:
         description: 複数行入力で複数人を招待可能
         checkbox: 招待をメールで送信
         submit: 招待する
+      modal:
+        completed_message: ユーザーを招待しました
+        temp_password: 作成したユーザーは仮パスワードが設定されています。
+        caution_password: 仮パスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
+        caution_without_email: 招待メールを送っていない場合、この画面で必ず仮パスワードをコピーし、招待者へ連絡してください。
+        email: メールアドレス
+        password: パスワード
+        failed_message: 作成失敗
 
 Portalize: ポータル化
 portalize:

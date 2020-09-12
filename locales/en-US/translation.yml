@@ -371,6 +371,14 @@ admin:
         description: You can invite more than one person at once with multi-line email addresses.
         checkbox: Send invitation by email
         submit: Submit
+      modal:
+        completed_message: Success for inviting new users
+        temp_password: The new users have temporary passwords.
+        caution_password: Please note that you can never find temporary passwords after you close this message.
+        caution_without_email: You need to tell directly the invited users temporary passwords if you have not sent email via invitation.
+        email: email
+        password: password
+        failed_message: Invitation Failed
 
 Portalize: Portalize
 portalize:
