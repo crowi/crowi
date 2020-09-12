@@ -68,7 +68,7 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
           <Input type="select" id="securityRegistrationMode" value={registrationMode} onChange={(e) => setRegistrationMode(e.target.value)}>
             {Object.entries(registrationModeOptions).map(([mode, label]) => (
               <option key={mode} value={mode}>
-                {label}
+                {t(`admin.security.registration.mode.label.${label}`)}
               </option>
             ))}
           </Input>
