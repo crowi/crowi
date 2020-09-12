@@ -300,6 +300,12 @@ admin:
     tips1: Basic認証を設定すると、ページ全体に共通の認証がかかります。
     tips2: IDとパスワードは暗号化されずに送信されるのでご注意下さい。
     restriction: 登録の制限
+    registration:
+      mode:
+        label:
+          open: '公開（誰でも登録可能）'
+          restricted: '制限（登録完了には管理者の承認が必要）'
+          closed: '非公開（登録には管理者による招待が必要）'
     restriction_description: ここに入力した内容は、ヘッダー等に表示されます。
     whitelist: 登録許可メールアドレスのホワイトリスト
     whitelist_placeholder: '例: mail@crowi.wiki'

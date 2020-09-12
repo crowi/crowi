@@ -300,6 +300,12 @@ admin:
     tips1: The basic authentication is applied to the entire page when you set up this section.
     tips2: Please note that your ID and password will be sent unencrypted.
     restriction: Registration restriction
+    registration:
+      mode:
+        label:
+          open: 'Public - Anyone can register.'
+          restricted: 'Restricted - Approval by Admin is required at registration.'
+          closed: 'Closed - Invitation by Admin is required at registration.'
     restriction_description: The information you input here will be displayed in the header
     whitelist: Whitelist of email addresses for registration permission
     whitelist_placeholder: 'ex. mail@crowi.wiki'
