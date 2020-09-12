@@ -366,7 +366,7 @@ admin:
     invite:
       form:
         collapse: Invite new users
-        email: email
+        email: Email
         example: 'ex. user@crowi.wiki'
         description: You can invite more than one person at once with multi-line email addresses.
         checkbox: Send invitation by email
@@ -376,8 +376,8 @@ admin:
         temp_password: The new users have temporary passwords.
         caution_password: Please note that you can never find temporary passwords after you close this message.
         caution_without_email: You need to tell directly the invited users temporary passwords if you have not sent email via invitation.
-        email: email
-        password: password
+        email: Email
+        password: Password
         failed_message: Invitation Failed
     reset_password:
       modal:
@@ -385,6 +385,28 @@ admin:
         caution: Please note that you can never find the new password after you close this message.
         after_reset: Please tell the user the new password.
         submit: Submit
+    edit:
+      modal:
+        ask: Do you edit user information?
+        current_name: Current name
+        current_email: Current email
+        new_name: Please enter your new name.
+        new_email: Please enter your new email address.
+        submit: Submit
+      dropdown:
+        edit: Edit
+        edit_menu: Edit menu
+        reset_password: Reset password
+        status: Status
+        approve: Approve
+        suspend: Suspend
+        restore: Restore
+        delete: Delete
+        delete_completely: Delete Completely
+        admin_menu: Admin menu
+        remove_admin: Remove admin
+        remove_caution: You can not remove yourself from admin.
+        make_admin: Make admin
 
 Portalize: Portalize
 portalize:

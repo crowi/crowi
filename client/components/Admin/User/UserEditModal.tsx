@@ -1,5 +1,6 @@
 import React, { useState, FC } from 'react'
 import { Form, FormGroup, Input, Label, Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'reactstrap'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   isOpen: boolean
@@ -14,6 +15,7 @@ interface Props {
 }
 
 const UserEditModal: FC<Props> = ({ isOpen, toggle, editUserNameAndEmail, clearForm, name, emailToBeChanged, setName, setEmailToBeChanged, user = {} }) => {
+  const [t] = useTranslation()
   const handleUserNameChange = (e) => {
     setName(e.target.value)
   }
@@ -27,26 +29,26 @@ const UserEditModal: FC<Props> = ({ isOpen, toggle, editUserNameAndEmail, clearF
   }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>
-      <ModalHeader toggle={toggle}>ユーザー情報を編集しますか?</ModalHeader>
+      <ModalHeader toggle={toggle}>{t('admin.user.edit.modal.ask')}</ModalHeader>
       <ModalBody>
         <Form>
           <FormGroup>
             <Label>
-              現在の名前: <code>{user.name}</code>
+              {t('admin.user.edit.modal.current_name')}: <code>{user.name}</code>
             </Label>
-            <Input type="text" name="name" placeholder="新しい名前を入力してください" defaultValue={user.name} onChange={handleUserNameChange} />
+            <Input type="text" name="name" placeholder={t('admin.user.edit.modal.new_name')} defaultValue={user.name} onChange={handleUserNameChange} />
           </FormGroup>
           <FormGroup>
             <Label>
-              現在のメールアドレス: <code>{user.email}</code>
+              {t('admin.user.edit.modal.current_email')}: <code>{user.email}</code>
             </Label>
-            <Input type="email" name="email" placeholder="新しいメールアドレスを入力してください" defaultValue={user.email} onChange={handleEmailChange} />
+            <Input type="email" name="email" placeholder={t('admin.user.edit.modal.new_email')} defaultValue={user.email} onChange={handleEmailChange} />
           </FormGroup>
         </Form>
       </ModalBody>
       <ModalFooter>
         <Button type="submit" color="primary" onClick={handleSubmit}>
-          実行
+          {t('admin.user.edit.modal.submit')}
         </Button>
       </ModalFooter>
     </Modal>

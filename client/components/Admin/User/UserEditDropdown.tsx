@@ -1,6 +1,7 @@
 import React, { useState, FC } from 'react'
 import { Button, Alert, Dropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap'
 import { STATUS } from './UserTable'
+import { useTranslation } from 'react-i18next'
 
 function OnlyStatusFactory(user) {
   return ({ status, children }) => user.status === status && children
@@ -21,6 +22,7 @@ interface Props {
 }
 
 const UserEditDropdown: FC<Props> = ({ me, user, ...props }) => {
+  const [t] = useTranslation()
   const { admin, username } = user
   const [open, setOpen] = useState(false)
   const {
@@ -39,60 +41,60 @@ const UserEditDropdown: FC<Props> = ({ me, user, ...props }) => {
   return (
     <Dropdown isOpen={open} toggle={() => setOpen(!open)}>
       <DropdownToggle color="light" caret>
-        編集
+        {t('admin.user.edit.dropdown.edit')}
       </DropdownToggle>
       <DropdownMenu right>
         <div className="dropdown-menu-buttons">
-          <DropdownItem header>編集メニュー</DropdownItem>
+          <DropdownItem header>{t('admin.user.edit.dropdown.edit_menu')}</DropdownItem>
           <Button color="light" onClick={() => handleClickEdit(user)}>
-            編集
+            {t('admin.user.edit.dropdown.edit')}
           </Button>
           <Button color="light" onClick={() => handleClickResetPassword(user)}>
-            パスワードの再発行
+            {t('admin.user.edit.dropdown.reset_password')}
           </Button>
-          <DropdownItem header>ステータス</DropdownItem>
+          <DropdownItem header>{t('admin.user.edit.dropdown.status')}</DropdownItem>
           <OnlyStatus status={STATUS.REGISTERED}>
             <Button color="info" onClick={() => handleClickApprove(user)}>
-              承認する
+              {t('admin.user.edit.dropdown.approve')}
             </Button>
           </OnlyStatus>
           <OnlyStatus status={STATUS.ACTIVE}>
             <Button color="warning" onClick={() => handleClickSuspend(user)}>
-              アカウント停止
+              {t('admin.user.edit.dropdown.suspend')}
             </Button>
           </OnlyStatus>
           <OnlyStatus status={STATUS.SUSPENDED}>
             <Button color="light" onClick={() => handleClickRestore(user)}>
-              元に戻す
+              {t('admin.user.edit.dropdown.restore')}
             </Button>
           </OnlyStatus>
           {/* label は同じだけど、こっちは論理削除 */}
           <Button color="danger" onClick={() => handleClickRemove(user)}>
-            削除する
+            {t('admin.user.edit.dropdown.delete')}
           </Button>
           {/* label は同じだけど、こっちは物理削除 */}
           <OnlyStatus status={STATUS.INVITED}>
             <Button color="danger" onClick={() => handleClickRemoveCompletely(user)}>
-              削除する
+              {t('admin.user.edit.dropdown.delete_completely')}
             </Button>
           </OnlyStatus>
           <OnlyStatus status={STATUS.ACTIVE}>
             {/* activated な人だけこのメニューを表示 */}
-            <DropdownItem header>管理者メニュー</DropdownItem>
+            <DropdownItem header>{t('admin.user.edit.dropdown.admin_menu')}</DropdownItem>
 
             {admin ? (
               username !== me.username ? (
                 <Button color="danger" onClick={() => handleClickRevokeAdmin(user)}>
-                  管理者からはずす
+                  {t('admin.user.edit.dropdown.remove_admin')}
                 </Button>
               ) : (
                 <DropdownItem>
-                  <Alert color="danger">自分自身を管理者から外すことはできません</Alert>
+                  <Alert color="danger">{t('admin.user.edit.dropdown.remove_caution')}</Alert>
                 </DropdownItem>
               )
             ) : (
               <Button color="primary" onClick={() => handleClickGrantAdmin(user)}>
-                管理者にする
+                {t('admin.user.edit.dropdown.make_admin')}
               </Button>
             )}
           </OnlyStatus>
