@@ -379,6 +379,12 @@ admin:
         email: メールアドレス
         password: パスワード
         failed_message: 作成失敗
+    reset_password:
+      modal:
+        ask: パスワードを新規発行しますか?
+        caution: 新規発行したパスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
+        after_reset: 新規発行したパスワードを、対象ユーザーへ連絡してください。
+        submit: 実行
 
 Portalize: ポータル化
 portalize:

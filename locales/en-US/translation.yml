@@ -379,6 +379,12 @@ admin:
         email: email
         password: password
         failed_message: Invitation Failed
+    reset_password:
+      modal:
+        ask: Do you reset the user's password?
+        caution: Please note that you can never find the new password after you close this message.
+        after_reset: Please tell the user the new password.
+        submit: Submit
 
 Portalize: Portalize
 portalize:
