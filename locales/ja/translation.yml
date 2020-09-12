@@ -385,6 +385,28 @@ admin:
         caution: 新規発行したパスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
         after_reset: 新規発行したパスワードを、対象ユーザーへ連絡してください。
         submit: 実行
+    edit:
+      modal:
+        ask: ユーザー情報を編集しますか？
+        current_name: 現在の名前
+        current_email: 現在のメールアドレス
+        new_name: 新しい名前を入力してください
+        new_email: 新しいメールアドレスを入力してください
+        submit: 実行 
+      dropdown:
+        edit: 編集
+        edit_menu: 編集メニュー
+        reset_password: パスワードの再発行
+        status: ステータス
+        approve: 承認する
+        suspend: アカウント停止
+        restore: 元に戻す
+        delete: 削除する
+        delete_completely: 完全に削除する
+        admin_menu: 管理者メニュー
+        remove_admin: 管理者から外す 
+        remove_caution: 自分自身を管理者から外すことはできません。
+        make_admin: 管理者にする
 
 Portalize: ポータル化
 portalize:
