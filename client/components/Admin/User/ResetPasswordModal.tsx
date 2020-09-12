@@ -1,5 +1,6 @@
 import React, { FC } from 'react'
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'reactstrap'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   isOpen: boolean
@@ -9,18 +10,19 @@ interface Props {
 }
 
 const ResetPasswordModal: FC<Props> = ({ isOpen, toggle, user = {}, resetPassword }) => {
+  const [t] = useTranslation()
   const handleClick = (e) => {
     e.preventDefault()
     resetPassword(user)
   }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>
-      <ModalHeader toggle={toggle}>パスワードを新規発行しますか?</ModalHeader>
+      <ModalHeader toggle={toggle}>{t('admin.user.reset_password.modal.ask')}</ModalHeader>
       <ModalBody>
         <p>
-          新規発行したパスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
+          {t('admin.user.reset_password.modal.caution')}
           <br />
-          <span className="text-danger">新規発行したパスワードを、対象ユーザーへ連絡してください。</span>
+          <span className="text-danger">{t('admin.user.reset_password.modal.after_reset')}</span>
         </p>
         <p>
           Reset user: <code>{user.email}</code>
@@ -28,7 +30,7 @@ const ResetPasswordModal: FC<Props> = ({ isOpen, toggle, user = {}, resetPasswor
       </ModalBody>
       <ModalFooter>
         <Button type="submit" color="primary" onClick={handleClick}>
-          実行
+          {t('admin.user.reset_password.modal.submit')}
         </Button>
       </ModalFooter>
     </Modal>
