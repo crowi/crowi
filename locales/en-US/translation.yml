@@ -363,6 +363,14 @@ admin:
     status: Status
     operation: Operation
     not_found: User Not Found
+    invite:
+      form:
+        collapse: Invite new users
+        email: email
+        example: 'ex. user@crowi.wiki'
+        description: You can invite more than one person at once with multi-line email addresses.
+        checkbox: Send invitation by email
+        submit: Submit
 
 Portalize: Portalize
 portalize:
