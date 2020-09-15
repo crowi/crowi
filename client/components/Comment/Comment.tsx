@@ -5,6 +5,7 @@ import CommentForm from './CommentForm'
 import Crowi from 'client/util/Crowi'
 import { CommonProps } from 'client/types/component'
 import { Comment as CommentType } from 'client/types/crowi'
+import CommentDeleteModal from './CommentDeleteModal'
 
 const PageComments = styled.div<Props>`
   margin: 8px 0 0 0;
@@ -69,6 +70,35 @@ function usePostComment(crowi: Crowi, pageId: string | null, revisionId: string 
   return [{ posting, message }, { postComment }] as const
 }
 
+/* 一時的に useModal をここに追加するが、後で他に使っている箇所と共通の定義をつくって import してくる */
+function useModal<T = any>(initialState: T | {} = {}) {
+  const [isOpen, setModal] = useState(false)
+  const [modalState, setModalState] = useState(initialState)
+
+  const toggle = () => setModal(!isOpen)
+  const open = (state) => {
+    setModal(true)
+    if (state) setModalState(state)
+  }
+  const close = () => {
+    setModal(false)
+    setModalState({})
+  }
+
+  return [
+    { isOpen, modalState },
+    { toggle, open, close },
+  ] as const
+}
+/* useModal は userEditModal などで使ってるので上で共通の定義して import してくるのがよさそう */
+
+function useDeleteComment() {
+  const deleteComment = async () => {
+    alert(`このコメントを消す!!!`)
+  }
+  return deleteComment
+}
+
 type Props = CommonProps & {
   crowi: Crowi
   pageId: string | null
@@ -82,15 +112,30 @@ const Comment: FC<Props> = (props) => {
   const [comments, fetchComments] = useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage)
   const [{ posting, message }, { postComment }] = usePostComment(crowi, pageId, revisionId, fetchComments)
 
+  const deleteComment = useDeleteComment()
+  const [
+    { isOpen: isOpenCommentDeleteModal, modalState: isOpenCommentDeleteModalState },
+    { toggle: toggleCommentDeleteModal, open: openCommentDeleteModal, close: closeCommentDeleteModal },
+  ] = useModal()
+  const { comment: deleteTarget } = isOpenCommentDeleteModalState
+
   useEffect(() => {
     fetchComments()
   }, [])
 
   return !isSharePage ? (
-    <PageComments {...others}>
-      <CommentForm posting={posting} message={message} postComment={postComment} />
-      <CommentLists crowi={crowi} comments={comments} revisionId={revisionId} />
-    </PageComments>
+    <>
+      <PageComments {...others}>
+        <CommentForm posting={posting} message={message} postComment={postComment} />
+        <CommentLists crowi={crowi} comments={comments} revisionId={revisionId} openCommentDeleteModal={openCommentDeleteModal} />
+      </PageComments>
+      <CommentDeleteModal
+        isOpen={isOpenCommentDeleteModal}
+        toggle={toggleCommentDeleteModal}
+        comment={isOpenCommentDeleteModalState}
+        deleteComment={deleteComment}
+      />
+    </>
   ) : null
 }
 

@@ -9,15 +9,16 @@ type Props = CommonProps & {
   crowi: Crowi
   comments: Comment[]
   revisionId: string | null
+  openCommentDeleteModal: (state: any) => void
 }
 
 const CommentList: FC<Props> = (props) => {
-  const { crowi, comments, revisionId, ...others } = props
+  const { crowi, comments, revisionId, openCommentDeleteModal, ...others } = props
 
   return (
     <div {...others}>
       {comments.map((comment) => (
-        <CommentItem key={comment._id} crowi={crowi} comment={comment} revisionId={revisionId} />
+        <CommentItem key={comment._id} crowi={crowi} comment={comment} revisionId={revisionId} openCommentDeleteModal={openCommentDeleteModal} />
       ))}
     </div>
   )
