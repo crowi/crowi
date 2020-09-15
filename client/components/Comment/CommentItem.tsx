@@ -6,6 +6,7 @@ import * as styles from 'client/constants/styles'
 import { CommonProps } from 'client/types/component'
 import Crowi from 'client/util/Crowi'
 import { formatToLocaleString, formatDistanceFromNow } from 'client/util/formatDate'
+import Icon from 'components/Common/Icon'
 
 type PageCommentContainerProps = Props & {
   isOwn: boolean
@@ -57,14 +58,19 @@ const CommentAt = styled.span`
   margin-right: 0.5em;
 `
 
+const Revision = styled.a`
+  margin-right: 1em;
+`
+
 type Props = CommonProps & {
   crowi: Crowi
   revisionId: string | null
   comment: Record<string, any>
+  openCommentDeleteModal: (state: any) => void
 }
 
 const CommentItem: FC<Props> = (props) => {
-  const { crowi, revisionId, comment, ...others } = props
+  const { crowi, revisionId, comment, openCommentDeleteModal, ...others } = props
   const { revision, creator, comment: commentBody, createdAt } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
 
@@ -81,8 +87,16 @@ const CommentItem: FC<Props> = (props) => {
         <CommentBody comment={commentBody} />
         <CommentMeta>
           <CommentAt title={absoluteCreatedAt}>{relativeCreatedAt}</CommentAt>
-          <a className={`badge ${badgeType}`} href={`?revision=${revision}`}>
+          <Revision className={`badge ${badgeType}`} href={`?revision=${revision}`}>
             {revision.substr(0, 8)}
+          </Revision>
+          <a
+            className="text-danger"
+            onClick={() => {
+              openCommentDeleteModal(commentBody)
+            }}
+          >
+            <Icon name="trashCanOutline" />
           </a>
         </CommentMeta>
       </PageComment>
