@@ -5,13 +5,13 @@ interface Props {
   isOpen: boolean
   toggle: () => void
   comment: any
-  deleteComment: () => void
+  deleteComment: (commentId: any) => void
 }
 
 const CommentDeleteModal: FC<Props> = ({ isOpen, toggle, comment, deleteComment }) => {
   const handleSubmit = (e) => {
     e.preventDefault()
-    deleteComment()
+    deleteComment(comment)
   }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>

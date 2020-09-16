@@ -93,7 +93,7 @@ const CommentItem: FC<Props> = (props) => {
           <a
             className="text-danger"
             onClick={() => {
-              openCommentDeleteModal(commentBody)
+              openCommentDeleteModal(comment._id)
             }}
           >
             <Icon name="trashCanOutline" />

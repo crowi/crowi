@@ -75,5 +75,30 @@ export default (crowi: Crowi) => {
     }
   }
 
+  /**
+   * @api {post} /comments.delete Delete comment form the page
+   * @apiName DeleteComment
+   * @apiGroup Comment
+   *
+   * @apiParam {String} page_id Page Id.
+   * @apiParam {String} revision_id Revision Id.
+   * @apiParam {String} comment Comment body
+   * @apiParam {Number} comment_position=-1 Line number of the comment
+   */
+  api.delete = async function (req: Request, res: Response) {
+    const commentId = req.body.comment
+    console.log(`リクエストは ${req.body.comment}`)
+
+    try {
+      const deleteTarget = await Comment.getCommentById(commentId)
+      console.log(`このコメントを削除してくれよな: ${deleteTarget}`)
+
+      const result = await Comment.removeCommentById(commentId)
+      return res.json(ApiResponse.success(result))
+    } catch (err) {
+      return res.json(ApiResponse.error(err))
+    }
+  }
+
   return actions
 }
