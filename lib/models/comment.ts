@@ -12,10 +12,12 @@ export interface CommentDocument extends Document {
   createdAt: Date
 }
 export interface CommentModel extends Model<CommentDocument> {
+  getCommentById(id: Types.ObjectId): Promise<CommentDocument>
   getCommentsByPageId(id: Types.ObjectId): Promise<CommentDocument[]>
   getCommentsByRevisionId(id: Types.ObjectId): Promise<CommentDocument[]>
   countCommentByPageId(page: any): Promise<number>
   removeCommentsByPageId(pageId: Types.ObjectId): Promise<void>
+  removeCommentById(id: Types.ObjectId): Promise<void>
   findCreatorsByPage(page: any): Promise<any[]>
 }
 
@@ -30,6 +32,18 @@ export default (crowi: Crowi) => {
     commentPosition: { type: Number, default: -1 },
     createdAt: { type: Date, default: Date.now },
   })
+
+  // 追加したやつ
+  commentSchema.statics.getCommentById = async function (id) {
+    const commentData = await Comment.findOne({ _id: id })
+
+    if (commentData === null) {
+      throw new Error('Comment not found')
+    }
+
+    return commentData
+  }
+  // 追加ここまで
 
   commentSchema.statics.getCommentsByPageId = function (id) {
     return Comment.find({ page: id }).sort({ createdAt: -1 }).populate('creator').exec()
@@ -46,6 +60,12 @@ export default (crowi: Crowi) => {
   commentSchema.statics.removeCommentsByPageId = async function (pageId) {
     await Comment.deleteMany({ page: pageId }).exec()
   }
+
+  // 追加したやつ
+  commentSchema.statics.removeCommentById = async function (id) {
+    await Comment.deleteOne({ _id: id }).exec()
+  }
+  // 追加ここまで
 
   commentSchema.statics.findCreatorsByPage = function (page) {
     return Comment.distinct('creator', { page }).exec()

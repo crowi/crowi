@@ -92,11 +92,30 @@ function useModal<T = any>(initialState: T | {} = {}) {
 }
 /* useModal は userEditModal などで使ってるので上で共通の定義して import してくるのがよさそう */
 
-function useDeleteComment() {
-  const deleteComment = async () => {
-    alert(`このコメントを消す!!!`)
+function useDeleteComment(crowi: Crowi, fetchComments: () => Promise<void>) {
+  const [deleting, setDeleting] = useState(false)
+  const [deletingMessage, setDeletingMessage] = useState('')
+
+  const deleteComment = async (commentId) => {
+    try {
+      setDeleting(true)
+      const { ok, error } = await crowi.apiPost('/comments.delete', {
+        comment: commentId,
+      })
+      if (ok) {
+        setDeletingMessage('')
+        fetchComments()
+      } else {
+        setDeletingMessage(error)
+      }
+    } catch (err) {
+      setDeletingMessage(err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
-  return deleteComment
+
+  return [{ deleting, deletingMessage }, { deleteComment }] as const
 }
 
 type Props = CommonProps & {
@@ -112,7 +131,7 @@ const Comment: FC<Props> = (props) => {
   const [comments, fetchComments] = useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage)
   const [{ posting, message }, { postComment }] = usePostComment(crowi, pageId, revisionId, fetchComments)
 
-  const deleteComment = useDeleteComment()
+  const [{ deleting, deletingMessage }, { deleteComment }] = useDeleteComment(crowi, fetchComments)
   const [
     { isOpen: isOpenCommentDeleteModal, modalState: isOpenCommentDeleteModalState },
     { toggle: toggleCommentDeleteModal, open: openCommentDeleteModal, close: closeCommentDeleteModal },
