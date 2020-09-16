@@ -12,6 +12,7 @@ const CommentDeleteModal: FC<Props> = ({ isOpen, toggle, comment, deleteComment 
   const handleSubmit = (e) => {
     e.preventDefault()
     deleteComment(comment)
+    toggle()
   }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>
@@ -20,7 +21,7 @@ const CommentDeleteModal: FC<Props> = ({ isOpen, toggle, comment, deleteComment 
         <p>削除対象のコメント: {comment}</p>
       </ModalBody>
       <ModalFooter>
-        <Button type="submit" color="primary" onClick={handleSubmit}>
+        <Button type="submit" color="danger" onClick={handleSubmit}>
           実行
         </Button>
       </ModalFooter>
