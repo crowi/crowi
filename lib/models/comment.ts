@@ -33,18 +33,6 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
   })
 
-  // 追加したやつ
-  commentSchema.statics.getCommentById = async function (id) {
-    const commentData = await Comment.findOne({ _id: id })
-
-    if (commentData === null) {
-      throw new Error('Comment not found')
-    }
-
-    return commentData
-  }
-  // 追加ここまで
-
   commentSchema.statics.getCommentsByPageId = function (id) {
     return Comment.find({ page: id }).sort({ createdAt: -1 }).populate('creator').exec()
   }
@@ -61,11 +49,9 @@ export default (crowi: Crowi) => {
     await Comment.deleteMany({ page: pageId }).exec()
   }
 
-  // 追加したやつ
   commentSchema.statics.removeCommentById = async function (id) {
     await Comment.deleteOne({ _id: id }).exec()
   }
-  // 追加ここまで
 
   commentSchema.statics.findCreatorsByPage = function (page) {
     return Comment.distinct('creator', { page }).exec()
