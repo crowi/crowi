@@ -71,7 +71,7 @@ type Props = CommonProps & {
 
 const CommentItem: FC<Props> = (props) => {
   const { crowi, revisionId, comment, openCommentDeleteModal, ...others } = props
-  const { revision, creator, comment: commentBody, createdAt } = comment
+  const { _id: id, revision, creator, comment: commentBody, createdAt } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
 
   const relativeCreatedAt = formatDistanceFromNow(createdAt)
@@ -93,7 +93,10 @@ const CommentItem: FC<Props> = (props) => {
           <a
             className="text-secondary"
             onClick={() => {
-              openCommentDeleteModal(comment._id)
+              openCommentDeleteModal({
+                id: id,
+                body: commentBody,
+              })
             }}
           >
             <Icon name="trashCanOutline" />
