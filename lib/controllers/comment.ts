@@ -86,13 +86,8 @@ export default (crowi: Crowi) => {
    * @apiParam {Number} comment_position=-1 Line number of the comment
    */
   api.delete = async function (req: Request, res: Response) {
-    const commentId = req.body.comment
-    console.log(`リクエストは ${req.body.comment}`)
-
+    const commentId = req.body.commentId
     try {
-      const deleteTarget = await Comment.getCommentById(commentId)
-      console.log(`このコメントを削除してくれよな: ${deleteTarget}`)
-
       const result = await Comment.removeCommentById(commentId)
       return res.json(ApiResponse.success(result))
     } catch (err) {

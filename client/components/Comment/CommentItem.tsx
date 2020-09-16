@@ -91,7 +91,7 @@ const CommentItem: FC<Props> = (props) => {
             {revision.substr(0, 8)}
           </Revision>
           <a
-            className="text-danger"
+            className="text-secondary"
             onClick={() => {
               openCommentDeleteModal(comment._id)
             }}
