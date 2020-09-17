@@ -70,7 +70,6 @@ function usePostComment(crowi: Crowi, pageId: string | null, revisionId: string 
   return [{ posting, message }, { postComment }] as const
 }
 
-/* 一時的に useModal をここに追加するが、後で他に使っている箇所と共通の定義をつくって import してくる */
 function useModal<T = any>(initialState: T | {} = {}) {
   const [isOpen, setModal] = useState(false)
   const [modalState, setModalState] = useState(initialState)
@@ -80,17 +79,12 @@ function useModal<T = any>(initialState: T | {} = {}) {
     setModal(true)
     if (state) setModalState(state)
   }
-  const close = () => {
-    setModal(false)
-    setModalState({})
-  }
 
   return [
     { isOpen, modalState },
-    { toggle, open, close },
+    { toggle, open },
   ] as const
 }
-/* useModal は userEditModal などで使ってるので上で共通の定義して import してくるのがよさそう */
 
 function useDeleteComment(crowi: Crowi, fetchComments: () => Promise<void>) {
   const [deleting, setDeleting] = useState(false)
@@ -134,7 +128,7 @@ const Comment: FC<Props> = (props) => {
   const [{ deleting, deletingMessage }, { deleteComment }] = useDeleteComment(crowi, fetchComments)
   const [
     { isOpen: isOpenCommentDeleteModal, modalState: isOpenCommentDeleteModalState },
-    { toggle: toggleCommentDeleteModal, open: openCommentDeleteModal, close: closeCommentDeleteModal },
+    { toggle: toggleCommentDeleteModal, open: openCommentDeleteModal },
   ] = useModal()
   const { comment: deleteTarget } = isOpenCommentDeleteModalState
 
