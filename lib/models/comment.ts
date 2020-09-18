@@ -12,7 +12,6 @@ export interface CommentDocument extends Document {
   createdAt: Date
 }
 export interface CommentModel extends Model<CommentDocument> {
-  getCommentById(id: Types.ObjectId): Promise<CommentDocument>
   getCommentsByPageId(id: Types.ObjectId): Promise<CommentDocument[]>
   getCommentsByRevisionId(id: Types.ObjectId): Promise<CommentDocument[]>
   countCommentByPageId(page: any): Promise<number>
