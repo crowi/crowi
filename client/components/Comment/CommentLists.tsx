@@ -57,7 +57,7 @@ interface Props {
   crowi: Crowi
   comments: { newer: Comment[]; current: Comment[]; older: Comment[] }
   revisionId: string | null
-  openCommentDeleteModal: (state: any) => void
+  openCommentDeleteModal: ({ id, body }: { id: string; body: string }) => void
 }
 
 const CommentLists: FC<Props> = ({ crowi, comments, revisionId, openCommentDeleteModal }) => {
