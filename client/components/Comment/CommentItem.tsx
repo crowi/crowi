@@ -62,6 +62,13 @@ const Revision = styled.a`
   margin-right: 1em;
 `
 
+const Trash = styled.a`
+  opacity: 0;
+  ${PageComment}:hover & {
+    opacity: 1;
+  }
+`
+
 type Props = CommonProps & {
   crowi: Crowi
   revisionId: string | null
@@ -90,7 +97,7 @@ const CommentItem: FC<Props> = (props) => {
           <Revision className={`badge ${badgeType}`} href={`?revision=${revision}`}>
             {revision.substr(0, 8)}
           </Revision>
-          <a
+          <Trash
             className="text-secondary"
             onClick={() => {
               openCommentDeleteModal({
@@ -100,7 +107,7 @@ const CommentItem: FC<Props> = (props) => {
             }}
           >
             <Icon name="trashCanOutline" />
-          </a>
+          </Trash>
         </CommentMeta>
       </PageComment>
     </PageCommentContainer>
