@@ -4,8 +4,8 @@ import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'reactstrap'
 interface Props {
   isOpen: boolean
   toggle: () => void
-  comment: { id: any; body: string }
-  deleteComment: (commentId: any) => void
+  comment: { id: string; body: string }
+  deleteComment: (commentId: string) => void
 }
 
 const CommentDeleteModal: FC<Props> = ({ isOpen, toggle, comment, deleteComment }) => {
