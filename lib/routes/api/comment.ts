@@ -10,7 +10,7 @@ export default (crowi: Crowi, app: Express, form) => {
 
   router.get('/comments.get', Comment.api.get)
   router.post('/comments.add', form.comment, csrf, Comment.api.add)
-  router.post('/comments.delete', LoginRequired, csrf, Comment.api.delete)
+  router.post('/comments.delete', csrf, Comment.api.delete)
 
   return router
 }
