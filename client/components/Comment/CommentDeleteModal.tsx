@@ -1,5 +1,6 @@
 import React, { useState, FC } from 'react'
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'reactstrap'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   isOpen: boolean
@@ -9,6 +10,7 @@ interface Props {
 }
 
 const CommentDeleteModal: FC<Props> = ({ isOpen, toggle, comment, deleteComment }) => {
+  const [t] = useTranslation()
   const handleSubmit = (e) => {
     e.preventDefault()
     deleteComment(comment.id)
@@ -16,13 +18,13 @@ const CommentDeleteModal: FC<Props> = ({ isOpen, toggle, comment, deleteComment 
   }
   return (
     <Modal isOpen={isOpen} toggle={toggle}>
-      <ModalHeader toggle={toggle}>本当にこのコメントを削除しますか?</ModalHeader>
+      <ModalHeader toggle={toggle}>{t('comment.delete_modal_message')}</ModalHeader>
       <ModalBody>
         <p>{comment.body}</p>
       </ModalBody>
       <ModalFooter>
         <Button type="submit" color="danger" onClick={handleSubmit}>
-          削除
+          {t('comment.delete')}
         </Button>
       </ModalFooter>
     </Modal>
