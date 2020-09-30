@@ -10,6 +10,4 @@ export default class CommentEvent extends EventEmitter {
     super()
     this.crowi = crowi
   }
-
-  onRemove(comment) {}
 }
