@@ -80,12 +80,12 @@ export default (crowi: Crowi) => {
    * @apiName DeleteComment
    * @apiGroup Comment
    *
-   * @apiParam {String} CommentId Comment Id.
+   * @apiParam {String} comment_id Comment Id.
    */
   api.delete = async function (req: Request, res: Response) {
-    const commentId = req.body.commentId
+    const comment_id = req.body.comment_id
     try {
-      const result = await Comment.removeCommentById(commentId)
+      const result = await Comment.removeCommentById(comment_id)
       return res.json(ApiResponse.success(result))
     } catch (err) {
       return res.json(ApiResponse.error(err))
