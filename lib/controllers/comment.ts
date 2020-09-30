@@ -76,14 +76,11 @@ export default (crowi: Crowi) => {
   }
 
   /**
-   * @api {post} /comments.delete Delete comment form the page
+   * @api {post} /comments.delete Delete a comment form the page
    * @apiName DeleteComment
    * @apiGroup Comment
    *
-   * @apiParam {String} page_id Page Id.
-   * @apiParam {String} revision_id Revision Id.
-   * @apiParam {String} comment Comment body
-   * @apiParam {Number} comment_position=-1 Line number of the comment
+   * @apiParam {String} CommentId Comment Id.
    */
   api.delete = async function (req: Request, res: Response) {
     const commentId = req.body.commentId
