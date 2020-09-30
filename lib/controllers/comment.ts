@@ -84,6 +84,11 @@ export default (crowi: Crowi) => {
    */
   api.delete = async function (req: Request, res: Response) {
     const comment_id = req.body.comment_id
+
+    if (!comment_id) {
+      return res.json(ApiResponse.error('Comment ID is not set'))
+    }
+
     try {
       const result = await Comment.removeCommentById(comment_id)
       return res.json(ApiResponse.success(result))
