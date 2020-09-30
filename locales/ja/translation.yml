@@ -356,3 +356,7 @@ unportalize:
   this_page: 'このページ'
   unportalized_page: '解除後のページ'
   alert_toppage: このポータルはトップページのポータルのため、特別なページに移動します。
+
+comment:
+  delete_modal_message: 本当にこのコメントを削除しますか？
+  delete: 削除
