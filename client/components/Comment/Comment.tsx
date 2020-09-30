@@ -124,13 +124,11 @@ const Comment: FC<Props> = (props) => {
   const { crowi, pageId, revisionId, revisionCreatedAt, isSharePage, ...others } = props
   const [comments, fetchComments] = useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage)
   const [{ posting, message }, { postComment }] = usePostComment(crowi, pageId, revisionId, fetchComments)
-
   const [{ deleting, deletingMessage }, { deleteComment }] = useDeleteComment(crowi, fetchComments)
   const [
     { isOpen: isOpenCommentDeleteModal, modalState: isOpenCommentDeleteModalState },
     { toggle: toggleCommentDeleteModal, open: openCommentDeleteModal },
   ] = useModal()
-  const { comment: deleteTarget } = isOpenCommentDeleteModalState
 
   useEffect(() => {
     fetchComments()
