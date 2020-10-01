@@ -5,15 +5,15 @@ import { useTranslation } from 'react-i18next'
 interface Props {
   isOpen: boolean
   toggle: () => void
-  comment: { id: string; body: string }
-  deleteComment: (commentId: string) => void
+  comment: { id: string; page_id: string; body: string }
+  deleteComment: (comment_id: string, page_id: string) => void
 }
 
 const CommentDeleteModal: FC<Props> = ({ isOpen, toggle, comment, deleteComment }) => {
   const [t] = useTranslation()
   const handleSubmit = (e) => {
     e.preventDefault()
-    deleteComment(comment.id)
+    deleteComment(comment.id, comment.page_id)
     toggle()
   }
   return (
