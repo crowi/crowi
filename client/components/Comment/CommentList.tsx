@@ -9,7 +9,7 @@ type Props = CommonProps & {
   crowi: Crowi
   comments: Comment[]
   revisionId: string | null
-  openCommentDeleteModal: ({ id, body }: { id: string; body: string }) => void
+  openCommentDeleteModal: ({ id, page_id, body }: { id: string; page_id: string; body: string }) => void
 }
 
 const CommentList: FC<Props> = (props) => {

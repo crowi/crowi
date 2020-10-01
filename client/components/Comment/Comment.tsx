@@ -90,11 +90,12 @@ function useDeleteComment(crowi: Crowi, fetchComments: () => Promise<void>) {
   const [deleting, setDeleting] = useState(false)
   const [deletingMessage, setDeletingMessage] = useState('')
 
-  const deleteComment = async (comment_id) => {
+  const deleteComment = async (comment_id: string, page_id: string) => {
     try {
       setDeleting(true)
       const { ok, error } = await crowi.apiPost('/comments.delete', {
         comment_id: comment_id,
+        page_id: page_id,
       })
       if (ok) {
         setDeletingMessage('')

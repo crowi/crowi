@@ -73,12 +73,12 @@ type Props = CommonProps & {
   crowi: Crowi
   revisionId: string | null
   comment: Record<string, any>
-  openCommentDeleteModal: ({ id, body }: { id: string; body: string }) => void
+  openCommentDeleteModal: ({ id, page_id, body }: { id: string; page_id: string; body: string }) => void
 }
 
 const CommentItem: FC<Props> = (props) => {
   const { crowi, revisionId, comment, openCommentDeleteModal, ...others } = props
-  const { _id: id, revision, creator, comment: commentBody, createdAt } = comment
+  const { _id: id, revision, creator, comment: commentBody, createdAt, page } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
 
   const relativeCreatedAt = formatDistanceFromNow(createdAt)
@@ -102,6 +102,7 @@ const CommentItem: FC<Props> = (props) => {
             onClick={() => {
               openCommentDeleteModal({
                 id: id,
+                page_id: page,
                 body: commentBody,
               })
             }}
