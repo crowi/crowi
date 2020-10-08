@@ -245,41 +245,41 @@ admin:
   app:
     legend: App Settings
     title: Name for this Wiki
-    title_description: You can rename this Wiki. The name will be displayed for headers and HTML title tag.
+    title_description: You can rename this Wiki - the name will be displayed in headers and HTML title tags.
     confidential: Confidential
-    confidential_placeholder: 'ex. Confidential'
-    confidential_description: You can customize confidential notification on headers.
-    allow_upload_file: Allow users upload files other than image
-    allow_upload_file_description1: You can apply this option only if you applied option which allow users upload files.
+    confidential_placeholder: 'Ex. "Confidential"'
+    confidential_description: You can customize confidential notifications in headers.
+    allow_upload_file: Allow users to upload files other than images.
+    allow_upload_file_description1: This option can only be applied if you allow users to upload files.
     allow_upload_file_description2: Users can attach files other than images if you apply this option.
   aws:
     legend: AWS Settings
-    tips1: You can configure your settings to access AWS. Once you complete this config, which enable file upload and profile picture feature.
-    notice: CAUTION. PLEASE NOTE THAT YOU MAY NOT ACCESS THE FILES YOU UPLOADED IF YOU CHANGE THIS SETTINGS.
+    tips1: You can configure your settings to access AWS. Once completed, file upload and profile picture features are enabled.
+    notice: CAUTION. PLEASE NOTE THAT YOU WILL BE UNABLE TO ACCESS THE FILES YOU UPLOADED IF YOU CHANGE THIS SETTING.
     region: Region
-    region_placeholder: 'ex. ap-northeast-1'
+    region_placeholder: 'Ex. "ap-northeast-1"'
     bucket: Bucket Name
-    bucket_placeholder: 'ex. crowi'
+    bucket_placeholder: 'Ex. "crowi"'
     access_key_id: Access Key ID
     secret_access_key: Secret Access Key
   github:
     legend: GitHub Settings
-    tips1: You will be able to login or sign up with GitHub account if you set GitHub information.
-    tips2: You can restrict login with GitHub account only for the members of organization if you input the organization name in this section.
+    tips1: Once you set up this project, You will be able to login or sign up with your GitHub account.
+    tips2: You can restrict login with GitHub accounts to only members of the organization if you input the organization name in this section.
     client_id: Client ID
     client_secret: Client Secret
     organization: Organization
   google:
     legend: Google Settings
-    tips: You will be able to login or sign up with Google account if you set Google information.
+    tips: Once you set up your project, You will be able to login or sign up with your Google account.
     client_id: Client ID
     client_secret: Client Secret
   mail:
     legend: Mail Settings
-    tips1: If you have SMTP settings in place, it will be used. If you don't have SMTP settings but you have AWS settings, it will try to send via SES. You need to verify FROM email address and enable production access.
-    tips2: Emails are not sent without either configs
-    from: From address
-    from_placeholder: 'ex. mail@crowi.wiki'
+    tips1: If you have SMTP settings in place, it will be used. If you don't have SMTP settings but you have AWS settings, it will try to send via SES. You need to verify the "FROM email address" and enable production access.
+    tips2: Emails can not be sent without either configuration set up.
+    from: FROM address
+    from_placeholder: 'Ex. mail@crowi.wiki'
     smtp:
       legend: SMTP Settings
       smtp: SMTP Settings
@@ -306,9 +306,9 @@ admin:
           open: 'Public - Anyone can register.'
           restricted: 'Restricted - Approval by Admin is required at registration.'
           closed: 'Closed - Invitation by Admin is required at registration.'
-    restriction_description: The information you input here will be displayed in the header
+    restriction_description: The information you input here will be displayed in the header.
     whitelist: Whitelist of email addresses for registration permission
-    whitelist_placeholder: 'ex. mail@crowi.wiki'
+    whitelist_placeholder: 'Ex. mail@crowi.wiki'
     whitelist_description1: You can limit the domain of email addresses that can be registered. For example, if you use crowi.wiki domain in your company, you can write <1>@crowi.wiki</1>, which means that only people with that company's email address can register.
     whitelist_description2: Please input one email address per line.
   backlink:
@@ -352,7 +352,7 @@ admin:
     build_description2: Click "Build Now" to delete all backlinks and create backlinks by all pages.
     build_description3: This may take a while.
   share:
-    legend: External Share Settings
+    legend: External Sharing Settings
     enable_external_share: Enable sharing Wiki pages to external users.
   user:
     legend: User List
@@ -367,27 +367,27 @@ admin:
       form:
         collapse: Invite new users
         email: Email
-        example: 'ex. user@crowi.wiki'
-        description: You can invite more than one person at once with multi-line email addresses.
+        example: 'Ex. user@crowi.wiki'
+        description: You can invite more than one person at a time with multi-line email addresses.
         checkbox: Send invitation by email
         submit: Submit
       modal:
-        completed_message: Success for inviting new users
+        completed_message: Successfully invited new users! 
         temp_password: The new users have temporary passwords.
-        caution_password: Please note that you can never find temporary passwords after you close this message.
-        caution_without_email: You need to tell directly the invited users temporary passwords if you have not sent email via invitation.
+        caution_password: Please note you will not be able to recover the temporary passwords once you close this message.
+        caution_without_email: You need to share the temporary passwords with invited users if you have not sent invitations via email.
         email: Email
         password: Password
         failed_message: Invitation Failed
     reset_password:
       modal:
-        ask: Do you reset the user's password?
-        caution: Please note that you can never find the new password after you close this message.
-        after_reset: Please tell the user the new password.
+        ask: Do you want to reset the user's password?
+        caution: Please note you will not be able to recover the new password once you close this message.
+        after_reset: Please share the new password with the user.
         submit: Submit
     edit:
       modal:
-        ask: Do you edit user information?
+        ask: Do you want to edit user information?
         current_name: Current name
         current_email: Current email
         new_name: Please enter your new name.
@@ -405,7 +405,7 @@ admin:
         delete_completely: Delete Completely
         admin_menu: Admin menu
         remove_admin: Remove admin
-        remove_caution: You can not remove yourself from admin.
+        remove_caution: You can not remove yourself as admin.
         make_admin: Make admin
 
 Portalize: Portalize
