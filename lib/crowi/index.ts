@@ -231,6 +231,7 @@ class Crowi {
     mongoose.Promise = global.Promise
 
     const mongoUri =
+      this.env.DB_URI || // https://mikan.github.io/2020/07/11/migrate-heroku-mlab-to-mongodb-atlas/
       this.env.MONGOLAB_URI || // for B.C.
       this.env.MONGODB_URI || // MONGOLAB changes their env name
       this.env.MONGOHQ_URL ||
