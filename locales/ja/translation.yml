@@ -229,6 +229,19 @@ search:
     results: '{{value}} 件'
 
 admin:
+  top:
+    title: Wiki管理
+    description: この画面はWiki管理者のみがアクセスできる画面です。
+    appoint_admin: 「ユーザー管理」から「管理者にする」ボタンを使ってユーザーをWiki管理者に任命することができます。
+  navigation:
+    top: Wiki 管理トップ
+    title: Wiki 管理
+    app: アプリ設定
+    notification: 通知設定
+    users: ユーザー管理
+    search: 検索管理
+    share: 外部共有設定  
+    backlinks: バックリンク管理
   app:
     legend: アプリ設定
     title: Wikiの名前
@@ -245,7 +258,9 @@ admin:
     tips2: また、SMTP の設定が無い場合、SES を利用したメール送信が行われます。FromメールアドレスのVerify、プロダクション利用設定をする必要があります。
     notice: この設定を途中で変更すると、これまでにアップロードしたファイル等へのアクセスができなくなりますのでご注意下さい。
     region: リージョン
+    region_placeholder: '例: ap-northeast-1'
     bucket: バケット名
+    bucket_placeholder: '例: crowi'
     access_key_id: Access Key ID
     secret_access_key: Secret Access Key
   github:
@@ -285,6 +300,12 @@ admin:
     tips1: Basic認証を設定すると、ページ全体に共通の認証がかかります。
     tips2: IDとパスワードは暗号化されずに送信されるのでご注意下さい。
     restriction: 登録の制限
+    registration:
+      mode:
+        label:
+          open: '公開（誰でも登録可能）'
+          restricted: '制限（登録完了には管理者の承認が必要）'
+          closed: '非公開（登録には管理者による招待が必要）'
     restriction_description: ここに入力した内容は、ヘッダー等に表示されます。
     whitelist: 登録許可メールアドレスのホワイトリスト
     whitelist_placeholder: '例: mail@crowi.wiki'
@@ -342,6 +363,50 @@ admin:
     status: ステータス
     operation: 操作
     not_found: ユーザーが見つかりませんでした
+    invite:
+      form:
+        collapse: 新規ユーザーの招待
+        email: メールアドレス
+        example: '例: user@crowi.wiki'
+        description: 複数行入力で複数人を招待可能
+        checkbox: 招待をメールで送信
+        submit: 招待する
+      modal:
+        completed_message: ユーザーを招待しました
+        temp_password: 作成したユーザーは仮パスワードが設定されています。
+        caution_password: 仮パスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
+        caution_without_email: 招待メールを送っていない場合、この画面で必ず仮パスワードをコピーし、招待者へ連絡してください。
+        email: メールアドレス
+        password: パスワード
+        failed_message: 作成失敗
+    reset_password:
+      modal:
+        ask: パスワードを新規発行しますか?
+        caution: 新規発行したパスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
+        after_reset: 新規発行したパスワードを、対象ユーザーへ連絡してください。
+        submit: 実行
+    edit:
+      modal:
+        ask: ユーザー情報を編集しますか？
+        current_name: 現在の名前
+        current_email: 現在のメールアドレス
+        new_name: 新しい名前を入力してください
+        new_email: 新しいメールアドレスを入力してください
+        submit: 実行 
+      dropdown:
+        edit: 編集
+        edit_menu: 編集メニュー
+        reset_password: パスワードの再発行
+        status: ステータス
+        approve: 承認する
+        suspend: アカウント停止
+        restore: 元に戻す
+        delete: 削除する
+        delete_completely: 完全に削除する
+        admin_menu: 管理者メニュー
+        remove_admin: 管理者から外す 
+        remove_caution: 自分自身を管理者から外すことはできません。
+        make_admin: 管理者にする
 
 Portalize: ポータル化
 portalize:
