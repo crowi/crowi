@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState, FC } from 'react'
-
+import { useTranslation } from 'react-i18next'
 import { AdminContext } from 'components/Admin/AdminPage'
 
 interface Info {
@@ -23,6 +23,7 @@ function useInfo(crowi) {
 }
 
 const TopPage: FC<{}> = () => {
+  const [t] = useTranslation()
   const { crowi, searchConfigured } = useContext(AdminContext)
   const [{ crowiVersion, searchInfo }, fetchInfo] = useInfo(crowi)
   const { node, indexName, esVersion } = searchInfo
@@ -34,9 +35,9 @@ const TopPage: FC<{}> = () => {
   return (
     <>
       <p>
-        この画面はWiki管理者のみがアクセスできる画面です。
+        {t('admin.top.description')}
         <br />
-        「ユーザー管理」から「管理者にする」ボタンを使ってユーザーをWiki管理者に任命することができます。
+        {t('admin.top.appoint_admin')}
       </p>
       <h2>Information</h2>
       <dl className="row">
