@@ -19,7 +19,7 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
   const [basicName, setBasicName] = useState(settingForm['security:basicName'] || '')
   const [basicSecret, setBasicSecret] = useState(settingForm['security:basicSecret'] || '')
   const [registrationMode, setRegistrationMode] = useState(settingForm['security:registrationMode'] || '')
-  const [registrationWhiteList, setRegistrationWhiteList] = useState(settingForm['security:registrationWhiteList'].join("\n"))
+  const [registrationWhiteList, setRegistrationWhiteList] = useState(settingForm['security:registrationWhiteList'].join(`\n`))
 
   const handleSubmit = (e) => {
     e.preventDefault()
