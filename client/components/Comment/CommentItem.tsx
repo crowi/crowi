@@ -6,6 +6,7 @@ import * as styles from 'client/constants/styles'
 import { CommonProps } from 'client/types/component'
 import Crowi from 'client/util/Crowi'
 import { formatToLocaleString, formatDistanceFromNow } from 'client/util/formatDate'
+import Icon from 'components/Common/Icon'
 
 type PageCommentContainerProps = Props & {
   isOwn: boolean
@@ -57,15 +58,27 @@ const CommentAt = styled.span`
   margin-right: 0.5em;
 `
 
+const Revision = styled.a`
+  margin-right: 1em;
+`
+
+const Trash = styled.a`
+  opacity: 0;
+  ${PageComment}:hover & {
+    opacity: 1;
+  }
+`
+
 type Props = CommonProps & {
   crowi: Crowi
   revisionId: string | null
   comment: Record<string, any>
+  openCommentDeleteModal: ({ id, page_id, body }: { id: string; page_id: string; body: string }) => void
 }
 
 const CommentItem: FC<Props> = (props) => {
-  const { crowi, revisionId, comment, ...others } = props
-  const { revision, creator, comment: commentBody, createdAt } = comment
+  const { crowi, revisionId, comment, openCommentDeleteModal, ...others } = props
+  const { _id: id, revision, creator, comment: commentBody, createdAt, page } = comment
   const badgeType = revision === revisionId ? 'badge-primary' : 'badge-secondary'
 
   const relativeCreatedAt = formatDistanceFromNow(createdAt)
@@ -81,9 +94,21 @@ const CommentItem: FC<Props> = (props) => {
         <CommentBody comment={commentBody} />
         <CommentMeta>
           <CommentAt title={absoluteCreatedAt}>{relativeCreatedAt}</CommentAt>
-          <a className={`badge ${badgeType}`} href={`?revision=${revision}`}>
+          <Revision className={`badge ${badgeType}`} href={`?revision=${revision}`}>
             {revision.substr(0, 8)}
-          </a>
+          </Revision>
+          <Trash
+            className="text-secondary"
+            onClick={() => {
+              openCommentDeleteModal({
+                id: id,
+                page_id: page,
+                body: commentBody,
+              })
+            }}
+          >
+            <Icon name="trashCanOutline" />
+          </Trash>
         </CommentMeta>
       </PageComment>
     </PageCommentContainer>
