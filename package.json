@@ -84,7 +84,7 @@
     "file-loader": "^6.0.0",
     "google-auth-library": "^5.5.1",
     "googleapis": "^44.0.0",
-    "highlight.js": "^9.15.8",
+    "highlight.js": "^10.1.2",
     "i18next": "~17.0.13",
     "i18next-browser-languagedetector": "^3.0.3",
     "i18next-express-middleware": "~1.8.1",
