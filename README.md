@@ -13,7 +13,7 @@
     <a href="https://circleci.com/gh/crowi/crowi"><img src="https://circleci.com/gh/crowi/crowi.svg?style=svg" alt="Circle CI"></a>
     <a href="https://codecov.io/gh/crowi/crowi"><img src="https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg" alt="Codecov"></a>
     <a href="https://hub.docker.com/r/crowi/crowi"><img src="https://img.shields.io/docker/pulls/crowi/crowi.svg" alt="Docker Pulls"></a>
-    <a href="https://spectrum.chat/crowi"><img src="https://withspectrum.github.io/badge/badge.svg" alt="Join the community on Spectrum"></a>
+    <a href="https://stakes.social/0x375bB44E669A14a09a982b98B74c677a8400EDbf"><img src="https://badge.devprotocol.xyz/0x375bB44E669A14a09a982b98B74c677a8400EDbf/descriptive" alt="Support on DEV"></a>
   </p>
 </div>
 
