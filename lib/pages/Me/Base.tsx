@@ -41,8 +41,8 @@ const Base: FC<Props> = (props) => {
             <ul className="nav nav-tabs">
               {navigationItems.map(({ name, icon, link, text }) =>
                 name !== 'password' || !context.auth.disablePasswordAuth ? (
-                  <li key={name} className={classNames('nav-item', activeItem === name ? 'active' : null)}>
-                    <a className="nav-link" href={link}>
+                  <li key={name} className="nav-item">
+                    <a className={classNames('nav-link', activeItem === name ? 'active' : null)} href={link}>
                       <Icon name={icon} /> {i18n.t(text)}
                     </a>
                   </li>
