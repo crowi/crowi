@@ -15,7 +15,7 @@ const PasswordPage: FC<Props> = (props) => {
 
   return (
     <Base title={i18n.t('Password Settings')} {...props}>
-      {hasPassword && <div className="alert alert-danger">{i18n.t('Please set a password')}</div>}
+      {!hasPassword && <div className="alert alert-danger">{i18n.t('Please set a password')}</div>}
 
       {user.email && (
         <p>
