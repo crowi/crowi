@@ -1,6 +1,6 @@
 import CrowiUtil from 'client/crowi'
 import plantuml from 'plantuml-encoder'
-import * as crypto from 'crypto'
+import SHA256 from 'crypto-js/sha256'
 import crowi from 'client/util/Crowi'
 
 export default class PlantUML {
@@ -11,9 +11,7 @@ export default class PlantUML {
   }
 
   generateId(token: string) {
-    const hasher = crypto.createHash('md5')
-    hasher.update(token)
-    return hasher.digest('hex')
+    return SHA256(token)
   }
 
   process(code: string, lang: string) {
