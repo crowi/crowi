@@ -10,9 +10,8 @@ export default (crowi: Crowi) => {
   const api = (actions.api = {} as any)
 
   api.list = async (req: Request, res: Response) => {
-    let { page = 1, limit = 50 } = req.query
-    page = parseInt(page)
-    limit = parseInt(limit)
+    const page = parseInt(req.query.page as string) || 1
+    const limit = parseInt(req.query.limit as string) || 50
     const options = { page, limit }
     try {
       const accessData = await ShareAccess.findAccesses({}, options)

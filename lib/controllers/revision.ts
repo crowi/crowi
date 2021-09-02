@@ -19,6 +19,9 @@ export default (crowi: Crowi) => {
    */
   actions.api.get = function (req: Request, res: Response) {
     const revisionId = req.query.revision_id
+    if (!revisionId) {
+      throw new Error(`revisionId is required`)
+    }
 
     Revision.findRevision(revisionId)
       .then(function (revisionData) {
@@ -69,7 +72,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id      Page Id.
    */
   actions.api.list = function (req: Request, res: Response) {
-    const revisionIds = (req.query.revision_ids || '').split(',')
+    const revisionIds = ((req.query.revision_ids as string) || '').split(',')
     const pageId = req.query.page_id || null
 
     if (pageId) {

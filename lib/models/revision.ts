@@ -15,7 +15,7 @@ export interface RevisionDocument extends Document {
 
 export interface RevisionModel extends Model<RevisionDocument> {
   findLatestRevision(path: string, cb: (err: Error, data: RevisionDocument | null) => void): void
-  findRevision(id: Types.ObjectId): Promise<RevisionDocument | null>
+  findRevision(id): Promise<RevisionDocument | null>
   findRevisions(ids): Promise<RevisionDocument[]>
   findRevisionIdList(path): Promise<RevisionDocument[]>
   findRevisionList(path, options): Promise<RevisionDocument[]>

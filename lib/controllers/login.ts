@@ -81,12 +81,19 @@ export default (crowi: Crowi, app: Express) => {
     const { code = '', state } = query
     const { google = {} } = req.session
     const { callbackAction: action } = google
-    const nextAction = action ? url.format({ pathname: action, query: { continue: state } }) : '/login'
+
+    let nextAction: URL
+    if (action) {
+      nextAction = new URL(`/${action}`, config['app:url'])
+      nextAction.searchParams.append('continue', state as string)
+    } else {
+      nextAction = new URL(`/login`, config['app:url'])
+    }
     debug('googleCallback.nextAction', nextAction)
     req.session.google = { authCode: code }
     debug('google auth code', code)
 
-    return res.redirect(nextAction)
+    return res.redirect(nextAction.toString())
   }
 
   actions.githubCallback = function (req: Request, res: Response) {
@@ -95,12 +102,22 @@ export default (crowi: Crowi, app: Express) => {
     const { code = '' } = query
     const { github = {} } = req.session
     const { callbackAction: action } = github
-    const nextAction = action ? url.format({ pathname: action, query }) : '/login'
+    // const nextAction = action ? url.format({ pathname: action, query }) : '/login'
+    let nextAction: URL
+    if (action) {
+      nextAction = new URL(`/${action}`, config['app:url'])
+      for (const [qkey, qvalue] of Object.entries(query)) {
+        nextAction.searchParams.append(qkey, qvalue as string)
+      }
+    } else {
+      nextAction = new URL(`/login`, config['app:url'])
+    }
+
     debug('githubCallback.nextAction', nextAction)
     req.session.github = { authCode: code }
     debug('github auth code', code)
 
-    return res.redirect(nextAction)
+    return res.redirect(nextAction.toString())
   }
 
   actions.error = function (req: Request, res: Response) {

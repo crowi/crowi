@@ -20,7 +20,7 @@ export interface WatcherDocument extends Document {
 }
 
 export interface WatcherModel extends Model<WatcherDocument> {
-  findByUserIdAndTargetId(userId: Types.ObjectId, targetId: Types.ObjectId): any
+  findByUserIdAndTargetId(userId: Types.ObjectId, targetId): any
   upsertWatcher(user: Types.ObjectId, targetModel: string, target: Types.ObjectId, status: string): any
   watchByPageId(user: Types.ObjectId, pageId: Types.ObjectId, status: string): any
   getWatchers(target: Types.ObjectId): Promise<Types.ObjectId[]>

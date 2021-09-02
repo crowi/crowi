@@ -248,7 +248,7 @@ export default (crowi: Crowi, app: Express) => {
 
     if (!config.crowi['auth:requireThirdPartyAuth'] || user.hasValidThirdPartyId()) {
       req.session.callback = null
-      return res.redirect(continueUrl)
+      return res.redirect(continueUrl as string)
     }
     req.session.callback = '/me/auth/third-party'
     return res.render('me/auth/third-party.html')

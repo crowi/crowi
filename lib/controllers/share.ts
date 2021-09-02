@@ -98,9 +98,10 @@ export default (crowi: Crowi) => {
   api.list = async (req: Request, res: Response) => {
     // list is allowed if the feature is disabled because it is used in admin page
 
-    let { page_id: pageId, page = 1, limit = 50, populate_accesses: populateAccesses = false } = req.query
-    page = parseInt(page)
-    limit = parseInt(limit)
+    const { page_id: pageId } = req.query
+    const page = parseInt(req.query.page as string) || 1
+    const limit = parseInt(req.query.limit as string) || 50
+    const populateAccesses = Boolean(req.query.populate_accesses)
     const query = pageId ? { page: pageId } : {}
     const options = { page, limit, populateAccesses }
     try {

@@ -13,7 +13,7 @@ export interface BacklinkDocument extends Document {
 }
 
 export interface BacklinkModel extends Model<BacklinkDocument> {
-  findByPageId(pageId: Types.ObjectId, limit: any, offset: any): Promise<BacklinkDocument[]>
+  findByPageId(pageId, limit: any, offset: any): Promise<BacklinkDocument[]>
   removeByPageId(pageId: Types.ObjectId): any
   removeBySavedPage(savedPage: any)
   createByParameters(parameters: any): Promise<BacklinkDocument>

@@ -73,7 +73,7 @@ export default (crowi: Crowi) => {
   actions.pageListShow = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = parseInt(req.query.offset as string) || 0
     const SEENER_THRESHOLD = 10
     let path = getPathFromRequest(req)
     path = path + (path == '/' ? '' : '/')
@@ -117,7 +117,7 @@ export default (crowi: Crowi) => {
   actions.deletedPageListShow = function (req: Request, res: Response) {
     const path = '/trash' + getPathFromRequest(req)
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = parseInt(req.query.offset as string) || 0
 
     // index page
     const pagerOptions: PagerOptions = { offset, limit }
@@ -385,7 +385,7 @@ export default (crowi: Crowi) => {
   actions.userBookmarkList = function (req: Request, res: Response) {
     const username = req.params.username
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = parseInt(req.query.offset as string) || 0
 
     const renderVars: any = {}
 
@@ -422,7 +422,7 @@ export default (crowi: Crowi) => {
   actions.userRecentCreatedList = function (req: Request, res: Response) {
     const username = req.params.username
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = parseInt(req.query.offset as string) || 0
 
     const renderVars: any = {}
 
@@ -495,7 +495,7 @@ export default (crowi: Crowi) => {
     const username = req.query.user || null
     const path = req.query.path || null
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = parseInt(req.query.offset as string) || 0
 
     const pagerOptions: PagerOptions = { offset, limit }
     const queryOptions = { offset, limit: limit + 1 }

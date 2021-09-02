@@ -35,7 +35,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} user_ids
    */
   api.list = function (req: Request, res: Response) {
-    const userIds = req.query.user_ids || null // TODO: handling
+    const userIds = (req.query.user_ids as string) || null // TODO: handling
 
     let userFetcher
     if (!userIds || userIds.split(',').length <= 0) {

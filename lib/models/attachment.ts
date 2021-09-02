@@ -23,7 +23,7 @@ export interface AttachmentDocument extends Document {
 }
 
 export interface AttachmentModel extends Model<AttachmentDocument> {
-  getListByPageId(id: Types.ObjectId): Promise<AttachmentDocument[]>
+  getListByPageId(id): Promise<AttachmentDocument[]>
   guessExtByFileType(fileType: string): string
   createAttachmentFilePath(pageId: Types.ObjectId, fileName: string, fileType: string): string
   removeAttachmentsByPageId(pageId: Types.ObjectId): any

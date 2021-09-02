@@ -10,7 +10,7 @@ export interface BookmarkDocument extends Document {
 }
 export interface BookmarkModel extends Model<BookmarkDocument> {
   populatePage(bookmarks: any[], requestUser?: any): Promise<BookmarkDocument[]>
-  findByPageIdAndUserId(pageId: Types.ObjectId, userId: Types.ObjectId): Promise<BookmarkDocument | null>
+  findByPageIdAndUserId(pageId, userId: Types.ObjectId): Promise<BookmarkDocument | null>
   findByUserId(
     userId: Types.ObjectId,
     option: any,

@@ -27,7 +27,7 @@ export interface ShareModel extends Model<ShareDocument> {
   paginate: any
 
   isExists(query): Promise<any>
-  findShares(query, options: { page?: number; limit?: number; sort?: object; populateAccesses?: boolean }): Promise<any>
+  findShares(query, options: { page?: number; limit?: number; sort?: object; populateAccesses?: boolean | string }): Promise<any>
   findShare(query, options?: { populateAccesses?: boolean }): Promise<ShareDocument>
   findShareByUuid(uuid, query?, options?): Promise<ShareDocument>
   findShareByPageId(pageId, query?, options?): Promise<ShareDocument>

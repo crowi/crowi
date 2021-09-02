@@ -212,11 +212,11 @@ export default (crowi: Crowi) => {
   actions.user = {}
   actions.api.user = {}
   actions.api.user.index = function (req: Request, res: Response) {
-    const page = parseInt(req.query.page) || 1
+    const page = parseInt(req.query.page as string) || 1
 
     // uq means user query
     // q used by search box on header
-    const uq = req.query.uq
+    const uq = req.query.uq as string
     const query: {
       $or?: any
     } = {}

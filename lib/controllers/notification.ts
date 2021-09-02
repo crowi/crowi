@@ -21,12 +21,12 @@ export default (crowi: Crowi) => {
 
     let limit = 10
     if (req.query.limit) {
-      limit = parseInt(req.query.limit, 10)
+      limit = parseInt(req.query.limit as string, 10)
     }
 
     let offset = 0
     if (req.query.offset) {
-      offset = parseInt(req.query.offset, 10)
+      offset = parseInt(req.query.offset as string, 10)
     }
 
     const requestLimit = limit + 1
