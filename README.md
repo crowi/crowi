@@ -42,7 +42,7 @@ Don't use `master` branch because it is unstable. Use released version except wh
 Dependencies
 -------------
 
-* Node.js 12.x
+* Node.js 14.x
 * MongoDB 4.2.x
 * Elasticsearch 6.x.x or 7.x.x (optional) ([Doc is here](https://github.com/crowi/crowi/wiki/Configure-Search-Functions))
 * Redis (optional)
