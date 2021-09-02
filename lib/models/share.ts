@@ -71,7 +71,7 @@ export default (crowi: Crowi) => {
 
   shareSchema.methods.isCreator = function (userData) {
     this.populate('creator')
-    const creatorId = ((this.creator as any) as UserDocument)._id.toString()
+    const creatorId = (this.creator as any as UserDocument)._id.toString()
     const userId = userData._id.toString()
 
     return creatorId === userId

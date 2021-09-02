@@ -21,13 +21,13 @@ interface AdminContext {
   fetchSettings: () => Promise<void>
 }
 
-export const AdminContext = createContext<AdminContext>(({
+export const AdminContext = createContext<AdminContext>({
   loading: true,
   searchConfigured: false,
   settingForm: {},
   registrationMode: '',
   isUploadable: false,
-} as any) as AdminContext)
+} as any as AdminContext)
 
 function useSearchConfig(crowi: Crowi) {
   const [searchConfigured, setSearchConfigured] = useState(false)

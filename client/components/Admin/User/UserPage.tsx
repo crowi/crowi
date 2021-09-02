@@ -185,10 +185,8 @@ const UserPage: FC<{}> = () => {
   const [{ users, pagination, query }, { setQuery, setSearch, fetchUsers, move }] = useFetchUsers(crowi, setFailure, clearStatus)
   const [{ invitedUsers }, { invite, clear }] = useInviteUsers(crowi, fetchUsers, setFailure, clearStatus)
 
-  const [
-    { isOpen: isOpenUserEditModal, modalState: userEditModalState },
-    { toggle: toggleUserEditModal, open: openUserEditModal, close: closeUserEditModal },
-  ] = useModal()
+  const [{ isOpen: isOpenUserEditModal, modalState: userEditModalState }, { toggle: toggleUserEditModal, open: openUserEditModal, close: closeUserEditModal }] =
+    useModal()
   const { user: editedUser } = userEditModalState
   const [{ name, emailToBeChanged }, { setName, setEmailToBeChanged, editUserNameAndEmail, clearForm }] = useEditUsers(
     crowi,

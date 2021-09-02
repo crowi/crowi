@@ -77,13 +77,13 @@ class Crowi {
   tokens: Tokens
 
   // FIXME: {} をアサインしないで済む方法を捜す
-  models: Models = ({} as any) as Models
+  models: Models = {} as any as Models
 
-  events: Events = ({} as any) as Events
+  events: Events = {} as any as Events
 
-  middlewares: Middlewares = ({} as any) as Middlewares
+  middlewares: Middlewares = {} as any as Middlewares
 
-  controllers: Controllers = ({} as any) as Controllers
+  controllers: Controllers = {} as any as Controllers
 
   env: typeof process.env
 

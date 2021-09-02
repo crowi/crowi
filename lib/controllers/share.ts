@@ -69,7 +69,7 @@ export default (crowi: Crowi) => {
 
       if (hasAccessAuthority(secretKeywords, share)) {
         req.session.shareIds = updateShareIds(shareIds, uuid)
-        const page = (share.page as any) as PageDocument
+        const page = share.page as any as PageDocument
 
         return res.render(getPath(crowi, 'SharePage'), {
           i18n: req.i18n,

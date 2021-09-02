@@ -6,67 +6,57 @@ describe('Page', () => {
   let createdPages
   let createdUsers
 
-  beforeAll((done) => {
+  beforeAll(async () => {
     Page = crowi.model('Page')
     User = crowi.model('User')
 
-    Promise.resolve()
-      .then(() => {
-        const userFixture = [
-          { name: 'Anon 0', username: 'anonymous0', email: 'anonymous0@example.com' },
-          { name: 'Anon 1', username: 'anonymous1', email: 'anonymous1@example.com' },
-        ]
+    const userFixture = [
+      { name: 'Anon 0', username: 'anonymous0', email: 'anonymous0@example.com' },
+      { name: 'Anon 1', username: 'anonymous1', email: 'anonymous1@example.com' },
+    ]
+    const testUsers = await Fixture.generate('User', userFixture)
+    createdUsers = testUsers
+    const testUser0 = testUsers[0]
+    const fixture = [
+      {
+        path: '/user/anonymous/memo',
+        grant: Page.GRANT_RESTRICTED,
+        grantedUsers: [testUser0],
+        creator: testUser0,
+      },
+      {
+        path: '/grant/public',
+        grant: Page.GRANT_PUBLIC,
+        grantedUsers: [testUser0],
+        creator: testUser0,
+      },
+      {
+        path: '/grant/restricted',
+        grant: Page.GRANT_RESTRICTED,
+        grantedUsers: [testUser0],
+        creator: testUser0,
+      },
+      {
+        path: '/grant/specified',
+        grant: Page.GRANT_SPECIFIED,
+        grantedUsers: [testUser0],
+        creator: testUser0,
+      },
+      {
+        path: '/grant/owner',
+        grant: Page.GRANT_OWNER,
+        grantedUsers: [testUser0],
+        creator: testUser0,
+      },
+      {
+        path: '/page/for/extended',
+        grant: Page.GRANT_PUBLIC,
+        creator: testUser0,
+        extended: { hoge: 1 },
+      },
+    ]
 
-        return Fixture.generate('User', userFixture)
-      })
-      .then((testUsers) => {
-        createdUsers = testUsers
-        const testUser0 = testUsers[0]
-
-        const fixture = [
-          {
-            path: '/user/anonymous/memo',
-            grant: Page.GRANT_RESTRICTED,
-            grantedUsers: [testUser0],
-            creator: testUser0,
-          },
-          {
-            path: '/grant/public',
-            grant: Page.GRANT_PUBLIC,
-            grantedUsers: [testUser0],
-            creator: testUser0,
-          },
-          {
-            path: '/grant/restricted',
-            grant: Page.GRANT_RESTRICTED,
-            grantedUsers: [testUser0],
-            creator: testUser0,
-          },
-          {
-            path: '/grant/specified',
-            grant: Page.GRANT_SPECIFIED,
-            grantedUsers: [testUser0],
-            creator: testUser0,
-          },
-          {
-            path: '/grant/owner',
-            grant: Page.GRANT_OWNER,
-            grantedUsers: [testUser0],
-            creator: testUser0,
-          },
-          {
-            path: '/page/for/extended',
-            grant: Page.GRANT_PUBLIC,
-            creator: testUser0,
-            extended: { hoge: 1 },
-          },
-        ]
-
-        return Fixture.generate('Page', fixture).then((pages) => {
-          createdPages = pages
-          done()
-        })
-      })
+    createdPages = await Fixture.generate('Page', fixture)
   })
 
   describe('.isPublic', () => {
@@ -207,7 +197,7 @@ describe('Page', () => {
         expect(page.getSlackChannel()).toBe('')
       })
 
-      test('set slack channel and should get it and should keep hoge ', async () => {
+      test('set slack channel and should get it and should keep hoge', async () => {
         const page = await Page.findOne({ path: '/page/for/extended' })
         await page.updateSlackChannel('slack-channel1')
 

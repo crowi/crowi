@@ -433,7 +433,7 @@ export default (crowi: Crowi) => {
         debug('Successfully save updatePost', doc)
 
         // fixme: うーん
-        doc.creator = ((doc.creator as any) as UserDocument)._id.toString() as any
+        doc.creator = (doc.creator as any as UserDocument)._id.toString() as any
         return res.json(ApiResponse.success({ updatePost: doc }))
       })
       .catch(function (err) {

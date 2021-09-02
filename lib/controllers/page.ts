@@ -245,7 +245,7 @@ export default (crowi: Crowi) => {
 
       if (isMarkdown) {
         res.set('Content-Type', 'text/plain')
-        return res.send(((page.revision as any) as RevisionDocument).body)
+        return res.send((page.revision as any as RevisionDocument).body)
       }
 
       return renderPage(page, req, res)
