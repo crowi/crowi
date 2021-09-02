@@ -1,47 +1,52 @@
 const path = require('path')
-const ExtractTextPlugin = require('extract-text-webpack-plugin')
-const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin')
+const MiniCssExtractPlugin = require('mini-css-extract-plugin')
+const RemoveEmptyScriptsPlugin = require('webpack-remove-empty-scripts')
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin')
 
 const isProduction = process.env.NODE_ENV === 'production'
 
 const ROOT = path.join(__dirname, '/../../')
 
-const extractSass = new ExtractTextPlugin({
-  filename: '[name].css',
-})
-
 const config = {
   mode: process.env.NODE_ENV,
   entry: {
-    crowi: './resource/css/crowi.scss',
+    'crowi-style': './resource/css/crowi.scss',
     'crowi-reveal': './resource/css/crowi-reveal.scss',
   },
   output: {
-    path: path.join(ROOT, 'public/css'),
-    filename: '[name].css',
+    path: path.resolve(ROOT, 'public/css'),
   },
   devtool: 'source-map',
+  plugins: [
+    new MiniCssExtractPlugin({
+      filename: '[name].css',
+    }),
+    new RemoveEmptyScriptsPlugin(),
+  ],
   module: {
     rules: [
       {
         test: /\.scss$/,
-        use: extractSass.extract({
-          use: [
-            {
-              loader: 'css-loader',
-              options: { url: false },
+        use: [
+          {
+            loader: MiniCssExtractPlugin.loader,
+          },
+          {
+            loader: 'css-loader',
+            options: {
+              url: false,
+              importLoaders: 2,
             },
-            {
-              loader: 'sass-loader',
-              options: {
-                sassOptions: {
-                  includePaths: ['./node_modules/bootstrap/scss', './node_modules/reveal.js/css'],
-                },
+          },
+          {
+            loader: 'sass-loader',
+            options: {
+              sassOptions: {
+                includePaths: ['./node_modules/bootstrap/scss', './node_modules/reveal.js/css'],
               },
             },
-          ],
-          fallback: 'style-loader',
-        }),
+          },
+        ],
       },
       {
         test: /\.woff2?$|\.ttf$|\.eot$|\.svg$/,
@@ -53,7 +58,9 @@ const config = {
       },
     ],
   },
-  plugins: [extractSass, ...(isProduction ? [new OptimizeCssAssetsPlugin()] : [])],
+  optimization: {
+    minimizer: [new CssMinimizerPlugin()],
+  },
   stats: {
     colors: true,
     errorDetails: true,
