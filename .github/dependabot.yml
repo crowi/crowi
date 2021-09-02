@@ -1,0 +1,21 @@
+version: 2
+updates:
+- package-ecosystem: npm
+  directory: "/"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: y18n
+    versions:
+    - 4.0.1
+  - dependency-name: nodemailer
+    versions:
+    - 6.4.16
+    - 6.4.17
+  - dependency-name: "@babel/plugin-proposal-export-namespace-from"
+    versions:
+    - 7.12.1
+  - dependency-name: enzyme-adapter-react-16
+    versions:
+    - 1.15.5
