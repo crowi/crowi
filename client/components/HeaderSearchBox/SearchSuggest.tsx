@@ -98,8 +98,8 @@ class SearchSuggest extends React.Component<Props> {
     }
 
     return [
-      this.renderList(t('page_types.portal'), 'fileDocumentBoxMultipleOutline', 'portal', portalPages),
-      this.renderList(t('page_types.public'), 'fileDocumentBoxOutline', 'public', publicPages),
+      this.renderList(t('page_types.portal'), 'textBoxMultipleOutline', 'portal', portalPages),
+      this.renderList(t('page_types.public'), 'textBoxOutline', 'public', publicPages),
       this.renderList(t('page_types.user'), 'account', 'user', userPages),
     ]
   }

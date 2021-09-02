@@ -85,7 +85,7 @@ const Header = () => {
                   )}
                   {user?.githubId && (
                     <span className="header-user-socialid">
-                      <Icon name="githubBox" />
+                      <Icon name="github" />
                     </span>
                   )}
                 </a>

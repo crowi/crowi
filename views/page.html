@@ -157,7 +157,7 @@
         {% if !isUserPage(path) || isNonExistentUserPage %}
           <a class="dropdown-item" href="#" data-target="#renamePage" data-toggle="modal">{{ Icon("fileMove") }} {{ t('Move') }}</a>
           <a class="dropdown-item" href="#" data-target="#renameTree" data-toggle="modal">{{ Icon("folderMove") }} {{ t('Move pages under', path|path2name ) }}</a>
-          <a class="dropdown-item" href="#" data-target="#portalize" data-toggle="modal">{{ Icon("fileDocumentBoxMultipleOutline") }} {{ t('Portalize') }}</a>
+          <a class="dropdown-item" href="#" data-target="#portalize" data-toggle="modal">{{ Icon("textBoxMultipleOutline") }} {{ t('Portalize') }}</a>
         {% endif %}
         <a class="dropdown-item toggle-presentation" href="?presentation=1">{{ Icon("presentation") }} {{ t('Presentation Mode') }} (beta)</a>
         {% if isDeletablePage() || isNonExistentUserPage %}

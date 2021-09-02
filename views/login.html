@@ -104,7 +104,7 @@
       {% endif %}
       {% if githubLoginEnabled() %}
       <form role="form" action="/login/github" method="get">
-        <button type="submit" class="btn btn-block btn-github">{{ Icon("githubBox") }} {{ t('page_login.sign_in_with', "GitHub") }}</button>
+        <button type="submit" class="btn btn-block btn-github">{{ Icon("github") }} {{ t('page_login.sign_in_with', "GitHub") }}</button>
         <input type="hidden" name="_csrf" value="{{ csrf() }}">
         <input type="hidden" name="continue" value="{{ continueUrl }}">
       </form>

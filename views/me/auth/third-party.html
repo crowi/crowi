@@ -46,7 +46,7 @@
       </div>
       {% endif %}
       <form action="/me/auth/github" method="post" role="form">
-        <button type="submit" class="btn btn-block btn-github" name="connectGitHub" value="1">{{ Icon("githubBox") }} {{ t('page_login.sign_in_with', "GitHub") }}</button>
+        <button type="submit" class="btn btn-block btn-github" name="connectGitHub" value="1">{{ Icon("github") }} {{ t('page_login.sign_in_with', "GitHub") }}</button>
         <input type="hidden" name="_csrf" value="{{ csrf() }}">
       </form>
     </div>
