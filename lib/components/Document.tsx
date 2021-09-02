@@ -34,7 +34,7 @@ const Document: FC<Props> = ({ title, bodyProps, bodyClassNames = [], context, c
         <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
         <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
         <link rel="icon" type="image/png" href="/android-chrome-192x192.png" sizes="192x192" />
-        <link rel="stylesheet" href="/css/crowi.css" />
+        <link rel="stylesheet" href="/css/crowi-style.css" />
         <script src={assetPath('/js/runtime.js')}></script>
         <script src={assetPath('/js/bundled.js')}></script>
         <link href="//fonts.googleapis.com/css?family=Open+Sans:400,600,700" rel="stylesheet" type="text/css" />
