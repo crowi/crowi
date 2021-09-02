@@ -121,7 +121,7 @@
     "socket.io-client": "^2.3.0",
     "socket.io-redis": "^5.3.0",
     "style-loader": "^3.2.1",
-    "styled-components": "^4.4.1",
+    "styled-components": "^5.3.1",
     "swig": "~1.4.0",
     "ts-loader": "^9.2.5",
     "tsconfig-paths": "^3.11.0",
