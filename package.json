@@ -35,7 +35,7 @@
     "@babel/plugin-proposal-optional-chaining": "^7.14.5",
     "@babel/plugin-proposal-throw-expressions": "^7.14.5",
     "@babel/plugin-syntax-dynamic-import": "^7.8.3",
-    "@babel/plugin-syntax-import-meta": "^7.10.1",
+    "@babel/plugin-syntax-import-meta": "^7.10.4",
     "@babel/polyfill": "^7.12.1",
     "@babel/preset-env": "^7.15.0",
     "@babel/preset-react": "^7.14.5",
@@ -133,6 +133,9 @@
     "yaml-loader": "^0.6.0"
   },
   "devDependencies": {
+    "@storybook/addon-postcss": "^2.0.0",
+    "@storybook/builder-webpack5": "^6.4.0-alpha.33",
+    "@storybook/manager-webpack5": "^6.4.0-alpha.33",
     "@storybook/react": "^6.3.7",
     "@types/bootstrap": "^4.1.2",
     "@types/classnames": "^2.2.9",
