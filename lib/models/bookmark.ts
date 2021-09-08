@@ -1,5 +1,6 @@
 import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
+import { MongoError } from 'mongodb'
 import Debug from 'debug'
 
 export interface BookmarkDocument extends Document {
@@ -40,7 +41,7 @@ export default (crowi: Crowi) => {
   })
   BookmarkSchema.index({ page: 1, user: 1 }, { unique: true })
 
-  BookmarkSchema.statics.populatePage = async function (bookmarks, requestUser) {
+  BookmarkSchema.statics.populatePage = async function (bookmarks: BookmarkDocument[], requestUser) {
     requestUser = requestUser || null
 
     const populatedBookmarks = await Bookmark.populate(bookmarks, {
@@ -120,7 +121,7 @@ export default (crowi: Crowi) => {
       BookmarkEvent.emit('create', page._id)
       return Bookmark
     } catch (err) {
-      if (err.code === 11000) {
+      if (err instanceof MongoError && err.message.match(/E11000/)) {
         // duplicate key (dummy response of new object)
         return newBookmark
       }
