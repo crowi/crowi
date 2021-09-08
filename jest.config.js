@@ -103,10 +103,12 @@ module.exports = {
     },
     {
       displayName: 'client/ts',
+      testEnvironment: 'jsdom',
       testMatch: ['<rootDir>/client/**/*.test.ts'],
     },
     {
       displayName: 'client/tsx',
+      testEnvironment: 'jsdom',
       setupFilesAfterEnv: ['./client/test/setup.ts'],
       testMatch: ['<rootDir>/client/**/*.test.tsx'],
     },

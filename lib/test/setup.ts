@@ -1,4 +1,4 @@
-import '@babel/polyfill'
+import 'regenerator-runtime/runtime'
 
 import Crowi from 'server/crowi'
 import { Express } from 'express'
