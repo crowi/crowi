@@ -187,7 +187,7 @@
     "jest": "^27.1.1",
     "lint-staged": "^10.2.11",
     "mini-css-extract-plugin": "^2.2.2",
-    "mongodb-memory-server": "^6.0.1",
+    "mongodb-memory-server": "^7.4.0",
     "node-sass": "^6.0.1",
     "nodemon": "^2.0.12",
     "npm-check": "^5.9.2",
