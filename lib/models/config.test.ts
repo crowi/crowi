@@ -1,9 +1,10 @@
 import { crowi, Fixture } from 'server/test/setup'
+import { ConfigModel } from './config'
 
 describe('Config model test', () => {
   let Config
 
-  beforeAll((done) => {
+  beforeAll(async () => {
     Config = crowi.model('Config')
 
     const fixtures = [
@@ -13,21 +14,7 @@ describe('Config model test', () => {
       { ns: 'plugin', key: 'other:config', value: JSON.stringify('this is data') },
     ]
 
-    Fixture.generate('Config', fixtures)
-      .then(function (configs) {
-        done()
-      })
-      .catch(function () {
-        done(new Error('Skip this test.'))
-      })
-  })
-
-  describe('.CONSTANTS', () => {
-    test('Config has constants', () => {
-      expect(Config.SECURITY_REGISTRATION_MODE_OPEN).toBe('Open')
-      expect(Config.SECURITY_REGISTRATION_MODE_RESTRICTED).toBe('Resricted')
-      expect(Config.SECURITY_REGISTRATION_MODE_CLOSED).toBe('Closed')
-    })
+    await Fixture.generate('Config', fixtures)
   })
 
   describe('.loadAllConfig', () => {
