@@ -2,9 +2,13 @@ import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 
-const SECURITY_REGISTRATION_MODE_OPEN = 'Open'
-const SECURITY_REGISTRATION_MODE_RESTRICTED = 'Resricted'
-const SECURITY_REGISTRATION_MODE_CLOSED = 'Closed'
+export const ConfigSecurityRegistrationMode = {
+  Open: 'open',
+  Restricted: 'restricted',
+  Closed: 'closed',
+} as const
+
+export type ConfigSecurityRegistrationModeType = typeof ConfigSecurityRegistrationMode[keyof typeof ConfigSecurityRegistrationMode]
 
 interface Config {
   crowi: object
@@ -16,12 +20,6 @@ export interface ConfigDocument extends Document {
   ns: string
   key: string
   value: string
-}
-
-export const registrationMode: Record<string, any> = {
-  [SECURITY_REGISTRATION_MODE_OPEN]: 'open',
-  [SECURITY_REGISTRATION_MODE_RESTRICTED]: 'restricted',
-  [SECURITY_REGISTRATION_MODE_CLOSED]: 'closed',
 }
 
 export function isRequiredThirdPartyAuth(config: Config): boolean {
@@ -76,10 +74,6 @@ export interface ConfigModel extends Model<ConfigDocument> {
   isUploadable(config: Config): boolean
   fileUploadEnabled(config: Config): boolean
   migrate(): Promise<void>
-
-  SECURITY_REGISTRATION_MODE_OPEN: string
-  SECURITY_REGISTRATION_MODE_RESTRICTED: string
-  SECURITY_REGISTRATION_MODE_CLOSED: string
 }
 
 export default (crowi: Crowi) => {
@@ -151,7 +145,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.updateConfigByNamespace = async function (ns, nsConfig) {
+  configSchema.statics.updateConfigByNamespace = async function (ns, nsConfig: Record<string, any>) {
     try {
       await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)))
     } catch (err) {
@@ -245,10 +239,6 @@ export default (crowi: Crowi) => {
     await forEachConfigs((ns, oldKey, newKey) => Config.copyConfig(ns, oldKey, newKey))
     await forEachConfigs((ns, oldKey) => Config.deleteConfig(ns, oldKey))
   }
-
-  configSchema.statics.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN
-  configSchema.statics.SECURITY_REGISTRATION_MODE_RESTRICTED = SECURITY_REGISTRATION_MODE_RESTRICTED
-  configSchema.statics.SECURITY_REGISTRATION_MODE_CLOSED = SECURITY_REGISTRATION_MODE_CLOSED
 
   const Config = model<ConfigDocument, ConfigModel>('Config', configSchema)
 

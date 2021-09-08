@@ -5,7 +5,7 @@ import ApiResponse from 'server/util/apiResponse'
 import { UserDocument } from 'server/models/user'
 import { getPath } from 'server/util/ssr'
 import { getAppContext } from 'server/util/view'
-import { registrationMode, hasSlackConfig, hasSlackToken } from 'server/models/config'
+import { hasSlackConfig, hasSlackToken, ConfigSecurityRegistrationMode } from 'server/models/config'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:admin')
@@ -95,7 +95,7 @@ export default (crowi: Crowi) => {
     const settingForm = config.crowi
     const isUploadable = Config.isUploadable(config)
 
-    return res.json(ApiResponse.success({ settingForm, registrationMode, isUploadable }))
+    return res.json(ApiResponse.success({ settingForm, registrationMode: ConfigSecurityRegistrationMode, isUploadable }))
   }
 
   actions.notification = {}

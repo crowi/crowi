@@ -7,7 +7,7 @@ import flash from 'connect-flash'
 import cons from 'consolidate'
 import expressReactViews from 'express-react-views'
 import Crowi from 'server/crowi'
-import { registrationMode } from 'server/models/config'
+import { ConfigSecurityRegistrationMode } from 'server/models/config'
 import Debug from 'debug'
 
 export default (crowi: Crowi, app: Express) => {
@@ -51,7 +51,7 @@ export default (crowi: Crowi, app: Express) => {
       pageGrants: Page.getGrantLabels(),
       userStatus: User.getUserStatusLabels(),
       language: User.getLanguageLabels(),
-      registrationMode,
+      registrationMode: ConfigSecurityRegistrationMode,
     }
 
     next()
