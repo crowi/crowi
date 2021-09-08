@@ -1,6 +1,6 @@
 import Debug from 'debug'
 import path, { sep } from 'path'
-import mongoose from 'mongoose'
+import { connect as mongooseConnect } from 'mongoose'
 import Tokens from 'csrf'
 import redis from 'redis'
 import url from 'url'
@@ -226,9 +226,8 @@ class Crowi {
     return this.events[name]
   }
 
-  setupDatabase() {
+  async setupDatabase() {
     // mongoUri = mongodb://user:password@host/dbname
-    mongoose.Promise = global.Promise
 
     const mongoUri =
       this.env.MONGOLAB_URI || // for B.C.
@@ -237,24 +236,19 @@ class Crowi {
       this.env.MONGO_URI ||
       'mongodb://localhost/crowi'
 
-    return new Promise((resolve, reject) => {
-      const mongooseOptions = {
-        useNewUrlParser: true,
-        useFindAndModify: false,
-        useCreateIndex: true,
-        useUnifiedTopology: true,
-      }
-      mongoose.connect(mongoUri, mongooseOptions, (e) => {
-        if (e) {
-          debug('DB Connect Error: ', e)
-          debug('DB Connect Error: ', mongoUri)
-          return reject(new Error("Cann't connect to Database Server."))
-        }
-
-        this.mongoose = mongoose
-        return resolve(mongoose)
-      })
-    })
+    const mongooseOptions = {
+      useNewUrlParser: true,
+      useFindAndModify: false,
+      useCreateIndex: true,
+      useUnifiedTopology: true,
+    }
+    try {
+      this.mongoose = await mongooseConnect(mongoUri, mongooseOptions)
+    } catch (e) {
+      debug('DB Connect Error: ', e)
+      debug('DB Connect Error: ', mongoUri)
+      throw new Error("Cann't connect to Database Server.")
+    }
   }
 
   async setupRedisClient() {
