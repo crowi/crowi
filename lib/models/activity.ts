@@ -8,7 +8,7 @@ export interface ActivityDocument extends Document {
   _id: Types.ObjectId
   user: Types.ObjectId | any
   targetModel: string
-  target: string
+  target: Types.ObjectId
   action: string
   event: Types.ObjectId
   eventModel: string
@@ -190,12 +190,12 @@ export default (crowi: Crowi) => {
   /**
    * saved hook
    */
-  activitySchema.post('save', async function (savedActivity: ActivityDocument) {
+  activitySchema.post('save', async (savedActivity: ActivityDocument) => {
     const Notification = crowi.model('Notification')
     try {
       const notificationUsers = await savedActivity.getNotificationTargetUsers()
 
-      return Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)))
+      Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)))
     } catch (err) {
       debug(err)
     }
