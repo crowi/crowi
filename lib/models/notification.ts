@@ -6,6 +6,14 @@ import ActivityDefine from 'server/util/activityDefine'
 import { ActivityDocument } from './activity'
 import { UserDocument } from './user'
 
+export const NotificationStatus = {
+  Unread: 'UNREAD',
+  Unopened: 'UNOPENED',
+  Opened: 'OPENED',
+} as const
+
+export type NotificationStatus = typeof NotificationStatus[keyof typeof NotificationStatus]
+
 const STATUS_UNREAD = 'UNREAD'
 const STATUS_UNOPENED = 'UNOPENED'
 const STATUS_OPENED = 'OPENED'
@@ -26,14 +34,10 @@ export interface NotificationModel extends Model<NotificationDocument> {
   findLatestNotificationsByUser(user: Types.ObjectId, skip: number, offset: number): Promise<NotificationDocument[]>
   upsertByActivity(user: Types.ObjectId, activity: ActivityDocument, createdAt?: Date | null): Promise<NotificationDocument | null>
   removeActivity(activity: any): any
-  removeEmpty(): Query<any>
-  read(user: UserDocument): Promise<Query<any>>
+  removeEmpty(): Promise<Query<any, NotificationDocument>>
+  read(user: UserDocument): Promise<Query<any, NotificationDocument>>
   open(user: UserDocument, id: Types.ObjectId): Promise<NotificationDocument | null>
   getUnreadCountByUser(user: Types.ObjectId): Promise<number | undefined>
-
-  STATUS_UNREAD: string
-  STATUS_UNOPENED: string
-  STATUS_OPENED: string
 }
 
 export default (crowi: Crowi) => {
@@ -70,8 +74,8 @@ export default (crowi: Crowi) => {
     ],
     status: {
       type: String,
-      default: STATUS_UNREAD,
-      enum: STATUSES,
+      default: NotificationStatus.Unread,
+      enum: NotificationStatus,
       index: true,
       require: true,
     },
@@ -114,7 +118,7 @@ export default (crowi: Crowi) => {
       targetModel,
       target,
       action,
-      status: STATUS_UNREAD,
+      status: NotificationStatus.Unread,
       createdAt: now,
       $addToSet: { activities: activityId },
     }
@@ -146,20 +150,20 @@ export default (crowi: Crowi) => {
     return result
   }
 
-  notificationSchema.statics.removeEmpty = function () {
+  notificationSchema.statics.removeEmpty = async function () {
     return Notification.deleteMany({ activities: { $size: 0 } })
   }
 
   notificationSchema.statics.read = async function (user) {
-    const query = { user, status: STATUS_UNREAD }
-    const parameters = { status: STATUS_UNOPENED }
+    const query = { user, status: NotificationStatus.Unread }
+    const parameters = { status: NotificationStatus.Unopened }
 
     return Notification.updateMany(query, parameters)
   }
 
   notificationSchema.statics.open = async function (user, id) {
     const query = { _id: id, user: user._id }
-    const parameters = { status: STATUS_OPENED }
+    const parameters = { status: NotificationStatus.Opened }
     const options = { new: true }
 
     const notification = await Notification.findOneAndUpdate(query, parameters, options)
@@ -170,7 +174,7 @@ export default (crowi: Crowi) => {
   }
 
   notificationSchema.statics.getUnreadCountByUser = async function (user) {
-    const query = { user, status: STATUS_UNREAD }
+    const query = { user, status: NotificationStatus.Unread }
 
     try {
       const count = await Notification.countDocuments(query)
@@ -188,10 +192,6 @@ export default (crowi: Crowi) => {
       io.sockets.emit('notification updated', { user })
     }
   })
-
-  notificationSchema.statics.STATUS_UNOPENED = STATUS_UNOPENED
-  notificationSchema.statics.STATUS_UNREAD = STATUS_UNREAD
-  notificationSchema.statics.STATUS_OPENED = STATUS_OPENED
 
   const Notification = model<NotificationDocument, NotificationModel>('Notification', notificationSchema)
 

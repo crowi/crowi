@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { crowi } from 'server/test/setup'
+import { NotificationStatus } from './notification'
 
 describe('Notification', function () {
   let Notification
@@ -17,18 +18,14 @@ describe('Notification', function () {
         const userId2 = ObjectId()
         const targetId = ObjectId()
         const activity = { _id: ObjectId(), user: userId1, targetModel: 'Page', target: targetId, action: 'COMMENT' }
-        return Notification.upsertByActivity(userId2, activity)
-          .then(function (notification) {
-            expect(notification.user.toString()).toBe(userId2.toString())
-            expect(notification.targetModel).toBe('Page')
-            expect(notification.target.toString()).toBe(targetId.toString())
-            expect(notification.action).toBe('COMMENT')
-            expect(notification.status).toBe(Notification.STATUS_UNREAD)
-            expect(notification.activities).toHaveLength(1)
-          })
-          .catch(function (err) {
-            throw new Error(err)
-          })
+
+        const result = await Notification.upsertByActivity(userId2, activity)
+        expect(result.user.toString()).toBe(userId2.toString())
+        expect(result.targetModel).toBe('Page')
+        expect(result.target.toString()).toBe(targetId.toString())
+        expect(result.action).toBe('COMMENT')
+        expect(result.status).toBe(NotificationStatus.Unread)
+        expect(result.activities).toHaveLength(1)
       })
     })
 
@@ -105,7 +102,7 @@ describe('Notification', function () {
 
       it('status is changed correctly', async () => {
         const notification = await Notification.open({ _id: user }, notificationId)
-        expect(notification.status).toBe(Notification.STATUS_OPENED)
+        expect(notification.status).toBe(NotificationStatus.Opened)
       })
     })
   })
