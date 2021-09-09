@@ -96,7 +96,7 @@
     "marked": "^0.6.3",
     "method-override": "~3.0.0",
     "mkdirp": "~0.5.1",
-    "mongoose": "^5.13.8",
+    "mongoose": "5.13.9",
     "mongoose-paginate": "5.0.x",
     "morgan": "^1.10.0",
     "multer": "^1.4.3",
