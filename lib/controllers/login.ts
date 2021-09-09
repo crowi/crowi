@@ -9,7 +9,7 @@ import GoogleAuth from 'server/util/googleAuth'
 import GitHubAuth from 'server/util/githubAuth'
 import axios from 'axios'
 import FileUploader from 'server/util/fileUploader'
-import { isDisabledPasswordAuth } from '../models/config'
+import { ConfigSecurityRegistrationMode, isDisabledPasswordAuth } from '../models/config'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:login')
@@ -289,7 +289,7 @@ export default (crowi: Crowi, app: Express) => {
     }
 
     // config で closed ならさよなら
-    if (config.crowi['security:registrationMode'] == Config.SECURITY_REGISTRATION_MODE_CLOSED) {
+    if (config.crowi['security:registrationMode'] == ConfigSecurityRegistrationMode.Closed) {
       return res.redirect('/')
     }
 
@@ -329,7 +329,7 @@ export default (crowi: Crowi, app: Express) => {
             return res.redirect('/register')
           } else {
             // 作成後、承認が必要なモードなら、管理者に通知する
-            if (config.crowi['security:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_RESTRICTED) {
+            if (config.crowi['security:registrationMode'] === ConfigSecurityRegistrationMode.Restricted) {
               // TODO send mail
               User.findAdmins(function (err, admins) {
                 async.each(
