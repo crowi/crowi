@@ -5,6 +5,7 @@ import CommentForm from './CommentForm'
 import Crowi from 'client/util/Crowi'
 import { CommonProps } from 'client/types/component'
 import { Comment as CommentType } from 'client/types/crowi'
+import CommentDeleteModal from './CommentDeleteModal'
 
 const PageComments = styled.div<Props>`
   margin: 8px 0 0 0;
@@ -69,6 +70,49 @@ function usePostComment(crowi: Crowi, pageId: string | null, revisionId: string 
   return [{ posting, message }, { postComment }] as const
 }
 
+function useModal<T = any>(initialState: T | {} = {}) {
+  const [isOpen, setModal] = useState(false)
+  const [modalState, setModalState] = useState(initialState)
+
+  const toggle = () => setModal(!isOpen)
+  const open = (state) => {
+    setModal(true)
+    if (state) setModalState(state)
+  }
+
+  return [
+    { isOpen, modalState },
+    { toggle, open },
+  ] as const
+}
+
+function useDeleteComment(crowi: Crowi, fetchComments: () => Promise<void>) {
+  const [deleting, setDeleting] = useState(false)
+  const [deletingMessage, setDeletingMessage] = useState('')
+
+  const deleteComment = async (comment_id: string, page_id: string) => {
+    try {
+      setDeleting(true)
+      const { ok, error } = await crowi.apiPost('/comments.delete', {
+        comment_id: comment_id,
+        page_id: page_id,
+      })
+      if (ok) {
+        setDeletingMessage('')
+        fetchComments()
+      } else {
+        setDeletingMessage(error)
+      }
+    } catch (err) {
+      setDeletingMessage(err.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return [{ deleting, deletingMessage }, { deleteComment }] as const
+}
+
 type Props = CommonProps & {
   crowi: Crowi
   pageId: string | null
@@ -81,16 +125,29 @@ const Comment: FC<Props> = (props) => {
   const { crowi, pageId, revisionId, revisionCreatedAt, isSharePage, ...others } = props
   const [comments, fetchComments] = useFetchComments(crowi, pageId, revisionId, revisionCreatedAt, isSharePage)
   const [{ posting, message }, { postComment }] = usePostComment(crowi, pageId, revisionId, fetchComments)
+  const [{ deleting, deletingMessage }, { deleteComment }] = useDeleteComment(crowi, fetchComments)
+  const [
+    { isOpen: isOpenCommentDeleteModal, modalState: isOpenCommentDeleteModalState },
+    { toggle: toggleCommentDeleteModal, open: openCommentDeleteModal },
+  ] = useModal()
 
   useEffect(() => {
     fetchComments()
   }, [])
 
   return !isSharePage ? (
-    <PageComments {...others}>
-      <CommentForm posting={posting} message={message} postComment={postComment} />
-      <CommentLists crowi={crowi} comments={comments} revisionId={revisionId} />
-    </PageComments>
+    <>
+      <PageComments {...others}>
+        <CommentForm posting={posting} message={message} postComment={postComment} />
+        <CommentLists crowi={crowi} comments={comments} revisionId={revisionId} openCommentDeleteModal={openCommentDeleteModal} />
+      </PageComments>
+      <CommentDeleteModal
+        isOpen={isOpenCommentDeleteModal}
+        toggle={toggleCommentDeleteModal}
+        comment={isOpenCommentDeleteModalState}
+        deleteComment={deleteComment}
+      />
+    </>
   ) : null
 }
 

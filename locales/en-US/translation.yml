@@ -421,3 +421,7 @@ unportalize:
   this_page: 'This page'
   unportalized_page: 'Unportalized page'
   alert_toppage: This page will move to a special page because this is top page portal.
+
+comment:
+  delete_modal_message: Delete this comment?
+  delete: Delete

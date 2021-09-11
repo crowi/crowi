@@ -5,6 +5,7 @@ import Page from './page'
 import Search from './search'
 import User from './user'
 import Config from './config'
+import Comment from './comment'
 
 export default {
   Activity,
@@ -14,4 +15,5 @@ export default {
   Search,
   User,
   Config,
+  Comment,
 }

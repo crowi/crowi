@@ -6,6 +6,7 @@ import { UserDocument } from 'server/models/user'
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routs:comment')
   const Comment = crowi.model('Comment')
+  const Page = crowi.model('Page')
   const actions = {} as any
   const api = {} as any
 
@@ -70,6 +71,40 @@ export default (crowi: Crowi) => {
       let createdComment = await Comment.create({ page, creator, revision, comment, commentPosition })
       createdComment = await createdComment.populate('creator').execPopulate()
       return res.json(ApiResponse.success({ comment: createdComment }))
+    } catch (err) {
+      return res.json(ApiResponse.error(err))
+    }
+  }
+
+  /**
+   * @api {post} /comments.delete Delete a comment form the page
+   * @apiName DeleteComment
+   * @apiGroup Comment
+   *
+   * @apiParam {String} comment_id Comment Id.
+   * @apiParam {String} page_id Page Id.
+   */
+  api.delete = async function (req: Request, res: Response) {
+    const user = req.user as UserDocument
+    const comment_id = req.body.comment_id
+    const page_id = req.body.page_id
+
+    if (!comment_id || !page_id) {
+      return res.json(ApiResponse.error('Comment ID or Page ID is not set'))
+    }
+
+    try {
+      const pageData = await Page.findPageById(page_id)
+      if (!pageData.isGrantedFor(user)) {
+        return res.json(ApiResponse.error('Permission error'))
+      }
+    } catch (err) {
+      return res.json(ApiResponse.error(err))
+    }
+
+    try {
+      const result = await Comment.removeCommentById(comment_id)
+      return res.json(ApiResponse.success(result))
     } catch (err) {
       return res.json(ApiResponse.error(err))
     }
