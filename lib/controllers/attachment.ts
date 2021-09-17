@@ -78,9 +78,9 @@ export default (crowi: Crowi, app: Express) => {
         ApiResponse.success({
           attachments: attachments.map((at) => {
             const fileUrl = at.fileUrl
-            at = at.toObject()
-            at.url = baseUrl + fileUrl
-            return at
+            const attachmentResult = at.toObject()
+            attachmentResult.url = baseUrl + fileUrl
+            return attachmentResult
           }),
         }),
       )
