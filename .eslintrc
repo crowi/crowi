@@ -40,7 +40,10 @@
     "react/prop-types": "off",
     "standard/no-callback-literal": "off",
     "node/handle-callback-err": "off",
-    "array-callback-return": "off"
+    "array-callback-return": "off",
+    "no-use-before-define": "off",
+    "prefer-regex-literals": "off",
+    "node/no-callback-literal": "off"
   },
   "settings": {
     "react": {

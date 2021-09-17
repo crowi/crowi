@@ -1,11 +1,12 @@
 import googleAuth from './googleAuth'
 import githubAuth from './githubAuth'
+import { UserStatus } from 'server/models/user'
 
 export default {
   isLoggedIn(crowi, req) {
     const { user = {} } = req
     const User = crowi.model('User')
-    const isLoggedIn = user && '_id' in user && user.status === User.STATUS_ACTIVE
+    const isLoggedIn = user && '_id' in user && user.status === UserStatus.Active
     return isLoggedIn
   },
   isAccessTokenExpired(req) {

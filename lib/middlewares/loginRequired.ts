@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
 import auth from 'server/util/auth'
 import Debug from 'debug'
+import { UserStatus } from 'server/models/user'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:middlewares:loginRequired')
@@ -28,14 +29,14 @@ export default (crowi: Crowi) => {
         return res.redirect(`/me/auth/third-party${query}`)
       }
 
-      if (req.user.status === User.STATUS_ACTIVE) {
+      if (req.user.status === UserStatus.Active) {
         // Active の人だけ先に進める
         return next()
-      } else if (req.user.status === User.STATUS_REGISTERED) {
+      } else if (req.user.status === UserStatus.Registered) {
         return res.redirect('/login/error/registered')
-      } else if (req.user.status === User.STATUS_SUSPENDED) {
+      } else if (req.user.status === UserStatus.Suspended) {
         return res.redirect('/login/error/suspended')
-      } else if (req.user.status === User.STATUS_INVITED) {
+      } else if (req.user.status === UserStatus.Invited) {
         return res.redirect('/login/invited')
       }
     }

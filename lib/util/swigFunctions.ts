@@ -4,6 +4,7 @@ import * as Icons from '@mdi/js'
 import renderIcon from 'common/functions/renderIcon'
 import { parentPath, isUserPageList, isUserPage, isTopPage, isTrashPage, userPageRoot, getAppContext } from './view'
 import { hasSlackToken, googleLoginEnabled, githubLoginEnabled } from 'server/models/config'
+import { UserStatus } from 'server/models/user'
 
 export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   // const debug = Debug('crowi:lib:swigFunctions')
@@ -101,15 +102,15 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
       // debug('userStatus', user._id, user.usename, user.status);
 
       switch (user.status) {
-        case User.STATUS_REGISTERED:
+        case UserStatus.Registered:
           return 'badge-info'
-        case User.STATUS_ACTIVE:
+        case UserStatus.Active:
           return 'badge-success'
-        case User.STATUS_SUSPENDED:
+        case UserStatus.Suspended:
           return 'badge-warning'
-        case User.STATUS_DELETED:
+        case UserStatus.Deleted:
           return 'badge-danger'
-        case User.STATUS_INVITED:
+        case UserStatus.Invited:
           return 'badge-info'
         default:
           break

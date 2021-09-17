@@ -10,6 +10,7 @@ import GitHubAuth from 'server/util/githubAuth'
 import axios from 'axios'
 import FileUploader from 'server/util/fileUploader'
 import { ConfigSecurityRegistrationMode, isDisabledPasswordAuth } from '../models/config'
+import { UserLang } from 'server/models/user'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:login')
@@ -281,7 +282,7 @@ export default (crowi: Crowi, app: Express) => {
   actions.register = async function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     // FIXME: lang
-    const { lang = User.LANG_EN_US } = req as any
+    const { lang = UserLang.EnUs } = req as any
 
     // ログイン済みならさようなら
     if (req.user) {

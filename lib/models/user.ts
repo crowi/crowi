@@ -4,17 +4,25 @@ import Debug from 'debug'
 import mongoosePaginate from 'mongoose-paginate'
 import crypto from 'crypto'
 import async from 'async'
-import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth } from 'server/models/config'
+import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth, ConfigSecurityRegistrationMode } from 'server/models/config'
 
-const STATUS_REGISTERED = 1
-const STATUS_ACTIVE = 2
-const STATUS_SUSPENDED = 3
-const STATUS_DELETED = 4
-const STATUS_INVITED = 5
-const LANG_EN = 'en'
-const LANG_EN_US = 'en-US'
-const LANG_EN_GB = 'en-GB'
-const LANG_JA = 'ja'
+export const UserStatus = {
+  Registered: 1,
+  Active: 2,
+  Suspended: 3,
+  Deleted: 4,
+  Invited: 5,
+} as const
+export type UserStatusType = typeof UserStatus[keyof typeof UserStatus]
+
+export const UserLang = {
+  En: 'en',
+  EnUs: 'en-US',
+  EnGb: 'en-GB',
+  Ja: 'ja',
+} as const
+export type UserLangType = typeof UserLang[keyof typeof UserLang]
+
 const PAGE_ITEMS = 50
 
 export interface UserDocument extends Document {
@@ -29,8 +37,8 @@ export interface UserDocument extends Document {
   introduction: string
   password: string
   apiToken: string
-  lang: 'en' | 'en-US' | 'en-GB' | 'ja'
-  status: number
+  lang: UserLangType
+  status: UserStatusType
   createdAt: Date
   admin: boolean
 
@@ -87,17 +95,6 @@ export interface UserModel extends Model<UserDocument> {
   createUserByEmailAndPassword(name, username, email, password, lang, callback): any
   createUserPictureFilePath(user: UserDocument, ext: string): string
   getUsernameByPath(path): string | null
-
-  STATUS_REGISTERED: number
-  STATUS_ACTIVE: number
-  STATUS_SUSPENDED: number
-  STATUS_DELETED: number
-  STATUS_INVITED: number
-  PAGE_ITEMS: number
-  LANG_EN: string
-  LANG_EN_US: string
-  LANG_EN_GB: string
-  LANG_JA: string
 }
 
 export default (crowi: Crowi) => {
@@ -119,9 +116,9 @@ export default (crowi: Crowi) => {
     lang: {
       type: String,
       enum: Object.values(getLanguageLabels()),
-      default: LANG_EN_US,
+      default: UserLang.EnUs,
     },
-    status: { type: Number, required: true, default: STATUS_ACTIVE, index: true },
+    status: { type: Number, required: true, default: UserStatus.Active, index: true },
     createdAt: { type: Date, default: Date.now },
     admin: { type: Boolean, default: 0, index: true },
   })
@@ -134,18 +131,18 @@ export default (crowi: Crowi) => {
     const config = crowi.getConfig()
 
     if (!config.crowi) {
-      return STATUS_ACTIVE // is this ok?
+      return UserStatus.Active // is this ok?
     }
 
     // status decided depends on registrationMode
     switch (config.crowi['security:registrationMode']) {
-      case Config.SECURITY_REGISTRATION_MODE_OPEN:
-        return STATUS_ACTIVE
-      case Config.SECURITY_REGISTRATION_MODE_RESTRICTED:
-      case Config.SECURITY_REGISTRATION_MODE_CLOSED: // 一応
-        return STATUS_REGISTERED
+      case ConfigSecurityRegistrationMode.Open:
+        return UserStatus.Active
+      case ConfigSecurityRegistrationMode.Restricted:
+      case ConfigSecurityRegistrationMode.Closed: // 一応
+        return UserStatus.Registered
       default:
-        return STATUS_ACTIVE // どっちにすんのがいいんだろうな
+        return UserStatus.Active // どっちにすんのがいいんだろうな
     }
   }
 
@@ -178,10 +175,10 @@ export default (crowi: Crowi) => {
 
   function getLanguageLabels() {
     const lang = {
-      LANG_EN,
-      LANG_EN_US,
-      LANG_EN_GB,
-      LANG_JA,
+      LANG_EN: UserLang.En,
+      LANG_EN_US: UserLang.EnUs,
+      LANG_EN_GB: UserLang.EnGb,
+      LANG_JA: UserLang.Ja,
     }
 
     return lang
@@ -283,7 +280,7 @@ export default (crowi: Crowi) => {
     this.setPassword(password)
     this.name = name
     this.username = username
-    this.status = STATUS_ACTIVE
+    this.status = UserStatus.Active
     this.save(function (err, userData) {
       userEvent.emit('activated', userData)
       return callback(err, userData)
@@ -308,7 +305,7 @@ export default (crowi: Crowi) => {
 
   userSchema.methods.statusActivate = function (callback) {
     debug('Activate User', this)
-    this.status = STATUS_ACTIVE
+    this.status = UserStatus.Active
     this.save(function (err, userData) {
       userEvent.emit('activated', userData)
       return callback(err, userData)
@@ -317,7 +314,7 @@ export default (crowi: Crowi) => {
 
   userSchema.methods.statusSuspend = function (callback) {
     debug('Suspend User', this)
-    this.status = STATUS_SUSPENDED
+    this.status = UserStatus.Suspended
     if (this.email === undefined || this.email === null) {
       // migrate old data
       this.email = '-'
@@ -337,7 +334,7 @@ export default (crowi: Crowi) => {
 
   userSchema.methods.statusDelete = function (callback) {
     debug('Delete User', this)
-    this.status = STATUS_DELETED
+    this.status = UserStatus.Deleted
     this.password = ''
     this.email = 'deleted@deleted'
     this.googleId = null
@@ -354,11 +351,11 @@ export default (crowi: Crowi) => {
   userSchema.statics.getLanguageLabels = getLanguageLabels
   userSchema.statics.getUserStatusLabels = function () {
     const userStatus = {}
-    userStatus[STATUS_REGISTERED] = '承認待ち'
-    userStatus[STATUS_ACTIVE] = 'Active'
-    userStatus[STATUS_SUSPENDED] = 'Suspended'
-    userStatus[STATUS_DELETED] = 'Deleted'
-    userStatus[STATUS_INVITED] = '招待済み'
+    userStatus[UserStatus.Registered] = '承認待ち'
+    userStatus[UserStatus.Active] = 'Active'
+    userStatus[UserStatus.Suspended] = 'Suspended'
+    userStatus[UserStatus.Deleted] = 'Deleted'
+    userStatus[UserStatus.Invited] = '招待済み'
 
     return userStatus
   }
@@ -400,7 +397,7 @@ export default (crowi: Crowi) => {
 
   userSchema.statics.findAllUsers = function (options = {}) {
     const sort = options.sort || { createdAt: -1 }
-    let status = options.status || [STATUS_ACTIVE, STATUS_SUSPENDED]
+    let status = options.status || [UserStatus.Active, UserStatus.Suspended]
     const fields = options.fields
 
     if (!Array.isArray(status)) {
@@ -420,7 +417,7 @@ export default (crowi: Crowi) => {
 
   userSchema.statics.findUsersByIds = function (ids, options = {}) {
     const sort = options.sort || { createdAt: -1 }
-    const status = options.status || STATUS_ACTIVE
+    const status = options.status || UserStatus.Active
     const fields = options.fields
 
     return User.find({ _id: { $in: ids }, status: status })
@@ -534,7 +531,7 @@ export default (crowi: Crowi) => {
       debug('Removing user:', userData)
       // 物理削除可能なのは、招待中ユーザーのみ
       // 利用を一度開始したユーザーは論理削除のみ可能
-      if (userData.status !== STATUS_INVITED) {
+      if (userData.status !== UserStatus.Invited) {
         return callback(new Error('Cannot remove completely the user whoes status is not INVITED'), null)
       }
 
@@ -599,7 +596,7 @@ export default (crowi: Crowi) => {
           newUser.email = email
           newUser.setPassword(password)
           newUser.createdAt = Date.now() as any
-          newUser.status = STATUS_INVITED
+          newUser.status = UserStatus.Invited
 
           newUser.save(function (err, user) {
             if (err) {
@@ -670,7 +667,7 @@ export default (crowi: Crowi) => {
     newUser.status = decideUserStatusOnRegistration()
 
     newUser.save(function (err, userData) {
-      if (userData.status == STATUS_ACTIVE) {
+      if (userData.status == UserStatus.Active) {
         userEvent.emit('activated', userData)
       }
       return callback(err, userData)
@@ -692,18 +689,6 @@ export default (crowi: Crowi) => {
 
     return username
   }
-
-  userSchema.statics.STATUS_REGISTERED = STATUS_REGISTERED
-  userSchema.statics.STATUS_ACTIVE = STATUS_ACTIVE
-  userSchema.statics.STATUS_SUSPENDED = STATUS_SUSPENDED
-  userSchema.statics.STATUS_DELETED = STATUS_DELETED
-  userSchema.statics.STATUS_INVITED = STATUS_INVITED
-  userSchema.statics.PAGE_ITEMS = PAGE_ITEMS
-
-  userSchema.statics.LANG_EN = LANG_EN
-  userSchema.statics.LANG_EN_US = LANG_EN_US
-  userSchema.statics.LANG_EN_GB = LANG_EN_US
-  userSchema.statics.LANG_JA = LANG_JA
 
   const User = model<UserDocument, UserModel>('User', userSchema)
 

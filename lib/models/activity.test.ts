@@ -1,6 +1,7 @@
 import faker from 'faker'
 import mongoose from 'mongoose'
 import { crowi, Fixture } from 'server/test/setup'
+import { UserStatus } from './user'
 
 describe('Activity', function () {
   let Activity
@@ -88,9 +89,9 @@ describe('Activity', function () {
       await Promise.all([User, Page, Comment, Watcher, Activity].map((model) => model.deleteMany({})))
 
       const users = [
-        { _id: userIds[0], email: faker.internet.email(), status: User.STATUS_ACTIVE },
-        { _id: userIds[1], email: faker.internet.email(), status: User.STATUS_ACTIVE },
-        { _id: userIds[2], email: faker.internet.email(), status: User.STATUS_SUSPENDED },
+        { _id: userIds[0], email: faker.internet.email(), status: UserStatus.Active },
+        { _id: userIds[1], email: faker.internet.email(), status: UserStatus.Active },
+        { _id: userIds[2], email: faker.internet.email(), status: UserStatus.Suspended },
       ]
       const pages = [{ _id: pageId, path: `/${faker.lorem.word()}`, grant: Page.GRANT_PUBLIC, creator: userIds[0] }]
       const comments = userIds.map((userId) => ({ page: pageId, creator: userId, comment: faker.lorem.word() }))

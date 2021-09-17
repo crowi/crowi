@@ -3,6 +3,7 @@ import { DeleteWriteOpResultObject } from 'mongodb'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 import ActivityDefine from 'server/util/activityDefine'
+import { UserStatus } from './user'
 
 export interface ActivityDocument extends Document {
   _id: Types.ObjectId
@@ -182,7 +183,7 @@ export default (crowi: Crowi) => {
     const notificationUsers = filter(unique([...targetUsers, ...watchUsers]), [...ignoreUsers, actionUser])
     const activeNotificationUsers = await User.find({
       _id: { $in: notificationUsers },
-      status: User.STATUS_ACTIVE,
+      status: UserStatus.Active,
     }).distinct('_id')
     return activeNotificationUsers
   }

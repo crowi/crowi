@@ -5,6 +5,7 @@ import i18nFsBackend from 'i18next-node-fs-backend'
 import i18nSprintf from 'i18next-sprintf-postprocessor'
 import i18nMiddleware from 'i18next-express-middleware'
 import i18nUserSettingDetector from 'server/util/i18nUserSettingDetector'
+import { UserLang } from 'server/models/user'
 
 export default (crowi: Crowi, app: Express) => {
   const User = crowi.model('User')
@@ -17,7 +18,7 @@ export default (crowi: Crowi, app: Express) => {
     .use(i18nSprintf)
     .init({
       // debug: (crowi.node_env === 'development'),
-      fallbackLng: [User.LANG_EN_US],
+      fallbackLng: [UserLang.EnUs],
       whitelist: Object.keys(User.getLanguageLabels()).map((k) => User[k]),
       backend: {
         loadPath: crowi.localeDir + '{{lng}}/translation.yml',
