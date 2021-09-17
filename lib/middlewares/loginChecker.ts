@@ -13,7 +13,7 @@ export default (crowi: Crowi, app: Express) => {
 
     // session に user object が入ってる
     if (req.session?.user && '_id' in req.session.user) {
-      User.findById(req.session.user._id, '+password +apiToken', function (err, userData) {
+      User.findById(req.session.user._id, '+password +apiToken', null, function (err, userData) {
         if (err) {
           next()
         } else {
