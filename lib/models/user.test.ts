@@ -16,7 +16,7 @@ describe('User', () => {
           User.createUserByEmailAndPassword('Aoi Miyazaki', 'aoi', 'aoi@example.com', 'hogefuga11', 'en', function (err, userData) {
             expect(err).toBeNull()
             expect(userData).toBeInstanceOf(User)
-            resolve()
+            resolve(true)
           })
         })
       })
@@ -25,7 +25,7 @@ describe('User', () => {
         return new Promise((resolve) => {
           User.findUserByUsername('aoi').then(function (userData) {
             expect(userData).toBeInstanceOf(User)
-            resolve()
+            resolve(true)
           })
         })
       })
@@ -35,7 +35,7 @@ describe('User', () => {
           User.findUsersByPartOfEmail('ao', {}).then(function (userData) {
             expect(userData[0]).toBeInstanceOf(User)
             expect(userData[0].email).toBe('aoi@example.com')
-            resolve()
+            resolve(true)
           })
         })
       })
@@ -53,7 +53,7 @@ describe('User', () => {
           username = User.getUsernameByPath('/user/some.user.name12/') // with slash
           expect(username).toBe('some.user.name12')
 
-          resolve()
+          resolve(true)
         })
       })
 
@@ -63,7 +63,7 @@ describe('User', () => {
           username = User.getUsernameByPath('/the/page/is/not/related/to/user/page')
           expect(username).toBeNull()
 
-          resolve()
+          resolve(true)
         })
       })
     })

@@ -1062,7 +1062,7 @@ export default (crowi: Crowi) => {
       })
       .catch((err) => {
         // do nothing if origin page doesn't exist
-        return Promise.resolve()
+        return Promise.resolve(true)
       })
   }
 

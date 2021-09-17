@@ -19,7 +19,7 @@ module.exports = function (crowi) {
           return reject(err)
         }
 
-        resolve()
+        resolve(true)
       })
     })
   }
@@ -42,7 +42,7 @@ module.exports = function (crowi) {
             reject(err)
           })
           .on('finish', function () {
-            resolve()
+            resolve(true)
           })
 
         fileStream.pipe(writer)

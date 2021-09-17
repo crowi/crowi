@@ -124,7 +124,7 @@ module.exports = function (crowi) {
           // through
         }
 
-        resolve()
+        resolve(true)
       })
     })
       .then((data) => {
