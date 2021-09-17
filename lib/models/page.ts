@@ -1,5 +1,5 @@
 import Crowi from 'server/crowi'
-import { Types, Document, Model, Schema, model } from 'mongoose'
+import { Types, Document, Model, Schema, model, FilterQuery } from 'mongoose'
 import Debug from 'debug'
 import { RevisionDocument } from './revision'
 import { UserDocument } from './user'
@@ -31,9 +31,9 @@ export interface PageDocument extends Document {
   _id: Types.ObjectId
   path: string
   revision: Types.ObjectId
-  redirectTo: string
+  redirectTo: string | null
   status: string
-  grant: number
+  grant: number | null
   grantedUsers: Types.ObjectId[]
   creator: Types.ObjectId
   lastUpdateUser: Types.ObjectId
@@ -1155,7 +1155,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.allPageCount = function () {
-    return Page.countDocuments({ redirectTo: null, grant: PageGrant.Public }) // TODO: option にする
+    return Page.countDocuments({ redirectTo: null, grant: PageGrant.Public } as FilterQuery<PageDocument>) // TODO: option にする
   }
 
   pageSchema.methods.getNotificationTargetUsers = async function () {
