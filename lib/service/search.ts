@@ -8,7 +8,7 @@ import { EventEmitter } from 'events'
 import Crowi from 'server/crowi'
 import { Query, SearchWithBody, FunctionScoreQueryParams } from 'server/util/elasticsearch/query'
 import { parseQuery } from 'server/service/query'
-import { TYPES } from 'server/models/page'
+import { PageTypesType } from 'server/models/page'
 import ElasticsearchClient from 'server/service/elasticsearch'
 
 const debug = Debug('crowi:lib:search')
@@ -16,7 +16,7 @@ const debug = Debug('crowi:lib:search')
 interface SearchOption {
   offset?: number
   limit?: number
-  type?: typeof TYPES[number]
+  type?: PageTypesType
 }
 
 export default class Search {
@@ -78,7 +78,7 @@ export default class Search {
       let count = 0
       const interval = setInterval(async () => {
         if (++count >= retry || (await this.client.ping())) {
-          resolve()
+          resolve(true)
           clearInterval(interval)
         }
       }, 5000)

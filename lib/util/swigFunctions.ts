@@ -5,6 +5,7 @@ import renderIcon from 'common/functions/renderIcon'
 import { parentPath, isUserPageList, isUserPage, isTopPage, isTrashPage, userPageRoot, getAppContext } from './view'
 import { hasSlackToken, googleLoginEnabled, githubLoginEnabled } from 'server/models/config'
 import { UserStatus } from 'server/models/user'
+import { PageGrant } from 'server/models/page'
 
 export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
   // const debug = Debug('crowi:lib:swigFunctions')
@@ -84,14 +85,14 @@ export default (crowi: Crowi, app: Express, req: Request, res: Response) => {
       }
 
       switch (pageData.grant) {
-        case Page.GRANT_PUBLIC:
+        case PageGrant.Public:
           return 'grant-public'
-        case Page.GRANT_RESTRICTED:
+        case PageGrant.Restricted:
           return 'grant-restricted'
         // case Page.GRANT_SPECIFIED:
         //  return 'grant-specified';
         //  break;
-        case Page.GRANT_OWNER:
+        case PageGrant.Owner:
           return 'grant-owner'
         default:
           break

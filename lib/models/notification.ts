@@ -1,5 +1,5 @@
 import Crowi from 'server/crowi'
-import { Types, Document, Model, Schema, Query, model } from 'mongoose'
+import { Types, Document, Model, Schema, Query, model, QueryOptions, UpdateQuery } from 'mongoose'
 import Debug from 'debug'
 import { subDays } from 'date-fns'
 import ActivityDefine from 'server/util/activityDefine'
@@ -11,13 +11,7 @@ export const NotificationStatus = {
   Unopened: 'UNOPENED',
   Opened: 'OPENED',
 } as const
-
 export type NotificationStatus = typeof NotificationStatus[keyof typeof NotificationStatus]
-
-const STATUS_UNREAD = 'UNREAD'
-const STATUS_UNOPENED = 'UNOPENED'
-const STATUS_OPENED = 'OPENED'
-const STATUSES = [STATUS_UNREAD, STATUS_UNOPENED, STATUS_OPENED]
 
 export interface NotificationDocument extends Document {
   _id: Types.ObjectId
@@ -26,7 +20,7 @@ export interface NotificationDocument extends Document {
   target: Types.ObjectId
   action: string
   activities: Types.ObjectId[]
-  status: string
+  status: NotificationStatus
   createdAt: Date
 }
 
@@ -107,23 +101,23 @@ export default (crowi: Crowi) => {
       .exec()
   }
 
-  notificationSchema.statics.upsertByActivity = async function (user, activity, createdAt = null) {
+  notificationSchema.statics.upsertByActivity = async function (user: UserDocument, activity: ActivityDocument, createdAt = null) {
     const { _id: activityId, targetModel, target, action } = activity
 
     const now = createdAt || Date.now()
     const lastWeek = subDays(now, 7)
     const query = { user, target, action, createdAt: { $gt: lastWeek } }
-    const parameters = {
+    const parameters: UpdateQuery<NotificationDocument> = {
       user,
       targetModel,
       target,
       action,
       status: NotificationStatus.Unread,
       createdAt: now,
-      $addToSet: { activities: activityId },
+      $addToSet: { activities: [activityId] },
     }
 
-    const options = {
+    const options: QueryOptions = {
       upsert: true,
       new: true,
       setDefaultsOnInsert: true,
@@ -139,10 +133,10 @@ export default (crowi: Crowi) => {
     return notification
   }
 
-  notificationSchema.statics.removeActivity = async function (activity) {
+  notificationSchema.statics.removeActivity = async function (activity: ActivityDocument) {
     const { _id, target, action } = activity
     const query = { target, action }
-    const parameters = { $pull: { activities: _id } }
+    const parameters: UpdateQuery<NotificationDocument> = { $pull: { activities: _id } }
 
     const result = await Notification.updateMany(query, parameters)
 

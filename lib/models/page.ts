@@ -4,21 +4,28 @@ import Debug from 'debug'
 import { RevisionDocument } from './revision'
 import { UserDocument } from './user'
 
-export const GRANT_PUBLIC = 1
-export const GRANT_RESTRICTED = 2
-export const GRANT_SPECIFIED = 3
-export const GRANT_OWNER = 4
-export const GRANTS = [GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER] as const
-export const PAGE_GRANT_ERROR = 1
-export const STATUS_WIP = 'wip'
-export const STATUS_PUBLISHED = 'published'
-export const STATUS_DELETED = 'deleted'
-export const STATUS_DEPRECATED = 'deprecated'
-export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED] as const
-export const TYPE_PORTAL = 'portal'
-export const TYPE_USER = 'user'
-export const TYPE_PUBLIC = 'public'
-export const TYPES = [TYPE_PORTAL, TYPE_USER, TYPE_PUBLIC] as const
+export const PageGrant = {
+  Public: 1,
+  Restricted: 2,
+  Specified: 3,
+  Owner: 4,
+} as const
+export type PageGrantType = typeof PageGrant[keyof typeof PageGrant]
+
+export const PageStatus = {
+  Wip: 'wip',
+  Published: 'published',
+  Deleted: 'deleted',
+  Deprecated: 'deprecated',
+} as const
+export type PageStatusType = typeof PageStatus[keyof typeof PageStatus]
+
+export const PageTypes = {
+  Portal: 'portal',
+  User: 'user',
+  Public: 'public',
+} as const
+export type PageTypesType = typeof PageTypes[keyof typeof PageTypes]
 
 export interface PageDocument extends Document {
   _id: Types.ObjectId
@@ -67,15 +74,6 @@ export interface PageDocument extends Document {
 }
 
 export interface PageModel extends Model<PageDocument> {
-  GRANT_PUBLIC: number
-  GRANT_RESTRICTED: number
-  GRANT_SPECIFIED: number
-  GRANT_OWNER: number
-  PAGE_GRANT_ERROR: number
-  TYPE_PORTAL: string
-  TYPE_PUBLIC: string
-  TYPE_USER: string
-
   populatePageData(pageData, revisionId?: Types.ObjectId | null): Promise<PageDocument>
   populatePagesRevision(pages, revisions): any
   populatePageListToAnyObjects(pageIdObjectArray): any
@@ -152,8 +150,8 @@ export default (crowi: Crowi) => {
       path: { type: String, required: true, index: true, unique: true },
       revision: { type: Schema.Types.ObjectId, ref: 'Revision' },
       redirectTo: { type: String, index: true },
-      status: { type: String, default: STATUS_PUBLISHED, index: true },
-      grant: { type: Number, default: GRANT_PUBLIC, index: true },
+      status: { type: String, default: PageStatus.Published, index: true },
+      grant: { type: Number, default: PageGrant.Public, index: true },
       grantedUsers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
       creator: { type: Schema.Types.ObjectId, ref: 'User', index: true },
       // lastUpdateUser: this schema is from 1.5.x (by deletion feature), and null is default.
@@ -196,24 +194,24 @@ export default (crowi: Crowi) => {
   pageEvent.on('update', pageEvent.onUpdate)
 
   pageSchema.methods.isWIP = function () {
-    return this.status === STATUS_WIP
+    return this.status === PageStatus.Wip
   }
 
   pageSchema.methods.isPublished = function () {
     // null: this is for B.C.
-    return this.status === null || this.status === STATUS_PUBLISHED
+    return this.status === null || this.status === PageStatus.Published
   }
 
   pageSchema.methods.isDeleted = function () {
-    return this.status === STATUS_DELETED
+    return this.status === PageStatus.Deleted
   }
 
   pageSchema.methods.isDeprecated = function () {
-    return this.status === STATUS_DEPRECATED
+    return this.status === PageStatus.Deprecated
   }
 
   pageSchema.methods.isPublic = function () {
-    if (!this.grant || this.grant == GRANT_PUBLIC) {
+    if (!this.grant || this.grant == PageGrant.Public) {
       return true
     }
 
@@ -463,10 +461,10 @@ export default (crowi: Crowi) => {
 
   pageSchema.statics.getGrantLabels = function () {
     const grantLabels = {}
-    grantLabels[GRANT_PUBLIC] = 'Public' // 公開
-    grantLabels[GRANT_RESTRICTED] = 'Anyone with the link' // リンクを知っている人のみ
-    // grantLabels[GRANT_SPECIFIED]  = 'Specified users only'; // 特定ユーザーのみ
-    grantLabels[GRANT_OWNER] = 'Just me' // 自分のみ
+    grantLabels[PageGrant.Public] = 'Public' // 公開
+    grantLabels[PageGrant.Restricted] = 'Anyone with the link' // リンクを知っている人のみ
+    // grantLabels[PageGrant.Specified]  = 'Specified users only'; // 特定ユーザーのみ
+    grantLabels[PageGrant.Owner] = 'Just me' // 自分のみ
 
     return grantLabels
   }
@@ -710,11 +708,11 @@ export default (crowi: Crowi) => {
     const conditions: any = {
       creator: user._id,
       redirectTo: null,
-      $or: [{ status: null }, { status: STATUS_PUBLISHED }],
+      $or: [{ status: null }, { status: PageStatus.Published }],
     }
 
     if (!user.equals(currentUser._id)) {
-      conditions.grant = GRANT_PUBLIC
+      conditions.grant = PageGrant.Public
     }
 
     return Page.find(conditions)
@@ -733,7 +731,7 @@ export default (crowi: Crowi) => {
     const criteria: any = { redirectTo: null }
 
     if (publicOnly) {
-      criteria.grant = GRANT_PUBLIC
+      criteria.grant = PageGrant.Public
     }
 
     return Page.find(criteria)
@@ -781,10 +779,10 @@ export default (crowi: Crowi) => {
       redirectTo: null,
       $or: [
         { grant: null },
-        { grant: GRANT_PUBLIC },
-        { grant: GRANT_RESTRICTED, grantedUsers: userData._id },
-        { grant: GRANT_SPECIFIED, grantedUsers: userData._id },
-        { grant: GRANT_OWNER, grantedUsers: userData._id },
+        { grant: PageGrant.Public },
+        { grant: PageGrant.Restricted, grantedUsers: userData._id },
+        { grant: PageGrant.Specified, grantedUsers: userData._id },
+        { grant: PageGrant.Owner, grantedUsers: userData._id },
       ],
     })
       .populate({ path: 'revision', populate: { path: 'author', model: 'User' } })
@@ -797,7 +795,7 @@ export default (crowi: Crowi) => {
 
     if (!includeDeletedPage) {
       q.and({
-        $or: [{ status: null }, { status: STATUS_PUBLISHED }],
+        $or: [{ status: null }, { status: PageStatus.Published }],
       } as any)
     }
 
@@ -809,7 +807,7 @@ export default (crowi: Crowi) => {
     return Page.findListByStartWith(path, userData, { limit: 0, ...option })
   }
 
-  pageSchema.statics.findUnfurlablePages = async function (type, array, grants = [GRANT_PUBLIC, GRANT_RESTRICTED]) {
+  pageSchema.statics.findUnfurlablePages = async function (type, array, grants = [PageGrant.Public, PageGrant.Restricted]) {
     const page = await Page.find({
       [type]: { $in: array },
       $or: grants.map((grant) => ({ grant })),
@@ -822,8 +820,8 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.findUnfurlablePagesByPaths = async function (paths) {
-    // `GRANT_RESTRICTED` pages can not be accessed using path
-    return Page.findUnfurlablePages('path', paths, [GRANT_PUBLIC])
+    // `PageGrant.Restricted` pages can not be accessed using path
+    return Page.findUnfurlablePages('path', paths, [PageGrant.Public])
   }
 
   pageSchema.statics.updatePageProperty = function (page, updateData) {
@@ -832,7 +830,7 @@ export default (crowi: Crowi) => {
 
   pageSchema.statics.updateGrant = async function (page, grant, userData) {
     page.grant = grant
-    if (grant == GRANT_PUBLIC) {
+    if (grant == PageGrant.Public) {
       page.grantedUsers = []
     } else {
       page.grantedUsers = []
@@ -881,7 +879,7 @@ export default (crowi: Crowi) => {
   pageSchema.statics.createPage = async function (path: string, body, user, options) {
     const Revision = crowi.model('Revision')
     const format = options.format || 'markdown'
-    let grant = options.grant || GRANT_PUBLIC
+    let grant = options.grant || PageGrant.Public
     const redirectTo = options.redirectTo || null
     const allowNonExistentUserPage = options.allowNonExistentUserPage || false
 
@@ -894,7 +892,7 @@ export default (crowi: Crowi) => {
 
     // force public
     if (isPortalPath(path)) {
-      grant = GRANT_PUBLIC
+      grant = PageGrant.Public
     }
 
     const pageData = await Page.findOne({ path })
@@ -910,7 +908,7 @@ export default (crowi: Crowi) => {
       updatedAt: Date.now(),
       redirectTo: redirectTo,
       grant: grant,
-      status: STATUS_PUBLISHED,
+      status: PageStatus.Published,
       grantedUsers: user ? [user] : [],
     })
 
@@ -949,9 +947,9 @@ export default (crowi: Crowi) => {
     const newPath = Page.getDeletedPageName(pageData.path)
     const isNonExistentUserPage = await Page.isNonExistentUserPage(pageData.path)
     if (Page.isDeletableName(pageData.path) || isNonExistentUserPage) {
-      await Page.updatePageProperty(pageData, { status: STATUS_DELETED, lastUpdateUser: user })
+      await Page.updatePageProperty(pageData, { status: PageStatus.Deleted, lastUpdateUser: user })
       await Share.deleteByPageId(pageData._id)
-      pageData.status = STATUS_DELETED
+      pageData.status = PageStatus.Deleted
 
       // ページ名が /trash/ 以下に存在する場合、おかしなことになる
       // が、 /trash 以下にページが有るのは、個別に作っていたケースのみ。
@@ -979,8 +977,8 @@ export default (crowi: Crowi) => {
     }
 
     await Page.completelyDeletePage(originPageData)
-    await Page.updatePageProperty(pageData, { status: STATUS_PUBLISHED, lastUpdateUser: user })
-    pageData.status = STATUS_PUBLISHED
+    await Page.updatePageProperty(pageData, { status: PageStatus.Published, lastUpdateUser: user })
+    pageData.status = PageStatus.Published
 
     debug('Revert deleted the page, and rename again it', pageData, newPath)
     await Page.rename(pageData, newPath, user, {})
@@ -1157,7 +1155,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.allPageCount = function () {
-    return Page.countDocuments({ redirectTo: null, grant: GRANT_PUBLIC }) // TODO: option にする
+    return Page.countDocuments({ redirectTo: null, grant: PageGrant.Public }) // TODO: option にする
   }
 
   pageSchema.methods.getNotificationTargetUsers = async function () {
@@ -1193,15 +1191,6 @@ export default (crowi: Crowi) => {
       })
       .catch((err) => err)
   })
-
-  pageSchema.statics.GRANT_PUBLIC = GRANT_PUBLIC
-  pageSchema.statics.GRANT_RESTRICTED = GRANT_RESTRICTED
-  pageSchema.statics.GRANT_SPECIFIED = GRANT_SPECIFIED
-  pageSchema.statics.GRANT_OWNER = GRANT_OWNER
-  pageSchema.statics.PAGE_GRANT_ERROR = PAGE_GRANT_ERROR
-  pageSchema.statics.TYPE_PORTAL = TYPE_PORTAL
-  pageSchema.statics.TYPE_PUBLIC = TYPE_PUBLIC
-  pageSchema.statics.TYPE_USER = TYPE_USER
 
   const Page = model<PageDocument, PageModel>('Page', pageSchema)
 

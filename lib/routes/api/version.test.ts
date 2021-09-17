@@ -15,7 +15,7 @@ describe('Routes /_api/versions test', () => {
             expect(body.ok).toBe(true)
             expect(body.version).toBe(require('../../../package.json').version)
 
-            resolve()
+            resolve(true)
           })
       })
     })

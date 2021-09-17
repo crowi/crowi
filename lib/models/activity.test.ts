@@ -1,6 +1,7 @@
 import faker from 'faker'
 import mongoose from 'mongoose'
 import { crowi, Fixture } from 'server/test/setup'
+import { PageGrant } from './page'
 import { UserStatus } from './user'
 
 describe('Activity', function () {
@@ -93,7 +94,7 @@ describe('Activity', function () {
         { _id: userIds[1], email: faker.internet.email(), status: UserStatus.Active },
         { _id: userIds[2], email: faker.internet.email(), status: UserStatus.Suspended },
       ]
-      const pages = [{ _id: pageId, path: `/${faker.lorem.word()}`, grant: Page.GRANT_PUBLIC, creator: userIds[0] }]
+      const pages = [{ _id: pageId, path: `/${faker.lorem.word()}`, grant: PageGrant.Public, creator: userIds[0] }]
       const comments = userIds.map((userId) => ({ page: pageId, creator: userId, comment: faker.lorem.word() }))
 
       await Promise.all([Fixture.generate('User', users), Fixture.generate('Page', pages), Fixture.generate('Comment', comments)])

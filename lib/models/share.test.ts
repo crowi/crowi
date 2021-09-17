@@ -1,5 +1,6 @@
 import faker from 'faker'
 import { crowi, Fixture } from 'server/test/setup'
+import { PageGrant } from './page'
 
 describe('Share', () => {
   let User
@@ -19,8 +20,8 @@ describe('Share', () => {
 
     await Page.deleteMany({})
     createdPages = await Fixture.generate('Page', [
-      { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
-      { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
+      { path: '/' + faker.lorem.slug(), grant: PageGrant.Public, grantedUsers: [user], creator: user },
+      { path: '/' + faker.lorem.slug(), grant: PageGrant.Public, grantedUsers: [user], creator: user },
     ])
 
     await Share.deleteMany({})

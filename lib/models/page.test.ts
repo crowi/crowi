@@ -1,4 +1,5 @@
 import { crowi, Fixture } from 'server/test/setup'
+import { PageGrant } from './page'
 
 describe('Page', () => {
   let Page
@@ -20,37 +21,37 @@ describe('Page', () => {
     const fixture = [
       {
         path: '/user/anonymous/memo',
-        grant: Page.GRANT_RESTRICTED,
+        grant: PageGrant.Restricted,
         grantedUsers: [testUser0],
         creator: testUser0,
       },
       {
         path: '/grant/public',
-        grant: Page.GRANT_PUBLIC,
+        grant: PageGrant.Public,
         grantedUsers: [testUser0],
         creator: testUser0,
       },
       {
         path: '/grant/restricted',
-        grant: Page.GRANT_RESTRICTED,
+        grant: PageGrant.Restricted,
         grantedUsers: [testUser0],
         creator: testUser0,
       },
       {
         path: '/grant/specified',
-        grant: Page.GRANT_SPECIFIED,
+        grant: PageGrant.Specified,
         grantedUsers: [testUser0],
         creator: testUser0,
       },
       {
         path: '/grant/owner',
-        grant: Page.GRANT_OWNER,
+        grant: PageGrant.Owner,
         grantedUsers: [testUser0],
         creator: testUser0,
       },
       {
         path: '/page/for/extended',
-        grant: Page.GRANT_PUBLIC,
+        grant: PageGrant.Public,
         creator: testUser0,
         extended: { hoge: 1 },
       },
@@ -249,7 +250,7 @@ describe('Page', () => {
     let user
 
     const generatePages = (paths) => {
-      const grant = Page.GRANT_PUBLIC
+      const grant = PageGrant.Public
       const grantedUsers = [user]
       const creator = user
       const updatedAt = Date.now()

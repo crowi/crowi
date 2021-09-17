@@ -14,7 +14,6 @@ export const UserStatus = {
   Invited: 5,
 } as const
 export type UserStatusType = typeof UserStatus[keyof typeof UserStatus]
-
 export const UserLang = {
   En: 'en',
   EnUs: 'en-US',
@@ -87,7 +86,7 @@ export interface UserModel extends Model<UserDocument> {
   findUserByGitHubId(githubId): Promise<UserDocument | null>
   findUserByEmail(email): Promise<UserDocument | null>
   findUserByEmailAndPassword(email: string, password: string): Promise<UserDocument | null>
-  isRegisterableUsername(username, callback: (registerable: boolean) => void): void
+  isRegisterableUsername(username): Promise<boolean>
   isRegisterable(email, username, callback: (registerable: boolean, detail: { email?: boolean; username?: boolean }) => void): void
   removeCompletelyById(id, callback: (err: Error | null, userData: 1 | null) => void): any
   resetPasswordByRandomString(id: Types.ObjectId): Promise<{ user: UserDocument; newPassword: string }>
@@ -489,13 +488,13 @@ export default (crowi: Crowi) => {
     return User.findOne({ email, password: hashedPassword }).exec()
   }
 
-  userSchema.statics.isRegisterableUsername = async function (username, callback) {
+  userSchema.statics.isRegisterableUsername = async function (username): Promise<boolean> {
     const userData = await User.findOne({ username })
     if (userData) {
-      return callback(false)
+      return false
     }
 
-    return callback(true)
+    return true
   }
 
   userSchema.statics.isRegisterable = async function (email, username, callback) {

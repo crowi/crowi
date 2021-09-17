@@ -5,7 +5,7 @@ import Debug from 'debug'
 import ApiResponse from 'server/util/apiResponse'
 import { decodeSpace } from 'server/util/path'
 import { BookmarkDocument } from 'server/models/bookmark'
-import { PageDocument } from 'server/models/page'
+import { PageDocument, PageGrant } from 'server/models/page'
 import { RevisionDocument } from 'server/models/revision'
 import { UserDocument } from 'server/models/user'
 
@@ -465,7 +465,7 @@ export default (crowi: Crowi) => {
       .then(function (pageData) {
         const isGranted = pageData.isGrantedFor(req.user)
 
-        if (pageData.grant == Page.GRANT_RESTRICTED && !isGranted) {
+        if (pageData.grant == PageGrant.Restricted && !isGranted) {
           return Page.pushToGrantedUsers(pageData, req.user)
         }
 

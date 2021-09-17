@@ -459,7 +459,7 @@ export default (crowi: Crowi, app: Express) => {
     }
   }
 
-  actions.invited = function (req: Request, res: Response) {
+  actions.invited = async function (req: Request, res: Response) {
     if (!req.user) {
       return res.redirect('/login')
     }
@@ -471,22 +471,22 @@ export default (crowi: Crowi, app: Express) => {
       const name = invitedForm.name
       const password = invitedForm.password
 
-      User.isRegisterableUsername(username, function (creatable) {
-        if (creatable) {
-          user.activateInvitedUser(username, name, password, function (err, data) {
-            if (err) {
-              req.flash('warningMessage', 'アクティベートに失敗しました。')
-              return res.render('invited.html')
-            } else {
-              return res.redirect('/')
-            }
-          })
-        } else {
-          req.flash('warningMessage', '利用できないユーザーIDです。')
-          debug('username', username)
-          return res.render('invited.html')
-        }
-      })
+      const creatable = await User.isRegisterableUsername(username)
+
+      if (creatable) {
+        user.activateInvitedUser(username, name, password, function (err, data) {
+          if (err) {
+            req.flash('warningMessage', 'アクティベートに失敗しました。')
+            return res.render('invited.html')
+          } else {
+            return res.redirect('/')
+          }
+        })
+      } else {
+        req.flash('warningMessage', '利用できないユーザーIDです。')
+        debug('username', username)
+        return res.render('invited.html')
+      }
     } else {
       return res.render('invited.html', {})
     }

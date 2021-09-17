@@ -27,7 +27,7 @@ import {
   appendNegativePhraseQuery,
   appendSearchQuery,
 } from 'server/util/elasticsearch/query'
-import { GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER } from 'server/models/page'
+import { PageGrant } from 'server/models/page'
 
 describe('createBaseQuery', () => {
   const index = 'crowi'
@@ -199,7 +199,7 @@ describe('filterPagesByUser', () => {
       {
         bool: {
           must_not: { match: { username } },
-          should: [{ match: { grant: GRANT_RESTRICTED } }, { match: { grant: GRANT_SPECIFIED } }, { match: { grant: GRANT_OWNER } }],
+          should: [{ match: { grant: PageGrant.Restricted } }, { match: { grant: PageGrant.Specified } }, { match: { grant: PageGrant.Owner } }],
         },
       },
     ])

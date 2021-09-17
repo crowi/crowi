@@ -5,6 +5,7 @@ import fs from 'fs'
 import FileUploader from 'server/util/fileUploader'
 import ApiResponse from 'server/util/apiResponse'
 import { UserDocument } from 'server/models/user'
+import { PageGrant } from 'server/models/page'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routs:attachment')
@@ -115,7 +116,7 @@ export default (crowi: Crowi, app: Express) => {
           throw new Error('path required if page_id is not specified.')
         }
         debug('Create page before file upload')
-        pageData = await Page.createPage(path, '# ' + path, user, { grant: Page.GRANT_OWNER })
+        pageData = await Page.createPage(path, '# ' + path, user, { grant: PageGrant.Owner })
         pageCreated = true
       } else {
         pageData = await Page.findPageById(id)

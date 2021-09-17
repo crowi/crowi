@@ -1,7 +1,7 @@
 import deepmerge from 'deepmerge'
 import { Search as ES6Search } from 'es6/api/requestParams'
 import { Search as ES7Search } from 'es7/api/requestParams'
-import { TYPES, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER } from 'server/models/page'
+import { PageTypesType, PageGrant } from 'server/models/page'
 import { SearchQuery } from 'server/service/query'
 
 export const defaultType = 'pages'
@@ -192,7 +192,7 @@ export const filterUserPages = <T extends Search>(query: T) => {
 }
 
 export type FilterPagesByTypeParams = {
-  type?: typeof TYPES[number]
+  type?: PageTypesType
 }
 
 export type FilterPagesByTypeFunction<T extends Search, U extends FilterPagesByTypeParams> = U extends { type?: infer R }
@@ -237,7 +237,7 @@ export const filterPagesByUser = <T extends Search, U extends FilterPagesByUserP
     return appendBoolMustNotQuery(query, {
       bool: {
         must_not: { match: { username } },
-        should: [{ match: { grant: GRANT_RESTRICTED } }, { match: { grant: GRANT_SPECIFIED } }, { match: { grant: GRANT_OWNER } }],
+        should: [{ match: { grant: PageGrant.Restricted } }, { match: { grant: PageGrant.Specified } }, { match: { grant: PageGrant.Owner } }],
       },
     }) as FilterPagesByUserResponse<T, U>
   }
