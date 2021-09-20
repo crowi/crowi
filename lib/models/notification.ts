@@ -114,7 +114,7 @@ export default (crowi: Crowi) => {
       action,
       status: NotificationStatus.Unread,
       createdAt: now,
-      $addToSet: { activities: [activityId] },
+      $addToSet: { activities: activityId },
     }
 
     const options: QueryOptions = {
