@@ -89,12 +89,12 @@ const PageCreateModal: FC<Props> = ({ crowi, fade = false, toggle, ...modalProps
   const createTodayPage = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const href = `${userPath}${portalName || t('Memo')}${pageName ? datePath : datePath.slice(0, -1)}${pageName}`
-    top.location.href = href
+    location.href = href
   }
 
   const createUnderTreePage = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    top.location.href = underTreePath
+    location.href = underTreePath
   }
 
   return (

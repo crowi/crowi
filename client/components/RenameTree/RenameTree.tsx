@@ -228,7 +228,7 @@ class RenameTree extends React.Component<Props, State> {
       const { pages }: { pages: Page[] } = data
       const urls = pages.map(({ path }) => path)
       const exists = (path: string) => urls.includes(path)
-      const redirect = (to: string) => () => (top.location.href = to)
+      const redirect = (to: string) => () => (location.href = to)
       const pageUrl = `${newPath}?redirectFrom=${RenameTree.getPath()}`
       const listUrl = RenameTree.addTrailingSlash(newPath)
       setTimeout(redirect(exists(newPath) ? pageUrl : listUrl), 1000)

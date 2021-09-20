@@ -225,7 +225,7 @@ $(function () {
         newPageNameCheck.html('<img src="/images/loading_s.gif"> Page moved! Redirecting to new page location.')
 
         setTimeout(function () {
-          top.location.href = page.path + '?redirectFrom=' + pagePath
+          location.href = page.path + '?redirectFrom=' + pagePath
         }, 1000)
       }
     })
@@ -251,7 +251,7 @@ $(function () {
         $('#delete-errors').addClass('alert-danger')
       } else {
         const page = res.page
-        top.location.href = page.path
+        location.href = page.path
       }
     })
 
@@ -269,7 +269,7 @@ $(function () {
         $('#delete-errors').addClass('alert-danger')
       } else {
         const page = res.page
-        top.location.href = page.path
+        location.href = page.path
       }
     })
 
@@ -287,7 +287,7 @@ $(function () {
         $('#delete-errors').addClass('alert-danger')
       } else {
         const page = res.page
-        top.location.href = page.path + '?unlinked=true'
+        location.href = page.path + '?unlinked=true'
       }
     })
 
@@ -349,7 +349,7 @@ $(function () {
           const template = $('#' + templateId).html()
 
           crowi.saveDraft(path, template)
-          top.location.href = path
+          location.href = path
         })
       })
 
@@ -527,7 +527,7 @@ $(function () {
         const template = $('#' + templateId).html()
 
         crowi.saveDraft(path, template)
-        top.location.href = path
+        location.href = path
       })
 
       Crowi.correctHeaders('#revision-body-content')

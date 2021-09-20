@@ -65,7 +65,7 @@ class SecretKeywordFormContainer extends React.Component<Props, State> {
       })
       if (hasAccessAuthority) {
         this.setState({ error: { status: false, message: '' } })
-        top.location.href = '/_share/' + shareId
+        location.href = '/_share/' + shareId
       } else {
         this.handleError()
       }

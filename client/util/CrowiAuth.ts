@@ -56,7 +56,7 @@ export default class CrowiAuth {
   onLogin() {
     const { continue: continueUrl = '/' } = queryString.parse(this.location.search)
     if (continueUrl) {
-      top.location.href = typeof continueUrl === 'string' ? continueUrl : '/'
+      location.href = typeof continueUrl === 'string' ? continueUrl : '/'
     } else {
       this.location.reload()
     }
