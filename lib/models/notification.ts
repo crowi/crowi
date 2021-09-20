@@ -11,7 +11,7 @@ export const NotificationStatus = {
   Unopened: 'UNOPENED',
   Opened: 'OPENED',
 } as const
-export type NotificationStatus = typeof NotificationStatus[keyof typeof NotificationStatus]
+export type NotificationStatusType = typeof NotificationStatus[keyof typeof NotificationStatus]
 
 export interface NotificationDocument extends Document {
   _id: Types.ObjectId
@@ -20,7 +20,7 @@ export interface NotificationDocument extends Document {
   target: Types.ObjectId
   action: string
   activities: Types.ObjectId[]
-  status: NotificationStatus
+  status: NotificationStatusType
   createdAt: Date
 }
 
@@ -69,7 +69,7 @@ export default (crowi: Crowi) => {
     status: {
       type: String,
       default: NotificationStatus.Unread,
-      enum: NotificationStatus,
+      enum: Object.values(NotificationStatus),
       index: true,
       require: true,
     },
