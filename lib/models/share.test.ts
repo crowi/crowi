@@ -1,6 +1,7 @@
 import faker from 'faker'
 import { crowi, Fixture } from 'server/test/setup'
 import { PageGrant } from './page'
+import { ShareStatus } from './share'
 
 describe('Share', () => {
   let User
@@ -49,9 +50,9 @@ describe('Share', () => {
 
       test('should inactivate share', async () => {
         const shareId = createdShares[0]._id
-        await expect(Share.deleteById(shareId)).resolves.toHaveProperty('status', Share.STATUS_INACTIVE)
+        await expect(Share.deleteById(shareId)).resolves.toHaveProperty('status', ShareStatus.Inactive)
         const pageId = createdShares[1].page
-        await expect(Share.deleteByPageId(pageId)).resolves.toHaveProperty('status', Share.STATUS_INACTIVE)
+        await expect(Share.deleteByPageId(pageId)).resolves.toHaveProperty('status', ShareStatus.Inactive)
       })
     })
   })

@@ -5,14 +5,17 @@ import uuidv4 from 'uuid/v4'
 import mongoosePaginate from 'mongoose-paginate'
 import { UserDocument } from './user'
 
-const STATUS_ACTIVE = 'active'
-const STATUS_INACTIVE = 'inactive'
+export const ShareStatus = {
+  Active: 'active',
+  Inactive: 'inactive',
+} as const
+export type ShareStatusType = typeof ShareStatus[keyof typeof ShareStatus]
 
 export interface ShareDocument extends Document {
   _id: Types.ObjectId
   uuid: string
   page: Types.ObjectId
-  status: string
+  status: ShareStatusType
   creator: Types.ObjectId
   secretKeyword: string
   createdAt: Date
@@ -35,9 +38,6 @@ export interface ShareModel extends Model<ShareDocument> {
   deleteShare(query: object): Promise<ShareDocument | null>
   deleteById(id): Promise<ShareDocument | null>
   deleteByPageId(pageId): Promise<ShareDocument | null>
-
-  STATUS_ACTIVE: string
-  STATUS_INACTIVE: string
 }
 
 export default (crowi: Crowi) => {
@@ -46,7 +46,7 @@ export default (crowi: Crowi) => {
   const shareSchema = new Schema<ShareDocument, ShareModel>({
     uuid: { type: String, required: true, index: true, unique: true },
     page: { type: Schema.Types.ObjectId, ref: 'Page', required: true, index: true },
-    status: { type: String, default: STATUS_ACTIVE, index: true },
+    status: { type: String, default: ShareStatus.Active, index: true },
     creator: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     secretKeyword: String,
     createdAt: { type: Date, default: Date.now },
@@ -62,11 +62,11 @@ export default (crowi: Crowi) => {
   shareSchema.plugin(mongoosePaginate)
 
   shareSchema.methods.isActive = function () {
-    return this.status === STATUS_ACTIVE
+    return this.status === ShareStatus.Active
   }
 
   shareSchema.methods.isInactive = function () {
-    return this.status === STATUS_INACTIVE
+    return this.status === ShareStatus.Inactive
   }
 
   shareSchema.methods.isCreator = function (userData) {
@@ -156,7 +156,7 @@ export default (crowi: Crowi) => {
   shareSchema.statics.createShare = async function (pageId, user) {
     const isExists = await Share.isExists({
       page: pageId,
-      status: STATUS_ACTIVE,
+      status: ShareStatus.Active,
     })
     if (isExists) {
       throw new Error('Cannot create new share.')
@@ -168,13 +168,13 @@ export default (crowi: Crowi) => {
       creator: user,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      status: STATUS_ACTIVE,
+      status: ShareStatus.Active,
     })
   }
 
   shareSchema.statics.deleteShare = async function (query = {}) {
-    const defaultQuery = { status: STATUS_ACTIVE }
-    return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: STATUS_INACTIVE }, { new: true }).exec()
+    const defaultQuery = { status: ShareStatus.Active }
+    return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: ShareStatus.Inactive }, { new: true }).exec()
   }
 
   shareSchema.statics.deleteById = async function (id) {
@@ -184,9 +184,6 @@ export default (crowi: Crowi) => {
   shareSchema.statics.deleteByPageId = async function (pageId) {
     return Share.deleteShare({ page: pageId })
   }
-
-  shareSchema.statics.STATUS_ACTIVE = STATUS_ACTIVE
-  shareSchema.statics.STATUS_INACTIVE = STATUS_INACTIVE
 
   const Share = model<ShareDocument, ShareModel>('Share', shareSchema)
 

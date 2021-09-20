@@ -6,6 +6,7 @@ import { PageDocument } from 'server/models/page'
 import { UserDocument } from 'server/models/user'
 import { getPath } from 'server/util/ssr'
 import { getAppContext } from 'server/util/view'
+import { ShareStatus } from 'server/models/share'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:share')
@@ -62,7 +63,7 @@ export default (crowi: Crowi) => {
     }
 
     try {
-      const share = await Share.findShareByUuid(uuid, { status: Share.STATUS_ACTIVE })
+      const share = await Share.findShareByUuid(uuid, { status: ShareStatus.Active })
       const shareId = share.uuid
       const trackingId = await addAccessLog(req, share)
       req.session.trackingId = trackingId
@@ -122,7 +123,7 @@ export default (crowi: Crowi) => {
     }
 
     try {
-      const shareData = await Share.findShareByPageId(pageId, { status: Share.STATUS_ACTIVE }, { populateAccesses })
+      const shareData = await Share.findShareByPageId(pageId, { status: ShareStatus.Active }, { populateAccesses })
       const result = { share: shareData }
       return res.json(ApiResponse.success(result))
     } catch (err) {
@@ -178,7 +179,7 @@ export default (crowi: Crowi) => {
     const { page_id: pageId } = req.body
 
     try {
-      const shareData = await Share.findShareByPageId(pageId, { status: Share.STATUS_ACTIVE })
+      const shareData = await Share.findShareByPageId(pageId, { status: ShareStatus.Active })
       await Share.deleteById(shareData.id)
       debug('Share deleted', shareData.id)
       const result = { share: shareData.toObject() }
@@ -218,7 +219,7 @@ export default (crowi: Crowi) => {
 
     req.session.secretKeywords = Object.assign(secretKeywords, { [shareId]: secretKeyword })
     try {
-      const share = await Share.findShareByUuid(shareId, { status: Share.STATUS_ACTIVE })
+      const share = await Share.findShareByUuid(shareId, { status: ShareStatus.Active })
       const result = { hasAccessAuthority: hasAccessAuthority(req.session.secretKeywords, share) }
       if (result.hasAccessAuthority) {
         req.session.shareIds = updateShareIds(shareIds, shareId)

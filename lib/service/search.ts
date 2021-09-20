@@ -8,7 +8,7 @@ import { EventEmitter } from 'events'
 import Crowi from 'server/crowi'
 import { Query, SearchWithBody, FunctionScoreQueryParams } from 'server/util/elasticsearch/query'
 import { parseQuery } from 'server/service/query'
-import { PageTypesType } from 'server/models/page'
+import { PageStatus, PageTypesType } from 'server/models/page'
 import ElasticsearchClient from 'server/service/elasticsearch'
 
 const debug = Debug('crowi:lib:search')
@@ -158,7 +158,7 @@ export default class Search {
 
     // FIXME: use STATUS_DELETED
     // isDeleted() couldn't use here because of lean()
-    if (page.status === 'deleted') {
+    if (page.status === PageStatus.Deleted) {
       return false
     }
 

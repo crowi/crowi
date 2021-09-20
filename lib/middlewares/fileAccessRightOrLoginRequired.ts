@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import Crowi from 'server/crowi'
+import { ShareStatus } from 'server/models/share'
 
 export default (crowi: Crowi) => {
   return async function (req: Request, res: Response, next) {
@@ -10,7 +11,7 @@ export default (crowi: Crowi) => {
       if (!attachment) {
         return res.sendStatus(404)
       }
-      const { uuid, secretKeyword } = await Share.findShareByPageId(attachment.page, { status: Share.STATUS_ACTIVE })
+      const { uuid, secretKeyword } = await Share.findShareByPageId(attachment.page, { status: ShareStatus.Active })
       const { shareIds = [], secretKeywords = {} } = req.session
       const isNoExistKeyword = !secretKeyword
       const hasCorrectKeyword = secretKeywords[uuid] === secretKeyword
