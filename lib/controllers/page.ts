@@ -8,6 +8,7 @@ import { BookmarkDocument } from 'server/models/bookmark'
 import { PageDocument, PageGrant } from 'server/models/page'
 import { RevisionDocument } from 'server/models/revision'
 import { UserDocument } from 'server/models/user'
+import { WatcherStatus } from 'server/models/watcher'
 
 interface PagerOptions {
   offset: number | string
@@ -975,7 +976,7 @@ export default (crowi: Crowi) => {
   api.watch = async function (req: Request, res: Response) {
     const { page_id: pageId } = req.body
     const { _id: userId } = req.user as UserDocument
-    const status = req.body.status ? Watcher.STATUS_WATCH : Watcher.STATUS_IGNORE
+    const status = req.body.status ? WatcherStatus.Watch : WatcherStatus.Ignore
     try {
       const watcher = await Watcher.watchByPageId(userId, pageId, status)
       const result = { watcher }

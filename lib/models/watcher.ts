@@ -3,16 +3,18 @@ import { Types, Document, Model, Schema, model } from 'mongoose'
 import ActivityDefine from 'server/util/activityDefine'
 // import Debug from 'debug'
 
-const STATUS_WATCH = 'WATCH'
-const STATUS_IGNORE = 'IGNORE'
-const STATUSES = [STATUS_WATCH, STATUS_IGNORE]
+export const WatcherStatus = {
+  Watch: 'WATCH',
+  Ignore: 'IGNORE',
+} as const
+export type WatcherStatusType = typeof WatcherStatus[keyof typeof WatcherStatus]
 
 export interface WatcherDocument extends Document {
   _id: Types.ObjectId
   user: Types.ObjectId
   targetModel: string
   target: Types.ObjectId
-  status: string
+  status: WatcherStatusType
   createdAt: Date
 
   isWatching(): boolean
@@ -25,9 +27,6 @@ export interface WatcherModel extends Model<WatcherDocument> {
   watchByPageId(user: Types.ObjectId, pageId: Types.ObjectId, status: string): any
   getWatchers(target: Types.ObjectId): Promise<Types.ObjectId[]>
   getIgnorers(target: Types.ObjectId): Promise<Types.ObjectId[]>
-
-  STATUS_WATCH: string
-  STATUS_IGNORE: string
 }
 
 export default (crowi: Crowi) => {
@@ -53,17 +52,17 @@ export default (crowi: Crowi) => {
     status: {
       type: String,
       require: true,
-      enum: STATUSES,
+      enum: Object.values(WatcherStatus),
     },
     createdAt: { type: Date, default: Date.now },
   })
 
   watcherSchema.methods.isWatching = function () {
-    return this.status === STATUS_WATCH
+    return this.status === WatcherStatus.Watch
   }
 
   watcherSchema.methods.isIgnoring = function () {
-    return this.status === STATUS_IGNORE
+    return this.status === WatcherStatus.Ignore
   }
 
   watcherSchema.statics.findByUserIdAndTargetId = function (userId, targetId) {
@@ -82,15 +81,12 @@ export default (crowi: Crowi) => {
   }
 
   watcherSchema.statics.getWatchers = async function (target) {
-    return Watcher.find({ target, status: STATUS_WATCH }).distinct('user')
+    return Watcher.find({ target, status: WatcherStatus.Watch }).distinct('user')
   }
 
   watcherSchema.statics.getIgnorers = async function (target) {
-    return Watcher.find({ target, status: STATUS_IGNORE }).distinct('user')
+    return Watcher.find({ target, status: WatcherStatus.Ignore }).distinct('user')
   }
-
-  watcherSchema.statics.STATUS_WATCH = STATUS_WATCH
-  watcherSchema.statics.STATUS_IGNORE = STATUS_IGNORE
 
   const Watcher = model<WatcherDocument, WatcherModel>('Watcher', watcherSchema)
 

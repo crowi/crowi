@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 import { crowi, Fixture } from 'server/test/setup'
 import { PageGrant } from './page'
 import { UserStatus } from './user'
+import { WatcherStatus } from './watcher'
 
 describe('Activity', function () {
   let Activity
@@ -122,7 +123,7 @@ describe('Activity', function () {
 
     describe('Watch', () => {
       beforeAll(async () => {
-        await Watcher.watchByPageId(userIds[1], pageId, Watcher.STATUS_WATCH)
+        await Watcher.watchByPageId(userIds[1], pageId, WatcherStatus.Watch)
       })
 
       it('is watched', async () => {
@@ -135,7 +136,7 @@ describe('Activity', function () {
 
     describe('Ignore', () => {
       beforeAll(async () => {
-        await Watcher.watchByPageId(userIds[1], pageId, Watcher.STATUS_IGNORE)
+        await Watcher.watchByPageId(userIds[1], pageId, WatcherStatus.Ignore)
       })
 
       it('is ignored', async () => {
