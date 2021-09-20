@@ -60,12 +60,10 @@ export default (crowi: Crowi) => {
       require: true,
       enum: ActivityDefine.getSupportActionNames(),
     },
-    activities: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'Activity',
-      },
-    ],
+    activities: {
+      type: [Schema.Types.ObjectId],
+      ref: 'Activity',
+    },
     status: {
       type: String,
       default: NotificationStatus.Unread,
@@ -114,6 +112,7 @@ export default (crowi: Crowi) => {
       action,
       status: NotificationStatus.Unread,
       createdAt: now,
+      // @ts-ignore
       $addToSet: { activities: activityId },
     }
 
@@ -136,6 +135,7 @@ export default (crowi: Crowi) => {
   notificationSchema.statics.removeActivity = async function (activity: ActivityDocument) {
     const { _id, target, action } = activity
     const query = { target, action }
+    // @ts-ignore
     const parameters: UpdateQuery<NotificationDocument> = { $pull: { activities: _id } }
 
     const result = await Notification.updateMany(query, parameters)
