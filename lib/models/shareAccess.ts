@@ -1,5 +1,5 @@
 import Crowi from 'server/crowi'
-import { Types, Document, Model, Schema, model } from 'mongoose'
+import { Types, Document, Model, Schema, model, UpdateQuery } from 'mongoose'
 // import Debug from 'debug'
 import mongoosePaginate from 'mongoose-paginate'
 
@@ -55,7 +55,7 @@ export default (crowi: Crowi) => {
 
   shareAccessSchema.statics.access = async function (shareId, trackingId) {
     const query = { share: shareId, tracking: trackingId }
-    const update = { lastAccessedAt: Date.now() }
+    const update: UpdateQuery<ShareAccessDocument> = { lastAccessedAt: new Date() }
     return this.findOneAndUpdate(query, update, { upsert: true, new: true }).exec()
   }
 
