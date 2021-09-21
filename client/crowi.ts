@@ -452,7 +452,7 @@ $(function () {
         const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
 
         // Save current canvas state to pettern
-        const pattern = ctx.createPattern(canvas, 'no-repeat') as CanvasPattern
+        const pattern = ctx.createPattern(canvas as CanvasImageSource, 'no-repeat') as CanvasPattern
         const { width, height } = canvas
 
         // Resize to 1/4 (and canvas state will clear)
@@ -721,9 +721,9 @@ window.addEventListener('load', function (e) {
   Crowi.modifyScrollTop()
 })
 
-window.addEventListener('hashchange', function (e) {
-  Crowi.unhighlightSelectedSection(Crowi.findHashFromUrl(e.oldURL))
-  Crowi.highlightSelectedSection(Crowi.findHashFromUrl(e.newURL))
+window.addEventListener('hashchange', (e) => {
+  Crowi.unhighlightSelectedSection(Crowi.findHashFromUrl((<HashChangeEvent>e).oldURL))
+  Crowi.highlightSelectedSection(Crowi.findHashFromUrl((<HashChangeEvent>e).newURL))
   Crowi.modifyScrollTop()
 
   // hash on page
