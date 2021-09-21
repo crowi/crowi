@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: /home/node/app
     docker:
-      - image: node:12.18.2
+      - image: cimg/node:14.17.6
         environment:
           REDIS_URL: redis://localhost:6379/crowi
           PLANTUML_URI: //localhost:8080
