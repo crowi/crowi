@@ -1,5 +1,5 @@
 import Crowi from 'server/crowi'
-import { Types, Document, Model, Schema, Query, model, QueryOptions, UpdateQuery } from 'mongoose'
+import { Types, Document, Model, Schema, Query, model, QueryOptions, UpdateQuery, FilterQuery } from 'mongoose'
 import Debug from 'debug'
 import { subDays } from 'date-fns'
 import ActivityDefine from 'server/util/activityDefine'
@@ -26,7 +26,7 @@ export interface NotificationDocument extends Document {
 
 export interface NotificationModel extends Model<NotificationDocument> {
   findLatestNotificationsByUser(user: Types.ObjectId, skip: number, offset: number): Promise<NotificationDocument[]>
-  upsertByActivity(user: Types.ObjectId, activity: ActivityDocument, createdAt?: Date | null): Promise<NotificationDocument | null>
+  upsertByActivity(user: UserDocument, activity: ActivityDocument, createdAt?: Date | null): Promise<NotificationDocument | null>
   removeActivity(activity: any): any
   removeEmpty(): Promise<Query<any, NotificationDocument>>
   read(user: UserDocument): Promise<Query<any, NotificationDocument>>
@@ -104,9 +104,9 @@ export default (crowi: Crowi) => {
 
     const now = createdAt || Date.now()
     const lastWeek = subDays(now, 7)
-    const query = { user, target, action, createdAt: { $gt: lastWeek } }
+    const query: FilterQuery<NotificationDocument> = { user: user._id, target, action, createdAt: { $gt: lastWeek } }
     const parameters: UpdateQuery<NotificationDocument> = {
-      user,
+      user: user._id,
       targetModel,
       target,
       action,
