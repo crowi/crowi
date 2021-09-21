@@ -6,5 +6,6 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["common", "lib", "local_modules"]
+  "include": ["common", "lib", "local_modules"],
+  "exclude": ["lib/test"]
 }
