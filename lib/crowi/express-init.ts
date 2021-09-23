@@ -1,5 +1,4 @@
 import express, { Express, Request, Response } from 'express'
-import bodyParser from 'body-parser'
 import methodOverride from 'method-override'
 import passport from 'passport'
 import session from 'express-session'
@@ -41,6 +40,7 @@ export default (crowi: Crowi, app: Express) => {
     // It has to be fixed to set values into service/config.
     config.crowi['app:url'] = baseUrl
 
+    console.log(User.getLanguageLabels())
     res.locals.req = req
     res.locals.baseUrl = baseUrl
     res.locals.config = config
@@ -82,8 +82,8 @@ export default (crowi: Crowi, app: Express) => {
   app.set('view engine', 'tsx')
   app.set('views', crowi.viewsDirs)
   app.use(methodOverride())
-  app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }))
-  app.use(bodyParser.json({ limit: '50mb' }))
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }))
+  app.use(express.json({ limit: '50mb' }))
   app.use(session(crowi.sessionConfig))
 
   // Set basic auth middleware
