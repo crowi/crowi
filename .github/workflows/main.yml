@@ -1,0 +1,53 @@
+name: Main
+
+on: [push]
+
+jobs:
+  run-tests:
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      matrix:
+        node-version: [14.x]
+
+
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: copy .env
+      run: cp .env.test .env
+
+    # https://docs.github.com/ja/actions/guides/caching-dependencies-to-speed-up-workflows
+    - name: Cache node modules
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-node-modules
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: Install dependencies
+      env:
+        MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
+        MONGOMS_DISABLE_POSTINSTALL: 1
+      run: npm ci
+    - name: Run test
+      run: npm test
