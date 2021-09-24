@@ -12,7 +12,6 @@ jobs:
       matrix:
         node-version: [14.x]
 
-
     services:
       redis:
         image: redis
@@ -44,10 +43,11 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
+    - name: Install lsb-release
+      run: sudo apt-get install -y lsb-release
     - name: Install dependencies
       env:
         MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
-        MONGOMS_DISABLE_POSTINSTALL: 1
       run: npm ci
     - name: Run test
       env:
