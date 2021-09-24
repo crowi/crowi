@@ -50,4 +50,6 @@ jobs:
         MONGOMS_DISABLE_POSTINSTALL: 1
       run: npm ci
     - name: Run test
+      env:
+        MONGOMS_DEBUG: 1
       run: npm test
