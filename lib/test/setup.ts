@@ -12,8 +12,6 @@ export const ROOT_DIR = global.ROOT_DIR as string
 export const MODEL_DIR = global.MODEL_DIR as string
 // @ts-ignore
 export const MONGO_URI = global.MONGO_URI as string
-// @ts-ignore
-export const MONGO_DB_NAME = global.MONGO_DB_NAME as string
 
 beforeAll(async () => {
   crowi = new Crowi(ROOT_DIR, {
