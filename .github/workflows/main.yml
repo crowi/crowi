@@ -43,8 +43,8 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
-    - name: Install lsb-release
-      run: sudo apt-get install -y lsb-release libssl-dev
+    - name: Install libcrypto.so
+      run: sudo apt-get install -y libssl-dev --reinstall
     - name: Install dependencies
       env:
         MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
