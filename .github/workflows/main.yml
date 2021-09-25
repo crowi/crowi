@@ -43,8 +43,8 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
-    - name: Install libcrypto.so
-      run: sudo apt-get install -y libssl-dev --reinstall
+    - name: Install .so
+      run: sudo locate libcrypto.so.1.0.0
     - name: Install dependencies
       env:
         MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
