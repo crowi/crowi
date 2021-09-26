@@ -48,6 +48,7 @@ jobs:
         MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
       run: npm ci
 
+    # TODO: type-check, lint, build, coverage
     - name: Run test
       env:
         MONGOMS_DEBUG: 1
