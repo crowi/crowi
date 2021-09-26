@@ -5,13 +5,12 @@ on: [push]
 jobs:
   run-tests:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     timeout-minutes: 10
 
     strategy:
       matrix:
         node-version: [14.x]
-
 
     services:
       redis:
@@ -47,7 +46,10 @@ jobs:
     - name: Install dependencies
       env:
         MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
-        MONGOMS_DISABLE_POSTINSTALL: 1
       run: npm ci
+
+    # TODO: type-check, lint, build, coverage
     - name: Run test
+      env:
+        MONGOMS_DEBUG: 1
       run: npm test
