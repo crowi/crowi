@@ -46,10 +46,18 @@ jobs:
     - name: Install dependencies
       env:
         MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
+        MONGOMS_VERSION: 3.6.13
       run: npm ci
 
-    # TODO: type-check, lint, build, coverage
+    - name: Type check
+      run: npm run type-check
+    - name: Run lint
+      run: npm run lint
+    - name: Build package
+      run: npm run build
+    # TODO: coverage
     - name: Run test
+      reckn: npm ci
       env:
         MONGOMS_DEBUG: 1
       run: npm test
