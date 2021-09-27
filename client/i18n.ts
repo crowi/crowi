@@ -1,8 +1,8 @@
-import i18n from 'i18next'
+import i18next from 'i18next'
 import LngDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
 
-import en from 'locales/en/translation.yml'
+import enUs from 'locales/en-US/translation.yml'
 import ja from 'locales/ja/translation.yml'
 
 export default () => {
@@ -15,21 +15,15 @@ export default () => {
     cacheUserLanguage(lng, options) {},
   })
 
-  i18n
+  i18next
     .use(lngDetector)
     .use(initReactI18next)
     .init({
-      fallbackLng: 'en',
+      fallbackLng: 'en-US',
       debug: process.env.NODE_ENV === 'development',
       interpolation: { escapeValue: false },
-      react: {
-        wait: false,
-        bindI18n: 'languageChanged loaded',
-        bindStore: 'added removed',
-        nsMode: 'default',
-      },
       resources: {
-        en: { translation: en },
+        en: { translation: enUs },
         ja: { translation: ja },
       },
       detection: {

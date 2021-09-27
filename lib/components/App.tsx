@@ -1,10 +1,10 @@
 import React, { FC, createContext } from 'react'
-import i18next from 'i18next'
+import { i18n } from 'i18next'
 import { I18nextProvider } from 'react-i18next'
 import { AppContext as AppContextType } from 'server/types/appContext'
 
 export interface Props {
-  i18n: i18next.i18n
+  i18n: i18n
   context: AppContextType
 }
 

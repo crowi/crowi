@@ -62,7 +62,6 @@ export default (crowi: Crowi, app: Express) => {
       env === 'development'
         ? {
             presets: [['@babel/env', { targets: { node: 'current' } }], '@babel/react'],
-            plugins: ['@babel/proposal-optional-chaining'],
           }
         : {
             presets: [],
