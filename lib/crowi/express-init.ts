@@ -40,7 +40,6 @@ export default (crowi: Crowi, app: Express) => {
     // It has to be fixed to set values into service/config.
     config.crowi['app:url'] = baseUrl
 
-    console.log(User.getLanguageLabels())
     res.locals.req = req
     res.locals.baseUrl = baseUrl
     res.locals.config = config
