@@ -72,6 +72,14 @@ Bookmarks: Bookmarks
 Created Pages: Created Pages
 Deleted Pages: Deleted Pages
 Sign out: Logout
+page_installer:
+  title:
+      welcome: Welcome to Crowi setup!
+      create_admin_account: Create Admin Account
+  note:
+      first_create_admin: First of all, let's create the admin account!
+  button:
+      submit: Create Wiki
 page_login:
   sign_in: Sign in
   sign_up_is_here: Sign up
@@ -372,7 +380,7 @@ admin:
         checkbox: Send invitation by email
         submit: Submit
       modal:
-        completed_message: Successfully invited new users! 
+        completed_message: Successfully invited new users!
         temp_password: The new users have temporary passwords.
         caution_password: Please note you will not be able to recover the temporary passwords once you close this message.
         caution_without_email: You need to share the temporary passwords with invited users if you have not sent invitations via email.

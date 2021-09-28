@@ -1,6 +1,6 @@
 {% extends 'layout/single-nologin.html' %}
 
-{% block html_title %}セットアップ {% endblock %}
+{% block html_title %}{{ t('page_installer.title.welcome') }} {% endblock %}
 
 {% block content_main %}
 
@@ -9,17 +9,18 @@
   <div class="installer-header">
     <img src="/logo/500w-inverse.png" width="250" alt="Crowi">
     <h1>
-      セットアップへようこそ!
+      {{ t('page_installer.title.welcome') }}
     </h1>
   </div>
 
 
   <div class="login-dialog"  id="login-dialog">
     <div class="login-dialog-inner">
-      <h2>管理者の作成</h2>
+      <h2>{{ t('page_installer.title.create_admin_account') }}</h2>
+
 
       <p class="text-info">
-      はじめに、管理者アカウントを作成してください。
+        {{ t('page_installer.note.first_create_admin') }}
       </p>
 
       {% if req.form.errors.length > 0 %}
@@ -33,39 +34,39 @@
       {% endif %}
 
       <form role="form" action="/installer/createAdmin" method="post">
-        <label>ユーザーID</label>
+        <label>{{ t('User ID') }}</label>
         <div class="input-group" id="input-group-username">
           <span class="input-group-prepend"><span class="input-group-text"><strong>@</strong></span></span>
-          <input type="text" class="form-control" placeholder="記入例: taroyama" name="registerForm[username]" value="{{ req.body.registerForm.username }}" required>
+          <input type="text" class="form-control" placeholder="{{ t('page_register.example') }}: taroyama" name="registerForm[username]" value="{{ req.body.registerForm.username }}" required>
         </div>
         <p class="help-block">
         <span id="help-block-username" class="text-danger"></span>
-        ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。
+        {{ t('page_register.form_help.user_id') }}
         </p>
 
-        <label>名前</label>
+        <label>{{ t('Name') }}</label>
         <div class="input-group">
           <span class="input-group-prepend"><span class="input-group-text">{{ Icon("account") }}</span></span>
-          <input type="text" class="form-control" placeholder="記入例: 山田 太郎" name="registerForm[name]" value="{{ req.body.registerForm.name }}" required>
+          <input type="text" class="form-control" placeholder="{{ t('page_register.example') }}: {{ t('page_register.taro_yamada') }}" name="registerForm[name]" value="{{ req.body.registerForm.name }}" required>
         </div>
 
-        <label >メールアドレス</label>
+        <label>{{ t('Email') }}</label>
         <div class="input-group">
           <span class="input-group-prepend"><span class="input-group-text">{{ Icon("email") }}</span></span>
           <input type="email" class="form-control" placeholder="E-mail" name="registerForm[email]" value="{{ googleEmail|default(req.body.registerForm.email) }}" required>
         </div>
 
-        <label>パスワード</label>
+        <label>{{ t('Password') }}</label>
         <div class="input-group">
           <span class="input-group-prepend"><span class="input-group-text">{{ Icon("key") }}</span></span>
           <input type="password" class="form-control" placeholder="Password" name="registerForm[password]" required>
         </div>
         <p class="help-block">
-        パスワードは6文字以上の半角英数字または記号
+        {{ t('page_register.form_help.password') }}
         </p>
 
         <input type="hidden" name="_csrf" value="{{ csrf() }}">
-        <input type="submit" class="btn btn-primary btn-lg btn-block" value="作成">
+        <input type="submit" class="btn btn-primary btn-lg btn-block" value="{{ t('page_installer.button.submit') }}">
       </form>
 
     </div>
