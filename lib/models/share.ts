@@ -1,7 +1,7 @@
 import Crowi from 'server/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 // import Debug from 'debug'
-import uuidv4 from 'uuid/v4'
+import { v4 as uuidv4 } from 'uuid'
 import mongoosePaginate from 'mongoose-paginate'
 import { UserDocument } from './user'
 
