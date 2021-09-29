@@ -2,11 +2,11 @@ import Debug from 'debug'
 import path, { sep } from 'path'
 import { connect as mongooseConnect } from 'mongoose'
 import Tokens from 'csrf'
-import redis from 'redis'
+import { createClient as createRedisClient, RedisClient } from 'redis'
 import url from 'url'
 import http from 'http'
-import socketIO from 'socket.io'
-import socketIORedis from 'socket.io-redis'
+import { Server as SocketIOServer } from 'socket.io'
+import { createAdapter } from '@socket.io/redis-adapter'
 import connectRedis from 'connect-redis'
 import express from 'express'
 import session from 'express-session'
@@ -93,7 +93,7 @@ class Crowi {
 
   port: number
 
-  redis: redis.RedisClient | null = null
+  redis: RedisClient | null = null
 
   redisUrl: string | null
 
@@ -102,7 +102,7 @@ class Crowi {
   // TODO: @types モジュール入れたらやる
   sessionConfig: any
 
-  io?: socketIO.Server
+  io?: SocketIOServer
 
   // FIXME: util/slack に型付けたらやる
   slack: any
@@ -253,8 +253,7 @@ class Crowi {
 
   async setupRedisClient() {
     if (this.redisOpts) {
-      const redisClient = redis.createClient(this.redisOpts)
-      this.redis = redisClient
+      this.redis = createRedisClient(this.redisOpts)
     }
   }
 
@@ -384,9 +383,9 @@ class Crowi {
     const server = http.createServer(this.app).listen(this.port, () => {
       console.log('[' + this.node_env + '] Express server listening on port ' + this.port)
     })
-    const io = socketIO(server, { transports: ['websocket'] })
-    if (this.redisOpts) {
-      io.adapter(socketIORedis(this.redisOpts))
+    const io = new SocketIOServer(server, { transports: ['websocket'] })
+    if (this.redisOpts && this.redis) {
+      io.adapter(createAdapter(this.redis, this.redis.duplicate()));
       debug('Using socket.io-redis')
     }
     io.sockets.on('connection', (socket) => {
