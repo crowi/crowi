@@ -24,7 +24,7 @@ interface State {
 interface Record {
   index: number
   path: string
-  info: Platform | undefined
+  info: typeof platform | undefined
   remoteAddress: string
   date: string
 }
