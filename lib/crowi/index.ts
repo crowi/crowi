@@ -385,7 +385,7 @@ class Crowi {
     })
     const io = new SocketIOServer(server, { transports: ['websocket'] })
     if (this.redisOpts && this.redis) {
-      io.adapter(createAdapter(this.redis, this.redis.duplicate()));
+      io.adapter(createAdapter(this.redis, this.redis.duplicate()))
       debug('Using socket.io-redis')
     }
     io.sockets.on('connection', (socket) => {
