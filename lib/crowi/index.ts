@@ -126,7 +126,7 @@ class Crowi {
     this.resourceDir = path.join(this.rootDir, 'resource') + sep
     this.viewsDir = path.join(this.rootDir, 'views') + sep
     this.mailDir = path.join(this.viewsDir, 'mail') + sep
-    const pagesDir = path.join(this.rootDir, ...(this.node_env === 'development' ? ['lib'] : ['dist', 'server']), 'pages') + sep
+    const pagesDir = path.join(this.rootDir, ...(Crowi.isRunOnTsNode() ? ['lib'] : ['dist', 'server']), 'pages') + sep
     this.viewsDirs = [this.viewsDir, pagesDir]
     this.tmpDir = path.join(this.rootDir, 'tmp') + sep
     this.cacheDir = path.join(this.tmpDir, 'cache')
@@ -156,6 +156,18 @@ class Crowi {
 
   isInitialized() {
     return this.initialized
+  }
+
+  static isRunOnTsNode(): boolean {
+    try {
+      if (process[Symbol.for('ts-node.register.instance')]) {
+        return true
+      }
+    } finally {
+      // pass
+    }
+
+    return false
   }
 
   isPageId(pageId) {

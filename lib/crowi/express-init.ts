@@ -4,7 +4,7 @@ import passport from 'passport'
 import session from 'express-session'
 import flash from 'connect-flash'
 import cons from 'consolidate'
-import expressReactViews from 'express-react-views'
+import { expressReactViewEngine }  from 'server/util/expressReactView'
 import Crowi from 'server/crowi'
 import { ConfigSecurityRegistrationMode } from 'server/models/config'
 import Debug from 'debug'
@@ -56,28 +56,15 @@ export default (crowi: Crowi, app: Express) => {
     next()
   })
 
-  const reactViews = expressReactViews.createEngine({
-    babel:
-      env === 'development'
-        ? {
-            presets: [['@babel/env', { targets: { node: 'current' } }], '@babel/react'],
-          }
-        : {
-            presets: [],
-            plugins: [],
-          },
-    transformViews: env === 'development',
-  })
+  const reactViewExt = Crowi.isRunOnTsNode() ? 'tsx' : 'js'
 
   app.set('port', crowi.port)
   app.use(express.static(crowi.publicDir))
   app.engine('html', cons.swig)
-  app.engine('js', reactViews)
-  app.engine('tsx', reactViews)
+  app.engine(reactViewExt, expressReactViewEngine())
   app.set('view cache', false)
   app.set('view engine', 'html')
-  app.set('view engine', 'js')
-  app.set('view engine', 'tsx')
+  app.set('view engine', reactViewExt)
   app.set('views', crowi.viewsDirs)
   app.use(methodOverride())
   app.use(express.urlencoded({ extended: true, limit: '50mb' }))
