@@ -156,7 +156,7 @@ export default (crowi: Crowi, app: Express) => {
     }
 
     const render = (options = { messages: {} }) =>
-      res.render(getPath(crowi, 'Me/PasswordPage'), {
+      res.render('Me/PasswordPage', {
         ...options,
         i18n: req.i18n,
         context: getAppContext(crowi, req),
