@@ -96,6 +96,7 @@ class Crowi {
   redis: redis.RedisClient | null = null
 
   redisUrl: string | null
+  redisRejectUnauthorized: boolean
 
   redisOpts: any
 
@@ -119,6 +120,7 @@ class Crowi {
     // Remove REDISTOGO_URL in the near future.
     this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_TLS_URL || this.env.REDIS_URL || null
     this.redisOpts = this.buildRedisOpts(this.redisUrl)
+    this.redisRejectUnauthorized = this.env.REDIS_REJECT_UNAUTHORIZED === 'false' ? false : true
 
     this.rootDir = rootdir
     this.pluginDir = path.join(this.rootDir, 'node_modules') + sep
@@ -204,8 +206,7 @@ class Crowi {
       const { hostname: host, port, auth, protocol } = url.parse(redisUrl)
       const password = auth ? { password: auth.split(':')[1] } : {}
 
-      // If you use a private TLS certification and do not verificate your CA, set rejectUnauthorized to true at your own risk.
-      const tls: object|null = (protocol === 'rediss:') ? {requestCert: true,  rejectUnauthorized: false} : null;
+      const tls: object|null = (protocol === 'rediss:') ? {requestCert: true,  rejectUnauthorized: this.redisRejectUnauthorized} : null;
 
       if (tls === null) {
         return {host, port, ...password}
