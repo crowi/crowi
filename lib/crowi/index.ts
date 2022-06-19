@@ -200,10 +200,19 @@ class Crowi {
 
   buildRedisOpts(redisUrl: string | null) {
     if (redisUrl) {
-      const { hostname: host, port, auth } = url.parse(redisUrl)
+      const { hostname: host, port, auth, protocol } = url.parse(redisUrl)
       const password = auth ? { password: auth.split(':')[1] } : {}
-      return { host, port, ...password }
+
+      // If you use a private TLS certification and do not verificate your CA, set rejectUnauthorized to true at your own risk.
+      const tls: object|null = (protocol === 'rediss:') ? {requestCert: true,  rejectUnauthorized: true} : null;
+
+      if (tls === null) {
+        return {host, port, ...password}
+      }
+
+      return {host, port, tls, ...password}
     }
+
     return null
   }
 
