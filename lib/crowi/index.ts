@@ -204,7 +204,7 @@ class Crowi {
       const password = auth ? { password: auth.split(':')[1] } : {}
 
       // If you use a private TLS certification and do not verificate your CA, set rejectUnauthorized to true at your own risk.
-      const tls: object|null = (protocol === 'rediss:') ? {requestCert: true,  rejectUnauthorized: true} : null;
+      const tls: object|null = (protocol === 'rediss:') ? {requestCert: true,  rejectUnauthorized: false} : null;
 
       if (tls === null) {
         return {host, port, ...password}
