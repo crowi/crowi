@@ -116,7 +116,8 @@ class Crowi {
     this.baseUrl = this.env.BASE_URL || null
     this.node_env = this.env.NODE_ENV || 'production'
     this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 3000
-    this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_URL || null
+    // Remove REDISTOGO_URL in the near future.
+    this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_TLS_URL || this.env.REDIS_URL || null
     this.redisOpts = this.buildRedisOpts(this.redisUrl)
 
     this.rootDir = rootdir
