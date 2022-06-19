@@ -35,7 +35,7 @@ describe('Test for Crowi application context', () => {
     const table: [string, object][] = [
       ['redis://localhost:6379', {host: 'localhost', port: '6379'}],
       ['redis://user:password@localhost:6379', {host: 'localhost', port: '6379', password: 'password'}],
-      ['rediss://localhost:6379', {host: 'localhost', port: '6379', tls: {requestCert: true, rejectUnauthorized: true}}],
+      ['rediss://localhost:6379', {host: 'localhost', port: '6379', tls: {requestCert: true, rejectUnauthorized: false}}],
     ]
 
     test.each(table)('parse %s', (url, expected) => {
