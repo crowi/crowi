@@ -10,7 +10,7 @@ jobs:
           FILE_UPLOAD: local
           MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
           MONGOMS_DISABLE_POSTINSTALL: 1
-      - image: cimg/redis:5
+      - image: cimg/redis:5.0
     steps:
       - checkout
       - setup_remote_docker:
