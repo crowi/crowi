@@ -1,6 +1,6 @@
 version: 2.1
 jobs:
-  build_16:
+  build:
     working_directory: ~/app
     docker:
       - image: cimg/node:16.15
@@ -40,6 +40,6 @@ workflows:
   version: 2
   main:
     jobs:
-      - build_16
+      - build
 orbs:
   codecov: codecov/codecov@1.0.5
