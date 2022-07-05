@@ -8,8 +8,6 @@ jobs:
           REDIS_URL: redis://localhost:6379/crowi
           PLANTUML_URI: //localhost:8080
           FILE_UPLOAD: local
-#          MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
-#          MONGOMS_DISABLE_POSTINSTALL: 1
       - image: cimg/redis:5.0
     steps:
       - checkout
@@ -18,7 +16,6 @@ jobs:
       - restore_cache:
           keys:
             - node_modules_16_{{ checksum "package-lock.json" }}
-#            - mongo_binaries_16_v2_{{ checksum "lib/test/crowi-environment.js" }}
       - run: npm install
       - save_cache:
           key: node_modules_16_{{ checksum "package-lock.json" }}
@@ -27,14 +24,10 @@ jobs:
       - run: npm run type-check
       - run: npm run lint
       - run: npm run build
-#      - run: npm run coverage-ci
-#      - codecov/upload:
-#          file: coverage/clover.xml
-#          when: on_success
-#      - save_cache:
-#          key: mongo_binaries_16_v2_{{ checksum "lib/test/crowi-environment.js" }}
-#          paths:
-#            - /root/.mongo-binaries
+      - run: npm run coverage-ci
+      - codecov/upload:
+          file: coverage/clover.xml
+          when: on_success
 
 workflows:
   version: 2
