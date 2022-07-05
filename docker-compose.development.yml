@@ -28,7 +28,7 @@ services:
     command: bash -c "npm install && npm run dev"
 
   mongodb:
-    image: mongo:5.0.8
+    image: mongo:4.0
     volumes:
       - ./data/mongodb:/data/db
     restart: unless-stopped
