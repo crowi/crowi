@@ -207,7 +207,7 @@
     "lint": "eslint '**/*.{ts,tsx,js,jsx}'",
     "storybook": "start-storybook --ci -s public -p 6001",
     "test": "env -u DEBUG TZ=UTC jest --maxWorkers=5",
-    "test-ci": "env -u DEBUG TZ=UTC jest --runInBand",
+    "test-ci": "env -u DEBUG TZ=UTC jest --maxWorkers=2",
     "test:client": "env -u DEBUG TZ=UTC jest client --maxWorkers=5",
     "test:server": "env -u DEBUG jest lib --maxWorkers=5",
     "coverage": "npm test -- --coverage",
