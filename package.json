@@ -211,7 +211,7 @@
     "test:client": "env -u DEBUG TZ=UTC jest client --maxWorkers=5",
     "test:server": "env -u DEBUG jest lib --maxWorkers=5",
     "coverage": "npm test -- --coverage",
-    "coverage-ci": "npm test-ci -- --coverage",
+    "coverage-ci": "npm run test-ci -- --coverage",
     "build": "run-s build:*",
     "build:server": "npm run prod:server",
     "build:client": "npm run prod:client",
