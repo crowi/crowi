@@ -27,7 +27,7 @@ jobs:
       - run: npm run type-check
       - run: npm run lint
       - run: npm run build
-      - run: npm run coverage
+      - run: npm run coverage-ci
       - codecov/upload:
           file: coverage/clover.xml
           when: on_success
