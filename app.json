@@ -23,6 +23,7 @@
       "description": "Uri for MongoDB.",
       "required": true
     },
+    "REDIS_REJECT_UNAUTHORIZED": "0",
     "MONGOMS_DISABLE_POSTINSTALL": "1"
   },
   "addons": [
