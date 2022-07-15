@@ -4,7 +4,7 @@ import passport from 'passport'
 import session from 'express-session'
 import flash from 'connect-flash'
 import cons from 'consolidate'
-import { expressReactViewEngine }  from 'server/util/expressReactView'
+import { expressReactViewEngine } from 'server/util/expressReactView'
 import Crowi from 'server/crowi'
 import { ConfigSecurityRegistrationMode } from 'server/models/config'
 import Debug from 'debug'
@@ -57,6 +57,8 @@ export default (crowi: Crowi, app: Express) => {
   })
 
   const reactViewExt = Crowi.isRunOnTsNode() ? 'tsx' : 'js'
+  console.log('isRunOnTsNode', Crowi.isRunOnTsNode())
+  console.log('reactViewExt', reactViewExt)
 
   app.set('port', crowi.port)
   app.use(express.static(crowi.publicDir))

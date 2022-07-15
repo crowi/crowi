@@ -80,7 +80,7 @@ export default (crowi: Crowi) => {
   }
 
   actions.index = function (req: Request, res: Response) {
-    return res.render(getPath(crowi, 'AdminPage'), { i18n: req.i18n, context: getAppContext(crowi, req) })
+    return res.render('AdminPage', { i18n: req.i18n, context: getAppContext(crowi, req) })
   }
 
   actions.api.index = function (req: Request, res: Response) {
