@@ -19,15 +19,18 @@
       "description": "A password seed is used by password hash generator. ",
       "generator": "secret"
     },
+    "MONGO_URI": {
+      "description": "Uri for MongoDB."
+      "required": true
+    },
     "MONGOMS_DISABLE_POSTINSTALL": "1"
   },
   "addons": [
-    "mongolab",
-    "redistogo",
+    "heroku-redis",
     {
       "plan": "bonsai",
       "options": {
-        "version": "7.2"
+        "version": "7.10.2"
       }
     }
   ]
