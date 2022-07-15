@@ -20,7 +20,7 @@
       "generator": "secret"
     },
     "MONGO_URI": {
-      "description": "Uri for MongoDB."
+      "description": "Uri for MongoDB.",
       "required": true
     },
     "MONGOMS_DISABLE_POSTINSTALL": "1"
