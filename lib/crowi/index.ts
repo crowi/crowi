@@ -119,7 +119,7 @@ class Crowi {
     // Remove REDISTOGO_URL in the near future.
     this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_TLS_URL || this.env.REDIS_URL || null
 
-    const redisRejectUnauthorized = this.env.REDIS_REJECT_UNAUTHORIZED === '0' ? false : true
+    const redisRejectUnauthorized = this.env.REDIS_REJECT_UNAUTHORIZED !== '0'
     this.redisOpts = this.buildRedisOpts(this.redisUrl, redisRejectUnauthorized)
 
     this.rootDir = rootdir
@@ -206,13 +206,13 @@ class Crowi {
       const { hostname: host, port, auth, protocol } = url.parse(redisUrl)
       const password = auth ? { password: auth.split(':')[1] } : {}
 
-      const tls: object|null = (protocol === 'rediss:') ? {requestCert: true,  rejectUnauthorized: redisRejectUnauthorized} : null;
+      const tls: object | null = protocol === 'rediss:' ? { requestCert: true, rejectUnauthorized: redisRejectUnauthorized } : null
 
       if (tls === null) {
-        return {host, port, ...password}
+        return { host, port, ...password }
       }
 
-      return {host, port, tls, ...password}
+      return { host, port, tls, ...password }
     }
 
     return null
