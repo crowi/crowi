@@ -229,67 +229,88 @@ search:
     results: '{{value}} results'
 
 admin:
+  top:
+    title: Wiki Admin
+    description: This page can only be accessed by the Wiki administrators.
+    appoint_admin: You can appoint any user as a Wiki administrator using the Make Admin button in the Manage User page.
+  navigation:
+    top: Admin Info
+    title: Admin Page
+    app: App Settings
+    notification: Notifications
+    users: Users
+    search: Search Index
+    share: External Sharing Settings
+    backlinks: Backlinks
   app:
     legend: App Settings
-    title: Wikiの名前
-    title_description: ヘッダーやHTMLタイトルに使用されるWikiの名前を変更できます。
-    confidential: コンフィデンシャル表示
-    confidential_placeholder: '例: 社外秘'
-    confidential_description: ここに入力した内容は、ヘッダー等に表示されます。
-    allow_upload_file: 画像以外のファイルアップロードを許可
-    allow_upload_file_description1: ファイルアップロードの設定を有効にしている場合にのみ、選択可能です。
-    allow_upload_file_description2: 許可をしている場合、画像以外のファイルをページに添付可能になります。
+    title: Name for this Wiki
+    title_description: You can rename this Wiki - the name will be displayed in headers and HTML title tags.
+    confidential: Confidential
+    confidential_placeholder: 'Ex. "Confidential"'
+    confidential_description: You can customize confidential notifications in headers.
+    allow_upload_file: Allow users to upload files other than images.
+    allow_upload_file_description1: This option can only be applied if you allow users to upload files.
+    allow_upload_file_description2: Users can attach files other than images if you apply this option.
   aws:
     legend: AWS Settings
-    tips1: AWS にアクセスするための設定を行います。AWS の設定を完了させると、ファイルアップロード機能、プロフィール写真機能などが有効になります。
-    notice: この設定を途中で変更すると、これまでにアップロードしたファイル等へのアクセスができなくなりますのでご注意下さい。
-    region: リージョン
-    bucket: バケット名
+    tips1: You can configure your settings to access AWS. Once completed, file upload and profile picture features are enabled.
+    notice: CAUTION. PLEASE NOTE THAT YOU WILL BE UNABLE TO ACCESS THE FILES YOU UPLOADED IF YOU CHANGE THIS SETTING.
+    region: Region
+    region_placeholder: 'Ex. "ap-northeast-1"'
+    bucket: Bucket Name
+    bucket_placeholder: 'Ex. "crowi"'
     access_key_id: Access Key ID
     secret_access_key: Secret Access Key
   github:
     legend: GitHub Settings
-    tips1: GitHub プロジェクトの設定をすると、GitHub アカウントにコネクトして登録やログインが可能になります。
-    tips2: また、Organizationを指定した場合は、その組織に所属するアカウントのみがコネクトできるようになります。
+    tips1: Once you set up this project, You will be able to login or sign up with your GitHub account.
+    tips2: You can restrict login with GitHub accounts to only members of the organization if you input the organization name in this section.
     client_id: Client ID
     client_secret: Client Secret
     organization: Organization
   google:
     legend: Google Settings
-    tips: Google プロジェクトの設定をすると、Google アカウントにコネクトして登録やログインが可能になります。
+    tips: Once you set up your project, You will be able to login or sign up with your Google account.
     client_id: Client ID
     client_secret: Client Secret
   mail:
     legend: Mail Settings
-    tips1: SMTPの設定がされている場合、それが利用されます。SMTP設定がなく、AWSの設定がある場合、SESでの送信を試みます。SESを利用するためにはFromメールアドレスのVerify、プロダクション利用設定をする必要があります。
-    tips2: どちらの設定もない場合、メールは送信されません。
-    from: Fromアドレス
-    from_placeholder: '例: mail@crowi.wiki'
+    tips1: If you have SMTP settings in place, it will be used. If you don't have SMTP settings but you have AWS settings, it will try to send via SES. You need to verify the "FROM email address" and enable production access.
+    tips2: Emails can not be sent without either configuration set up.
+    from: FROM address
+    from_placeholder: 'Ex. mail@crowi.wiki'
     smtp:
-      legend: SMTP設定
-      smtp: SMTP設定
-      host: ホスト
-      port: ポート
-      user: ユーザー
-      password: パスワード
+      legend: SMTP Settings
+      smtp: SMTP Settings
+      host: Host
+      port: Port
+      user: User
+      password: Password
     aws:
-      legend: AWS設定
-      region: リージョン
+      legend: AWS Settings
+      region: Region
       access_key_id: Access Key ID
       secret_access_key: Secret Access Key
   security:
     legend: Security Settings
-    basic_auth: Basic認証
+    basic_auth: Basic Authentication
     id: ID
-    password: パスワード
-    tips1: Basic認証を設定すると、ページ全体に共通の認証がかかります。
-    tips2: IDとパスワードは暗号化されずに送信されるのでご注意下さい。
-    restriction: 登録の制限
-    restriction_description: ここに入力した内容は、ヘッダー等に表示されます。
-    whitelist: 登録許可メールアドレスのホワイトリスト
-    whitelist_placeholder: '例: mail@crowi.wiki'
-    whitelist_description1: 登録可能なメールアドレスを制限することができます。例えば、会社で使う場合、<1>@crowi.wiki</1>などと記載すると、その会社のメールアドレスを持っている人のみ登録可能になります。
-    whitelist_description2: 1行に1メールアドレス入力してください。
+    password: Password
+    tips1: The basic authentication is applied to the entire page when you set up this section.
+    tips2: Please note that your ID and password will be sent unencrypted.
+    restriction: Registration restriction
+    registration:
+      mode:
+        label:
+          open: 'Public - Anyone can register.'
+          restricted: 'Restricted - Approval by Admin is required at registration.'
+          closed: 'Closed - Invitation by Admin is required at registration.'
+    restriction_description: The information you input here will be displayed in the header.
+    whitelist: Whitelist of email addresses for registration permission
+    whitelist_placeholder: 'Ex. mail@crowi.wiki'
+    whitelist_description1: You can limit the domain of email addresses that can be registered. For example, if you use crowi.wiki domain in your company, you can write <1>@crowi.wiki</1>, which means that only people with that company's email address can register.
+    whitelist_description2: Please input one email address per line.
   auth:
     legend: 認証設定
     require_third_party_auth: 外部認証の設定を必須にする
@@ -337,17 +358,61 @@ admin:
     build_description2: Click "Build Now" to delete all backlinks and create backlinks by all pages.
     build_description3: This may take a while.
   share:
-    legend: External Share Settings
-    enable_external_share: Wikiページの外部ユーザーへの共有を有効にする。
+    legend: External Sharing Settings
+    enable_external_share: Enable sharing Wiki pages to external users.
   user:
     legend: User List
-    user_id: ユーザーID
-    name: 名前
-    email: メールアドレス
-    created_at: 作成日
-    status: ステータス
-    operation: 操作
-    not_found: ユーザーが見つかりませんでした
+    user_id: User ID
+    name: Name
+    email: Email
+    created_at: Created
+    status: Status
+    operation: Operation
+    not_found: User Not Found
+    invite:
+      form:
+        collapse: Invite new users
+        email: Email
+        example: 'Ex. user@crowi.wiki'
+        description: You can invite more than one person at a time with multi-line email addresses.
+        checkbox: Send invitation by email
+        submit: Submit
+      modal:
+        completed_message: Successfully invited new users!
+        temp_password: The new users have temporary passwords.
+        caution_password: Please note you will not be able to recover the temporary passwords once you close this message.
+        caution_without_email: You need to share the temporary passwords with invited users if you have not sent invitations via email.
+        email: Email
+        password: Password
+        failed_message: Invitation Failed
+    reset_password:
+      modal:
+        ask: Do you want to reset the user's password?
+        caution: Please note you will not be able to recover the new password once you close this message.
+        after_reset: Please share the new password with the user.
+        submit: Submit
+    edit:
+      modal:
+        ask: Do you want to edit user information?
+        current_name: Current name
+        current_email: Current email
+        new_name: Please enter your new name.
+        new_email: Please enter your new email address.
+        submit: Submit
+      dropdown:
+        edit: Edit
+        edit_menu: Edit menu
+        reset_password: Reset password
+        status: Status
+        approve: Approve
+        suspend: Suspend
+        restore: Restore
+        delete: Delete
+        delete_completely: Delete Completely
+        admin_menu: Admin menu
+        remove_admin: Remove admin
+        remove_caution: You can not remove yourself as admin.
+        make_admin: Make admin
 
 Portalize: Portalize
 portalize:
@@ -362,3 +427,7 @@ unportalize:
   this_page: 'This page'
   unportalized_page: 'Unportalized page'
   alert_toppage: This page will move to a special page because this is top page portal.
+
+comment:
+  delete_modal_message: Delete this comment?
+  delete: Delete

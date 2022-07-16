@@ -19,7 +19,7 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
   const [basicName, setBasicName] = useState(settingForm['security:basicName'] || '')
   const [basicSecret, setBasicSecret] = useState(settingForm['security:basicSecret'] || '')
   const [registrationMode, setRegistrationMode] = useState(settingForm['security:registrationMode'] || '')
-  const [registrationWhiteList, setRegistrationWhiteList] = useState(settingForm['security:registrationWhiteList'])
+  const [registrationWhiteList, setRegistrationWhiteList] = useState((settingForm['security:registrationWhiteList'] || []).join(`\n`))
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -68,7 +68,7 @@ const SecuritySettings: FC<Props> = ({ registrationMode: registrationModeOptions
           <Input type="select" id="securityRegistrationMode" value={registrationMode} onChange={(e) => setRegistrationMode(e.target.value)}>
             {Object.entries(registrationModeOptions).map(([mode, label]) => (
               <option key={mode} value={mode}>
-                {label}
+                {t(`admin.security.registration.mode.label.${label}`)}
               </option>
             ))}
           </Input>

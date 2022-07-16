@@ -19,9 +19,9 @@ export interface ConfigDocument extends Document {
 }
 
 export const registrationMode: Record<string, any> = {
-  [SECURITY_REGISTRATION_MODE_OPEN]: '公開 (だれでも登録可能)',
-  [SECURITY_REGISTRATION_MODE_RESTRICTED]: '制限 (登録完了には管理者の承認が必要)',
-  [SECURITY_REGISTRATION_MODE_CLOSED]: '非公開 (登録には管理者による招待が必要)',
+  [SECURITY_REGISTRATION_MODE_OPEN]: 'open',
+  [SECURITY_REGISTRATION_MODE_RESTRICTED]: 'restricted',
+  [SECURITY_REGISTRATION_MODE_CLOSED]: 'closed',
 }
 
 export function isRequiredThirdPartyAuth(config: Config): boolean {

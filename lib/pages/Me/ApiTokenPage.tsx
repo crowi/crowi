@@ -40,7 +40,7 @@ const ApiTokenPage: FC<Props> = (props) => {
                   {i18n.t('page_me_apitoken.notice.update_token2')}
                 </p>
 
-                <button type="submit" defaultValue="1" name="apiTokenForm[confirm]" className="btn btn-primary">
+                <button type="submit" value="1" name="apiTokenForm[confirm]" className="btn btn-primary">
                   {i18n.t('Update API Token')}
                 </button>
               </div>

@@ -161,6 +161,7 @@ export default (crowi: Crowi, app: Express) => {
         i18n: req.i18n,
         context: getAppContext(crowi, req),
         activeItem: 'password',
+        hasPassword: user.isPasswordSet(),
         messages: { ...options.messages, success: req.flash('successMessage') },
       })
 

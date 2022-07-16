@@ -26,4 +26,6 @@ const comments = {
   older: [...Array(5)].map(createComment),
 }
 
-export const Default = () => <CommentLists crowi={crowi} comments={comments} revisionId={null} />
+const openCommentDeleteModal = ({ id, page_id, body }) => ({ id, page_id, body })
+
+export const Default = () => <CommentLists crowi={crowi} comments={comments} revisionId={null} openCommentDeleteModal={openCommentDeleteModal} />

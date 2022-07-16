@@ -1,5 +1,6 @@
 import React, { FC } from 'react'
 import { Modal, ModalHeader, ModalBody, Table } from 'reactstrap'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   users: any[]
@@ -7,21 +8,23 @@ interface Props {
 }
 
 const InvitedUserModal: FC<Props> = ({ users, clear }) => {
+  const [t] = useTranslation()
   return (
     <Modal isOpen={users.length > 0} toggle={clear}>
-      <ModalHeader toggle={clear}>ユーザーを招待しました</ModalHeader>
+      <ModalHeader toggle={clear}>{t('admin.user.invite.modal.completed_message')}</ModalHeader>
       <ModalBody>
         <p>
-          作成したユーザーは仮パスワードが設定されています。
+          {t('admin.user.invite.modal.temp_password')}
           <br />
-          仮パスワードはこの画面を閉じると二度と表示できませんのでご注意ください。
-          <span className="text-danger">招待メールを送っていない場合、この画面で必ず仮パスワードをコピーし、招待者へ連絡してください。</span>
+          {t('admin.user.invite.modal.caution_password')}
+          <br />
+          <span className="text-danger">{t('admin.user.invite.modal.caution_without_email')}</span>
         </p>
         <Table>
           <thead>
             <tr>
-              <th>メールアドレス</th>
-              <th>パスワード</th>
+              <th>{t('admin.user.invite.modal.email')}</th>
+              <th>{t('admin.user.invite.modal.password')}</th>
             </tr>
           </thead>
           <tbody>
@@ -30,7 +33,7 @@ const InvitedUserModal: FC<Props> = ({ users, clear }) => {
                 <td>
                   <pre>{email}</pre>
                 </td>
-                <td>{user ? <pre>{password}</pre> : <span className="text-danger">作成失敗</span>}</td>
+                <td>{user ? <pre>{password}</pre> : <span className="text-danger">{t('admin.user.invite.modal.failed_message')}</span>}</td>
               </tr>
             ))}
           </tbody>

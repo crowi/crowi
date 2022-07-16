@@ -44,7 +44,7 @@ const IndexPage: FC<Props> = (props) => {
                       <ul>
                         {context.security.registrationWhiteList.map((em) => (
                           <li key={em}>
-                            <code>{{ em }}</code>
+                            <code>{em}</code>
                           </li>
                         ))}
                       </ul>
