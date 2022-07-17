@@ -38,6 +38,7 @@
     "handle-callback-err": "off",
     "no-console": "off",
     "no-global-assign": "off",
+    "no-use-before-define": "off",
     "node/no-deprecated-api": "off",
     "prettier/prettier": "error",
     "react/prop-types": "off",

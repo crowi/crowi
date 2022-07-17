@@ -69,6 +69,8 @@ or please write `.env`.
 * `NODE_ENV`: `production` OR `development`.
 * `MONGO_URI`: URI to connect to MongoDB. This parameter is also by `MONGOHQ_URL` OR `MONGOLAB_URI`.
 * `REDIS_URL`: URI to connect to Redis (used for session store and socket.io). This parameter is also by `REDISTOGO_URL`.
+    * Use `rediss://` scheme if you want to TLS connection to Redis.
+    * `REDIS_REJECT_UNAUTHORIZED`: Set "0" if you want to skip the verification of certificate.
 * `ELASTICSEARCH_URI`: URI to connect to Elasticearch.
 * `PASSWORD_SEED`: A password seed used by password hash generator.
 * `SECRET_TOKEN`: A secret key for verifying the integrity of signed cookies.
