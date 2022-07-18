@@ -58,7 +58,7 @@ jobs:
 
     # TODO: coverage
     - name: Run test
-      run: npm coverage
+      run: npm run coverage
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
