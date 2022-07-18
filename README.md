@@ -10,8 +10,7 @@
     <a href="https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.9"><img src="https://www.herokucdn.com/deploy/button.png" alt="Delpoy"></a>
   </p>
   <p align=center>
-    ![example workflow](https://github.com/crowi/crowi/actions/workflows/main.yml/badge.svg)
-    <a href="https://circleci.com/gh/crowi/crowi"><img src="https://circleci.com/gh/crowi/crowi.svg?style=svg" alt="Circle CI"></a>
+    <img src="https://github.com/crowi/crowi/actions/workflows/main.yml/badge.svg" alt="GitHub Actions CI">
     <a href="https://codecov.io/gh/crowi/crowi"><img src="https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg" alt="Codecov"></a>
     <a href="https://hub.docker.com/r/crowi/crowi"><img src="https://img.shields.io/docker/pulls/crowi/crowi.svg" alt="Docker Pulls"></a>
   </p>
