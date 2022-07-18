@@ -58,6 +58,4 @@ jobs:
 
     # TODO: coverage
     - name: Run test
-      env:
-        MONGOMS_DEBUG: 1
       run: npm test
