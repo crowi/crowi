@@ -1,0 +1,69 @@
+name: Main
+
+on: [push]
+
+jobs:
+  run-tests:
+
+    runs-on: ubuntu-18.04
+    timeout-minutes: 10
+
+    strategy:
+      matrix:
+        node-version: [12.x]
+
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: copy .env
+      run: cp .env.test .env
+
+    # https://docs.github.com/ja/actions/guides/caching-dependencies-to-speed-up-workflows
+    - name: Cache node modules
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-node-modules
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: Install dependencies
+      env:
+        MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
+        MONGOMS_VERSION: 3.6.13
+      run: npm ci
+
+    - name: Type check
+      run: npm run type-check
+    - name: Run lint
+      run: npm run lint
+    - name: Build package
+      run: npm run build
+
+    # TODO: coverage
+    - name: Run test
+      run: npm run coverage
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        fail_ci_if_error: true
+        files: coverage/clover.xml
+        flags: unittests
+        verbose: true
