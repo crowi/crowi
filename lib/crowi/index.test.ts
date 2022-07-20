@@ -30,4 +30,21 @@ describe('Test for Crowi application context', () => {
       expect(crowi.getMongo().connection.readyState).toBe(1)
     })
   })
+
+  describe('buildRedisOpts', () => {
+    const table: [string, boolean, object][] = [
+      ['redis://localhost:6379', true, { host: 'localhost', port: '6379' }],
+      ['redis://localhost:6379', false, { host: 'localhost', port: '6379' }],
+
+      ['redis://user:password@localhost:6379', true, { host: 'localhost', port: '6379', password: 'password' }],
+      ['redis://user:password@localhost:6379', false, { host: 'localhost', port: '6379', password: 'password' }],
+
+      ['rediss://localhost:6379', true, { host: 'localhost', port: '6379', tls: { requestCert: true, rejectUnauthorized: true } }],
+      ['rediss://localhost:6379', false, { host: 'localhost', port: '6379', tls: { requestCert: true, rejectUnauthorized: false } }],
+    ]
+
+    test.each(table)('parse %s', (url, redisRejectUnauthorized, expected) => {
+      expect(crowi.buildRedisOpts(url, redisRejectUnauthorized)).toStrictEqual(expected)
+    })
+  })
 })
