@@ -10,7 +10,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [12.x]
+        node-version: [14.x]
 
     services:
       redis:
@@ -46,7 +46,7 @@ jobs:
     - name: Install dependencies
       env:
         MONGOMS_DOWNLOAD_MIRROR: https://downloads.mongodb.org
-        MONGOMS_VERSION: 3.6.13
+        MONGOMS_VERSION: 4.4.15
       run: npm ci
 
     - name: Type check
