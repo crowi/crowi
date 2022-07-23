@@ -16,6 +16,7 @@ export interface CommentModel extends Model<CommentDocument> {
   getCommentsByRevisionId(id): Promise<CommentDocument[]>
   countCommentByPageId(page: any): Promise<number>
   removeCommentsByPageId(pageId: Types.ObjectId): Promise<void>
+  removeCommentById(id: Types.ObjectId): Promise<void>
   findCreatorsByPage(page: any): Promise<any[]>
 }
 
@@ -47,6 +48,12 @@ export default (crowi: Crowi) => {
     await Comment.deleteMany({ page: pageId }).exec()
   }
 
+  commentSchema.statics.removeCommentById = async function (id) {
+    const comment = await Comment.findOne({ _id: id }).exec()
+    commentEvent.emit('remove', comment)
+    await Comment.deleteOne({ _id: id }).exec()
+  }
+
   commentSchema.statics.findCreatorsByPage = function (page) {
     return Comment.distinct('creator', { page }).exec()
   }
@@ -72,6 +79,17 @@ export default (crowi: Crowi) => {
         debug('Activity created', activityLog)
       })
       .catch(function (err) {})
+  })
+
+  const commentEvent = crowi.event('Comment')
+  commentEvent.on('remove', async function (comment: CommentDocument) {
+    const Activity = crowi.model('Activity')
+
+    try {
+      await Activity.removeByPageCommentDelete(comment)
+    } catch (err) {
+      debug(err)
+    }
   })
 
   const Comment = model<CommentDocument, CommentModel>('Comment', commentSchema)
