@@ -31,17 +31,17 @@ jobs:
       run: cp .env.test .env
 
     # https://docs.github.com/ja/actions/guides/caching-dependencies-to-speed-up-workflows
-    - name: Cache node modules
-      uses: actions/cache@v2
-      env:
-        cache-name: cache-node-modules
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
+#    - name: Cache node modules
+#      uses: actions/cache@v2
+#      env:
+#        cache-name: cache-node-modules
+#      with:
+#        path: ~/.npm
+#        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+#        restore-keys: |
+#          ${{ runner.os }}-build-${{ env.cache-name }}-
+#          ${{ runner.os }}-build-
+#          ${{ runner.os }}-
 
     - name: Install dependencies
       env:
@@ -60,10 +60,10 @@ jobs:
     - name: Run test
       run: npm run coverage
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        fail_ci_if_error: true
-        files: coverage/clover.xml
-        flags: unittests
-        verbose: true
+ #   - name: Upload coverage to Codecov
+ #     uses: codecov/codecov-action@v3
+ #     with:
+ #       fail_ci_if_error: true
+ #       files: coverage/clover.xml
+ #       flags: unittests
+ #       verbose: true
