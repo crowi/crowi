@@ -50,16 +50,10 @@ jobs:
       run: npm ci
 
     - name: Type check
-      env:
-          NODE_OPTIONS: "--max-old-space-size=8192"
       run: npm run type-check
-
     - name: Run lint
       run: npm run lint
-
     - name: Build package
-      env:
-          NODE_OPTIONS: "--max-old-space-size=8192"
       run: npm run build
 
     # TODO: coverage
