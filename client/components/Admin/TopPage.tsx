@@ -23,7 +23,7 @@ function useInfo(crowi) {
     serverInfo: {
       node: { arch: '', version: '' },
     },
-    searchInfo: {}
+    searchInfo: {},
   })
 
   const fetchInfo = async () => {
@@ -56,7 +56,9 @@ const TopPage: FC<{}> = () => {
         <dt className="col-3">Crowi Version</dt>
         <dd className="col-9">{crowiVersion}</dd>
         <dt className="col-3">Node arch / version</dt>
-        <dd className="col-9">{serverInfo.node.arch} / {serverInfo.node.version}</dd>
+        <dd className="col-9">
+          {serverInfo.node.arch} / {serverInfo.node.version}
+        </dd>
         <dt className="col-3">Search</dt>
         <dd className="col-9">
           {/* TODO: multiple nodes */}
