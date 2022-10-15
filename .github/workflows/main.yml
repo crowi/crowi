@@ -58,12 +58,13 @@ jobs:
 
     # TODO: coverage
     - name: Run test
-      run: npm run coverage
+      #run: npm run coverage
+      run: npm run test
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        fail_ci_if_error: true
-        files: coverage/clover.xml
-        flags: unittests
-        verbose: true
+#    - name: Upload coverage to Codecov
+#      uses: codecov/codecov-action@v3
+#      with:
+#        fail_ci_if_error: true
+#        files: coverage/clover.xml
+#        flags: unittests
+#        verbose: true
