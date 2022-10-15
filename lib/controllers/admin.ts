@@ -386,7 +386,7 @@ export default (crowi: Crowi) => {
       node: {
         arch: process.arch,
         version: process.version,
-      }
+      },
     }
     const searchInfo = searcher
       ? {
