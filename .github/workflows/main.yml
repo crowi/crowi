@@ -59,7 +59,7 @@ jobs:
     # TODO: coverage
     - name: Run test
       #run: npm run coverage
-      run: env -u DEBUG TZ=UTC ./node_modules/.bin/jest --runInBnad
+      run: env -u DEBUG TZ=UTC ./node_modules/.bin/jest --runInBand
 
 #    - name: Upload coverage to Codecov
 #      uses: codecov/codecov-action@v3
