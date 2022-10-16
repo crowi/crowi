@@ -382,6 +382,12 @@ export default (crowi: Crowi) => {
   actions.api.top.index = function (req: Request, res: Response) {
     const { version: crowiVersion } = crowi
     const searcher = crowi.getSearcher()
+    const serverInfo = {
+      node: {
+        arch: process.arch,
+        version: process.version,
+      },
+    }
     const searchInfo = searcher
       ? {
           node: searcher.node,
@@ -390,7 +396,7 @@ export default (crowi: Crowi) => {
         }
       : {}
 
-    return res.json(ApiResponse.success({ crowiVersion, searchInfo }))
+    return res.json(ApiResponse.success({ crowiVersion, serverInfo, searchInfo }))
   }
 
   actions.api.postSettings = function (req: Request, res: Response) {
