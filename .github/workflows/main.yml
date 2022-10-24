@@ -59,10 +59,12 @@ jobs:
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
       
-    # TODO: coverage
+    - name: Get number of CPU cores
+      id: cpu-cores
+      uses: SimenB/github-actions-cpu-cores@v1
     - name: Run test
       #run: npm run coverage
-      run: env -u DEBUG TZ=UTC ./node_modules/.bin/jest --runInBand
+      run: env -u DEBUG TZ=UTC ./node_modules/.bin/jest --max-workers ${{ steps.cpu-cores.outputs.count }}
 
 #    - name: Upload coverage to Codecov
 #      uses: codecov/codecov-action@v3
