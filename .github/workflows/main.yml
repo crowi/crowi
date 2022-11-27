@@ -5,7 +5,7 @@ on: [push]
 jobs:
   run-tests:
 
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
 
     strategy:
@@ -24,7 +24,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v3
       with:
         node-version: ${{ matrix.node-version }}
     - name: copy .env
@@ -56,14 +56,20 @@ jobs:
     - name: Build package
       run: npm run build
 
-    # TODO: coverage
-    - name: Run test
-      run: npm run coverage
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        fail_ci_if_error: true
-        files: coverage/clover.xml
-        flags: unittests
-        verbose: true
+    - name: Get number of CPU cores
+      id: cpu-cores
+      uses: SimenB/github-actions-cpu-cores@v1
+    - name: Run test
+      #run: npm run coverage
+      run: env -u DEBUG TZ=UTC ./node_modules/.bin/jest --max-workers ${{ steps.cpu-cores.outputs.count }}
+
+#    - name: Upload coverage to Codecov
+#      uses: codecov/codecov-action@v3
+#      with:
+#        fail_ci_if_error: true
+#        files: coverage/clover.xml
+#        flags: unittests
+#        verbose: true
