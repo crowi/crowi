@@ -6,7 +6,7 @@ jobs:
   run-tests:
 
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     strategy:
       matrix:
@@ -24,7 +24,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v3
       with:
         node-version: ${{ matrix.node-version }}
     - name: copy .env
@@ -58,7 +58,7 @@ jobs:
 
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
-      
+
     - name: Get number of CPU cores
       id: cpu-cores
       uses: SimenB/github-actions-cpu-cores@v1
