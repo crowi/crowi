@@ -311,6 +311,12 @@ admin:
     whitelist_placeholder: '例: mail@crowi.wiki'
     whitelist_description1: 登録可能なメールアドレスを制限することができます。例えば、会社で使う場合、<1>@crowi.wiki</1>などと記載すると、その会社のメールアドレスを持っている人のみ登録可能になります。
     whitelist_description2: 1行に1メールアドレス入力してください。
+  auth:
+    legend: 認証設定
+    require_third_party_auth: 外部認証の設定を必須にする
+    require_third_party_auth_help: 外部認証を設定していないユーザーがログインした場合、またはページ遷移した場合に外部認証の設定を要求します。
+    disable_password_auth: パスワードによるログインを禁止する
+    disable_password_auth_help: 外部認証以外でログインすることができなくなります。
   backlink:
     legend: バックリンク構築
     build: Build Now

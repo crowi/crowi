@@ -311,6 +311,12 @@ admin:
     whitelist_placeholder: 'Ex. mail@crowi.wiki'
     whitelist_description1: You can limit the domain of email addresses that can be registered. For example, if you use crowi.wiki domain in your company, you can write <1>@crowi.wiki</1>, which means that only people with that company's email address can register.
     whitelist_description2: Please input one email address per line.
+  auth:
+    legend: 認証設定
+    require_third_party_auth: 外部認証の設定を必須にする
+    require_third_party_auth_help: 外部認証を設定していないユーザーがログインした場合、またはページ遷移した場合に外部認証の設定を要求します。
+    disable_password_auth: パスワードによるログインを禁止する
+    disable_password_auth_help: 外部認証以外でログインすることができなくなります。
   backlink:
     legend: Backlinks Build
     build: Build Now
@@ -372,7 +378,7 @@ admin:
         checkbox: Send invitation by email
         submit: Submit
       modal:
-        completed_message: Successfully invited new users! 
+        completed_message: Successfully invited new users!
         temp_password: The new users have temporary passwords.
         caution_password: Please note you will not be able to recover the temporary passwords once you close this message.
         caution_without_email: You need to share the temporary passwords with invited users if you have not sent invitations via email.
