@@ -216,7 +216,7 @@
     "build:client": "npm run prod:client",
     "prod:server": "NODE_OPTIONS=--max_old_space_size=2048 NODE_ENV=production webpack --bail --config webpack/server/webpack.config.js",
     "prod:client": "NODE_ENV=production webpack --bail --config webpack/client/webpack.config.js",
-    "type-check": "tsc --noEmit",
+    "type-check": "NODE_OPTIONS=--max_old_space_size=2048 tsc --noEmit",
     "type-check:watch": "npm run type-check -- --watch",
     "webpack": "webpack"
   },
