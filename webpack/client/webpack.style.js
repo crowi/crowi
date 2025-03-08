@@ -1,12 +1,12 @@
 const path = require('path')
-const ExtractTextPlugin = require('extract-text-webpack-plugin')
+const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin')
 
 const isProduction = process.env.NODE_ENV === 'production'
 
 const ROOT = path.join(__dirname, '/../../')
 
-const extractSass = new ExtractTextPlugin({
+const extractSass = new MiniCssExtractPlugin({
   filename: '[name].css',
 })
 
@@ -25,23 +25,7 @@ const config = {
     rules: [
       {
         test: /\.scss$/,
-        use: extractSass.extract({
-          use: [
-            {
-              loader: 'css-loader',
-              options: { url: false },
-            },
-            {
-              loader: 'sass-loader',
-              options: {
-                sassOptions: {
-                  includePaths: ['./node_modules/bootstrap/scss', './node_modules/reveal.js/css'],
-                },
-              },
-            },
-          ],
-          fallback: 'style-loader',
-        }),
+        use: extractSass.loader,
       },
       {
         test: /\.woff2?$|\.ttf$|\.eot$|\.svg$/,
