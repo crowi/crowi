@@ -1,20 +1,21 @@
-@import 'theme';
-@import '~bootstrap/scss/bootstrap';
+@use 'theme';
+@use 'sass:color';
+@use 'bootstrap/scss/bootstrap' as bootstrap;
 
 // crowi component
-@import 'layout';
-@import 'page';
-@import 'page_list';
-@import 'form';
-@import 'wiki';
-@import 'user';
-@import 'portal';
-@import 'search';
-@import 'backlink';
-@import 'notification';
-@import 'attachments';
-@import 'share';
-@import 'tree';
+@use 'layout';
+@use 'page';
+@use 'page_list';
+@use 'form';
+@use 'wiki';
+@use 'user';
+@use 'portal';
+@use 'search';
+@use 'backlink';
+@use 'notification';
+@use 'attachments';
+@use 'share';
+@use 'tree';
 
 a:hover {
   text-decoration: none;
@@ -26,7 +27,7 @@ ul {
 
 code {
   border-radius: 4px;
-  background: lighten($pink, 40);
+  background: color.scale(theme.$pink, $lightness: 40%);
 }
 
 .mdi-svg {
@@ -155,14 +156,14 @@ footer {
     form {
       input {
         border: none;
-        border-bottom: 1px dotted gray('800');
+        border-bottom: 1px dotted bootstrap.$gray-800;
         border-radius: 0;
         padding-right: 6px;
         padding-left: 6px;
-        background: gray('100');
+        background: bootstrap.$gray-100;
 
         &:focus {
-          background: gray('200');
+          background: bootstrap.$gray-200;
         }
       }
 
@@ -289,11 +290,11 @@ footer {
 
 $btn-google-color: rgb(204, 89, 71);
 .btn-google {
-  @include button-variant($btn-google-color, darken($btn-google-color, 20%));
+  @include bootstrap.button-variant($btn-google-color, color.scale($btn-google-color, $lightness: -20%));
 }
 $btn-github-color: rgb(68, 68, 68);
 .btn-github {
-  @include button-variant($btn-github-color, darken($btn-github-color, 20%));
+  @include bootstrap.button-variant($btn-github-color, color.scale($btn-github-color, $lightness: -20%));
 }
 
 input.searching {
