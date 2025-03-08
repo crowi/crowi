@@ -14,7 +14,6 @@ const config = {
   mode: process.env.NODE_ENV,
   entry: {
     crowi: './resource/css/crowi.scss',
-    'crowi-reveal': './resource/css/crowi-reveal.scss',
   },
   output: {
     path: path.join(ROOT, 'public/css'),

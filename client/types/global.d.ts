@@ -12,7 +12,6 @@ declare global {
     crowi: crowi
     crowiAuth: crowiAuth
     crowiRenderer: crowiRenderer
-    Reveal: {}
     MathJax: {}
     inlineAttachment: any
   }

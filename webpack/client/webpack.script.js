@@ -1,6 +1,5 @@
 const path = require('path')
 const webpack = require('webpack')
-const CopyWebpackPlugin = require('copy-webpack-plugin')
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin')
 
 const ROOT = path.join(__dirname, '/../../')
@@ -18,7 +17,6 @@ const config = {
     ],
     app: path.join(ROOT, 'client/app.tsx'),
     crowi: path.join(ROOT, 'client/crowi.ts'),
-    presentation: path.join(ROOT, 'client/crowi-presentation.ts'),
     form: path.join(ROOT, 'client/crowi-form.ts'),
     installer: path.join(ROOT, 'client/crowi-installer.ts'),
   },
@@ -52,15 +50,6 @@ const config = {
     new webpack.ProvidePlugin({
       $: 'jquery',
       jQuery: 'jquery',
-    }),
-    new CopyWebpackPlugin({
-      patterns: [
-        { from: path.join(ROOT, 'node_modules/reveal.js/css'), to: path.join(ROOT, 'public/css/reveal/css') },
-        { from: path.join(ROOT, 'node_modules/reveal.js/lib/font'), to: path.join(ROOT, 'public/css/reveal/lib/font') },
-        { from: path.join(ROOT, 'node_modules/reveal.js/lib/css'), to: path.join(ROOT, 'public/js/reveal/lib/css') },
-        { from: path.join(ROOT, 'node_modules/reveal.js/lib/js'), to: path.join(ROOT, 'public/js/reveal/lib/js') },
-        { from: path.join(ROOT, 'node_modules/reveal.js/plugin'), to: path.join(ROOT, 'public/js/reveal/plugin/') },
-      ],
     }),
     new ForkTsCheckerWebpackPlugin(),
   ],

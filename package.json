@@ -115,7 +115,6 @@
     "react-router-dom": "^5.2.0",
     "reactstrap": "^8.0.1",
     "redis": "^3.0.2",
-    "reveal.js": "^3.8.0",
     "sass": "^1.85.1",
     "sass-loader": "^8.0.2",
     "scrollpos-styler": "^0.7.0",
