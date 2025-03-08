@@ -7,13 +7,13 @@ const isProduction = process.env.NODE_ENV === 'production'
 const ROOT = path.join(__dirname, '/../../')
 
 const extractSass = new MiniCssExtractPlugin({
-  filename: '[name].css',
+  filename: 'crowi-main.css',
 })
 
 const config = {
   mode: process.env.NODE_ENV,
   entry: {
-    crowi: './resource/css/crowi.scss',
+    'crowi-style': './resource/css/crowi.scss',
   },
   output: {
     path: path.join(ROOT, 'public/css'),
@@ -24,7 +24,7 @@ const config = {
     rules: [
       {
         test: /\.scss$/,
-        use: extractSass.loader,
+        use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
       },
       {
         test: /\.woff2?$|\.ttf$|\.eot$|\.svg$/,

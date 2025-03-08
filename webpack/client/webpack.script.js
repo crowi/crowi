@@ -28,6 +28,12 @@ const config = {
   resolve: {
     modules: ['./node_modules', './client/thirdparty-js'],
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+    fallback: {
+      crypto: require.resolve('crypto-browserify'),
+      stream: require.resolve('stream-browserify'),
+      buffer: require.resolve('buffer/'),
+      vm: require.resolve('vm-browserify'),
+    },
   },
   module: {
     rules: [
@@ -50,6 +56,8 @@ const config = {
     new webpack.ProvidePlugin({
       $: 'jquery',
       jQuery: 'jquery',
+      process: 'process/browser',
+      Buffer: ['buffer', 'Buffer'],
     }),
     new ForkTsCheckerWebpackPlugin(),
   ],
