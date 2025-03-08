@@ -52,7 +52,6 @@ export {
   mdiOpenInNew as openInNew,
   mdiPaw as paw,
   mdiPencilOutline as pencilOutline,
-  mdiPresentation as presentation,
   mdiRocket as rocket,
   mdiShoePrint as shoePrint,
   mdiSlack as slack,
