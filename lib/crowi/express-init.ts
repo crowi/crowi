@@ -5,7 +5,6 @@ import passport from 'passport'
 import session from 'express-session'
 import flash from 'connect-flash'
 import cons from 'consolidate'
-import expressReactViews from 'express-react-views'
 import Crowi from 'server/crowi'
 import { registrationMode } from 'server/models/config'
 import Debug from 'debug'
@@ -57,25 +56,9 @@ export default (crowi: Crowi, app: Express) => {
     next()
   })
 
-  const reactViews = expressReactViews.createEngine({
-    babel:
-      env === 'development'
-        ? {
-            presets: [['@babel/env', { targets: { node: 'current' } }], '@babel/react'],
-            plugins: ['@babel/proposal-optional-chaining'],
-          }
-        : {
-            presets: [],
-            plugins: [],
-          },
-    transformViews: env === 'development',
-  })
-
   app.set('port', crowi.port)
   app.use(express.static(crowi.publicDir))
   app.engine('html', cons.swig)
-  app.engine('js', reactViews)
-  app.engine('tsx', reactViews)
   app.set('view cache', false)
   app.set('view engine', 'html')
   app.set('view engine', 'js')
