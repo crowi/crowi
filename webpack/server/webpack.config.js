@@ -1,1 +1,1 @@
-module.exports = [require('./webpack.script'), require('./webpack.page')]
+module.exports = [require('./webpack.script')]
