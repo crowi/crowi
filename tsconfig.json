@@ -24,6 +24,6 @@
       "src/*": ["src/*"]
     }
   },
-  "include": ["src", "local_modules"],
+  "include": ["src"],
   "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*"]
 }
