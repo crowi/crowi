@@ -20,6 +20,6 @@
     "noUnusedParameters": true,
     "rootDir": "."
   },
-  "include": ["common", "src", "local_modules"],
+  "include": ["src", "local_modules"],
   "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*"]
 }
