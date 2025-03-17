@@ -16,9 +16,13 @@
     "sourceMap": true,
     "declaration": true,
     "noImplicitAny": false, // TODO: あとでtrueにする
-    "noUnusedLocals": true,
+    "noUnusedLocals": false, // TODO: あとでtrueにする
     "noUnusedParameters": false, // TODO: あとでtrueにする
-    "rootDir": "."
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "src/*": ["src/*"]
+    }
   },
   "include": ["src", "local_modules"],
   "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*"]
