@@ -1,4 +1,4 @@
-import renderIcon from 'common/functions/renderIcon'
+import renderIcon from 'src/common/functions/renderIcon'
 
 describe('renderIcon test', () => {
   test('renderIcon', () => {

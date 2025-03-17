@@ -1,7 +1,7 @@
 import Crowi from 'src/crowi'
 import { Express, Request, Response } from 'express'
 import * as Icons from '@mdi/js'
-import renderIcon from 'common/functions/renderIcon'
+import renderIcon from 'src/common/functions/renderIcon'
 import { parentPath, isUserPageList, isUserPage, isTopPage, isTrashPage, userPageRoot, getAppContext } from './view'
 import { hasSlackToken, googleLoginEnabled, githubLoginEnabled } from 'src/models/config'
 

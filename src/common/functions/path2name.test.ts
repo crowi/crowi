@@ -1,4 +1,4 @@
-import path2name from 'common/functions/path2name'
+import path2name from 'src/common/functions/path2name'
 
 describe('path2name test', () => {
   test('convert path to shortName', () => {
