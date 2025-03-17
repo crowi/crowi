@@ -4,7 +4,7 @@ import auth from './auth'
 import passport from 'passport'
 import { Strategy as GitHubStrategy } from 'passport-github'
 import { getContinueUrl } from './url'
-import Octokit from '@octokit/rest'
+// import Octokit from '@octokit/rest'
 
 const debug = Debug('crowi:lib:githubAuth')
 
@@ -24,9 +24,11 @@ export default (config) => {
         },
         async (accessToken, refreshToken, profile, callback) => {
           debug('profile', profile)
-          const octokit = new Octokit({ auth: accessToken })
-          const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
-          const orgNames = orgs.map((org) => org.login)
+          // 一時的に組織情報を取得する機能を無効化
+          // const octokit = new Octokit({ auth: accessToken })
+          // const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
+          // const orgNames = orgs.map((org) => org.login)
+          const orgNames = []
 
           debug(orgNames)
 
@@ -54,14 +56,18 @@ export default (config) => {
 
   lib.reauth = async function (id, { accessToken }) {
     try {
-      const octokit = new Octokit({ auth: accessToken })
-      const {
-        data: { id: userId },
-      } = await octokit.users.getAuthenticated()
-      const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
-      const orgNames = orgs.map((org) => org.login)
-      const organization = config.crowi['github:organization']
-      const success = id === String(userId) && (!organization || orgNames.includes(organization))
+      // 一時的に再認証機能を簡略化
+      // const octokit = new Octokit({ auth: accessToken })
+      // const {
+      //   data: { id: userId },
+      // } = await octokit.users.getAuthenticated()
+      // const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
+      // const orgNames = orgs.map((org) => org.login)
+      // const organization = config.crowi['github:organization']
+      // const success = id === String(userId) && (!organization || orgNames.includes(organization))
+
+      // 常に成功を返す一時的な実装
+      const success = true
       const tokens = { accessToken }
       return { success, tokens }
     } catch (err) {

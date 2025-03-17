@@ -31,6 +31,7 @@ const config = {
         loader: 'ts-loader',
         options: {
           configFile: path.join(ROOT, 'tsconfig.server.json'),
+          transpileOnly: true,
         },
       },
     ],

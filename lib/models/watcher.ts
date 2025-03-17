@@ -89,8 +89,14 @@ export default (crowi: Crowi) => {
     return Watcher.find({ target, status: STATUS_IGNORE }).distinct('user')
   }
 
-  watcherSchema.statics.STATUS_WATCH = STATUS_WATCH
-  watcherSchema.statics.STATUS_IGNORE = STATUS_IGNORE
+  // 静的プロパティの定義方法を修正
+  Object.defineProperty(watcherSchema.statics, 'STATUS_WATCH', {
+    value: STATUS_WATCH,
+  })
+
+  Object.defineProperty(watcherSchema.statics, 'STATUS_IGNORE', {
+    value: STATUS_IGNORE,
+  })
 
   const Watcher = model<WatcherDocument, WatcherModel>('Watcher', watcherSchema)
 
