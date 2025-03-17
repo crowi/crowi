@@ -1,10 +1,23 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "target": "es2019",
+    "target": "es2021",
+    "module": "commonjs",
+    "lib": ["es2021"],
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
     "jsx": "react",
     "allowJs": true,
-    "checkJs": true
+    "checkJs": true,
+    "outDir": "./dist/server",
+    "sourceMap": true,
+    "declaration": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "include": ["common", "lib", "local_modules"],
   "exclude": ["**/*.test.ts", "**/*.test.js", "lib/test/**/*"]
