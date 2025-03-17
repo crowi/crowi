@@ -16,7 +16,7 @@ const debug = Debug('crowi:lib:search')
 interface SearchOption {
   offset?: number
   limit?: number
-  type?: typeof TYPES[number]
+  type?: (typeof TYPES)[number]
 }
 
 export default class Search {
@@ -74,8 +74,8 @@ export default class Search {
   }
 
   async waitES(retry = 10) {
-    return new Promise((resolve) => {
-      let count = 0
+    let count = 0
+    return new Promise<void>((resolve) => {
       const interval = setInterval(async () => {
         if (++count >= retry || (await this.client.ping())) {
           resolve()
