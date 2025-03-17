@@ -1,7 +1,7 @@
 {
   "name": "crowi",
   "version": "2.0.0-dev",
-  "main": "lib/app.ts",
+  "main": "src/app.ts",
   "description": "The simple & powerful Wiki",
   "tags": [
     "wiki",
@@ -56,8 +56,6 @@
     "connect-flash": "~0.1.1",
     "connect-redis": "^4.0.4",
     "consolidate": "^0.15.1",
-    "copy-webpack-plugin": "^6.0.2",
-    "crypto-browserify": "^3.12.1",
     "csrf": "~3.1.0",
     "csstype": "^2.5.8",
     "date-fns": "^2.1.0",
@@ -110,10 +108,8 @@
     "swig": "~1.4.0",
     "ts-loader": "^9.4.4",
     "tsconfig-paths": "^3.9.0",
-    "tsconfig-paths-webpack-plugin": "^3.2.0",
     "uuid": "^3.3.3",
-    "vm-browserify": "^1.1.2",
-    "webpack-node-externals": "^1.7.2"
+    "vm-browserify": "^1.1.2"
   },
   "devDependencies": {
     "@babel/core": "^7.26.9",
@@ -153,7 +149,6 @@
     "eslint-plugin-promise": "^4.1.1",
     "eslint-plugin-standard": "~5.0.0",
     "faker": "^4.1.0",
-    "fork-ts-checker-webpack-plugin": "^5.0.5",
     "http-proxy-middleware": "^0.20.0",
     "lint-staged": "^10.2.11",
     "mongodb-memory-server": "^6.0.1",
@@ -164,15 +159,13 @@
     "regenerator-runtime": "^0.13.3",
     "supertest": "^4.0.2",
     "ts-node": "^8.10.2",
-    "typescript": "^4.9.5",
-    "webpack": "^5.98.0",
-    "webpack-cli": "^6.0.1"
+    "typescript": "^4.9.5"
   },
   "license": "MIT",
   "scripts": {
     "start": "node dist/server/app.js",
     "dev": "concurrently --kill-others 'npm run dev:server'",
-    "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon lib/app.ts",
+    "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon src/app.ts",
     "format": "eslint --fix '**/*.{ts,tsx,js,jsx}'",
     "lint": "eslint '**/*.{ts,tsx,js,jsx}'",
     "test": "env -u DEBUG TZ=UTC jest --maxWorkers=5",
@@ -180,10 +173,9 @@
     "coverage": "npm test -- --coverage",
     "build": "run-s build:*",
     "build:server": "npm run prod:server",
-    "prod:server": "NODE_OPTIONS=--max_old_space_size=2048 NODE_ENV=production webpack --bail --config webpack/server/webpack.config.js",
+    "prod:server": "tsc -p tsconfig.server.json",
     "type-check": "tsc --noEmit",
-    "type-check:watch": "npm run type-check -- --watch",
-    "webpack": "webpack"
+    "type-check:watch": "npm run type-check -- --watch"
   },
   "env": {
     "NODE_ENV": "production"
