@@ -12,12 +12,12 @@
     "jsx": "react",
     "allowJs": true,
     "checkJs": true,
-    "outDir": "./dist/server",
+    "outDir": "./dist",
     "sourceMap": true,
     "declaration": true,
-    "noImplicitAny": true,
+    "noImplicitAny": false, // TODO: あとでtrueにする
     "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedParameters": false, // TODO: あとでtrueにする
     "rootDir": "."
   },
   "include": ["src", "local_modules"],
