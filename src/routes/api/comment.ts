@@ -1,0 +1,16 @@
+import { Router, Express } from 'express'
+import Crowi from 'src/crowi'
+const router = Router()
+
+export default (crowi: Crowi, app: Express, form) => {
+  const { Comment } = crowi.controllers
+  const { AccessTokenParser, LoginRequired, CsrfVerify: csrf } = crowi.middlewares
+
+  router.use('/comments*', AccessTokenParser, LoginRequired)
+
+  router.get('/comments.get', Comment.api.get)
+  router.post('/comments.add', form.comment, csrf, Comment.api.add)
+  router.post('/comments.delete', csrf, Comment.api.delete)
+
+  return router
+}

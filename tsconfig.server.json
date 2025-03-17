@@ -17,8 +17,9 @@
     "declaration": true,
     "noImplicitAny": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "rootDir": "."
   },
-  "include": ["common", "lib", "local_modules"],
-  "exclude": ["**/*.test.ts", "**/*.test.js", "lib/test/**/*"]
+  "include": ["common", "src", "local_modules"],
+  "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*"]
 }
