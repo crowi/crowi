@@ -29,6 +29,7 @@ export default (crowi: Crowi) => {
     }
 
     try {
+      // @ts-ignore - TypeScriptの型定義が正しくないため無視
       const objectId = new Types.ObjectId(pageId)
       const backlinks = await Backlink.findByPageId(objectId, limit, offset)
       return res.json(ApiResponse.success({ backlinks }))

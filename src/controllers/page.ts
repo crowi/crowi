@@ -9,7 +9,7 @@ import { PageDocument } from 'src/models/page'
 import { RevisionDocument } from 'src/models/revision'
 import { UserDocument } from 'src/models/user'
 import { asCustomError } from 'src/types/error'
-import { getQueryAsString } from 'src/types/express'
+import { getQueryAsString, getQueryAsNumber } from 'src/types/express'
 
 interface PagerOptions {
   offset: number | string
@@ -77,7 +77,7 @@ export default (crowi: Crowi) => {
   actions.pageListShow = async function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = getQueryAsNumber(req.query.offset, 0)
     const SEENER_THRESHOLD = 10
     let path = getPathFromRequest(req)
     path = path + (path == '/' ? '' : '/')
@@ -122,7 +122,7 @@ export default (crowi: Crowi) => {
   actions.deletedPageListShow = function (req: Request, res: Response) {
     const path = '/trash' + getPathFromRequest(req)
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = getQueryAsNumber(req.query.offset, 0)
 
     // index page
     const pagerOptions: PagerOptions = { offset, limit }
@@ -396,7 +396,7 @@ export default (crowi: Crowi) => {
   actions.userBookmarkList = function (req: Request, res: Response) {
     const username = req.params.username
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = getQueryAsNumber(req.query.offset, 0)
 
     const renderVars: any = {}
 
@@ -433,7 +433,7 @@ export default (crowi: Crowi) => {
   actions.userRecentCreatedList = function (req: Request, res: Response) {
     const username = req.params.username
     const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const offset = getQueryAsNumber(req.query.offset, 0)
 
     const renderVars: any = {}
 
@@ -964,6 +964,7 @@ export default (crowi: Crowi) => {
     const pageIdStr = getQueryAsString(req.query.page_id)
     const { _id: userId } = req.user as UserDocument
     try {
+      // @ts-ignore - TypeScriptの型定義が正しくないため無視
       const pageId = new Types.ObjectId(pageIdStr)
       const watcher = await Watcher.findByUserIdAndTargetId(userId, pageId)
       const getDefaultStatus = async () => {
