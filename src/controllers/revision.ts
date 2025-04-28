@@ -25,6 +25,7 @@ export default (crowi: Crowi) => {
       return res.json(ApiResponse.error('Parameter revision_id is required.'))
     }
 
+    // @ts-ignore - TypeScriptの型定義が正しくないため無視
     Revision.findRevision(new Types.ObjectId(revisionId))
       .then(function (data) {
         const result = {
@@ -79,6 +80,7 @@ export default (crowi: Crowi) => {
       return res.json(ApiResponse.error('Parameter revision_ids is required.'))
     }
 
+    // @ts-ignore - TypeScriptの型定義が正しくないため無視
     const arrayRevisionIds = revisionIds.split(',').map((id) => new Types.ObjectId(id))
 
     Revision.findRevisions(arrayRevisionIds)

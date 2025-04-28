@@ -556,8 +556,9 @@ export default (crowi: Crowi) => {
       await user.updateNameAndEmail(name, emailToBeChanged)
       return res.json(ApiResponse.success({ message: 'Successfully updated' }))
     } catch (err) {
-      if (err.message) {
-        return res.json(ApiResponse.error(err.message))
+      const error = asCustomError(err)
+      if (error.message) {
+        return res.json(ApiResponse.error(error.message))
       } else {
         return res.json(ApiResponse.error('Failed to update name or email'))
       }
@@ -569,14 +570,17 @@ export default (crowi: Crowi) => {
     const invitedId = req.params.id
     const message = req.body.message
 
-    await User.isEmailValid(invitedId, (err, invited) => {
-      if (err) {
-        const error = asCustomError(err)
-        return res.json(ApiResponse.error(error.message))
+    try {
+      const invited = await User.isEmailValid(invitedId)
+      if (!invited) {
+        return res.json(ApiResponse.error('招待されたメールアドレスは使用できません。'))
       }
 
       // ... existing code ...
-    })
+    } catch (err) {
+      const error = asCustomError(err)
+      return res.json(ApiResponse.error(error.message))
+    }
   }
 
   return actions

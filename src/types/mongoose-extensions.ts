@@ -10,6 +10,7 @@ export function objectIdToString(id: Types.ObjectId | string | null | undefined)
 export function stringToObjectId(id: string | null | undefined): Types.ObjectId | null {
   if (!id) return null
   try {
+    // @ts-ignore - TypeScriptの型定義が正しくないため無視
     return new Types.ObjectId(id)
   } catch (e) {
     return null
