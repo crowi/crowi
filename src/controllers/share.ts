@@ -6,6 +6,7 @@ import { PageDocument } from 'src/models/page'
 import { UserDocument } from 'src/models/user'
 import { getPath } from 'src/util/ssr'
 import { getAppContext } from 'src/util/view'
+import { getQueryAsNumber, getQueryAsBoolean, getQueryAsString, getQueryAsObjectId } from 'src/types/express'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:share')
@@ -31,7 +32,7 @@ export default (crowi: Crowi) => {
     const trackingId = await firstOrCreateTrackingId(req)
     try {
       ShareAccess.access(share._id, trackingId)
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
     }
 
@@ -85,7 +86,7 @@ export default (crowi: Crowi) => {
         shareId,
         page: null,
       })
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
       return res.redirect('/')
     }
@@ -96,9 +97,11 @@ export default (crowi: Crowi) => {
   api.list = async (req: Request, res: Response) => {
     // list is allowed if the feature is disabled because it is used in admin page
 
-    let { page_id: pageId, page = 1, limit = 50, populate_accesses: populateAccesses = false } = req.query
-    page = parseInt(page)
-    limit = parseInt(limit)
+    const pageId = req.query.page_id
+    const page = getQueryAsNumber(req.query.page, 1)
+    const limit = getQueryAsNumber(req.query.limit, 50)
+    const populateAccesses = getQueryAsBoolean(req.query.populate_accesses)
+
     const query = pageId ? { page: pageId } : {}
     const options = { page, limit, populateAccesses }
     try {
@@ -106,13 +109,14 @@ export default (crowi: Crowi) => {
       const result = { share: shareData }
 
       return res.json(ApiResponse.success(result))
-    } catch (err) {
+    } catch (err: any) {
       return res.json(ApiResponse.error(err))
     }
   }
 
   api.get = async (req: Request, res: Response) => {
-    const { page_id: pageId, populate_accesses: populateAccesses = false } = req.query
+    const pageId = req.query.page_id
+    const populateAccesses = getQueryAsBoolean(req.query.populate_accesses)
 
     if (pageId === null) {
       return res.json(ApiResponse.error('Parameters page_id is required.'))
@@ -122,7 +126,7 @@ export default (crowi: Crowi) => {
       const shareData = await Share.findShareByPageId(pageId, { status: Share.STATUS_ACTIVE }, { populateAccesses })
       const result = { share: shareData }
       return res.json(ApiResponse.success(result))
-    } catch (err) {
+    } catch (err: any) {
       return res.json(ApiResponse.error(err))
     }
   }
@@ -155,7 +159,7 @@ export default (crowi: Crowi) => {
       }
       const result = { share: shareData.toObject() }
       return res.json(ApiResponse.success(result))
-    } catch (err) {
+    } catch (err: any) {
       return res.json(ApiResponse.error(err))
     }
   }
@@ -180,7 +184,7 @@ export default (crowi: Crowi) => {
       debug('Share deleted', shareData.id)
       const result = { share: shareData.toObject() }
       return res.json(ApiResponse.success(result))
-    } catch (err) {
+    } catch (err: any) {
       debug('Error occured while get setting', err, err.stack)
       return res.json(ApiResponse.error('Failed to delete share.'))
     }
@@ -199,7 +203,7 @@ export default (crowi: Crowi) => {
       const shareData = await share.save()
       const result = { share: shareData.toObject() }
       return res.json(ApiResponse.success(result))
-    } catch (err) {
+    } catch (err: any) {
       debug('Error occured while update secret keyword', err, err.stack)
       return res.json(ApiResponse.error('Failed to update secret keyword.'))
     }
@@ -221,7 +225,7 @@ export default (crowi: Crowi) => {
         req.session.shareIds = updateShareIds(shareIds, shareId)
       }
       return res.json(ApiResponse.success(result))
-    } catch (err) {
+    } catch (err: any) {
       return res.json(ApiResponse.error(err))
     }
   }
