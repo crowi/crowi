@@ -8,6 +8,8 @@ import { BookmarkDocument } from 'src/models/bookmark'
 import { PageDocument } from 'src/models/page'
 import { RevisionDocument } from 'src/models/revision'
 import { UserDocument } from 'src/models/user'
+import { asCustomError } from 'src/types/error'
+import { getQueryAsString } from 'src/types/express'
 
 interface PagerOptions {
   offset: number | string
@@ -501,10 +503,10 @@ export default (crowi: Crowi) => {
    * @apiParam {String} user
    */
   api.list = function (req: Request, res: Response) {
-    const username = req.query.user || null
-    const path = req.query.path || null
-    const limit = 50
-    const offset = parseInt(req.query.offset) || 0
+    const username = getQueryAsString(req.query.user) || null
+    const path = getQueryAsString(req.query.path) || null
+    const limit = parseInt(getQueryAsString(req.query.limit), 10) || 50
+    const offset = parseInt(getQueryAsString(req.query.offset), 10) || 0
 
     const pagerOptions: PagerOptions = { offset, limit }
     const queryOptions = { offset, limit: limit + 1 }
@@ -519,24 +521,20 @@ export default (crowi: Crowi) => {
 
     let pageFetcher
     if (path === null) {
-      pageFetcher = User.findUserByUsername(username).then(function (user) {
-        if (user === null) {
-          throw new Error('The user not found.')
-        }
-        return Page.findListByCreator(user, queryOptions, req.user)
-      })
+      pageFetcher = Page.findListByCreator(username, req.user, queryOptions) // by username
     } else {
-      pageFetcher = Page.findListByStartWith(path, req.user, queryOptions)
+      pageFetcher = Page.findListByStartWith(path, req.user, queryOptions) // by path
     }
 
     pageFetcher
       .then(function (pages) {
-        if (pages.length > limit) {
-          pages.pop()
-        }
         pagerOptions.length = pages.length
 
-        const result = { pages }
+        const result = {
+          pages: pages.slice(0, limit),
+          pager: generatePager(pagerOptions),
+        }
+
         return res.json(ApiResponse.success(result))
       })
       .catch(function (err) {
@@ -642,9 +640,9 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_id
    */
   api.get = function (req: Request, res: Response) {
-    const pagePath = req.query.path || null
-    const pageId = req.query.page_id || null // TODO: handling
-    const revisionId = req.query.revision_id || null
+    const pagePath = getQueryAsString(req.query.path) || null
+    const pageId = getQueryAsString(req.query.page_id) || null // TODO: handling
+    const revisionId = getQueryAsString(req.query.revision_id) || null
 
     if (!pageId && !pagePath) {
       return res.json(ApiResponse.error(new Error('Parameter path or page_id is required.')))
@@ -956,18 +954,20 @@ export default (crowi: Crowi) => {
       const result = { page }
       return res.json(ApiResponse.success(result))
     } catch (err) {
-      debug('Error occured while get setting', err, err.stack)
+      const error = asCustomError(err)
+      debug('Error occured while get setting', error, error.stack)
       return res.json(ApiResponse.error('Failed to delete redirect page.'))
     }
   }
 
   api.watchStatus = async function (req: Request, res: Response) {
-    const { page_id: pageId } = req.query
+    const pageIdStr = getQueryAsString(req.query.page_id)
     const { _id: userId } = req.user as UserDocument
     try {
+      const pageId = new Types.ObjectId(pageIdStr)
       const watcher = await Watcher.findByUserIdAndTargetId(userId, pageId)
       const getDefaultStatus = async () => {
-        const page = await Page.findById(pageId)
+        const page = await Page.findById(pageIdStr)
         if (!page) throw new Error('Page not found')
         const targetUsers = await page.getNotificationTargetUsers()
         return targetUsers.some((user) => user.toString() === userId.toString())
@@ -976,7 +976,8 @@ export default (crowi: Crowi) => {
       const result = { watching }
       return res.json(ApiResponse.success(result))
     } catch (err) {
-      debug('Error occured while get setting', err, err.stack)
+      const error = asCustomError(err)
+      debug('Error occured while get setting', error, error.stack)
       return res.json(ApiResponse.error('Failed to fetch watch status.'))
     }
   }
@@ -990,7 +991,8 @@ export default (crowi: Crowi) => {
       const result = { watcher }
       return res.json(ApiResponse.success(result))
     } catch (err) {
-      debug('Error occured while update watch status', err, err.stack)
+      const error = asCustomError(err)
+      debug('Error occured while update watch status', error, error.stack)
       return res.json(ApiResponse.error('Failed to watch this page.'))
     }
   }

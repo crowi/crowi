@@ -1,6 +1,8 @@
 import { Request, Response } from 'express'
 import Crowi from 'src/crowi'
 import ApiResponse from 'src/util/apiResponse'
+import { getQueryAsString } from 'src/types/express'
+import { Types } from 'mongoose'
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routes:backlink')
@@ -17,21 +19,22 @@ export default (crowi: Crowi) => {
    * @apiParam {Number} limit
    * @apiParam {Number} offset
    */
-  actions.api.list = function (req: Request, res: Response) {
-    const pageId = req.query.page_id
-    const limit = req.query.limit || 10
+  actions.api.list = async function (req: Request, res: Response) {
+    const pageId = getQueryAsString(req.query.pageId)
+    const limit = req.query.limit || 20
     const offset = req.query.offset || 0
 
-    Backlink.findByPageId(pageId, limit, offset)
-      .then((backlinks) => {
-        const result = {
-          data: backlinks,
-        }
-        return res.json(ApiResponse.success(result))
-      })
-      .catch((err) => {
-        return res.json(ApiResponse.error(err))
-      })
+    if (!pageId) {
+      return res.json(ApiResponse.error('pageId is required'))
+    }
+
+    try {
+      const objectId = new Types.ObjectId(pageId)
+      const backlinks = await Backlink.findByPageId(objectId, limit, offset)
+      return res.json(ApiResponse.success({ backlinks }))
+    } catch (err) {
+      return res.json(ApiResponse.error(err))
+    }
   }
 
   return actions
