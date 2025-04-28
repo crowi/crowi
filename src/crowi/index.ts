@@ -5,8 +5,8 @@ import Tokens from 'csrf'
 import redis from 'redis'
 import url from 'url'
 import http from 'http'
-import socketIO from 'socket.io'
-import socketIORedis from 'socket.io-redis'
+// import socketIO from 'socket.io'
+// import socketIORedis from 'socket.io-redis'
 import connectRedis from 'connect-redis'
 import express from 'express'
 import session from 'express-session'
@@ -34,7 +34,7 @@ type Events = { [K in keyof typeof events]: InstanceType<(typeof events)[K]> }
 
 type Middlewares = { [K in keyof ReturnType<typeof middlewares>]: ReturnType<typeof middlewares>[K] }
 
-type Controllers = { [K in keyof ReturnType<typeof controllers>]: ReturnType<typeof controllers>[K] }
+export type Controllers = { [K in keyof ReturnType<typeof controllers>]: ReturnType<typeof controllers>[K] }
 
 const debug = Debug('crowi:crowi')
 
@@ -102,7 +102,7 @@ class Crowi {
   // TODO: @types モジュール入れたらやる
   sessionConfig: any
 
-  io?: socketIO.Server
+  // io?: socketIO.Server
 
   // FIXME: util/slack に型付けたらやる
   slack: any
@@ -322,7 +322,8 @@ class Crowi {
   }
 
   getIo(): any {
-    return this.io
+    // return this.io
+    return null
   }
 
   getSearcher() {
@@ -403,6 +404,7 @@ class Crowi {
     const server = http.createServer(this.app).listen(this.port, () => {
       console.log('[' + this.node_env + '] Express server listening on port ' + this.port)
     })
+    /*
     const io = socketIO(server, { transports: ['websocket'] })
     if (this.redisOpts) {
       io.adapter(socketIORedis(this.redisOpts))
@@ -413,6 +415,7 @@ class Crowi {
     })
 
     this.io = io
+    */
 
     return this.app
   }
