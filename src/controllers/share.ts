@@ -58,7 +58,7 @@ export default (crowi: Crowi) => {
 
     if (!isExternalShareEnabled()) {
       res.status(405)
-      return res.render('405.html')
+      return res.json({ error: 'Method Not Allowed' })
     }
 
     try {
@@ -69,10 +69,9 @@ export default (crowi: Crowi) => {
 
       if (hasAccessAuthority(secretKeywords, share)) {
         req.session.shareIds = updateShareIds(shareIds, uuid)
-        const page = (share.page as any) as PageDocument
+        const page = share.page as any as PageDocument
 
-        return res.render(getPath(crowi, 'SharePage'), {
-          i18n: req.i18n,
+        return res.json({
           context: getAppContext(crowi, req),
           hasSecretKeyword: true,
           shareId,
@@ -80,8 +79,7 @@ export default (crowi: Crowi) => {
         })
       }
 
-      return res.render(getPath(crowi, 'SharePage'), {
-        i18n: req.i18n,
+      return res.json({
         context: getAppContext(crowi, req),
         hasSecretKeyword: false,
         shareId,

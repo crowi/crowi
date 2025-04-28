@@ -12,8 +12,6 @@ import FileAccessRightOrLoginRequired from './fileAccessRightOrLoginRequired'
 import I18next from './i18next'
 import LoginChecker from './loginChecker'
 import LoginRequired from './loginRequired'
-import SwigFilters from './swigFilters'
-import SwigFunctions from './swigFunctions'
 
 export default (crowi: Crowi, app: Express) => ({
   AccessTokenParser: AccessTokenParser(crowi, app),
@@ -27,6 +25,4 @@ export default (crowi: Crowi, app: Express) => ({
   I18next: I18next(crowi, app),
   LoginChecker: LoginChecker(crowi, app),
   LoginRequired: LoginRequired(crowi),
-  SwigFilters: SwigFilters(crowi, app),
-  SwigFunctions: SwigFunctions(crowi, app),
 })

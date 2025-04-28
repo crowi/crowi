@@ -4,7 +4,6 @@ import methodOverride from 'method-override'
 import passport from 'passport'
 import session from 'express-session'
 import flash from 'connect-flash'
-import cons from 'consolidate'
 import Crowi from 'src/crowi'
 import { registrationMode } from 'src/models/config'
 import Debug from 'debug'
@@ -58,11 +57,6 @@ export default (crowi: Crowi, app: Express) => {
 
   app.set('port', crowi.port)
   app.use(express.static(crowi.publicDir))
-  app.engine('html', cons.swig)
-  app.set('view cache', false)
-  app.set('view engine', 'html')
-  app.set('view engine', 'js')
-  app.set('view engine', 'tsx')
   app.set('views', crowi.viewsDirs)
   app.use(methodOverride())
   app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }))
@@ -76,9 +70,6 @@ export default (crowi: Crowi, app: Express) => {
   app.use(passport.session())
 
   app.use(flash())
-
-  app.use(middlewares.SwigFilters)
-  app.use(middlewares.SwigFunctions)
 
   app.use(middlewares.LoginChecker)
 

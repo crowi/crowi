@@ -86,14 +86,13 @@ export default (crowi: Crowi, app: Express) => {
       })
   }
 
-  actions.index = function (req: Request, res: Response) {
+  actions.user = function (req: Request, res: Response) {
     const user = req.user as UserDocument
     const { userForm } = req.body
 
-    const render = (options = { messages: {} }) =>
-      res.render(getPath(crowi, 'Me/IndexPage'), {
+    const render = (options = { messages: {} }) => {
+      const responseData = {
         ...options,
-        i18n: req.i18n,
         context: getAppContext(crowi, req),
         activeItem: 'user',
         messages: {
@@ -106,7 +105,9 @@ export default (crowi: Crowi, app: Express) => {
             warning: req.flash('warningMessage.auth.github'),
           },
         },
-      })
+      }
+      return res.json(responseData)
+    }
 
     if (req.method == 'POST' && req.form.isValid) {
       const { name, email, lang } = userForm
@@ -155,15 +156,16 @@ export default (crowi: Crowi, app: Express) => {
       return res.redirect('/me')
     }
 
-    const render = (options = { messages: {} }) =>
-      res.render(getPath(crowi, 'Me/PasswordPage'), {
+    const render = (options = { messages: {} }) => {
+      const responseData = {
         ...options,
-        i18n: req.i18n,
         context: getAppContext(crowi, req),
         activeItem: 'password',
         hasPassword: user.isPasswordSet(),
         messages: { ...options.messages, success: req.flash('successMessage') },
-      })
+      }
+      return res.json(responseData)
+    }
 
     if (req.method == 'POST' && req.form.isValid) {
       const newPassword = passwordForm.newPassword
@@ -200,15 +202,16 @@ export default (crowi: Crowi, app: Express) => {
   actions.apiToken = async (req: Request, res: Response) => {
     const user = req.user as UserDocument
 
-    const render = (options = { messages: {} }) =>
-      res.render(getPath(crowi, 'Me/ApiTokenPage'), {
+    const render = (options = { messages: {} }) => {
+      const responseData = {
         ...options,
-        i18n: req.i18n,
         context: getAppContext(crowi, req),
         activeItem: 'apiToken',
         apiToken: req.user?.apiToken,
         messages: { ...options.messages, success: req.flash('successMessage') },
-      })
+      }
+      return res.json(responseData)
+    }
 
     if (req.method == 'POST' && req.form.isValid) {
       try {
@@ -225,11 +228,15 @@ export default (crowi: Crowi, app: Express) => {
   }
 
   actions.notifications = function (req: Request, res: Response) {
-    return res.render(getPath(crowi, 'Me/NotificationsPage'), { i18n: req.i18n, context: getAppContext(crowi, req), activeItem: 'notifications' })
+    const responseData = {
+      context: getAppContext(crowi, req),
+      activeItem: 'notifications',
+    }
+    return res.json(responseData)
   }
 
   actions.updates = function (req: Request, res: Response) {
-    res.render('me/update.html', {})
+    res.json({})
   }
 
   actions.deletePicture = function (req: Request, res: Response) {
@@ -251,7 +258,7 @@ export default (crowi: Crowi, app: Express) => {
       return res.redirect(continueUrl)
     }
     req.session.callback = '/me/auth/third-party'
-    return res.render('me/auth/third-party.html')
+    return res.json({ requireThirdPartyAuth: true })
   }
 
   actions.authGoogle = async function (req: Request, res: Response) {
