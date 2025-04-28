@@ -192,10 +192,14 @@ export default (crowi: Crowi) => {
     }
 
     searchEvent.on('addPageProgress', (total, current, skip) => {
+      /*
       crowi.getIo().sockets.emit('admin:addPageProgress', { total, current, skip })
+      */
     })
     searchEvent.on('finishAddPage', (total, current, skip) => {
+      /*
       crowi.getIo().sockets.emit('admin:finishAddPage', { total, current, skip })
+      */
     })
 
     search

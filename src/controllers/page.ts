@@ -27,10 +27,12 @@ export default (crowi: Crowi) => {
   // register page events
   const pageEvent = crowi.event('Page')
   pageEvent.on('update', function (page, user) {
+    /*
     const io = crowi.getIo()
     if (io) {
       io.sockets.emit('page edited', { page, user })
     }
+    */
   })
 
   function getPathFromRequest(req) {
