@@ -6,6 +6,8 @@ import { UserDocument } from 'src/models/user'
 import { getPath } from 'src/util/ssr'
 import { getAppContext } from 'src/util/view'
 import { registrationMode, hasSlackConfig, hasSlackToken } from 'src/models/config'
+import { asCustomError } from 'src/types/error'
+import { getQueryAsString } from 'src/types/express'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:admin')
@@ -139,7 +141,8 @@ export default (crowi: Crowi) => {
 
       return res.json(ApiResponse.success({ message: 'Updated Slack setting.' }))
     } catch (err) {
-      return res.json(ApiResponse.error(err.message))
+      const error = asCustomError(err)
+      return res.json(ApiResponse.error(error.message))
     }
   }
 
@@ -153,13 +156,14 @@ export default (crowi: Crowi) => {
         configService.deleteConfig('notification', 'slack:token'),
       ])
     } catch (err) {
-      return res.json(ApiResponse.error(err.message))
+      const error = asCustomError(err)
+      return res.json(ApiResponse.error(error.message))
     }
     return res.json(ApiResponse.success({ message: 'Successfully remove slack setting.' }))
   }
 
   actions.notification.slackAuth = async function (req: Request, res: Response) {
-    const code = req.query.code
+    const code = getQueryAsString(req.query.code)
     const configService = crowi.getConfigService()
 
     if (!code || !hasSlackConfig(req.config)) {
@@ -217,11 +221,11 @@ export default (crowi: Crowi) => {
   actions.user = {}
   actions.api.user = {}
   actions.api.user.index = function (req: Request, res: Response) {
-    const page = parseInt(req.query.page) || 1
+    const page = parseInt(getQueryAsString(req.query.page)) || 1
 
     // uq means user query
     // q used by search box on header
-    const uq = req.query.uq
+    const uq = getQueryAsString(req.query.uq)
     const query: {
       $or?: any
     } = {}
@@ -558,6 +562,21 @@ export default (crowi: Crowi) => {
         return res.json(ApiResponse.error('Failed to update name or email'))
       }
     }
+  }
+
+  async function activateInvitedUser(req: Request, res: Response) {
+    const user = req.user
+    const invitedId = req.params.id
+    const message = req.body.message
+
+    await User.isEmailValid(invitedId, (err, invited) => {
+      if (err) {
+        const error = asCustomError(err)
+        return res.json(ApiResponse.error(error.message))
+      }
+
+      // ... existing code ...
+    })
   }
 
   return actions

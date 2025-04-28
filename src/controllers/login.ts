@@ -9,6 +9,8 @@ import GoogleAuth from 'src/util/googleAuth'
 import GitHubAuth from 'src/util/githubAuth'
 import FileUploader from 'src/util/fileUploader'
 import { isDisabledPasswordAuth } from '../models/config'
+import { URL } from 'url'
+import { getQueryAsString } from 'src/types/express'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:login')
@@ -77,10 +79,18 @@ export default (crowi: Crowi, app: Express) => {
   actions.googleCallback = function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { query } = req
-    const { code = '', state } = query
+    const code = getQueryAsString(query.code) || ''
+    const state = getQueryAsString(query.state)
     const { google = {} } = req.session
     const { callbackAction: action } = google
-    const nextAction = action ? url.format({ pathname: action, query: { continue: state } }) : '/login'
+
+    let nextAction = '/login'
+    if (action) {
+      const redirectUrl = new URL(action, 'http://placeholder')
+      redirectUrl.searchParams.append('continue', state)
+      nextAction = redirectUrl.pathname + redirectUrl.search
+    }
+
     debug('googleCallback.nextAction', nextAction)
     req.session.google = { authCode: code }
     debug('google auth code', code)
@@ -91,10 +101,22 @@ export default (crowi: Crowi, app: Express) => {
   actions.githubCallback = function (req: Request, res: Response) {
     debug('Header', req.url, req.headers.referer)
     const { query } = req
-    const { code = '' } = query
+    const code = getQueryAsString(query.code) || ''
     const { github = {} } = req.session
     const { callbackAction: action } = github
-    const nextAction = action ? url.format({ pathname: action, query }) : '/login'
+
+    let nextAction = '/login'
+    if (action) {
+      const redirectUrl = new URL(action, 'http://placeholder')
+      // 必要なクエリパラメータを追加
+      Object.entries(query).forEach(([key, value]) => {
+        if (typeof value === 'string') {
+          redirectUrl.searchParams.append(key, value)
+        }
+      })
+      nextAction = redirectUrl.pathname + redirectUrl.search
+    }
+
     debug('githubCallback.nextAction', nextAction)
     req.session.github = { authCode: code }
     debug('github auth code', code)
