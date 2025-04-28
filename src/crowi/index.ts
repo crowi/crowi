@@ -24,13 +24,13 @@ import { hasSlackConfig } from '../models/config'
 import mailer from 'src/util/mailer'
 import slack from 'src/util/slack'
 import expressInit from './express-init'
-import Searcher from 'src/service/search'
+// import Searcher from 'src/service/search'
 
 const pkg = require('../../package.json')
 
-type Models = { [K in keyof typeof models]: ReturnType<typeof models[K]> }
+type Models = { [K in keyof typeof models]: ReturnType<(typeof models)[K]> }
 
-type Events = { [K in keyof typeof events]: InstanceType<typeof events[K]> }
+type Events = { [K in keyof typeof events]: InstanceType<(typeof events)[K]> }
 
 type Middlewares = { [K in keyof ReturnType<typeof middlewares>]: ReturnType<typeof middlewares>[K] }
 
@@ -77,13 +77,13 @@ class Crowi {
   tokens: Tokens
 
   // FIXME: {} をアサインしないで済む方法を捜す
-  models: Models = ({} as any) as Models
+  models: Models = {} as any as Models
 
-  events: Events = ({} as any) as Events
+  events: Events = {} as any as Events
 
-  middlewares: Middlewares = ({} as any) as Middlewares
+  middlewares: Middlewares = {} as any as Middlewares
 
-  controllers: Controllers = ({} as any) as Controllers
+  controllers: Controllers = {} as any as Controllers
 
   env: typeof process.env
 
@@ -348,6 +348,7 @@ class Crowi {
   async setupSearcher() {
     const searcherUri = this.env.ELASTICSEARCH_URI || this.env.BONSAI_URL || null
 
+    /*
     if (searcherUri) {
       try {
         this.searcher = new Searcher(this, searcherUri)
@@ -357,6 +358,7 @@ class Crowi {
         this.searcher = null
       }
     }
+      */
   }
 
   setupMailer() {
