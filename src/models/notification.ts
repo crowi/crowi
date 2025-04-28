@@ -191,11 +191,12 @@ export default (crowi: Crowi) => {
     */
   })
 
-  notificationSchema.statics.STATUS_UNOPENED = STATUS_UNOPENED
-  notificationSchema.statics.STATUS_UNREAD = STATUS_UNREAD
-  notificationSchema.statics.STATUS_OPENED = STATUS_OPENED
-
   const Notification = model<NotificationDocument, NotificationModel>('Notification', notificationSchema)
+
+  // 静的プロパティをスキーマではなくモデルに直接割り当て
+  Notification.STATUS_UNOPENED = STATUS_UNOPENED
+  Notification.STATUS_UNREAD = STATUS_UNREAD
+  Notification.STATUS_OPENED = STATUS_OPENED
 
   return Notification
 }

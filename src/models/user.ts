@@ -693,19 +693,20 @@ export default (crowi: Crowi) => {
     return username
   }
 
-  userSchema.statics.STATUS_REGISTERED = STATUS_REGISTERED
-  userSchema.statics.STATUS_ACTIVE = STATUS_ACTIVE
-  userSchema.statics.STATUS_SUSPENDED = STATUS_SUSPENDED
-  userSchema.statics.STATUS_DELETED = STATUS_DELETED
-  userSchema.statics.STATUS_INVITED = STATUS_INVITED
-  userSchema.statics.PAGE_ITEMS = PAGE_ITEMS
-
-  userSchema.statics.LANG_EN = LANG_EN
-  userSchema.statics.LANG_EN_US = LANG_EN_US
-  userSchema.statics.LANG_EN_GB = LANG_EN_US
-  userSchema.statics.LANG_JA = LANG_JA
-
   const User = model<UserDocument, UserModel>('User', userSchema)
+
+  // 静的プロパティをスキーマではなくモデルに直接割り当て
+  User.STATUS_REGISTERED = STATUS_REGISTERED
+  User.STATUS_ACTIVE = STATUS_ACTIVE
+  User.STATUS_SUSPENDED = STATUS_SUSPENDED
+  User.STATUS_DELETED = STATUS_DELETED
+  User.STATUS_INVITED = STATUS_INVITED
+  User.PAGE_ITEMS = PAGE_ITEMS
+
+  User.LANG_EN = LANG_EN
+  User.LANG_EN_US = LANG_EN_US
+  User.LANG_EN_GB = LANG_EN_US
+  User.LANG_JA = LANG_JA
 
   return User
 }

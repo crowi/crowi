@@ -185,10 +185,11 @@ export default (crowi: Crowi) => {
     return Share.deleteShare({ page: pageId })
   }
 
-  shareSchema.statics.STATUS_ACTIVE = STATUS_ACTIVE
-  shareSchema.statics.STATUS_INACTIVE = STATUS_INACTIVE
-
   const Share = model<ShareDocument, ShareModel>('Share', shareSchema)
+
+  // 静的プロパティをスキーマではなくモデルに直接割り当て
+  Share.STATUS_ACTIVE = STATUS_ACTIVE
+  Share.STATUS_INACTIVE = STATUS_INACTIVE
 
   return Share
 }
