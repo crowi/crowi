@@ -1,5 +1,7 @@
 import path from 'path'
+// @ts-ignore
 import { Client as ES6Client } from 'es6'
+// @ts-ignore
 import { Client as ES7Client } from 'es7'
 import Debug from 'debug'
 import { format } from 'date-fns'
@@ -93,7 +95,7 @@ export default class Search {
         throw new Error('no nodes info')
       }
 
-      for (const [nodeName, { version, plugins }] of Object.entries(nodes.nodes)) {
+      for (const [nodeName, { version, plugins }] of Object.entries(nodes.nodes as Record<string, { version: string; plugins: { name: string }[] }>)) {
         this.esNodeName = nodeName
         this.esNodeNames = [...this.esNodeNames, nodeName]
         this.esVersion = version
