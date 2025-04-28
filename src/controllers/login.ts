@@ -7,7 +7,6 @@ import { getContinueUrl } from 'src/util/url'
 import auth from 'src/util/auth'
 import GoogleAuth from 'src/util/googleAuth'
 import GitHubAuth from 'src/util/githubAuth'
-import axios from 'axios'
 import FileUploader from 'src/util/fileUploader'
 import { isDisabledPasswordAuth } from '../models/config'
 
@@ -365,6 +364,8 @@ export default (crowi: Crowi, app: Express) => {
 
             debug('socialImage?:', socialImage)
             if (socialImage) {
+              /*
+              TODO: あとで
               const fileUploader = FileUploader(crowi)
 
               axios
@@ -397,6 +398,7 @@ export default (crowi: Crowi, app: Express) => {
                 .catch(function () {
                   // ignore
                 })
+                  */
             }
 
             return loginSuccess(req, res, userData)
