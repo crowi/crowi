@@ -21,12 +21,7 @@ module.exports = {
   // collectCoverage: false,
 
   // An array of glob patterns indicating a set of files for which coverage information should be collected
-  collectCoverageFrom: [
-    '{common,lib,client}/**/*.{ts,tsx}',
-    '!{common,lib,client}/test',
-    '!{common,lib,client}/**/*.test.{ts,tsx}',
-    '!client/**/*.stories.tsx',
-  ],
+  collectCoverageFrom: ['{common,src}/**/*.{ts,tsx}', '!{common,src}/test', '!{common,src}/**/*.test.{ts,tsx}'],
 
   // The directory where Jest should output its coverage files
   coverageDirectory: 'coverage',
@@ -97,20 +92,9 @@ module.exports = {
     },
     {
       displayName: 'server',
-      testEnvironment: './lib/test/crowi-environment.js',
-      setupFilesAfterEnv: ['./lib/test/setup.ts'],
-      testMatch: ['<rootDir>/lib/**/*.test.ts'],
-    },
-    {
-      displayName: 'client/ts',
-      testMatch: ['<rootDir>/client/**/*.test.ts'],
-      testEnvironment: 'jsdom',
-    },
-    {
-      displayName: 'client/tsx',
-      setupFilesAfterEnv: ['./client/test/setup.ts'],
-      testMatch: ['<rootDir>/client/**/*.test.tsx'],
-      testEnvironment: 'jsdom',
+      testEnvironment: './src/test/crowi-environment.js',
+      setupFilesAfterEnv: ['./src/test/setup.ts'],
+      testMatch: ['<rootDir>/src/**/*.test.ts'],
     },
   ],
 
@@ -186,8 +170,7 @@ module.exports = {
 
   // A map from regular expressions to paths to transformers
   transform: {
-    '/client/': 'babel-jest',
-    '/lib/': 'ts-jest',
+    '/src/': 'ts-jest',
     '/test/': 'ts-jest',
   },
 

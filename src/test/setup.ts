@@ -1,5 +1,3 @@
-import '@babel/polyfill'
-
 import Crowi from 'src/crowi'
 import { Express } from 'express'
 
