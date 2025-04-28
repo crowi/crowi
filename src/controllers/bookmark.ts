@@ -4,6 +4,7 @@ import Debug from 'debug'
 import ApiResponse from 'src/util/apiResponse'
 import ApiPaginate from 'src/util/apiPaginate'
 import { UserDocument } from 'src/models/user'
+import { getQueryAsObjectId } from 'src/types/express'
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:routes:bookmark')
@@ -21,7 +22,11 @@ export default (crowi: Crowi) => {
    */
   actions.api.get = function (req: Request, res: Response) {
     const user = req.user as UserDocument
-    const pageId = req.query.page_id
+    const pageId = getQueryAsObjectId(req.query.page_id)
+
+    if (!pageId) {
+      return res.json(ApiResponse.error('Invalid page_id'))
+    }
 
     Bookmark.findByPageIdAndUserId(pageId, user._id)
       .then(function (bookmark) {

@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import Crowi from 'src/crowi'
 import ApiResponse from 'src/util/apiResponse'
 import { UserDocument } from 'src/models/user'
+import { getQueryAsObjectId, getQueryAsString } from 'src/types/express'
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routs:comment')
@@ -21,8 +22,8 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_id Revision Id.
    */
   api.get = function (req: Request, res: Response) {
-    const pageId = req.query.page_id
-    const revisionId = req.query.revision_id
+    const pageId = getQueryAsObjectId(req.query.page_id)
+    const revisionId = getQueryAsString(req.query.revision_id)
 
     if (revisionId) {
       return Comment.getCommentsByRevisionId(revisionId)
@@ -32,6 +33,10 @@ export default (crowi: Crowi) => {
         .catch(function (err) {
           res.json(ApiResponse.error(err))
         })
+    }
+
+    if (!pageId) {
+      return res.json(ApiResponse.error('Invalid page_id'))
     }
 
     return Comment.getCommentsByPageId(pageId)

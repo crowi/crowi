@@ -8,6 +8,7 @@ import GitHubAuth from 'src/util/githubAuth'
 import { UserDocument } from 'src/models/user'
 import { getPath } from 'src/util/ssr'
 import { getAppContext } from 'src/util/view'
+import { getQueryAsString } from 'src/types/express'
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:routes:me')
@@ -128,8 +129,9 @@ export default (crowi: Crowi, app: Express) => {
         try {
           await user.update({ name, email, lang })
         } catch (err) {
-          Object.keys(err.errors).forEach((e) => {
-            req.form.errors.push(err.errors[e].message)
+          const error = err as any
+          Object.keys(error.errors).forEach((e) => {
+            req.form.errors.push(error.errors[e].message)
           })
           return render({ messages: { error: req.form.errors } })
         }
@@ -251,7 +253,7 @@ export default (crowi: Crowi, app: Express) => {
   actions.authThirdParty = function (req: Request, res: Response) {
     const config = crowi.getConfig()
     const user = req.user as UserDocument
-    const { continue: continueUrl = '/' } = req.query
+    const continueUrl = getQueryAsString(req.query.continue) || '/'
 
     if (!config.crowi['auth:requireThirdPartyAuth'] || user.hasValidThirdPartyId()) {
       req.session.callback = null

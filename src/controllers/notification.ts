@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import Crowi from 'src/crowi'
 import ApiResponse from 'src/util/apiResponse'
 import { UserDocument } from 'src/models/user'
+import { getQueryAsNumber } from 'src/types/express'
 
 export default (crowi: Crowi) => {
   // const debug = Debug('crowi:routes:notification')
@@ -21,12 +22,12 @@ export default (crowi: Crowi) => {
 
     let limit = 10
     if (req.query.limit) {
-      limit = parseInt(req.query.limit, 10)
+      limit = getQueryAsNumber(req.query.limit, 10)
     }
 
     let offset = 0
     if (req.query.offset) {
-      offset = parseInt(req.query.offset, 10)
+      offset = getQueryAsNumber(req.query.offset, 0)
     }
 
     const requestLimit = limit + 1
