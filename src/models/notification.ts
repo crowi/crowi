@@ -82,7 +82,7 @@ export default (crowi: Crowi) => {
   })
   notificationSchema.virtual('actionUsers').get(function (this: NotificationDocument) {
     const Activity = crowi.model('Activity')
-    return Activity.getActionUsersFromActivities((this.activities as any) as ActivityDocument[])
+    return Activity.getActionUsersFromActivities(this.activities as any as ActivityDocument[])
   })
   const transform = (doc, ret) => {
     // delete ret.activities
