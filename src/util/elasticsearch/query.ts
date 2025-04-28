@@ -1,5 +1,7 @@
 import deepmerge from 'deepmerge'
+// @ts-ignore
 import { Search as ES6Search } from 'es6/api/requestParams'
+// @ts-ignore
 import { Search as ES7Search } from 'es7/api/requestParams'
 import { TYPES, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER } from 'src/models/page'
 import { SearchQuery } from 'src/service/query'
@@ -192,7 +194,7 @@ export const filterUserPages = <T extends Search>(query: T) => {
 }
 
 export type FilterPagesByTypeParams = {
-  type?: typeof TYPES[number]
+  type?: (typeof TYPES)[number]
 }
 
 export type FilterPagesByTypeFunction<T extends Search, U extends FilterPagesByTypeParams> = U extends { type?: infer R }

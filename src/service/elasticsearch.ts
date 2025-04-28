@@ -1,4 +1,6 @@
+// @ts-ignore
 import { Client as ES6Client, ApiResponse as ES6ApiResponse, RequestParams as ES6RequestParams } from 'es6'
+// @ts-ignore
 import { Client as ES7Client, ApiResponse as ES7ApiResponse, RequestParams as ES7RequestParams } from 'es7'
 import { BulkResponse, CatAliasesResponse, CatIndicesResponse, IndicesExistsAliasResponse, NodesInfoResponse, SearchResponse } from 'src/types/elasticsearch'
 
