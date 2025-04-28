@@ -1194,16 +1194,17 @@ export default (crowi: Crowi) => {
       .catch((err) => err)
   })
 
-  pageSchema.statics.GRANT_PUBLIC = GRANT_PUBLIC
-  pageSchema.statics.GRANT_RESTRICTED = GRANT_RESTRICTED
-  pageSchema.statics.GRANT_SPECIFIED = GRANT_SPECIFIED
-  pageSchema.statics.GRANT_OWNER = GRANT_OWNER
-  pageSchema.statics.PAGE_GRANT_ERROR = PAGE_GRANT_ERROR
-  pageSchema.statics.TYPE_PORTAL = TYPE_PORTAL
-  pageSchema.statics.TYPE_PUBLIC = TYPE_PUBLIC
-  pageSchema.statics.TYPE_USER = TYPE_USER
-
   const Page = model<PageDocument, PageModel>('Page', pageSchema)
+
+  // 静的プロパティをスキーマではなくモデルに直接割り当て
+  Page.GRANT_PUBLIC = GRANT_PUBLIC
+  Page.GRANT_RESTRICTED = GRANT_RESTRICTED
+  Page.GRANT_SPECIFIED = GRANT_SPECIFIED
+  Page.GRANT_OWNER = GRANT_OWNER
+  Page.PAGE_GRANT_ERROR = PAGE_GRANT_ERROR
+  Page.TYPE_PORTAL = TYPE_PORTAL
+  Page.TYPE_PUBLIC = TYPE_PUBLIC
+  Page.TYPE_USER = TYPE_USER
 
   return Page
 }

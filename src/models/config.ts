@@ -246,11 +246,12 @@ export default (crowi: Crowi) => {
     await forEachConfigs((ns, oldKey) => Config.deleteConfig(ns, oldKey))
   }
 
-  configSchema.statics.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN
-  configSchema.statics.SECURITY_REGISTRATION_MODE_RESTRICTED = SECURITY_REGISTRATION_MODE_RESTRICTED
-  configSchema.statics.SECURITY_REGISTRATION_MODE_CLOSED = SECURITY_REGISTRATION_MODE_CLOSED
-
   const Config = model<ConfigDocument, ConfigModel>('Config', configSchema)
+
+  // 静的プロパティをスキーマではなくモデルに直接割り当て
+  Config.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN as string
+  Config.SECURITY_REGISTRATION_MODE_RESTRICTED = SECURITY_REGISTRATION_MODE_RESTRICTED as string
+  Config.SECURITY_REGISTRATION_MODE_CLOSED = SECURITY_REGISTRATION_MODE_CLOSED as string
 
   return Config
 }
