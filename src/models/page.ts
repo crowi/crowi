@@ -225,7 +225,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.isCreator = function (userData) {
-    if (this.populated('creator') && ((this.creator as any) as UserDocument)._id.toString() === userData._id.toString()) {
+    if (this.populated('creator') && (this.creator as any as UserDocument)._id.toString() === userData._id.toString()) {
       return true
     } else if (this.creator.toString() === userData._id.toString()) {
       return true
@@ -252,7 +252,7 @@ export default (crowi: Crowi) => {
       return true
     }
 
-    return this.latestRevision == (((this.revision as any) as RevisionDocument)._id.toString() as any)
+    return this.latestRevision == ((this.revision as any as RevisionDocument)._id.toString() as any)
   }
 
   pageSchema.methods.isUpdatable = function (previousRevision) {
@@ -280,7 +280,7 @@ export default (crowi: Crowi) => {
   pageSchema.methods.like = async function (userData) {
     const Activity = crowi.model('Activity')
 
-    const added = ((this.liker as any) as Types.Array<UserDocument>).addToSet(userData._id)
+    const added = (this.liker as any as Types.Array<UserDocument>).addToSet(userData._id)
     if (added.length > 0) {
       const data = await this.save()
 
@@ -302,7 +302,7 @@ export default (crowi: Crowi) => {
   pageSchema.methods.unlike = async function (userData) {
     const Activity = crowi.model('Activity')
 
-    const liker = (this.liker as any) as Types.Array<UserDocument>
+    const liker = this.liker as any as Types.Array<UserDocument>
     const beforeCount = liker.length
     liker.pull(userData._id)
     if (liker.length != beforeCount) {
@@ -339,7 +339,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.isSeenUser = function (userData) {
-    const seenUsers = (this.seenUsers as any) as UserDocument[]
+    const seenUsers = this.seenUsers as any as UserDocument[]
 
     return seenUsers.some(function (seenUser) {
       return seenUser.equals(userData._id)
@@ -347,7 +347,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.methods.seen = async function (userData) {
-    const seenUsers = (this.seenUsers as any) as Types.Array<UserDocument>
+    const seenUsers = this.seenUsers as any as Types.Array<UserDocument>
 
     if (this.isSeenUser(userData)) {
       debug('seenUsers not updated')

@@ -87,7 +87,7 @@ export default (crowi: Crowi) => {
     newRevision.body = body
     newRevision.format = format
     newRevision.author = user._id
-    newRevision.createdAt = (Date.now() as any) as Date
+    newRevision.createdAt = Date.now() as any as Date
 
     return newRevision
   }
