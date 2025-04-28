@@ -100,7 +100,7 @@ export default (crowi: Crowi) => {
       }
 
       pagerOptions.length = pageList.length
-      res.render('page_list.html', {
+      res.json({
         path,
         page: portalPage || null,
         pages: pageList,
@@ -111,6 +111,7 @@ export default (crowi: Crowi) => {
       })
     } catch (err) {
       debug('Error on rendering pageListShow', err)
+      res.status(500).json({ error: 'Error on rendering pageListShow' })
     }
   }
 
@@ -143,10 +144,11 @@ export default (crowi: Crowi) => {
 
         renderVars.pager = generatePager(pagerOptions)
         renderVars.pages = pageList
-        res.render('page_list.html', renderVars)
+        res.json(renderVars)
       })
       .catch(function (err) {
         debug('Error on rendering deletedPageListShow', err)
+        res.status(500).json({ error: 'Error on rendering deletedPageListShow' })
       })
   }
 
@@ -155,7 +157,7 @@ export default (crowi: Crowi) => {
 
     // create page
     if (!pageData) {
-      return res.render('page.html', {
+      return res.json({
         author: {},
         page: false,
       })
@@ -176,9 +178,8 @@ export default (crowi: Crowi) => {
       author: pageData.revision.author || false,
       isNonExistentUserTrashPage,
     }
-    const defaultPageTeamplate = 'page.html'
 
-    res.render(req.query.presentation ? 'page_presentation.html' : defaultPageTeamplate, renderVars)
+    return res.json(renderVars)
   }
 
   actions.userPageShow = async function (req: Request, res: Response) {
@@ -219,7 +220,7 @@ export default (crowi: Crowi) => {
       debug('Error while loading user page.', username)
     }
 
-    return res.render('user_page.html', {
+    return res.json({
       username,
       bookmarkList,
       createdList,
@@ -245,7 +246,7 @@ export default (crowi: Crowi) => {
 
       if (isMarkdown) {
         res.set('Content-Type', 'text/plain')
-        return res.send(((page.revision as any) as RevisionDocument).body)
+        return res.send((page.revision as any as RevisionDocument).body)
       }
 
       return renderPage(page, req, res)
@@ -283,11 +284,17 @@ export default (crowi: Crowi) => {
             return
           }
 
-          debug('There no page for', `${path}`)
-          return renderPage(null, req, res)
+          // if guest user, redirect to `/login'
+          if (req.user === null) {
+            req.session.redirectTo = `${req.path}${req.search}`
+            return res.redirect('/login')
+          }
+
+          return renderPage(null, req, res) // show create
         }
       } catch (err) {
-        debug('Error on rendering pageShow (redirect to portal)', err)
+        debug('Error on rendering pageShow (redirect to portal or fixed)', err)
+        return res.redirect('/')
       }
     }
   }
@@ -410,7 +417,7 @@ export default (crowi: Crowi) => {
         renderVars.pager = generatePager(pagerOptions)
         renderVars.bookmarks = bookmarks
 
-        return res.render('user/bookmarks.html', renderVars)
+        return res.json(renderVars)
       })
       .catch(function (err) {
         debug('Error on rendereing bookmark', err)
@@ -447,7 +454,7 @@ export default (crowi: Crowi) => {
         renderVars.pager = generatePager(pagerOptions)
         renderVars.pages = pages
 
-        return res.render('user/recent-create.html', renderVars)
+        return res.json(renderVars)
       })
       .catch(function (err) {
         debug('Error on rendereing recent-created', err)

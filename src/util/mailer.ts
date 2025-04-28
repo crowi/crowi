@@ -1,6 +1,5 @@
 import Debug from 'debug'
 import nodemailer from 'nodemailer'
-import swig from 'swig'
 import ses from 'nodemailer-ses-transport'
 
 const debug = Debug('crowi:lib:mailer')
@@ -90,15 +89,10 @@ export default (crowi) => {
 
   function send(config, callback) {
     if (mailer) {
-      const templateVars = config.vars || {}
-      return swig.renderFile(MAIL_TEMPLATE_DIR + config.template, templateVars, function (err, output) {
-        if (err) {
-          throw err
-        }
-
-        config.text = output
-        return mailer.sendMail(setupMailConfig(config), callback)
-      })
+      // テンプレート処理をシンプルなテキスト代入に変更
+      // 将来的には別のメールテンプレートエンジンに置き換える必要があります
+      config.text = config.vars ? JSON.stringify(config.vars) : 'メール本文（テンプレートエンジン削除のため詳細は表示できません）'
+      return mailer.sendMail(setupMailConfig(config), callback)
     } else {
       debug('Mailer is not completed to set up. Please set up SMTP or AWS setting.')
       return callback(new Error('Mailer is not completed to set up. Please set up SMTP or AWS setting.'), null)

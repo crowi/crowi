@@ -80,7 +80,8 @@ export default (crowi: Crowi) => {
   }
 
   actions.index = function (req: Request, res: Response) {
-    return res.render(getPath(crowi, 'AdminPage'), { i18n: req.i18n, context: getAppContext(crowi, req) })
+    const context = getAppContext(crowi, req)
+    return res.json({ context })
   }
 
   actions.api.index = function (req: Request, res: Response) {
@@ -439,7 +440,7 @@ export default (crowi: Crowi) => {
         debug('Successfully save updatePost', doc)
 
         // fixme: うーん
-        doc.creator = ((doc.creator as any) as UserDocument)._id.toString() as any
+        doc.creator = (doc.creator as any as UserDocument)._id.toString() as any
         return res.json(ApiResponse.success({ updatePost: doc }))
       })
       .catch(function (err) {

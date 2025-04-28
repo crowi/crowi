@@ -113,7 +113,7 @@ export default (crowi: Crowi, app: Express) => {
       reasonMessage = 'Wait for approved by administrators.'
     }
 
-    return res.render('login/error.html', {
+    return res.status(403).json({
       reason: reason,
       reasonMessage: reasonMessage,
     })
@@ -169,15 +169,13 @@ export default (crowi: Crowi, app: Express) => {
 
       if (socialId) {
         if (toConnect) {
-          const locals = { toConnect, targetUser, ...socialSession }
-
-          return res.render('login.html', locals)
+          return res.json({ toConnect, targetUser, ...socialSession })
         }
 
         return res.redirect('/register')
       }
 
-      return res.render('login.html', { continueUrl })
+      return res.json({ continueUrl })
     }
   }
 
@@ -417,7 +415,7 @@ export default (crowi: Crowi, app: Express) => {
         const isRegistering = isDisabledPasswordAuth(config)
         const type = isRegistering ? 'warningMessage' : 'registerWarningMessage'
         req.flash(type, message)
-        return res.render('login.html', { isRegistering })
+        return res.json({ isRegistering, error: message })
       }
 
       if (!User.isEmailValid(socialEmail)) {
@@ -437,7 +435,7 @@ export default (crowi: Crowi, app: Express) => {
       const toConnect = !!targetUser
       const locals = { isRegistering, toConnect, targetUser, ...socialSession }
 
-      return res.render('register.html', locals)
+      return res.json(locals)
     }
   }
 
@@ -458,7 +456,7 @@ export default (crowi: Crowi, app: Express) => {
           user.activateInvitedUser(username, name, password, function (err, data) {
             if (err) {
               req.flash('warningMessage', 'アクティベートに失敗しました。')
-              return res.render('invited.html')
+              return res.json({ error: 'アクティベートに失敗しました。' })
             } else {
               return res.redirect('/')
             }
@@ -466,11 +464,11 @@ export default (crowi: Crowi, app: Express) => {
         } else {
           req.flash('warningMessage', '利用できないユーザーIDです。')
           debug('username', username)
-          return res.render('invited.html')
+          return res.json({ error: '利用できないユーザーIDです。' })
         }
       })
     } else {
-      return res.render('invited.html', {})
+      return res.json({})
     }
   }
 

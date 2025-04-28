@@ -437,7 +437,7 @@ class Crowi {
       app.use(morgan('combined'))
       app.use(function (err, req, res, next) {
         res.status(500)
-        res.render('500.html', { error: err })
+        res.json({ error: 'Internal Server Error', message: err.message })
       })
     }
 
