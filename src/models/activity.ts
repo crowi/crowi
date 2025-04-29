@@ -208,15 +208,18 @@ export default (crowi: Crowi) => {
   /**
    * saved hook
    */
-  activitySchema.post('save', async function (savedActivity: ActivityDocument) {
+  activitySchema.post('save', (savedActivity: ActivityDocument) => {
     const Notification = crowi.model('Notification')
-    try {
-      const notificationUsers = await savedActivity.getNotificationTargetUsers()
 
-      return Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)))
-    } catch (err) {
-      debug(err)
-    }
+    savedActivity.getNotificationTargetUsers()
+      .then((notificationUsers) => {
+        return Promise.all(notificationUsers.map((user) =>
+          Notification.upsertByActivity(user, savedActivity)
+        ))
+      })
+      .catch((err) => {
+        debug(err)
+      })
   })
 
   // because mongoose's 'remove' hook fired only when remove by a method of Document (not by a Model method)
