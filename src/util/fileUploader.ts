@@ -7,6 +7,14 @@ const fileUploader = {
   generateUrl(filePath: string) {
     throw new Error('Not implemented')
   },
+
+  findDeliveryFile(attachmentId: string, filePath: string) {
+    throw new Error('Not implemented')
+  },
+
+  deleteFile(attachmentId: string, filePath: string) {
+    throw new Error('Not implemented')
+  },
 }
 
 export default (crowi: Crowi) => {
