@@ -139,11 +139,11 @@ export default (crowi: Crowi) => {
     await Config.updateConfigByNamespace('crowi', getArrayForInstalling())
   }
 
-  configSchema.statics.updateByParams = async function (ns, key, value) {
+  configSchema.statics.updateByParams = async function (ns: string, key: string, value: string) {
     await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec()
   }
 
-  configSchema.statics.updateConfig = async function (ns, key, value) {
+  configSchema.statics.updateConfig = async function (ns: string, key: string, value: string) {
     try {
       await Config.updateByParams(ns, key, value)
     } catch (err) {
@@ -151,7 +151,7 @@ export default (crowi: Crowi) => {
     }
   }
 
-  configSchema.statics.updateConfigByNamespace = async function (ns, nsConfig) {
+  configSchema.statics.updateConfigByNamespace = async function (ns: string, nsConfig: Record<string, any>) {
     try {
       await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)))
     } catch (err) {
