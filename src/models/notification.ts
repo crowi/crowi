@@ -26,8 +26,8 @@ export interface NotificationModel extends Model<NotificationDocument> {
   findLatestNotificationsByUser(user: Types.ObjectId, skip: number, offset: number): Promise<NotificationDocument[]>
   upsertByActivity(user: Types.ObjectId, activity: ActivityDocument, createdAt?: Date | null): Promise<NotificationDocument | null>
   removeActivity(activity: any): any
-  removeEmpty(): Query<any>
-  read(user: UserDocument): Promise<Query<any>>
+  removeEmpty(): ReturnType<typeof Model.deleteMany>
+  read(user: UserDocument): ReturnType<typeof Model.updateMany>
   open(user: UserDocument, id: Types.ObjectId): Promise<NotificationDocument | null>
   getUnreadCountByUser(user: Types.ObjectId): Promise<number | undefined>
 
