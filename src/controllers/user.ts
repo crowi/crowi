@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import Crowi from 'src/crowi'
 import ApiResponse from 'src/util/apiResponse'
 import { UserDocument } from 'src/models/user'
+import { getQueryAsString } from 'src/types/express'
 
 export default (crowi: Crowi) => {
   const User = crowi.model('User')
@@ -35,7 +36,7 @@ export default (crowi: Crowi) => {
    * @apiParam {String} user_ids
    */
   api.list = function (req: Request, res: Response) {
-    const userIds = req.query.user_ids || null // TODO: handling
+    const userIds = getQueryAsString(req.query.user_ids) || null // TODO: handling
 
     let userFetcher
     if (!userIds || userIds.split(',').length <= 0) {

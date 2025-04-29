@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import Crowi from 'src/crowi'
+import { getQueryAsNumber } from 'src/types/express'
 import ApiResponse from 'src/util/apiResponse'
 
 export default (crowi: Crowi) => {
@@ -10,9 +11,8 @@ export default (crowi: Crowi) => {
   const api = (actions.api = {} as any)
 
   api.list = async (req: Request, res: Response) => {
-    let { page = 1, limit = 50 } = req.query
-    page = parseInt(page)
-    limit = parseInt(limit)
+    const page = getQueryAsNumber(req.query.page, 1)
+    const limit = getQueryAsNumber(req.query.limit, 50)
     const options = { page, limit }
     try {
       const accessData = await ShareAccess.findAccesses({}, options)
