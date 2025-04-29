@@ -329,7 +329,7 @@ export default (crowi: Crowi) => {
       try {
         const redirectPage = await Page.removePageById(this._id)
         debug('Redirect Page deleted', redirectPage.path)
-      } catch (err) {
+      } catch (err: any) {
         debug('Error occured while get setting', err, err.stack)
         throw new Error(`Failed to delete redirect page (${this.path}).`)
       }
@@ -686,10 +686,12 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.findPagesByIds = function (ids) {
-    return Page.find({
+    const query: any = {
       _id: { $in: ids },
       redirectTo: null,
-    })
+    };
+
+    return Page.find(query)
       .populate([
         { path: 'creator', model: 'User' },
         {
@@ -777,7 +779,7 @@ export default (crowi: Crowi) => {
     }
 
     // FIXME: might be heavy
-    const q = Page.find({
+    const query: any = {
       redirectTo: null,
       $or: [
         { grant: null },
@@ -786,7 +788,8 @@ export default (crowi: Crowi) => {
         { grant: GRANT_SPECIFIED, grantedUsers: userData._id },
         { grant: GRANT_OWNER, grantedUsers: userData._id },
       ],
-    })
+    };
+    const q = Page.find(query)
       .populate({ path: 'revision', populate: { path: 'author', model: 'User' } })
       .and({
         $or: pathCondition,
@@ -1157,7 +1160,8 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.allPageCount = function () {
-    return Page.countDocuments({ redirectTo: null, grant: GRANT_PUBLIC }) // TODO: option にする
+    const query: any = { redirectTo: null, grant: GRANT_PUBLIC };
+    return Page.countDocuments(query) // TODO: option にする
   }
 
   pageSchema.methods.getNotificationTargetUsers = async function () {
