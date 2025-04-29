@@ -93,19 +93,20 @@ export type FunctionScoreQueryResponse<T extends SearchWithBody> = T & {
 
 export const createFunctionScoreQuery = <T extends SearchWithBody>(params: { query: T } & FunctionScoreQueryParams): FunctionScoreQueryResponse<T> => {
   const { query, fieldValueFactor: field_value_factor, boostMode: boost_mode } = params
-  return {
-    ...query,
+
+  const functionScoreBody = {
     body: {
-      ...query.body,
       query: {
         function_score: {
-          query: query.body.query,
+          query: (query as any).body.query,
           field_value_factor,
           boost_mode,
         },
       },
     },
   }
+
+  return merge(query, functionScoreBody);
 }
 
 export const convertToFunctionScoreQuery = <T extends SearchWithBody>(query: T, params: FunctionScoreQueryParams) => {
