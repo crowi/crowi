@@ -1,6 +1,7 @@
 import Crowi from 'src/crowi'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
+import { UserDocument } from './user'
 
 export interface BookmarkDocument extends Document {
   _id: Types.ObjectId
@@ -40,7 +41,7 @@ export default (crowi: Crowi) => {
   })
   BookmarkSchema.index({ page: 1, user: 1 }, { unique: true })
 
-  BookmarkSchema.statics.populatePage = async function (bookmarks, requestUser) {
+  BookmarkSchema.statics.populatePage = async function (bookmarks: BookmarkDocument[], requestUser: UserDocument | null) {
     requestUser = requestUser || null
 
     const populatedBookmarks = await Bookmark.populate(bookmarks, {
@@ -119,7 +120,7 @@ export default (crowi: Crowi) => {
       const Bookmark = await newBookmark.save()
       BookmarkEvent.emit('create', page._id)
       return Bookmark
-    } catch (err) {
+    } catch (err: any) {
       if (err.code === 11000) {
         // duplicate key (dummy response of new object)
         return newBookmark
