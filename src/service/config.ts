@@ -1,5 +1,5 @@
 import Debug from 'debug'
-import { v4 as uuid } from 'uuid/v4'
+import { v4 } from 'uuid'
 import redis from 'redis'
 import Crowi from 'src/crowi'
 import ConfigEvent from 'src/events/config'
@@ -16,7 +16,7 @@ export default class ConfigService {
   event: ConfigEvent
 
   pubSub: {
-    id: uuid
+    id: string
     publisher: redis.RedisClient | null
     subscriber: redis.RedisClient | null
     channel: string
@@ -30,7 +30,7 @@ export default class ConfigService {
     this.event = this.crowi.event('Config')
 
     this.pubSub = {
-      id: uuid(),
+      id: v4(),
       publisher: null,
       subscriber: null,
       channel: 'config',
