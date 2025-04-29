@@ -9,7 +9,7 @@
     "documentation",
     "collaboration"
   ],
-  "author": "Sotaro KARASAWA <sotaro.k@gmail.com>",
+  "author": "Sotaro KARASAWA <s@sotaro.com>",
   "contributors": [
     "lightnet328 <lightnet328@gmail.com>",
     "otofune <otofune@gmail.com>",
@@ -22,6 +22,28 @@
   "engines": {
     "node": "16.x",
     "npm": "8.x"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "node dist/src/app.js",
+    "dev": "concurrently --kill-others 'npm run dev:server'",
+    "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon src/app.ts",
+    "format": "prettier --write '**/*.{ts,tsx,js,jsx}'",
+    "lint": "echo 'eslint was removed'",
+    "test": "env -u DEBUG TZ=UTC jest --maxWorkers=5",
+    "test:server": "env -u DEBUG jest lib --maxWorkers=5",
+    "coverage": "npm test -- --coverage",
+    "build": "run-s build:*",
+    "build:server": "npm run prod:server",
+    "prod:server": "tsc",
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "npm run type-check -- --watch"
+  },
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "bugs": {
+    "url": "https://github.com/crowi/crowi/issues"
   },
   "dependencies": {
     "@slack/client": "^5.0.2",
@@ -100,27 +122,5 @@
     "supertest": "^4.0.2",
     "ts-node": "^8.10.2",
     "typescript": "^4.9.5"
-  },
-  "license": "MIT",
-  "scripts": {
-    "start": "node dist/server/app.js",
-    "dev": "concurrently --kill-others 'npm run dev:server'",
-    "dev:server": "DEBUG=crowi:* NODE_ENV=development nodemon src/app.ts",
-    "format": "prettier --write '**/*.{ts,tsx,js,jsx}'",
-    "lint": "echo 'eslint was removed'",
-    "test": "env -u DEBUG TZ=UTC jest --maxWorkers=5",
-    "test:server": "env -u DEBUG jest lib --maxWorkers=5",
-    "coverage": "npm test -- --coverage",
-    "build": "run-s build:*",
-    "build:server": "npm run prod:server",
-    "prod:server": "tsc",
-    "type-check": "tsc --noEmit",
-    "type-check:watch": "npm run type-check -- --watch"
-  },
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "bugs": {
-    "url": "https://github.com/crowi/crowi/issues"
   }
 }
