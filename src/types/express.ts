@@ -1,6 +1,7 @@
 import { Request } from 'express';
 import { ParsedQs } from 'qs';
-import { Types } from 'mongoose';
+import { Schema } from 'mongoose';
+import { Session, SessionData } from 'express-session';
 
 declare global {
   namespace Express {
@@ -9,7 +10,7 @@ declare global {
       form?: any;
       config?: any;
       user?: any;
-      session: any;
+      session: Session & Partial<SessionData>;
     }
   }
 }
@@ -29,18 +30,19 @@ export function getQueryAsBoolean(query: string | ParsedQs | (string | ParsedQs)
   if (query === undefined) return false;
   if (typeof query === 'string') return query === 'true';
   if (Array.isArray(query)) {
-    return query.length > 0 && (query[0] === 'true' || query[0] === true);
+    return query.length > 0 && (query[0] === 'true' || query[0] === true as any);
   }
   return Boolean(query);
 }
 
 // Query パラメータを ObjectId として安全に取得するためのヘルパー関数
-export function getQueryAsObjectId(query: string | ParsedQs | (string | ParsedQs)[] | undefined): Types.ObjectId | null {
+export function getQueryAsObjectId(query: string | ParsedQs | (string | ParsedQs)[] | undefined): Schema.Types.ObjectId | null {
   const strValue = getQueryAsString(query);
   if (!strValue) return null;
 
   try {
-    return new Types.ObjectId(strValue);
+    // Schema.Types.ObjectIdのコンストラクタは文字列を受け取れる
+    return new Schema.Types.ObjectId(strValue);
   } catch (e) {
     return null;
   }
