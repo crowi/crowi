@@ -18,12 +18,12 @@
     "noImplicitAny": false, // TODO: あとでtrueにする
     "noUnusedLocals": false, // TODO: あとでtrueにする
     "noUnusedParameters": false, // TODO: あとでtrueにする
-    "rootDir": ".",
+    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
       "src/*": ["src/*"]
     }
   },
   "include": ["src"],
-  "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*"]
+  "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*", "dist"]
 }
