@@ -20,8 +20,8 @@
     "url": "https://github.com/crowi/crowi.git"
   },
   "engines": {
-    "node": "16.x",
-    "npm": "8.x"
+    "node": "18.x",
+    "npm": ">=9.x"
   },
   "license": "MIT",
   "_moduleAliases": {
@@ -110,7 +110,7 @@
     "@types/faker": "^4.1.7",
     "@types/mongodb": "^3.5.25",
     "@types/multer": "^1.3.10",
-    "@types/node": "^12.12.5",
+    "@types/node": "^18.19.0",
     "@types/prettier": "^2.0.2",
     "@types/query-string": "^6.1.1",
     "@types/redis": "^2.8.22",
@@ -124,7 +124,7 @@
     "prettier": "^2.0.5",
     "regenerator-runtime": "^0.13.3",
     "supertest": "^4.0.2",
-    "ts-node": "^8.10.2",
+    "ts-node": "^10.9.0",
     "typescript": "^4.9.5"
   }
 }
