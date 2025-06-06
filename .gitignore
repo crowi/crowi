@@ -13,3 +13,6 @@ public/uploads/*
 
 # server
 dist
+
+# local settings
+.claude/settings.local.json
