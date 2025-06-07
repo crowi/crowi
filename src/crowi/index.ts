@@ -2,12 +2,12 @@ import Debug from 'debug'
 import path, { sep } from 'path'
 import mongoose from 'mongoose'
 import Tokens from 'csrf'
-import redis from 'redis'
+import { createClient } from 'redis'
 import url from 'url'
 import http from 'http'
 // import socketIO from 'socket.io'
 // import socketIORedis from 'socket.io-redis'
-import connectRedis from 'connect-redis'
+import RedisStore from 'connect-redis'
 import express from 'express'
 import session from 'express-session'
 import errorHandler from 'errorhandler'
@@ -205,14 +205,23 @@ class Crowi {
     if (redisUrl) {
       const { hostname: host, port, auth, protocol } = url.parse(redisUrl)
       const password = auth ? { password: auth.split(':')[1] } : {}
+      
+      // Convert port to number for Redis v4 compatibility
+      const portNumber = port ? parseInt(port, 10) : 6379
 
       const tls: object | null = protocol === 'rediss:' ? { requestCert: true, rejectUnauthorized: redisRejectUnauthorized } : null
 
-      if (tls === null) {
-        return { host, port, ...password }
+      // Redis v4 uses socket object for connection configuration
+      const socketConfig = {
+        host,
+        port: portNumber,
+        ...(tls && { tls })
       }
 
-      return { host, port, tls, ...password }
+      return {
+        socket: socketConfig,
+        ...password
+      }
     }
 
     return null
@@ -270,9 +279,16 @@ class Crowi {
 
   async setupRedisClient() {
     if (this.redisOpts) {
-      const redisClient = redis.createClient(this.redisOpts)
-      await redisClient.connect()
-      this.redis = redisClient
+      try {
+        const redisClient = createClient(this.redisOpts)
+        await redisClient.connect()
+        this.redis = redisClient
+        debug('Redis client connected successfully')
+      } catch (error) {
+        debug('Failed to connect to Redis:', (error as Error).message)
+        console.warn('Redis connection failed. Continuing without Redis...')
+        this.redis = null
+      }
     }
   }
 
@@ -291,7 +307,6 @@ class Crowi {
     }
 
     if (this.redis) {
-      const RedisStore = connectRedis
       sessionConfig.store = new RedisStore({
         prefix: 'crowi:sess:',
         client: this.redis,

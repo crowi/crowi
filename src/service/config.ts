@@ -1,6 +1,6 @@
 import Debug from 'debug'
 import { v4 } from 'uuid'
-import redis from 'redis'
+import { createClient } from 'redis'
 import Crowi from 'src/crowi'
 import ConfigEvent from 'src/events/config'
 
@@ -76,7 +76,11 @@ export default class ConfigService {
     // To notify config updated to another srever, publish event via pubsub.
     const { publisher, channel, id } = this.pubSub
     if (publisher) {
-      await publisher.publish(channel, JSON.stringify({ id }))
+      try {
+        await publisher.publish(channel, JSON.stringify({ id }))
+      } catch (error) {
+        debug('Failed to publish config update:', (error as Error).message)
+      }
     }
 
     // To notify config updated to the server itself, emit the event
@@ -124,31 +128,40 @@ export default class ConfigService {
     const { redisOpts } = this.crowi
 
     if (redisOpts) {
-      this.pubSub.publisher = redis.createClient(redisOpts)
-      this.pubSub.subscriber = redis.createClient(redisOpts)
-      
-      await this.pubSub.publisher.connect()
-      await this.pubSub.subscriber.connect()
+      try {
+        this.pubSub.publisher = createClient(redisOpts)
+        this.pubSub.subscriber = createClient(redisOpts)
+        
+        await this.pubSub.publisher.connect()
+        await this.pubSub.subscriber.connect()
 
-      const { pubSub } = this
-      const { subscriber } = pubSub
+        const { pubSub } = this
+        const { subscriber } = pubSub
 
-      debug('PubSubId', pubSub.id)
+        debug('PubSubId', pubSub.id)
 
-      if (subscriber) {
-        subscriber.on('message', async (channel, message) => {
-          if (channel !== pubSub.channel) return
+        if (subscriber) {
+          subscriber.on('message', async (channel, message) => {
+            if (channel !== pubSub.channel) return
 
-          const { id } = JSON.parse(message)
-          if (id === pubSub.id) return
+            const { id } = JSON.parse(message)
+            if (id === pubSub.id) return
 
-          await this.load()
-          this.event.emit('config:updated')
+            await this.load()
+            this.event.emit('config:updated')
 
-          debug(`Config updated by ${id}`)
-        })
+            debug(`Config updated by ${id}`)
+          })
 
-        await subscriber.subscribe(pubSub.channel)
+          await subscriber.subscribe(pubSub.channel)
+        }
+        
+        debug('Redis pub/sub setup completed')
+      } catch (error) {
+        debug('Failed to setup Redis pub/sub:', (error as Error).message)
+        console.warn('Redis pub/sub setup failed. Config synchronization disabled.')
+        this.pubSub.publisher = null
+        this.pubSub.subscriber = null
       }
     }
   }

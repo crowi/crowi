@@ -22,7 +22,7 @@ export default class LRU {
     const { client } = this
 
     if (client) {
-      return await client.zRemRangeByRank(namespace, 0, max)
+      return await client.ZREMRANGEBYRANK(namespace, 0, max)
     }
   }
 
@@ -31,7 +31,7 @@ export default class LRU {
 
     if (client) {
       await this.removeByRange(namespace, -this.max - 1)
-      return await client.zAdd(namespace, { score: Date.now(), value: key })
+      return await client.ZADD(namespace, { score: Date.now(), value: key })
     }
   }
 
@@ -39,7 +39,7 @@ export default class LRU {
     const { client } = this
 
     if (client) {
-      return await client.zRange(namespace, 0, limit - 1, { REV: true })
+      return await client.ZRANGE(namespace, 0, limit - 1, { REV: true })
     }
   }
 
