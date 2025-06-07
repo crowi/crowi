@@ -42,17 +42,17 @@ export default (crowi: Crowi) => {
     },
     targetModel: {
       type: String,
-      require: true,
+      required: true,
       enum: ActivityDefine.getSupportTargetModelNames(),
     },
     target: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.Mixed,
       refPath: 'targetModel',
-      require: true,
+      required: true,
     },
     status: {
       type: String,
-      require: true,
+      required: true,
       enum: STATUSES,
     },
     createdAt: { type: Date, default: Date.now },

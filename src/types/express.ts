@@ -1,6 +1,6 @@
 import { Request } from 'express';
 import { ParsedQs } from 'qs';
-import { Schema } from 'mongoose';
+import { Schema, Types } from 'mongoose';
 import { Session, SessionData } from 'express-session';
 
 declare global {
@@ -36,13 +36,13 @@ export function getQueryAsBoolean(query: string | ParsedQs | (string | ParsedQs)
 }
 
 // Query パラメータを ObjectId として安全に取得するためのヘルパー関数
-export function getQueryAsObjectId(query: string | ParsedQs | (string | ParsedQs)[] | undefined): Schema.Types.ObjectId | null {
+export function getQueryAsObjectId(query: string | ParsedQs | (string | ParsedQs)[] | undefined): Types.ObjectId | null {
   const strValue = getQueryAsString(query);
   if (!strValue) return null;
 
   try {
-    // Schema.Types.ObjectIdのコンストラクタは文字列を受け取れる
-    return new Schema.Types.ObjectId(strValue);
+    // Types.ObjectIdのコンストラクタは文字列を受け取れる
+    return new Types.ObjectId(strValue);
   } catch (e) {
     return null;
   }

@@ -1,5 +1,5 @@
 import Crowi from 'src/crowi'
-import { DeleteWriteOpResultObject } from 'mongodb'
+import { DeleteResult } from 'mongodb'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import Debug from 'debug'
 import ActivityDefine from 'src/util/activityDefine'
@@ -21,10 +21,10 @@ export interface ActivityModel extends Model<ActivityDocument> {
   createByParameters(parameters: any): Promise<ActivityDocument>
   removeByParameters(parameters: any): any
   createByPageComment(comment: any): Promise<ActivityDocument>
-  removeByPageCommentDelete(comment: any): Promise<DeleteWriteOpResultObject['result']>
+  removeByPageCommentDelete(comment: any): Promise<DeleteResult>
   createByPageLike(page: any, user: any): Promise<ActivityDocument>
-  removeByPageUnlike(page: any, user: any): Promise<DeleteWriteOpResultObject['result']>
-  removeByPage(page: any): Promise<DeleteWriteOpResultObject['result']>
+  removeByPageUnlike(page: any, user: any): Promise<DeleteResult>
+  removeByPage(page: any): Promise<DeleteResult>
   findByUser(user: any): Promise<ActivityDocument[]>
   getActionUsersFromActivities(activities: ActivityDocument[]): any[]
 }
@@ -39,21 +39,21 @@ export default (crowi: Crowi) => {
       type: Schema.Types.ObjectId,
       ref: 'User',
       index: true,
-      require: true,
+      required: true,
     },
     targetModel: {
       type: String,
-      require: true,
+      required: true,
       enum: ActivityDefine.getSupportTargetModelNames(),
     },
     target: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.Mixed,
       refPath: 'targetModel',
-      require: true,
+      required: true,
     },
     action: {
       type: String,
-      require: true,
+      required: true,
       enum: ActivityDefine.getSupportActionNames(),
     },
     event: {

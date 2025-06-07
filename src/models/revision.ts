@@ -1,5 +1,5 @@
 import Crowi from 'src/crowi'
-import { DeleteWriteOpResultObject } from 'mongodb'
+import { DeleteResult } from 'mongodb'
 import { Types, Document, Model, Schema, model } from 'mongoose'
 import { PageDocument } from './page'
 // import Debug from 'debug'
@@ -21,7 +21,7 @@ export interface RevisionModel extends Model<RevisionDocument> {
   findRevisionList(path, options): Promise<RevisionDocument[]>
   updateRevisionListByPath(path, updateData): Promise<RevisionDocument>
   prepareRevision(pageData: PageDocument, body, user, options?): RevisionDocument
-  removeRevisionsByPath(path): Promise<DeleteWriteOpResultObject['result']>
+  removeRevisionsByPath(path): Promise<DeleteResult>
   updatePath(pathName): void
   findAuthorsByPage(page): Promise<RevisionDocument['author'][]>
 }

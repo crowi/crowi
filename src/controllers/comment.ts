@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import Crowi from 'src/crowi'
+import { Types } from 'mongoose'
 import ApiResponse from 'src/util/apiResponse'
 import { UserDocument } from 'src/models/user'
 import { getQueryAsObjectId, getQueryAsString } from 'src/types/express'
@@ -26,7 +27,7 @@ export default (crowi: Crowi) => {
     const revisionId = getQueryAsString(req.query.revision_id)
 
     if (revisionId) {
-      return Comment.getCommentsByRevisionId(revisionId)
+      return Comment.getCommentsByRevisionId(new Types.ObjectId(revisionId))
         .then(function (comments) {
           res.json(ApiResponse.success({ comments }))
         })
@@ -74,7 +75,7 @@ export default (crowi: Crowi) => {
 
     try {
       let createdComment = await Comment.create({ page, creator, revision, comment, commentPosition })
-      createdComment = await createdComment.populate('creator').execPopulate()
+      createdComment = await createdComment.populate('creator')
       return res.json(ApiResponse.success({ comment: createdComment }))
     } catch (err) {
       return res.json(ApiResponse.error(err))

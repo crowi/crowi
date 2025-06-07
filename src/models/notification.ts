@@ -45,21 +45,21 @@ export default (crowi: Crowi) => {
       type: Schema.Types.ObjectId,
       ref: 'User',
       index: true,
-      require: true,
+      required: true,
     },
     targetModel: {
       type: String,
-      require: true,
+      required: true,
       enum: ActivityDefine.getSupportTargetModelNames(),
     },
     target: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.Mixed,
       refPath: 'targetModel',
-      require: true,
+      required: true,
     },
     action: {
       type: String,
-      require: true,
+      required: true,
       enum: ActivityDefine.getSupportActionNames(),
     },
     activities: [
@@ -73,7 +73,7 @@ export default (crowi: Crowi) => {
       default: STATUS_UNREAD,
       enum: STATUSES,
       index: true,
-      require: true,
+      required: true,
     },
     createdAt: {
       type: Date,
