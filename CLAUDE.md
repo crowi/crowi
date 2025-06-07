@@ -85,3 +85,7 @@ Key environment variables (see `.env.sample`):
 - Test files located alongside source files (`*.test.ts`)
 - MongoDB Memory Server for database tests
 - Supertest for API endpoint testing
+
+## Debugging Memories
+
+- Debug process: When debugging, always run `npm run dev` and carefully check for any errors that might occur during the development server startup
