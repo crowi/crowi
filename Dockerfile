@@ -1,4 +1,4 @@
-FROM node:18-buster-slim as builder
+FROM node:20-bookworm-slim as builder
 
 ENV CROWI_VERSION v1.8.0
 ENV MONGOMS_DOWNLOAD_MIRROR https://downloads.mongodb.org
@@ -19,7 +19,7 @@ RUN rm -rf lib client
 #ENV NODE_ENV ${NODE_ENV}
 #RUN npm prune
 
-FROM node:18-buster-slim
+FROM node:20-bookworm-slim
 
 ARG NODE_ENV="production"
 
