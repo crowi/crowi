@@ -55,11 +55,7 @@ module.exports = {
   // globalTeardown: null,
 
   // A set of global variables that need to be available in all test environments
-  globals: {
-    'ts-jest': {
-      tsConfigFile: 'tsconfig.server.json',
-    },
-  },
+  globals: {},
 
   // An array of directory names to be searched recursively up from the requiring module's location
   // moduleDirectories: [
@@ -70,7 +66,11 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json', 'jsx', 'node'],
 
   // A map from regular expressions to module names that allow to stub out resources with a single module
-  // moduleNameMapper: {},
+  moduleNameMapper: {
+    '^src/(.*)': '<rootDir>/src/$1',
+    '^client/(.*)': '<rootDir>/client/$1',
+    '^common/(.*)': '<rootDir>/common/$1'
+  },
 
   // An array of regexp pattern strings, matched against all module paths before considered 'visible' to the module loader
   // modulePathIgnorePatterns: [],
@@ -125,7 +125,7 @@ module.exports = {
   // runner: "jest-runner",
 
   // The paths to modules that run some code to configure or set up the testing environment before each test
-  setupFiles: ['./node_modules/regenerator-runtime/runtime'],
+  setupFiles: ['regenerator-runtime/runtime'],
 
   // The path to a module that runs some code to configure or set up the testing framework before each test
   // setupTestFrameworkScriptFile: null,
@@ -135,6 +135,8 @@ module.exports = {
 
   // The test environment that will be used for testing
   // testEnvironment: "jest-environment-jsdom",
+  
+  extensionsToTreatAsEsm: ['.ts'],
 
   // Options that will be passed to the testEnvironment
   // testEnvironmentOptions: {},
@@ -170,8 +172,9 @@ module.exports = {
 
   // A map from regular expressions to paths to transformers
   transform: {
-    '/src/': 'ts-jest',
-    '/test/': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: 'tsconfig.json'
+    }],
   },
 
   // An array of regexp pattern strings that are matched against all source file paths, matched files will skip transformation
