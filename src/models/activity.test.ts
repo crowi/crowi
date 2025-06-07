@@ -22,8 +22,8 @@ describe('Activity', function () {
   describe('.createByParameters', function () {
     describe('correct parameters', function () {
       it('should create', function () {
-        const userId = ObjectId();
-        const targetId = ObjectId();
+        const userId = new ObjectId();
+        const targetId = new ObjectId();
 
         const parameters = {
           user: userId,
@@ -48,8 +48,8 @@ describe('Activity', function () {
 
     describe('invalid parameters', function () {
       it('should not create', function () {
-        const userId = ObjectId();
-        const targetId = ObjectId();
+        const userId = new ObjectId();
+        const targetId = new ObjectId();
 
         const parameters = {
           user: userId,
@@ -65,8 +65,8 @@ describe('Activity', function () {
 
   describe('.removeByParameters', () => {
     describe('correct parameters', () => {
-      const user = ObjectId();
-      const target = ObjectId();
+      const user = new ObjectId();
+      const target = new ObjectId();
       const parameters = { user, targetModel: 'Page', target, action: 'COMMENT' };
 
       beforeAll(async () => {
@@ -74,15 +74,15 @@ describe('Activity', function () {
       });
 
       it('should remove', async () => {
-        const { n } = await Activity.removeByParameters(parameters);
-        expect(n).toBe(1);
+        const { deletedCount } = await Activity.removeByParameters(parameters);
+        expect(deletedCount).toBe(1);
       });
     });
   });
 
   describe('Target users', () => {
-    const userIds = [ObjectId(), ObjectId(), ObjectId()];
-    const pageId = ObjectId();
+    const userIds = [new ObjectId(), new ObjectId(), new ObjectId()];
+    const pageId = new ObjectId();
 
     beforeAll(async () => {
       await Promise.all([User, Page, Comment, Watcher, Activity].map((model) => model.deleteMany({})));
@@ -104,7 +104,8 @@ describe('Activity', function () {
 
     describe('Action User and Suspended User', () => {
       let notificationUsers;
-      beforeAll(async () => {
+      beforeEach(async () => {
+        await Activity.deleteMany({});
         const activity = await Activity.createByParameters({ user: userIds[0], target: pageId, targetModel: 'Page', action: 'COMMENT' });
         notificationUsers = (await activity.getNotificationTargetUsers()).map(String);
       });
@@ -119,7 +120,8 @@ describe('Activity', function () {
     });
 
     describe('Watch', () => {
-      beforeAll(async () => {
+      beforeEach(async () => {
+        await Watcher.deleteMany({});
         await Watcher.watchByPageId(userIds[1], pageId, Watcher.STATUS_WATCH);
       });
 
@@ -132,7 +134,8 @@ describe('Activity', function () {
     });
 
     describe('Ignore', () => {
-      beforeAll(async () => {
+      beforeEach(async () => {
+        await Watcher.deleteMany({});
         await Watcher.watchByPageId(userIds[1], pageId, Watcher.STATUS_IGNORE);
       });
 

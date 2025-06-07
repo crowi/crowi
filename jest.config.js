@@ -82,19 +82,47 @@ module.exports = {
   // notifyMode: "always",
 
   // A preset that is used as a base for Jest's configuration
-  preset: 'ts-jest',
+  // preset: 'ts-jest',
 
   // Run tests from one or more projects
   projects: [
     {
       displayName: 'common',
+      preset: 'ts-jest',
       testMatch: ['<rootDir>/common/**/*.test.ts'],
+      moduleNameMapper: {
+        '^src/(.*)': '<rootDir>/src/$1',
+        '^client/(.*)': '<rootDir>/client/$1',
+        '^common/(.*)': '<rootDir>/common/$1',
+      },
+      transform: {
+        '^.+\\.tsx?$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+          },
+        ],
+      },
     },
     {
       displayName: 'server',
+      preset: 'ts-jest',
       testEnvironment: './src/test/crowi-environment.js',
       setupFilesAfterEnv: ['./src/test/setup.ts'],
       testMatch: ['<rootDir>/src/**/*.test.ts'],
+      moduleNameMapper: {
+        '^src/(.*)': '<rootDir>/src/$1',
+        '^client/(.*)': '<rootDir>/client/$1',
+        '^common/(.*)': '<rootDir>/common/$1',
+      },
+      transform: {
+        '^.+\\.tsx?$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+          },
+        ],
+      },
     },
   ],
 
@@ -171,19 +199,17 @@ module.exports = {
   // timers: "real",
 
   // A map from regular expressions to paths to transformers
-  transform: {
-    '^.+\\.tsx?$': [
-      'ts-jest',
-      {
-        tsconfig: 'tsconfig.json',
-      },
-    ],
-  },
+  // transform: {
+  //   '^.+\\.tsx?$': [
+  //     'ts-jest',
+  //     {
+  //       tsconfig: 'tsconfig.json',
+  //     },
+  //   ],
+  // },
 
   // An array of regexp pattern strings that are matched against all source file paths, matched files will skip transformation
-  // transformIgnorePatterns: [
-  //   "/node_modules/"
-  // ],
+  transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$))'],
 
   // An array of regexp pattern strings that are matched against all modules before the module loader will automatically return a mock for them
   // unmockedModulePathPatterns: undefined,

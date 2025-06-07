@@ -100,5 +100,9 @@ export default (crowi: Crowi) => {
 
   const Watcher = model<WatcherDocument, WatcherModel>('Watcher', watcherSchema);
 
+  // Set static properties on the model instance as well
+  (Watcher as any).STATUS_WATCH = STATUS_WATCH;
+  (Watcher as any).STATUS_IGNORE = STATUS_IGNORE;
+
   return Watcher;
 };

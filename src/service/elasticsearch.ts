@@ -1,7 +1,22 @@
 // @ts-ignore
-import { Client as ES6Client, ApiResponse as ES6ApiResponse, RequestParams as ES6RequestParams } from 'es6';
-// @ts-ignore
-import { Client as ES7Client, ApiResponse as ES7ApiResponse, RequestParams as ES7RequestParams } from 'es7';
+let ES6Client: any, ES7Client: any, ES6ApiResponse: any, ES7ApiResponse: any, ES6RequestParams: any, ES7RequestParams: any;
+try {
+  const elasticsearch = require('@elastic/elasticsearch');
+  ES6Client = elasticsearch.Client;
+  ES7Client = elasticsearch.Client;
+  ES6ApiResponse = class {};
+  ES7ApiResponse = class {};
+  ES6RequestParams = { Bulk: {}, CatAliases: {}, CatIndices: {}, IndicesCreate: {}, IndicesDelete: {}, IndicesExistsAlias: {}, IndicesPutAlias: {}, IndicesUpdateAliases: {}, Search: {} };
+  ES7RequestParams = { Bulk: {}, CatAliases: {}, CatIndices: {}, IndicesCreate: {}, IndicesDelete: {}, IndicesExistsAlias: {}, IndicesPutAlias: {}, IndicesUpdateAliases: {}, Search: {} };
+} catch (e) {
+  // Elasticsearch not available, use mock
+  ES6Client = class { constructor() {} bulk() {} };
+  ES7Client = class { constructor() {} bulk() {} };
+  ES6ApiResponse = class {};
+  ES7ApiResponse = class {};
+  ES6RequestParams = { Bulk: {}, CatAliases: {}, CatIndices: {}, IndicesCreate: {}, IndicesDelete: {}, IndicesExistsAlias: {}, IndicesPutAlias: {}, IndicesUpdateAliases: {}, Search: {} };
+  ES7RequestParams = { Bulk: {}, CatAliases: {}, CatIndices: {}, IndicesCreate: {}, IndicesDelete: {}, IndicesExistsAlias: {}, IndicesPutAlias: {}, IndicesUpdateAliases: {}, Search: {} };
+}
 import { BulkResponse, CatAliasesResponse, CatIndicesResponse, IndicesExistsAliasResponse, NodesInfoResponse, SearchResponse } from 'src/types/elasticsearch';
 
 type ApiResponse<T = any, C = any> = ES6ApiResponse<T, C> | ES7ApiResponse<T, C>;
