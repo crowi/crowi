@@ -7,8 +7,12 @@ try {
   ES7Client = elasticsearch.Client;
 } catch (e) {
   // Elasticsearch not available, use mock
-  ES6Client = class { constructor() {} };
-  ES7Client = class { constructor() {} };
+  ES6Client = class {
+    constructor() {}
+  };
+  ES7Client = class {
+    constructor() {}
+  };
 }
 import Debug from 'debug';
 import { format } from 'date-fns';
@@ -23,7 +27,9 @@ let ElasticsearchClient: any;
 try {
   ElasticsearchClient = require('src/service/elasticsearch').default;
 } catch (e) {
-  ElasticsearchClient = class { constructor() {} };
+  ElasticsearchClient = class {
+    constructor() {}
+  };
 }
 
 const debug = Debug('crowi:lib:search');

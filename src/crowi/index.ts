@@ -250,6 +250,9 @@ class Crowi {
     // mongoUri = mongodb://user:password@host/dbname
     mongoose.Promise = global.Promise;
 
+    // Set strictQuery to true for schema consistency and query safety
+    mongoose.set('strictQuery', true);
+
     const mongoUri =
       this.env.MONGOLAB_URI || // for B.C.
       this.env.MONGODB_URI || // MONGOLAB changes their env name
