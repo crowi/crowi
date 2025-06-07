@@ -69,7 +69,7 @@ module.exports = {
   moduleNameMapper: {
     '^src/(.*)': '<rootDir>/src/$1',
     '^client/(.*)': '<rootDir>/client/$1',
-    '^common/(.*)': '<rootDir>/common/$1'
+    '^common/(.*)': '<rootDir>/common/$1',
   },
 
   // An array of regexp pattern strings, matched against all module paths before considered 'visible' to the module loader
@@ -135,7 +135,7 @@ module.exports = {
 
   // The test environment that will be used for testing
   // testEnvironment: "jest-environment-jsdom",
-  
+
   // extensionsToTreatAsEsm: ['.ts'],
 
   // Options that will be passed to the testEnvironment
@@ -172,9 +172,12 @@ module.exports = {
 
   // A map from regular expressions to paths to transformers
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: 'tsconfig.json'
-    }],
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        tsconfig: 'tsconfig.json',
+      },
+    ],
   },
 
   // An array of regexp pattern strings that are matched against all source file paths, matched files will skip transformation

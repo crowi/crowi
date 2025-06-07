@@ -131,7 +131,7 @@ export default class ConfigService {
       try {
         this.pubSub.publisher = createClient(redisOpts)
         this.pubSub.subscriber = createClient(redisOpts)
-        
+
         await this.pubSub.publisher.connect()
         await this.pubSub.subscriber.connect()
 
@@ -155,7 +155,7 @@ export default class ConfigService {
 
           await subscriber.subscribe(pubSub.channel)
         }
-        
+
         debug('Redis pub/sub setup completed')
       } catch (error) {
         debug('Failed to setup Redis pub/sub:', (error as Error).message)

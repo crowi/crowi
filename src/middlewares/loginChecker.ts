@@ -13,7 +13,9 @@ export default (crowi: Crowi, app: Express) => {
 
     // session に user object が入ってる
     if (req.session?.user && '_id' in req.session.user) {
-      User.findById(req.session.user._id).select('+password +apiToken').exec()
+      User.findById(req.session.user._id)
+        .select('+password +apiToken')
+        .exec()
         .then((userData: any) => {
           req.user = req.session.user = userData
           res.locals.user = req.user

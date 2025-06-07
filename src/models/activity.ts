@@ -211,11 +211,10 @@ export default (crowi: Crowi) => {
   activitySchema.post('save', (savedActivity: ActivityDocument) => {
     const Notification = crowi.model('Notification')
 
-    savedActivity.getNotificationTargetUsers()
+    savedActivity
+      .getNotificationTargetUsers()
       .then((notificationUsers) => {
-        return Promise.all(notificationUsers.map((user) =>
-          Notification.upsertByActivity(user, savedActivity)
-        ))
+        return Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)))
       })
       .catch((err) => {
         debug(err)
