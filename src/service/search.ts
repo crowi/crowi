@@ -1,8 +1,15 @@
 import path from 'path';
 // @ts-ignore
-import { Client as ES6Client } from 'es6';
-// @ts-ignore
-import { Client as ES7Client } from 'es7';
+let ES6Client: any, ES7Client: any;
+try {
+  const elasticsearch = require('@elastic/elasticsearch');
+  ES6Client = elasticsearch.Client;
+  ES7Client = elasticsearch.Client;
+} catch (e) {
+  // Elasticsearch not available, use mock
+  ES6Client = class { constructor() {} };
+  ES7Client = class { constructor() {} };
+}
 import Debug from 'debug';
 import { format } from 'date-fns';
 import fs from 'fs';
@@ -11,7 +18,13 @@ import Crowi from 'src/crowi';
 import { Query, SearchWithBody, FunctionScoreQueryParams } from 'src/util/elasticsearch/query';
 import { parseQuery } from 'src/service/query';
 import { TYPES } from 'src/models/page';
-import ElasticsearchClient from 'src/service/elasticsearch';
+// @ts-ignore
+let ElasticsearchClient: any;
+try {
+  ElasticsearchClient = require('src/service/elasticsearch').default;
+} catch (e) {
+  ElasticsearchClient = class { constructor() {} };
+}
 
 const debug = Debug('crowi:lib:search');
 
@@ -55,7 +68,7 @@ export default class Search {
   node: string;
   indexNames: { base: string; current: string };
   requestTimeout: number;
-  client: ElasticsearchClient;
+  client: any;
 
   constructor(crowi: Crowi, esUri: string) {
     this.esUri = esUri;

@@ -13,10 +13,10 @@ describe('Notification', function () {
   describe('.upsertByActivity', function () {
     describe('valid parameters', function () {
       it('should create', async function () {
-        const userId1 = ObjectId();
-        const userId2 = ObjectId();
-        const targetId = ObjectId();
-        const activity = { _id: ObjectId(), user: userId1, targetModel: 'Page', target: targetId, action: 'COMMENT' };
+        const userId1 = new ObjectId();
+        const userId2 = new ObjectId();
+        const targetId = new ObjectId();
+        const activity = { _id: new ObjectId(), user: userId1, targetModel: 'Page', target: targetId, action: 'COMMENT' };
         return Notification.upsertByActivity(userId2, activity)
           .then(function (notification) {
             expect(notification.user.toString()).toBe(userId2.toString());
@@ -34,11 +34,11 @@ describe('Notification', function () {
 
     describe('invalid parameters', function () {
       it('should create', function () {
-        const user = ObjectId();
+        const user = new ObjectId();
         const activity = {
-          user: ObjectId(),
+          user: new ObjectId(),
           targetModel: 'Page2', // invalid
-          target: ObjectId(),
+          target: new ObjectId(),
           action: 'COMMENT',
         };
 
@@ -47,24 +47,24 @@ describe('Notification', function () {
     });
 
     describe('A week later', () => {
-      const user = ObjectId();
-      const target = ObjectId();
+      const user = new ObjectId();
+      const target = new ObjectId();
 
       beforeEach(async () => {
         await Notification.deleteMany({});
-        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' };
+        const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target, action: 'COMMENT' };
         await Notification.upsertByActivity(user, activity, new Date(2018, 10, 10).getTime());
       });
 
       it('is 1', async () => {
-        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' };
+        const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target, action: 'COMMENT' };
         await Notification.upsertByActivity(user, activity, new Date(2018, 10, 16).getTime());
         const count = await Notification.countDocuments({});
         expect(count).toBe(1);
       });
 
       it('is 2', async () => {
-        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target, action: 'COMMENT' };
+        const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target, action: 'COMMENT' };
         await Notification.upsertByActivity(user, activity, new Date(2018, 10, 17).getTime());
         const count = await Notification.countDocuments({});
         expect(count).toBe(2);
@@ -74,31 +74,31 @@ describe('Notification', function () {
 
   describe('.read', () => {
     describe('read', () => {
-      const user = ObjectId();
+      const user = new ObjectId();
       let notificationId;
 
       beforeAll(async () => {
         await Notification.deleteMany({});
-        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' };
+        const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target: new ObjectId(), action: 'COMMENT' };
         const notification = await Notification.upsertByActivity(user, activity);
         notificationId = notification._id;
       });
 
       it('status is changed correctly', async () => {
         const result = await Notification.read(user);
-        expect(result).toEqual({ n: 1, nModified: 1, ok: 1 });
+        expect(result).toEqual({ acknowledged: true, matchedCount: 1, modifiedCount: 1, upsertedCount: 0, upsertedId: null });
       });
     });
   });
 
   describe('.open', () => {
     describe('open', () => {
-      const user = ObjectId();
+      const user = new ObjectId();
       let notificationId;
 
       beforeAll(async () => {
         await Notification.deleteMany({});
-        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' };
+        const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target: new ObjectId(), action: 'COMMENT' };
         const notification = await Notification.upsertByActivity(user, activity);
         notificationId = notification._id;
       });
@@ -111,7 +111,7 @@ describe('Notification', function () {
   });
 
   describe('.getUnreadCountByUser', () => {
-    const user = ObjectId();
+    const user = new ObjectId();
 
     describe('initially', () => {
       beforeAll(async () => {
@@ -126,7 +126,7 @@ describe('Notification', function () {
 
     describe('after created', () => {
       beforeAll(async () => {
-        const activity = { _id: ObjectId(), user: ObjectId(), targetModel: 'Page', target: ObjectId(), action: 'COMMENT' };
+        const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target: new ObjectId(), action: 'COMMENT' };
         await Notification.upsertByActivity(user, activity);
       });
 

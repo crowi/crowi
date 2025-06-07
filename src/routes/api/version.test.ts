@@ -4,7 +4,7 @@ import { app } from 'src/test/setup';
 describe('Routes /_api/versions test', () => {
   describe('/_api/versions.get', () => {
     it('should returns crowi version', () => {
-      return new Promise((resolve) => {
+      return new Promise<void>((resolve) => {
         request(app)
           .get('/_api/versions.get')
           .expect('Content-Type', /json/)

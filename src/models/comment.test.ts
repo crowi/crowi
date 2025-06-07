@@ -56,7 +56,7 @@ describe('Comment', () => {
         const createdCommentBody = createdComment.comment;
         expect(createdCommentBody).toBe('これがテスト用のコメント');
       } catch (err) {
-        throw new Error(err);
+        throw new Error(err as string);
       }
     });
   });
@@ -70,7 +70,7 @@ describe('Comment', () => {
         comments = await Comment.countCommentByPageId(createdComment.page.id);
         expect(comments).toStrictEqual(0);
       } catch (err) {
-        throw new Error(err);
+        throw new Error(err as string);
       }
     });
   });
