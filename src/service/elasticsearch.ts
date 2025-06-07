@@ -6,16 +6,62 @@ try {
   ES7Client = elasticsearch.Client;
   ES6ApiResponse = class {};
   ES7ApiResponse = class {};
-  ES6RequestParams = { Bulk: {}, CatAliases: {}, CatIndices: {}, IndicesCreate: {}, IndicesDelete: {}, IndicesExistsAlias: {}, IndicesPutAlias: {}, IndicesUpdateAliases: {}, Search: {} };
-  ES7RequestParams = { Bulk: {}, CatAliases: {}, CatIndices: {}, IndicesCreate: {}, IndicesDelete: {}, IndicesExistsAlias: {}, IndicesPutAlias: {}, IndicesUpdateAliases: {}, Search: {} };
+  ES6RequestParams = {
+    Bulk: {},
+    CatAliases: {},
+    CatIndices: {},
+    IndicesCreate: {},
+    IndicesDelete: {},
+    IndicesExistsAlias: {},
+    IndicesPutAlias: {},
+    IndicesUpdateAliases: {},
+    Search: {},
+  };
+  ES7RequestParams = {
+    Bulk: {},
+    CatAliases: {},
+    CatIndices: {},
+    IndicesCreate: {},
+    IndicesDelete: {},
+    IndicesExistsAlias: {},
+    IndicesPutAlias: {},
+    IndicesUpdateAliases: {},
+    Search: {},
+  };
 } catch (e) {
   // Elasticsearch not available, use mock
-  ES6Client = class { constructor() {} bulk() {} };
-  ES7Client = class { constructor() {} bulk() {} };
+  ES6Client = class {
+    constructor() {}
+    bulk() {}
+  };
+  ES7Client = class {
+    constructor() {}
+    bulk() {}
+  };
   ES6ApiResponse = class {};
   ES7ApiResponse = class {};
-  ES6RequestParams = { Bulk: {}, CatAliases: {}, CatIndices: {}, IndicesCreate: {}, IndicesDelete: {}, IndicesExistsAlias: {}, IndicesPutAlias: {}, IndicesUpdateAliases: {}, Search: {} };
-  ES7RequestParams = { Bulk: {}, CatAliases: {}, CatIndices: {}, IndicesCreate: {}, IndicesDelete: {}, IndicesExistsAlias: {}, IndicesPutAlias: {}, IndicesUpdateAliases: {}, Search: {} };
+  ES6RequestParams = {
+    Bulk: {},
+    CatAliases: {},
+    CatIndices: {},
+    IndicesCreate: {},
+    IndicesDelete: {},
+    IndicesExistsAlias: {},
+    IndicesPutAlias: {},
+    IndicesUpdateAliases: {},
+    Search: {},
+  };
+  ES7RequestParams = {
+    Bulk: {},
+    CatAliases: {},
+    CatIndices: {},
+    IndicesCreate: {},
+    IndicesDelete: {},
+    IndicesExistsAlias: {},
+    IndicesPutAlias: {},
+    IndicesUpdateAliases: {},
+    Search: {},
+  };
 }
 import { BulkResponse, CatAliasesResponse, CatIndicesResponse, IndicesExistsAliasResponse, NodesInfoResponse, SearchResponse } from 'src/types/elasticsearch';
 
