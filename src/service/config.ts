@@ -17,8 +17,8 @@ export default class ConfigService {
 
   pubSub: {
     id: string
-    publisher: redis.RedisClient | null
-    subscriber: redis.RedisClient | null
+    publisher: any
+    subscriber: any
     channel: string
   }
 
@@ -36,7 +36,7 @@ export default class ConfigService {
       channel: 'config',
     }
 
-    this.setupPubSub()
+    // setupPubSub will be called from Crowi.setupConfig()
 
     this.event.on('config:updated', this.postUpdate.bind(this))
   }
@@ -72,11 +72,11 @@ export default class ConfigService {
     return this.config || {}
   }
 
-  notifyUpdated() {
+  async notifyUpdated() {
     // To notify config updated to another srever, publish event via pubsub.
     const { publisher, channel, id } = this.pubSub
     if (publisher) {
-      publisher.publish(channel, JSON.stringify({ id }))
+      await publisher.publish(channel, JSON.stringify({ id }))
     }
 
     // To notify config updated to the server itself, emit the event
@@ -120,12 +120,15 @@ export default class ConfigService {
     this.notifyUpdated()
   }
 
-  setupPubSub() {
+  async setupPubSub() {
     const { redisOpts } = this.crowi
 
     if (redisOpts) {
       this.pubSub.publisher = redis.createClient(redisOpts)
       this.pubSub.subscriber = redis.createClient(redisOpts)
+      
+      await this.pubSub.publisher.connect()
+      await this.pubSub.subscriber.connect()
 
       const { pubSub } = this
       const { subscriber } = pubSub
@@ -145,7 +148,7 @@ export default class ConfigService {
           debug(`Config updated by ${id}`)
         })
 
-        subscriber.subscribe(pubSub.channel)
+        await subscriber.subscribe(pubSub.channel)
       }
     }
   }
