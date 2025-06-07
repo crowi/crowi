@@ -93,7 +93,7 @@ class Crowi {
 
   port: number
 
-  redis: redis.RedisClient | null = null
+  redis: any = null
 
   redisUrl: string | null
 
@@ -271,6 +271,7 @@ class Crowi {
   async setupRedisClient() {
     if (this.redisOpts) {
       const redisClient = redis.createClient(this.redisOpts)
+      await redisClient.connect()
       this.redis = redisClient
     }
   }
@@ -286,11 +287,11 @@ class Crowi {
         httpOnly: true,
         maxAge: sessionAge,
       },
-      store: undefined,
+      store: undefined as any,
     }
 
     if (this.redis) {
-      const RedisStore = connectRedis(session)
+      const RedisStore = connectRedis
       sessionConfig.store = new RedisStore({
         prefix: 'crowi:sess:',
         client: this.redis,
@@ -336,6 +337,7 @@ class Crowi {
 
   async setupConfig() {
     this.config = new ConfigService(this)
+    await this.config.setupPubSub()
 
     return this.config.load()
   }

@@ -1,12 +1,12 @@
 import Crowi from 'src/crowi'
-import { RedisClient } from 'redis'
+import { RedisClientType } from 'redis'
 
 export default class LRU {
   crowi: Crowi
 
   max: number
 
-  client: RedisClient | null
+  client: any
 
   constructor(crowi: Crowi) {
     this.crowi = crowi
@@ -18,16 +18,11 @@ export default class LRU {
     }
   }
 
-  removeByRange(namespace, max) {
+  async removeByRange(namespace, max) {
     const { client } = this
 
     if (client) {
-      return new Promise((resolve, reject) => {
-        client.zremrangebyrank(namespace, 0, max, (err, response) => {
-          if (err) reject(err)
-          resolve(response)
-        })
-      })
+      return await client.zRemRangeByRank(namespace, 0, max)
     }
   }
 
@@ -36,25 +31,15 @@ export default class LRU {
 
     if (client) {
       await this.removeByRange(namespace, -this.max - 1)
-      return new Promise((resolve, reject) => {
-        client.zadd(namespace, Date.now(), key, (err, response) => {
-          if (err) reject(err)
-          resolve(response)
-        })
-      })
+      return await client.zAdd(namespace, { score: Date.now(), value: key })
     }
   }
 
-  range(namespace, limit = 0) {
+  async range(namespace, limit = 0) {
     const { client } = this
 
     if (client) {
-      return new Promise((resolve, reject) => {
-        client.zrevrange(namespace, 0, limit - 1, (err, response) => {
-          if (err) reject(err)
-          resolve(response)
-        })
-      })
+      return await client.zRange(namespace, 0, limit - 1, { REV: true })
     }
   }
 
