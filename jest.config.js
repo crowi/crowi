@@ -136,7 +136,7 @@ module.exports = {
   // The test environment that will be used for testing
   // testEnvironment: "jest-environment-jsdom",
   
-  extensionsToTreatAsEsm: ['.ts'],
+  // extensionsToTreatAsEsm: ['.ts'],
 
   // Options that will be passed to the testEnvironment
   // testEnvironmentOptions: {},

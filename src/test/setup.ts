@@ -1,17 +1,17 @@
 import Crowi from 'src/crowi'
 import { Express } from 'express'
 
-export let crowi: Crowi
-export let app: Express
+export let crowi: Crowi;
+export let app: Express;
 
 // @ts-ignore
-export const ROOT_DIR = global.ROOT_DIR as string
+export const ROOT_DIR = global.ROOT_DIR as string;
 // @ts-ignore
-export const MODEL_DIR = global.MODEL_DIR as string
+export const MODEL_DIR = global.MODEL_DIR as string;
 // @ts-ignore
-export const MONGO_URI = global.MONGO_URI as string
+export const MONGO_URI = global.MONGO_URI as string;
 // @ts-ignore
-export const MONGO_DB_NAME = global.MONGO_DB_NAME as string
+export const MONGO_DB_NAME = global.MONGO_DB_NAME as string;
 
 beforeAll(async () => {
   crowi = new Crowi(ROOT_DIR, {
@@ -19,22 +19,22 @@ beforeAll(async () => {
     MONGO_URI: MONGO_URI,
     BASE_URL: 'http://localhost:13001',
     ...process.env,
-  })
-  await crowi.init()
-  app = crowi.getApp()
-})
+  });
+  await crowi.init();
+  app = crowi.getApp();
+});
 
 afterAll(async () => {
-  await crowi.getMongo().disconnect()
-})
+  await crowi.getMongo().disconnect();
+});
 
 export const Fixture = {
   async generate(model, fixture) {
-    const conn = crowi.getMongo().connection
+    const conn = crowi.getMongo().connection;
     if (conn.readyState === 0) {
-      throw new Error()
+      throw new Error();
     }
-    const Model = conn.model(model)
-    return Promise.all(fixture.map((entity) => new Model(entity).save()))
+    const Model = conn.model(model);
+    return Promise.all(fixture.map((entity) => new Model(entity).save()));
   },
-}
+};
