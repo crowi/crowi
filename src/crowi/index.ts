@@ -259,10 +259,7 @@ class Crowi {
 
     return new Promise((resolve, reject) => {
       const mongooseOptions = {
-        useNewUrlParser: true,
-        useFindAndModify: false,
-        useCreateIndex: true,
-        useUnifiedTopology: true,
+        // Mongoose 6+ removes these deprecated options
       }
       mongoose.connect(mongoUri, mongooseOptions, (e) => {
         if (e) {

@@ -123,7 +123,7 @@ export default (crowi: Crowi) => {
     },
     status: { type: Number, required: true, default: STATUS_ACTIVE, index: true },
     createdAt: { type: Date, default: Date.now },
-    admin: { type: Boolean, default: 0, index: true },
+    admin: { type: Boolean, default: false, index: true },
   })
   userSchema.plugin(mongoosePaginate)
 

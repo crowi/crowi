@@ -2,6 +2,7 @@ import { Express, Request, Response } from 'express'
 import Crowi from 'src/crowi'
 import Debug from 'debug'
 import fs from 'fs'
+import { Types } from 'mongoose'
 import FileUploader from 'src/util/fileUploader'
 import ApiResponse from 'src/util/apiResponse'
 import { UserDocument } from 'src/models/user'
@@ -70,7 +71,7 @@ export default (crowi: Crowi, app: Express) => {
       return res.json(ApiResponse.error('Parameters page_id is required.'))
     }
 
-    Attachment.getListByPageId(id).then(function (attachments) {
+    Attachment.getListByPageId(new Types.ObjectId(id as string)).then(function (attachments) {
       const config = crowi.getConfig()
       const baseUrl = config.crowi['app:url'] || ''
       return res.json(

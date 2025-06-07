@@ -402,7 +402,6 @@ export default (crowi: Crowi) => {
         { path: 'creator', model: 'User' },
         { path: 'revision', model: 'Revision', populate: { path: 'author', model: 'User' } },
       ])
-      .execPopulate()
   }
 
   pageSchema.statics.populatePagesRevision = async function (pages, revisions) {
