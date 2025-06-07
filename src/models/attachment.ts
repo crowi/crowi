@@ -14,6 +14,7 @@ export interface AttachmentDocument extends Document {
   fileFormat: string;
   fileSize: number;
   createdAt: Date;
+  updatedAt: Date;
 
   // virtual
   fileUrl: string;
@@ -52,6 +53,7 @@ export default (crowi: Crowi) => {
       fileFormat: { type: String, required: true },
       fileSize: { type: Number, default: 0 },
       createdAt: { type: Date, default: Date.now },
+      updatedAt: { type: Date, default: Date.now },
     },
     {
       toJSON: {
