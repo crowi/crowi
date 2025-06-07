@@ -205,7 +205,7 @@ class Crowi {
     if (redisUrl) {
       const { hostname: host, port, auth, protocol } = url.parse(redisUrl)
       const password = auth ? { password: auth.split(':')[1] } : {}
-      
+
       // Convert port to number for Redis v4 compatibility
       const portNumber = port ? parseInt(port, 10) : 6379
 
@@ -215,12 +215,12 @@ class Crowi {
       const socketConfig = {
         host,
         port: portNumber,
-        ...(tls && { tls })
+        ...(tls && { tls }),
       }
 
       return {
         socket: socketConfig,
-        ...password
+        ...password,
       }
     }
 

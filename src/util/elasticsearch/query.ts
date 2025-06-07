@@ -106,7 +106,7 @@ export const createFunctionScoreQuery = <T extends SearchWithBody>(params: { que
     },
   }
 
-  return merge(query, functionScoreBody);
+  return merge(query, functionScoreBody)
 }
 
 export const convertToFunctionScoreQuery = <T extends SearchWithBody>(query: T, params: FunctionScoreQueryParams) => {
@@ -202,10 +202,10 @@ export type FilterPagesByTypeFunction<T extends Search, U extends FilterPagesByT
   ? R extends 'portal'
     ? typeof filterPortalPages
     : R extends 'public'
-    ? typeof filterPublicPages
-    : R extends 'user'
-    ? typeof filterUserPages
-    : T
+      ? typeof filterPublicPages
+      : R extends 'user'
+        ? typeof filterUserPages
+        : T
   : never
 
 export type FilterPagesByTypeResponse<T extends Search, U extends FilterPagesByTypeParams> = T & ReturnType<FilterPagesByTypeFunction<T, U>>

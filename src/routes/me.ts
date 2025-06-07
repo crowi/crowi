@@ -22,6 +22,5 @@ export default (crowi: Crowi, app: Express, form) => {
   router.post('/me/auth/github', Me.authGitHub)
   router.get('/me/auth/github/callback', Me.authGitHubCallback)
 
-
   return router
 }

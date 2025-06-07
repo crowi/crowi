@@ -396,12 +396,11 @@ export default (crowi: Crowi) => {
     pageData.likerCount = pageData.liker.length || 0
     pageData.seenUsersCount = pageData.seenUsers.length || 0
 
-    return pageData
-      .populate([
-        { path: 'lastUpdateUser', model: 'User' },
-        { path: 'creator', model: 'User' },
-        { path: 'revision', model: 'Revision', populate: { path: 'author', model: 'User' } },
-      ])
+    return pageData.populate([
+      { path: 'lastUpdateUser', model: 'User' },
+      { path: 'creator', model: 'User' },
+      { path: 'revision', model: 'Revision', populate: { path: 'author', model: 'User' } },
+    ])
   }
 
   pageSchema.statics.populatePagesRevision = async function (pages, revisions) {
@@ -688,7 +687,7 @@ export default (crowi: Crowi) => {
     const query: any = {
       _id: { $in: ids },
       redirectTo: null,
-    };
+    }
 
     return Page.find(query)
       .populate([
@@ -787,7 +786,7 @@ export default (crowi: Crowi) => {
         { grant: GRANT_SPECIFIED, grantedUsers: userData._id },
         { grant: GRANT_OWNER, grantedUsers: userData._id },
       ],
-    };
+    }
     const q = Page.find(query)
       .populate({ path: 'revision', populate: { path: 'author', model: 'User' } })
       .and({
@@ -1159,7 +1158,7 @@ export default (crowi: Crowi) => {
   }
 
   pageSchema.statics.allPageCount = function () {
-    const query: any = { redirectTo: null, grant: GRANT_PUBLIC };
+    const query: any = { redirectTo: null, grant: GRANT_PUBLIC }
     return Page.countDocuments(query) // TODO: option にする
   }
 
