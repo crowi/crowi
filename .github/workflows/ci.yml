@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev, dev2]
+  pull_request:
+    branches: [main, dev, dev2]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    env:
+      NODE_ENV: test
+      PASSWORD_SEED: test_password_seed
+      FILE_UPLOAD: none
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type check
+        run: npm run type-check
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build project
+        run: npm run build
+
+  format-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check code formatting
+        run: |
+          npm run format
+          if [ -n "$(git diff --name-only)" ]; then
+            echo "Code is not properly formatted. Please run 'npm run format' and commit the changes."
+            git diff
+            exit 1
+          fi
