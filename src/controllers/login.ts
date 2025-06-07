@@ -1,334 +1,334 @@
-import { Express, Request, Response, NextFunction } from 'express'
-import Crowi from 'src/crowi'
-import Debug from 'debug'
-import async from 'async'
-import url from 'url'
-import { getContinueUrl } from 'src/util/url'
-import auth from 'src/util/auth'
-import GoogleAuth from 'src/util/googleAuth'
-import GitHubAuth from 'src/util/githubAuth'
-import FileUploader from 'src/util/fileUploader'
-import { isDisabledPasswordAuth } from '../models/config'
-import { URL } from 'url'
-import { getQueryAsString } from 'src/types/express'
+import { Express, Request, Response, NextFunction } from 'express';
+import Crowi from 'src/crowi';
+import Debug from 'debug';
+import async from 'async';
+import url from 'url';
+import { getContinueUrl } from 'src/util/url';
+import auth from 'src/util/auth';
+import GoogleAuth from 'src/util/googleAuth';
+import GitHubAuth from 'src/util/githubAuth';
+import FileUploader from 'src/util/fileUploader';
+import { isDisabledPasswordAuth } from '../models/config';
+import { URL } from 'url';
+import { getQueryAsString } from 'src/types/express';
 
 export default (crowi: Crowi, app: Express) => {
-  const debug = Debug('crowi:routes:login')
-  const config = crowi.getConfig()
-  const mailer = crowi.getMailer()
-  const User = crowi.model('User')
-  const Config = crowi.model('Config')
-  const actions = {} as any
-  const isLoggedIn = auth.isLoggedIn
+  const debug = Debug('crowi:routes:login');
+  const config = crowi.getConfig();
+  const mailer = crowi.getMailer();
+  const User = crowi.model('User');
+  const Config = crowi.model('Config');
+  const actions = {} as any;
+  const isLoggedIn = auth.isLoggedIn;
 
   const getSocialSession = function (session) {
-    const { google = {}, github = {} } = session
-    const { id: googleId } = google
-    const { id: githubId } = github
-    const socialId = googleId || githubId
-    const socialEmail = google.email || github.email
-    const socialName = google.name || github.name
-    const socialImage = google.image || github.image
-    const issuerName = googleId ? 'Google' : githubId ? 'GitHub' : ''
+    const { google = {}, github = {} } = session;
+    const { id: googleId } = google;
+    const { id: githubId } = github;
+    const socialId = googleId || githubId;
+    const socialEmail = google.email || github.email;
+    const socialName = google.name || github.name;
+    const socialImage = google.image || github.image;
+    const issuerName = googleId ? 'Google' : githubId ? 'GitHub' : '';
 
-    return { googleId, githubId, socialId, socialEmail, socialName, socialImage, issuerName }
-  }
+    return { googleId, githubId, socialId, socialEmail, socialName, socialImage, issuerName };
+  };
 
   const clearSession = function (req) {
-    req.session.google = {}
-    req.session.github = {}
-    req.session.social = {}
-  }
+    req.session.google = {};
+    req.session.github = {};
+    req.session.social = {};
+  };
 
   const loginSuccess = async function (req: Request, res: Response, userData) {
-    userData = await userData.populateSecrets()
-    req.user = req.session.user = userData
+    userData = await userData.populateSecrets();
+    req.user = req.session.user = userData;
     if (!userData.password) {
-      return res.redirect('/me/password')
+      return res.redirect('/me/password');
     }
 
-    clearSession(req)
+    clearSession(req);
 
-    return res.redirect(getContinueUrl(req))
-  }
+    return res.redirect(getContinueUrl(req));
+  };
 
   const loginFailure = function (req: Request, res: Response) {
-    req.session.auth = {}
-    req.flash('warningMessage', 'Sign in failure.')
+    req.session.auth = {};
+    req.flash('warningMessage', 'Sign in failure.');
 
-    const continueUrl = getContinueUrl(req)
-    const query = continueUrl === '/' ? '' : `?continue=${continueUrl}`
-    const redirectUrl = `/login${query}`
-    return res.redirect(redirectUrl)
-  }
+    const continueUrl = getContinueUrl(req);
+    const query = continueUrl === '/' ? '' : `?continue=${continueUrl}`;
+    const redirectUrl = `/login${query}`;
+    return res.redirect(redirectUrl);
+  };
 
   const connect = async function (req, userData) {
-    const { googleId, githubId } = getSocialSession(req.session)
+    const { googleId, githubId } = getSocialSession(req.session);
 
     try {
       if (googleId) {
-        await userData.updateGoogleId(googleId)
+        await userData.updateGoogleId(googleId);
       } else if (githubId) {
-        await userData.updateGitHubId(githubId)
+        await userData.updateGitHubId(githubId);
       }
     } catch (err) {
-      debug('Failed to connect', err)
+      debug('Failed to connect', err);
     }
-  }
+  };
 
   actions.googleCallback = function (req: Request, res: Response) {
-    debug('Header', req.url, req.headers.referer)
-    const { query } = req
-    const code = getQueryAsString(query.code) || ''
-    const state = getQueryAsString(query.state)
-    const { google = {} } = req.session
-    const { callbackAction: action } = google
+    debug('Header', req.url, req.headers.referer);
+    const { query } = req;
+    const code = getQueryAsString(query.code) || '';
+    const state = getQueryAsString(query.state);
+    const { google = {} } = req.session;
+    const { callbackAction: action } = google;
 
-    let nextAction = '/login'
+    let nextAction = '/login';
     if (action) {
-      const redirectUrl = new URL(action, 'http://placeholder')
-      redirectUrl.searchParams.append('continue', state)
-      nextAction = redirectUrl.pathname + redirectUrl.search
+      const redirectUrl = new URL(action, 'http://placeholder');
+      redirectUrl.searchParams.append('continue', state);
+      nextAction = redirectUrl.pathname + redirectUrl.search;
     }
 
-    debug('googleCallback.nextAction', nextAction)
-    req.session.google = { authCode: code }
-    debug('google auth code', code)
+    debug('googleCallback.nextAction', nextAction);
+    req.session.google = { authCode: code };
+    debug('google auth code', code);
 
-    return res.redirect(nextAction)
-  }
+    return res.redirect(nextAction);
+  };
 
   actions.githubCallback = function (req: Request, res: Response) {
-    debug('Header', req.url, req.headers.referer)
-    const { query } = req
-    const code = getQueryAsString(query.code) || ''
-    const { github = {} } = req.session
-    const { callbackAction: action } = github
+    debug('Header', req.url, req.headers.referer);
+    const { query } = req;
+    const code = getQueryAsString(query.code) || '';
+    const { github = {} } = req.session;
+    const { callbackAction: action } = github;
 
-    let nextAction = '/login'
+    let nextAction = '/login';
     if (action) {
-      const redirectUrl = new URL(action, 'http://placeholder')
+      const redirectUrl = new URL(action, 'http://placeholder');
       // 必要なクエリパラメータを追加
       Object.entries(query).forEach(([key, value]) => {
         if (typeof value === 'string') {
-          redirectUrl.searchParams.append(key, value)
+          redirectUrl.searchParams.append(key, value);
         }
-      })
-      nextAction = redirectUrl.pathname + redirectUrl.search
+      });
+      nextAction = redirectUrl.pathname + redirectUrl.search;
     }
 
-    debug('githubCallback.nextAction', nextAction)
-    req.session.github = { authCode: code }
-    debug('github auth code', code)
+    debug('githubCallback.nextAction', nextAction);
+    req.session.github = { authCode: code };
+    debug('github auth code', code);
 
-    return res.redirect(nextAction)
-  }
+    return res.redirect(nextAction);
+  };
 
   actions.error = function (req: Request, res: Response) {
-    const reason = req.params.reason
-    let reasonMessage = ''
+    const reason = req.params.reason;
+    let reasonMessage = '';
 
     if (reason === 'suspended') {
-      reasonMessage = 'This account is suspended.'
+      reasonMessage = 'This account is suspended.';
     } else if (reason === 'registered') {
-      reasonMessage = 'Wait for approved by administrators.'
+      reasonMessage = 'Wait for approved by administrators.';
     }
 
     return res.status(403).json({
       reason: reason,
       reasonMessage: reasonMessage,
-    })
-  }
+    });
+  };
 
   actions.login = async function (req: Request, res: Response) {
-    debug('Header', req.url, req.headers.referer)
-    const { loginForm } = req.body
+    debug('Header', req.url, req.headers.referer);
+    const { loginForm } = req.body;
 
     if (req.method == 'POST' && req.form.isValid) {
-      let { email } = loginForm
-      const { password } = loginForm
-      const { toConnect } = req.body
-      const { socialEmail } = getSocialSession(req.session)
+      let { email } = loginForm;
+      const { password } = loginForm;
+      const { toConnect } = req.body;
+      const { socialEmail } = getSocialSession(req.session);
 
       if (!toConnect && config.crowi['auth:disablePasswordAuth']) {
-        return loginFailure(req, res)
+        return loginFailure(req, res);
       }
 
-      email = toConnect ? socialEmail : email
+      email = toConnect ? socialEmail : email;
       const userData = await User.findUserByEmailAndPassword(email, password).catch((err) => {
-        debug('on login findUserByEmailAndPassword', err)
-      })
+        debug('on login findUserByEmailAndPassword', err);
+      });
 
       if (userData) {
         if (toConnect) {
-          await connect(req, userData)
+          await connect(req, userData);
         }
-        return loginSuccess(req, res, userData)
+        return loginSuccess(req, res, userData);
       }
 
-      return loginFailure(req, res)
+      return loginFailure(req, res);
     } else {
-      const continueUrl = getContinueUrl(req)
+      const continueUrl = getContinueUrl(req);
 
       if (isLoggedIn(crowi, req)) {
-        return res.redirect('/')
+        return res.redirect('/');
       }
 
       // method GET
       if (req.form) {
-        debug(req.form.errors)
+        debug(req.form.errors);
       }
 
-      const socialSession = getSocialSession(req.session)
-      const { socialId, socialEmail } = socialSession
+      const socialSession = getSocialSession(req.session);
+      const { socialId, socialEmail } = socialSession;
       const targetUser = socialEmail
         ? await User.findUserByEmail(socialEmail).catch((err) => {
-            debug('Failed to findUserByEmail', err)
+            debug('Failed to findUserByEmail', err);
           })
-        : null
-      const toConnect = !!targetUser
+        : null;
+      const toConnect = !!targetUser;
 
       if (socialId) {
         if (toConnect) {
-          return res.json({ toConnect, targetUser, ...socialSession })
+          return res.json({ toConnect, targetUser, ...socialSession });
         }
 
-        return res.redirect('/register')
+        return res.redirect('/register');
       }
 
-      return res.json({ continueUrl })
+      return res.json({ continueUrl });
     }
-  }
+  };
 
   actions.loginGoogle = function (req: Request, res: Response) {
-    debug('Header', req.url, req.headers.referer)
-    const googleAuth = GoogleAuth(config)
-    const { google = {} } = req.session
-    const { authCode: code } = google
+    debug('Header', req.url, req.headers.referer);
+    const googleAuth = GoogleAuth(config);
+    const { google = {} } = req.session;
+    const { authCode: code } = google;
 
-    debug('code', code)
+    debug('code', code);
     if (!code) {
       googleAuth.createAuthUrl(req, function (err, redirectUrl) {
         if (err) {
           // TODO
         }
 
-        req.session.google = { callbackAction: '/login/google' }
-        return res.redirect(redirectUrl)
-      })
+        req.session.google = { callbackAction: '/login/google' };
+        return res.redirect(redirectUrl);
+      });
     } else {
       googleAuth.handleCallback(req, async (err, tokenInfo) => {
-        debug('handleCallback', err, tokenInfo)
+        debug('handleCallback', err, tokenInfo);
         if (err) {
-          return loginFailure(req, res)
+          return loginFailure(req, res);
         }
 
-        const { user_id: id, email, name, picture: image } = tokenInfo
+        const { user_id: id, email, name, picture: image } = tokenInfo;
 
         const userData = await User.findUserByGoogleId(id).catch((err) => {
-          debug('findUserByGoogleId', err)
-        })
+          debug('findUserByGoogleId', err);
+        });
         if (userData) {
-          return loginSuccess(req, res, userData)
+          return loginSuccess(req, res, userData);
         }
-        clearSession(req)
-        req.session.google = { id, email, name, image }
-        return res.redirect('/login')
-      })
+        clearSession(req);
+        req.session.google = { id, email, name, image };
+        return res.redirect('/login');
+      });
     }
-  }
+  };
 
   actions.loginGitHub = function (req: Request, res: Response, next: NextFunction) {
-    debug('Header', req.url, req.headers.referer)
-    const githubAuth = GitHubAuth(config)
-    const { github = {} } = req.session
-    const { authCode: code } = github
+    debug('Header', req.url, req.headers.referer);
+    const githubAuth = GitHubAuth(config);
+    const { github = {} } = req.session;
+    const { authCode: code } = github;
 
-    debug('code', code)
+    debug('code', code);
     if (!code) {
-      req.session.github = { callbackAction: '/login/github' }
-      githubAuth.authenticate(req, res, next)
+      req.session.github = { callbackAction: '/login/github' };
+      githubAuth.authenticate(req, res, next);
     } else {
       githubAuth.handleCallback(
         req,
         res,
         next,
       )(async (err, tokenInfo) => {
-        debug('handleCallback', err, tokenInfo)
+        debug('handleCallback', err, tokenInfo);
         if (err) {
-          return loginFailure(req, res)
+          return loginFailure(req, res);
         }
 
-        const { organizations, user_id: id, email, name, picture: image } = tokenInfo
+        const { organizations, user_id: id, email, name, picture: image } = tokenInfo;
 
         if (organizations && !User.isGitHubAccountValid(organizations)) {
-          clearSession(req)
-          return loginFailure(req, res)
+          clearSession(req);
+          return loginFailure(req, res);
         }
 
         const userData = await User.findUserByGitHubId(id).catch((err) => {
-          debug('findUserByGitHubId', err)
-        })
+          debug('findUserByGitHubId', err);
+        });
         if (userData) {
-          return loginSuccess(req, res, userData)
+          return loginSuccess(req, res, userData);
         }
 
-        clearSession(req)
-        req.session.github = { organizations, id, email, name, image }
-        return res.redirect('/login')
-      })
+        clearSession(req);
+        req.session.github = { organizations, id, email, name, image };
+        return res.redirect('/login');
+      });
     }
-  }
+  };
 
   actions.register = async function (req: Request, res: Response) {
-    debug('Header', req.url, req.headers.referer)
+    debug('Header', req.url, req.headers.referer);
     // FIXME: lang
-    const { lang = User.LANG_EN_US } = req as any
+    const { lang = User.LANG_EN_US } = req as any;
 
     // ログイン済みならさようなら
     if (req.user) {
-      return res.redirect('/')
+      return res.redirect('/');
     }
 
     // config で closed ならさよなら
     if (config.crowi['security:registrationMode'] == Config.SECURITY_REGISTRATION_MODE_CLOSED) {
-      return res.redirect('/')
+      return res.redirect('/');
     }
 
     if (req.method == 'POST' && req.form.isValid) {
-      const { t } = req
-      const { registerForm = {} } = req.form
-      const { name = null, username = null, email = null, password = null, googleId = null, githubId = null, socialImage = null } = registerForm
+      const { t } = req;
+      const { registerForm = {} } = req.form;
+      const { name = null, username = null, email = null, password = null, googleId = null, githubId = null, socialImage = null } = registerForm;
 
-      debug('registerForm', registerForm)
+      debug('registerForm', registerForm);
 
       // email と username の unique チェックする
       User.isRegisterable(email, username, function (isRegisterable, errOn) {
         const registerFailure = (message) => {
-          req.flash('registerWarningMessage', message)
-          debug('isError user register error', errOn)
-          return res.redirect('/register')
-        }
+          req.flash('registerWarningMessage', message);
+          debug('isError user register error', errOn);
+          return res.redirect('/register');
+        };
 
         if (!User.isEmailValid(email)) {
-          return registerFailure('This email address could not be used. (Make sure the allowed email address)')
+          return registerFailure('This email address could not be used. (Make sure the allowed email address)');
         }
         if (!isRegisterable) {
           if (!errOn.username) {
-            return registerFailure(t('page_register.error.unavailable_user_id'))
+            return registerFailure(t('page_register.error.unavailable_user_id'));
           }
           if (!errOn.email) {
-            return registerFailure(t('page_register.error.already_registered_email'))
+            return registerFailure(t('page_register.error.already_registered_email'));
           }
         }
         if (config.crowi['auth:disablePasswordAuth'] && !googleId && !githubId) {
-          return registerFailure(t('page_register.error.unavailable_password_auth'))
+          return registerFailure(t('page_register.error.unavailable_password_auth'));
         }
 
         User.createUserByEmailAndPassword(name, username, email, password, lang, async function (err, userData) {
           if (err) {
-            req.flash('registerWarningMessage', 'Failed to register.')
-            return res.redirect('/register')
+            req.flash('registerWarningMessage', 'Failed to register.');
+            return res.redirect('/register');
           } else {
             // 作成後、承認が必要なモードなら、管理者に通知する
             if (config.crowi['security:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_RESTRICTED) {
@@ -350,41 +350,41 @@ export default (crowi: Crowi, app: Express) => {
                         },
                       },
                       function (err, s) {
-                        debug('completed to send email: ', err, s)
-                        next()
+                        debug('completed to send email: ', err, s);
+                        next();
                       },
-                    )
+                    );
                   },
                   function (err) {
-                    debug('Sending invitation email completed.', err)
+                    debug('Sending invitation email completed.', err);
                   },
-                )
-              })
+                );
+              });
             }
 
             // there are no googleId nor githubId, exit
             if (!googleId && !githubId) {
-              return loginSuccess(req, res, userData)
+              return loginSuccess(req, res, userData);
             }
 
             // else, updating googleId/githubId and upload socialImage
 
             if (googleId) {
               try {
-                userData = await userData.updateGoogleId(googleId)
+                userData = await userData.updateGoogleId(googleId);
               } catch (err) {
                 // TODO
               }
             }
             if (githubId) {
               try {
-                userData = await userData.updateGitHubId(githubId)
+                userData = await userData.updateGitHubId(githubId);
               } catch (err) {
                 // TODO
               }
             }
 
-            debug('socialImage?:', socialImage)
+            debug('socialImage?:', socialImage);
             if (socialImage) {
               /*
               TODO: あとで
@@ -423,82 +423,82 @@ export default (crowi: Crowi, app: Express) => {
                   */
             }
 
-            return loginSuccess(req, res, userData)
+            return loginSuccess(req, res, userData);
           }
-        })
-      })
+        });
+      });
     } else {
       // method GET of form is not valid
-      debug('session is', req.session)
+      debug('session is', req.session);
 
-      const socialSession = getSocialSession(req.session)
-      const { socialEmail } = socialSession
-      const { github = {} } = req.session
+      const socialSession = getSocialSession(req.session);
+      const { socialEmail } = socialSession;
+      const { github = {} } = req.session;
 
       const registerFailure = (message) => {
-        const isRegistering = isDisabledPasswordAuth(config)
-        const type = isRegistering ? 'warningMessage' : 'registerWarningMessage'
-        req.flash(type, message)
-        return res.json({ isRegistering, error: message })
-      }
+        const isRegistering = isDisabledPasswordAuth(config);
+        const type = isRegistering ? 'warningMessage' : 'registerWarningMessage';
+        req.flash(type, message);
+        return res.json({ isRegistering, error: message });
+      };
 
       if (!User.isEmailValid(socialEmail)) {
-        return registerFailure('This email address could not be used. (Make sure the allowed email address)')
+        return registerFailure('This email address could not be used. (Make sure the allowed email address)');
       }
 
       if (github.organizations && !User.isGitHubAccountValid(github.organizations)) {
-        return registerFailure('This account could not be used. (Make sure whether you belong to allowed GitHub Organization)')
+        return registerFailure('This account could not be used. (Make sure whether you belong to allowed GitHub Organization)');
       }
 
-      const isRegistering = true
+      const isRegistering = true;
       const targetUser = socialEmail
         ? await User.findUserByEmail(socialEmail).catch((err) => {
-            debug('Failed to findUserByEmail', err)
+            debug('Failed to findUserByEmail', err);
           })
-        : null
-      const toConnect = !!targetUser
-      const locals = { isRegistering, toConnect, targetUser, ...socialSession }
+        : null;
+      const toConnect = !!targetUser;
+      const locals = { isRegistering, toConnect, targetUser, ...socialSession };
 
-      return res.json(locals)
+      return res.json(locals);
     }
-  }
+  };
 
   actions.invited = function (req: Request, res: Response) {
     if (!req.user) {
-      return res.redirect('/login')
+      return res.redirect('/login');
     }
 
     if (req.method == 'POST' && req.form.isValid) {
-      const user = req.user
-      const invitedForm = req.form.invitedForm || {}
-      const username = invitedForm.username
-      const name = invitedForm.name
-      const password = invitedForm.password
+      const user = req.user;
+      const invitedForm = req.form.invitedForm || {};
+      const username = invitedForm.username;
+      const name = invitedForm.name;
+      const password = invitedForm.password;
 
       User.isRegisterableUsername(username, function (creatable) {
         if (creatable) {
           user.activateInvitedUser(username, name, password, function (err, data) {
             if (err) {
-              req.flash('warningMessage', 'アクティベートに失敗しました。')
-              return res.json({ error: 'アクティベートに失敗しました。' })
+              req.flash('warningMessage', 'アクティベートに失敗しました。');
+              return res.json({ error: 'アクティベートに失敗しました。' });
             } else {
-              return res.redirect('/')
+              return res.redirect('/');
             }
-          })
+          });
         } else {
-          req.flash('warningMessage', '利用できないユーザーIDです。')
-          debug('username', username)
-          return res.json({ error: '利用できないユーザーIDです。' })
+          req.flash('warningMessage', '利用できないユーザーIDです。');
+          debug('username', username);
+          return res.json({ error: '利用できないユーザーIDです。' });
         }
-      })
+      });
     } else {
-      return res.json({})
+      return res.json({});
     }
-  }
+  };
 
   actions.updateInvitedUser = function (req: Request, res: Response) {
-    return res.redirect('/')
-  }
+    return res.redirect('/');
+  };
 
-  return actions
-}
+  return actions;
+};

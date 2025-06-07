@@ -1,11 +1,11 @@
-import Crowi from 'src/crowi'
-import { Types, Document, Schema, model } from 'mongoose'
+import Crowi from 'src/crowi';
+import { Types, Document, Schema, model } from 'mongoose';
 
 export interface TrackingDocument extends Document {
-  _id: Types.ObjectId
-  userAgent: string
-  remoteAddress: string
-  createdAt: Date
+  _id: Types.ObjectId;
+  userAgent: string;
+  remoteAddress: string;
+  createdAt: Date;
 }
 
 export default (crowi: Crowi) => {
@@ -15,9 +15,9 @@ export default (crowi: Crowi) => {
     userAgent: { type: String, required: true },
     remoteAddress: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
-  })
+  });
 
-  const Tracking = model<TrackingDocument>('Tracking', trackingSchema)
+  const Tracking = model<TrackingDocument>('Tracking', trackingSchema);
 
-  return Tracking
-}
+  return Tracking;
+};

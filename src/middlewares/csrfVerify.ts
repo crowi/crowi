@@ -1,25 +1,25 @@
-import Crowi from 'src/crowi'
-import Debug from 'debug'
-import { Request, Response } from 'express'
+import Crowi from 'src/crowi';
+import Debug from 'debug';
+import { Request, Response } from 'express';
 
-const debug = Debug('crowi:middlewares:csrfVerify')
+const debug = Debug('crowi:middlewares:csrfVerify');
 
 export default (crowi: Crowi) => {
   return (req: Request, res: Response, next) => {
-    const token = req.body._csrf || req.query._csrf || null
-    const csrfKey = (req.session && req.session.id) || 'anon'
+    const token = req.body._csrf || req.query._csrf || null;
+    const csrfKey = (req.session && req.session.id) || 'anon';
 
-    debug('req.skipCsrfVerify', req.skipCsrfVerify)
+    debug('req.skipCsrfVerify', req.skipCsrfVerify);
     if (req.skipCsrfVerify) {
-      debug('csrf verify skipped')
-      return next()
+      debug('csrf verify skipped');
+      return next();
     }
 
     if (crowi.getTokens().verify(csrfKey, token)) {
-      return next()
+      return next();
     }
 
-    debug('csrf verification failed. return 403', csrfKey, token)
-    return res.sendStatus(403)
-  }
-}
+    debug('csrf verification failed. return 403', csrfKey, token);
+    return res.sendStatus(403);
+  };
+};

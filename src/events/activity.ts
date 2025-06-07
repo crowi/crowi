@@ -1,14 +1,14 @@
-import { EventEmitter } from 'events'
-import Crowi from 'src/crowi'
+import { EventEmitter } from 'events';
+import Crowi from 'src/crowi';
 // import Debug from 'debug'
 // const debug = Debug('crowi:events:activity')
 
 export default class ActivityEvent extends EventEmitter {
-  public crowi: Crowi
+  public crowi: Crowi;
 
   constructor(crowi: Crowi) {
-    super()
-    this.crowi = crowi
+    super();
+    this.crowi = crowi;
   }
 
   onRemove(activity) {}

@@ -1,5 +1,5 @@
-import form from 'express-form'
-const { field } = form
+import form from 'express-form';
+const { field } = form;
 
 export default form(
   field('settingForm[github:clientId]')
@@ -11,4 +11,4 @@ export default form(
   field('settingForm[github:organization]')
     .trim()
     .is(/^[\da-zA-Z\-_]+$/),
-)
+);

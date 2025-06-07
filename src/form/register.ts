@@ -1,5 +1,5 @@
-import form from 'express-form'
-const { field } = form
+import form from 'express-form';
+const { field } = form;
 
 export default form(
   field('registerForm.username')
@@ -13,4 +13,4 @@ export default form(
   field('registerForm.googleId'),
   field('registerForm.githubId'),
   field('registerForm.socialImage'),
-)
+);

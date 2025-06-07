@@ -1,33 +1,33 @@
-import { Request, Response } from 'express'
-import { Types } from 'mongoose'
-import Crowi from 'src/crowi'
-import Debug from 'debug'
-import ApiResponse from 'src/util/apiResponse'
-import { decodeSpace } from 'src/util/path'
-import { BookmarkDocument } from 'src/models/bookmark'
-import { PageDocument } from 'src/models/page'
-import { RevisionDocument } from 'src/models/revision'
-import { UserDocument } from 'src/models/user'
-import { asCustomError } from 'src/types/error'
-import { getQueryAsString, getQueryAsNumber } from 'src/types/express'
+import { Request, Response } from 'express';
+import { Types } from 'mongoose';
+import Crowi from 'src/crowi';
+import Debug from 'debug';
+import ApiResponse from 'src/util/apiResponse';
+import { decodeSpace } from 'src/util/path';
+import { BookmarkDocument } from 'src/models/bookmark';
+import { PageDocument } from 'src/models/page';
+import { RevisionDocument } from 'src/models/revision';
+import { UserDocument } from 'src/models/user';
+import { asCustomError } from 'src/types/error';
+import { getQueryAsString, getQueryAsNumber } from 'src/types/express';
 
 interface PagerOptions {
-  offset: number | string
-  limit: number | string
-  length?: number
+  offset: number | string;
+  limit: number | string;
+  length?: number;
 }
 
 export default (crowi: Crowi) => {
-  const debug = Debug('crowi:routes:page')
-  const Page = crowi.model('Page')
-  const User = crowi.model('User')
-  const Bookmark = crowi.model('Bookmark')
-  const Watcher = crowi.model('Watcher')
-  const actions = {} as any
-  const api = (actions.api = {} as any)
+  const debug = Debug('crowi:routes:page');
+  const Page = crowi.model('Page');
+  const User = crowi.model('User');
+  const Bookmark = crowi.model('Bookmark');
+  const Watcher = crowi.model('Watcher');
+  const actions = {} as any;
+  const api = (actions.api = {} as any);
 
   // register page events
-  const pageEvent = crowi.event('Page')
+  const pageEvent = crowi.event('Page');
   pageEvent.on('update', function (page, user) {
     /*
     const io = crowi.getIo()
@@ -35,57 +35,57 @@ export default (crowi: Crowi) => {
       io.sockets.emit('page edited', { page, user })
     }
     */
-  })
+  });
 
   function getPathFromRequest(req) {
-    let path
-    path = '/' + (req.params[0] || '')
-    path = decodeSpace(path)
-    path = path.replace(/\.md$/, '')
-    return path
+    let path;
+    path = '/' + (req.params[0] || '');
+    path = decodeSpace(path);
+    path = path.replace(/\.md$/, '');
+    return path;
   }
 
   // TODO: total とかでちゃんと計算する
   function generatePager(options: PagerOptions) {
-    let next: number | null = null
-    let prev: number | null = null
-    const offset = parseInt(String(options.offset), 10)
-    const limit = parseInt(String(options.limit), 10)
-    const length = options.length || 0
+    let next: number | null = null;
+    let prev: number | null = null;
+    const offset = parseInt(String(options.offset), 10);
+    const limit = parseInt(String(options.limit), 10);
+    const length = options.length || 0;
 
     if (offset > 0) {
-      prev = offset - limit
+      prev = offset - limit;
       if (prev < 0) {
-        prev = 0
+        prev = 0;
       }
     }
 
     if (length < limit) {
-      next = null
+      next = null;
     } else {
-      next = offset + limit
+      next = offset + limit;
     }
 
     return {
       prev: prev,
       next: next,
       offset: offset,
-    }
+    };
   }
 
   // routing
   actions.pageListShow = async function (req: Request, res: Response) {
-    const user = req.user as UserDocument
-    const limit = 50
-    const offset = getQueryAsNumber(req.query.offset, 0)
-    const SEENER_THRESHOLD = 10
-    let path = getPathFromRequest(req)
-    path = path + (path == '/' ? '' : '/')
+    const user = req.user as UserDocument;
+    const limit = 50;
+    const offset = getQueryAsNumber(req.query.offset, 0);
+    const SEENER_THRESHOLD = 10;
+    let path = getPathFromRequest(req);
+    path = path + (path == '/' ? '' : '/');
 
-    debug('Page list show', path)
+    debug('Page list show', path);
 
-    const pagerOptions: PagerOptions = { offset, limit }
-    const queryOptions = { offset, limit: limit + 1 }
+    const pagerOptions: PagerOptions = { offset, limit };
+    const queryOptions = { offset, limit: limit + 1 };
 
     try {
       const [portalPage, pageList] = (await Promise.all([
@@ -93,17 +93,17 @@ export default (crowi: Crowi) => {
         Page.findListByStartWith(path, req.user, queryOptions),
         // FIXME: A bug of Promise.all type. It was introduced by TypeScript 3.7.3.
         // https://github.com/microsoft/TypeScript/pull/33707
-      ])) as [PageDocument | null, PageDocument[]]
+      ])) as [PageDocument | null, PageDocument[]];
 
       if (pageList.length > limit) {
-        pageList.pop()
+        pageList.pop();
       }
 
       if (portalPage) {
-        crowi.lru.add(user._id.toString(), portalPage._id.toString())
+        crowi.lru.add(user._id.toString(), portalPage._id.toString());
       }
 
-      pagerOptions.length = pageList.length
+      pagerOptions.length = pageList.length;
       res.json({
         path,
         page: portalPage || null,
@@ -112,68 +112,68 @@ export default (crowi: Crowi) => {
         viewConfig: {
           seener_threshold: SEENER_THRESHOLD,
         },
-      })
+      });
     } catch (err) {
-      debug('Error on rendering pageListShow', err)
-      res.status(500).json({ error: 'Error on rendering pageListShow' })
+      debug('Error on rendering pageListShow', err);
+      res.status(500).json({ error: 'Error on rendering pageListShow' });
     }
-  }
+  };
 
   actions.deletedPageListShow = function (req: Request, res: Response) {
-    const path = '/trash' + getPathFromRequest(req)
-    const limit = 50
-    const offset = getQueryAsNumber(req.query.offset, 0)
+    const path = '/trash' + getPathFromRequest(req);
+    const limit = 50;
+    const offset = getQueryAsNumber(req.query.offset, 0);
 
     // index page
-    const pagerOptions: PagerOptions = { offset, limit }
+    const pagerOptions: PagerOptions = { offset, limit };
     const queryOptions = {
       offset,
       limit: limit + 1,
       includeDeletedPage: true,
-    }
+    };
 
     const renderVars: any = {
       page: null,
       path,
       pages: [],
-    }
+    };
 
     Page.findListByStartWith(path, req.user, queryOptions)
       .then(function (pageList) {
         if (pageList.length > limit) {
-          pageList.pop()
+          pageList.pop();
         }
 
-        pagerOptions.length = pageList.length
+        pagerOptions.length = pageList.length;
 
-        renderVars.pager = generatePager(pagerOptions)
-        renderVars.pages = pageList
-        res.json(renderVars)
+        renderVars.pager = generatePager(pagerOptions);
+        renderVars.pages = pageList;
+        res.json(renderVars);
       })
       .catch(function (err) {
-        debug('Error on rendering deletedPageListShow', err)
-        res.status(500).json({ error: 'Error on rendering deletedPageListShow' })
-      })
-  }
+        debug('Error on rendering deletedPageListShow', err);
+        res.status(500).json({ error: 'Error on rendering deletedPageListShow' });
+      });
+  };
 
   async function renderPage(pageData, req: Request, res: Response) {
-    const user = req.user as UserDocument
+    const user = req.user as UserDocument;
 
     // create page
     if (!pageData) {
       return res.json({
         author: {},
         page: false,
-      })
+      });
     }
 
-    crowi.lru.add(user._id.toString(), pageData._id.toString())
+    crowi.lru.add(user._id.toString(), pageData._id.toString());
 
     if (pageData.redirectTo) {
-      return res.redirect(encodeURI(pageData.redirectTo + '?redirectFrom=' + pageData.path))
+      return res.redirect(encodeURI(pageData.redirectTo + '?redirectFrom=' + pageData.path));
     }
 
-    const isNonExistentUserTrashPage = await Page.isNonExistentUserTrashPage(pageData.path)
+    const isNonExistentUserTrashPage = await Page.isNonExistentUserTrashPage(pageData.path);
 
     const renderVars = {
       path: pageData.path,
@@ -181,47 +181,47 @@ export default (crowi: Crowi) => {
       revision: pageData.revision || {},
       author: pageData.revision.author || false,
       isNonExistentUserTrashPage,
-    }
+    };
 
-    return res.json(renderVars)
+    return res.json(renderVars);
   }
 
   actions.userPageShow = async function (req: Request, res: Response) {
-    const user = req.user as UserDocument
-    const username = req.params.username
-    const path = `/user/${username}`
-    res.locals.path = path
-    debug('path', path)
+    const user = req.user as UserDocument;
+    const username = req.params.username;
+    const path = `/user/${username}`;
+    res.locals.path = path;
+    debug('path', path);
 
     // check page existance
-    let pageData
+    let pageData;
     try {
-      pageData = await Page.findPage(path, req.user, req.query.revision)
+      pageData = await Page.findPage(path, req.user, req.query.revision);
 
-      crowi.lru.add(user._id.toString(), pageData._id.toString())
+      crowi.lru.add(user._id.toString(), pageData._id.toString());
 
       if (pageData.redirectTo) {
-        return res.redirect(encodeURI(pageData.redirectTo + '?redirectFrom=' + pageData.path))
+        return res.redirect(encodeURI(pageData.redirectTo + '?redirectFrom=' + pageData.path));
       }
     } catch (e) {
       // for B.C.: Old Crowi has no user page
-      return renderPage(null, req, res) // show create
+      return renderPage(null, req, res); // show create
     }
 
-    let pageUser: UserDocument | {} | null = {}
-    let bookmarkList: BookmarkDocument[] = []
-    let createdList = []
-    let isNonExistentUserPage = false
+    let pageUser: UserDocument | {} | null = {};
+    let bookmarkList: BookmarkDocument[] = [];
+    let createdList = [];
+    let isNonExistentUserPage = false;
     try {
       // user いない場合
-      pageUser = await User.findUserByUsername(username)
-      ;[bookmarkList, createdList] = await Promise.all([
+      pageUser = await User.findUserByUsername(username);
+      [bookmarkList, createdList] = await Promise.all([
         Bookmark.findByUser(pageUser, { limit: 10, populatePage: true, requestUser: req.user }),
         Page.findListByCreator(pageUser, { limit: 10 }, req.user),
-      ])
+      ]);
     } catch (e) {
-      isNonExistentUserPage = true
-      debug('Error while loading user page.', username)
+      isNonExistentUserPage = true;
+      debug('Error while loading user page.', username);
     }
 
     return res.json({
@@ -234,131 +234,131 @@ export default (crowi: Crowi) => {
       revision: pageData.revision || {},
       author: pageData.revision.author || false,
       isNonExistentUserPage,
-    })
-  }
+    });
+  };
 
   actions.pageShow = async function (req: Request, res: Response) {
-    const path = getPathFromRequest(req)
+    const path = getPathFromRequest(req);
 
     // FIXME: せっかく getPathFromRequest になってるのにここが生 params[0] だとダサイ
-    const isMarkdown = req.params[0].match(/.+\.md$/) || false
+    const isMarkdown = req.params[0].match(/.+\.md$/) || false;
 
-    res.locals.path = path
+    res.locals.path = path;
     try {
-      const page = (await Page.findPage(path, req.user, req.query.revision)) as PageDocument
-      debug('Page found', page._id, page.path)
+      const page = (await Page.findPage(path, req.user, req.query.revision)) as PageDocument;
+      debug('Page found', page._id, page.path);
 
       if (isMarkdown) {
-        res.set('Content-Type', 'text/plain')
-        return res.send((page.revision as any as RevisionDocument).body)
+        res.set('Content-Type', 'text/plain');
+        return res.send((page.revision as any as RevisionDocument).body);
       }
 
-      return renderPage(page, req, res)
+      return renderPage(page, req, res);
     } catch (err) {
-      const normalizedPath = Page.normalizePath(path)
+      const normalizedPath = Page.normalizePath(path);
       if (normalizedPath !== path) {
-        return res.redirect(normalizedPath)
+        return res.redirect(normalizedPath);
       }
 
       // pageShow は /* にマッチしてる最後の砦なので、creatableName でない routing は
       // これ以前に定義されているはずなので、こうしてしまって問題ない。
       if (!Page.isCreatableName(path)) {
         // 削除済みページの場合 /trash 以下に移動しているので creatableName になっていないので、表示を許可
-        debug('Page is not creatable name.', path)
-        res.redirect('/')
-        return
+        debug('Page is not creatable name.', path);
+        res.redirect('/');
+        return;
       }
       if (req.query.revision) {
-        return res.redirect(encodeURI(path))
+        return res.redirect(encodeURI(path));
       }
 
       if (isMarkdown) {
-        return res.redirect('/')
+        return res.redirect('/');
       }
 
       try {
-        const portalPage = await Page.hasPortalPage(path + '/', req.user)
+        const portalPage = await Page.hasPortalPage(path + '/', req.user);
         if (portalPage) {
-          return res.redirect(encodeURI(path) + '/')
+          return res.redirect(encodeURI(path) + '/');
         } else {
-          const fixed = Page.fixToCreatableName(path)
+          const fixed = Page.fixToCreatableName(path);
           if (fixed !== path) {
-            debug('fixed page name', fixed)
-            res.redirect(encodeURI(fixed))
-            return
+            debug('fixed page name', fixed);
+            res.redirect(encodeURI(fixed));
+            return;
           }
 
           // if guest user, redirect to `/login'
           if (req.user === null) {
-            req.session.redirectTo = `${req.path}${req.search}`
-            return res.redirect('/login')
+            req.session.redirectTo = `${req.path}${req.search}`;
+            return res.redirect('/login');
           }
 
-          return renderPage(null, req, res) // show create
+          return renderPage(null, req, res); // show create
         }
       } catch (err) {
-        debug('Error on rendering pageShow (redirect to portal or fixed)', err)
-        return res.redirect('/')
+        debug('Error on rendering pageShow (redirect to portal or fixed)', err);
+        return res.redirect('/');
       }
     }
-  }
+  };
 
   actions.pageEdit = function (req: Request, res: Response) {
-    const pageForm = req.body.pageForm
-    const body = pageForm.body
-    const currentRevision = pageForm.currentRevision
-    const grant = pageForm.grant
-    const path = pageForm.path
+    const pageForm = req.body.pageForm;
+    const body = pageForm.body;
+    const currentRevision = pageForm.currentRevision;
+    const grant = pageForm.grant;
+    const path = pageForm.path;
 
     // TODO: make it pluggable
-    const notify = pageForm.notify || {}
+    const notify = pageForm.notify || {};
 
-    debug('notify: ', notify)
+    debug('notify: ', notify);
 
-    const redirectPath = encodeURI(path)
-    let pageData: PageDocument | null | {} = {}
-    let updateOrCreate
-    let previousRevision: Types.ObjectId | null | false = false
+    const redirectPath = encodeURI(path);
+    let pageData: PageDocument | null | {} = {};
+    let updateOrCreate;
+    let previousRevision: Types.ObjectId | null | false = false;
 
     // set to render
-    res.locals.pageForm = pageForm
+    res.locals.pageForm = pageForm;
 
     // 削除済みページはここで編集不可判定される
     if (!Page.isCreatableName(path)) {
-      res.redirect(redirectPath)
-      return
+      res.redirect(redirectPath);
+      return;
     }
 
-    const ignoreNotFound = true
+    const ignoreNotFound = true;
     Page.findPage(path, req.user, null, ignoreNotFound)
       .then(function (data) {
-        pageData = data
+        pageData = data;
 
         if (!req.form.isValid) {
-          debug('Form data not valid')
-          throw new Error('Form data not valid.')
+          debug('Form data not valid');
+          throw new Error('Form data not valid.');
         }
 
         if (data && !data.isUpdatable(currentRevision)) {
-          debug('Conflict occured')
-          req.form.errors.push('page_edit.notice.conflict')
-          throw new Error('Conflict.')
+          debug('Conflict occured');
+          req.form.errors.push('page_edit.notice.conflict');
+          throw new Error('Conflict.');
         }
 
         if (data) {
-          previousRevision = data.revision
-          return Page.updatePage(data, body, req.user, { grant: grant })
+          previousRevision = data.revision;
+          return Page.updatePage(data, body, req.user, { grant: grant });
         } else {
           // new page
-          updateOrCreate = 'create'
-          return Page.createPage(path, body, req.user, { grant: grant })
+          updateOrCreate = 'create';
+          return Page.createPage(path, body, req.user, { grant: grant });
         }
       })
       .then(function (data) {
         // data is a saved page data.
-        pageData = data
+        pageData = data;
         if (!data) {
-          throw new Error('Data not found')
+          throw new Error('Data not found');
         }
         // TODO: move to events
         if (notify.slack) {
@@ -366,133 +366,133 @@ export default (crowi: Crowi) => {
             data
               .updateSlackChannel(notify.slack.channel)
               .then(function () {})
-              .catch(function () {})
+              .catch(function () {});
 
             if (crowi.slack) {
               notify.slack.channel.split(',').map(function (chan) {
-                const message = crowi.slack.prepareSlackMessage(pageData, req.user, chan, updateOrCreate, previousRevision)
+                const message = crowi.slack.prepareSlackMessage(pageData, req.user, chan, updateOrCreate, previousRevision);
                 crowi.slack
                   .post(message.channel, message.text, message)
                   .then(function () {})
-                  .catch(function () {})
-              })
+                  .catch(function () {});
+              });
             }
           }
         }
 
-        return res.redirect(redirectPath)
+        return res.redirect(redirectPath);
       })
       .catch(function (err) {
-        debug('Page create or edit error.', err)
+        debug('Page create or edit error.', err);
         if (pageData && !req.form.isValid) {
-          return renderPage(pageData, req, res)
+          return renderPage(pageData, req, res);
         }
 
-        return res.redirect(redirectPath)
-      })
-  }
+        return res.redirect(redirectPath);
+      });
+  };
 
   // app.get( '/users/:username([^/]+)/bookmarks'      , loginRequired(crowi, app) , page.userBookmarkList);
   actions.userBookmarkList = function (req: Request, res: Response) {
-    const username = req.params.username
-    const limit = 50
-    const offset = getQueryAsNumber(req.query.offset, 0)
+    const username = req.params.username;
+    const limit = 50;
+    const offset = getQueryAsNumber(req.query.offset, 0);
 
-    const renderVars: any = {}
+    const renderVars: any = {};
 
-    const pagerOptions: PagerOptions = { offset, limit }
-    const queryOptions = { offset, limit: limit + 1, populatePage: true, requestUser: req.user }
+    const pagerOptions: PagerOptions = { offset, limit };
+    const queryOptions = { offset, limit: limit + 1, populatePage: true, requestUser: req.user };
 
     User.findUserByUsername(username)
       .then(function (user) {
         if (user === null) {
-          throw new Error('The user not found.')
+          throw new Error('The user not found.');
         }
-        renderVars.pageUser = user
+        renderVars.pageUser = user;
 
-        return Bookmark.findByUser(user, queryOptions)
+        return Bookmark.findByUser(user, queryOptions);
       })
       .then(function (bookmarks) {
         if (bookmarks.length > limit) {
-          bookmarks.pop()
+          bookmarks.pop();
         }
-        pagerOptions.length = bookmarks.length
+        pagerOptions.length = bookmarks.length;
 
-        renderVars.pager = generatePager(pagerOptions)
-        renderVars.bookmarks = bookmarks
+        renderVars.pager = generatePager(pagerOptions);
+        renderVars.bookmarks = bookmarks;
 
-        return res.json(renderVars)
+        return res.json(renderVars);
       })
       .catch(function (err) {
-        debug('Error on rendereing bookmark', err)
-        res.redirect('/')
-      })
-  }
+        debug('Error on rendereing bookmark', err);
+        res.redirect('/');
+      });
+  };
 
   // app.get( '/users/:username([^/]+)/recent-create' , loginRequired(crowi, app) , page.userRecentCreatedList);
   actions.userRecentCreatedList = function (req: Request, res: Response) {
-    const username = req.params.username
-    const limit = 50
-    const offset = getQueryAsNumber(req.query.offset, 0)
+    const username = req.params.username;
+    const limit = 50;
+    const offset = getQueryAsNumber(req.query.offset, 0);
 
-    const renderVars: any = {}
+    const renderVars: any = {};
 
-    const pagerOptions: PagerOptions = { offset, limit }
-    const queryOptions = { offset, limit: limit + 1 }
+    const pagerOptions: PagerOptions = { offset, limit };
+    const queryOptions = { offset, limit: limit + 1 };
 
     User.findUserByUsername(username)
       .then(function (user) {
         if (user === null) {
-          throw new Error('The user not found.')
+          throw new Error('The user not found.');
         }
-        renderVars.pageUser = user
+        renderVars.pageUser = user;
 
-        return Page.findListByCreator(user, queryOptions, req.user)
+        return Page.findListByCreator(user, queryOptions, req.user);
       })
       .then(function (pages) {
         if (pages.length > limit) {
-          pages.pop()
+          pages.pop();
         }
-        pagerOptions.length = pages.length
+        pagerOptions.length = pages.length;
 
-        renderVars.pager = generatePager(pagerOptions)
-        renderVars.pages = pages
+        renderVars.pager = generatePager(pagerOptions);
+        renderVars.pages = pages;
 
-        return res.json(renderVars)
+        return res.json(renderVars);
       })
       .catch(function (err) {
-        debug('Error on rendereing recent-created', err)
-        res.redirect('/')
-      })
-  }
+        debug('Error on rendereing recent-created', err);
+        res.redirect('/');
+      });
+  };
 
   /**
    * redirector
    */
   api.redirector = function (req: Request, res: Response) {
-    const id = req.params.id
+    const id = req.params.id;
 
     Page.findPageById(id)
       .then(function (pageData) {
-        const isGranted = pageData.isGrantedFor(req.user)
+        const isGranted = pageData.isGrantedFor(req.user);
 
         if (pageData.grant == Page.GRANT_RESTRICTED && !isGranted) {
-          return Page.pushToGrantedUsers(pageData, req.user)
+          return Page.pushToGrantedUsers(pageData, req.user);
         }
 
         if (!isGranted) {
-          throw new Error('Page is not granted for the user.')
+          throw new Error('Page is not granted for the user.');
         }
 
-        return Promise.resolve(pageData)
+        return Promise.resolve(pageData);
       })
       .then(function (page) {
-        return res.redirect(encodeURI(page.path))
+        return res.redirect(encodeURI(page.path));
       })
       .catch(function (err) {
-        return res.redirect('/')
-      })
-  }
+        return res.redirect('/');
+      });
+  };
 
   /**
    * @api {get} /pages.list List pages by user
@@ -503,44 +503,44 @@ export default (crowi: Crowi) => {
    * @apiParam {String} user
    */
   api.list = function (req: Request, res: Response) {
-    const username = getQueryAsString(req.query.user) || null
-    const path = getQueryAsString(req.query.path) || null
-    const limit = parseInt(getQueryAsString(req.query.limit), 10) || 50
-    const offset = parseInt(getQueryAsString(req.query.offset), 10) || 0
+    const username = getQueryAsString(req.query.user) || null;
+    const path = getQueryAsString(req.query.path) || null;
+    const limit = parseInt(getQueryAsString(req.query.limit), 10) || 50;
+    const offset = parseInt(getQueryAsString(req.query.offset), 10) || 0;
 
-    const pagerOptions: PagerOptions = { offset, limit }
-    const queryOptions = { offset, limit: limit + 1 }
+    const pagerOptions: PagerOptions = { offset, limit };
+    const queryOptions = { offset, limit: limit + 1 };
 
     // Accepts only one of these
     if (username === null && path === null) {
-      return res.json(ApiResponse.error('Parameter user or path is required.'))
+      return res.json(ApiResponse.error('Parameter user or path is required.'));
     }
     if (username !== null && path !== null) {
-      return res.json(ApiResponse.error('Parameter user or path is required.'))
+      return res.json(ApiResponse.error('Parameter user or path is required.'));
     }
 
-    let pageFetcher
+    let pageFetcher;
     if (path === null) {
-      pageFetcher = Page.findListByCreator(username, req.user, queryOptions) // by username
+      pageFetcher = Page.findListByCreator(username, req.user, queryOptions); // by username
     } else {
-      pageFetcher = Page.findListByStartWith(path, req.user, queryOptions) // by path
+      pageFetcher = Page.findListByStartWith(path, req.user, queryOptions); // by path
     }
 
     pageFetcher
       .then(function (pages) {
-        pagerOptions.length = pages.length
+        pagerOptions.length = pages.length;
 
         const result = {
           pages: pages.slice(0, limit),
           pager: generatePager(pagerOptions),
-        }
+        };
 
-        return res.json(ApiResponse.success(result))
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        return res.json(ApiResponse.error(err))
-      })
-  }
+        return res.json(ApiResponse.error(err));
+      });
+  };
 
   /**
    * @api {post} /pages.create Create new page
@@ -552,35 +552,35 @@ export default (crowi: Crowi) => {
    * @apiParam {String} grant
    */
   api.create = function (req: Request, res: Response) {
-    const body = req.body.body || null
-    const pagePath = req.body.path || null
-    const grant = req.body.grant || null
+    const body = req.body.body || null;
+    const pagePath = req.body.path || null;
+    const grant = req.body.grant || null;
 
     if (body === null || pagePath === null) {
-      return res.json(ApiResponse.error('Parameters body and path are required.'))
+      return res.json(ApiResponse.error('Parameters body and path are required.'));
     }
 
-    const ignoreNotFound = true
+    const ignoreNotFound = true;
     Page.findPage(pagePath, req.user, null, ignoreNotFound)
       .then(function (data) {
         if (data !== null) {
-          throw new Error('Page exists')
+          throw new Error('Page exists');
         }
 
-        return Page.createPage(pagePath, body, req.user, { grant: grant })
+        return Page.createPage(pagePath, body, req.user, { grant: grant });
       })
       .then(function (data) {
         if (!data) {
-          throw new Error('Failed to create page.')
+          throw new Error('Failed to create page.');
         }
-        const result = { page: data.toObject() }
+        const result = { page: data.toObject() };
 
-        return res.json(ApiResponse.success(result))
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        return res.json(ApiResponse.error(err))
-      })
-  }
+        return res.json(ApiResponse.error(err));
+      });
+  };
 
   /**
    * @api {post} /pages.update Update page
@@ -597,38 +597,38 @@ export default (crowi: Crowi) => {
    * - If revision_id is not specified => force update by the new contents.
    */
   api.update = function (req: Request, res: Response) {
-    const pageBody = req.body.body || null
-    const pageId = req.body.page_id || null
-    const revisionId = req.body.revision_id || null
-    const grant = req.body.grant || null
+    const pageBody = req.body.body || null;
+    const pageId = req.body.page_id || null;
+    const revisionId = req.body.revision_id || null;
+    const grant = req.body.grant || null;
 
     if (pageId === null || pageBody === null) {
-      return res.json(ApiResponse.error('page_id and body are required.'))
+      return res.json(ApiResponse.error('page_id and body are required.'));
     }
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
       .then(function (pageData) {
         if (pageData && revisionId !== null && !pageData.isUpdatable(revisionId)) {
-          throw new Error('Revision error.')
+          throw new Error('Revision error.');
         }
 
-        const grantOption = { grant: pageData.grant }
+        const grantOption = { grant: pageData.grant };
         if (grant !== null) {
-          grantOption.grant = grant
+          grantOption.grant = grant;
         }
-        return Page.updatePage(pageData, pageBody, req.user, grantOption)
+        return Page.updatePage(pageData, pageBody, req.user, grantOption);
       })
       .then(function (pageData) {
         const result = {
           page: pageData.toObject(),
-        }
-        return res.json(ApiResponse.success(result))
+        };
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        debug('error on _api/pages.update', err)
-        return res.json(ApiResponse.error(err))
-      })
-  }
+        debug('error on _api/pages.update', err);
+        return res.json(ApiResponse.error(err));
+      });
+  };
 
   /**
    * @api {get} /pages.get Get page data
@@ -640,32 +640,32 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_id
    */
   api.get = function (req: Request, res: Response) {
-    const pagePath = getQueryAsString(req.query.path) || null
-    const pageId = getQueryAsString(req.query.page_id) || null // TODO: handling
-    const revisionId = getQueryAsString(req.query.revision_id) || null
+    const pagePath = getQueryAsString(req.query.path) || null;
+    const pageId = getQueryAsString(req.query.page_id) || null; // TODO: handling
+    const revisionId = getQueryAsString(req.query.revision_id) || null;
 
     if (!pageId && !pagePath) {
-      return res.json(ApiResponse.error(new Error('Parameter path or page_id is required.')))
+      return res.json(ApiResponse.error(new Error('Parameter path or page_id is required.')));
     }
 
-    let pageFinder
+    let pageFinder;
     if (pageId) {
       // prioritized
-      pageFinder = Page.findPageByIdAndGrantedUser(pageId, req.user)
+      pageFinder = Page.findPageByIdAndGrantedUser(pageId, req.user);
     } else if (pagePath) {
-      pageFinder = Page.findPage(pagePath, req.user, revisionId)
+      pageFinder = Page.findPage(pagePath, req.user, revisionId);
     }
 
     pageFinder
       .then(function (page) {
-        const result = { page }
+        const result = { page };
 
-        return res.json(ApiResponse.success(result))
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        return res.json(ApiResponse.error(err))
-      })
-  }
+        return res.json(ApiResponse.error(err));
+      });
+  };
 
   /**
    * @api {post} /pages.seen Mark as seen user
@@ -675,25 +675,25 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    */
   api.seen = function (req: Request, res: Response) {
-    const pageId = req.body.page_id
+    const pageId = req.body.page_id;
     if (!pageId) {
-      return res.json(ApiResponse.error('page_id required'))
+      return res.json(ApiResponse.error('page_id required'));
     }
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
       .then(function (page) {
-        return page.seen(req.user)
+        return page.seen(req.user);
       })
       .then(function (seenUser) {
-        const result = { seenUser }
+        const result = { seenUser };
 
-        return res.json(ApiResponse.success(result))
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        debug('Seen user update error', err)
-        return res.json(ApiResponse.error(err))
-      })
-  }
+        debug('Seen user update error', err);
+        return res.json(ApiResponse.error(err));
+      });
+  };
 
   /**
    * @api {post} /likes.add Like page
@@ -703,21 +703,21 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    */
   api.like = function (req: Request, res: Response) {
-    const id = req.body.page_id
+    const id = req.body.page_id;
 
     Page.findPageByIdAndGrantedUser(id, req.user)
       .then(function (pageData) {
-        return pageData.like(req.user)
+        return pageData.like(req.user);
       })
       .then(function (data) {
-        const result = { page: data }
-        return res.json(ApiResponse.success(result))
+        const result = { page: data };
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        debug('Like failed', err)
-        return res.json(ApiResponse.error({}))
-      })
-  }
+        debug('Like failed', err);
+        return res.json(ApiResponse.error({}));
+      });
+  };
 
   /**
    * @api {post} /likes.remove Unlike page
@@ -727,21 +727,21 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    */
   api.unlike = function (req: Request, res: Response) {
-    const id = req.body.page_id
+    const id = req.body.page_id;
 
     Page.findPageByIdAndGrantedUser(id, req.user)
       .then(function (pageData) {
-        return pageData.unlike(req.user)
+        return pageData.unlike(req.user);
       })
       .then(function (data) {
-        const result = { page: data }
-        return res.json(ApiResponse.success(result))
+        const result = { page: data };
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        debug('Unlike failed', err)
-        return res.json(ApiResponse.error({}))
-      })
-  }
+        debug('Unlike failed', err);
+        return res.json(ApiResponse.error({}));
+      });
+  };
 
   /**
    * @api {get} /pages.updatePost
@@ -751,27 +751,27 @@ export default (crowi: Crowi) => {
    * @apiParam {String} path
    */
   api.getUpdatePost = function (req: Request, res: Response) {
-    const path = req.query.path
-    const UpdatePost = crowi.model('UpdatePost')
+    const path = req.query.path;
+    const UpdatePost = crowi.model('UpdatePost');
 
     if (!path) {
-      return res.json(ApiResponse.error({}))
+      return res.json(ApiResponse.error({}));
     }
 
     UpdatePost.findSettingsByPath(path)
       .then(function (data) {
         data = data.map(function (e) {
-          return e.channel
-        })
-        debug('Found updatePost data', data)
-        const result = { updatePost: data }
-        return res.json(ApiResponse.success(result))
+          return e.channel;
+        });
+        debug('Found updatePost data', data);
+        const result = { updatePost: data };
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        debug('Error occured while get setting', err)
-        return res.json(ApiResponse.error({}))
-      })
-  }
+        debug('Error occured while get setting', err);
+        return res.json(ApiResponse.error({}));
+      });
+  };
 
   /**
    * @api {post} /pages.remove Remove page
@@ -782,38 +782,38 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_id
    */
   api.remove = function (req: Request, res: Response) {
-    const pageId = req.body.page_id
-    const previousRevision = req.body.revision_id || null
+    const pageId = req.body.page_id;
+    const previousRevision = req.body.revision_id || null;
 
     // get completely flag
-    const isCompletely = req.body.completely !== undefined
+    const isCompletely = req.body.completely !== undefined;
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
       .then(function (pageData) {
-        debug('Delete page', pageData._id, pageData.path)
+        debug('Delete page', pageData._id, pageData.path);
 
         if (isCompletely) {
-          return Page.completelyDeletePage(pageData, req.user)
+          return Page.completelyDeletePage(pageData, req.user);
         }
 
         // else
 
         if (!pageData.isUpdatable(previousRevision)) {
-          throw new Error("Someone could update this page, so couldn't delete.")
+          throw new Error("Someone could update this page, so couldn't delete.");
         }
-        return Page.deletePage(pageData, req.user)
+        return Page.deletePage(pageData, req.user);
       })
       .then(function (page) {
-        debug('Page deleted', page.path)
-        const result = { page }
+        debug('Page deleted', page.path);
+        const result = { page };
 
-        return res.json(ApiResponse.success(result))
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        debug('Error occured while get setting', err, err.stack)
-        return res.json(ApiResponse.error('Failed to delete page.'))
-      })
-  }
+        debug('Error occured while get setting', err, err.stack);
+        return res.json(ApiResponse.error('Failed to delete page.'));
+      });
+  };
 
   /**
    * @api {post} /pages.revertRemove Revert removed page
@@ -823,24 +823,24 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    */
   api.revertRemove = function (req: Request, res: Response) {
-    const pageId = req.body.page_id
+    const pageId = req.body.page_id;
 
     Page.findPageByIdAndGrantedUser(pageId, req.user)
       .then(function (pageData) {
         // TODO: これでいいんだっけ
-        return Page.revertDeletedPage(pageData, req.user)
+        return Page.revertDeletedPage(pageData, req.user);
       })
       .then(function (page) {
-        debug('Complete to revert deleted page', page.path)
-        const result = { page }
+        debug('Complete to revert deleted page', page.path);
+        const result = { page };
 
-        return res.json(ApiResponse.success(result))
+        return res.json(ApiResponse.success(result));
       })
       .catch(function (err) {
-        debug('Error occured while get setting', err, err.stack)
-        return res.json(ApiResponse.error('Failed to revert deleted page.'))
-      })
-  }
+        debug('Error occured while get setting', err, err.stack);
+        return res.json(ApiResponse.error('Failed to revert deleted page.'));
+      });
+  };
 
   /**
    * @api {post} /pages.rename Rename page
@@ -854,87 +854,87 @@ export default (crowi: Crowi) => {
    * @apiParam {Bool} create_redirect
    */
   api.rename = async function (req: Request, res: Response) {
-    const { page_id: pageId, revision_id: previousRevision = null, new_path: newPath, create_redirect: createRedirect, move_trees: moveTrees } = req.body
-    const newPagePath = Page.normalizePath(newPath)
-    const newPageIsPortal = newPagePath.endsWith('/')
+    const { page_id: pageId, revision_id: previousRevision = null, new_path: newPath, create_redirect: createRedirect, move_trees: moveTrees } = req.body;
+    const newPagePath = Page.normalizePath(newPath);
+    const newPageIsPortal = newPagePath.endsWith('/');
     const options = {
       createRedirectPage: (!newPageIsPortal && createRedirect) || 0,
       moveUnderTrees: moveTrees || 0,
-    }
+    };
 
     if (!Page.isCreatableName(newPagePath)) {
-      return res.json(ApiResponse.error(`このページ名は作成できません (${newPagePath})`))
+      return res.json(ApiResponse.error(`このページ名は作成できません (${newPagePath})`));
     }
 
     const rename = async function () {
       try {
-        const page = await Page.findPageById(pageId)
+        const page = await Page.findPageById(pageId);
         if (!page.isUpdatable(previousRevision)) {
-          return res.json(ApiResponse.error(new Error("Someone could update this page, so couldn't delete.")))
+          return res.json(ApiResponse.error(new Error("Someone could update this page, so couldn't delete.")));
         }
-        await Page.rename(page, newPagePath, req.user, options)
-        const result = { page }
-        return res.json(ApiResponse.success(result))
+        await Page.rename(page, newPagePath, req.user, options);
+        const result = { page };
+        return res.json(ApiResponse.success(result));
       } catch (err) {
-        return res.json(ApiResponse.error('Failed to update page.'))
+        return res.json(ApiResponse.error('Failed to update page.'));
       }
-    }
+    };
 
     try {
-      const page = await Page.findPageByPath(newPagePath)
+      const page = await Page.findPageByPath(newPagePath);
       if (page.isUnlinkable(req.user)) {
         try {
-          await page.unlink(req.user)
-          rename()
+          await page.unlink(req.user);
+          rename();
         } catch (err) {
-          res.json(ApiResponse.error(err))
+          res.json(ApiResponse.error(err));
         }
       } else {
         // can't rename to that path when page found and can't remove it
-        return res.json(ApiResponse.error(`このページ名は作成できません (${newPagePath})。ページが存在します。`))
+        return res.json(ApiResponse.error(`このページ名は作成できません (${newPagePath})。ページが存在します。`));
       }
     } catch (err) {
-      rename()
+      rename();
     }
-  }
+  };
 
   api.renameTree = async function (req: Request, res: Response) {
-    const { path, new_path: newPath, create_redirect: createRedirect = 0 } = req.body
-    const options = { createRedirectPage: createRedirect }
+    const { path, new_path: newPath, create_redirect: createRedirect = 0 } = req.body;
+    const options = { createRedirectPage: createRedirect };
 
-    const paths = await Page.findChildrenByPath(path, req.user, {})
-    const pathMap = Page.getPathMap(paths, path, newPath)
+    const paths = await Page.findChildrenByPath(path, req.user, {});
+    const pathMap = Page.getPathMap(paths, path, newPath);
 
-    const [error, errors] = await Page.checkPagesRenamable(Object.values(pathMap), req.user)
+    const [error, errors] = await Page.checkPagesRenamable(Object.values(pathMap), req.user);
 
     if (error) {
-      const info = { errors, path_map: pathMap }
-      return res.json(ApiResponse.error('rename_tree.error.can_not_move', info))
+      const info = { errors, path_map: pathMap };
+      return res.json(ApiResponse.error('rename_tree.error.can_not_move', info));
     }
 
     try {
-      const result = await Page.renameTree(pathMap, req.user, options)
-      return res.json(ApiResponse.success({ pages: result }))
+      const result = await Page.renameTree(pathMap, req.user, options);
+      return res.json(ApiResponse.success({ pages: result }));
     } catch (err) {
-      return res.json(ApiResponse.error(err))
+      return res.json(ApiResponse.error(err));
     }
-  }
+  };
 
   api.checkTreeRenamable = async function (req: Request, res: Response) {
-    const { path, new_path: newPath } = req.body
+    const { path, new_path: newPath } = req.body;
 
-    const paths = await Page.findChildrenByPath(path, req.user, {})
-    const pathMap = Page.getPathMap(paths, path, newPath)
+    const paths = await Page.findChildrenByPath(path, req.user, {});
+    const pathMap = Page.getPathMap(paths, path, newPath);
 
-    const [error, errors] = await Page.checkPagesRenamable(Object.values(pathMap), req.user)
+    const [error, errors] = await Page.checkPagesRenamable(Object.values(pathMap), req.user);
 
     if (error) {
-      const info = { errors, path_map: pathMap }
-      return res.json(ApiResponse.error('rename_tree.error.can_not_move', info))
+      const info = { errors, path_map: pathMap };
+      return res.json(ApiResponse.error('rename_tree.error.can_not_move', info));
     }
 
-    return res.json(ApiResponse.success({ path_map: pathMap }))
-  }
+    return res.json(ApiResponse.success({ path_map: pathMap }));
+  };
 
   /**
    * @api {post} /pages.unlink Remove the redirecting page
@@ -945,58 +945,58 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_id
    */
   api.unlink = async function (req: Request, res: Response) {
-    const { page_id: pageId } = req.body
+    const { page_id: pageId } = req.body;
     try {
-      const page = await Page.findPageByIdAndGrantedUser(pageId, req.user)
-      debug('Unlink page', page._id, page.path)
-      await Page.removeRedirectOriginPageByPath(page.path)
-      debug('Redirect Page deleted', page.path)
-      const result = { page }
-      return res.json(ApiResponse.success(result))
+      const page = await Page.findPageByIdAndGrantedUser(pageId, req.user);
+      debug('Unlink page', page._id, page.path);
+      await Page.removeRedirectOriginPageByPath(page.path);
+      debug('Redirect Page deleted', page.path);
+      const result = { page };
+      return res.json(ApiResponse.success(result));
     } catch (err) {
-      const error = asCustomError(err)
-      debug('Error occured while get setting', error, error.stack)
-      return res.json(ApiResponse.error('Failed to delete redirect page.'))
+      const error = asCustomError(err);
+      debug('Error occured while get setting', error, error.stack);
+      return res.json(ApiResponse.error('Failed to delete redirect page.'));
     }
-  }
+  };
 
   api.watchStatus = async function (req: Request, res: Response) {
-    const pageIdStr = getQueryAsString(req.query.page_id)
-    const { _id: userId } = req.user as UserDocument
+    const pageIdStr = getQueryAsString(req.query.page_id);
+    const { _id: userId } = req.user as UserDocument;
     try {
       // @ts-ignore - TypeScriptの型定義が正しくないため無視
-      const pageId = new Types.ObjectId(pageIdStr)
-      const watcher = await Watcher.findByUserIdAndTargetId(userId, pageId)
+      const pageId = new Types.ObjectId(pageIdStr);
+      const watcher = await Watcher.findByUserIdAndTargetId(userId, pageId);
       const getDefaultStatus = async () => {
-        const page = await Page.findById(pageIdStr)
-        if (!page) throw new Error('Page not found')
-        const targetUsers = await page.getNotificationTargetUsers()
-        return targetUsers.some((user) => user.toString() === userId.toString())
-      }
-      const watching = watcher ? watcher.isWatching() : await getDefaultStatus()
-      const result = { watching }
-      return res.json(ApiResponse.success(result))
+        const page = await Page.findById(pageIdStr);
+        if (!page) throw new Error('Page not found');
+        const targetUsers = await page.getNotificationTargetUsers();
+        return targetUsers.some((user) => user.toString() === userId.toString());
+      };
+      const watching = watcher ? watcher.isWatching() : await getDefaultStatus();
+      const result = { watching };
+      return res.json(ApiResponse.success(result));
     } catch (err) {
-      const error = asCustomError(err)
-      debug('Error occured while get setting', error, error.stack)
-      return res.json(ApiResponse.error('Failed to fetch watch status.'))
+      const error = asCustomError(err);
+      debug('Error occured while get setting', error, error.stack);
+      return res.json(ApiResponse.error('Failed to fetch watch status.'));
     }
-  }
+  };
 
   api.watch = async function (req: Request, res: Response) {
-    const { page_id: pageId } = req.body
-    const { _id: userId } = req.user as UserDocument
-    const status = req.body.status ? Watcher.STATUS_WATCH : Watcher.STATUS_IGNORE
+    const { page_id: pageId } = req.body;
+    const { _id: userId } = req.user as UserDocument;
+    const status = req.body.status ? Watcher.STATUS_WATCH : Watcher.STATUS_IGNORE;
     try {
-      const watcher = await Watcher.watchByPageId(userId, pageId, status)
-      const result = { watcher }
-      return res.json(ApiResponse.success(result))
+      const watcher = await Watcher.watchByPageId(userId, pageId, status);
+      const result = { watcher };
+      return res.json(ApiResponse.success(result));
     } catch (err) {
-      const error = asCustomError(err)
-      debug('Error occured while update watch status', error, error.stack)
-      return res.json(ApiResponse.error('Failed to watch this page.'))
+      const error = asCustomError(err);
+      debug('Error occured while update watch status', error, error.stack);
+      return res.json(ApiResponse.error('Failed to watch this page.'));
     }
-  }
+  };
 
-  return actions
-}
+  return actions;
+};

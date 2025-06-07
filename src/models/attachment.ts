@@ -1,45 +1,45 @@
-import Crowi from 'src/crowi'
-import { Types, Document, Model, Schema, model } from 'mongoose'
-import Debug from 'debug'
-import crypto from 'crypto'
-import FileUploader from 'src/util/fileUploader'
+import Crowi from 'src/crowi';
+import { Types, Document, Model, Schema, model } from 'mongoose';
+import Debug from 'debug';
+import crypto from 'crypto';
+import FileUploader from 'src/util/fileUploader';
 
 export interface AttachmentDocument extends Document {
-  _id: Types.ObjectId
-  page: Types.ObjectId
-  creator: Types.ObjectId
-  filePath: string
-  fileName: string
-  originalName: string
-  fileFormat: string
-  fileSize: number
-  createdAt: Date
+  _id: Types.ObjectId;
+  page: Types.ObjectId;
+  creator: Types.ObjectId;
+  filePath: string;
+  fileName: string;
+  originalName: string;
+  fileFormat: string;
+  fileSize: number;
+  createdAt: Date;
 
   // virtual
-  fileUrl: string
+  fileUrl: string;
 
   // dynamic field
-  url: string
+  url: string;
 }
 
 export interface AttachmentModel extends Model<AttachmentDocument> {
-  getListByPageId(id: Types.ObjectId): Promise<AttachmentDocument[]>
-  guessExtByFileType(fileType: string): string
-  createAttachmentFilePath(pageId: Types.ObjectId, fileName: string, fileType: string): string
-  removeAttachmentsByPageId(pageId: Types.ObjectId): any
-  findDeliveryFile(attachment: AttachmentDocument, forceUpdate?: boolean): any
-  removeAttachment(attachment: AttachmentDocument): any
+  getListByPageId(id: Types.ObjectId): Promise<AttachmentDocument[]>;
+  guessExtByFileType(fileType: string): string;
+  createAttachmentFilePath(pageId: Types.ObjectId, fileName: string, fileType: string): string;
+  removeAttachmentsByPageId(pageId: Types.ObjectId): any;
+  findDeliveryFile(attachment: AttachmentDocument, forceUpdate?: boolean): any;
+  removeAttachment(attachment: AttachmentDocument): any;
 }
 
 export default (crowi: Crowi) => {
-  const debug = Debug('crowi:models:attachment')
-  const fileUploader = FileUploader(crowi)
+  const debug = Debug('crowi:models:attachment');
+  const fileUploader = FileUploader(crowi);
 
   function generateFileHash(fileName) {
-    const hasher = crypto.createHash('md5')
-    hasher.update(fileName)
+    const hasher = crypto.createHash('md5');
+    hasher.update(fileName);
 
-    return hasher.digest('hex')
+    return hasher.digest('hex');
   }
 
   const attachmentSchema = new Schema<AttachmentDocument, AttachmentModel>(
@@ -58,68 +58,68 @@ export default (crowi: Crowi) => {
         virtuals: true,
       },
     },
-  )
+  );
 
   attachmentSchema.virtual('fileUrl').get(function (this: AttachmentDocument) {
-    return `/files/${this._id}`
-  })
+    return `/files/${this._id}`;
+  });
 
   attachmentSchema.statics.getListByPageId = function (id) {
-    return Attachment.find({ page: id }).sort({ updatedAt: 1 }).populate('creator').exec()
-  }
+    return Attachment.find({ page: id }).sort({ updatedAt: 1 }).populate('creator').exec();
+  };
 
   attachmentSchema.statics.guessExtByFileType = function (fileType) {
-    let ext = ''
-    const isImage = fileType.match(/^image\/(.+)/i)
+    let ext = '';
+    const isImage = fileType.match(/^image\/(.+)/i);
 
     if (isImage) {
-      ext = isImage[1].toLowerCase()
+      ext = isImage[1].toLowerCase();
     }
 
-    return ext
-  }
+    return ext;
+  };
 
   attachmentSchema.statics.createAttachmentFilePath = function (pageId, fileName, fileType) {
-    let ext = ''
-    const fnExt = fileName.match(/(.*)(?:\.([^.]+$))/)
+    let ext = '';
+    const fnExt = fileName.match(/(.*)(?:\.([^.]+$))/);
 
     if (fnExt) {
-      ext = '.' + fnExt[2]
+      ext = '.' + fnExt[2];
     } else {
-      ext = Attachment.guessExtByFileType(fileType)
+      ext = Attachment.guessExtByFileType(fileType);
       if (ext !== '') {
-        ext = '.' + ext
+        ext = '.' + ext;
       }
     }
 
-    return 'attachment/' + pageId + '/' + generateFileHash(fileName) + ext
-  }
+    return 'attachment/' + pageId + '/' + generateFileHash(fileName) + ext;
+  };
 
   attachmentSchema.statics.removeAttachmentsByPageId = async function (pageId) {
-    const attachments = await Attachment.getListByPageId(pageId)
-    await Promise.all(attachments.map((attachment) => Attachment.removeAttachment(attachment)))
+    const attachments = await Attachment.getListByPageId(pageId);
+    await Promise.all(attachments.map((attachment) => Attachment.removeAttachment(attachment)));
 
-    return attachments
-  }
+    return attachments;
+  };
 
   attachmentSchema.statics.findDeliveryFile = function (attachment, forceUpdate) {
     // TODO
-    forceUpdate = forceUpdate || false
+    forceUpdate = forceUpdate || false;
 
-    return fileUploader.findDeliveryFile(attachment._id, attachment.filePath)
-  }
+    return fileUploader.findDeliveryFile(attachment._id, attachment.filePath);
+  };
 
   attachmentSchema.statics.removeAttachment = async function (attachment) {
-    const filePath = attachment.filePath
+    const filePath = attachment.filePath;
 
-    await Attachment.deleteOne({ _id: attachment._id })
+    await Attachment.deleteOne({ _id: attachment._id });
 
-    const data = await fileUploader.deleteFile(attachment._id, filePath)
+    const data = await fileUploader.deleteFile(attachment._id, filePath);
 
-    return data
-  }
+    return data;
+  };
 
-  const Attachment = model<AttachmentDocument, AttachmentModel>('Attachment', attachmentSchema)
+  const Attachment = model<AttachmentDocument, AttachmentModel>('Attachment', attachmentSchema);
 
-  return Attachment
-}
+  return Attachment;
+};

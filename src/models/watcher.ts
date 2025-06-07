@@ -1,33 +1,33 @@
-import Crowi from 'src/crowi'
-import { Types, Document, Model, Schema, model } from 'mongoose'
-import ActivityDefine from 'src/util/activityDefine'
+import Crowi from 'src/crowi';
+import { Types, Document, Model, Schema, model } from 'mongoose';
+import ActivityDefine from 'src/util/activityDefine';
 // import Debug from 'debug'
 
-const STATUS_WATCH = 'WATCH'
-const STATUS_IGNORE = 'IGNORE'
-const STATUSES = [STATUS_WATCH, STATUS_IGNORE]
+const STATUS_WATCH = 'WATCH';
+const STATUS_IGNORE = 'IGNORE';
+const STATUSES = [STATUS_WATCH, STATUS_IGNORE];
 
 export interface WatcherDocument extends Document {
-  _id: Types.ObjectId
-  user: Types.ObjectId
-  targetModel: string
-  target: Types.ObjectId
-  status: string
-  createdAt: Date
+  _id: Types.ObjectId;
+  user: Types.ObjectId;
+  targetModel: string;
+  target: Types.ObjectId;
+  status: string;
+  createdAt: Date;
 
-  isWatching(): boolean
-  isIgnoring(): boolean
+  isWatching(): boolean;
+  isIgnoring(): boolean;
 }
 
 export interface WatcherModel extends Model<WatcherDocument> {
-  findByUserIdAndTargetId(userId: Types.ObjectId, targetId: Types.ObjectId): any
-  upsertWatcher(user: Types.ObjectId, targetModel: string, target: Types.ObjectId, status: string): any
-  watchByPageId(user: Types.ObjectId, pageId: Types.ObjectId, status: string): any
-  getWatchers(target: Types.ObjectId): Promise<Types.ObjectId[]>
-  getIgnorers(target: Types.ObjectId): Promise<Types.ObjectId[]>
+  findByUserIdAndTargetId(userId: Types.ObjectId, targetId: Types.ObjectId): any;
+  upsertWatcher(user: Types.ObjectId, targetModel: string, target: Types.ObjectId, status: string): any;
+  watchByPageId(user: Types.ObjectId, pageId: Types.ObjectId, status: string): any;
+  getWatchers(target: Types.ObjectId): Promise<Types.ObjectId[]>;
+  getIgnorers(target: Types.ObjectId): Promise<Types.ObjectId[]>;
 
-  STATUS_WATCH: string
-  STATUS_IGNORE: string
+  STATUS_WATCH: string;
+  STATUS_IGNORE: string;
 }
 
 export default (crowi: Crowi) => {
@@ -56,49 +56,49 @@ export default (crowi: Crowi) => {
       enum: STATUSES,
     },
     createdAt: { type: Date, default: Date.now },
-  })
+  });
 
   watcherSchema.methods.isWatching = function () {
-    return this.status === STATUS_WATCH
-  }
+    return this.status === STATUS_WATCH;
+  };
 
   watcherSchema.methods.isIgnoring = function () {
-    return this.status === STATUS_IGNORE
-  }
+    return this.status === STATUS_IGNORE;
+  };
 
   watcherSchema.statics.findByUserIdAndTargetId = function (userId, targetId) {
-    return this.findOne({ user: userId, target: targetId })
-  }
+    return this.findOne({ user: userId, target: targetId });
+  };
 
   watcherSchema.statics.upsertWatcher = function (user, targetModel, target, status) {
-    const query = { user, targetModel, target }
-    const doc = { ...query, status }
-    const options = { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
-    return Watcher.findOneAndUpdate(query, doc, options)
-  }
+    const query = { user, targetModel, target };
+    const doc = { ...query, status };
+    const options = { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true };
+    return Watcher.findOneAndUpdate(query, doc, options);
+  };
 
   watcherSchema.statics.watchByPageId = function (user, pageId, status) {
-    return this.upsertWatcher(user, 'Page', pageId, status)
-  }
+    return this.upsertWatcher(user, 'Page', pageId, status);
+  };
 
   watcherSchema.statics.getWatchers = async function (target) {
-    return Watcher.find({ target, status: STATUS_WATCH }).distinct('user')
-  }
+    return Watcher.find({ target, status: STATUS_WATCH }).distinct('user');
+  };
 
   watcherSchema.statics.getIgnorers = async function (target) {
-    return Watcher.find({ target, status: STATUS_IGNORE }).distinct('user')
-  }
+    return Watcher.find({ target, status: STATUS_IGNORE }).distinct('user');
+  };
 
   // 静的プロパティの定義方法を修正
   Object.defineProperty(watcherSchema.statics, 'STATUS_WATCH', {
     value: STATUS_WATCH,
-  })
+  });
 
   Object.defineProperty(watcherSchema.statics, 'STATUS_IGNORE', {
     value: STATUS_IGNORE,
-  })
+  });
 
-  const Watcher = model<WatcherDocument, WatcherModel>('Watcher', watcherSchema)
+  const Watcher = model<WatcherDocument, WatcherModel>('Watcher', watcherSchema);
 
-  return Watcher
-}
+  return Watcher;
+};

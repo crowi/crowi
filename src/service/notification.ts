@@ -1,18 +1,18 @@
-import Crowi from 'src/crowi'
+import Crowi from 'src/crowi';
 
 export default class Notification {
-  crowi: Crowi
+  crowi: Crowi;
 
-  config: any
+  config: any;
 
   constructor(crowi: Crowi) {
-    this.crowi = crowi
-    this.config = crowi.getConfig()
+    this.crowi = crowi;
+    this.config = crowi.getConfig();
   }
 
   hasSlackConfig() {
     if (!this.config.notification.slack) {
-      return false
+      return false;
     }
   }
 

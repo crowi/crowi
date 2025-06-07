@@ -1,24 +1,24 @@
-import { Express } from 'express'
-import Crowi from 'src/crowi'
+import { Express } from 'express';
+import Crowi from 'src/crowi';
 
-import Admin from './admin'
-import Attachment from './attachment'
-import Backlink from './backlink'
-import Bookmark from './bookmark'
-import Comment from './comment'
-import Installer from './installer'
-import Login from './login'
-import Logout from './logout'
-import Me from './me'
-import Notification from './notification'
-import Page from './page'
-import Revision from './revision'
-import Search from './search'
-import Share from './share'
-import ShareAccess from './shareAccess'
-import Slack from './slack'
-import User from './user'
-import Version from './version'
+import Admin from './admin';
+import Attachment from './attachment';
+import Backlink from './backlink';
+import Bookmark from './bookmark';
+import Comment from './comment';
+import Installer from './installer';
+import Login from './login';
+import Logout from './logout';
+import Me from './me';
+import Notification from './notification';
+import Page from './page';
+import Revision from './revision';
+import Search from './search';
+import Share from './share';
+import ShareAccess from './shareAccess';
+import Slack from './slack';
+import User from './user';
+import Version from './version';
 
 export default (crowi: Crowi, app: Express) => ({
   Admin: Admin(crowi),
@@ -39,4 +39,4 @@ export default (crowi: Crowi, app: Express) => ({
   Slack: Slack(crowi),
   User: User(crowi),
   Version: Version(crowi, app),
-})
+});

@@ -1,6 +1,6 @@
-import Debug from 'debug'
+import Debug from 'debug';
 
-const debug = Debug('crowi:util:accessTokenParser')
+const debug = Debug('crowi:util:accessTokenParser');
 
 /**
  * Extract Bearer token from Authorization header.
@@ -10,23 +10,23 @@ const debug = Debug('crowi:util:accessTokenParser')
  * @return {?string} found access_token or null.
  */
 const extractBearerToken = (headers) => {
-  const v = headers.authorization
+  const v = headers.authorization;
   if (!v) {
-    return null
+    return null;
   }
 
-  const parts = v.trim().replace(/( )+/g, ' ').split(' ')
+  const parts = v.trim().replace(/( )+/g, ' ').split(' ');
   if (parts.length !== 2 || parts[0] !== 'Bearer') {
-    return null
+    return null;
   }
 
-  return parts[1]
-}
+  return parts[1];
+};
 
 export const parseAccessToken = (req) => {
   if (!req) {
-    throw new Error('req required.')
+    throw new Error('req required.');
   }
 
-  return extractBearerToken(req.headers) || req.query.access_token || req.body.access_token || null
-}
+  return extractBearerToken(req.headers) || req.query.access_token || req.body.access_token || null;
+};

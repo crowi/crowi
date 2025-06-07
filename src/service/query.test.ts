@@ -1,4 +1,4 @@
-import { parseQuery } from 'src/service/query'
+import { parseQuery } from 'src/service/query';
 
 describe('parseQuery', () => {
   const cases = [
@@ -132,10 +132,10 @@ describe('parseQuery', () => {
         },
       },
     ],
-  ] as const
+  ] as const;
   it('should parse query', () => {
     for (const [input, output] of cases) {
-      expect(parseQuery(input)).toEqual(output)
+      expect(parseQuery(input)).toEqual(output);
     }
-  })
-})
+  });
+});

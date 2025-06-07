@@ -1,11 +1,11 @@
-import { Router, Express } from 'express'
-import Crowi from 'src/crowi'
-const router = Router()
+import { Router, Express } from 'express';
+import Crowi from 'src/crowi';
+const router = Router();
 
 export default (crowi: Crowi, app: Express, form) => {
-  const { Version } = crowi.controllers
+  const { Version } = crowi.controllers;
 
-  router.get('/versions.get', Version.api.get)
+  router.get('/versions.get', Version.api.get);
 
-  return router
-}
+  return router;
+};

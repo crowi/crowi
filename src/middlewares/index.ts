@@ -1,17 +1,17 @@
-import { Express } from 'express'
-import Crowi from 'src/crowi'
+import { Express } from 'express';
+import Crowi from 'src/crowi';
 
-import AccessTokenParser from './accessTokenParser'
-import AdminRequired from './adminRequired'
-import ApplicationInstalled from './applicationInstalled'
-import ApplicationNotInstalled from './applicationNotInstalled'
-import BasicAuth from './basicAuth'
-import CsrfVerify from './csrfVerify'
-import EncodeSpace from './encodeSpace'
-import FileAccessRightOrLoginRequired from './fileAccessRightOrLoginRequired'
-import I18next from './i18next'
-import LoginChecker from './loginChecker'
-import LoginRequired from './loginRequired'
+import AccessTokenParser from './accessTokenParser';
+import AdminRequired from './adminRequired';
+import ApplicationInstalled from './applicationInstalled';
+import ApplicationNotInstalled from './applicationNotInstalled';
+import BasicAuth from './basicAuth';
+import CsrfVerify from './csrfVerify';
+import EncodeSpace from './encodeSpace';
+import FileAccessRightOrLoginRequired from './fileAccessRightOrLoginRequired';
+import I18next from './i18next';
+import LoginChecker from './loginChecker';
+import LoginRequired from './loginRequired';
 
 export default (crowi: Crowi, app: Express) => ({
   AccessTokenParser: AccessTokenParser(crowi, app),
@@ -25,4 +25,4 @@ export default (crowi: Crowi, app: Express) => ({
   I18next: I18next(crowi, app),
   LoginChecker: LoginChecker(crowi, app),
   LoginRequired: LoginRequired(crowi),
-})
+});

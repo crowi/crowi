@@ -1,83 +1,83 @@
-import { Request, Response } from 'express'
-import Crowi from 'src/crowi'
-import Debug from 'debug'
-import ApiResponse from 'src/util/apiResponse'
-import { PageDocument } from 'src/models/page'
-import { UserDocument } from 'src/models/user'
-import { getPath } from 'src/util/ssr'
-import { getAppContext } from 'src/util/view'
-import { getQueryAsNumber, getQueryAsBoolean, getQueryAsString, getQueryAsObjectId } from 'src/types/express'
+import { Request, Response } from 'express';
+import Crowi from 'src/crowi';
+import Debug from 'debug';
+import ApiResponse from 'src/util/apiResponse';
+import { PageDocument } from 'src/models/page';
+import { UserDocument } from 'src/models/user';
+import { getPath } from 'src/util/ssr';
+import { getAppContext } from 'src/util/view';
+import { getQueryAsNumber, getQueryAsBoolean, getQueryAsString, getQueryAsObjectId } from 'src/types/express';
 
 export default (crowi: Crowi) => {
-  const debug = Debug('crowi:routes:share')
-  const Share = crowi.model('Share')
-  const ShareAccess = crowi.model('ShareAccess')
-  const Tracking = crowi.model('Tracking')
-  const actions = {} as any
+  const debug = Debug('crowi:routes:share');
+  const Share = crowi.model('Share');
+  const ShareAccess = crowi.model('ShareAccess');
+  const Tracking = crowi.model('Tracking');
+  const actions = {} as any;
 
   async function firstOrCreateTrackingId(req) {
-    const { trackingId } = req.session
-    debug('ShereAccess from session', trackingId)
+    const { trackingId } = req.session;
+    debug('ShereAccess from session', trackingId);
     if (!trackingId) {
-      const userAgent = req.headers['user-agent']
-      const remoteAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress
-      const tracking = await Tracking.create({ userAgent, remoteAddress })
-      debug('ShereAccess new created', tracking._id)
-      return tracking._id
+      const userAgent = req.headers['user-agent'];
+      const remoteAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+      const tracking = await Tracking.create({ userAgent, remoteAddress });
+      debug('ShereAccess new created', tracking._id);
+      return tracking._id;
     }
-    return trackingId
+    return trackingId;
   }
 
   async function addAccessLog(req, share) {
-    const trackingId = await firstOrCreateTrackingId(req)
+    const trackingId = await firstOrCreateTrackingId(req);
     try {
-      ShareAccess.access(share._id, trackingId)
+      ShareAccess.access(share._id, trackingId);
     } catch (err: any) {
-      console.error(err)
+      console.error(err);
     }
 
-    return trackingId
+    return trackingId;
   }
 
   function hasAccessAuthority(secretKeywords, { uuid, secretKeyword }) {
-    return !secretKeyword || secretKeywords[uuid] === secretKeyword
+    return !secretKeyword || secretKeywords[uuid] === secretKeyword;
   }
 
   function updateShareIds(shareIds, id) {
-    const unique = (id, index, array) => array.indexOf(id) === index
-    return shareIds.concat(id).filter(Boolean).filter(unique)
+    const unique = (id, index, array) => array.indexOf(id) === index;
+    return shareIds.concat(id).filter(Boolean).filter(unique);
   }
 
   function isExternalShareEnabled() {
-    const config = crowi.getConfig()
-    return Boolean(config.crowi['app:externalShare'])
+    const config = crowi.getConfig();
+    return Boolean(config.crowi['app:externalShare']);
   }
 
   actions.pageShow = async (req: Request, res: Response) => {
-    const { uuid } = req.params
-    const { shareIds = [], secretKeywords = {} } = req.session
+    const { uuid } = req.params;
+    const { shareIds = [], secretKeywords = {} } = req.session;
 
     if (!isExternalShareEnabled()) {
-      res.status(405)
-      return res.json({ error: 'Method Not Allowed' })
+      res.status(405);
+      return res.json({ error: 'Method Not Allowed' });
     }
 
     try {
-      const share = await Share.findShareByUuid(uuid, { status: Share.STATUS_ACTIVE })
-      const shareId = share.uuid
-      const trackingId = await addAccessLog(req, share)
-      req.session.trackingId = trackingId
+      const share = await Share.findShareByUuid(uuid, { status: Share.STATUS_ACTIVE });
+      const shareId = share.uuid;
+      const trackingId = await addAccessLog(req, share);
+      req.session.trackingId = trackingId;
 
       if (hasAccessAuthority(secretKeywords, share)) {
-        req.session.shareIds = updateShareIds(shareIds, uuid)
-        const page = share.page as any as PageDocument
+        req.session.shareIds = updateShareIds(shareIds, uuid);
+        const page = share.page as any as PageDocument;
 
         return res.json({
           context: getAppContext(crowi, req),
           hasSecretKeyword: true,
           shareId,
           page,
-        })
+        });
       }
 
       return res.json({
@@ -85,51 +85,51 @@ export default (crowi: Crowi) => {
         hasSecretKeyword: false,
         shareId,
         page: null,
-      })
+      });
     } catch (err: any) {
-      console.error(err)
-      return res.redirect('/')
+      console.error(err);
+      return res.redirect('/');
     }
-  }
+  };
 
-  const api = (actions.api = {} as any)
+  const api = (actions.api = {} as any);
 
   api.list = async (req: Request, res: Response) => {
     // list is allowed if the feature is disabled because it is used in admin page
 
-    const pageId = req.query.page_id
-    const page = getQueryAsNumber(req.query.page, 1)
-    const limit = getQueryAsNumber(req.query.limit, 50)
-    const populateAccesses = getQueryAsBoolean(req.query.populate_accesses)
+    const pageId = req.query.page_id;
+    const page = getQueryAsNumber(req.query.page, 1);
+    const limit = getQueryAsNumber(req.query.limit, 50);
+    const populateAccesses = getQueryAsBoolean(req.query.populate_accesses);
 
-    const query = pageId ? { page: pageId } : {}
-    const options = { page, limit, populateAccesses }
+    const query = pageId ? { page: pageId } : {};
+    const options = { page, limit, populateAccesses };
     try {
-      const shareData = await Share.findShares(query, options)
-      const result = { share: shareData }
+      const shareData = await Share.findShares(query, options);
+      const result = { share: shareData };
 
-      return res.json(ApiResponse.success(result))
+      return res.json(ApiResponse.success(result));
     } catch (err: any) {
-      return res.json(ApiResponse.error(err))
+      return res.json(ApiResponse.error(err));
     }
-  }
+  };
 
   api.get = async (req: Request, res: Response) => {
-    const pageId = req.query.page_id
-    const populateAccesses = getQueryAsBoolean(req.query.populate_accesses)
+    const pageId = req.query.page_id;
+    const populateAccesses = getQueryAsBoolean(req.query.populate_accesses);
 
     if (pageId === null) {
-      return res.json(ApiResponse.error('Parameters page_id is required.'))
+      return res.json(ApiResponse.error('Parameters page_id is required.'));
     }
 
     try {
-      const shareData = await Share.findShareByPageId(pageId, { status: Share.STATUS_ACTIVE }, { populateAccesses })
-      const result = { share: shareData }
-      return res.json(ApiResponse.success(result))
+      const shareData = await Share.findShareByPageId(pageId, { status: Share.STATUS_ACTIVE }, { populateAccesses });
+      const result = { share: shareData };
+      return res.json(ApiResponse.success(result));
     } catch (err: any) {
-      return res.json(ApiResponse.error(err))
+      return res.json(ApiResponse.error(err));
     }
-  }
+  };
 
   /**
    * @api {post} /shares.create Create new share
@@ -140,29 +140,29 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id
    */
   api.create = async (req: Request, res: Response) => {
-    const user = req.user as UserDocument
+    const user = req.user as UserDocument;
 
     if (!isExternalShareEnabled()) {
-      return res.status(405)
+      return res.status(405);
     }
 
-    const { page_id: pageId = null } = req.body
+    const { page_id: pageId = null } = req.body;
 
     if (pageId === null) {
-      return res.json(ApiResponse.error('Parameters id and page_id are required.'))
+      return res.json(ApiResponse.error('Parameters id and page_id are required.'));
     }
 
     try {
-      const shareData = await Share.createShare(pageId, user._id)
+      const shareData = await Share.createShare(pageId, user._id);
       if (!shareData) {
-        throw new Error('Failed to create share.')
+        throw new Error('Failed to create share.');
       }
-      const result = { share: shareData.toObject() }
-      return res.json(ApiResponse.success(result))
+      const result = { share: shareData.toObject() };
+      return res.json(ApiResponse.success(result));
     } catch (err: any) {
-      return res.json(ApiResponse.error(err))
+      return res.json(ApiResponse.error(err));
     }
-  }
+  };
 
   /**
    * @api {post} /shares.delete Delete share
@@ -173,62 +173,62 @@ export default (crowi: Crowi) => {
    */
   api.delete = async (req: Request, res: Response) => {
     if (!isExternalShareEnabled()) {
-      return res.status(405)
+      return res.status(405);
     }
 
-    const { page_id: pageId } = req.body
+    const { page_id: pageId } = req.body;
 
     try {
-      const shareData = await Share.findShareByPageId(pageId, { status: Share.STATUS_ACTIVE })
-      await Share.deleteById(shareData.id)
-      debug('Share deleted', shareData.id)
-      const result = { share: shareData.toObject() }
-      return res.json(ApiResponse.success(result))
+      const shareData = await Share.findShareByPageId(pageId, { status: Share.STATUS_ACTIVE });
+      await Share.deleteById(shareData.id);
+      debug('Share deleted', shareData.id);
+      const result = { share: shareData.toObject() };
+      return res.json(ApiResponse.success(result));
     } catch (err: any) {
-      debug('Error occured while get setting', err, err.stack)
-      return res.json(ApiResponse.error('Failed to delete share.'))
+      debug('Error occured while get setting', err, err.stack);
+      return res.json(ApiResponse.error('Failed to delete share.'));
     }
-  }
+  };
 
   api.setSecretKeyword = async (req: Request, res: Response) => {
     if (!isExternalShareEnabled()) {
-      return res.status(405)
+      return res.status(405);
     }
 
-    const { share_id: shareId, secret_keyword: secretKeyword } = req.body
+    const { share_id: shareId, secret_keyword: secretKeyword } = req.body;
 
     try {
-      const share = await Share.findShareByUuid(shareId)
-      share.secretKeyword = secretKeyword
-      const shareData = await share.save()
-      const result = { share: shareData.toObject() }
-      return res.json(ApiResponse.success(result))
+      const share = await Share.findShareByUuid(shareId);
+      share.secretKeyword = secretKeyword;
+      const shareData = await share.save();
+      const result = { share: shareData.toObject() };
+      return res.json(ApiResponse.success(result));
     } catch (err: any) {
-      debug('Error occured while update secret keyword', err, err.stack)
-      return res.json(ApiResponse.error('Failed to update secret keyword.'))
+      debug('Error occured while update secret keyword', err, err.stack);
+      return res.json(ApiResponse.error('Failed to update secret keyword.'));
     }
-  }
+  };
 
   api.checkSecretKeyword = async (req: Request, res: Response) => {
     if (!isExternalShareEnabled()) {
-      return res.status(405)
+      return res.status(405);
     }
 
-    const { share_id: shareId, secret_keyword: secretKeyword } = req.body
-    const { shareIds = [], secretKeywords = {} } = req.session
+    const { share_id: shareId, secret_keyword: secretKeyword } = req.body;
+    const { shareIds = [], secretKeywords = {} } = req.session;
 
-    req.session.secretKeywords = Object.assign(secretKeywords, { [shareId]: secretKeyword })
+    req.session.secretKeywords = Object.assign(secretKeywords, { [shareId]: secretKeyword });
     try {
-      const share = await Share.findShareByUuid(shareId, { status: Share.STATUS_ACTIVE })
-      const result = { hasAccessAuthority: hasAccessAuthority(req.session.secretKeywords, share) }
+      const share = await Share.findShareByUuid(shareId, { status: Share.STATUS_ACTIVE });
+      const result = { hasAccessAuthority: hasAccessAuthority(req.session.secretKeywords, share) };
       if (result.hasAccessAuthority) {
-        req.session.shareIds = updateShareIds(shareIds, shareId)
+        req.session.shareIds = updateShareIds(shareIds, shareId);
       }
-      return res.json(ApiResponse.success(result))
+      return res.json(ApiResponse.success(result));
     } catch (err: any) {
-      return res.json(ApiResponse.error(err))
+      return res.json(ApiResponse.error(err));
     }
-  }
+  };
 
-  return actions
-}
+  return actions;
+};

@@ -1,14 +1,14 @@
-import { Express, Request, Response, NextFunction } from 'express'
-import Crowi from 'src/crowi'
+import { Express, Request, Response, NextFunction } from 'express';
+import Crowi from 'src/crowi';
 // const debug = Debug('crowi:middlewares:loginChecker')
 
 export default (crowi: Crowi, app: Express) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const User = crowi.model('User')
-    const csrfKey = req.session?.id || 'anon'
+    const User = crowi.model('User');
+    const csrfKey = req.session?.id || 'anon';
 
     if (!req.csrfToken) {
-      req.csrfToken = crowi.getTokens().create(csrfKey)
+      req.csrfToken = crowi.getTokens().create(csrfKey);
     }
 
     // session に user object が入ってる
@@ -17,17 +17,17 @@ export default (crowi: Crowi, app: Express) => {
         .select('+password +apiToken')
         .exec()
         .then((userData: any) => {
-          req.user = req.session.user = userData
-          res.locals.user = req.user
-          next()
+          req.user = req.session.user = userData;
+          res.locals.user = req.user;
+          next();
         })
         .catch(() => {
-          next()
-        })
+          next();
+        });
     } else {
-      req.user = req.session.user = null
-      res.locals.user = req.user
-      next()
+      req.user = req.session.user = null;
+      res.locals.user = req.user;
+      next();
     }
-  }
-}
+  };
+};

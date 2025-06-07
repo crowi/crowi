@@ -1,4 +1,4 @@
-import path2name from 'src/common/functions/path2name'
+import path2name from 'src/common/functions/path2name';
 
 describe('path2name test', () => {
   test('convert path to shortName', () => {
@@ -10,10 +10,10 @@ describe('path2name test', () => {
       ['/user/aoi.miyazaki/dialy/2019/08', 'dialy/2019/08'],
       ['/user/aoi.miyazaki/dialy/2019', 'dialy/2019'],
       ['/user/aoi.miyazaki/dialy/2019/', 'dialy/2019/'],
-    ]
+    ];
 
     for (const t of testData) {
-      expect(path2name(t[0])).toEqual(t[1])
+      expect(path2name(t[0])).toEqual(t[1]);
     }
-  })
-})
+  });
+});
