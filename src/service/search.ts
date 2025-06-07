@@ -1,29 +1,29 @@
-import path from 'path'
+import path from 'path';
 // @ts-ignore
-import { Client as ES6Client } from 'es6'
+import { Client as ES6Client } from 'es6';
 // @ts-ignore
-import { Client as ES7Client } from 'es7'
-import Debug from 'debug'
-import { format } from 'date-fns'
-import fs from 'fs'
-import { EventEmitter } from 'events'
-import Crowi from 'src/crowi'
-import { Query, SearchWithBody, FunctionScoreQueryParams } from 'src/util/elasticsearch/query'
-import { parseQuery } from 'src/service/query'
-import { TYPES } from 'src/models/page'
-import ElasticsearchClient from 'src/service/elasticsearch'
+import { Client as ES7Client } from 'es7';
+import Debug from 'debug';
+import { format } from 'date-fns';
+import fs from 'fs';
+import { EventEmitter } from 'events';
+import Crowi from 'src/crowi';
+import { Query, SearchWithBody, FunctionScoreQueryParams } from 'src/util/elasticsearch/query';
+import { parseQuery } from 'src/service/query';
+import { TYPES } from 'src/models/page';
+import ElasticsearchClient from 'src/service/elasticsearch';
 
-const debug = Debug('crowi:lib:search')
+const debug = Debug('crowi:lib:search');
 
 interface SearchOption {
-  offset?: number
-  limit?: number
-  type?: (typeof TYPES)[number]
+  offset?: number;
+  limit?: number;
+  type?: (typeof TYPES)[number];
 }
 
 export default class Search {
-  static DEFAULT_OFFSET = 0
-  static DEFAULT_LIMIT = 50
+  static DEFAULT_OFFSET = 0;
+  static DEFAULT_LIMIT = 50;
 
   // In Elasticsearch RegExp, we don't need to used ^ and $.
   // Ref: https://www.elastic.co/guide/en/elasticsearch/reference/5.6/query-dsl-regexp-query.html#_standard_operators
@@ -43,157 +43,157 @@ export default class Search {
         'path.raw': '/user/',
       },
     },
-  }
+  };
 
-  esNodeName = '-'
-  esNodeNames: string[] = []
-  esVersion = 'unknown'
-  esPluginNames: string[] = []
-  esUri: string
-  crowi: Crowi
-  searchEvent: EventEmitter
-  node: string
-  indexNames: { base: string; current: string }
-  requestTimeout: number
-  client: ElasticsearchClient
+  esNodeName = '-';
+  esNodeNames: string[] = [];
+  esVersion = 'unknown';
+  esPluginNames: string[] = [];
+  esUri: string;
+  crowi: Crowi;
+  searchEvent: EventEmitter;
+  node: string;
+  indexNames: { base: string; current: string };
+  requestTimeout: number;
+  client: ElasticsearchClient;
 
   constructor(crowi: Crowi, esUri: string) {
-    this.esUri = esUri
-    this.crowi = crowi
-    this.searchEvent = crowi.event('Search')
+    this.esUri = esUri;
+    this.crowi = crowi;
+    this.searchEvent = crowi.event('Search');
 
-    const uri = this.parseUri(this.esUri)
-    const { node } = uri
-    this.node = node
+    const uri = this.parseUri(this.esUri);
+    const { node } = uri;
+    this.node = node;
     this.indexNames = {
       base: uri.indexName,
       current: `${uri.indexName}-current`,
-    }
-    const requestTimeout = 5000
-    this.requestTimeout = requestTimeout
+    };
+    const requestTimeout = 5000;
+    this.requestTimeout = requestTimeout;
 
-    this.client = new ElasticsearchClient(new ES6Client({ node, requestTimeout }))
+    this.client = new ElasticsearchClient(new ES6Client({ node, requestTimeout }));
   }
 
   async waitES(retry = 10) {
-    let count = 0
+    let count = 0;
     return new Promise<void>((resolve) => {
       const interval = setInterval(async () => {
         if (++count >= retry || (await this.client.ping())) {
-          resolve()
-          clearInterval(interval)
+          resolve();
+          clearInterval(interval);
         }
-      }, 5000)
-    })
+      }, 5000);
+    });
   }
 
   async checkESVersion() {
     try {
-      const response = await this.client.nodes.info()
-      const nodes = response.body
+      const response = await this.client.nodes.info();
+      const nodes = response.body;
       if (!nodes.nodes) {
-        throw new Error('no nodes info')
+        throw new Error('no nodes info');
       }
 
       for (const [nodeName, { version, plugins }] of Object.entries(nodes.nodes as Record<string, { version: string; plugins: { name: string }[] }>)) {
-        this.esNodeName = nodeName
-        this.esNodeNames = [...this.esNodeNames, nodeName]
-        this.esVersion = version
-        this.esPluginNames = [...this.esPluginNames, ...plugins.map(({ name }) => name)]
+        this.esNodeName = nodeName;
+        this.esNodeNames = [...this.esNodeNames, nodeName];
+        this.esVersion = version;
+        this.esPluginNames = [...this.esPluginNames, ...plugins.map(({ name }) => name)];
       }
     } catch (error) {
-      debug('es check version error:', error)
+      debug('es check version error:', error);
     }
   }
 
   isES7() {
-    return this.esVersion.startsWith('7')
+    return this.esVersion.startsWith('7');
   }
 
   registerUpdateEvent() {
-    const pageEvent = this.crowi.event('Page')
-    pageEvent.on('create', this.syncPageCreated.bind(this))
-    pageEvent.on('update', this.syncPageUpdated.bind(this))
-    pageEvent.on('delete', this.syncPageDeleted.bind(this))
+    const pageEvent = this.crowi.event('Page');
+    pageEvent.on('create', this.syncPageCreated.bind(this));
+    pageEvent.on('update', this.syncPageUpdated.bind(this));
+    pageEvent.on('delete', this.syncPageDeleted.bind(this));
 
-    const bookmarkEvent = this.crowi.event('Bookmark')
-    bookmarkEvent.on('create', this.syncBookmarkChanged.bind(this))
-    bookmarkEvent.on('delete', this.syncBookmarkChanged.bind(this))
+    const bookmarkEvent = this.crowi.event('Bookmark');
+    bookmarkEvent.on('create', this.syncBookmarkChanged.bind(this));
+    bookmarkEvent.on('delete', this.syncBookmarkChanged.bind(this));
   }
 
   async initialize() {
-    const { node, requestTimeout } = this
+    const { node, requestTimeout } = this;
 
-    await this.waitES()
+    await this.waitES();
 
-    await this.checkESVersion()
+    await this.checkESVersion();
 
     if (this.isES7()) {
-      this.client = new ElasticsearchClient(new ES7Client({ node, requestTimeout }))
+      this.client = new ElasticsearchClient(new ES7Client({ node, requestTimeout }));
     }
 
-    await this.ensureAlias()
+    await this.ensureAlias();
 
-    this.registerUpdateEvent()
+    this.registerUpdateEvent();
   }
 
   requireMappingFile() {
-    const { resourceDir } = this.crowi
+    const { resourceDir } = this.crowi;
 
-    let fileName = 'mappings.json'
+    let fileName = 'mappings.json';
     if ('analysis-kuromoji' in this.esPluginNames) {
-      fileName = 'mappings-kuromoji.json'
+      fileName = 'mappings-kuromoji.json';
     }
     if ('analysis-sudachi' in this.esPluginNames) {
-      fileName = 'mappings-sudachi.json'
+      fileName = 'mappings-sudachi.json';
     }
-    const dirName = this.isES7() ? 'es7' : 'es6'
+    const dirName = this.isES7() ? 'es7' : 'es6';
 
-    const filePath = path.join(resourceDir, 'search', dirName, fileName)
-    return JSON.parse(fs.readFileSync(filePath).toString())
+    const filePath = path.join(resourceDir, 'search', dirName, fileName);
+    return JSON.parse(fs.readFileSync(filePath).toString());
   }
 
   shouldIndexed(page) {
     if (page.redirectTo !== null) {
-      return false
+      return false;
     }
 
     // FIXME: use STATUS_DELETED
     // isDeleted() couldn't use here because of lean()
     if (page.status === 'deleted') {
-      return false
+      return false;
     }
 
-    return true
+    return true;
   }
 
   // BONSAI_URL is following format:
   // => https://{ID}:{PASSWORD}@{HOST}
   parseUri(uri) {
     if (!uri.startsWith('http')) {
-      throw new Error('URL for Elasticsearch should starts with http/https')
+      throw new Error('URL for Elasticsearch should starts with http/https');
     }
 
-    const esUrl = new URL(uri)
-    let indexName = 'crowi'
-    const node = `${esUrl.protocol}//${esUrl.username && esUrl.password ? `${esUrl.username}:${esUrl.password}@` : ''}${esUrl.host}`
+    const esUrl = new URL(uri);
+    let indexName = 'crowi';
+    const node = `${esUrl.protocol}//${esUrl.username && esUrl.password ? `${esUrl.username}:${esUrl.password}@` : ''}${esUrl.host}`;
     if (esUrl.pathname !== '/') {
-      indexName = esUrl.pathname.substring(1)
+      indexName = esUrl.pathname.substring(1);
     }
 
-    return { node, indexName }
+    return { node, indexName };
   }
 
   createIndexName() {
-    const datetime = format(new Date(), 'yyyyMMddHHmmss')
-    return `${this.indexNames.base}-${datetime}`
+    const datetime = format(new Date(), 'yyyyMMddHHmmss');
+    return `${this.indexNames.base}-${datetime}`;
   }
 
   async createIndex(index) {
-    await this.checkESVersion()
-    const body = this.requireMappingFile()
+    await this.checkESVersion();
+    const body = this.requireMappingFile();
 
-    return this.client.indices.create({ index, body })
+    return this.client.indices.create({ index, body });
   }
 
   /**
@@ -218,111 +218,111 @@ export default class Search {
    *
    */
   async buildIndex() {
-    const newIndexName = this.createIndexName()
+    const newIndexName = this.createIndexName();
 
     try {
       // creating index anyway.
-      await this.createIndex(newIndexName)
-      debug('Index created.')
+      await this.createIndex(newIndexName);
+      debug('Index created.');
     } catch (err) {
-      debug('Error (while creating new index)', newIndexName, err)
-      throw new Error('Error while creating index.')
+      debug('Error (while creating new index)', newIndexName, err);
+      throw new Error('Error while creating index.');
     }
 
     try {
-      await this.addAllPages(newIndexName)
-      debug('Added all pages.')
+      await this.addAllPages(newIndexName);
+      debug('Added all pages.');
     } catch (err) {
-      debug('Error (while adding all pages)', err)
-      throw new Error('Error while adding all pages.')
+      debug('Error (while adding all pages)', err);
+      throw new Error('Error while adding all pages.');
     }
 
     // remove `current` alias from old existing index, and add `current` to newIndexName index.
-    const alias = await this.getAlias()
+    const alias = await this.getAlias();
     const add = {
       index: newIndexName,
       alias: this.indexNames.current,
-    }
+    };
     try {
       if (alias) {
         const remove = {
           index: '*',
           alias: alias.alias,
-        }
-        await this.updateAliases([{ add }, { remove }])
+        };
+        await this.updateAliases([{ add }, { remove }]);
       } else {
-        await this.updateAliases([{ add }])
+        await this.updateAliases([{ add }]);
       }
-      debug('Updated aliases.')
+      debug('Updated aliases.');
     } catch (err) {
-      debug('Error (while updating aliases)', err)
-      throw new Error('Error while updating aliases.')
+      debug('Error (while updating aliases)', err);
+      throw new Error('Error while updating aliases.');
     }
 
-    const indices = await this.getIndices()
-    const deleteIndices = indices.filter((index) => index !== newIndexName)
+    const indices = await this.getIndices();
+    const deleteIndices = indices.filter((index) => index !== newIndexName);
 
     // for the first time, no old indices exists
     if (deleteIndices.length === 0) {
-      return
+      return;
     }
 
-    await this.deleteIndices(deleteIndices)
+    await this.deleteIndices(deleteIndices);
   }
 
   async getIndices() {
-    const response = await this.client.cat.indices({ format: 'json' })
-    const indices = response.body
-    return indices.map(({ index }) => index).filter((index) => index.startsWith(this.indexNames.base))
+    const response = await this.client.cat.indices({ format: 'json' });
+    const indices = response.body;
+    return indices.map(({ index }) => index).filter((index) => index.startsWith(this.indexNames.base));
   }
 
   deleteIndices(indices) {
-    return this.client.indices.delete({ index: indices })
+    return this.client.indices.delete({ index: indices });
   }
 
   async existsAlias() {
-    const response = await this.client.indices.existsAlias({ name: this.indexNames.current })
-    return response.body
+    const response = await this.client.indices.existsAlias({ name: this.indexNames.current });
+    return response.body;
   }
 
   async getAlias() {
-    const existsAlias = await this.existsAlias()
+    const existsAlias = await this.existsAlias();
     if (existsAlias) {
-      const response = await this.client.cat.aliases({ name: this.indexNames.current, format: 'json' })
-      const aliases = response.body
+      const response = await this.client.cat.aliases({ name: this.indexNames.current, format: 'json' });
+      const aliases = response.body;
       if (aliases.length > 0) {
-        return aliases[0]
+        return aliases[0];
       }
     }
   }
 
   async putAlias(index) {
-    return this.client.indices.putAlias({ index, name: this.indexNames.current })
+    return this.client.indices.putAlias({ index, name: this.indexNames.current });
   }
 
   async ensureAlias() {
-    const exists = await this.existsAlias()
+    const exists = await this.existsAlias();
     if (!exists) {
-      const indices = await this.getIndices()
+      const indices = await this.getIndices();
       if (indices.length > 0) {
-        await this.putAlias(indices[0])
-        return true
+        await this.putAlias(indices[0]);
+        return true;
       }
     }
-    return exists
+    return exists;
   }
 
   async updateAliases(actions) {
-    return this.client.indices.updateAliases({ body: { actions } })
+    return this.client.indices.updateAliases({ body: { actions } });
   }
 
   getType() {
-    return this.isES7() ? '_doc' : 'pages'
+    return this.isES7() ? '_doc' : 'pages';
   }
 
   prepareBodyForUpdate(body, page, index = null) {
     if (!Array.isArray(body)) {
-      throw new Error('Body must be an array.')
+      throw new Error('Body must be an array.');
     }
 
     const command = {
@@ -331,7 +331,7 @@ export default class Search {
         _type: this.getType(),
         _id: page._id.toString(),
       },
-    }
+    };
 
     const document = {
       doc: {
@@ -344,15 +344,15 @@ export default class Search {
         updated_at: page.updatedAt,
       },
       doc_as_upsert: true,
-    }
+    };
 
-    body.push(command)
-    body.push(document)
+    body.push(command);
+    body.push(document);
   }
 
   prepareBodyForCreate(body, page, index = null) {
     if (!Array.isArray(body)) {
-      throw new Error('Body must be an array.')
+      throw new Error('Body must be an array.');
     }
 
     const command = {
@@ -361,9 +361,9 @@ export default class Search {
         _type: this.getType(),
         _id: page._id.toString(),
       },
-    }
+    };
 
-    const bookmarkCount = page.bookmarkCount || 0
+    const bookmarkCount = page.bookmarkCount || 0;
     const document = {
       path: page.path,
       body: page.revision.body,
@@ -374,15 +374,15 @@ export default class Search {
       like_count: page.liker.length || 0,
       created_at: page.createdAt,
       updated_at: page.updatedAt,
-    }
+    };
 
-    body.push(command)
-    body.push(document)
+    body.push(command);
+    body.push(document);
   }
 
   prepareBodyForDelete(body, page, index = null) {
     if (!Array.isArray(body)) {
-      throw new Error('Body must be an array.')
+      throw new Error('Body must be an array.');
     }
 
     const command = {
@@ -391,114 +391,114 @@ export default class Search {
         _type: this.getType(),
         _id: page._id.toString(),
       },
-    }
+    };
 
-    body.push(command)
+    body.push(command);
   }
 
   async addPages(pages) {
-    const Bookmark = this.crowi.model('Bookmark')
-    const body = []
+    const Bookmark = this.crowi.model('Bookmark');
+    const body = [];
 
     for (const page of pages) {
-      page.bookmarkCount = await Bookmark.countByPageId(page._id)
-      this.prepareBodyForCreate(body, page)
+      page.bookmarkCount = await Bookmark.countByPageId(page._id);
+      this.prepareBodyForCreate(body, page);
     }
 
-    debug('addPages(): Sending Request to ES', body)
-    const response = await this.client.bulk({ body })
-    return response.body
+    debug('addPages(): Sending Request to ES', body);
+    const response = await this.client.bulk({ body });
+    return response.body;
   }
 
   async updatePages(pages) {
-    const body = []
+    const body = [];
 
     pages.map((page) => {
-      this.prepareBodyForUpdate(body, page)
-    })
+      this.prepareBodyForUpdate(body, page);
+    });
 
-    debug('updatePages(): Sending Request to ES', body)
-    const response = await this.client.bulk({ body })
-    return response.body
+    debug('updatePages(): Sending Request to ES', body);
+    const response = await this.client.bulk({ body });
+    return response.body;
   }
 
   deletePages(pages) {
-    const body = []
+    const body = [];
 
     pages.map((page) => {
-      this.prepareBodyForDelete(body, page)
-    })
+      this.prepareBodyForDelete(body, page);
+    });
 
-    debug('deletePages(): Sending Request to ES', body)
+    debug('deletePages(): Sending Request to ES', body);
     return this.client.bulk({
       body: body,
-    })
+    });
   }
 
   async addAllPages(index) {
-    const Page = this.crowi.model('Page')
-    const allPageCount = await Page.allPageCount()
-    const Bookmark = this.crowi.model('Bookmark')
-    const cursor = Page.getStreamOfFindAll({ publicOnly: false })
-    let body = []
-    let sent = 0
-    let skipped = 0
-    let total = 0
+    const Page = this.crowi.model('Page');
+    const allPageCount = await Page.allPageCount();
+    const Bookmark = this.crowi.model('Bookmark');
+    const cursor = Page.getStreamOfFindAll({ publicOnly: false });
+    let body = [];
+    let sent = 0;
+    let skipped = 0;
+    let total = 0;
 
     const bulkSend = async (body) => {
       try {
         const response = await this.client.bulk({
           body,
           timeout: '1d',
-        })
-        const { items, errors, took } = response.body
-        debug('addAllPages add anyway (items, errors, took): ', (items || []).length, errors, took, 'ms')
+        });
+        const { items, errors, took } = response.body;
+        debug('addAllPages add anyway (items, errors, took): ', (items || []).length, errors, took, 'ms');
       } catch (err) {
-        debug('addAllPages error on add anyway: ', err)
+        debug('addAllPages error on add anyway: ', err);
       }
-    }
+    };
 
     try {
       await cursor.eachAsync(async (doc) => {
         if (!doc.creator || !doc.revision || !this.shouldIndexed(doc)) {
           // debug('Skipped', doc.path);
-          skipped++
-          return
+          skipped++;
+          return;
         }
-        total++
+        total++;
 
-        const bookmarkCount = await Bookmark.countByPageId(doc._id)
-        const page = { ...doc, bookmarkCount }
-        this.prepareBodyForCreate(body, page, index)
+        const bookmarkCount = await Bookmark.countByPageId(doc._id);
+        const page = { ...doc, bookmarkCount };
+        this.prepareBodyForCreate(body, page, index);
 
         if (body.length >= 4000) {
           // send each 2000 docs. (body has 2 elements for each data)
-          sent++
-          debug('Sending request (seq, total, skipped)', sent, total, skipped)
-          await bulkSend(body)
-          this.searchEvent.emit('addPageProgress', allPageCount, total, skipped)
+          sent++;
+          debug('Sending request (seq, total, skipped)', sent, total, skipped);
+          await bulkSend(body);
+          this.searchEvent.emit('addPageProgress', allPageCount, total, skipped);
 
-          body = []
+          body = [];
         }
-      })
+      });
       // send all remaining data on body[]
-      debug('Sending last body of bulk operation:', body.length)
-      await bulkSend(body)
-      this.searchEvent.emit('finishAddPage', allPageCount, total, skipped)
+      debug('Sending last body of bulk operation:', body.length);
+      await bulkSend(body);
+      this.searchEvent.emit('finishAddPage', allPageCount, total, skipped);
     } catch (e) {
-      debug('Error wile iterating cursor.eacnAsync()', e)
-      throw e
+      debug('Error wile iterating cursor.eacnAsync()', e);
+      throw e;
     }
   }
 
   async getBookmarkCountFactor() {
-    const User = this.crowi.model('User')
-    const count = await User.countDocuments({})
-    return 10000 / (count || 1)
+    const User = this.crowi.model('User');
+    const count = await User.countDocuments({});
+    return 10000 / (count || 1);
   }
 
   async getFunctionScoreQueryParams(): Promise<FunctionScoreQueryParams> {
-    const factor = await this.getBookmarkCountFactor()
+    const factor = await this.getBookmarkCountFactor();
     return {
       fieldValueFactor: {
         field: 'bookmark_count',
@@ -507,13 +507,13 @@ export default class Search {
         missing: 0,
       },
       boostMode: 'sum',
-    }
+    };
   }
 
   async search<T extends SearchWithBody>(query: T) {
     try {
-      const response = await this.client.search(query)
-      const { took, hits } = response.body
+      const response = await this.client.search(query);
+      const { took, hits } = response.body;
       return {
         meta: {
           took,
@@ -521,15 +521,15 @@ export default class Search {
           results: hits.hits.length,
         },
         data: hits.hits.map(({ _id, _score, _source }) => ({ _id, _score, _source })),
-      }
+      };
     } catch (err) {
-      debug('Search error', err)
-      throw err
+      debug('Search error', err);
+      throw err;
     }
   }
 
   async searchKeyword<T extends { username: string }>(keyword: string, user: T, option: SearchOption = {}) {
-    const { offset: from, limit: size, type } = option
+    const { offset: from, limit: size, type } = option;
 
     const query = Query.createBaseQuery({ index: this.indexNames.current, type: this.getType() })
       .appendPaging({ from, size })
@@ -538,9 +538,9 @@ export default class Search {
       .filterPagesByUser({ username: user.username })
       .appendSearchQuery(parseQuery(keyword))
       .convertToFunctionScoreQuery(await this.getFunctionScoreQueryParams())
-      .value()
+      .value();
 
-    return this.search(query)
+    return this.search(query);
   }
 
   searchByPath(keyword, prefix) {
@@ -548,7 +548,7 @@ export default class Search {
   }
 
   async searchKeywordUnderPath<T extends { username: string }>(keyword: string, path: string, user: T, option: SearchOption = {}) {
-    const { offset: from, limit: size, type } = option
+    const { offset: from, limit: size, type } = option;
 
     const query = Query.createBaseQuery({ index: this.indexNames.current, type: this.getType() })
       .appendPaging({ from, size })
@@ -558,73 +558,73 @@ export default class Search {
       .filterPagesByUser({ username: user.username })
       .appendSearchQuery(parseQuery(keyword))
       .convertToFunctionScoreQuery(await this.getFunctionScoreQueryParams())
-      .value()
+      .value();
 
-    return this.search(query)
+    return this.search(query);
   }
 
   async syncPageCreated(page, user, bookmarkCount = 0) {
-    debug('Search.syncPageCreated', page.path)
+    debug('Search.syncPageCreated', page.path);
 
     if (!this.shouldIndexed(page)) {
-      return
+      return;
     }
 
-    page.bookmarkCount = bookmarkCount
+    page.bookmarkCount = bookmarkCount;
     try {
-      const res = await this.addPages([page])
-      debug('ES Response', res)
+      const res = await this.addPages([page]);
+      debug('ES Response', res);
     } catch (err) {
-      debug('ES Error', err)
+      debug('ES Error', err);
     }
   }
 
   async syncPageUpdated(page, user, bookmarkCount = 0) {
-    debug('Search.syncPageUpdated', page.path)
-    debug('Page:', page)
+    debug('Search.syncPageUpdated', page.path);
+    debug('Page:', page);
     if (!this.shouldIndexed(page)) {
       try {
-        const res = await this.deletePages([page])
-        debug('deletePages: ES Response', res)
+        const res = await this.deletePages([page]);
+        debug('deletePages: ES Response', res);
       } catch (err) {
-        debug('deletePages: ES Error', err)
+        debug('deletePages: ES Error', err);
       }
 
-      return
+      return;
     }
 
-    page.bookmarkCount = bookmarkCount
+    page.bookmarkCount = bookmarkCount;
     try {
-      const res = await this.updatePages([page])
-      debug('ES Response', res)
+      const res = await this.updatePages([page]);
+      debug('ES Response', res);
     } catch (err) {
-      debug('ES Error', err)
+      debug('ES Error', err);
     }
   }
 
   async syncPageDeleted(page, user) {
-    debug('Search.syncPageDeleted', page.path)
+    debug('Search.syncPageDeleted', page.path);
 
     try {
-      const res = await this.deletePages([page])
-      debug('deletePages: ES Response', res)
+      const res = await this.deletePages([page]);
+      debug('deletePages: ES Response', res);
     } catch (err) {
-      debug('deletePages: ES Error', err)
+      debug('deletePages: ES Error', err);
     }
   }
 
   async syncBookmarkChanged(pageId) {
-    const Page = this.crowi.model('Page')
-    const Bookmark = this.crowi.model('Bookmark')
-    const [page, bookmarkCount] = await Promise.all([Page.findPageById(pageId), Bookmark.countByPageId(pageId)])
+    const Page = this.crowi.model('Page');
+    const Bookmark = this.crowi.model('Bookmark');
+    const [page, bookmarkCount] = await Promise.all([Page.findPageById(pageId), Bookmark.countByPageId(pageId)]);
 
     // @ts-ignore
-    page.bookmarkCount = bookmarkCount
+    page.bookmarkCount = bookmarkCount;
     try {
-      const res = await this.updatePages([page])
-      debug('ES Response', res)
+      const res = await this.updatePages([page]);
+      debug('ES Response', res);
     } catch (err) {
-      debug('ES Error', err)
+      debug('ES Error', err);
     }
   }
 }

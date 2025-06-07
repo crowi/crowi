@@ -26,12 +26,12 @@ import {
   appendPositivePhraseQuery,
   appendNegativePhraseQuery,
   appendSearchQuery,
-} from 'src/util/elasticsearch/query'
-import { GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER } from 'src/models/page'
+} from 'src/util/elasticsearch/query';
+import { GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER } from 'src/models/page';
 
 describe('createBaseQuery', () => {
-  const index = 'crowi'
-  const type = 'test'
+  const index = 'crowi';
+  const type = 'test';
   it('should create base query', () => {
     expect(createBaseQuery({ index, type })).toEqual({
       index,
@@ -40,8 +40,8 @@ describe('createBaseQuery', () => {
         query: {},
         _source: defaultFields,
       },
-    })
-    const fields = ['test']
+    });
+    const fields = ['test'];
     expect(createBaseQuery({ index, type, fields })).toEqual({
       index,
       type,
@@ -49,19 +49,19 @@ describe('createBaseQuery', () => {
         query: {},
         _source: fields,
       },
-    })
-  })
-})
+    });
+  });
+});
 
 describe('createFunctionScoreQuery', () => {
-  const query = 'test'
+  const query = 'test';
   const fieldValueFactor = {
     field: 'bookmark_count',
     modifier: 'log1p',
     factor: 1,
     missing: 0,
-  } as const
-  const boostMode = 'sum'
+  } as const;
+  const boostMode = 'sum';
   it('should create function score query', () => {
     expect(
       createFunctionScoreQuery({
@@ -79,20 +79,20 @@ describe('createFunctionScoreQuery', () => {
           },
         },
       },
-    })
-  })
-})
+    });
+  });
+});
 
 describe('convertToFunctionScoreQuery', () => {
-  const index = 'crowi'
-  const query = createBaseQuery({ index })
+  const index = 'crowi';
+  const query = createBaseQuery({ index });
   const fieldValueFactor = {
     field: 'bookmark_count',
     modifier: 'log1p',
     factor: 1,
     missing: 0,
-  } as const
-  const boostMode = 'sum'
+  } as const;
+  const boostMode = 'sum';
   it('should convert a query to a function score query', () => {
     expect(convertToFunctionScoreQuery(query, { fieldValueFactor, boostMode })).toEqual({
       ...query,
@@ -106,94 +106,94 @@ describe('convertToFunctionScoreQuery', () => {
           },
         },
       },
-    })
-  })
-})
+    });
+  });
+});
 
-const baseQuery = createBaseQuery({ index: 'test' })
+const baseQuery = createBaseQuery({ index: 'test' });
 
 describe('appendPaging', () => {
-  const params = { from: 1, size: 2 }
+  const params = { from: 1, size: 2 };
   it('should return value containing from property', () => {
-    expect(appendPaging(baseQuery, params).from).toEqual(params.from)
-  })
+    expect(appendPaging(baseQuery, params).from).toEqual(params.from);
+  });
   it('should return value containing size property', () => {
-    expect(appendPaging(baseQuery, params).size).toEqual(params.size)
-  })
-})
+    expect(appendPaging(baseQuery, params).size).toEqual(params.size);
+  });
+});
 
 describe('appendSort', () => {
-  const params = { _score: 'desc' } as const
+  const params = { _score: 'desc' } as const;
   it('should return value containing size property', () => {
-    expect(appendSort(baseQuery, params).sort).toEqual(params)
-  })
-})
+    expect(appendSort(baseQuery, params).sort).toEqual(params);
+  });
+});
 
 const boolQuery = {
   regexp: {
     'path.raw': '.*/',
   },
-}
+};
 
 describe('appendBoolQuery', () => {
   it('should append bool query', () => {
-    expect(appendBoolQuery(baseQuery, { type: 'must', query: boolQuery }).body.query.bool.must).toEqual([boolQuery])
-  })
-})
+    expect(appendBoolQuery(baseQuery, { type: 'must', query: boolQuery }).body.query.bool.must).toEqual([boolQuery]);
+  });
+});
 
 describe('appendBoolMustQuery', () => {
   it('should append bool must query', () => {
-    expect(appendBoolMustQuery(baseQuery, boolQuery).body.query.bool.must).toEqual([boolQuery])
-  })
-})
+    expect(appendBoolMustQuery(baseQuery, boolQuery).body.query.bool.must).toEqual([boolQuery]);
+  });
+});
 
 describe('appendBoolShouldQuery', () => {
   it('should append bool should query', () => {
-    expect(appendBoolShouldQuery(baseQuery, boolQuery).body.query.bool.should).toEqual([boolQuery])
-  })
-})
+    expect(appendBoolShouldQuery(baseQuery, boolQuery).body.query.bool.should).toEqual([boolQuery]);
+  });
+});
 
 describe('appendBoolFilterQuery', () => {
   it('should append bool filter query', () => {
-    expect(appendBoolFilterQuery(baseQuery, boolQuery).body.query.bool.filter).toEqual([boolQuery])
-  })
-})
+    expect(appendBoolFilterQuery(baseQuery, boolQuery).body.query.bool.filter).toEqual([boolQuery]);
+  });
+});
 
 describe('appendBoolMustNotQuery', () => {
   it('should append bool must not query', () => {
-    expect(appendBoolMustNotQuery(baseQuery, boolQuery).body.query.bool.must_not).toEqual([boolQuery])
-  })
-})
+    expect(appendBoolMustNotQuery(baseQuery, boolQuery).body.query.bool.must_not).toEqual([boolQuery]);
+  });
+});
 
 describe('filterPortalPages', () => {
   it('should filter portal pages', () => {
-    expect(filterPortalPages(baseQuery).body.query.bool.must_not).toEqual([queries.user])
-    expect(filterPortalPages(baseQuery).body.query.bool.filter).toEqual([queries.portal])
-  })
-})
+    expect(filterPortalPages(baseQuery).body.query.bool.must_not).toEqual([queries.user]);
+    expect(filterPortalPages(baseQuery).body.query.bool.filter).toEqual([queries.portal]);
+  });
+});
 
 describe('filterPublicPages', () => {
   it('should filter public pages', () => {
-    expect(filterPublicPages(baseQuery).body.query.bool.must_not).toEqual([queries.user, queries.portal])
-  })
-})
+    expect(filterPublicPages(baseQuery).body.query.bool.must_not).toEqual([queries.user, queries.portal]);
+  });
+});
 
 describe('filterUserPages', () => {
   it('should filter user pages', () => {
-    expect(filterUserPages(baseQuery).body.query.bool.filter).toEqual([queries.user])
-  })
-})
+    expect(filterUserPages(baseQuery).body.query.bool.filter).toEqual([queries.user]);
+  });
+});
 
 describe('filterPagesByType', () => {
   it('should filter pages by type', () => {
-    expect(filterPagesByType(baseQuery, { type: 'portal' })).toEqual(filterPortalPages(baseQuery))
-    expect(filterPagesByType(baseQuery, { type: 'public' })).toEqual(filterPublicPages(baseQuery))
-    expect(filterPagesByType(baseQuery, { type: 'user' })).toEqual(filterUserPages(baseQuery))
-  })
-})
+    expect(filterPagesByType(baseQuery, { type: 'portal' })).toEqual(filterPortalPages(baseQuery));
+    expect(filterPagesByType(baseQuery, { type: 'public' })).toEqual(filterPublicPages(baseQuery));
+    expect(filterPagesByType(baseQuery, { type: 'user' })).toEqual(filterUserPages(baseQuery));
+  });
+});
 
 describe('filterPagesByUser', () => {
-  const username = 'lightnet328'
+  const username = 'lightnet328';
   it('should filter pages by user', () => {
     expect(filterPagesByUser(baseQuery, { username }).body.query.bool.must_not).toEqual([
       {
@@ -202,9 +202,9 @@ describe('filterPagesByUser', () => {
           should: [{ match: { grant: GRANT_RESTRICTED } }, { match: { grant: GRANT_SPECIFIED } }, { match: { grant: GRANT_OWNER } }],
         },
       },
-    ])
-  })
-})
+    ]);
+  });
+});
 
 describe('filterPagesByPath', () => {
   it('should filter pages by path', () => {
@@ -214,21 +214,21 @@ describe('filterPagesByPath', () => {
           'path.raw': `/hoge/*`,
         },
       },
-    ])
+    ]);
     expect(filterPagesByPath(baseQuery, { path: '/hoge/' }).body.query.bool.filter).toEqual([
       {
         wildcard: {
           'path.raw': `/hoge/*`,
         },
       },
-    ])
-  })
-})
+    ]);
+  });
+});
 
-const keywords = ['crowi', 'markdown']
+const keywords = ['crowi', 'markdown'];
 
 describe('appendKeywordQuery', () => {
-  const query = keywords.join(' ')
+  const query = keywords.join(' ');
   it('should append keyword query', () => {
     expect(appendKeywordQuery(baseQuery, { type: 'positive', keywords, operator: 'and' }).body.query).toHaveProperty('bool.must', [
       {
@@ -238,7 +238,7 @@ describe('appendKeywordQuery', () => {
           operator: 'and',
         },
       },
-    ])
+    ]);
     expect(appendKeywordQuery(baseQuery, { type: 'negative', keywords, operator: 'or' }).body.query).toHaveProperty('bool.must_not', [
       {
         multi_match: {
@@ -247,23 +247,23 @@ describe('appendKeywordQuery', () => {
           operator: 'or',
         },
       },
-    ])
-  })
-})
+    ]);
+  });
+});
 
 describe('appendPositiveKeywordQuery', () => {
   it('should append positive keyword query', () => {
-    expect(appendPositiveKeywordQuery(baseQuery, { keywords })).toEqual(appendKeywordQuery(baseQuery, { type: 'positive', keywords, operator: 'and' }))
-  })
-})
+    expect(appendPositiveKeywordQuery(baseQuery, { keywords })).toEqual(appendKeywordQuery(baseQuery, { type: 'positive', keywords, operator: 'and' }));
+  });
+});
 
 describe('appendNegativeKeywordQuery', () => {
   it('should append negative keyword query', () => {
-    expect(appendNegativeKeywordQuery(baseQuery, { keywords })).toEqual(appendKeywordQuery(baseQuery, { type: 'negative', keywords, operator: 'or' }))
-  })
-})
+    expect(appendNegativeKeywordQuery(baseQuery, { keywords })).toEqual(appendKeywordQuery(baseQuery, { type: 'negative', keywords, operator: 'or' }));
+  });
+});
 
-const phrases = ['happy halloween', 'trick or treat']
+const phrases = ['happy halloween', 'trick or treat'];
 
 describe('appendPhraseQuery', () => {
   it('should append phrase query', () => {
@@ -284,7 +284,7 @@ describe('appendPhraseQuery', () => {
           operator: 'and',
         },
       },
-    ])
+    ]);
     expect(appendPhraseQuery(baseQuery, { type: 'negative', phrases, operator: 'or' }).body.query).toHaveProperty('bool.must_not', [
       {
         multi_match: {
@@ -302,21 +302,21 @@ describe('appendPhraseQuery', () => {
           operator: 'or',
         },
       },
-    ])
-  })
-})
+    ]);
+  });
+});
 
 describe('appendPositivePhraseQuery', () => {
   it('should append positive phrase query', () => {
-    expect(appendPositivePhraseQuery(baseQuery, { phrases })).toEqual(appendPhraseQuery(baseQuery, { type: 'positive', phrases, operator: 'and' }))
-  })
-})
+    expect(appendPositivePhraseQuery(baseQuery, { phrases })).toEqual(appendPhraseQuery(baseQuery, { type: 'positive', phrases, operator: 'and' }));
+  });
+});
 
 describe('appendNegativePhraseQuery', () => {
   it('should append negative phrase query', () => {
-    expect(appendNegativePhraseQuery(baseQuery, { phrases })).toEqual(appendPhraseQuery(baseQuery, { type: 'negative', phrases, operator: 'or' }))
-  })
-})
+    expect(appendNegativePhraseQuery(baseQuery, { phrases })).toEqual(appendPhraseQuery(baseQuery, { type: 'negative', phrases, operator: 'or' }));
+  });
+});
 
 describe('appendSearchQuery', () => {
   it('should append search query', () => {
@@ -349,7 +349,7 @@ describe('appendSearchQuery', () => {
           operator: 'and',
         },
       },
-    ])
+    ]);
     expect(
       appendSearchQuery(baseQuery, {
         keywords: { positive: keywords, negative: keywords },
@@ -379,6 +379,6 @@ describe('appendSearchQuery', () => {
           operator: 'or',
         },
       },
-    ])
-  })
-})
+    ]);
+  });
+});

@@ -1,5 +1,5 @@
-import request from 'supertest'
-import { app } from 'src/test/setup'
+import request from 'supertest';
+import { app } from 'src/test/setup';
 
 describe('Routes /_api/versions test', () => {
   describe('/_api/versions.get', () => {
@@ -10,14 +10,14 @@ describe('Routes /_api/versions test', () => {
           .expect('Content-Type', /json/)
           .expect(200)
           .then((res) => {
-            const body = res.body
+            const body = res.body;
 
-            expect(body.ok).toBe(true)
-            expect(body.version).toBe(require('../../../package.json').version)
+            expect(body.ok).toBe(true);
+            expect(body.version).toBe(require('../../../package.json').version);
 
-            resolve()
-          })
-      })
-    })
-  })
-})
+            resolve();
+          });
+      });
+    });
+  });
+});

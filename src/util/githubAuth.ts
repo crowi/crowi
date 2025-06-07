@@ -1,17 +1,17 @@
-import { Request, Response } from 'express'
-import Debug from 'debug'
-import auth from './auth'
-import passport from 'passport'
-import { Strategy as GitHubStrategy } from 'passport-github'
-import { getContinueUrl } from './url'
+import { Request, Response } from 'express';
+import Debug from 'debug';
+import auth from './auth';
+import passport from 'passport';
+import { Strategy as GitHubStrategy } from 'passport-github';
+import { getContinueUrl } from './url';
 // import Octokit from '@octokit/rest'
 
-const debug = Debug('crowi:lib:githubAuth')
+const debug = Debug('crowi:lib:githubAuth');
 
 export default (config) => {
-  const lib: any = {}
+  const lib: any = {};
 
-  lib.PROVIDER = 'github'
+  lib.PROVIDER = 'github';
 
   function useGitHubStrategy(config, callbackQuery = '') {
     passport.use(
@@ -23,14 +23,14 @@ export default (config) => {
           scope: ['user:email', 'read:org'],
         },
         async (accessToken, refreshToken, profile, callback) => {
-          debug('profile', profile)
+          debug('profile', profile);
           // 一時的に組織情報を取得する機能を無効化
           // const octokit = new Octokit({ auth: accessToken })
           // const { data: orgs } = await octokit.orgs.listForAuthenticatedUser()
           // const orgNames = orgs.map((org) => org.login)
-          const orgNames = []
+          const orgNames = [];
 
-          debug(orgNames)
+          debug(orgNames);
 
           callback(null, {
             token: accessToken,
@@ -39,20 +39,20 @@ export default (config) => {
             name: profile.displayName || '',
             picture: profile.photos[0].value,
             organizations: orgNames,
-          })
+          });
         },
       ),
-    )
+    );
   }
 
   lib.authenticate = function (req: Request, res: Response, next) {
-    const continueUrl = getContinueUrl(req)
-    const query = continueUrl === '/' ? '' : `?continue=${continueUrl}`
-    useGitHubStrategy(config, query)
-    passport.authenticate('github')(req, res, next)
-  }
+    const continueUrl = getContinueUrl(req);
+    const query = continueUrl === '/' ? '' : `?continue=${continueUrl}`;
+    useGitHubStrategy(config, query);
+    passport.authenticate('github')(req, res, next);
+  };
 
-  lib.getOrganization = () => {}
+  lib.getOrganization = () => {};
 
   lib.reauth = async function (id, { accessToken }) {
     try {
@@ -67,28 +67,28 @@ export default (config) => {
       // const success = id === String(userId) && (!organization || orgNames.includes(organization))
 
       // 常に成功を返す一時的な実装
-      const success = true
-      const tokens = { accessToken }
-      return { success, tokens }
+      const success = true;
+      const tokens = { accessToken };
+      return { success, tokens };
     } catch (err) {
-      debug('Error on reauthenticating', err)
-      return { success: false }
+      debug('Error on reauthenticating', err);
+      return { success: false };
     }
-  }
+  };
 
   lib.handleCallback = function (req: Request, res: Response, next) {
     return function (callback) {
-      useGitHubStrategy(config)
+      useGitHubStrategy(config);
       passport.authenticate('github', function (err, user, info) {
         if (err) {
-          return callback(err, null)
+          return callback(err, null);
         }
 
-        auth.saveTokenToSession(req, lib.PROVIDER, { accessToken: user.token, refreshToken: null, expiryDate: null })
-        return callback(err, user)
-      })(req, res, next)
-    }
-  }
+        auth.saveTokenToSession(req, lib.PROVIDER, { accessToken: user.token, refreshToken: null, expiryDate: null });
+        return callback(err, user);
+      })(req, res, next);
+    };
+  };
 
-  return lib
-}
+  return lib;
+};

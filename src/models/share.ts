@@ -1,43 +1,43 @@
-import Crowi from 'src/crowi'
-import { Types, Document, Model, Schema, model } from 'mongoose'
+import Crowi from 'src/crowi';
+import { Types, Document, Model, Schema, model } from 'mongoose';
 // import Debug from 'debug'
-import { v4 as uuidv4 } from 'uuid'
-import mongoosePaginate from 'mongoose-paginate'
-import { UserDocument } from './user'
+import { v4 as uuidv4 } from 'uuid';
+import mongoosePaginate from 'mongoose-paginate';
+import { UserDocument } from './user';
 
-const STATUS_ACTIVE = 'active'
-const STATUS_INACTIVE = 'inactive'
+const STATUS_ACTIVE = 'active';
+const STATUS_INACTIVE = 'inactive';
 
 export interface ShareDocument extends Document {
-  _id: Types.ObjectId
-  uuid: string
-  page: Types.ObjectId
-  status: string
-  creator: Types.ObjectId
-  secretKeyword: string
-  createdAt: Date
-  updatedAt: Date
+  _id: Types.ObjectId;
+  uuid: string;
+  page: Types.ObjectId;
+  status: string;
+  creator: Types.ObjectId;
+  secretKeyword: string;
+  createdAt: Date;
+  updatedAt: Date;
 
-  isActive(): boolean
-  isInactive(): boolean
-  isCreator(userData): boolean
+  isActive(): boolean;
+  isInactive(): boolean;
+  isCreator(userData): boolean;
 }
 
 export interface ShareModel extends Model<ShareDocument> {
-  paginate: any
+  paginate: any;
 
-  isExists(query): Promise<any>
-  findShares(query, options: { page?: number; limit?: number; sort?: object; populateAccesses?: boolean }): Promise<any>
-  findShare(query, options?: { populateAccesses?: boolean }): Promise<ShareDocument>
-  findShareByUuid(uuid, query?, options?): Promise<ShareDocument>
-  findShareByPageId(pageId, query?, options?): Promise<ShareDocument>
-  createShare(pageId: Types.ObjectId, user: Types.ObjectId): Promise<ShareDocument>
-  deleteShare(query: object): Promise<ShareDocument | null>
-  deleteById(id): Promise<ShareDocument | null>
-  deleteByPageId(pageId): Promise<ShareDocument | null>
+  isExists(query): Promise<any>;
+  findShares(query, options: { page?: number; limit?: number; sort?: object; populateAccesses?: boolean }): Promise<any>;
+  findShare(query, options?: { populateAccesses?: boolean }): Promise<ShareDocument>;
+  findShareByUuid(uuid, query?, options?): Promise<ShareDocument>;
+  findShareByPageId(pageId, query?, options?): Promise<ShareDocument>;
+  createShare(pageId: Types.ObjectId, user: Types.ObjectId): Promise<ShareDocument>;
+  deleteShare(query: object): Promise<ShareDocument | null>;
+  deleteById(id): Promise<ShareDocument | null>;
+  deleteByPageId(pageId): Promise<ShareDocument | null>;
 
-  STATUS_ACTIVE: string
-  STATUS_INACTIVE: string
+  STATUS_ACTIVE: string;
+  STATUS_INACTIVE: string;
 }
 
 export default (crowi: Crowi) => {
@@ -51,43 +51,43 @@ export default (crowi: Crowi) => {
     secretKeyword: String,
     createdAt: { type: Date, default: Date.now },
     updatedAt: Date,
-  })
+  });
   shareSchema.virtual('accesses', {
     ref: 'ShareAccess',
     localField: '_id',
     foreignField: 'share',
-  })
-  shareSchema.set('toObject', { virtuals: true })
-  shareSchema.set('toJSON', { virtuals: true })
-  shareSchema.plugin(mongoosePaginate)
+  });
+  shareSchema.set('toObject', { virtuals: true });
+  shareSchema.set('toJSON', { virtuals: true });
+  shareSchema.plugin(mongoosePaginate);
 
   shareSchema.methods.isActive = function () {
-    return this.status === STATUS_ACTIVE
-  }
+    return this.status === STATUS_ACTIVE;
+  };
 
   shareSchema.methods.isInactive = function () {
-    return this.status === STATUS_INACTIVE
-  }
+    return this.status === STATUS_INACTIVE;
+  };
 
   shareSchema.methods.isCreator = function (userData) {
-    this.populate('creator')
-    const creatorId = (this.creator as any as UserDocument)._id.toString()
-    const userId = userData._id.toString()
+    this.populate('creator');
+    const creatorId = (this.creator as any as UserDocument)._id.toString();
+    const userId = userData._id.toString();
 
-    return creatorId === userId
-  }
+    return creatorId === userId;
+  };
 
   shareSchema.statics.isExists = async function (query) {
-    const count = await this.countDocuments(query)
-    return count > 0
-  }
+    const count = await this.countDocuments(query);
+    return count > 0;
+  };
 
   shareSchema.statics.findShares = async function (query, options = {}) {
-    const page = options.page || 1
-    const limit = options.limit || 50
-    const sort = options.sort || { createdAt: -1 }
+    const page = options.page || 1;
+    const limit = options.limit || 50;
+    const sort = options.sort || { createdAt: -1 };
 
-    const { populateAccesses = false } = options
+    const { populateAccesses = false } = options;
     const optionalDocs = populateAccesses
       ? [
           {
@@ -96,7 +96,7 @@ export default (crowi: Crowi) => {
             options: { sort: { lastAccessedAt: -1 } },
           },
         ]
-      : []
+      : [];
 
     return this.paginate(query, {
       page,
@@ -111,13 +111,13 @@ export default (crowi: Crowi) => {
           path: 'creator',
         },
       ],
-    })
-  }
+    });
+  };
 
   shareSchema.statics.findShare = async function (query, options = {}) {
-    const Page = crowi.model('Page')
+    const Page = crowi.model('Page');
 
-    const { populateAccesses = false } = options
+    const { populateAccesses = false } = options;
     const optionalDocs = populateAccesses
       ? [
           {
@@ -125,41 +125,41 @@ export default (crowi: Crowi) => {
             populate: { path: 'tracking' },
           },
         ]
-      : []
+      : [];
 
     const shareData = await Share.findOne(query)
       .findOne(query)
       .populate([...optionalDocs, { path: 'page' }, { path: 'creator' }])
-      .exec()
+      .exec();
 
     if (shareData === null) {
-      const shareNotFoundError = new Error('Share Not Found')
-      shareNotFoundError.name = 'Crowi:Share:NotFound'
-      throw shareNotFoundError
+      const shareNotFoundError = new Error('Share Not Found');
+      shareNotFoundError.name = 'Crowi:Share:NotFound';
+      throw shareNotFoundError;
     }
 
-    shareData.page = (await Page.populatePageData(shareData.page)) as any
-    return shareData
-  }
+    shareData.page = (await Page.populatePageData(shareData.page)) as any;
+    return shareData;
+  };
 
   shareSchema.statics.findShareByUuid = async function (uuid, query, options) {
-    query = Object.assign({ uuid }, query !== undefined ? query : {})
-    return Share.findShare(query, options)
-  }
+    query = Object.assign({ uuid }, query !== undefined ? query : {});
+    return Share.findShare(query, options);
+  };
 
   shareSchema.statics.findShareByPageId = async function (pageId, query, options) {
-    query = Object.assign({ page: pageId }, query !== undefined ? query : {})
+    query = Object.assign({ page: pageId }, query !== undefined ? query : {});
 
-    return Share.findShare(query, options)
-  }
+    return Share.findShare(query, options);
+  };
 
   shareSchema.statics.createShare = async function (pageId, user) {
     const isExists = await Share.isExists({
       page: pageId,
       status: STATUS_ACTIVE,
-    })
+    });
     if (isExists) {
-      throw new Error('Cannot create new share.')
+      throw new Error('Cannot create new share.');
     }
 
     return Share.create({
@@ -169,27 +169,27 @@ export default (crowi: Crowi) => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       status: STATUS_ACTIVE,
-    })
-  }
+    });
+  };
 
   shareSchema.statics.deleteShare = async function (query = {}) {
-    const defaultQuery = { status: STATUS_ACTIVE }
-    return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: STATUS_INACTIVE }, { new: true }).exec()
-  }
+    const defaultQuery = { status: STATUS_ACTIVE };
+    return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: STATUS_INACTIVE }, { new: true }).exec();
+  };
 
   shareSchema.statics.deleteById = async function (id) {
-    return Share.deleteShare({ _id: id })
-  }
+    return Share.deleteShare({ _id: id });
+  };
 
   shareSchema.statics.deleteByPageId = async function (pageId) {
-    return Share.deleteShare({ page: pageId })
-  }
+    return Share.deleteShare({ page: pageId });
+  };
 
-  const Share = model<ShareDocument, ShareModel>('Share', shareSchema)
+  const Share = model<ShareDocument, ShareModel>('Share', shareSchema);
 
   // 静的プロパティをスキーマではなくモデルに直接割り当て
-  Share.STATUS_ACTIVE = STATUS_ACTIVE
-  Share.STATUS_INACTIVE = STATUS_INACTIVE
+  Share.STATUS_ACTIVE = STATUS_ACTIVE;
+  Share.STATUS_INACTIVE = STATUS_INACTIVE;
 
-  return Share
-}
+  return Share;
+};

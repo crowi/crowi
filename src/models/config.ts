@@ -1,95 +1,95 @@
-import Crowi from 'src/crowi'
-import { Types, Document, Model, Schema, model } from 'mongoose'
-import Debug from 'debug'
+import Crowi from 'src/crowi';
+import { Types, Document, Model, Schema, model } from 'mongoose';
+import Debug from 'debug';
 
-const SECURITY_REGISTRATION_MODE_OPEN = 'Open'
-const SECURITY_REGISTRATION_MODE_RESTRICTED = 'Resricted'
-const SECURITY_REGISTRATION_MODE_CLOSED = 'Closed'
+const SECURITY_REGISTRATION_MODE_OPEN = 'Open';
+const SECURITY_REGISTRATION_MODE_RESTRICTED = 'Resricted';
+const SECURITY_REGISTRATION_MODE_CLOSED = 'Closed';
 
 interface Config {
-  crowi: object
-  notification: object
+  crowi: object;
+  notification: object;
 }
 
 export interface ConfigDocument extends Document {
-  _id: Types.ObjectId
-  ns: string
-  key: string
-  value: string
+  _id: Types.ObjectId;
+  ns: string;
+  key: string;
+  value: string;
 }
 
 export const registrationMode: Record<string, any> = {
   [SECURITY_REGISTRATION_MODE_OPEN]: 'open',
   [SECURITY_REGISTRATION_MODE_RESTRICTED]: 'restricted',
   [SECURITY_REGISTRATION_MODE_CLOSED]: 'closed',
-}
+};
 
 export function isRequiredThirdPartyAuth(config: Config): boolean {
-  return !!config.crowi['auth:requireThirdPartyAuth']
+  return !!config.crowi['auth:requireThirdPartyAuth'];
 }
 
 export function isDisabledPasswordAuth(config: Config): boolean {
-  return !!config.crowi['auth:disablePasswordAuth']
+  return !!config.crowi['auth:disablePasswordAuth'];
 }
 
 export function googleLoginEnabled(config: Config): boolean {
-  return config.crowi['google:clientId'] && config.crowi['google:clientSecret']
+  return config.crowi['google:clientId'] && config.crowi['google:clientSecret'];
 }
 
 export function githubLoginEnabled(config: Config): boolean {
-  return config.crowi['github:clientId'] && config.crowi['github:clientSecret']
+  return config.crowi['github:clientId'] && config.crowi['github:clientSecret'];
 }
 
 export function hasSlackConfig(config: Config): boolean {
   if (!config.notification) {
-    return false
+    return false;
   }
   if (!config.notification['slack:clientId'] || !config.notification['slack:clientSecret']) {
-    return false
+    return false;
   }
 
-  return true
+  return true;
 }
 
 export function hasSlackToken(config: Config): boolean {
   if (!hasSlackConfig(config)) {
-    return false
+    return false;
   }
 
   if (!config.notification['slack:token']) {
-    return false
+    return false;
   }
 
-  return true
+  return true;
 }
 
 export interface ConfigModel extends Model<ConfigDocument> {
-  applicationInstall(): Promise<void>
-  updateByParams(ns: string, key: string, value: string): Promise<void>
-  updateConfig(ns: string, key: string, value: string): Promise<void>
-  updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>
-  copyByParams(ns: string, key: string, newKey: string): Promise<void>
-  copyConfig(ns: string, key: string, newKey: string): Promise<void>
-  deleteByParams(ns: string, key: string): Promise<void>
-  deleteConfig(ns: string, key: string): Promise<void>
-  loadAllConfig(): Promise<object>
-  isUploadable(config: Config): boolean
-  fileUploadEnabled(config: Config): boolean
-  migrate(): Promise<void>
+  applicationInstall(): Promise<void>;
+  updateByParams(ns: string, key: string, value: string): Promise<void>;
+  updateConfig(ns: string, key: string, value: string): Promise<void>;
+  updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>;
+  copyByParams(ns: string, key: string, newKey: string): Promise<void>;
+  copyConfig(ns: string, key: string, newKey: string): Promise<void>;
+  deleteByParams(ns: string, key: string): Promise<void>;
+  deleteConfig(ns: string, key: string): Promise<void>;
+  loadAllConfig(): Promise<object>;
+  isUploadable(config: Config): boolean;
+  fileUploadEnabled(config: Config): boolean;
+  migrate(): Promise<void>;
 
-  SECURITY_REGISTRATION_MODE_OPEN: string
-  SECURITY_REGISTRATION_MODE_RESTRICTED: string
-  SECURITY_REGISTRATION_MODE_CLOSED: string
+  SECURITY_REGISTRATION_MODE_OPEN: string;
+  SECURITY_REGISTRATION_MODE_RESTRICTED: string;
+  SECURITY_REGISTRATION_MODE_CLOSED: string;
 }
 
 export default (crowi: Crowi) => {
-  const debug = Debug('crowi:models:config')
+  const debug = Debug('crowi:models:config');
 
   const configSchema = new Schema<ConfigDocument, ConfigModel>({
     ns: { type: String, required: true, index: true },
     key: { type: String, required: true, index: true },
     value: { type: String, required: true },
-  })
+  });
 
   function getArrayForInstalling() {
     return {
@@ -127,104 +127,104 @@ export default (crowi: Crowi) => {
       'github:clientId': '',
       'github:clientSecret': '',
       'github:organization': '',
-    }
+    };
   }
 
   // Execute only once for installing application
   configSchema.statics.applicationInstall = async function () {
-    const count = await Config.countDocuments({ ns: 'crowi' }).exec()
+    const count = await Config.countDocuments({ ns: 'crowi' }).exec();
     if (count > 0) {
-      throw new Error('Application already installed')
+      throw new Error('Application already installed');
     }
-    await Config.updateConfigByNamespace('crowi', getArrayForInstalling())
-  }
+    await Config.updateConfigByNamespace('crowi', getArrayForInstalling());
+  };
 
   configSchema.statics.updateByParams = async function (ns: string, key: string, value: string) {
-    await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec()
-  }
+    await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec();
+  };
 
   configSchema.statics.updateConfig = async function (ns: string, key: string, value: string) {
     try {
-      await Config.updateByParams(ns, key, value)
+      await Config.updateByParams(ns, key, value);
     } catch (err) {
-      debug('updateConfig', err)
+      debug('updateConfig', err);
     }
-  }
+  };
 
   configSchema.statics.updateConfigByNamespace = async function (ns: string, nsConfig: Record<string, any>) {
     try {
-      await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)))
+      await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)));
     } catch (err) {
-      debug('updateConfigByNamespace', err)
+      debug('updateConfigByNamespace', err);
     }
-  }
+  };
 
   configSchema.statics.copyByParams = async function (ns, key, newKey) {
-    const config = await Config.findOne({ ns, key }).exec()
+    const config = await Config.findOne({ ns, key }).exec();
     if (config !== null) {
-      await Config.findOneAndUpdate({ ns, key: newKey }, { ns, key: newKey, value: config.value }, { upsert: true }).exec()
+      await Config.findOneAndUpdate({ ns, key: newKey }, { ns, key: newKey, value: config.value }, { upsert: true }).exec();
     }
-  }
+  };
 
   configSchema.statics.copyConfig = async function (ns, key, newKey) {
     try {
-      await Config.copyByParams(ns, key, newKey)
+      await Config.copyByParams(ns, key, newKey);
     } catch (err) {
-      debug('copyConfig', err)
+      debug('copyConfig', err);
     }
-  }
+  };
 
   configSchema.statics.deleteByParams = async function (ns, key) {
-    await Config.deleteOne({ ns, key }).exec()
-  }
+    await Config.deleteOne({ ns, key }).exec();
+  };
 
   configSchema.statics.deleteConfig = async function (ns, key) {
     try {
-      await Config.deleteByParams(ns, key)
+      await Config.deleteByParams(ns, key);
     } catch (err) {
-      debug('deleteConfig', err)
+      debug('deleteConfig', err);
     }
-  }
+  };
 
   configSchema.statics.loadAllConfig = async function () {
-    const config = { crowi: {} }
+    const config = { crowi: {} };
 
-    const doc = await Config.find().sort({ ns: 1, key: 1 }).exec()
+    const doc = await Config.find().sort({ ns: 1, key: 1 }).exec();
 
     doc.forEach(({ ns, key, value }) => {
       if (!config[ns]) {
-        config[ns] = {}
+        config[ns] = {};
       }
 
-      config[ns][key] = JSON.parse(value)
-    })
+      config[ns][key] = JSON.parse(value);
+    });
 
-    return config
-  }
+    return config;
+  };
 
   // FIXME: export function にするためにはこの FILE_UPLOAD を crowi.env から参照してるのどうにかしないと
   configSchema.statics.isUploadable = function (config) {
-    const method = crowi.env.FILE_UPLOAD || 'aws'
+    const method = crowi.env.FILE_UPLOAD || 'aws';
     const isConfigured =
       config.crowi['upload:aws:accessKeyId'] &&
       config.crowi['upload:aws:secretAccessKey'] &&
       config.crowi['upload:aws:region'] &&
-      config.crowi['upload:aws:bucket']
+      config.crowi['upload:aws:bucket'];
 
     if (method == 'aws' && !isConfigured) {
-      return false
+      return false;
     }
 
-    return method != 'none'
-  }
+    return method != 'none';
+  };
 
   configSchema.statics.fileUploadEnabled = function (config) {
     if (!Config.isUploadable(config)) {
-      return false
+      return false;
     }
 
-    return config.crowi['app:fileUpload'] || false
-  }
+    return config.crowi['app:fileUpload'] || false;
+  };
 
   configSchema.statics.migrate = async function () {
     const renameKeys = {
@@ -237,21 +237,21 @@ export default (crowi: Crowi) => {
         ['aws:accessKeyId', 'mail:aws:accessKeyId'],
         ['aws:secretAccessKey', 'mail:aws:secretAccessKey'],
       ],
-    }
+    };
 
     const forEachConfigs = (func: (ns: string, oldKey: string, newKey: string) => Promise<void>): Promise<void[][]> =>
-      Promise.all(Object.entries(renameKeys).map(([ns, keys]) => Promise.all(keys.map(([oldKey, newKey]) => func(ns, oldKey, newKey)))))
+      Promise.all(Object.entries(renameKeys).map(([ns, keys]) => Promise.all(keys.map(([oldKey, newKey]) => func(ns, oldKey, newKey)))));
 
-    await forEachConfigs((ns, oldKey, newKey) => Config.copyConfig(ns, oldKey, newKey))
-    await forEachConfigs((ns, oldKey) => Config.deleteConfig(ns, oldKey))
-  }
+    await forEachConfigs((ns, oldKey, newKey) => Config.copyConfig(ns, oldKey, newKey));
+    await forEachConfigs((ns, oldKey) => Config.deleteConfig(ns, oldKey));
+  };
 
-  const Config = model<ConfigDocument, ConfigModel>('Config', configSchema)
+  const Config = model<ConfigDocument, ConfigModel>('Config', configSchema);
 
   // 静的プロパティをスキーマではなくモデルに直接割り当て
-  Config.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN as string
-  Config.SECURITY_REGISTRATION_MODE_RESTRICTED = SECURITY_REGISTRATION_MODE_RESTRICTED as string
-  Config.SECURITY_REGISTRATION_MODE_CLOSED = SECURITY_REGISTRATION_MODE_CLOSED as string
+  Config.SECURITY_REGISTRATION_MODE_OPEN = SECURITY_REGISTRATION_MODE_OPEN as string;
+  Config.SECURITY_REGISTRATION_MODE_RESTRICTED = SECURITY_REGISTRATION_MODE_RESTRICTED as string;
+  Config.SECURITY_REGISTRATION_MODE_CLOSED = SECURITY_REGISTRATION_MODE_CLOSED as string;
 
-  return Config
-}
+  return Config;
+};

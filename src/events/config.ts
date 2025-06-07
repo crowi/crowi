@@ -1,11 +1,11 @@
-import Crowi from 'src/crowi'
-import { EventEmitter } from 'events'
+import Crowi from 'src/crowi';
+import { EventEmitter } from 'events';
 
 export default class ConfigEvent extends EventEmitter {
-  public crowi: Crowi
+  public crowi: Crowi;
 
   constructor(crowi: Crowi) {
-    super()
-    this.crowi = crowi
+    super();
+    this.crowi = crowi;
   }
 }

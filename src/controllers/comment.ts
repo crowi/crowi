@@ -1,18 +1,18 @@
-import { Request, Response } from 'express'
-import Crowi from 'src/crowi'
-import { Types } from 'mongoose'
-import ApiResponse from 'src/util/apiResponse'
-import { UserDocument } from 'src/models/user'
-import { getQueryAsObjectId, getQueryAsString } from 'src/types/express'
+import { Request, Response } from 'express';
+import Crowi from 'src/crowi';
+import { Types } from 'mongoose';
+import ApiResponse from 'src/util/apiResponse';
+import { UserDocument } from 'src/models/user';
+import { getQueryAsObjectId, getQueryAsString } from 'src/types/express';
 
 export default (crowi: Crowi) => {
   // var debug = Debug('crowi:routs:comment')
-  const Comment = crowi.model('Comment')
-  const Page = crowi.model('Page')
-  const actions = {} as any
-  const api = {} as any
+  const Comment = crowi.model('Comment');
+  const Page = crowi.model('Page');
+  const actions = {} as any;
+  const api = {} as any;
 
-  actions.api = api
+  actions.api = api;
 
   /**
    * @api {get} /comments.get Get comments of the page of the revision
@@ -23,31 +23,31 @@ export default (crowi: Crowi) => {
    * @apiParam {String} revision_id Revision Id.
    */
   api.get = function (req: Request, res: Response) {
-    const pageId = getQueryAsObjectId(req.query.page_id)
-    const revisionId = getQueryAsString(req.query.revision_id)
+    const pageId = getQueryAsObjectId(req.query.page_id);
+    const revisionId = getQueryAsString(req.query.revision_id);
 
     if (revisionId) {
       return Comment.getCommentsByRevisionId(new Types.ObjectId(revisionId))
         .then(function (comments) {
-          res.json(ApiResponse.success({ comments }))
+          res.json(ApiResponse.success({ comments }));
         })
         .catch(function (err) {
-          res.json(ApiResponse.error(err))
-        })
+          res.json(ApiResponse.error(err));
+        });
     }
 
     if (!pageId) {
-      return res.json(ApiResponse.error('Invalid page_id'))
+      return res.json(ApiResponse.error('Invalid page_id'));
     }
 
     return Comment.getCommentsByPageId(pageId)
       .then(function (comments) {
-        res.json(ApiResponse.success({ comments }))
+        res.json(ApiResponse.success({ comments }));
       })
       .catch(function (err) {
-        res.json(ApiResponse.error(err))
-      })
-  }
+        res.json(ApiResponse.error(err));
+      });
+  };
 
   /**
    * @api {post} /comments.add Post comment for the page
@@ -60,27 +60,27 @@ export default (crowi: Crowi) => {
    * @apiParam {Number} comment_position=-1 Line number of the comment
    */
   api.add = async function (req: Request, res: Response) {
-    const user = req.user as UserDocument
+    const user = req.user as UserDocument;
 
     if (!req.form.isValid) {
-      return res.json(ApiResponse.error('Invalid comment.'))
+      return res.json(ApiResponse.error('Invalid comment.'));
     }
 
-    const form = req.form.commentForm
-    const page = form.page_id
-    const creator = user._id
-    const revision = form.revision_id
-    const comment = form.comment
-    const commentPosition = form.comment_position || undefined
+    const form = req.form.commentForm;
+    const page = form.page_id;
+    const creator = user._id;
+    const revision = form.revision_id;
+    const comment = form.comment;
+    const commentPosition = form.comment_position || undefined;
 
     try {
-      let createdComment = await Comment.create({ page, creator, revision, comment, commentPosition })
-      createdComment = await createdComment.populate('creator')
-      return res.json(ApiResponse.success({ comment: createdComment }))
+      let createdComment = await Comment.create({ page, creator, revision, comment, commentPosition });
+      createdComment = await createdComment.populate('creator');
+      return res.json(ApiResponse.success({ comment: createdComment }));
     } catch (err) {
-      return res.json(ApiResponse.error(err))
+      return res.json(ApiResponse.error(err));
     }
-  }
+  };
 
   /**
    * @api {post} /comments.delete Delete a comment form the page
@@ -91,30 +91,30 @@ export default (crowi: Crowi) => {
    * @apiParam {String} page_id Page Id.
    */
   api.delete = async function (req: Request, res: Response) {
-    const user = req.user as UserDocument
-    const comment_id = req.body.comment_id
-    const page_id = req.body.page_id
+    const user = req.user as UserDocument;
+    const comment_id = req.body.comment_id;
+    const page_id = req.body.page_id;
 
     if (!comment_id || !page_id) {
-      return res.json(ApiResponse.error('Comment ID or Page ID is not set'))
+      return res.json(ApiResponse.error('Comment ID or Page ID is not set'));
     }
 
     try {
-      const pageData = await Page.findPageById(page_id)
+      const pageData = await Page.findPageById(page_id);
       if (!pageData.isGrantedFor(user)) {
-        return res.json(ApiResponse.error('Permission error'))
+        return res.json(ApiResponse.error('Permission error'));
       }
     } catch (err) {
-      return res.json(ApiResponse.error(err))
+      return res.json(ApiResponse.error(err));
     }
 
     try {
-      const result = await Comment.removeCommentById(comment_id)
-      return res.json(ApiResponse.success(result))
+      const result = await Comment.removeCommentById(comment_id);
+      return res.json(ApiResponse.success(result));
     } catch (err) {
-      return res.json(ApiResponse.error(err))
+      return res.json(ApiResponse.error(err));
     }
-  }
+  };
 
-  return actions
-}
+  return actions;
+};

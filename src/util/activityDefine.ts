@@ -1,19 +1,19 @@
-const MODEL_PAGE = 'Page'
-const MODEL_COMMENT = 'Comment'
+const MODEL_PAGE = 'Page';
+const MODEL_COMMENT = 'Comment';
 
-const ACTION_CREATE = 'CREATE' // Not support yet
-const ACTION_MODIFY = 'MODIFY' // Not support yet
-const ACTION_DELETE = 'DELETE' // Not support yet
-const ACTION_COMMENT = 'COMMENT'
-const ACTION_LIKE = 'LIKE'
+const ACTION_CREATE = 'CREATE'; // Not support yet
+const ACTION_MODIFY = 'MODIFY'; // Not support yet
+const ACTION_DELETE = 'DELETE'; // Not support yet
+const ACTION_COMMENT = 'COMMENT';
+const ACTION_LIKE = 'LIKE';
 
 const getSupportTargetModelNames = () => {
-  return [MODEL_PAGE]
-}
+  return [MODEL_PAGE];
+};
 
 const getSupportEventModelNames = () => {
-  return [MODEL_COMMENT]
-}
+  return [MODEL_COMMENT];
+};
 
 const getSupportActionNames = () => {
   return [
@@ -22,8 +22,8 @@ const getSupportActionNames = () => {
     // ACTION_DELETE,
     ACTION_COMMENT,
     ACTION_LIKE,
-  ]
-}
+  ];
+};
 
 const activityDefine = {
   MODEL_PAGE,
@@ -38,6 +38,6 @@ const activityDefine = {
   getSupportTargetModelNames,
   getSupportEventModelNames,
   getSupportActionNames,
-}
+};
 
-export default activityDefine
+export default activityDefine;

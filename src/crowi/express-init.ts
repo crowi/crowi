@@ -1,33 +1,33 @@
-import express, { Express, Request, Response } from 'express'
-import methodOverride from 'method-override'
-import passport from 'passport'
-import session from 'express-session'
-import flash from 'connect-flash'
-import Crowi from 'src/crowi'
-import { registrationMode } from 'src/models/config'
-import Debug from 'debug'
+import express, { Express, Request, Response } from 'express';
+import methodOverride from 'method-override';
+import passport from 'passport';
+import session from 'express-session';
+import flash from 'connect-flash';
+import Crowi from 'src/crowi';
+import { registrationMode } from 'src/models/config';
+import Debug from 'debug';
 
 export default (crowi: Crowi, app: Express) => {
-  const debug = Debug('crowi:crowi:express-init')
-  const env = crowi.node_env
-  const middlewares = crowi.middlewares
+  const debug = Debug('crowi:crowi:express-init');
+  const env = crowi.node_env;
+  const middlewares = crowi.middlewares;
 
   app.use(function (req: Request, res: Response, next) {
-    debug('Route request', req.method, req.url)
-    const now = new Date()
-    const config = crowi.getConfig()
-    const tzoffset = -(config.crowi['app:timezone'] || 9) * 60 // for date
-    const Page = crowi.model('Page')
-    const User = crowi.model('User')
+    debug('Route request', req.method, req.url);
+    const now = new Date();
+    const config = crowi.getConfig();
+    const tzoffset = -(config.crowi['app:timezone'] || 9) * 60; // for date
+    const Page = crowi.model('Page');
+    const User = crowi.model('User');
 
-    app.set('tzoffset', tzoffset)
+    app.set('tzoffset', tzoffset);
 
-    req.config = config
-    req.csrfToken = null
+    req.config = config;
+    req.csrfToken = null;
 
-    let baseUrl = crowi.baseUrl
+    let baseUrl = crowi.baseUrl;
     if (!baseUrl) {
-      baseUrl = (req.headers['x-forwarded-proto'] == 'https' ? 'https' : req.protocol) + '://' + req.get('host')
+      baseUrl = (req.headers['x-forwarded-proto'] == 'https' ? 'https' : req.protocol) + '://' + req.get('host');
     }
 
     // FIXME:
@@ -36,41 +36,41 @@ export default (crowi: Crowi, app: Express) => {
     // And service/config has crowi object on its own property.
     // So, this config.crowi is Crowi Object and config.crowi['app:url'] means, accessing Crowi object's public property (create and assign the value)
     // It has to be fixed to set values into service/config.
-    config.crowi['app:url'] = baseUrl
+    config.crowi['app:url'] = baseUrl;
 
-    res.locals.req = req
-    res.locals.baseUrl = baseUrl
-    res.locals.config = config
-    res.locals.env = env
-    res.locals.now = now
-    res.locals.tzoffset = tzoffset
+    res.locals.req = req;
+    res.locals.baseUrl = baseUrl;
+    res.locals.config = config;
+    res.locals.env = env;
+    res.locals.now = now;
+    res.locals.tzoffset = tzoffset;
     res.locals.consts = {
       pageGrants: Page.getGrantLabels(),
       userStatus: User.getUserStatusLabels(),
       language: User.getLanguageLabels(),
       registrationMode,
-    }
+    };
 
-    next()
-  })
+    next();
+  });
 
-  app.set('port', crowi.port)
-  app.use(express.static(crowi.publicDir))
-  app.set('views', crowi.viewsDirs)
-  app.use(methodOverride())
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }))
-  app.use(express.json({ limit: '50mb' }))
-  app.use(session(crowi.sessionConfig))
+  app.set('port', crowi.port);
+  app.use(express.static(crowi.publicDir));
+  app.set('views', crowi.viewsDirs);
+  app.use(methodOverride());
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(session(crowi.sessionConfig));
 
   // Set basic auth middleware
-  app.use(middlewares.BasicAuth)
+  app.use(middlewares.BasicAuth);
 
-  app.use(passport.initialize())
-  app.use(passport.session())
+  app.use(passport.initialize());
+  app.use(passport.session());
 
-  app.use(flash())
+  app.use(flash());
 
-  app.use(middlewares.LoginChecker)
+  app.use(middlewares.LoginChecker);
 
-  app.use(middlewares.I18next)
-}
+  app.use(middlewares.I18next);
+};

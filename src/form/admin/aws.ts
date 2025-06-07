@@ -1,5 +1,5 @@
-import form from 'express-form'
-const { field } = form
+import form from 'express-form';
+const { field } = form;
 
 export default form(
   field('settingForm[upload:aws:region]', 'リージョン')
@@ -10,4 +10,4 @@ export default form(
     .trim()
     .is(/^[\da-zA-Z]+$/),
   field('settingForm[upload:aws:secretAccessKey]', 'Secret Access Key').trim(),
-)
+);
