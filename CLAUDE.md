@@ -6,19 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Crowi is a Markdown-based Wiki application built with TypeScript, Express.js, and MongoDB. It provides team knowledge sharing capabilities with features like timeline views, search functionality, and various integrations.
 
-**Current Status**: This project has been converted to a Turborepo monorepo structure. The server-side code is located in `apps/crowi-api` and frontend code will be added to separate apps after server migration is complete.
+**Current Status**: This project has been converted to a Turborepo monorepo structure. The server-side code is located in `apps/crowi-api` and a new Astro-based frontend has been added in `apps/crowi-web`.
 
 ## Monorepo Structure
 
 ```
 crowi/
 ├── apps/
-│   └── crowi-api/          # Express.js API server
-│       ├── src/            # TypeScript source code
-│       ├── views/          # HTML templates
-│       ├── locales/        # i18n files
+│   ├── crowi-api/          # Express.js API server
+│   │   ├── src/            # TypeScript source code
+│   │   ├── views/          # HTML templates
+│   │   ├── locales/        # i18n files
+│   │   ├── public/         # Static assets
+│   │   └── package.json    # API-specific dependencies
+│   └── crowi-web/          # Astro frontend
+│       ├── src/            # Astro components and pages
 │       ├── public/         # Static assets
-│       └── package.json    # API-specific dependencies
+│       └── package.json    # Frontend dependencies
 ├── packages/               # Shared packages (future)
 ├── turbo.json             # Turborepo configuration
 ├── pnpm-workspace.yaml    # PNPM workspace configuration
@@ -37,6 +41,12 @@ pnpm dev
 
 # Run specific app
 pnpm --filter @crowi/api dev
+
+# Run frontend only
+pnpm --filter @crowi/web dev
+
+# Run both API and frontend
+pnpm dev
 
 # Run with Docker Compose (includes MongoDB, Redis, Elasticsearch, PlantUML)
 docker-compose -f docker-compose.development.yml up
@@ -132,3 +142,9 @@ Key environment variables (see `.env.sample`):
   - Review and update OAuth provider support
   - Enhance file upload functionality
   - Investigate performance improvements for large wiki instances
+
+## TypeScript Guidelines
+
+- Avoid using `any` type in new code
+- When encountering `any` in existing code, gradually replace it with the most appropriate type
+- Do not attempt to modify entire files or unrelated code at once to prevent unexpected issues

@@ -22,6 +22,8 @@
   "packageManager": "pnpm@8.15.0",
   "scripts": {
     "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter @crowi/api",
+    "dev:web": "turbo run dev --filter @crowi/web",
     "build": "turbo run build",
     "test": "turbo run test",
     "test:server": "turbo run test:server",
