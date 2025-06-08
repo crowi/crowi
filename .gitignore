@@ -14,5 +14,12 @@ public/uploads/*
 # server
 dist
 
+# Turborepo
+.turbo
+**/.turbo/
+
+# TypeScript build info
+*.tsbuildinfo
+
 # local settings
 .claude/settings.local.json
