@@ -1,5 +1,4 @@
 import Crowi from 'src/crowi';
-import { DeleteResult } from 'mongodb';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
 import ActivityDefine from 'src/util/activityDefine';
@@ -21,10 +20,10 @@ export interface ActivityModel extends Model<ActivityDocument> {
   createByParameters(parameters: any): Promise<ActivityDocument>;
   removeByParameters(parameters: any): any;
   createByPageComment(comment: any): Promise<ActivityDocument>;
-  removeByPageCommentDelete(comment: any): Promise<DeleteResult>;
+  removeByPageCommentDelete(comment: any): Promise<{ deletedCount: number }>;
   createByPageLike(page: any, user: any): Promise<ActivityDocument>;
-  removeByPageUnlike(page: any, user: any): Promise<DeleteResult>;
-  removeByPage(page: any): Promise<DeleteResult>;
+  removeByPageUnlike(page: any, user: any): Promise<{ deletedCount: number }>;
+  removeByPage(page: any): Promise<{ deletedCount: number }>;
   findByUser(user: any): Promise<ActivityDocument[]>;
   getActionUsersFromActivities(activities: ActivityDocument[]): any[];
 }
