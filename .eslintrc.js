@@ -17,13 +17,13 @@ module.exports = {
   overrides: [
     {
       files: ['src/**/*.ts'],
-      excludedFiles: ['**/*.test.ts'],
+      excludedFiles: ['**/*.test.ts', 'src/test/**/*'],
       parserOptions: {
         project: './tsconfig.json',
       },
     },
     {
-      files: ['**/*.test.ts'],
+      files: ['**/*.test.ts', 'src/test/**/*'],
       env: {
         jest: true,
       },
