@@ -6,15 +6,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Crowi is a Markdown-based Wiki application built with TypeScript, Express.js, and MongoDB. It provides team knowledge sharing capabilities with features like timeline views, search functionality, and various integrations.
 
+**Current Status**: This project has been converted to a Turborepo monorepo structure. The server-side code is located in `apps/crowi-api` and frontend code will be added to separate apps after server migration is complete.
+
+## Monorepo Structure
+
+```
+crowi/
+├── apps/
+│   └── crowi-api/          # Express.js API server
+│       ├── src/            # TypeScript source code
+│       ├── views/          # HTML templates
+│       ├── locales/        # i18n files
+│       ├── public/         # Static assets
+│       └── package.json    # API-specific dependencies
+├── packages/               # Shared packages (future)
+├── turbo.json             # Turborepo configuration
+├── pnpm-workspace.yaml    # PNPM workspace configuration
+└── package.json           # Root monorepo configuration
+```
+
 ## Development Commands
 
 ### Setup and Run
 ```bash
-# Install dependencies
-npm install
+# Install dependencies (root)
+pnpm install
 
 # Run development server with auto-reload
-npm run dev
+pnpm dev
+
+# Run specific app
+pnpm --filter @crowi/api dev
 
 # Run with Docker Compose (includes MongoDB, Redis, Elasticsearch, PlantUML)
 docker-compose -f docker-compose.development.yml up
@@ -22,44 +44,44 @@ docker-compose -f docker-compose.development.yml up
 
 ### Testing
 ```bash
-# Run all tests
-npm test
+# Run all tests across all apps
+pnpm test
 
 # Run server tests only
-npm run test:server
+pnpm test:server
 
-# Run tests with coverage
-npm run coverage
+# Run tests for specific app
+pnpm --filter @crowi/api test
 ```
 
 ### Build and Type Checking
 ```bash
-# Build for production
-npm run build
+# Build all apps
+pnpm build
 
-# Type check without emitting files
-npm run type-check
+# Type check all apps
+pnpm type-check
 
-# Type check in watch mode
-npm run type-check:watch
+# Build specific app
+pnpm --filter @crowi/api build
 ```
 
 ### Code Formatting
 ```bash
-# Format all TypeScript and JavaScript files
-npm run format
+# Format all TypeScript and JavaScript files across monorepo
+pnpm format
 ```
 
 ## Architecture Overview
 
-### Server-Side Structure (TypeScript)
-- **Entry Point**: `src/app.ts` - Express application initialization
-- **Controllers** (`src/controllers/`): HTTP request handlers for pages, auth, admin, etc.
-- **Models** (`src/models/`): Mongoose schemas for MongoDB (Page, User, Comment, etc.)
-- **Routes** (`src/routes/`): Route definitions including API endpoints
-- **Services** (`src/service/`): Business logic layer (search, notifications, config)
-- **Middlewares** (`src/middlewares/`): Authentication, CSRF, admin checks
-- **Events** (`src/events/`): Event-driven architecture for page updates, notifications
+### Server-Side Structure (apps/crowi-api)
+- **Entry Point**: `apps/crowi-api/src/app.ts` - Express application initialization
+- **Controllers** (`apps/crowi-api/src/controllers/`): HTTP request handlers for pages, auth, admin, etc.
+- **Models** (`apps/crowi-api/src/models/`): Mongoose schemas for MongoDB (Page, User, Comment, etc.)
+- **Routes** (`apps/crowi-api/src/routes/`): Route definitions including API endpoints
+- **Services** (`apps/crowi-api/src/service/`): Business logic layer (search, notifications, config)
+- **Middlewares** (`apps/crowi-api/src/middlewares/`): Authentication, CSRF, admin checks
+- **Events** (`apps/crowi-api/src/events/`): Event-driven architecture for page updates, notifications
 
 ### Key Services
 - **MongoDB**: Primary data store for wiki content
@@ -96,8 +118,15 @@ Key environment variables (see `.env.sample`):
 
 ## Project Status and Todos
 
-- Current project status: Active development
+- Current project status: Migrated to Turborepo monorepo structure
+- Recently completed:
+  - ✅ Converted to Turborepo monorepo
+  - ✅ Moved server-side code to apps/crowi-api
+  - ✅ Removed unused frontend dependencies
+  - ✅ Updated TypeScript and build configurations
 - Pending todos:
+  - Complete server-side code migration to modern TypeScript
+  - Add frontend code after server migration is complete
   - Implement more comprehensive test coverage
   - Optimize Elasticsearch integration
   - Review and update OAuth provider support
