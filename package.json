@@ -41,7 +41,8 @@
     "build:server": "npm run prod:server",
     "prod:server": "tsc",
     "type-check": "tsc --noEmit",
-    "type-check:watch": "npm run type-check -- --watch"
+    "type-check:watch": "npm run type-check -- --watch",
+    "changelog": "conventional-changelog -p conventionalcommits -i CHANGES.md -s"
   },
   "env": {
     "NODE_ENV": "production"
@@ -118,6 +119,7 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "concurrently": "^5.0.0",
+    "conventional-changelog-cli": "^5.0.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.4.1",
