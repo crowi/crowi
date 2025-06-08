@@ -1,0 +1,19 @@
+{
+  "name": "@crowi/web",
+  "type": "module",
+  "version": "2.0.0-dev",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "type-check": "tsc --noEmit",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^5.9.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
