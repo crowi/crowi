@@ -208,7 +208,7 @@ export default (crowi: Crowi) => {
       return renderPage(null, req, res); // show create
     }
 
-    let pageUser: UserDocument | {} | null = {};
+    let pageUser: UserDocument | null = null;
     let bookmarkList: BookmarkDocument[] = [];
     let createdList = [];
     let isNonExistentUserPage = false;
@@ -316,7 +316,7 @@ export default (crowi: Crowi) => {
     debug('notify: ', notify);
 
     const redirectPath = encodeURI(path);
-    let pageData: PageDocument | null | {} = {};
+    let pageData: PageDocument | null = null;
     let updateOrCreate;
     let previousRevision: Types.ObjectId | null | false = false;
 
