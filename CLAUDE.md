@@ -93,3 +93,13 @@ Key environment variables (see `.env.sample`):
 ## Commit Message Guidelines
 
 - Write commit comments following the Conventional Commits format
+
+## Project Status and Todos
+
+- Current project status: Active development
+- Pending todos:
+  - Implement more comprehensive test coverage
+  - Optimize Elasticsearch integration
+  - Review and update OAuth provider support
+  - Enhance file upload functionality
+  - Investigate performance improvements for large wiki instances
