@@ -89,3 +89,7 @@ Key environment variables (see `.env.sample`):
 ## Debugging Memories
 
 - Debug process: When debugging, always run `npm run dev` and carefully check for any errors that might occur during the development server startup
+
+## Commit Message Guidelines
+
+- Write commit comments following the Conventional Commits format
