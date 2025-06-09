@@ -3,6 +3,20 @@ import { ParsedQs } from 'qs';
 import { Schema, Types } from 'mongoose';
 import { Session, SessionData } from 'express-session';
 
+declare module 'express-session' {
+  interface SessionData {
+    shareIds?: string[];
+    secretKeywords?: Record<string, string>;
+    user?: any;
+    auth?: any;
+    google?: any;
+    github?: any;
+    callback?: string | null;
+    redirectTo?: string;
+    trackingId?: string;
+  }
+}
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
@@ -11,6 +25,8 @@ declare global {
       form?: any;
       config?: any;
       user?: any;
+      skipCsrfVerify?: boolean;
+      csrfToken?: string | null;
       session: Session & Partial<SessionData>;
     }
   }
