@@ -14,7 +14,7 @@ import Version from './version';
 
 const router = Router();
 
-export default (crowi: Crowi, app: Express, form) => {
+export default (crowi: Crowi, app: Express, form): Router => {
   const routes = {
     Admin: Admin(crowi, app, form),
     Attachment: Attachment(crowi, app, form),
