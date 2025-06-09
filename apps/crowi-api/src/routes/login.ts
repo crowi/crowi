@@ -2,7 +2,7 @@ import { Router, Express } from 'express';
 import Crowi from 'src/crowi';
 const router = Router();
 
-export default (crowi: Crowi, app: Express, form) => {
+export default (crowi: Crowi, app: Express, form): Router => {
   const { Login } = crowi.controllers;
   const { ApplicationInstalled, CsrfVerify: csrf } = crowi.middlewares;
 

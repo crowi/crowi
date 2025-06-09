@@ -3,7 +3,7 @@ import Crowi from 'src/crowi';
 import multer from 'multer';
 const router = Router();
 
-export default (crowi: Crowi, app: Express, form) => {
+export default (crowi: Crowi, app: Express, form): Router => {
   const { Attachment } = crowi.controllers;
   const { AccessTokenParser, LoginRequired, CsrfVerify: csrf } = crowi.middlewares;
 
