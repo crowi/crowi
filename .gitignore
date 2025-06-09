@@ -2,7 +2,8 @@ config/default.js
 node_modules/
 bower_components/
 .env
-data
+data/
+tmp/
 npm-debug.log
 coverage
 
@@ -23,3 +24,5 @@ dist
 
 # local settings
 .claude/settings.local.json
+
+# temporary folder
