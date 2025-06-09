@@ -1,0 +1,25 @@
+config/default.js
+node_modules/
+bower_components/
+.env
+data
+npm-debug.log
+coverage
+
+# client
+public/js/*
+public/css/*
+public/uploads/*
+
+# server
+dist
+
+# Turborepo
+.turbo
+**/.turbo/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# local settings
+.claude/settings.local.json
