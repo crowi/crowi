@@ -29,7 +29,7 @@ Install
 
 Install dependencies and build CSS and JavaScript:
 
-    $ npm install
+    $ pnpm install
 
 More info is [here](https://github.com/crowi/crowi/wiki/Install-and-Configuration).
 
