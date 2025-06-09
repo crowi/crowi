@@ -39,6 +39,6 @@
   },
   "devDependencies": {
     "conventional-changelog-cli": "^5.0.0",
-    "turbo": "^1.13.3"
+    "turbo": "^2.5.4"
   }
 }
