@@ -86,28 +86,54 @@ see: [.env.sample](./.env.sample)
 For develop
 -------------
 
-We can use docker-compose for develop without complicated settings.
+### Quick Start
 
-```
-$ docker-compose -f docker-compose.development.yml up
+1. Start MongoDB and Redis services:
+```bash
+$ docker compose up -d
 ```
 
-- Express restarts when a file changed
-- Webpack compiled assets automatically
+2. Copy the sample environment file and configure:
+```bash
+$ cp .env.sample .env
+# Edit .env to set appropriate values
+```
+
+3. Install dependencies:
+```bash
+$ pnpm install
+```
+
+4. Run the development server:
+```bash
+$ pnpm dev
+```
+
+The application will be available at http://localhost:3000
+
+### Docker Services
+
+The docker compose file provides:
+- **MongoDB 8**: Running on port 37017 (mapped from container's 27017)
+- **Redis 7.4**: Running on port 16379 (mapped from container's 6379)
+
+Data is persisted in `./data/mongodb/` directory.
 
 ### Troubleshooting
 
-Please try the following commands.
+To manage Docker services:
+```bash
+# Stop services
+$ docker compose stop
 
-```
-# Stop containers
-$ docker-compose -f docker-compose.development.yml stop
 # Remove containers
-$ docker-compose -f docker-compose.development.yml rm
-# Remove images
-$ docker-compose -f docker-compose.development.yml images -q | xargs docker rmi -f
-# Build images
-$ docker-compose -f docker-compose.development.yml build
+$ docker compose down
+
+# Remove containers and volumes
+$ docker compose down -v
+
+# View logs
+$ docker compose logs -f
 ```
 
 License

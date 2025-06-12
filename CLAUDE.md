@@ -32,24 +32,42 @@ crowi/
 ## Development Commands
 
 ### Setup and Run
+
+#### Quick Start
 ```bash
-# Install dependencies (root)
+# 1. Start MongoDB and Redis services
+docker compose up -d
+
+# 2. Copy and configure environment variables
+cp .env.sample .env
+# Edit .env to set appropriate values
+
+# 3. Install dependencies (root)
 pnpm install
 
-# Run development server with auto-reload
+# 4. Run development server with auto-reload
 pnpm dev
+```
 
-# Run specific app
+The application will be available at http://localhost:3000
+
+#### Docker Services
+The `docker compose` configuration provides:
+- **MongoDB 8**: Running on port 37017 (host) → 27017 (container)
+- **Redis 7.4**: Running on port 16379 (host) → 6379 (container)
+
+Note: Elasticsearch and PlantUML support has been postponed and removed from the Docker setup.
+
+#### Running Individual Apps
+```bash
+# Run API server only
 pnpm --filter @crowi/api dev
 
-# Run frontend only
+# Run frontend only (when available)
 pnpm --filter @crowi/web dev
 
 # Run both API and frontend
 pnpm dev
-
-# Run with Docker Compose (includes MongoDB, Redis, Elasticsearch, PlantUML)
-docker-compose -f docker-compose.development.yml up
 ```
 
 ### Testing
@@ -94,9 +112,9 @@ pnpm format
 - **Events** (`apps/crowi-api/src/events/`): Event-driven architecture for page updates, notifications
 
 ### Key Services
-- **MongoDB**: Primary data store for wiki content
-- **Redis**: Session storage and Socket.io adapter
-- **Elasticsearch**: Full-text search functionality (optional)
+- **MongoDB**: Primary data store for wiki content (Docker: port 37017)
+- **Redis**: Session storage and Socket.io adapter (Docker: port 16379)
+- **Elasticsearch**: Full-text search functionality (optional - currently postponed)
 - **File Upload**: Supports AWS S3, local storage, or none
 
 ### Authentication
@@ -106,10 +124,11 @@ pnpm format
 
 ### Environment Configuration
 Key environment variables (see `.env.sample`):
-- `MONGO_URI`: MongoDB connection string
-- `REDIS_URL`: Redis connection (optional)
-- `ELASTICSEARCH_URI`: Elasticsearch URL (optional)
+- `MONGO_URI`: MongoDB connection string (default: `mongodb://localhost:37017/crowi`)
+- `REDIS_URL`: Redis connection (default: `redis://localhost:16379`)
+- `ELASTICSEARCH_URI`: Elasticsearch URL (optional - currently disabled)
 - `PASSWORD_SEED`: Required for password hashing
+- `SECRET_TOKEN`: Required for session security
 - `FILE_UPLOAD`: Storage type (`aws`, `local`, `none`)
 
 ### Testing Strategy
