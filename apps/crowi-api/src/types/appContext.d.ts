@@ -1,45 +1,45 @@
 export type AppContext = {
-  title: string
-  path: string
-  url: string
+  title: string;
+  path: string;
+  url: string;
   auth: {
-    requireThirdPartyAuth: boolean
-    disablePasswordAuth: boolean
-    canDisconnectThirdPartyId: boolean
+    requireThirdPartyAuth: boolean;
+    disablePasswordAuth: boolean;
+    canDisconnectThirdPartyId: boolean;
     providers: {
-      google: boolean
-      github: boolean
-    }
-  }
+      google: boolean;
+      github: boolean;
+    };
+  };
   upload: {
-    image: boolean
-    file: boolean
-  }
+    image: boolean;
+    file: boolean;
+  };
   search: {
-    isConfigured: boolean
-  }
+    isConfigured: boolean;
+  };
   security: {
-    registrationWhiteList: string[]
-  }
+    registrationWhiteList: string[];
+  };
   user: {
-    _id: string | null
-    name: string
-    username: string
-    image: string
-    email: string | null
-    googleId: string | null
-    githubId: string | null
-    admin: boolean
-    language: string
-  }
+    _id: string | null;
+    name: string;
+    username: string;
+    image: string;
+    email: string | null;
+    googleId: string | null;
+    githubId: string | null;
+    admin: boolean;
+    language: string;
+  };
   env: {
-    PLANTUML_URI: string | null
-    MATHJAX: string | null
-  }
+    PLANTUML_URI: string | null;
+    MATHJAX: string | null;
+  };
   config: {
     crowi: {
-      'app:confidential': string | null
-    }
-  }
-  csrfToken: string
-}
+      'app:confidential': string | null;
+    };
+  };
+  csrfToken: string;
+};
