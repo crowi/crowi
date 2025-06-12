@@ -1,0 +1,8 @@
+{
+  "execMap": {
+    "ts": "ts-node --files -r tsconfig-paths/register"
+  },
+  "watch": ["src/", "locales/"],
+  "ignore": ["*.tsx", "test/", "*.test.ts"],
+  "ext": "ts,tsx,js,jsx,json"
+}

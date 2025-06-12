@@ -29,7 +29,7 @@ Install
 
 Install dependencies and build CSS and JavaScript:
 
-    $ npm install
+    $ pnpm install
 
 More info is [here](https://github.com/crowi/crowi/wiki/Install-and-Configuration).
 
@@ -41,7 +41,7 @@ Don't use `master` branch because it is unstable. Use released version except wh
 Dependencies
 -------------
 
-* Node.js 12.x
+* Node.js 22.x
 * MongoDB 4.2.x
 * Elasticsearch 6.x.x or 7.x.x (optional) ([Doc is here](https://github.com/crowi/crowi/wiki/Configure-Search-Functions))
 * Redis (optional)
