@@ -15,6 +15,8 @@ crowi/
 ├── apps/
 │   ├── crowi-api/          # Express.js API server
 │   │   ├── src/            # TypeScript source code
+│   │   │   └── routes/
+│   │   │       └── ts-rest/ # New ts-rest route implementations
 │   │   ├── views/          # HTML templates
 │   │   ├── locales/        # i18n files
 │   │   ├── public/         # Static assets
@@ -23,7 +25,12 @@ crowi/
 │       ├── src/            # Astro components and pages
 │       ├── public/         # Static assets
 │       └── package.json    # Frontend dependencies
-├── packages/               # Shared packages (future)
+├── packages/               # Shared packages
+│   └── api-contract/       # ts-rest API contracts and Zod schemas
+│       ├── src/
+│       │   ├── contracts/  # ts-rest contract definitions
+│       │   └── schemas/    # Zod schema definitions
+│       └── package.json
 ├── turbo.json             # Turborepo configuration
 ├── pnpm-workspace.yaml    # PNPM workspace configuration
 └── package.json           # Root monorepo configuration
@@ -163,3 +170,70 @@ Crowi 2.0 の開発では以下の方針に従って作業を進めています:
 - Avoid using `any` type in new code
 - When encountering `any` in existing code, gradually replace it with the most appropriate type
 - Do not attempt to modify entire files or unrelated code at once to prevent unexpected issues
+
+## API Migration to ts-rest (2025/01/13)
+
+### Overview
+We are migrating the existing Express.js API to use `ts-rest` with `zod` for type-safe API definitions and client generation. This migration is being done gradually to maintain backward compatibility.
+
+### Current Progress
+1. **Created `@crowi/api-contract` package** (packages/api-contract)
+   - Contains all ts-rest contract definitions using Zod schemas
+   - Built with tsup for both CJS and ESM output
+   - Serves as single source of truth for API types
+
+2. **Migrated Routes** (available at /api/v2 prefix):
+   - ✅ GET /login - Display login page
+   - ✅ POST /login - Process login
+   - ✅ GET /register - Display registration page
+   - ✅ POST /register - Process registration
+   - ✅ GET /login/error/:reason - Display login errors
+   - ✅ GET /installer - Get installer status
+   - ✅ POST /installer/createAdmin - Create initial admin
+
+3. **Implementation Details**:
+   - Routes defined in `apps/crowi-api/src/routes/ts-rest/`
+   - Contracts defined in `packages/api-contract/src/contracts/`
+   - Schemas defined in `packages/api-contract/src/schemas/`
+   - Middleware still applied using Express patterns (to be migrated later)
+   - Existing controllers wrapped to maintain compatibility
+
+### Next Steps for Migration
+1. **Migrate remaining authentication routes**:
+   - GET /login/google, GET /login/github
+   - GET /login/invited, POST /login/activateInvited
+   - GET /google/callback, GET /github/callback
+   - GET /logout
+
+2. **Migrate API routes** (/_api/*):
+   - Start with simple GET endpoints
+   - Then move to more complex POST/PUT/DELETE operations
+   - Ensure proper request/response validation with Zod
+
+3. **Migrate page routes**:
+   - Page display and editing routes
+   - Search functionality
+   - User pages and bookmarks
+
+4. **Enhance ts-rest integration**:
+   - Move middleware logic into ts-rest handlers
+   - Implement proper error handling with Zod validation
+   - Add request/response transformers where needed
+   - Generate TypeScript client from contracts
+
+5. **Remove old Express routes** (after testing):
+   - Once ts-rest routes are stable, remove old implementations
+   - Update all internal API calls to use new endpoints
+   - Update documentation
+
+### Technical Notes
+- ts-rest routes currently mounted under `/api/v2` to avoid conflicts
+- Middleware applied using Express patterns (will migrate to ts-rest middleware)
+- Response handling wraps existing controllers for compatibility
+- All types validated using Zod schemas
+- Build api-contract with: `pnpm --filter @crowi/api-contract build`
+
+### Branch Information
+- Working branch: `dev2-ts-rest`
+- Main development branch: `dev2-2` (changed from `dev2`)
+- CI/CD configured to run on: main, dev, dev2-2
