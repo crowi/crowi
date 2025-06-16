@@ -16,7 +16,7 @@ import Layout from '../layouts/Layout.astro';
             <option value="DELETE">DELETE</option>
             <option value="PATCH">PATCH</option>
           </select>
-          <input type="text" id="url" class="url-input" placeholder="http://localhost:3000/api/v2/login" value="http://localhost:3000/api/v2/login">
+          <input type="text" id="url" class="url-input" placeholder="http://localhost:3000/api/v2/auth/login" value="http://localhost:3000/api/v2/auth/login">
         </div>
 
         <div class="headers-section">
@@ -37,6 +37,17 @@ import Layout from '../layouts/Layout.astro';
         </div>
 
         <button id="send-request" class="send-btn">Send Request</button>
+
+        <div class="examples-section">
+          <h3>Example Requests</h3>
+          <div class="example-buttons">
+            <button class="example-btn" data-method="POST" data-url="/auth/login" data-body='{"email":"test@example.com","password":"password123"}'>Login</button>
+            <button class="example-btn" data-method="POST" data-url="/auth/register" data-body='{"username":"testuser","name":"Test User","email":"test@example.com","password":"password123"}'>Register</button>
+            <button class="example-btn" data-method="GET" data-url="/auth/me" data-auth="true">Get Me</button>
+            <button class="example-btn" data-method="POST" data-url="/auth/refresh" data-body='{"refreshToken":"your-refresh-token"}'>Refresh Token</button>
+            <button class="example-btn" data-method="GET" data-url="/installer">Check Installation</button>
+          </div>
+        </div>
       </div>
 
       <div class="response-section">
@@ -181,6 +192,32 @@ import Layout from '../layouts/Layout.astro';
     cursor: not-allowed;
   }
 
+  .examples-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #ddd;
+  }
+
+  .example-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .example-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+
+  .example-btn:hover {
+    background: #e3f2fd;
+    border-color: #2196F3;
+  }
+
   .response-meta {
     display: flex;
     gap: 1rem;
@@ -246,6 +283,54 @@ import Layout from '../layouts/Layout.astro';
       headersContainer.appendChild(headerRow);
     });
 
+    // Handle example buttons
+    let accessToken = null; // Store access token for authenticated requests
+    
+    document.querySelectorAll('.example-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const button = e.target;
+        const method = button.dataset.method;
+        const path = button.dataset.url;
+        const body = button.dataset.body;
+        const needsAuth = button.dataset.auth === 'true';
+        
+        // Set method
+        document.getElementById('method').value = method;
+        
+        // Set URL
+        const baseUrl = 'http://localhost:3000/api/v2';
+        document.getElementById('url').value = baseUrl + path;
+        
+        // Set body
+        document.getElementById('body').value = body || '';
+        
+        // Add Authorization header if needed
+        if (needsAuth && accessToken) {
+          // Check if Authorization header already exists
+          let authHeaderFound = false;
+          document.querySelectorAll('.header-row').forEach(row => {
+            const key = row.querySelector('.header-key');
+            if (key.value === 'Authorization') {
+              row.querySelector('.header-value').value = `Bearer ${accessToken}`;
+              authHeaderFound = true;
+            }
+          });
+          
+          // Add Authorization header if not found
+          if (!authHeaderFound) {
+            const headerRow = document.createElement('div');
+            headerRow.className = 'header-row';
+            headerRow.innerHTML = `
+              <input type="text" class="header-key" value="Authorization">
+              <input type="text" class="header-value" value="Bearer ${accessToken}">
+              <button class="remove-header" onclick="removeHeader(this)">×</button>
+            `;
+            headersContainer.appendChild(headerRow);
+          }
+        }
+      });
+    });
+
     sendBtn.addEventListener('click', async () => {
       const method = document.getElementById('method').value;
       const url = document.getElementById('url').value;
@@ -303,6 +388,19 @@ import Layout from '../layouts/Layout.astro';
         if (contentType && contentType.includes('application/json')) {
           responseData = await response.json();
           responseEl.textContent = JSON.stringify(responseData, null, 2);
+          
+          // Store access token if this is a successful auth response
+          if (response.ok && responseData.accessToken) {
+            accessToken = responseData.accessToken;
+            console.log('Access token stored for authenticated requests');
+            
+            // Also update refresh token in example if present
+            document.querySelectorAll('.example-btn').forEach(btn => {
+              if (btn.dataset.url === '/auth/refresh' && responseData.refreshToken) {
+                btn.dataset.body = JSON.stringify({ refreshToken: responseData.refreshToken });
+              }
+            });
+          }
         } else {
           responseData = await response.text();
           responseEl.textContent = responseData;

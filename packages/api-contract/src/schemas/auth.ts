@@ -1,5 +1,29 @@
 import { z } from 'zod';
 
+// Token-based authentication schemas
+export const TokenAuthLoginRequestSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+});
+
+export const TokenAuthResponseSchema = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  expiresIn: z.number(), // seconds until expiration
+  user: z.object({
+    id: z.string(),
+    username: z.string(),
+    email: z.string().email(),
+    name: z.string(),
+    image: z.string().optional(),
+  }),
+});
+
+export const RefreshTokenRequestSchema = z.object({
+  refreshToken: z.string(),
+});
+
+// Legacy schemas (to be removed)
 export const LoginRequestSchema = z.object({
   loginForm: z.object({
     email: z.string().email(),
@@ -21,6 +45,15 @@ export const LoginResponseSchema = z.object({
   issuerName: z.string().optional(),
 });
 
+// Token-based registration schemas
+export const TokenAuthRegisterRequestSchema = z.object({
+  username: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  password: z.string().min(6),
+});
+
+// Legacy schemas (to be removed)
 export const RegisterRequestSchema = z.object({
   registerForm: z.object({
     username: z.string(),
