@@ -37,26 +37,53 @@ This is a minimal web application for testing the Crowi API server endpoints.
 
 ## Example API Calls
 
-### Test Login Endpoint
-- Method: `GET`
-- URL: `http://localhost:3000/api/v2/login`
+### Token-Based Authentication (New)
 
-### Test Application Status
-- Method: `GET`
-- URL: `http://localhost:3000/api/v2/installer`
-
-### Test Login (POST)
+#### Login
 - Method: `POST`
-- URL: `http://localhost:3000/api/v2/login`
+- URL: `http://localhost:3000/api/v2/auth/login`
 - Body:
   ```json
   {
-    "loginForm": {
-      "email": "test@example.com",
-      "password": "password123"
-    }
+    "email": "test@example.com",
+    "password": "password123"
   }
   ```
+- Response includes: `accessToken`, `refreshToken`, `expiresIn`, and `user` object
+
+#### Register
+- Method: `POST`
+- URL: `http://localhost:3000/api/v2/auth/register`
+- Body:
+  ```json
+  {
+    "username": "testuser",
+    "name": "Test User",
+    "email": "test@example.com",
+    "password": "password123"
+  }
+  ```
+
+#### Get Current User
+- Method: `GET`
+- URL: `http://localhost:3000/api/v2/auth/me`
+- Headers: `Authorization: Bearer <accessToken>`
+
+#### Refresh Token
+- Method: `POST`
+- URL: `http://localhost:3000/api/v2/auth/refresh`
+- Body:
+  ```json
+  {
+    "refreshToken": "your-refresh-token"
+  }
+  ```
+
+### Other Endpoints
+
+#### Test Application Status
+- Method: `GET`
+- URL: `http://localhost:3000/api/v2/installer`
 
 ## Development
 
