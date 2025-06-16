@@ -7,6 +7,7 @@ import {
   RegisterResponseSchema,
   ErrorResponseSchema,
 } from '../schemas/auth';
+import { ApplicationNotInstalledErrorSchema } from '../schemas/common';
 
 const c = initContract();
 
@@ -16,6 +17,7 @@ export const authContract = c.router({
     path: '/login',
     responses: {
       200: LoginResponseSchema,
+      503: ApplicationNotInstalledErrorSchema,
     },
     summary: 'Display login page',
   },
@@ -26,6 +28,7 @@ export const authContract = c.router({
     responses: {
       200: z.undefined(), // Redirect response
       400: z.object({ errors: z.array(z.string()) }),
+      503: ApplicationNotInstalledErrorSchema,
     },
     summary: 'Process login',
   },
@@ -34,6 +37,7 @@ export const authContract = c.router({
     path: '/register',
     responses: {
       200: RegisterResponseSchema,
+      503: ApplicationNotInstalledErrorSchema,
     },
     summary: 'Display registration page',
   },
@@ -44,6 +48,7 @@ export const authContract = c.router({
     responses: {
       200: z.undefined(), // Redirect response
       400: z.object({ errors: z.array(z.string()) }),
+      503: ApplicationNotInstalledErrorSchema,
     },
     summary: 'Process registration',
   },
