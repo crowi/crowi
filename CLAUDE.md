@@ -181,6 +181,7 @@ We are migrating the existing Express.js API to use `ts-rest` with `zod` for typ
    - Contains all ts-rest contract definitions using Zod schemas
    - Built with tsup for both CJS and ESM output
    - Serves as single source of truth for API types
+   - Includes common error schemas for standardized API responses
 
 2. **Migrated Routes** (available at /api/v2 prefix):
    - ✅ GET /login - Display login page
@@ -191,37 +192,52 @@ We are migrating the existing Express.js API to use `ts-rest` with `zod` for typ
    - ✅ GET /installer - Get installer status
    - ✅ POST /installer/createAdmin - Create initial admin
 
-3. **Implementation Details**:
+3. **Updated Middleware for API-only Operation**:
+   - ✅ `applicationInstalled` - Returns JSON error (503) instead of redirect
+   - ✅ `loginRequired` - Returns JSON errors (401/403) instead of redirects
+   - Error schemas defined in `packages/api-contract/src/schemas/common.ts`:
+     - `ApplicationNotInstalledError` - HTTP 503
+     - `AuthenticationRequiredError` - HTTP 401
+     - `UserStatusError` - HTTP 403 (for registered/suspended/invited users)
+     - `ThirdPartyAuthRequiredError` - HTTP 403
+
+4. **Implementation Details**:
    - Routes defined in `apps/crowi-api/src/routes/ts-rest/`
    - Contracts defined in `packages/api-contract/src/contracts/`
    - Schemas defined in `packages/api-contract/src/schemas/`
-   - Middleware still applied using Express patterns (to be migrated later)
+   - Middleware now returns JSON errors with `redirectTo` field for client compatibility
    - Existing controllers wrapped to maintain compatibility
 
 ### Next Steps for Migration
-1. **Migrate remaining authentication routes**:
+1. **Update remaining middleware to return JSON errors**:
+   - adminRequired
+   - applicationNotInstalled
+   - fileAccessRightOrLoginRequired
+   - Other middleware that perform redirects
+
+2. **Migrate remaining authentication routes**:
    - GET /login/google, GET /login/github
    - GET /login/invited, POST /login/activateInvited
    - GET /google/callback, GET /github/callback
    - GET /logout
 
-2. **Migrate API routes** (/_api/*):
+3. **Migrate API routes** (/_api/*):
    - Start with simple GET endpoints
    - Then move to more complex POST/PUT/DELETE operations
    - Ensure proper request/response validation with Zod
 
-3. **Migrate page routes**:
+4. **Migrate page routes**:
    - Page display and editing routes
    - Search functionality
    - User pages and bookmarks
 
-4. **Enhance ts-rest integration**:
+5. **Enhance ts-rest integration**:
    - Move middleware logic into ts-rest handlers
    - Implement proper error handling with Zod validation
    - Add request/response transformers where needed
    - Generate TypeScript client from contracts
 
-5. **Remove old Express routes** (after testing):
+6. **Remove old Express routes** (after testing):
    - Once ts-rest routes are stable, remove old implementations
    - Update all internal API calls to use new endpoints
    - Update documentation
