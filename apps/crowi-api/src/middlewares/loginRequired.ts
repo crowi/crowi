@@ -2,11 +2,7 @@ import { Request, Response } from 'express';
 import Crowi from 'src/crowi';
 import auth from 'src/util/auth';
 import Debug from 'debug';
-import { 
-  AuthenticationRequiredErrorSchema,
-  UserStatusErrorSchema,
-  ThirdPartyAuthRequiredErrorSchema 
-} from '@crowi/api-contract';
+import { AuthenticationRequiredErrorSchema, UserStatusErrorSchema, ThirdPartyAuthRequiredErrorSchema } from '@crowi/api-contract';
 import { z } from 'zod';
 
 type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;

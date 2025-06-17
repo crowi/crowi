@@ -27,23 +27,15 @@ export function createJwtUtil(crowi: Crowi) {
       email: user.email,
     };
 
-    const accessToken = jwt.sign(
-      { ...payload, type: 'access' },
-      secret,
-      { 
-        expiresIn: ACCESS_TOKEN_EXPIRES_IN,
-        issuer: 'crowi',
-      }
-    );
+    const accessToken = jwt.sign({ ...payload, type: 'access' }, secret, {
+      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+      issuer: 'crowi',
+    });
 
-    const refreshToken = jwt.sign(
-      { ...payload, type: 'refresh' },
-      secret,
-      { 
-        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
-        issuer: 'crowi',
-      }
-    );
+    const refreshToken = jwt.sign({ ...payload, type: 'refresh' }, secret, {
+      expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+      issuer: 'crowi',
+    });
 
     // Calculate expiration time in seconds
     const expiresIn = 15 * 60; // 15 minutes in seconds
@@ -103,7 +95,7 @@ export function createJwtUtil(crowi: Crowi) {
 
     const User = crowi.model('User');
     const user = await User.findById(payload.userId);
-    
+
     if (!user || user.status !== User.STATUS_ACTIVE) {
       return null;
     }

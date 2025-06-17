@@ -16,16 +16,19 @@ export default (crowi: Crowi, app: Express) => {
   const installerRouter = s.router(apiContract.installer, {
     getStatus: async ({ req, res }) => {
       return new Promise((resolve) => {
-        installer.index(req as any, {
-          json: (data) => resolve({ status: 200, body: data }),
-        } as any);
+        installer.index(
+          req as any,
+          {
+            json: (data) => resolve({ status: 200, body: data }),
+          } as any,
+        );
       });
     },
     createAdmin: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
-        
+
         installer.createAdmin(request, {
           json: (data) => {
             if (data.status === 'error') {
@@ -41,9 +44,9 @@ export default (crowi: Crowi, app: Express) => {
   });
 
   createExpressEndpoints(apiContract.installer, installerRouter, router);
-  
+
   // Apply middleware to all installer routes
   router.use(applicationNotInstalled);
-  
+
   return router;
 };
