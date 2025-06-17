@@ -45,7 +45,7 @@ export default (crowi: Crowi, app: Express) => {
       if (user.status !== User.STATUS_ACTIVE) {
         let code = 'USER_NOT_ACTIVE';
         let message = 'User account is not active';
-        
+
         if (user.status === User.STATUS_REGISTERED) {
           code = 'USER_REGISTERED';
           message = 'User registration is not complete';
@@ -110,7 +110,7 @@ export default (crowi: Crowi, app: Express) => {
 
     try {
       // Check if registration is restricted
-      const config = await Config.loadAllConfig() as { crowi: Record<string, any> };
+      const config = (await Config.loadAllConfig()) as { crowi: Record<string, any> };
       if (config.crowi['security:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_CLOSED) {
         const error: ApiError = {
           error: {
@@ -123,19 +123,14 @@ export default (crowi: Crowi, app: Express) => {
 
       // Check if user already exists
       const existingUser = await User.findOne({
-        $or: [
-          { email: email },
-          { username: username },
-        ],
+        $or: [{ email: email }, { username: username }],
       });
 
       if (existingUser) {
         const error: ApiError = {
           error: {
             code: 'USER_EXISTS',
-            message: existingUser.email === email 
-              ? 'Email already registered' 
-              : 'Username already taken',
+            message: existingUser.email === email ? 'Email already registered' : 'Username already taken',
           },
         };
         return res.status(409).json(error);
@@ -149,7 +144,7 @@ export default (crowi: Crowi, app: Express) => {
         name: string;
         image?: string;
       }
-      
+
       const newUser = await new Promise<UserDocument | null>((resolve, reject) => {
         User.createUserByEmailAndPassword(
           name,
@@ -160,7 +155,7 @@ export default (crowi: Crowi, app: Express) => {
           (err: Error | null, user: UserDocument | null) => {
             if (err) reject(err);
             else resolve(user);
-          }
+          },
         );
       });
 
@@ -219,7 +214,7 @@ export default (crowi: Crowi, app: Express) => {
 
     try {
       const tokens = await jwtUtil.refreshAccessToken(refreshToken);
-      
+
       if (!tokens) {
         const error: ApiError = {
           error: {
@@ -241,9 +236,9 @@ export default (crowi: Crowi, app: Express) => {
         };
         return res.status(401).json(error);
       }
-      
+
       const user = await User.findById(payload.userId);
-      
+
       if (!user) {
         const error: ApiError = {
           error: {

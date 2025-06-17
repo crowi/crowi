@@ -40,7 +40,7 @@ export default (crowi: Crowi) => {
 
     try {
       const user = await User.findById(payload.userId);
-      
+
       if (!user) {
         const errorResponse = {
           error: {
@@ -54,7 +54,7 @@ export default (crowi: Crowi) => {
       if (user.status !== User.STATUS_ACTIVE) {
         let code = 'USER_NOT_ACTIVE';
         let message = 'User account is not active';
-        
+
         if (user.status === User.STATUS_REGISTERED) {
           code = 'USER_REGISTERED';
           message = 'User registration is not complete';
@@ -67,12 +67,15 @@ export default (crowi: Crowi) => {
         }
 
         const errorResponse: UserStatusError = {
-          error: { 
-            code: code as 'USER_REGISTERED' | 'USER_SUSPENDED' | 'USER_INVITED', 
+          error: {
+            code: code as 'USER_REGISTERED' | 'USER_SUSPENDED' | 'USER_INVITED',
             message,
-            redirectTo: user.status === User.STATUS_REGISTERED ? '/login/error/registered' :
-                       user.status === User.STATUS_SUSPENDED ? '/login/error/suspended' :
-                       '/login/invited'
+            redirectTo:
+              user.status === User.STATUS_REGISTERED
+                ? '/login/error/registered'
+                : user.status === User.STATUS_SUSPENDED
+                  ? '/login/error/suspended'
+                  : '/login/invited',
           },
         };
         return res.status(403).json(errorResponse);

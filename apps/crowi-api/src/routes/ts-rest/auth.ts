@@ -16,17 +16,20 @@ export default (crowi: Crowi, app: Express) => {
   const authRouter = s.router(apiContract.auth, {
     login: async ({ req, res }) => {
       return new Promise((resolve) => {
-        Login.login(req as any, {
-          json: (data) => resolve({ status: 200, body: data }),
-          redirect: () => resolve({ status: 200, body: {} }),
-        } as any);
+        Login.login(
+          req as any,
+          {
+            json: (data) => resolve({ status: 200, body: data }),
+            redirect: () => resolve({ status: 200, body: {} }),
+          } as any,
+        );
       });
     },
     loginPost: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
-        
+
         Login.login(request, {
           json: (data) => resolve({ status: 400, body: { errors: request.form?.errors || [] } }),
           redirect: () => resolve({ status: 200, body: undefined }),
@@ -35,17 +38,20 @@ export default (crowi: Crowi, app: Express) => {
     },
     register: async ({ req, res }) => {
       return new Promise((resolve) => {
-        Login.register(req as any, {
-          json: (data) => resolve({ status: 200, body: data }),
-          redirect: () => resolve({ status: 200, body: {} }),
-        } as any);
+        Login.register(
+          req as any,
+          {
+            json: (data) => resolve({ status: 200, body: data }),
+            redirect: () => resolve({ status: 200, body: {} }),
+          } as any,
+        );
       });
     },
     registerPost: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
-        
+
         Login.register(request, {
           json: (data) => resolve({ status: 400, body: { errors: request.form?.errors || [] } }),
           redirect: () => resolve({ status: 200, body: undefined }),
@@ -54,20 +60,23 @@ export default (crowi: Crowi, app: Express) => {
     },
     loginError: async ({ params }) => {
       return new Promise((resolve) => {
-        Login.error({ params } as any, {
-          status: (code) => ({
-            json: (data) => resolve({ status: 403 as const, body: data }),
-          }),
-        } as any);
+        Login.error(
+          { params } as any,
+          {
+            status: (code) => ({
+              json: (data) => resolve({ status: 403 as const, body: data }),
+            }),
+          } as any,
+        );
       });
     },
   });
 
   createExpressEndpoints(apiContract.auth, authRouter, router);
-  
+
   // Apply middleware to specific routes
   router.use('/login', applicationInstalled);
   router.use('/register', applicationInstalled);
-  
+
   return router;
 };

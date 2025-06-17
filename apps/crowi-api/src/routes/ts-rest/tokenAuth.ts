@@ -18,7 +18,7 @@ export default (crowi: Crowi, app: Express) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
-        
+
         TokenAuth.login(request, {
           status: (code) => ({
             json: (data) => resolve({ status: code as any, body: data }),
@@ -27,12 +27,12 @@ export default (crowi: Crowi, app: Express) => {
         } as any);
       });
     },
-    
+
     register: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
-        
+
         TokenAuth.register(request, {
           status: (code) => ({
             json: (data) => resolve({ status: code as any, body: data }),
@@ -41,12 +41,12 @@ export default (crowi: Crowi, app: Express) => {
         } as any);
       });
     },
-    
+
     refresh: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
-        
+
         TokenAuth.refresh(request, {
           status: (code) => ({
             json: (data) => resolve({ status: code as any, body: data }),
@@ -55,35 +55,35 @@ export default (crowi: Crowi, app: Express) => {
         } as any);
       });
     },
-    
+
     logout: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
-        
+
         // Apply JWT auth middleware
         requireJwtAuth(request, res as any, (err) => {
           if (err) {
             return resolve({ status: 401 as const, body: { error: { code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required' } } });
           }
-          
+
           TokenAuth.logout(request, {
             json: (data) => resolve({ status: 200, body: data }),
           } as any);
         });
       });
     },
-    
+
     me: async ({ req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
-        
+
         // Apply JWT auth middleware
         requireJwtAuth(request, res as any, (err) => {
           if (err) {
             return resolve({ status: 401 as const, body: { error: { code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required' } } });
           }
-          
+
           TokenAuth.me(request, {
             status: (code) => ({
               json: (data) => resolve({ status: code as any, body: data }),
@@ -96,10 +96,10 @@ export default (crowi: Crowi, app: Express) => {
   });
 
   createExpressEndpoints(apiContract.tokenAuth, tokenAuthRouter, router);
-  
+
   // Apply middleware to specific routes
   router.use('/auth/login', checkAppInstalled);
   router.use('/auth/register', checkAppInstalled);
-  
+
   return router;
 };
