@@ -1,15 +1,25 @@
 import { Express, Request, Response } from 'express';
 import Crowi from 'src/crowi';
 import Debug from 'debug';
-import { ApiError } from '@crowi/api-contract';
+import { createJwtUtil } from '../util/jwt';
+import { ApiErrorSchema } from '@crowi/api-contract';
+import { z } from 'zod';
+
+type ApiError = z.infer<typeof ApiErrorSchema>;
 
 export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:controllers:tokenAuth');
   const User = crowi.model('User');
   const Config = crowi.model('Config');
-  const jwtUtil = require('../util/jwt')(crowi);
+  const jwtUtil = createJwtUtil(crowi);
 
-  const actions = {} as any;
+  const actions = {} as {
+    login: (req: Request, res: Response) => Promise<Response>;
+    register: (req: Request, res: Response) => Promise<Response>;
+    refresh: (req: Request, res: Response) => Promise<Response>;
+    logout: (req: Request, res: Response) => Promise<Response>;
+    me: (req: Request, res: Response) => Promise<Response>;
+  };
 
   /**
    * POST /auth/login
@@ -100,7 +110,7 @@ export default (crowi: Crowi, app: Express) => {
 
     try {
       // Check if registration is restricted
-      const config = await Config.loadAllConfig() as any;
+      const config = await Config.loadAllConfig() as { crowi: Record<string, any> };
       if (config.crowi['security:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_CLOSED) {
         const error: ApiError = {
           error: {
@@ -132,14 +142,22 @@ export default (crowi: Crowi, app: Express) => {
       }
 
       // Create new user
-      const newUser = await new Promise<any>((resolve, reject) => {
+      interface UserDocument {
+        _id: any;
+        username: string;
+        email: string;
+        name: string;
+        image?: string;
+      }
+      
+      const newUser = await new Promise<UserDocument | null>((resolve, reject) => {
         User.createUserByEmailAndPassword(
           name,
           username,
           email,
           password,
           'en', // default language
-          (err: any, user: any) => {
+          (err: Error | null, user: UserDocument | null) => {
             if (err) reject(err);
             else resolve(user);
           }
@@ -214,6 +232,16 @@ export default (crowi: Crowi, app: Express) => {
 
       // Get user data for response
       const payload = jwtUtil.verifyToken(refreshToken, 'refresh');
+      if (!payload) {
+        const error: ApiError = {
+          error: {
+            code: 'INVALID_REFRESH_TOKEN',
+            message: 'Invalid or expired refresh token',
+          },
+        };
+        return res.status(401).json(error);
+      }
+      
       const user = await User.findById(payload.userId);
       
       if (!user) {

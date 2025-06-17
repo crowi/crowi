@@ -1,12 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import Crowi from 'src/crowi';
 import Debug from 'debug';
-import { AuthenticationRequiredError } from '@crowi/api-contract';
+import { createJwtUtil } from '../util/jwt';
+import { AuthenticationRequiredErrorSchema, UserStatusErrorSchema } from '@crowi/api-contract';
+import { z } from 'zod';
+
+type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
+type UserStatusError = z.infer<typeof UserStatusErrorSchema>;
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:middlewares:jwtAuth');
   const User = crowi.model('User');
-  const jwtUtil = require('../util/jwt')(crowi);
+  const jwtUtil = createJwtUtil(crowi);
 
   return async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
@@ -37,9 +42,9 @@ export default (crowi: Crowi) => {
       const user = await User.findById(payload.userId);
       
       if (!user) {
-        const errorResponse: AuthenticationRequiredError = {
+        const errorResponse = {
           error: {
-            code: 'AUTHENTICATION_REQUIRED',
+            code: 'AUTHENTICATION_REQUIRED' as const,
             message: 'Authentication is required',
           },
         };
@@ -61,9 +66,16 @@ export default (crowi: Crowi) => {
           message = 'User invitation is pending';
         }
 
-        return res.status(403).json({
-          error: { code, message },
-        });
+        const errorResponse: UserStatusError = {
+          error: { 
+            code: code as 'USER_REGISTERED' | 'USER_SUSPENDED' | 'USER_INVITED', 
+            message,
+            redirectTo: user.status === User.STATUS_REGISTERED ? '/login/error/registered' :
+                       user.status === User.STATUS_SUSPENDED ? '/login/error/suspended' :
+                       '/login/invited'
+          },
+        };
+        return res.status(403).json(errorResponse);
       }
 
       // Attach user to request

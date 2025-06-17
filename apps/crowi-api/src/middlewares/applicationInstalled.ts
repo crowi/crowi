@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { ApplicationNotInstalledError } from '@crowi/api-contract';
+import { ApplicationNotInstalledErrorSchema } from '@crowi/api-contract';
+import { z } from 'zod';
+
+type ApplicationNotInstalledError = z.infer<typeof ApplicationNotInstalledErrorSchema>;
 
 export default () => {
   return (req: Request, res: Response, next: NextFunction) => {

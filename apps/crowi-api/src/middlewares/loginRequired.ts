@@ -3,10 +3,15 @@ import Crowi from 'src/crowi';
 import auth from 'src/util/auth';
 import Debug from 'debug';
 import { 
-  AuthenticationRequiredError, 
-  UserStatusError, 
-  ThirdPartyAuthRequiredError 
+  AuthenticationRequiredErrorSchema,
+  UserStatusErrorSchema,
+  ThirdPartyAuthRequiredErrorSchema 
 } from '@crowi/api-contract';
+import { z } from 'zod';
+
+type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
+type UserStatusError = z.infer<typeof UserStatusErrorSchema>;
+type ThirdPartyAuthRequiredError = z.infer<typeof ThirdPartyAuthRequiredErrorSchema>;
 
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:middlewares:loginRequired');
