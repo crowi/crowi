@@ -100,8 +100,8 @@ export default (crowi: Crowi, app: Express) => {
 
     try {
       // Check if registration is restricted
-      const config = await Config.getRegistrationModeAsync();
-      if (config['auth:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_CLOSED) {
+      const config = await Config.loadAllConfig() as any;
+      if (config.crowi['security:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_CLOSED) {
         const error: ApiError = {
           error: {
             code: 'REGISTRATION_CLOSED',
@@ -132,13 +132,19 @@ export default (crowi: Crowi, app: Express) => {
       }
 
       // Create new user
-      const newUser = await User.createUserByEmailAndPassword(
-        name,
-        username,
-        email,
-        password,
-        'en' // default language
-      );
+      const newUser = await new Promise<any>((resolve, reject) => {
+        User.createUserByEmailAndPassword(
+          name,
+          username,
+          email,
+          password,
+          'en', // default language
+          (err: any, user: any) => {
+            if (err) reject(err);
+            else resolve(user);
+          }
+        );
+      });
 
       if (!newUser) {
         const error: ApiError = {
@@ -209,6 +215,16 @@ export default (crowi: Crowi, app: Express) => {
       // Get user data for response
       const payload = jwtUtil.verifyToken(refreshToken, 'refresh');
       const user = await User.findById(payload.userId);
+      
+      if (!user) {
+        const error: ApiError = {
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'User not found',
+          },
+        };
+        return res.status(404).json(error);
+      }
 
       return res.json({
         ...tokens,
