@@ -25,7 +25,7 @@ importers:
         version: 5.0.2(debug@4.1.1)
       '@ts-rest/express':
         specifier: ^3.52.1
-        version: 3.52.1(@ts-rest/core@3.52.1)(express@4.21.2)
+        version: 3.52.1(@ts-rest/core@3.52.1)(express@4.21.2)(zod@3.25.56)
       async:
         specifier: ~1.5.0
         version: 1.5.2
@@ -167,6 +167,9 @@ importers:
       uuid:
         specifier: ^11.1.0
         version: 11.1.0
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.56
     devDependencies:
       '@types/classnames':
         specifier: ^2.2.9
@@ -2870,7 +2873,7 @@ packages:
       zod: 3.25.56
     dev: false
 
-  /@ts-rest/express@3.52.1(@ts-rest/core@3.52.1)(express@4.21.2):
+  /@ts-rest/express@3.52.1(@ts-rest/core@3.52.1)(express@4.21.2)(zod@3.25.56):
     resolution: {integrity: sha512-ttVynyJSWYnVzn7FazSFvShD5j3Lq1JsIhSKereV2Z51zxWEQwo35CpCO3Q8rELzkfD9CYoT6eNSBJRlJLogIw==}
     peerDependencies:
       '@ts-rest/core': ~3.52.0
@@ -2882,6 +2885,7 @@ packages:
     dependencies:
       '@ts-rest/core': 3.52.1(@types/node@22.15.30)(zod@3.25.56)
       express: 4.21.2
+      zod: 3.25.56
     dev: false
 
   /@tsconfig/node10@1.0.11:

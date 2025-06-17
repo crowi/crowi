@@ -83,7 +83,8 @@
     "query-string": "^6.8.3",
     "redis": "^4.7.1",
     "tsconfig-paths": "^3.9.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/classnames": "^2.2.9",
