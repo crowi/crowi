@@ -15,7 +15,7 @@ import {
 const c = initContract();
 
 export const tokenAuthContract = c.router({
-  login: {
+  tokenLogin: {
     method: 'POST',
     path: '/auth/login',
     body: TokenAuthLoginRequestSchema,
@@ -27,7 +27,7 @@ export const tokenAuthContract = c.router({
     },
     summary: 'Authenticate user and receive tokens',
   },
-  register: {
+  tokenRegister: {
     method: 'POST',
     path: '/auth/register',
     body: TokenAuthRegisterRequestSchema,
@@ -39,7 +39,7 @@ export const tokenAuthContract = c.router({
     },
     summary: 'Register new user and receive tokens',
   },
-  refresh: {
+  tokenRefresh: {
     method: 'POST',
     path: '/auth/refresh',
     body: RefreshTokenRequestSchema,
@@ -49,7 +49,7 @@ export const tokenAuthContract = c.router({
     },
     summary: 'Refresh access token using refresh token',
   },
-  logout: {
+  tokenLogout: {
     method: 'POST',
     path: '/auth/logout',
     headers: z.object({
@@ -64,7 +64,7 @@ export const tokenAuthContract = c.router({
     },
     summary: 'Logout user and invalidate tokens',
   },
-  me: {
+  tokenMe: {
     method: 'GET',
     path: '/auth/me',
     headers: z.object({

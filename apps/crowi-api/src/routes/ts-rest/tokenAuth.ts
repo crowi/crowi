@@ -14,7 +14,7 @@ export default (crowi: Crowi, app: Express) => {
   const requireJwtAuth = jwtAuth(crowi);
 
   const tokenAuthRouter = s.router(apiContract.tokenAuth, {
-    login: async ({ body, req, res }) => {
+    tokenLogin: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
@@ -28,7 +28,7 @@ export default (crowi: Crowi, app: Express) => {
       });
     },
 
-    register: async ({ body, req, res }) => {
+    tokenRegister: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
@@ -42,7 +42,7 @@ export default (crowi: Crowi, app: Express) => {
       });
     },
 
-    refresh: async ({ body, req, res }) => {
+    tokenRefresh: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
@@ -56,7 +56,7 @@ export default (crowi: Crowi, app: Express) => {
       });
     },
 
-    logout: async ({ body, req, res }) => {
+    tokenLogout: async ({ body, req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
         request.body = body;
@@ -74,7 +74,7 @@ export default (crowi: Crowi, app: Express) => {
       });
     },
 
-    me: async ({ req, res }) => {
+    tokenMe: async ({ req, res }) => {
       return new Promise((resolve) => {
         const request = req as any;
 
