@@ -257,3 +257,7 @@ We are migrating the existing Express.js API to use `ts-rest` with `zod` for typ
 - Working branch: `dev2-ts-rest`
 - Main development branch: `dev2-2` (changed from `dev2`)
 - CI/CD configured to run on: main, dev, dev2-2
+
+## Development Memories
+
+- pnpm format before push
