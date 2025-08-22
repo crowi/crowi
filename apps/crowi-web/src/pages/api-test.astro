@@ -1,5 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
 ---
 
 <Layout title="Crowi API Test Tool">
@@ -16,7 +18,7 @@ import Layout from '../layouts/Layout.astro';
             <option value="DELETE">DELETE</option>
             <option value="PATCH">PATCH</option>
           </select>
-          <input type="text" id="url" class="url-input" placeholder="http://localhost:3000/api/v2/auth/login" value="http://localhost:3000/api/v2/auth/login">
+          <input type="text" id="url" class="url-input" placeholder="{API_URL}/api/v2/auth/login" value="{API_URL}/api/v2/auth/login">
         </div>
 
         <div class="headers-section">
@@ -259,7 +261,7 @@ import Layout from '../layouts/Layout.astro';
   }
 </style>
 
-<script>
+<script define:vars={{ API_URL }}>
   function removeHeader(button) {
     button.parentElement.remove();
   }
@@ -298,7 +300,7 @@ import Layout from '../layouts/Layout.astro';
         document.getElementById('method').value = method;
         
         // Set URL
-        const baseUrl = 'http://localhost:3000/api/v2';
+        const baseUrl = API_URL + '/api/v2';
         document.getElementById('url').value = baseUrl + path;
         
         // Set body
