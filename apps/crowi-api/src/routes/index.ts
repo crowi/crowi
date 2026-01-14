@@ -9,6 +9,7 @@ import Admin from './admin';
 import API from './api';
 import Login from './login';
 import Me from './me';
+import TsRestRoutes from './ts-rest';
 
 export default (crowi: Crowi, app: Express) => {
   const controllers = crowi.controllers;
@@ -48,6 +49,9 @@ export default (crowi: Crowi, app: Express) => {
     ApplicationNotInstalled: applicationNotInstalled,
     ApplicationInstalled: applicationInstalled,
   } = middlewares;
+
+  // Mount ts-rest routes (new system)
+  TsRestRoutes(crowi, app);
 
   app.use(routes.Admin);
   app.use(routes.Login);
