@@ -1,5 +1,6 @@
 config/default.js
 node_modules/
+tmp/
 bower_components/
 .env
 data
