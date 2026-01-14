@@ -94,9 +94,24 @@ Key environment variables (see `.env.sample`):
 
 - Write commit comments following the Conventional Commits format
 
+## Crowi 2.0 Development Strategy
+
+Crowi 2.0 の開発では以下の方針に従って作業を進めています:
+
+### Phase 1: API Server Migration
+- React、view 関連のコードを削除し、API サーバーのみにする
+- API サーバーは、過去のデータをそのまま扱える形として compatibility を残す
+- コアとは呼べない周辺の機能は一部コメントアウトや一時的に利用不可とし、今後の開発の中で再度有効にしていく
+- 不要なファイルの削除が終わったら、コアの各種依存パッケージを最新のバージョンに切り替えていく
+- この状態で、一旦 TypeScript の build が通る状態を目指す
+
+### Phase 2: Monorepo & Frontend
+- Monorepo 化する
+- View に相当する web frontend を新規 app として作成する
+
 ## Project Status and Todos
 
-- Current project status: Active development
+- Current project status: Active development (v2.0 migration)
 - Pending todos:
   - Implement more comprehensive test coverage
   - Optimize Elasticsearch integration
