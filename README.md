@@ -7,14 +7,16 @@
 
 <div align=center>
   <p align=center>
-    <a href="https://heroku.com/deploy?template=https://github.com/crowi/crowi/tree/v1.7.9"><img src="https://www.herokucdn.com/deploy/button.png" alt="Delpoy"></a>
-  </p>
-  <p align=center>
-    <img src="https://github.com/crowi/crowi/actions/workflows/main.yml/badge.svg" alt="GitHub Actions CI">
-    <a href="https://codecov.io/gh/crowi/crowi"><img src="https://codecov.io/gh/crowi/crowi/branch/master/graph/badge.svg" alt="Codecov"></a>
-    <a href="https://hub.docker.com/r/crowi/crowi"><img src="https://img.shields.io/docker/pulls/crowi/crowi.svg" alt="Docker Pulls"></a>
+    <img src="https://github.com/crowi/crowi/actions/workflows/ci.yml/badge.svg" alt="GitHub Actions CI">
   </p>
 </div>
+
+> [!CAUTION]
+> **Crowi v2 is currently under active development.**
+>
+> - There is no stable release available at this time
+> - Crowi v1.x is deprecated and no longer maintained
+> - Do not use this repository in production until v2 is officially released
 
 Crowi is a **Markdown Wiki** like:
 
@@ -29,19 +31,14 @@ Install
 
 Install dependencies and build CSS and JavaScript:
 
-    $ npm install
+    $ pnpm install
 
 More info is [here](https://github.com/crowi/crowi/wiki/Install-and-Configuration).
-
-### ⚠️WARNING⚠️
-
-Don't use `master` branch because it is unstable. Use released version except when you want to contribute to the project.
-
 
 Dependencies
 -------------
 
-* Node.js 12.x
+* Node.js 22.x
 * MongoDB 4.2.x
 * Elasticsearch 6.x.x or 7.x.x (optional) ([Doc is here](https://github.com/crowi/crowi/wiki/Configure-Search-Functions))
 * Redis (optional)

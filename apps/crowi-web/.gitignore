@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.astro/
+*.tsbuildinfo
+.DS_Store
+.vercel
+.netlify
+_site/
+*.log
+package-lock.json
+.turbo/
+.eslintcache
+.pnpm-store
+
+# IDEs
+.idea
+*.code-workspace
