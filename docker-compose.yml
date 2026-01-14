@@ -28,7 +28,7 @@ services:
     command: bash -c "npm install && npm run dev"
 
   mongodb:
-    image: mongo:3.6.13
+    image: mongo:8
     volumes:
       - ./data/mongodb:/data/db
     restart: unless-stopped
@@ -56,7 +56,7 @@ services:
       - 9200:9200
 
   redis:
-    image: redis:4.0.8
+    image: redis:7
     restart: unless-stopped
     ports:
       - 6379:6379
