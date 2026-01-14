@@ -23,7 +23,7 @@ export const installerContract = c.router({
     body: CreateAdminRequestSchema,
     responses: {
       200: CreateAdminResponseSchema,
-      302: z.undefined(), // Redirect on success
+      400: CreateAdminResponseSchema,
     },
     summary: 'Create initial admin user',
   },

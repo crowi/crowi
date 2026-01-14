@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const InstallerStatusResponseSchema = z.object({
-  status: z.literal('installer_required'),
+  status: z.enum(['installer_required', 'already_installed']),
 });
 
 export const CreateAdminRequestSchema = z.object({
@@ -14,6 +14,7 @@ export const CreateAdminRequestSchema = z.object({
 });
 
 export const CreateAdminResponseSchema = z.object({
-  status: z.literal('error'),
-  errors: z.array(z.string()),
+  status: z.enum(['ok', 'error']),
+  message: z.string().optional(),
+  errors: z.array(z.string()).optional(),
 });

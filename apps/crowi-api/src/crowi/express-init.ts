@@ -15,29 +15,31 @@ export default (crowi: Crowi, app: Express) => {
 
   // Configure CORS for development
   if (env === 'development') {
-    app.use(cors({
-      origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        
-        // Allow localhost and any port
-        if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-          return callback(null, true);
-        }
-        
-        // Allow configured base URL
-        const baseUrl = crowi.getBaseUrl();
-        if (baseUrl && origin === baseUrl) {
-          return callback(null, true);
-        }
-        
-        // Default to allowing in development
-        callback(null, true);
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    }));
+    app.use(
+      cors({
+        origin: function (origin, callback) {
+          // Allow requests with no origin (like mobile apps or curl requests)
+          if (!origin) return callback(null, true);
+
+          // Allow localhost and any port
+          if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+            return callback(null, true);
+          }
+
+          // Allow configured base URL
+          const baseUrl = crowi.getBaseUrl();
+          if (baseUrl && origin === baseUrl) {
+            return callback(null, true);
+          }
+
+          // Default to allowing in development
+          callback(null, true);
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      }),
+    );
     debug('CORS enabled for development environment');
   }
 

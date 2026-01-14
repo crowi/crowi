@@ -24,7 +24,7 @@ export default (crowi: Crowi, app: Express) => {
   app.use('/api/v2', installerRouter);
   debug('Mounting tokenAuth router at /api/v2');
   app.use('/api/v2', tokenAuthRouter);
-  
+
   debug('All ts-rest routes mounted successfully');
 
   // TODO: Once tested, we'll migrate middleware handling into the ts-rest handlers
