@@ -43,10 +43,11 @@ export default (crowi: Crowi, app: Express) => {
     },
   });
 
-  createExpressEndpoints(apiContract.installer, installerRouter, router);
+  // Apply middleware to installer routes BEFORE creating endpoints
+  const notInstalledMiddleware = applicationNotInstalled();
+  router.use('/installer', notInstalledMiddleware);
 
-  // Apply middleware to all installer routes
-  router.use(applicationNotInstalled);
+  createExpressEndpoints(apiContract.installer, installerRouter, router);
 
   return router;
 };
