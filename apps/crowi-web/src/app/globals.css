@@ -1,0 +1,199 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Crowi Theme
+ * Original colors from apps/crowi-api/resource/css/_theme.scss:
+ * - Primary: #43676b (teal green)
+ * - Header Background: #263a3c (dark teal)
+ * - Aside Background: #f8f9fa (light gray)
+ * - Font: 'Open Sans', 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif
+ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Crowi-specific color tokens */
+  --color-crowi-header: var(--crowi-header);
+  --color-crowi-header-foreground: var(--crowi-header-foreground);
+  --color-crowi-bookmark: var(--crowi-bookmark);
+  --color-crowi-success: var(--crowi-success);
+  --color-crowi-warning: var(--crowi-warning);
+  --color-crowi-danger: var(--crowi-danger);
+}
+
+:root {
+  --radius: 0.375rem;
+
+  /* Crowi brand colors */
+  /* Primary: #43676b - teal green */
+  --primary: oklch(0.465 0.04 192);
+  --primary-foreground: oklch(0.985 0 0);
+
+  /* Header: #263a3c - dark teal */
+  --crowi-header: oklch(0.295 0.025 192);
+  --crowi-header-foreground: oklch(0.985 0 0);
+
+  /* Background & surface */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.2 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0 0);
+
+  /* Secondary: lighter teal */
+  --secondary: oklch(0.95 0.01 192);
+  --secondary-foreground: oklch(0.295 0.025 192);
+
+  /* Muted */
+  --muted: oklch(0.97 0.005 192);
+  --muted-foreground: oklch(0.45 0 0);
+
+  /* Accent */
+  --accent: oklch(0.92 0.015 192);
+  --accent-foreground: oklch(0.295 0.025 192);
+
+  /* Destructive: #b94a48 */
+  --destructive: oklch(0.52 0.18 25);
+
+  /* Border & Input */
+  --border: oklch(0.88 0.01 192);
+  --input: oklch(0.92 0.005 192);
+  --ring: oklch(0.465 0.04 192);
+
+  /* Sidebar: #f8f9fa */
+  --sidebar: oklch(0.98 0.002 192);
+  --sidebar-foreground: oklch(0.25 0 0);
+  --sidebar-primary: oklch(0.465 0.04 192);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.94 0.01 192);
+  --sidebar-accent-foreground: oklch(0.25 0 0);
+  --sidebar-border: oklch(0.88 0.01 192);
+  --sidebar-ring: oklch(0.465 0.04 192);
+
+  /* Crowi-specific tokens */
+  --crowi-bookmark: oklch(0.75 0.15 85); /* #e6b422 gold */
+  --crowi-success: oklch(0.6 0.15 145);
+  --crowi-warning: oklch(0.75 0.15 70); /* #e47800 orange */
+  --crowi-danger: oklch(0.52 0.18 25); /* #b94a48 red */
+
+  /* Chart colors with Crowi teal palette */
+  --chart-1: oklch(0.465 0.04 192);
+  --chart-2: oklch(0.55 0.08 170);
+  --chart-3: oklch(0.6 0.1 150);
+  --chart-4: oklch(0.7 0.12 130);
+  --chart-5: oklch(0.75 0.15 85);
+}
+
+.dark {
+  /* Primary stays same hue but lighter for dark mode */
+  --primary: oklch(0.65 0.06 192);
+  --primary-foreground: oklch(0.15 0 0);
+
+  /* Header background */
+  --crowi-header: oklch(0.22 0.02 192);
+  --crowi-header-foreground: oklch(0.95 0 0);
+
+  /* Dark background & surface */
+  --background: oklch(0.15 0.01 192);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.2 0.015 192);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.2 0.015 192);
+  --popover-foreground: oklch(0.95 0 0);
+
+  /* Secondary */
+  --secondary: oklch(0.25 0.02 192);
+  --secondary-foreground: oklch(0.9 0 0);
+
+  /* Muted */
+  --muted: oklch(0.25 0.015 192);
+  --muted-foreground: oklch(0.65 0 0);
+
+  /* Accent */
+  --accent: oklch(0.3 0.025 192);
+  --accent-foreground: oklch(0.95 0 0);
+
+  /* Destructive */
+  --destructive: oklch(0.6 0.2 25);
+
+  /* Border & Input */
+  --border: oklch(0.3 0.02 192);
+  --input: oklch(0.28 0.015 192);
+  --ring: oklch(0.55 0.05 192);
+
+  /* Sidebar */
+  --sidebar: oklch(0.18 0.015 192);
+  --sidebar-foreground: oklch(0.92 0 0);
+  --sidebar-primary: oklch(0.6 0.05 192);
+  --sidebar-primary-foreground: oklch(0.15 0 0);
+  --sidebar-accent: oklch(0.28 0.02 192);
+  --sidebar-accent-foreground: oklch(0.92 0 0);
+  --sidebar-border: oklch(0.3 0.02 192);
+  --sidebar-ring: oklch(0.55 0.05 192);
+
+  /* Crowi-specific tokens (adjusted for dark mode) */
+  --crowi-bookmark: oklch(0.8 0.14 85);
+  --crowi-success: oklch(0.65 0.15 145);
+  --crowi-warning: oklch(0.8 0.14 70);
+  --crowi-danger: oklch(0.65 0.18 25);
+
+  /* Chart colors */
+  --chart-1: oklch(0.6 0.06 192);
+  --chart-2: oklch(0.65 0.1 170);
+  --chart-3: oklch(0.7 0.12 150);
+  --chart-4: oklch(0.75 0.14 130);
+  --chart-5: oklch(0.8 0.14 85);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Open Sans', 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', var(--font-geist-sans), sans-serif;
+  }
+}
