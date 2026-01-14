@@ -1,16 +1,60 @@
 ---
-
+import Layout from '../layouts/Layout.astro';
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout title="Crowi Web">
+	<main>
+		<h1>Crowi Web</h1>
+		<p>Welcome to the Crowi web interface.</p>
+		
+		<div class="tools">
+			<h2>Development Tools</h2>
+			<ul>
+				<li><a href="/api-test">API Unit Test Tool</a> - Test Crowi API endpoints</li>
+			</ul>
+		</div>
+	</main>
+</Layout>
+
+<style>
+	main {
+		margin: auto;
+		padding: 1rem;
+		max-width: 800px;
+	}
+	
+	h1 {
+		font-size: 2.5rem;
+		font-weight: 700;
+		margin-bottom: 1rem;
+	}
+	
+	.tools {
+		margin-top: 2rem;
+		padding: 1.5rem;
+		background: #f5f5f5;
+		border-radius: 8px;
+	}
+	
+	.tools h2 {
+		margin-bottom: 1rem;
+	}
+	
+	.tools ul {
+		list-style: none;
+		padding: 0;
+	}
+	
+	.tools li {
+		margin-bottom: 0.5rem;
+	}
+	
+	.tools a {
+		color: #2196F3;
+		text-decoration: none;
+	}
+	
+	.tools a:hover {
+		text-decoration: underline;
+	}
+</style>

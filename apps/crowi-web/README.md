@@ -1,47 +1,94 @@
-# Astro Starter Kit: Minimal
+# Crowi Web - API Unit Test Tool
 
-```sh
-npm create astro@latest -- --template minimal
-```
+This is a minimal web application for testing the Crowi API server endpoints.
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/withastro/astro/tree/latest/examples/minimal)
-[![Open with CodeSandbox](https://assets.codesandbox.io/github/button-edit-lime.svg)](https://codesandbox.io/p/sandbox/github/withastro/astro/tree/latest/examples/minimal)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/withastro/astro?devcontainer_path=.devcontainer/minimal/devcontainer.json)
+## Features
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+- Test any HTTP method (GET, POST, PUT, DELETE, PATCH)
+- Add custom headers
+- Send JSON request bodies
+- View formatted JSON responses
+- See response status codes and timing
 
-## 🚀 Project Structure
+## Getting Started
 
-Inside of your Astro project, you'll see the following folders and files:
+1. Start the API server (from the root directory):
+   ```bash
+   pnpm dev:api
+   ```
 
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
+2. Start the web server (from the root directory):
+   ```bash
+   pnpm dev:web
+   ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+3. Open your browser to http://localhost:4321
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+4. Click on "API Unit Test Tool" to access the testing interface
 
-Any static assets, like images, can be placed in the `public/` directory.
+## Using the API Test Tool
 
-## 🧞 Commands
+1. **Select HTTP Method**: Choose from GET, POST, PUT, DELETE, or PATCH
+2. **Enter URL**: The full URL of the API endpoint (e.g., `http://localhost:3000/api/v2/login`)
+3. **Add Headers**: Click "+ Add Header" to add custom headers (Content-Type is pre-filled)
+4. **Request Body**: For non-GET requests, enter the JSON body
+5. **Send Request**: Click "Send Request" to execute the API call
+6. **View Response**: The response will appear on the right with status code and formatted JSON
 
-All commands are run from the root of the project, from a terminal:
+## Example API Calls
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+### Token-Based Authentication (New)
 
-## 👀 Want to learn more?
+#### Login
+- Method: `POST`
+- URL: `http://localhost:3000/api/v2/auth/login`
+- Body:
+  ```json
+  {
+    "email": "test@example.com",
+    "password": "password123"
+  }
+  ```
+- Response includes: `accessToken`, `refreshToken`, `expiresIn`, and `user` object
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+#### Register
+- Method: `POST`
+- URL: `http://localhost:3000/api/v2/auth/register`
+- Body:
+  ```json
+  {
+    "username": "testuser",
+    "name": "Test User",
+    "email": "test@example.com",
+    "password": "password123"
+  }
+  ```
+
+#### Get Current User
+- Method: `GET`
+- URL: `http://localhost:3000/api/v2/auth/me`
+- Headers: `Authorization: Bearer <accessToken>`
+
+#### Refresh Token
+- Method: `POST`
+- URL: `http://localhost:3000/api/v2/auth/refresh`
+- Body:
+  ```json
+  {
+    "refreshToken": "your-refresh-token"
+  }
+  ```
+
+### Other Endpoints
+
+#### Test Application Status
+- Method: `GET`
+- URL: `http://localhost:3000/api/v2/installer`
+
+## Development
+
+This tool is built with Astro and uses vanilla JavaScript for simplicity. The main files are:
+
+- `/src/pages/api-test.astro` - The API testing interface
+- `/src/layouts/Layout.astro` - The base layout
+- `/src/pages/index.astro` - The home page with links to tools

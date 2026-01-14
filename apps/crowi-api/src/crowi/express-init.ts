@@ -3,6 +3,7 @@ import methodOverride from 'method-override';
 import passport from 'passport';
 import session from 'express-session';
 import flash from 'connect-flash';
+import cors from 'cors';
 import Crowi from 'src/crowi';
 import { registrationMode } from 'src/models/config';
 import Debug from 'debug';
@@ -11,6 +12,36 @@ export default (crowi: Crowi, app: Express) => {
   const debug = Debug('crowi:crowi:express-init');
   const env = crowi.node_env;
   const middlewares = crowi.middlewares;
+
+  // Configure CORS for development
+  if (env === 'development') {
+    app.use(
+      cors({
+        origin: function (origin, callback) {
+          // Allow requests with no origin (like mobile apps or curl requests)
+          if (!origin) return callback(null, true);
+
+          // Allow localhost and any port
+          if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+            return callback(null, true);
+          }
+
+          // Allow configured base URL
+          const baseUrl = crowi.getBaseUrl();
+          if (baseUrl && origin === baseUrl) {
+            return callback(null, true);
+          }
+
+          // Default to allowing in development
+          callback(null, true);
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      }),
+    );
+    debug('CORS enabled for development environment');
+  }
 
   app.use(function (req: Request, res: Response, next) {
     debug('Route request', req.method, req.url);

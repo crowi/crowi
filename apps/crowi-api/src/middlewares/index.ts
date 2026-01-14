@@ -10,6 +10,7 @@ import CsrfVerify from './csrfVerify';
 import EncodeSpace from './encodeSpace';
 import FileAccessRightOrLoginRequired from './fileAccessRightOrLoginRequired';
 import I18next from './i18next';
+import JwtAuth from './jwtAuth';
 import LoginChecker from './loginChecker';
 import LoginRequired from './loginRequired';
 
@@ -23,6 +24,7 @@ export default (crowi: Crowi, app: Express) => ({
   EncodeSpace: EncodeSpace(),
   FileAccessRightOrLoginRequired: FileAccessRightOrLoginRequired(crowi),
   I18next: I18next(crowi, app),
+  JwtAuth: JwtAuth(crowi),
   LoginChecker: LoginChecker(crowi, app),
   LoginRequired: LoginRequired(crowi),
 });
