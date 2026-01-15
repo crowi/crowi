@@ -195,7 +195,11 @@ export default (crowi: Crowi) => {
   };
 
   userSchema.methods.isPasswordValid = function (password) {
-    return this.password == generatePassword(password);
+    const inputHash = generatePassword(password);
+    debug('Password check - stored:', this.password);
+    debug('Password check - input hash:', inputHash);
+    debug('Password check - PASSWORD_SEED exists:', !!crowi.env.PASSWORD_SEED);
+    return this.password == inputHash;
   };
 
   userSchema.methods.setPassword = function (password) {

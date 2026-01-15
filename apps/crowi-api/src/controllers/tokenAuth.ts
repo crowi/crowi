@@ -27,10 +27,25 @@ export default (crowi: Crowi, app: Express) => {
    */
   actions.login = async (req: Request, res: Response) => {
     const { email, password } = req.body;
+    debug('Login attempt for email:', email);
 
     try {
       // Find user by email
-      const user = await User.findUserByEmail(email);
+      const foundUser = await User.findUserByEmail(email);
+      debug('User found:', foundUser ? foundUser.email : 'null');
+      if (!foundUser) {
+        debug('Login failed: user not found');
+        const error: ApiError = {
+          error: {
+            code: 'INVALID_CREDENTIALS',
+            message: 'Invalid email or password',
+          },
+        };
+        return res.status(401).json(error);
+      }
+
+      // Populate password field (excluded by default)
+      const user = await foundUser.populateSecrets();
       if (!user) {
         const error: ApiError = {
           error: {
@@ -64,8 +79,11 @@ export default (crowi: Crowi, app: Express) => {
       }
 
       // Verify password
+      debug('Checking password for user:', user.email);
       const isPasswordValid = await user.isPasswordValid(password);
+      debug('Password valid:', isPasswordValid);
       if (!isPasswordValid) {
+        debug('Login failed: invalid password');
         const error: ApiError = {
           error: {
             code: 'INVALID_CREDENTIALS',
