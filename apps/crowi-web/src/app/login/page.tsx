@@ -1,9 +1,23 @@
+import { Suspense } from 'react';
 import { LoginForm } from './login-form';
 
 export const metadata = {
   title: 'サインイン | Crowi',
   description: 'Crowi にサインイン',
 };
+
+function LoginFormFallback() {
+  return (
+    <div className="bg-card rounded-lg shadow-2xl p-6 animate-pulse">
+      <div className="h-6 bg-muted rounded w-1/3 mx-auto mb-6" />
+      <div className="space-y-4">
+        <div className="h-10 bg-muted rounded" />
+        <div className="h-10 bg-muted rounded" />
+        <div className="h-12 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   return (
@@ -18,7 +32,9 @@ export default function LoginPage() {
           />
         </div>
 
-        <LoginForm />
+        <Suspense fallback={<LoginFormFallback />}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );
