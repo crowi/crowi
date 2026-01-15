@@ -41,10 +41,9 @@ export default function Home() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
-              src="/logo/100w-inverse.png"
-              width={80}
+              src="/logo/500w-inverse.png"
               alt="Crowi"
-              className="h-8 w-auto"
+              className="h-6 w-auto"
             />
           </div>
           <Button
