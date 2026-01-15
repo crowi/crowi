@@ -65,7 +65,7 @@ export function useAuth() {
           isAuthenticated: false,
         });
       }
-    } catch (error) {
+    } catch {
       setAuthState({
         user: null,
         isLoading: false,
@@ -89,7 +89,7 @@ export function useAuth() {
           },
           body: JSON.stringify({ refreshToken }),
         });
-      } catch (error) {
+      } catch {
         // Ignore errors, we'll clear tokens anyway
       }
     }
@@ -108,6 +108,8 @@ export function useAuth() {
   }, [router]);
 
   useEffect(() => {
+    // Initial auth check on mount - valid pattern for client-side authentication
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUser();
   }, [fetchUser]);
 

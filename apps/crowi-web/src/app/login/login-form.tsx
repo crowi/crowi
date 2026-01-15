@@ -58,7 +58,7 @@ export function LoginForm() {
       } else {
         setErrors(['予期しないエラーが発生しました']);
       }
-    } catch (error) {
+    } catch {
       setErrors(['サーバーとの通信中にエラーが発生しました']);
     } finally {
       setIsSubmitting(false);
