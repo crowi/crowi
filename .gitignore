@@ -24,3 +24,6 @@ dist
 
 # local settings
 .claude/settings.local.json
+
+# migration state (temporary work-in-progress data)
+.claude/migration-state/
