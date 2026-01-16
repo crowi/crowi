@@ -2,7 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, User, Mail, AtSign, Calendar } from 'lucide-react';
+import Link from 'next/link';
+import { LogOut, User, Mail, AtSign, Calendar, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -46,15 +47,28 @@ export default function Home() {
               className="h-6 w-auto"
             />
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={logout}
-            className="text-white hover:bg-white/10"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            ログアウト
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="text-white hover:bg-white/10"
+            >
+              <Link href="/settings">
+                <Settings className="h-4 w-4 mr-2" />
+                設定
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="text-white hover:bg-white/10"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              ログアウト
+            </Button>
+          </div>
         </div>
       </header>
 

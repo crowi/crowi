@@ -59,7 +59,6 @@ Conventional Commits を使用：
 
 <body>
 
-Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
 ### type

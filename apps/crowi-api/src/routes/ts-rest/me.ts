@@ -2,7 +2,7 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router, Request, Response } from 'express';
-import loginRequired from '../../middlewares/loginRequired';
+import jwtAuth from '../../middlewares/jwtAuth';
 import multer from 'multer';
 import fs from 'fs';
 import FileUploader from 'src/util/fileUploader';
@@ -15,7 +15,7 @@ export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
   const router = Router();
   const User = crowi.model('User');
-  const checkLoginRequired = loginRequired(crowi);
+  const checkJwtAuth = jwtAuth(crowi);
 
   // Configure multer for file uploads
   const upload = multer({ dest: crowi.tmpDir });
@@ -35,152 +35,151 @@ export default (crowi: Crowi, _app: Express) => {
     createdAt: user.createdAt.toISOString(),
   });
 
-  // Helper to check authentication
-  const checkAuth = (req: Request, res: Response): Promise<boolean> => {
-    return new Promise((resolve) => {
-      checkLoginRequired(req, res, (err?: unknown) => {
-        if (err) {
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      });
-    });
-  };
-
   const meRouter = s.router(apiContract.me, {
     getProfile: async ({ req, res }) => {
-      // Check authentication
-      const isAuthenticated = await checkAuth(req as Request, res as Response);
-      if (!isAuthenticated) {
-        return {
-          status: 401 as const,
-          body: {
-            error: {
-              code: 'AUTHENTICATION_REQUIRED' as const,
-              message: 'Authentication is required' as const,
-              redirectTo: '/login',
-            },
-          },
-        };
-      }
+      return new Promise((resolve) => {
+        const request = req as any;
 
-      const user = req.user as UserDocument;
+        // Apply JWT auth middleware
+        checkJwtAuth(request, res as any, async (err) => {
+          if (err) {
+            return resolve({
+              status: 401 as const,
+              body: {
+                error: {
+                  code: 'AUTHENTICATION_REQUIRED' as const,
+                  message: 'Authentication is required' as const,
+                  redirectTo: '/login',
+                },
+              },
+            });
+          }
 
-      // Check if user has password set
-      const userWithSecrets = await user.populateSecrets();
-      const hasPassword = userWithSecrets.isPasswordSet();
+          const user = request.user as UserDocument;
 
-      return {
-        status: 200 as const,
-        body: userToProfileResponse(user, hasPassword),
-      };
+          // Check if user has password set
+          const userWithSecrets = await user.populateSecrets();
+          const hasPassword = userWithSecrets.isPasswordSet();
+
+          resolve({
+            status: 200 as const,
+            body: userToProfileResponse(user, hasPassword),
+          });
+        });
+      });
     },
 
     updateProfile: async ({ body, req, res }) => {
-      // Check authentication
-      const isAuthenticated = await checkAuth(req as Request, res as Response);
-      if (!isAuthenticated) {
-        return {
-          status: 401 as const,
-          body: {
-            error: {
-              code: 'AUTHENTICATION_REQUIRED' as const,
-              message: 'Authentication is required' as const,
-              redirectTo: '/login',
-            },
-          },
-        };
-      }
+      return new Promise((resolve) => {
+        const request = req as any;
 
-      const user = req.user as UserDocument;
-      const { name, email, lang } = body.userForm;
+        // Apply JWT auth middleware
+        checkJwtAuth(request, res as any, async (err) => {
+          if (err) {
+            return resolve({
+              status: 401 as const,
+              body: {
+                error: {
+                  code: 'AUTHENTICATION_REQUIRED' as const,
+                  message: 'Authentication is required' as const,
+                  redirectTo: '/login',
+                },
+              },
+            });
+          }
 
-      // Check if email is valid (whitelist check)
-      if (!User.isEmailValid(email)) {
-        return {
-          status: 400 as const,
-          body: {
-            status: 'error' as const,
-            message: "You can't update to that email address",
-            errors: ["You can't update to that email address"],
-          },
-        };
-      }
+          const user = request.user as UserDocument;
+          const { name, email, lang } = body.userForm;
 
-      // Check for duplicate email
-      const existingUser = await User.findOne({ email });
-      if (existingUser && !existingUser._id.equals(user._id)) {
-        debug('Email address was duplicated');
-        return {
-          status: 400 as const,
-          body: {
-            status: 'error' as const,
-            message: 'It can not be changed to that mail address',
-            errors: ['It can not be changed to that mail address'],
-          },
-        };
-      }
+          // Check if email is valid (whitelist check)
+          if (!User.isEmailValid(email)) {
+            return resolve({
+              status: 400 as const,
+              body: {
+                status: 'error' as const,
+                message: "You can't update to that email address",
+                errors: ["You can't update to that email address"],
+              },
+            });
+          }
 
-      try {
-        // Update user fields
-        user.name = name;
-        user.email = email;
-        user.lang = lang;
-        await user.save();
+          // Check for duplicate email
+          const existingUser = await User.findOne({ email });
+          if (existingUser && !existingUser._id.equals(user._id)) {
+            debug('Email address was duplicated');
+            return resolve({
+              status: 400 as const,
+              body: {
+                status: 'error' as const,
+                message: 'It can not be changed to that mail address',
+                errors: ['It can not be changed to that mail address'],
+              },
+            });
+          }
 
-        // Check if user has password set
-        const userWithSecrets = await user.populateSecrets();
-        const hasPassword = userWithSecrets.isPasswordSet();
+          try {
+            // Update user fields
+            user.name = name;
+            user.email = email;
+            user.lang = lang;
+            await user.save();
 
-        return {
-          status: 200 as const,
-          body: userToProfileResponse(user, hasPassword),
-        };
-      } catch (err) {
-        const error = err as { errors?: Record<string, { message: string }> };
-        const errorMessages: string[] = [];
-        if (error.errors) {
-          Object.keys(error.errors).forEach((e) => {
-            errorMessages.push(error.errors![e].message);
-          });
-        } else {
-          errorMessages.push('Failed to update profile');
-        }
+            // Check if user has password set
+            const userWithSecrets = await user.populateSecrets();
+            const hasPassword = userWithSecrets.isPasswordSet();
 
-        return {
-          status: 400 as const,
-          body: {
-            status: 'error' as const,
-            message: errorMessages[0],
-            errors: errorMessages,
-          },
-        };
-      }
+            resolve({
+              status: 200 as const,
+              body: userToProfileResponse(user, hasPassword),
+            });
+          } catch (err) {
+            const error = err as { errors?: Record<string, { message: string }> };
+            const errorMessages: string[] = [];
+            if (error.errors) {
+              Object.keys(error.errors).forEach((e) => {
+                errorMessages.push(error.errors![e].message);
+              });
+            } else {
+              errorMessages.push('Failed to update profile');
+            }
+
+            resolve({
+              status: 400 as const,
+              body: {
+                status: 'error' as const,
+                message: errorMessages[0],
+                errors: errorMessages,
+              },
+            });
+          }
+        });
+      });
     },
 
     uploadPicture: async ({ req, res }) => {
-      // Check authentication
-      const isAuthenticated = await checkAuth(req as Request, res as Response);
-      if (!isAuthenticated) {
-        return {
-          status: 401 as const,
-          body: {
-            error: {
-              code: 'AUTHENTICATION_REQUIRED' as const,
-              message: 'Authentication is required' as const,
-              redirectTo: '/login',
-            },
-          },
-        };
-      }
-
-      const user = req.user as UserDocument;
-      const fileUploader = FileUploader(crowi);
-
-      // Handle file upload with multer
       return new Promise((resolve) => {
-        upload.single('file')(req as Request, res as Response, async (err) => {
+        const request = req as any;
+
+        // Apply JWT auth middleware
+        checkJwtAuth(request, res as any, (authErr) => {
+          if (authErr) {
+            return resolve({
+              status: 401 as const,
+              body: {
+                error: {
+                  code: 'AUTHENTICATION_REQUIRED' as const,
+                  message: 'Authentication is required' as const,
+                  redirectTo: '/login',
+                },
+              },
+            });
+          }
+
+          const user = request.user as UserDocument;
+          const fileUploader = FileUploader(crowi);
+
+          // Handle file upload with multer
+          upload.single('file')(request as Request, res as Response, async (err) => {
           if (err) {
             debug('Multer error:', err);
             return resolve({
@@ -274,31 +273,34 @@ export default (crowi: Crowi, _app: Express) => {
             });
           }
         });
+        });
       });
     },
 
     deletePicture: async ({ req, res }) => {
-      // Check authentication
-      const isAuthenticated = await checkAuth(req as Request, res as Response);
-      if (!isAuthenticated) {
-        return {
-          status: 401 as const,
-          body: {
-            error: {
-              code: 'AUTHENTICATION_REQUIRED' as const,
-              message: 'Authentication is required' as const,
-              redirectTo: '/login',
-            },
-          },
-        };
-      }
-
-      const user = req.user as UserDocument;
-
-      // Delete user image
-      // TODO: Also delete from S3/storage
       return new Promise((resolve) => {
-        user.deleteImage((err: Error | null) => {
+        const request = req as any;
+
+        // Apply JWT auth middleware
+        checkJwtAuth(request, res as any, (authErr) => {
+          if (authErr) {
+            return resolve({
+              status: 401 as const,
+              body: {
+                error: {
+                  code: 'AUTHENTICATION_REQUIRED' as const,
+                  message: 'Authentication is required' as const,
+                  redirectTo: '/login',
+                },
+              },
+            });
+          }
+
+          const user = request.user as UserDocument;
+
+          // Delete user image
+          // TODO: Also delete from S3/storage
+          user.deleteImage((err: Error | null) => {
           if (err) {
             debug('Error deleting image:', err);
             return resolve({
@@ -318,6 +320,7 @@ export default (crowi: Crowi, _app: Express) => {
               message: 'Deleted profile picture',
             },
           });
+        });
         });
       });
     },
