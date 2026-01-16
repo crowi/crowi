@@ -3,6 +3,7 @@ import { Express } from 'express';
 import authRoutes from './auth';
 import installerRoutes from './installer';
 import tokenAuthRoutes from './tokenAuth';
+import meRoutes from './me';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest');
@@ -17,6 +18,7 @@ export default (crowi: Crowi, app: Express) => {
   const authRouter = authRoutes(crowi, app); // Legacy - to be removed
   const installerRouter = installerRoutes(crowi, app);
   const tokenAuthRouter = tokenAuthRoutes(crowi, app);
+  const meRouter = meRoutes(crowi, app);
 
   debug('Mounting auth router at /api/v2');
   app.use('/api/v2', authRouter);
@@ -24,6 +26,8 @@ export default (crowi: Crowi, app: Express) => {
   app.use('/api/v2', installerRouter);
   debug('Mounting tokenAuth router at /api/v2');
   app.use('/api/v2', tokenAuthRouter);
+  debug('Mounting me router at /api/v2');
+  app.use('/api/v2', meRouter);
 
   debug('All ts-rest routes mounted successfully');
 

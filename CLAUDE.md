@@ -257,3 +257,27 @@ We are migrating the existing Express.js API to use `ts-rest` with `zod` for typ
 ## Development Memories
 
 - pnpm format before push
+
+
+# Migration Workflow
+
+移行タスクはサブエージェントパイプラインで実行。
+
+## 使い方
+
+```bash
+# 移行タスク実行
+/migrate {task-name}
+
+# 個別サブエージェント呼び出し
+Use the migration-planner subagent to analyze: {feature}
+Use the migration-implementer subagent to implement: {task-id}
+Use the migration-reviewer subagent to review: {task-id}
+Use the migration-committer subagent to commit: {task-id}
+```
+
+## タスク管理
+
+- キュー: `.claude/migration-state/queue.json`
+- タスク: `.claude/migration-state/tasks/{task-id}.json`
+- ステータス: `PLANNED` → `REVIEW` → `APPROVED` → `COMMITTED` → `DONE`

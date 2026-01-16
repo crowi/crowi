@@ -37,6 +37,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache MongoDB binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-8.0
+
+      - name: Pre-download MongoDB
+        working-directory: apps/crowi-api
+        run: node -e "require('mongodb-memory-server').MongoMemoryServer.create().then(s => s.stop())"
+        env:
+          MONGOMS_VERSION: 8.0.4
+
       - name: Run type check
         run: pnpm type-check
 
