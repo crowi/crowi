@@ -39,7 +39,9 @@ export const meContract = c.router({
     method: 'POST',
     path: '/me/picture',
     contentType: 'multipart/form-data',
-    body: c.type<{ file: File }>(),
+    body: z.object({
+      file: z.any().describe('Profile picture file'),
+    }),
     responses: {
       200: PictureUploadResponseSchema,
       400: ProfileErrorResponseSchema,
