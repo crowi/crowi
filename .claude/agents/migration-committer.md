@@ -222,6 +222,127 @@ gh run view {RUN_ID} --log-failed
 - `.claude/migration-state/` の更新は別コミットに
 - 一時ファイルや生成ファイルはコミットしない
 
+### Pre-commit チェック（必須）
+
+**コミット前に必ず以下のチェックを実行してください。エラーがある場合はコミットを中止します。**
+
+#### 1. Secrets / 環境特有ファイルのチェック
+
+**絶対にコミットしてはいけないファイル:**
+```bash
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+secrets.yml
+**/config/secrets.*
+```
+
+**チェック実行:**
+```bash
+# ステージングされたファイルをチェック
+SECRETS=$(git diff --cached --name-only | grep -E '\.(env|pem|key|p12|pfx)(\.|$)|credentials|secrets')
+if [ -n "$SECRETS" ]; then
+  echo "❌ ERROR: Secret files detected in staging area:"
+  echo "$SECRETS"
+  echo ""
+  echo "These files must NOT be committed. Please unstage them with:"
+  echo "git reset HEAD <file>"
+  exit 1
+fi
+```
+
+#### 2. ビルド成果物のチェック
+
+**コミットしてはいけないディレクトリ/ファイル:**
+```bash
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+node_modules/
+coverage/
+apps/*/dist/
+packages/*/dist/
+apps/*/.next/
+```
+
+**チェック実行:**
+```bash
+# ビルド成果物をチェック
+BUILD_ARTIFACTS=$(git diff --cached --name-only | grep -E '^(dist|build|out|\.next|node_modules|coverage)/')
+if [ -n "$BUILD_ARTIFACTS" ]; then
+  echo "❌ ERROR: Build artifacts detected in staging area:"
+  echo "$BUILD_ARTIFACTS"
+  echo ""
+  echo "Build artifacts should not be committed. Please unstage them."
+  exit 1
+fi
+
+# apps/packages 内の dist/ もチェック
+BUILD_ARTIFACTS_APPS=$(git diff --cached --name-only | grep -E '^(apps|packages)/.*/dist/')
+if [ -n "$BUILD_ARTIFACTS_APPS" ]; then
+  echo "❌ ERROR: Build artifacts detected in staging area:"
+  echo "$BUILD_ARTIFACTS_APPS"
+  echo ""
+  echo "Build artifacts should not be committed. Please unstage them."
+  exit 1
+fi
+```
+
+#### 3. 一時ファイル・キャッシュのチェック
+
+**コミットしてはいけないファイル:**
+```bash
+*.log
+*.tmp
+*.cache
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.turbo/
+```
+
+**チェック実行:**
+```bash
+# 一時ファイルをチェック
+TEMP_FILES=$(git diff --cached --name-only | grep -E '\.(log|tmp|cache|swp|swo)$|\.DS_Store|Thumbs\.db|~$|\.turbo/')
+if [ -n "$TEMP_FILES" ]; then
+  echo "⚠️  WARNING: Temporary files detected in staging area:"
+  echo "$TEMP_FILES"
+  echo ""
+  echo "Please consider unstaging these files."
+fi
+```
+
+#### 4. 大容量ファイルのチェック
+
+**警告が必要なファイル (1MB以上):**
+
+```bash
+# 大容量ファイルをチェック
+git diff --cached --name-only | while read file; do
+  if [ -f "$file" ]; then
+    size=$(wc -c < "$file" 2>/dev/null || echo "0")
+    if [ "$size" -gt 1048576 ]; then
+      size_mb=$((size / 1024 / 1024))
+      echo "⚠️  WARNING: Large file detected: $file (${size_mb}MB)"
+      echo "   Consider using Git LFS for large binary files."
+    fi
+  fi
+done
+```
+
 ### 既存の変更がある場合
 
 ```bash
