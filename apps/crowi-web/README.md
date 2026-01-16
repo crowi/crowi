@@ -1,94 +1,36 @@
-# Crowi Web - API Unit Test Tool
-
-This is a minimal web application for testing the Crowi API server endpoints.
-
-## Features
-
-- Test any HTTP method (GET, POST, PUT, DELETE, PATCH)
-- Add custom headers
-- Send JSON request bodies
-- View formatted JSON responses
-- See response status codes and timing
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
 
-1. Start the API server (from the root directory):
-   ```bash
-   pnpm dev:api
-   ```
+First, run the development server:
 
-2. Start the web server (from the root directory):
-   ```bash
-   pnpm dev:web
-   ```
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-3. Open your browser to http://localhost:4321
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-4. Click on "API Unit Test Tool" to access the testing interface
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Using the API Test Tool
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-1. **Select HTTP Method**: Choose from GET, POST, PUT, DELETE, or PATCH
-2. **Enter URL**: The full URL of the API endpoint (e.g., `http://localhost:3000/api/v2/login`)
-3. **Add Headers**: Click "+ Add Header" to add custom headers (Content-Type is pre-filled)
-4. **Request Body**: For non-GET requests, enter the JSON body
-5. **Send Request**: Click "Send Request" to execute the API call
-6. **View Response**: The response will appear on the right with status code and formatted JSON
+## Learn More
 
-## Example API Calls
+To learn more about Next.js, take a look at the following resources:
 
-### Token-Based Authentication (New)
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-#### Login
-- Method: `POST`
-- URL: `http://localhost:3000/api/v2/auth/login`
-- Body:
-  ```json
-  {
-    "email": "test@example.com",
-    "password": "password123"
-  }
-  ```
-- Response includes: `accessToken`, `refreshToken`, `expiresIn`, and `user` object
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-#### Register
-- Method: `POST`
-- URL: `http://localhost:3000/api/v2/auth/register`
-- Body:
-  ```json
-  {
-    "username": "testuser",
-    "name": "Test User",
-    "email": "test@example.com",
-    "password": "password123"
-  }
-  ```
+## Deploy on Vercel
 
-#### Get Current User
-- Method: `GET`
-- URL: `http://localhost:3000/api/v2/auth/me`
-- Headers: `Authorization: Bearer <accessToken>`
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-#### Refresh Token
-- Method: `POST`
-- URL: `http://localhost:3000/api/v2/auth/refresh`
-- Body:
-  ```json
-  {
-    "refreshToken": "your-refresh-token"
-  }
-  ```
-
-### Other Endpoints
-
-#### Test Application Status
-- Method: `GET`
-- URL: `http://localhost:3000/api/v2/installer`
-
-## Development
-
-This tool is built with Astro and uses vanilla JavaScript for simplicity. The main files are:
-
-- `/src/pages/api-test.astro` - The API testing interface
-- `/src/layouts/Layout.astro` - The base layout
-- `/src/pages/index.astro` - The home page with links to tools
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
