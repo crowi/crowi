@@ -1,0 +1,166 @@
+import { z } from 'zod';
+
+// Page grant enum - matches Page model constants
+export const PageGrantSchema = z.enum(['1', '2', '3', '4']).transform((val) => Number(val));
+export const PageGrantEnum = {
+  PUBLIC: 1,
+  RESTRICTED: 2,
+  SPECIFIED: 3,
+  OWNER: 4,
+} as const;
+
+// Page status enum - matches Page model constants
+export const PageStatusSchema = z.enum(['wip', 'published', 'deleted', 'deprecated']);
+export const PageStatusEnum = {
+  WIP: 'wip',
+  PUBLISHED: 'published',
+  DELETED: 'deleted',
+  DEPRECATED: 'deprecated',
+} as const;
+
+// Page type enum
+export const PageTypeSchema = z.enum(['portal', 'user', 'public']);
+export const PageTypeEnum = {
+  PORTAL: 'portal',
+  USER: 'user',
+  PUBLIC: 'public',
+} as const;
+
+// User schema - minimal user information for page responses
+export const PageUserSchema = z.object({
+  _id: z.string(),
+  id: z.string().optional(), // for compatibility
+  username: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  image: z.string().nullable().optional(),
+  createdAt: z.string(),
+});
+export type PageUser = z.infer<typeof PageUserSchema>;
+
+// Revision schema - matches RevisionDocument
+export const RevisionSchema = z.object({
+  _id: z.string(),
+  path: z.string(),
+  body: z.string(),
+  format: z.string().default('markdown'),
+  author: PageUserSchema.nullable().optional(),
+  createdAt: z.string(),
+});
+export type Revision = z.infer<typeof RevisionSchema>;
+
+// Page extended data schema
+export const PageExtendedSchema = z.record(z.any()).optional();
+
+// Base page schema - matches PageDocument
+export const PageSchema = z.object({
+  _id: z.string(),
+  path: z.string(),
+  revision: z.union([z.string(), RevisionSchema]).optional(),
+  redirectTo: z.string().nullable().optional(),
+  status: PageStatusSchema.nullable().optional(),
+  grant: z.number().optional(),
+  grantedUsers: z.array(z.string()).optional(),
+  creator: z.union([z.string(), PageUserSchema]).nullable().optional(),
+  lastUpdateUser: z.union([z.string(), PageUserSchema]).nullable().optional(),
+  liker: z.array(z.string()).optional(),
+  seenUsers: z.array(z.string()).optional(),
+  commentCount: z.number().default(0),
+  extended: PageExtendedSchema,
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
+  // dynamic fields
+  latestRevision: z.string().optional(),
+  likerCount: z.number().optional(),
+  seenUsersCount: z.number().optional(),
+});
+export type Page = z.infer<typeof PageSchema>;
+
+// Page with populated revision - for detailed page responses
+export const PageWithRevisionSchema = PageSchema.extend({
+  revision: RevisionSchema,
+  creator: PageUserSchema.nullable().optional(),
+  lastUpdateUser: PageUserSchema.nullable().optional(),
+});
+export type PageWithRevision = z.infer<typeof PageWithRevisionSchema>;
+
+// Get page request schema - using query parameters
+export const GetPageRequestSchema = z.object({
+  path: z.string().optional(),
+  page_id: z.string().optional(),
+  revision_id: z.string().optional(),
+});
+export type GetPageRequest = z.infer<typeof GetPageRequestSchema>;
+
+// Get page response schema
+export const GetPageResponseSchema = z.object({
+  page: PageWithRevisionSchema,
+});
+export type GetPageResponse = z.infer<typeof GetPageResponseSchema>;
+
+// List pages request schema
+export const ListPagesRequestSchema = z.object({
+  path: z.string().optional(),
+  user: z.string().optional(),
+  limit: z.coerce.number().optional().default(50),
+  offset: z.coerce.number().optional().default(0),
+});
+export type ListPagesRequest = z.infer<typeof ListPagesRequestSchema>;
+
+// Pager schema
+export const PagerSchema = z.object({
+  prev: z.number().nullable(),
+  next: z.number().nullable(),
+  offset: z.number(),
+});
+export type Pager = z.infer<typeof PagerSchema>;
+
+// List pages response schema
+export const ListPagesResponseSchema = z.object({
+  pages: z.array(PageSchema),
+  pager: PagerSchema,
+});
+export type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
+
+// Create page request schema
+export const CreatePageRequestSchema = z.object({
+  path: z.string(),
+  body: z.string(),
+  grant: z.number().optional(),
+});
+export type CreatePageRequest = z.infer<typeof CreatePageRequestSchema>;
+
+// Update page request schema
+export const UpdatePageRequestSchema = z.object({
+  page_id: z.string(),
+  body: z.string(),
+  revision_id: z.string().optional(),
+  grant: z.number().optional(),
+});
+export type UpdatePageRequest = z.infer<typeof UpdatePageRequestSchema>;
+
+// Error response schemas
+export const PageNotFoundErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('PAGE_NOT_FOUND'),
+    message: z.literal('Page not found'),
+  }),
+});
+
+export const PageNotGrantedErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('PAGE_NOT_GRANTED'),
+    message: z.literal('Page is not granted for the user'),
+  }),
+});
+
+export const PageRevisionErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('PAGE_REVISION_ERROR'),
+    message: z.string(),
+  }),
+});
+
+export type PageNotFoundError = z.infer<typeof PageNotFoundErrorSchema>;
+export type PageNotGrantedError = z.infer<typeof PageNotGrantedErrorSchema>;
+export type PageRevisionError = z.infer<typeof PageRevisionErrorSchema>;
