@@ -2,7 +2,6 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router, Request, Response } from 'express';
-import loginRequired from '../../middlewares/loginRequired';
 import multer from 'multer';
 import fs from 'fs';
 import FileUploader from 'src/util/fileUploader';
@@ -15,7 +14,6 @@ export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
   const router = Router();
   const User = crowi.model('User');
-  const checkLoginRequired = loginRequired(crowi);
 
   // Configure multer for file uploads
   const upload = multer({ dest: crowi.tmpDir });
@@ -35,37 +33,9 @@ export default (crowi: Crowi, _app: Express) => {
     createdAt: user.createdAt.toISOString(),
   });
 
-  // Helper to check authentication
-  const checkAuth = (req: Request, res: Response): Promise<boolean> => {
-    return new Promise((resolve) => {
-      checkLoginRequired(req, res, (err?: unknown) => {
-        if (err) {
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      });
-    });
-  };
-
   const meRouter = s.router(apiContract.me, {
-    getProfile: async ({ req, res }) => {
-      // Check authentication
-      const isAuthenticated = await checkAuth(req as Request, res as Response);
-      if (!isAuthenticated) {
-        return {
-          status: 401 as const,
-          body: {
-            error: {
-              code: 'AUTHENTICATION_REQUIRED' as const,
-              message: 'Authentication is required' as const,
-              redirectTo: '/login',
-            },
-          },
-        };
-      }
-
-      const user = req.user as UserDocument;
+    getProfile: async ({ req }) => {
+      const user = (req as any).user as UserDocument;
 
       // Check if user has password set
       const userWithSecrets = await user.populateSecrets();
@@ -77,23 +47,8 @@ export default (crowi: Crowi, _app: Express) => {
       };
     },
 
-    updateProfile: async ({ body, req, res }) => {
-      // Check authentication
-      const isAuthenticated = await checkAuth(req as Request, res as Response);
-      if (!isAuthenticated) {
-        return {
-          status: 401 as const,
-          body: {
-            error: {
-              code: 'AUTHENTICATION_REQUIRED' as const,
-              message: 'Authentication is required' as const,
-              redirectTo: '/login',
-            },
-          },
-        };
-      }
-
-      const user = req.user as UserDocument;
+    updateProfile: async ({ body, req }) => {
+      const user = (req as any).user as UserDocument;
       const { name, email, lang } = body.userForm;
 
       // Check if email is valid (whitelist check)
@@ -160,26 +115,11 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     uploadPicture: async ({ req, res }) => {
-      // Check authentication
-      const isAuthenticated = await checkAuth(req as Request, res as Response);
-      if (!isAuthenticated) {
-        return {
-          status: 401 as const,
-          body: {
-            error: {
-              code: 'AUTHENTICATION_REQUIRED' as const,
-              message: 'Authentication is required' as const,
-              redirectTo: '/login',
-            },
-          },
-        };
-      }
-
-      const user = req.user as UserDocument;
-      const fileUploader = FileUploader(crowi);
-
-      // Handle file upload with multer
       return new Promise((resolve) => {
+        const user = (req as any).user as UserDocument;
+        const fileUploader = FileUploader(crowi);
+
+        // Handle file upload with multer
         upload.single('file')(req as Request, res as Response, async (err) => {
           if (err) {
             debug('Multer error:', err);
@@ -277,27 +217,12 @@ export default (crowi: Crowi, _app: Express) => {
       });
     },
 
-    deletePicture: async ({ req, res }) => {
-      // Check authentication
-      const isAuthenticated = await checkAuth(req as Request, res as Response);
-      if (!isAuthenticated) {
-        return {
-          status: 401 as const,
-          body: {
-            error: {
-              code: 'AUTHENTICATION_REQUIRED' as const,
-              message: 'Authentication is required' as const,
-              redirectTo: '/login',
-            },
-          },
-        };
-      }
-
-      const user = req.user as UserDocument;
-
-      // Delete user image
-      // TODO: Also delete from S3/storage
+    deletePicture: async ({ req }) => {
       return new Promise((resolve) => {
+        const user = (req as any).user as UserDocument;
+
+        // Delete user image
+        // TODO: Also delete from S3/storage
         user.deleteImage((err: Error | null) => {
           if (err) {
             debug('Error deleting image:', err);

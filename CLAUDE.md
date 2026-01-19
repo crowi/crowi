@@ -135,18 +135,18 @@ Key environment variables (see `.env.sample`):
 
 ## Crowi 2.0 Development Strategy
 
-Crowi 2.0 の開発では以下の方針に従って作業を進めています:
+For Crowi 2.0 development, we follow these guidelines:
 
 ### Phase 1: API Server Migration
-- React、view 関連のコードを削除し、API サーバーのみにする
-- API サーバーは、過去のデータをそのまま扱える形として compatibility を残す
-- コアとは呼べない周辺の機能は一部コメントアウトや一時的に利用不可とし、今後の開発の中で再度有効にしていく
-- 不要なファイルの削除が終わったら、コアの各種依存パッケージを最新のバージョンに切り替えていく
-- この状態で、一旦 TypeScript の build が通る状態を目指す
+- Remove React and view-related code, focusing on API server only
+- Maintain compatibility with existing data in the API server
+- Comment out or temporarily disable non-core peripheral features, re-enabling them during future development
+- After removing unnecessary files, upgrade core dependency packages to their latest versions
+- Aim for a TypeScript build that compiles successfully at this stage
 
 ### Phase 2: Monorepo & Frontend
-- Monorepo 化する
-- View に相当する web frontend を新規 app として作成する
+- Convert to monorepo structure
+- Create new web frontend app equivalent to the previous views
 
 ## Project Status and Todos
 
@@ -261,23 +261,33 @@ We are migrating the existing Express.js API to use `ts-rest` with `zod` for typ
 
 # Migration Workflow
 
-移行タスクはサブエージェントパイプラインで実行。
+Migration tasks are executed through a subagent pipeline.
 
-## 使い方
+## Usage
 
 ```bash
-# 移行タスク実行
+# Execute migration task
 /migrate {task-name}
 
-# 個別サブエージェント呼び出し
+# Individual subagent invocation
 Use the migration-planner subagent to analyze: {feature}
 Use the migration-implementer subagent to implement: {task-id}
 Use the migration-reviewer subagent to review: {task-id}
 Use the migration-committer subagent to commit: {task-id}
 ```
 
-## タスク管理
+## Task Management
 
-- キュー: `.claude/migration-state/queue.json`
-- タスク: `.claude/migration-state/tasks/{task-id}.json`
-- ステータス: `PLANNED` → `REVIEW` → `APPROVED` → `COMMITTED` → `DONE`
+- Queue: `.claude/migration-state/queue.json`
+- Tasks: `.claude/migration-state/tasks/{task-id}.json`
+- Status: `PLANNED` → `REVIEW` → `APPROVED` → `COMMITTED` → `DONE`
+
+## migration-committer Pre-commit Checklist
+
+For detailed pre-commit checklist, see `.claude/agents/migration-committer.md`.
+
+**Overview:**
+- Detection of secrets and environment-specific files
+- Detection of build artifacts
+- Detection of temporary files and caches
+- Warnings for large files
