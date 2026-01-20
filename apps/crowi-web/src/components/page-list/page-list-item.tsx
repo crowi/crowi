@@ -57,7 +57,7 @@ export function PageListItem({ page }: PageListItemProps) {
         {/* Page path and icons */}
         <div className="flex items-center gap-2 mb-1">
           <a
-            href={`/pages${page.path}`}
+            href={page.path}
             className="font-medium text-foreground hover:text-primary transition-colors truncate"
           >
             {page.path}
