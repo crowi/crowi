@@ -26,4 +26,9 @@ dist
 .claude/settings.local.json
 
 # migration state (temporary work-in-progress data)
-.claude/migration-state/
+# Keep directory structure but ignore actual task files
+.claude/migration-state/*
+!.claude/migration-state/.gitkeep
+!.claude/migration-state/tasks/
+.claude/migration-state/tasks/*
+!.claude/migration-state/tasks/.gitkeep
