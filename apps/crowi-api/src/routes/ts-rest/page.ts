@@ -236,10 +236,7 @@ export default (crowi: Crowi, _app: Express) => {
           // List pages by path and get portal page
           debug('Finding pages by path:', path);
           debug('Query params:', { limit, offset, path, userParam });
-          [portalPage, pages] = await Promise.all([
-            Page.findPortalPage(path, user),
-            Page.findListByStartWith(path, user, { limit, offset }),
-          ]);
+          [portalPage, pages] = await Promise.all([Page.findPortalPage(path, user), Page.findListByStartWith(path, user, { limit, offset })]);
           debug('Found pages:', pages.length);
           debug('Found portal page:', !!portalPage);
         } else {
