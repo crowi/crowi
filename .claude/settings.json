@@ -39,7 +39,11 @@
       "Bash(mkdir *)",
       "Bash(echo *)",
       "Edit(.claude/migration-state/**)",
-      "Write(.claude/migration-state/**)"
+      "Write(.claude/migration-state/**)",
+      "Write(.claude/migration-state/*.json)",
+      "Write(.claude/migration-state/tasks/*.json)",
+      "Edit(.claude/migration-state/*.json)",
+      "Edit(.claude/migration-state/tasks/*.json)"
     ],
     "deny": [
       "Bash(rm -rf *)",
