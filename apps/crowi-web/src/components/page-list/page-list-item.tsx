@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { MessageSquare, ThumbsUp, Lock, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Page } from '@crowi/api-contract';
@@ -56,12 +57,12 @@ export function PageListItem({ page }: PageListItemProps) {
       <div className="flex-1 min-w-0">
         {/* Page path and icons */}
         <div className="flex items-center gap-2 mb-1">
-          <a
+          <Link
             href={page.path}
             className="font-medium text-foreground hover:text-primary transition-colors truncate"
           >
             {page.path}
-          </a>
+          </Link>
           {isPortal && (
             <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Portal page" />
           )}
