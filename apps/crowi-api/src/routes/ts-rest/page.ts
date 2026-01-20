@@ -196,9 +196,121 @@ export default (crowi: Crowi, _app: Express) => {
       }
     },
 
-    // TODO: Implement other page endpoints
-    listPages: async () => {
-      throw new Error('Not implemented');
+    /**
+     * GET /api/v2/pages/list
+     * List pages by path or user
+     * - Supports pagination with limit and offset
+     * - Returns pages with populated creator and lastUpdateUser
+     */
+    listPages: async ({ query, req }) => {
+      const user = (req as any).user as UserDocument;
+      const { path, user: userParam, limit = 50, offset = 0 } = query;
+
+      debug('listPages called with:', { path, user: userParam, limit, offset, userId: user._id });
+
+      try {
+        let pages: PageDocument[] = [];
+        let portalPage: PageDocument | null = null;
+
+        if (userParam) {
+          // List pages by creator
+          debug('Finding pages by creator:', userParam);
+          const targetUser = await crowi.model('User').findById(userParam);
+          if (!targetUser) {
+            return {
+              status: 200 as const,
+              body: {
+                pages: [],
+                pager: {
+                  prev: null,
+                  next: null,
+                  offset: 0,
+                },
+                portalPage: null,
+              },
+            };
+          }
+
+          pages = await Page.findListByCreator(targetUser, { limit, offset }, user);
+        } else if (path && path !== '/') {
+          // List pages by path and get portal page
+          debug('Finding pages by path:', path);
+          debug('Query params:', { limit, offset, path, userParam });
+          [portalPage, pages] = await Promise.all([Page.findPortalPage(path, user), Page.findListByStartWith(path, user, { limit, offset })]);
+          debug('Found pages:', pages.length);
+          debug('Found portal page:', !!portalPage);
+        } else {
+          // List all pages the user can access (including path='/')
+          debug('Finding all accessible pages', { path });
+          const conditions: any = {
+            redirectTo: null,
+            $or: [{ status: null }, { status: 'published' }],
+            grant: { $in: [1, 2] }, // PUBLIC or RESTRICTED
+          };
+
+          // If path='/', also get portal page
+          if (path === '/') {
+            [portalPage, pages] = await Promise.all([
+              Page.findPortalPage(path, user),
+              Page.find(conditions)
+                .sort({ updatedAt: -1 })
+                .skip(offset)
+                .limit(limit)
+                .populate({ path: 'revision', populate: { path: 'author' } })
+                .populate('creator')
+                .populate('lastUpdateUser')
+                .exec(),
+            ]);
+          } else {
+            pages = await Page.find(conditions)
+              .sort({ updatedAt: -1 })
+              .skip(offset)
+              .limit(limit)
+              .populate({ path: 'revision', populate: { path: 'author' } })
+              .populate('creator')
+              .populate('lastUpdateUser')
+              .exec();
+          }
+        }
+
+        // Convert pages to response format
+        const pageResponses = pages.map((page) => pageToResponse(page));
+        const portalPageResponse = portalPage ? pageToResponse(portalPage) : null;
+
+        // Calculate pagination
+        const prev = offset > 0 ? Math.max(0, offset - limit) : null;
+        const next = pages.length === limit ? offset + limit : null;
+
+        return {
+          status: 200 as const,
+          body: {
+            pages: pageResponses,
+            pager: {
+              prev,
+              next,
+              offset,
+            },
+            portalPage: portalPageResponse,
+          },
+        };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error listing pages:', error.message);
+
+        // Return empty list on error
+        return {
+          status: 200 as const,
+          body: {
+            pages: [],
+            pager: {
+              prev: null,
+              next: null,
+              offset: 0,
+            },
+            portalPage: null,
+          },
+        };
+      }
     },
     createPage: async () => {
       throw new Error('Not implemented');
