@@ -210,6 +210,7 @@ export default (crowi: Crowi, _app: Express) => {
 
       try {
         let pages: PageDocument[] = [];
+        let portalPage: PageDocument | null = null;
 
         if (userParam) {
           // List pages by creator
@@ -225,36 +226,59 @@ export default (crowi: Crowi, _app: Express) => {
                   next: null,
                   offset: 0,
                 },
+                portalPage: null,
               },
             };
           }
 
           pages = await Page.findListByCreator(targetUser, { limit, offset }, user);
-        } else if (path) {
-          // List pages by path
+        } else if (path && path !== '/') {
+          // List pages by path and get portal page
           debug('Finding pages by path:', path);
-          pages = await Page.findListByStartWith(path, user, { limit, offset });
+          debug('Query params:', { limit, offset, path, userParam });
+          [portalPage, pages] = await Promise.all([
+            Page.findPortalPage(path, user),
+            Page.findListByStartWith(path, user, { limit, offset }),
+          ]);
+          debug('Found pages:', pages.length);
+          debug('Found portal page:', !!portalPage);
         } else {
-          // List all pages the user can access
-          debug('Finding all accessible pages');
+          // List all pages the user can access (including path='/')
+          debug('Finding all accessible pages', { path });
           const conditions: any = {
             redirectTo: null,
             $or: [{ status: null }, { status: 'published' }],
             grant: { $in: [1, 2] }, // PUBLIC or RESTRICTED
           };
 
-          pages = await Page.find(conditions)
-            .sort({ updatedAt: -1 })
-            .skip(offset)
-            .limit(limit)
-            .populate({ path: 'revision', populate: { path: 'author' } })
-            .populate('creator')
-            .populate('lastUpdateUser')
-            .exec();
+          // If path='/', also get portal page
+          if (path === '/') {
+            [portalPage, pages] = await Promise.all([
+              Page.findPortalPage(path, user),
+              Page.find(conditions)
+                .sort({ updatedAt: -1 })
+                .skip(offset)
+                .limit(limit)
+                .populate({ path: 'revision', populate: { path: 'author' } })
+                .populate('creator')
+                .populate('lastUpdateUser')
+                .exec(),
+            ]);
+          } else {
+            pages = await Page.find(conditions)
+              .sort({ updatedAt: -1 })
+              .skip(offset)
+              .limit(limit)
+              .populate({ path: 'revision', populate: { path: 'author' } })
+              .populate('creator')
+              .populate('lastUpdateUser')
+              .exec();
+          }
         }
 
         // Convert pages to response format
         const pageResponses = pages.map((page) => pageToResponse(page));
+        const portalPageResponse = portalPage ? pageToResponse(portalPage) : null;
 
         // Calculate pagination
         const prev = offset > 0 ? Math.max(0, offset - limit) : null;
@@ -269,6 +293,7 @@ export default (crowi: Crowi, _app: Express) => {
               next,
               offset,
             },
+            portalPage: portalPageResponse,
           },
         };
       } catch (err) {
@@ -285,6 +310,7 @@ export default (crowi: Crowi, _app: Express) => {
               next: null,
               offset: 0,
             },
+            portalPage: null,
           },
         };
       }

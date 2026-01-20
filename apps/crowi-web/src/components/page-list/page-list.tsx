@@ -48,7 +48,7 @@ export function PageList({ initialParams = {} }: PageListProps) {
     );
   }
 
-  if (!data || data.pages.length === 0) {
+  if (!data || (data.pages.length === 0 && !data.portalPage)) {
     return (
       <Card className="p-8 text-center">
         <p className="text-muted-foreground">No pages found.</p>
@@ -58,19 +58,39 @@ export function PageList({ initialParams = {} }: PageListProps) {
 
   return (
     <div className="space-y-4">
+      {/* Portal Page */}
+      {data.portalPage && (
+        <Card className="p-6">
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <div
+              dangerouslySetInnerHTML={{
+                __html:
+                  typeof data.portalPage.revision === 'object'
+                    ? data.portalPage.revision?.body || ''
+                    : '',
+              }}
+            />
+          </div>
+        </Card>
+      )}
+
       {/* Page List */}
-      <Card className="divide-y">
-        {data.pages.map((page) => (
-          <PageListItem key={page._id} page={page} />
-        ))}
-      </Card>
+      {data.pages.length > 0 && (
+        <Card className="divide-y">
+          {data.pages.map((page) => (
+            <PageListItem key={page._id} page={page} />
+          ))}
+        </Card>
+      )}
 
       {/* Pagination */}
-      <Pagination
-        pager={data.pager}
-        limit={params.limit}
-        onPageChange={handlePageChange}
-      />
+      {data.pages.length > 0 && (
+        <Pagination
+          pager={data.pager}
+          limit={params.limit}
+          onPageChange={handlePageChange}
+        />
+      )}
     </div>
   );
 }

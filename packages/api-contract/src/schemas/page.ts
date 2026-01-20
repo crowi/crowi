@@ -119,6 +119,7 @@ export type Pager = z.infer<typeof PagerSchema>;
 export const ListPagesResponseSchema = z.object({
   pages: z.array(PageSchema),
   pager: PagerSchema,
+  portalPage: PageSchema.nullable().optional(),
 });
 export type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
 

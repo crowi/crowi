@@ -771,7 +771,7 @@ export default (crowi: Crowi) => {
     // var sliceOption = option.revisionSlice || { $slice: 1 }
 
     pathCondition.push({ path: queryReg });
-    if (path.match(/\/$/)) {
+    if (path.match(/\/$/) && path.length > 1) {
       debug('Page list by ending with /, so find also upper level page');
       pathCondition.push({ path: path.substr(0, path.length - 1) });
     }
@@ -787,6 +787,7 @@ export default (crowi: Crowi) => {
         { grant: GRANT_OWNER, grantedUsers: userData._id },
       ],
     };
+    debug('findListByStartWith query:', JSON.stringify({ path, opt, pathCondition, userData: userData._id }));
     const q = Page.find(query)
       .populate({ path: 'revision', populate: { path: 'author', model: 'User' } })
       .and({
@@ -802,7 +803,10 @@ export default (crowi: Crowi) => {
       } as any);
     }
 
-    return q.exec();
+    return q.exec().then((results) => {
+      debug('findListByStartWith results count:', results.length);
+      return results;
+    });
   };
 
   pageSchema.statics.findChildrenByPath = async function (path, userData, option) {
