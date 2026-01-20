@@ -8,6 +8,8 @@ tools:
   - Grep
   - Glob
   - Bash
+  - Write
+  - Edit
 ---
 
 # Migration Reviewer

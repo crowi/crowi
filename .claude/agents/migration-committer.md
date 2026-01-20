@@ -8,6 +8,8 @@ tools:
   - Bash
   - Glob
   - Grep
+  - Write
+  - Edit
 ---
 
 # Migration Committer

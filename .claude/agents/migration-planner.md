@@ -8,6 +8,8 @@ tools:
   - Grep
   - Glob
   - WebFetch
+  - Write
+  - Edit
 ---
 
 # Migration Planner
