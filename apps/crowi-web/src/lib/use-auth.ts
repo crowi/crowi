@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
@@ -23,6 +23,7 @@ interface AuthState {
 
 export function useAuth() {
   const router = useRouter();
+  const initialCheckDone = useRef(false);
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isLoading: true,
@@ -39,6 +40,15 @@ export function useAuth() {
         isAuthenticated: false,
       });
       return;
+    }
+
+    // If we have a token, assume authenticated to avoid flicker while verifying
+    if (!initialCheckDone.current) {
+      initialCheckDone.current = true;
+      setAuthState((prev) => ({
+        ...prev,
+        isAuthenticated: true,
+      }));
     }
 
     try {

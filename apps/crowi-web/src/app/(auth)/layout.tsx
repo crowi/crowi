@@ -21,16 +21,14 @@ export default function AuthLayout({
     }
   }, [isLoading, isAuthenticated, router]);
 
-  if (isLoading) {
+  // If not authenticated and not loading, don't render anything (will redirect)
+  if (!isAuthenticated) {
+    // Show minimal loading state only when we don't have a token
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--crowi-header)] via-[oklch(0.35_0.03_192)] to-[oklch(0.4_0.04_170)]">
         <div className="text-white text-lg">Loading...</div>
       </div>
     );
-  }
-
-  if (!isAuthenticated || !user) {
-    return null;
   }
 
   return (
