@@ -18,6 +18,9 @@ export function PageListItem({ page }: PageListItemProps) {
   // Determine the display user (prefer lastUpdateUser, fallback to creator)
   const displayUser = lastUpdateUser || creator;
 
+  // Get display name with fallback to username or default
+  const displayName = displayUser?.name || displayUser?.username || '?';
+
   // Check if page is a portal page (ends with /)
   const isPortal = page.path.endsWith('/');
 
@@ -46,9 +49,9 @@ export function PageListItem({ page }: PageListItemProps) {
       {/* User Avatar */}
       {displayUser && (
         <Avatar className="h-10 w-10 flex-shrink-0">
-          <AvatarImage src={displayUser.image || undefined} alt={displayUser.name} />
+          <AvatarImage src={displayUser.image || undefined} alt={displayName} />
           <AvatarFallback className="bg-primary/10 text-primary">
-            {displayUser.name.charAt(0).toUpperCase()}
+            {displayName.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
       )}
@@ -74,7 +77,7 @@ export function PageListItem({ page }: PageListItemProps) {
         {/* User and date info */}
         {displayUser && (
           <div className="text-sm text-muted-foreground">
-            <span className="font-medium">{displayUser.name}</span>
+            <span className="font-medium">{displayName}</span>
             {' · '}
             <time dateTime={page.updatedAt || page.createdAt}>
               {formatDate(page.updatedAt || page.createdAt)}

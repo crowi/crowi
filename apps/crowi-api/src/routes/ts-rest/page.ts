@@ -14,6 +14,12 @@ const debug = Debug('crowi:routes:ts-rest:page');
 const pageToResponse = (page: PageDocument) => {
   const pageObj = page.toObject() as any; // Use any to handle dynamic mongoose document
 
+  // Helper to safely convert date to ISO string
+  const toISOStringOrNull = (date: Date | undefined | null): string | null => {
+    if (!date) return null;
+    return date instanceof Date ? date.toISOString() : String(date);
+  };
+
   // Convert ObjectIds to strings
   const result: any = {
     _id: page._id.toString(),
@@ -32,10 +38,10 @@ const pageToResponse = (page: PageDocument) => {
                 name: pageObj.revision.author.name,
                 email: pageObj.revision.author.email,
                 image: pageObj.revision.author.image || null,
-                createdAt: pageObj.revision.author.createdAt.toISOString(),
+                createdAt: toISOStringOrNull(pageObj.revision.author.createdAt),
               }
             : null,
-          createdAt: pageObj.revision.createdAt.toISOString(),
+          createdAt: toISOStringOrNull(pageObj.revision.createdAt),
         }
       : undefined,
     redirectTo: page.redirectTo || null,
@@ -50,7 +56,7 @@ const pageToResponse = (page: PageDocument) => {
           name: pageObj.creator.name,
           email: pageObj.creator.email,
           image: pageObj.creator.image || null,
-          createdAt: pageObj.creator.createdAt.toISOString(),
+          createdAt: toISOStringOrNull(pageObj.creator.createdAt),
         }
       : null,
     lastUpdateUser: pageObj.lastUpdateUser
@@ -61,15 +67,15 @@ const pageToResponse = (page: PageDocument) => {
           name: pageObj.lastUpdateUser.name,
           email: pageObj.lastUpdateUser.email,
           image: pageObj.lastUpdateUser.image || null,
-          createdAt: pageObj.lastUpdateUser.createdAt.toISOString(),
+          createdAt: toISOStringOrNull(pageObj.lastUpdateUser.createdAt),
         }
       : null,
     liker: page.liker?.map((id) => id.toString()) || [],
     seenUsers: page.seenUsers?.map((id) => id.toString()) || [],
     commentCount: page.commentCount || 0,
     extended: page.extended,
-    createdAt: page.createdAt.toISOString(),
-    updatedAt: page.updatedAt?.toISOString(),
+    createdAt: toISOStringOrNull(page.createdAt),
+    updatedAt: toISOStringOrNull(page.updatedAt),
     latestRevision: pageObj.latestRevision?.toString(),
     likerCount: pageObj.likerCount,
     seenUsersCount: pageObj.seenUsersCount,
@@ -231,12 +237,19 @@ export default (crowi: Crowi, _app: Express) => {
             };
           }
 
-          pages = await Page.findListByCreator(targetUser, { limit, offset }, user);
+          // findListByCreator doesn't populate creator/lastUpdateUser, so we need to do it manually
+          const rawPages = await Page.findListByCreator(targetUser, { limit, offset }, user);
+          pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
         } else if (path && path !== '/') {
           // List pages by path and get portal page
           debug('Finding pages by path:', path);
           debug('Query params:', { limit, offset, path, userParam });
-          [portalPage, pages] = await Promise.all([Page.findPortalPage(path, user), Page.findListByStartWith(path, user, { limit, offset })]);
+          const [rawPortalPage, rawPages] = await Promise.all([Page.findPortalPage(path, user), Page.findListByStartWith(path, user, { limit, offset })]);
+          // findListByStartWith doesn't populate creator/lastUpdateUser, so we need to do it manually
+          [portalPage, pages] = (await Promise.all([
+            rawPortalPage ? Page.populate(rawPortalPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }]) : null,
+            Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }]),
+          ])) as [PageDocument | null, PageDocument[]];
           debug('Found pages:', pages.length);
           debug('Found portal page:', !!portalPage);
         } else {
