@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Home } from 'lucide-react';
 
 interface BreadcrumbProps {
   path: string;
@@ -30,14 +31,16 @@ function getBreadcrumbItems(path: string): { path: string; name: string }[] {
 }
 
 export function Breadcrumb({ path }: BreadcrumbProps) {
-  const items = getBreadcrumbItems(path);
+  // Don't show breadcrumb on root path
+  if (path === '/') return null;
 
-  if (items.length === 0) return null;
+  const items = getBreadcrumbItems(path);
 
   return (
     <nav className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
-      <Link href="/" className="hover:text-foreground transition-colors">
-        Home
+      <Link href="/" className="hover:text-foreground transition-colors flex items-center gap-1">
+        <Home className="h-4 w-4" />
+        <span>Home</span>
       </Link>
       {items.map((item) => (
         <span key={item.path} className="flex items-center gap-1">
