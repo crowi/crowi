@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Breadcrumb } from '@/components/breadcrumb';
 import { Bookmark, Clock, User, Lock, FileText, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
@@ -31,42 +31,12 @@ export function PageHeader({ page, onEdit }: PageHeaderProps) {
     return segments[segments.length - 1] || 'Untitled';
   };
 
-  // Get breadcrumb from path
-  const getBreadcrumb = (path: string): { path: string; name: string }[] => {
-    if (path === '/') return [];
-    const segments = path.split('/').filter(Boolean);
-    const breadcrumb: { path: string; name: string }[] = [];
-
-    segments.slice(0, -1).forEach((segment, index) => {
-      const segmentPath = '/' + segments.slice(0, index + 1).join('/') + '/';
-      breadcrumb.push({ path: segmentPath, name: segment });
-    });
-
-    return breadcrumb;
-  };
-
-  const breadcrumb = getBreadcrumb(page.path);
   const pageTitle = getPageTitle(page.path);
 
   return (
     <div className="border-b pb-4 mb-6">
       {/* Breadcrumb */}
-      {breadcrumb.length > 0 && (
-        <nav className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
-          <Link href="/" className="hover:text-foreground transition-colors">
-            Home
-          </Link>
-          {breadcrumb.map((item) => (
-            <span key={item.path} className="flex items-center gap-1">
-              <span>/</span>
-              <Link href={item.path} className="hover:text-foreground transition-colors">
-                {item.name}
-              </Link>
-            </span>
-          ))}
-          <span>/</span>
-        </nav>
-      )}
+      <Breadcrumb path={page.path} />
 
       {/* Title and actions */}
       <div className="flex items-start justify-between gap-4">

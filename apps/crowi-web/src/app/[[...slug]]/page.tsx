@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { LogOut, Settings, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Breadcrumb } from '@/components/breadcrumb';
 import { useAuth } from '@/lib/use-auth';
 import { PageList } from '@/components/page-list/page-list';
 import { PageView } from '@/components/page-view';
@@ -53,6 +54,7 @@ export default function CatchAllPage() {
     const segments = cleanPath.split('/').filter(Boolean);
     return segments.length > 0 ? segments[segments.length - 1] : 'Pages';
   };
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -117,10 +119,9 @@ export default function CatchAllPage() {
           // Portal/Directory view - shows page list
           <>
             <div className="mb-6">
+              <Breadcrumb path={path} />
               <h1 className="text-3xl font-bold">{getPortalTitle(path)}</h1>
-              <p className="text-muted-foreground mt-1">
-                {path === '/' ? 'Browse all pages' : `Browse pages in ${path}`}
-              </p>
+              <p className="text-muted-foreground mt-1">{path}</p>
             </div>
             <PageList initialParams={{ path }} />
           </>
