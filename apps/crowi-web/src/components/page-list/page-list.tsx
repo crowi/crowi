@@ -6,8 +6,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { PageListItem } from './page-list-item';
 import { Pagination } from './pagination';
+import { PageContent } from '@/components/page-view/page-content';
 import { usePageList } from '@/lib/use-page-list';
-import type { ListPagesRequest } from '@crowi/api-contract';
+import type { ListPagesRequest, PageWithRevision } from '@crowi/api-contract';
 
 interface PageListProps {
   initialParams?: Partial<ListPagesRequest>;
@@ -61,16 +62,7 @@ export function PageList({ initialParams = {} }: PageListProps) {
       {/* Portal Page */}
       {data.portalPage && (
         <Card className="p-6">
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <div
-              dangerouslySetInnerHTML={{
-                __html:
-                  typeof data.portalPage.revision === 'object'
-                    ? data.portalPage.revision?.body || ''
-                    : '',
-              }}
-            />
-          </div>
+          <PageContent page={data.portalPage as PageWithRevision} />
         </Card>
       )}
 
