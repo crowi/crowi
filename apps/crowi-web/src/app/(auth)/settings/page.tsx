@@ -18,12 +18,10 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="container max-w-4xl mx-auto py-8 px-4">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-            <p className="text-muted-foreground">読み込み中...</p>
-          </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+          <p className="text-muted-foreground">読み込み中...</p>
         </div>
       </div>
     );
@@ -31,25 +29,21 @@ export default function SettingsPage() {
 
   if (error) {
     return (
-      <div className="container max-w-4xl mx-auto py-8 px-4">
-        <Alert variant="destructive">
-          <AlertDescription>
-            プロフィールの読み込みに失敗しました。ログインしていることを確認してください。
-          </AlertDescription>
-        </Alert>
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>
+          プロフィールの読み込みに失敗しました。ログインしていることを確認してください。
+        </AlertDescription>
+      </Alert>
     );
   }
 
   if (!profile) {
     return (
-      <div className="container max-w-4xl mx-auto py-8 px-4">
-        <Alert variant="destructive">
-          <AlertDescription>
-            プロフィールが見つかりませんでした。
-          </AlertDescription>
-        </Alert>
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>
+          プロフィールが見つかりませんでした。
+        </AlertDescription>
+      </Alert>
     );
   }
 
