@@ -3,8 +3,16 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings, User, Bookmark, FileText, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/use-auth';
 
 export default function AuthLayout({
@@ -45,26 +53,68 @@ export default function AuthLayout({
             </Link>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="text-white hover:bg-white/10"
-            >
-              <Link href="/settings">
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </Link>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={logout}
-              className="text-white hover:bg-white/10"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/10 flex items-center gap-2"
+                >
+                  <Avatar className="h-6 w-6">
+                    {user?.image ? (
+                      <AvatarImage src={user.image} alt={user.name || user.username} />
+                    ) : null}
+                    <AvatarFallback className="bg-[var(--crowi-primary)] text-white text-xs">
+                      {(user?.name || user?.username || '?').charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden sm:inline">{user?.name || user?.username}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5 text-sm">
+                  <div className="font-medium">{user?.name}</div>
+                  <div className="text-muted-foreground">@{user?.username}</div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href={`/user/${user?.username}`}>
+                    <User className="h-4 w-4 mr-2" />
+                    マイページ
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={`/user/${user?.username}/bookmarks`}>
+                    <Bookmark className="h-4 w-4 mr-2" />
+                    ブックマーク
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={`/user/${user?.username}/recent-create`}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    作成したページ
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/trash">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    ゴミ箱
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">
+                    <Settings className="h-4 w-4 mr-2" />
+                    設定
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={logout} className="text-red-600">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  ログアウト
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
