@@ -4,6 +4,7 @@ import { installerContract } from './installer';
 import { tokenAuthContract } from './tokenAuth';
 import { meContract } from './me';
 import { pageContract } from './page';
+import { userContract } from './user';
 
 const c = initContract();
 
@@ -13,4 +14,5 @@ export const apiContract = c.router({
   tokenAuth: tokenAuthContract,
   me: meContract,
   page: pageContract,
+  user: userContract,
 });

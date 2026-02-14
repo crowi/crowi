@@ -4,4 +4,5 @@ export * from './schemas/installer';
 export * from './schemas/common';
 export * from './schemas/me';
 export * from './schemas/page';
+export * from './schemas/user';
 export * from './openapi';
