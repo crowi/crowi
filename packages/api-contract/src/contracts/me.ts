@@ -6,6 +6,11 @@ import {
   PictureUploadResponseSchema,
   SuccessResponseSchema,
   ProfileErrorResponseSchema,
+  UpdatePasswordRequestSchema,
+  PasswordUpdateSuccessSchema,
+  PasswordErrorResponseSchema,
+  ApiTokenResponseSchema,
+  ApiTokenErrorResponseSchema,
 } from '../schemas/me';
 import {
   AuthenticationRequiredErrorSchema,
@@ -59,5 +64,37 @@ export const meContract = c.router({
       401: AuthenticationRequiredErrorSchema,
     },
     summary: 'Delete profile picture',
+  },
+  updatePassword: {
+    method: 'PUT',
+    path: '/me/password',
+    body: UpdatePasswordRequestSchema,
+    responses: {
+      200: PasswordUpdateSuccessSchema,
+      400: PasswordErrorResponseSchema,
+      401: AuthenticationRequiredErrorSchema,
+    },
+    summary: 'Update user password',
+  },
+  getApiToken: {
+    method: 'GET',
+    path: '/me/apiToken',
+    responses: {
+      200: ApiTokenResponseSchema,
+      401: AuthenticationRequiredErrorSchema,
+      500: ApiTokenErrorResponseSchema,
+    },
+    summary: 'Get current user API token',
+  },
+  resetApiToken: {
+    method: 'POST',
+    path: '/me/apiToken',
+    body: z.undefined(),
+    responses: {
+      200: ApiTokenResponseSchema,
+      401: AuthenticationRequiredErrorSchema,
+      500: ApiTokenErrorResponseSchema,
+    },
+    summary: 'Reset (regenerate) API token',
   },
 });

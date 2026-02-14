@@ -52,3 +52,51 @@ export const ProfileErrorResponseSchema = z.object({
   errors: z.array(z.string()).optional(),
 });
 export type ProfileErrorResponse = z.infer<typeof ProfileErrorResponseSchema>;
+
+// Password validation regex
+// New password must contain at least one letter, one digit, and one special character
+const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])[\x20-\x7F]+$/;
+
+// Password update request schema
+export const UpdatePasswordRequestSchema = z.object({
+  oldPassword: z.string().optional(),
+  newPassword: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(100, 'Password must be at most 100 characters')
+    .regex(PASSWORD_REGEX, 'Password must contain at least one letter, one digit, and one special character'),
+  newPasswordConfirm: z.string(),
+}).refine((data) => data.newPassword === data.newPasswordConfirm, {
+  message: 'Passwords do not match',
+  path: ['newPasswordConfirm'],
+});
+export type UpdatePasswordRequest = z.infer<typeof UpdatePasswordRequestSchema>;
+
+// Password update success response schema
+export const PasswordUpdateSuccessSchema = z.object({
+  status: z.literal('ok'),
+  message: z.string(),
+});
+export type PasswordUpdateSuccess = z.infer<typeof PasswordUpdateSuccessSchema>;
+
+// Password error response schema
+export const PasswordErrorResponseSchema = z.object({
+  status: z.literal('error'),
+  message: z.string(),
+  errors: z.array(z.string()).optional(),
+});
+export type PasswordErrorResponse = z.infer<typeof PasswordErrorResponseSchema>;
+
+// API Token response schema
+export const ApiTokenResponseSchema = z.object({
+  status: z.literal('ok'),
+  apiToken: z.string(),
+});
+export type ApiTokenResponse = z.infer<typeof ApiTokenResponseSchema>;
+
+// API Token error response schema
+export const ApiTokenErrorResponseSchema = z.object({
+  status: z.literal('error'),
+  message: z.string(),
+});
+export type ApiTokenErrorResponse = z.infer<typeof ApiTokenErrorResponseSchema>;
