@@ -196,4 +196,8 @@
     @apply bg-background text-foreground;
     font-family: 'Open Sans', 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', var(--font-geist-sans), sans-serif;
   }
+  a,
+  button {
+    cursor: pointer;
+  }
 }

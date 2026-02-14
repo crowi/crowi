@@ -10,9 +10,11 @@ async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
 
   const refreshToken = localStorage.getItem('refreshToken');
+  console.log('[api-client] refreshAccessToken called, hasRefreshToken:', !!refreshToken);
   if (!refreshToken) return null;
 
   try {
+    console.log('[api-client] Attempting token refresh...');
     const response = await fetch(`${API_BASE_URL}/api/v2/auth/refresh`, {
       method: 'POST',
       headers: {
@@ -21,21 +23,27 @@ async function refreshAccessToken(): Promise<string | null> {
       body: JSON.stringify({ refreshToken }),
     });
 
+    console.log('[api-client] Refresh response status:', response.status);
+
     if (response.ok) {
       const data = await response.json();
+      console.log('[api-client] Refresh successful, storing new tokens');
       localStorage.setItem('accessToken', data.accessToken);
       if (data.refreshToken) {
         localStorage.setItem('refreshToken', data.refreshToken);
       }
       return data.accessToken;
     } else {
+      const errorBody = await response.text();
+      console.log('[api-client] Refresh failed:', response.status, errorBody);
       // Refresh failed - clear tokens and redirect to login
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       window.location.href = '/login';
       return null;
     }
-  } catch {
+  } catch (err) {
+    console.log('[api-client] Refresh error:', err);
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     return null;
@@ -60,37 +68,48 @@ export const apiClient = initClient(apiContract, {
     }
 
     // Make the fetch request
+    console.log('[api-client] Request:', method, path);
     let response = await fetch(path, {
       method,
       headers: requestHeaders,
       body: body as BodyInit | undefined,
     });
+    console.log('[api-client] Response status:', response.status);
 
     // If 401 and we have a refresh token, try to refresh
     if (response.status === 401 && typeof window !== 'undefined') {
+      console.log('[api-client] Got 401, attempting token refresh...');
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
         // Prevent multiple simultaneous refresh requests
         if (!isRefreshing) {
+          console.log('[api-client] Starting refresh (not already refreshing)');
           isRefreshing = true;
           refreshPromise = refreshAccessToken().finally(() => {
             isRefreshing = false;
             refreshPromise = null;
           });
+        } else {
+          console.log('[api-client] Already refreshing, waiting for existing promise');
         }
 
         // Wait for refresh to complete
         const newAccessToken = await refreshPromise;
+        console.log('[api-client] Refresh complete, hasNewToken:', !!newAccessToken);
 
         if (newAccessToken) {
           // Retry the original request with new token
+          console.log('[api-client] Retrying request with new token');
           requestHeaders['Authorization'] = `Bearer ${newAccessToken}`;
           response = await fetch(path, {
             method,
             headers: requestHeaders,
             body: body as BodyInit | undefined,
           });
+          console.log('[api-client] Retry response status:', response.status);
         }
+      } else {
+        console.log('[api-client] No refresh token available');
       }
     }
 

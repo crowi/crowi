@@ -16,7 +16,7 @@ interface SettingsLayoutProps {
 
 export function SettingsLayout({ profileTab }: SettingsLayoutProps) {
   return (
-    <div className="container max-w-4xl mx-auto py-8 px-4">
+    <>
       <div className="mb-8">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <SettingsIcon className="size-8" />
@@ -79,6 +79,6 @@ export function SettingsLayout({ profileTab }: SettingsLayoutProps) {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </>
   );
 }
