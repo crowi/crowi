@@ -4,6 +4,8 @@ import { useProfile } from '@/lib/use-profile';
 import { SettingsLayout } from './settings-layout';
 import { ProfileForm } from './profile-form';
 import { ProfilePicture } from './profile-picture';
+import { PasswordForm } from './password-form';
+import { ApiTokenSection } from './api-token-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Card,
@@ -91,6 +93,33 @@ export default function SettingsPage() {
                   <p>{new Date(profile.createdAt).toLocaleString('ja-JP')}</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      }
+      securityTab={
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>パスワード変更</CardTitle>
+              <CardDescription>
+                アカウントのパスワードを変更できます
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PasswordForm profile={profile} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>APIトークン</CardTitle>
+              <CardDescription>
+                API経由でCrowiにアクセスするためのトークンを管理します
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ApiTokenSection />
             </CardContent>
           </Card>
         </div>
