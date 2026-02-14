@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { LogOut, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/use-auth';
+import { ConnectionBanner } from '@/components/connection-banner';
+import { ServerErrorModal } from '@/components/server-error-modal';
+import { useConnection } from '@/lib/connection-context';
 
 export default function AuthLayout({
   children,
@@ -13,16 +16,18 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, isLoading, isAuthenticated, logout } = useAuth();
+  const { isLoading, isAuthenticated, logout } = useAuth();
+  const { state: connectionState } = useConnection();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    // 接続エラー中はリダイレクトしない
+    if (!isLoading && !isAuthenticated && connectionState === 'connected') {
       router.push('/login');
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [isLoading, isAuthenticated, connectionState, router]);
 
-  // If not authenticated and not loading, don't render anything (will redirect)
-  if (!isAuthenticated) {
+  // If not authenticated and not loading (and not in error state), don't render anything (will redirect)
+  if (!isAuthenticated && connectionState === 'connected') {
     // Show minimal loading state only when we don't have a token
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--crowi-header)] via-[oklch(0.35_0.03_192)] to-[oklch(0.4_0.04_170)]">
@@ -33,6 +38,12 @@ export default function AuthLayout({
 
   return (
     <div className="min-h-screen bg-background">
+      {/* 接続エラーバナー */}
+      <ConnectionBanner />
+
+      {/* サーバーエラーモーダル */}
+      <ServerErrorModal />
+
       <header className="bg-[var(--crowi-header)] text-white">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
