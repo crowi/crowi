@@ -61,7 +61,7 @@ Use the migration-planner subagent to analyze and plan the migration for: {task-
 プランナーが以下を行います：
 - 旧実装のコードを分析
 - 移行に必要な作業を特定
-- タスク定義を `.claude/migration-state/tasks/{task-id}.json` に保存
+- タスク定義を `.migration-state/tasks/{task-id}.json` に保存
 - キューを更新
 
 ### Step 2: 実装 (Implementation)
@@ -199,7 +199,7 @@ Use the migration-reviewer subagent to review: migrate-page-list
 
 ```bash
 # タスクファイルを削除
-rm .claude/migration-state/tasks/migrate-page-list.json
+rm .migration-state/tasks/migrate-page-list.json
 
 # queue.json から該当タスクを削除
 # その後、/migrate page-list を再実行

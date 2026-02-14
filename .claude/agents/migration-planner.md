@@ -29,8 +29,8 @@ tools:
    - 依存関係を特定し、実行順序を決定
 
 3. **計画の出力**
-   - `.claude/migration-state/queue.json` にタスクを追加
-   - 各タスクの詳細を `.claude/migration-state/tasks/` に保存
+   - `.migration-state/queue.json` にタスクを追加
+   - 各タスクの詳細を `.migration-state/tasks/` に保存
 
 ## 分析対象ディレクトリ
 
