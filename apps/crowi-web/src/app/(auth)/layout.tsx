@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LogOut, Settings, User, Bookmark, FileText, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/user-avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,14 +60,7 @@ export default function AuthLayout({
                   size="sm"
                   className="text-white hover:bg-white/10 flex items-center gap-2"
                 >
-                  <Avatar className="h-6 w-6">
-                    {user?.image ? (
-                      <AvatarImage src={user.image} alt={user.name || user.username} />
-                    ) : null}
-                    <AvatarFallback className="!bg-[#43676b] !text-white text-xs font-semibold">
-                      {(user?.name || user?.username || '?').charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                  {user && <UserAvatar user={user} size="sm" />}
                   <span className="hidden sm:inline !text-white">{user?.name || user?.username}</span>
                 </Button>
               </DropdownMenuTrigger>

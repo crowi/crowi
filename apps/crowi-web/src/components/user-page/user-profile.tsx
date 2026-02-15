@@ -1,8 +1,8 @@
 'use client';
 
 import { FileText, Bookmark } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
+import { UserAvatar } from '@/components/user-avatar';
 import type { UserPublic } from '@crowi/api-contract';
 
 interface UserProfileProps {
@@ -13,19 +13,13 @@ interface UserProfileProps {
 
 export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserProfileProps) {
   const displayName = user.name || user.username;
-  const initials = displayName.charAt(0).toUpperCase();
 
   return (
     <Card className="py-4">
       <CardContent>
         <div className="flex items-start gap-6">
           {/* Avatar */}
-          <Avatar className="h-20 w-20 flex-shrink-0">
-            <AvatarImage src={user.image || undefined} alt={displayName} />
-            <AvatarFallback className="!bg-[#43676b] text-white text-2xl font-semibold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={user} size="lg" className="flex-shrink-0" />
 
           {/* User Info */}
           <div className="flex-1 min-w-0">
