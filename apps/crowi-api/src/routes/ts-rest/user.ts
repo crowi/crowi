@@ -1,13 +1,74 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract } from '@crowi/api-contract';
+import { apiContract, UserPublic, Page, PageUser, Bookmark, Revision } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { BookmarkDocument } from 'src/models/bookmark';
+import { Types } from 'mongoose';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:user');
+
+/**
+ * Type for populated user fields in Mongoose documents
+ */
+interface PopulatedUser {
+  _id: Types.ObjectId;
+  username: string;
+  name: string;
+  email: string;
+  image?: string | null;
+  createdAt?: Date;
+}
+
+/**
+ * Type for populated revision in Mongoose documents
+ */
+interface PopulatedRevision {
+  _id: Types.ObjectId;
+  path: string;
+  body: string;
+  format?: string;
+  author?: PopulatedUser | null;
+  createdAt?: Date;
+}
+
+/**
+ * Type for page data that may be a Mongoose document or plain object
+ */
+interface PageLike {
+  _id: Types.ObjectId | string;
+  path: string;
+  revision?: PopulatedRevision | Types.ObjectId | null;
+  redirectTo?: string | null;
+  status?: string | null;
+  grant?: number;
+  grantedUsers?: (Types.ObjectId | string)[];
+  creator?: PopulatedUser | Types.ObjectId | null;
+  lastUpdateUser?: PopulatedUser | Types.ObjectId | null;
+  liker?: (Types.ObjectId | string)[];
+  seenUsers?: (Types.ObjectId | string)[];
+  commentCount?: number;
+  extended?: Record<string, unknown>;
+  createdAt?: Date;
+  updatedAt?: Date;
+  latestRevision?: Types.ObjectId | string;
+  likerCount?: number;
+  seenUsersCount?: number;
+  toObject?: () => PageLike;
+}
+
+/**
+ * Type for bookmark data that may be a Mongoose document or plain object
+ */
+interface BookmarkLike {
+  _id: Types.ObjectId | string;
+  page?: PageLike | null;
+  user: PopulatedUser | Types.ObjectId | string;
+  createdAt?: Date;
+  toObject?: () => BookmarkLike;
+}
 
 /**
  * Helper to safely convert date to ISO string
@@ -18,113 +79,107 @@ const toISOStringOrNull = (date: Date | undefined | null): string | null => {
 };
 
 /**
+ * Helper to convert ObjectId or string to string
+ */
+const toStringId = (id: Types.ObjectId | string): string => {
+  return typeof id === 'string' ? id : id.toString();
+};
+
+/**
+ * Convert user data to PageUser response format
+ */
+const toPageUser = (user: PopulatedUser): PageUser => ({
+  _id: user._id.toString(),
+  id: user._id.toString(),
+  username: user.username,
+  name: user.name,
+  email: user.email,
+  image: user.image || null,
+  createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
+});
+
+/**
  * Convert UserDocument to serializable object for API response
  */
-const userToResponse = (user: UserDocument) => {
-  return {
-    _id: user._id.toString(),
-    id: user._id.toString(),
-    username: user.username,
-    name: user.name,
-    email: user.email,
-    image: user.image || null,
-    introduction: user.introduction || '',
-    createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
-    admin: user.admin || false,
-    status: user.status,
-  };
+const userToResponse = (user: UserDocument): UserPublic => ({
+  _id: user._id.toString(),
+  id: user._id.toString(),
+  username: user.username,
+  name: user.name,
+  email: user.email,
+  image: user.image || null,
+  introduction: user.introduction || '',
+  createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
+  admin: user.admin || false,
+  status: user.status,
+});
+
+/**
+ * Check if a value is a populated user object
+ */
+const isPopulatedUser = (value: unknown): value is PopulatedUser => {
+  return typeof value === 'object' && value !== null && '_id' in value && 'username' in value && 'name' in value;
 };
+
+/**
+ * Check if a value is a populated revision object
+ */
+const isPopulatedRevision = (value: unknown): value is PopulatedRevision => {
+  return typeof value === 'object' && value !== null && '_id' in value && 'path' in value && 'body' in value;
+};
+
+/**
+ * Convert revision data to Revision response format
+ */
+const toRevision = (revision: PopulatedRevision): Revision => ({
+  _id: revision._id.toString(),
+  path: revision.path,
+  body: revision.body,
+  format: revision.format || 'markdown',
+  author: revision.author ? toPageUser(revision.author) : null,
+  createdAt: toISOStringOrNull(revision.createdAt) || new Date().toISOString(),
+});
 
 /**
  * Convert PageDocument to serializable object for API response
  */
-const pageToResponse = (page: PageDocument) => {
-  const pageObj = page.toObject() as any;
+const pageToResponse = (page: PageDocument | PageLike): Page => {
+  // Handle both Mongoose documents and plain objects
+  const pageObj: PageLike = typeof (page as PageDocument).toObject === 'function' ? (page as PageDocument).toObject() : (page as PageLike);
 
-  const result: any = {
-    _id: page._id.toString(),
-    path: page.path,
-    revision: pageObj.revision
-      ? {
-          _id: pageObj.revision._id.toString(),
-          path: pageObj.revision.path,
-          body: pageObj.revision.body,
-          format: pageObj.revision.format || 'markdown',
-          author: pageObj.revision.author
-            ? {
-                _id: pageObj.revision.author._id.toString(),
-                id: pageObj.revision.author._id.toString(),
-                username: pageObj.revision.author.username,
-                name: pageObj.revision.author.name,
-                email: pageObj.revision.author.email,
-                image: pageObj.revision.author.image || null,
-                createdAt: toISOStringOrNull(pageObj.revision.author.createdAt),
-              }
-            : null,
-          createdAt: toISOStringOrNull(pageObj.revision.createdAt),
-        }
-      : undefined,
-    redirectTo: page.redirectTo || null,
-    status: page.status || null,
-    grant: page.grant,
-    grantedUsers: page.grantedUsers?.map((id) => id.toString()) || [],
-    creator: pageObj.creator
-      ? {
-          _id: pageObj.creator._id.toString(),
-          id: pageObj.creator._id.toString(),
-          username: pageObj.creator.username,
-          name: pageObj.creator.name,
-          email: pageObj.creator.email,
-          image: pageObj.creator.image || null,
-          createdAt: toISOStringOrNull(pageObj.creator.createdAt),
-        }
-      : null,
-    lastUpdateUser: pageObj.lastUpdateUser
-      ? {
-          _id: pageObj.lastUpdateUser._id.toString(),
-          id: pageObj.lastUpdateUser._id.toString(),
-          username: pageObj.lastUpdateUser.username,
-          name: pageObj.lastUpdateUser.name,
-          email: pageObj.lastUpdateUser.email,
-          image: pageObj.lastUpdateUser.image || null,
-          createdAt: toISOStringOrNull(pageObj.lastUpdateUser.createdAt),
-        }
-      : null,
-    liker: page.liker?.map((id) => id.toString()) || [],
-    seenUsers: page.seenUsers?.map((id) => id.toString()) || [],
-    commentCount: page.commentCount || 0,
-    extended: page.extended,
-    createdAt: toISOStringOrNull(page.createdAt),
-    updatedAt: toISOStringOrNull(page.updatedAt),
-    latestRevision: pageObj.latestRevision?.toString(),
+  return {
+    _id: toStringId(pageObj._id),
+    path: pageObj.path,
+    revision: pageObj.revision && isPopulatedRevision(pageObj.revision) ? toRevision(pageObj.revision) : undefined,
+    redirectTo: pageObj.redirectTo || null,
+    status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated') || undefined,
+    grant: pageObj.grant,
+    grantedUsers: pageObj.grantedUsers?.map(toStringId) || [],
+    creator: pageObj.creator && isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
+    lastUpdateUser: pageObj.lastUpdateUser && isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
+    liker: pageObj.liker?.map(toStringId) || [],
+    seenUsers: pageObj.seenUsers?.map(toStringId) || [],
+    commentCount: pageObj.commentCount || 0,
+    extended: pageObj.extended,
+    createdAt: toISOStringOrNull(pageObj.createdAt) || new Date().toISOString(),
+    updatedAt: toISOStringOrNull(pageObj.updatedAt) || undefined,
+    latestRevision: pageObj.latestRevision ? toStringId(pageObj.latestRevision) : undefined,
     likerCount: pageObj.likerCount,
     seenUsersCount: pageObj.seenUsersCount,
   };
-
-  return result;
 };
 
 /**
  * Convert BookmarkDocument to serializable object for API response
  */
-const bookmarkToResponse = (bookmark: BookmarkDocument) => {
-  const bookmarkObj = bookmark.toObject ? bookmark.toObject() : (bookmark as any);
+const bookmarkToResponse = (bookmark: BookmarkDocument | BookmarkLike): Bookmark => {
+  const bookmarkObj: BookmarkLike =
+    typeof (bookmark as BookmarkDocument).toObject === 'function' ? (bookmark as BookmarkDocument).toObject() : (bookmark as BookmarkLike);
 
   return {
-    _id: bookmarkObj._id.toString(),
-    page: bookmarkObj.page ? pageToResponse(bookmarkObj.page) : null,
-    user:
-      typeof bookmarkObj.user === 'object'
-        ? {
-            _id: bookmarkObj.user._id.toString(),
-            id: bookmarkObj.user._id.toString(),
-            username: bookmarkObj.user.username,
-            name: bookmarkObj.user.name,
-            email: bookmarkObj.user.email,
-            image: bookmarkObj.user.image || null,
-            createdAt: toISOStringOrNull(bookmarkObj.user.createdAt),
-          }
-        : bookmarkObj.user.toString(),
+    _id: toStringId(bookmarkObj._id),
+    page: bookmarkObj.page ? pageToResponse(bookmarkObj.page) : (null as unknown as Page),
+    user: isPopulatedUser(bookmarkObj.user) ? toPageUser(bookmarkObj.user) : toStringId(bookmarkObj.user as Types.ObjectId | string),
     createdAt: toISOStringOrNull(bookmarkObj.createdAt) || new Date().toISOString(),
   };
 };
