@@ -64,11 +64,11 @@ export default function AuthLayout({
                     {user?.image ? (
                       <AvatarImage src={user.image} alt={user.name || user.username} />
                     ) : null}
-                    <AvatarFallback className="bg-[var(--crowi-primary)] text-white text-xs">
+                    <AvatarFallback className="!bg-[#43676b] !text-white text-xs font-semibold">
                       {(user?.name || user?.username || '?').charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden sm:inline">{user?.name || user?.username}</span>
+                  <span className="hidden sm:inline !text-white">{user?.name || user?.username}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">

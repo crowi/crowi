@@ -22,7 +22,7 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserPro
           {/* Avatar */}
           <Avatar className="h-20 w-20 flex-shrink-0">
             <AvatarImage src={user.image || undefined} alt={displayName} />
-            <AvatarFallback className="bg-[var(--crowi-primary)] text-white text-2xl">
+            <AvatarFallback className="!bg-[#43676b] text-white text-2xl font-semibold">
               {initials}
             </AvatarFallback>
           </Avatar>
