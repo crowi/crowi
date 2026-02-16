@@ -55,7 +55,8 @@ export type ProfileErrorResponse = z.infer<typeof ProfileErrorResponseSchema>;
 
 // Password validation regex
 // New password must contain at least one letter, one digit, and one special character
-const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])[\x20-\x7F]+$/;
+// Allowed special characters: !@#$%^&*()_+-=[]{};\:'"|,.<>/?`~
+const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])[a-zA-Z\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]+$/;
 
 // Password update request schema
 export const UpdatePasswordRequestSchema = z.object({
