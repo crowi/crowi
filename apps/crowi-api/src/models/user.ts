@@ -3,6 +3,7 @@ import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
 import mongoosePaginate from 'mongoose-paginate';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import async from 'async';
 import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth } from 'src/models/config';
 
@@ -162,11 +163,32 @@ export default (crowi: Crowi) => {
     return password;
   }
 
-  function generatePassword(password) {
+  /**
+   * Generate password hash using SHA-256 (legacy algorithm)
+   * This is kept for backward compatibility with existing passwords
+   */
+  function generatePasswordLegacy(password) {
     const hasher = crypto.createHash('sha256');
     hasher.update(crowi.env.PASSWORD_SEED + password);
 
     return hasher.digest('hex');
+  }
+
+  /**
+   * Generate password hash using bcrypt (recommended)
+   * Bcrypt hashes start with $2a$ or $2b$ prefix
+   */
+  function generatePasswordHash(password) {
+    const saltRounds = 10;
+    return bcrypt.hashSync(password, saltRounds);
+  }
+
+  /**
+   * Check if a hash is a bcrypt hash
+   * Bcrypt hashes start with $2a$ or $2b$ prefix
+   */
+  function isBcryptHash(hash: string) {
+    return hash && (hash.startsWith('$2a$') || hash.startsWith('$2b$'));
   }
 
   function generateApiToken(user) {
@@ -195,15 +217,25 @@ export default (crowi: Crowi) => {
   };
 
   userSchema.methods.isPasswordValid = function (password) {
-    const inputHash = generatePassword(password);
+    debug('Password check - stored hash format:', isBcryptHash(this.password) ? 'bcrypt' : 'legacy SHA-256');
+
+    // Check if stored password is a bcrypt hash
+    if (isBcryptHash(this.password)) {
+      return bcrypt.compareSync(password, this.password);
+    }
+
+    // Fall back to legacy SHA-256 verification for backward compatibility
+    const inputHash = generatePasswordLegacy(password);
     debug('Password check - stored:', this.password);
-    debug('Password check - input hash:', inputHash);
+    debug('Password check - input hash (legacy):', inputHash);
     debug('Password check - PASSWORD_SEED exists:', !!crowi.env.PASSWORD_SEED);
     return this.password == inputHash;
   };
 
   userSchema.methods.setPassword = function (password) {
-    this.password = generatePassword(password);
+    // Always use bcrypt for new passwords
+    this.password = generatePasswordHash(password);
+    debug('Password set using bcrypt');
     return this;
   };
 
@@ -491,9 +523,27 @@ export default (crowi: Crowi) => {
     return User.findOne({ email }).exec();
   };
 
-  userSchema.statics.findUserByEmailAndPassword = function (email, password) {
-    const hashedPassword = generatePassword(password);
-    return User.findOne({ email, password: hashedPassword }).exec();
+  userSchema.statics.findUserByEmailAndPassword = async function (email, password) {
+    // First, try to find user by email and legacy SHA-256 hash (for backward compatibility)
+    const hashedPasswordLegacy = generatePasswordLegacy(password);
+    let user = await User.findOne({ email, password: hashedPasswordLegacy }).select('+password').exec();
+
+    if (user) {
+      debug('User found with legacy SHA-256 password');
+      return user;
+    }
+
+    // If not found, find user by email and verify bcrypt password
+    user = await User.findOne({ email }).select('+password').exec();
+    if (user && user.password && isBcryptHash(user.password)) {
+      const isValid = bcrypt.compareSync(password, user.password);
+      if (isValid) {
+        debug('User found with bcrypt password');
+        return user;
+      }
+    }
+
+    return null;
   };
 
   userSchema.statics.isRegisterableUsername = async function (username, callback) {

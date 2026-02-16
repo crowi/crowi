@@ -263,18 +263,6 @@ export default (crowi: Crowi, _app: Express) => {
         };
       }
 
-      // Double-check password confirmation (already validated by Zod, but keeping for safety)
-      if (newPassword !== newPasswordConfirm) {
-        return {
-          status: 400 as const,
-          body: {
-            status: 'error' as const,
-            message: 'Passwords do not match',
-            errors: ['Passwords do not match'],
-          },
-        };
-      }
-
       // Get user with password field populated for validation
       const userWithSecrets = await user.populateSecrets();
       const hasPassword = userWithSecrets.isPasswordSet();

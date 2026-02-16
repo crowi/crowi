@@ -18,29 +18,59 @@ interface PasswordRequirement {
   met: boolean;
 }
 
+// Password requirements configuration
+const PASSWORD_REQUIREMENTS = {
+  minLength: 8,
+  maxLength: 100,
+  letterRegex: /[a-zA-Z]/,
+  digitRegex: /\d/,
+  symbolRegex: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/,
+} as const;
+
+// Validate password against all requirements
+const validatePasswordRequirements = (password: string) => {
+  return {
+    hasMinLength: password.length >= PASSWORD_REQUIREMENTS.minLength,
+    hasMaxLength: password.length <= PASSWORD_REQUIREMENTS.maxLength,
+    hasLetter: PASSWORD_REQUIREMENTS.letterRegex.test(password),
+    hasDigit: PASSWORD_REQUIREMENTS.digitRegex.test(password),
+    hasSymbol: PASSWORD_REQUIREMENTS.symbolRegex.test(password),
+  };
+};
+
+// Check if password meets all requirements
+const isPasswordMeetingRequirements = (password: string) => {
+  if (!password) return false;
+  const checks = validatePasswordRequirements(password);
+  return Object.values(checks).every(Boolean);
+};
+
 function PasswordRequirements({ password }: { password: string }) {
-  const requirements: PasswordRequirement[] = useMemo(() => [
-    {
-      label: '8文字以上',
-      met: password.length >= 8,
-    },
-    {
-      label: '100文字以下',
-      met: password.length <= 100,
-    },
-    {
-      label: '英字を含む',
-      met: /[a-zA-Z]/.test(password),
-    },
-    {
-      label: '数字を含む',
-      met: /\d/.test(password),
-    },
-    {
-      label: '記号を含む',
-      met: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password),
-    },
-  ], [password]);
+  const requirements: PasswordRequirement[] = useMemo(() => {
+    const checks = validatePasswordRequirements(password);
+    return [
+      {
+        label: '8文字以上',
+        met: checks.hasMinLength,
+      },
+      {
+        label: '100文字以下',
+        met: checks.hasMaxLength,
+      },
+      {
+        label: '英字を含む',
+        met: checks.hasLetter,
+      },
+      {
+        label: '数字を含む',
+        met: checks.hasDigit,
+      },
+      {
+        label: '記号を含む',
+        met: checks.hasSymbol,
+      },
+    ];
+  }, [password]);
 
   if (!password) {
     return null;
@@ -103,19 +133,20 @@ export function PasswordForm({ profile }: PasswordFormProps) {
     if (!formData.newPassword) {
       validationErrors.push('新しいパスワードを入力してください');
     } else {
-      if (formData.newPassword.length < 8) {
+      const checks = validatePasswordRequirements(formData.newPassword);
+      if (!checks.hasMinLength) {
         validationErrors.push('パスワードは8文字以上にしてください');
       }
-      if (formData.newPassword.length > 100) {
+      if (!checks.hasMaxLength) {
         validationErrors.push('パスワードは100文字以下にしてください');
       }
-      if (!/[a-zA-Z]/.test(formData.newPassword)) {
+      if (!checks.hasLetter) {
         validationErrors.push('パスワードには英字を含めてください');
       }
-      if (!/\d/.test(formData.newPassword)) {
+      if (!checks.hasDigit) {
         validationErrors.push('パスワードには数字を含めてください');
       }
-      if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(formData.newPassword)) {
+      if (!checks.hasSymbol) {
         validationErrors.push('パスワードには記号を含めてください');
       }
     }
@@ -164,11 +195,7 @@ export function PasswordForm({ profile }: PasswordFormProps) {
     if (profile.hasPassword && !formData.oldPassword) return false;
     if (!formData.newPassword || !formData.newPasswordConfirm) return false;
     if (formData.newPassword !== formData.newPasswordConfirm) return false;
-    if (formData.newPassword.length < 8 || formData.newPassword.length > 100) return false;
-    if (!/[a-zA-Z]/.test(formData.newPassword)) return false;
-    if (!/\d/.test(formData.newPassword)) return false;
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(formData.newPassword)) return false;
-    return true;
+    return isPasswordMeetingRequirements(formData.newPassword);
   }, [formData, profile.hasPassword]);
 
   return (
