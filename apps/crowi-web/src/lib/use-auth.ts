@@ -144,7 +144,9 @@ export function useAuth() {
         });
       }
     }
-  }, [connectionHandlers]);
+    // connectionHandlersは依存配列に含めない（最新の値は常に参照される）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const logout = useCallback(async () => {
     const accessToken = localStorage.getItem('accessToken');
@@ -179,12 +181,14 @@ export function useAuth() {
     router.push('/login');
   }, [router]);
 
-  // リトライコールバックを登録
+  // リトライコールバックを登録（初回のみ）
   useEffect(() => {
     if (connectionHandlers) {
       connectionHandlers.registerRetryCallback(fetchUser);
     }
-  }, [connectionHandlers, fetchUser]);
+    // fetchUserは常に最新の関数が参照されるため、初回登録のみでよい
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Initial auth check on mount - valid pattern for client-side authentication

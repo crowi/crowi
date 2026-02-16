@@ -102,6 +102,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   // ネットワークエラー設定
   const setNetworkError = useCallback(
     (errorMessage?: string) => {
+      clearTimers(); // ステート更新前にクリア
       setState('network-error');
       setError(errorMessage || 'ネットワーク接続に問題があります');
       // 既にエラー状態の場合はリトライカウントを増加
@@ -111,12 +112,13 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         return newCount;
       });
     },
-    [state, scheduleRetry]
+    [state, scheduleRetry, clearTimers]
   );
 
   // サーバーエラー設定
   const setServerError = useCallback(
     (errorMessage?: string) => {
+      clearTimers(); // ステート更新前にクリア
       setState('server-error');
       setError(errorMessage || 'サーバーに問題が発生しています');
       setRetryCount((prev) => {
@@ -125,7 +127,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         return newCount;
       });
     },
-    [state, scheduleRetry]
+    [state, scheduleRetry, clearTimers]
   );
 
   // 手動リトライ

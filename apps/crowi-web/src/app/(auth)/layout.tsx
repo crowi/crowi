@@ -26,9 +26,19 @@ export default function AuthLayout({
     }
   }, [isLoading, isAuthenticated, connectionState, router]);
 
-  // If not authenticated and not loading (and not in error state), don't render anything (will redirect)
-  if (!isAuthenticated && connectionState === 'connected') {
-    // Show minimal loading state only when we don't have a token
+  // セッション期限切れイベントのリスナー
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      router.push('/login');
+    };
+
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
+  }, [router]);
+
+  // 認証チェック中、または接続正常時の未認証の場合はローディング画面を表示
+  // 接続エラー時は下のレイアウト(エラーバナー/モーダル付き)を表示
+  if (!isAuthenticated && (isLoading || connectionState === 'connected')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--crowi-header)] via-[oklch(0.35_0.03_192)] to-[oklch(0.4_0.04_170)]">
         <div className="text-white text-lg">Loading...</div>

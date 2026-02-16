@@ -36,16 +36,19 @@ async function refreshAccessToken(): Promise<string | null> {
     } else {
       const errorBody = await response.text();
       console.log('[api-client] Refresh failed:', response.status, errorBody);
-      // Refresh failed - clear tokens and redirect to login
+      // Refresh failed - clear tokens and dispatch event for navigation
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
-      window.location.href = '/login';
+      // カスタムイベントを発行してReact側でナビゲーションを処理
+      window.dispatchEvent(new CustomEvent('auth:session-expired'));
       return null;
     }
   } catch (err) {
     console.log('[api-client] Refresh error:', err);
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    // カスタムイベントを発行してReact側でナビゲーションを処理
+    window.dispatchEvent(new CustomEvent('auth:session-expired'));
     return null;
   }
 }
