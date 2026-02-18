@@ -91,8 +91,8 @@ planner → implementer → reviewer ─┬→ committer
 
 ## タスク管理
 
-- キュー: `.claude/migration-state/queue.json`
-- タスク: `.claude/migration-state/tasks/{task-id}.json`
+- キュー: `.migration-state/queue.json`
+- タスク: `.migration-state/tasks/{task-id}.json`
 - ステータス: `PLANNED` → `REVIEW` → `APPROVED` → `COMMITTED`
 
 ## 技術スタック

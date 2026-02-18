@@ -246,6 +246,178 @@ export default (crowi: Crowi, _app: Express) => {
         });
       });
     },
+
+    updatePassword: async ({ body, req }) => {
+      const user = (req as any).user as UserDocument;
+      const { oldPassword, newPassword, newPasswordConfirm } = body;
+
+      // Check if email is set (required for password setting)
+      if (!user.isEmailSet()) {
+        return {
+          status: 400 as const,
+          body: {
+            status: 'error' as const,
+            message: 'Email must be set before setting password',
+            errors: ['Email must be set before setting password'],
+          },
+        };
+      }
+
+      // Double-check password confirmation (already validated by Zod, but keeping for safety)
+      if (newPassword !== newPasswordConfirm) {
+        return {
+          status: 400 as const,
+          body: {
+            status: 'error' as const,
+            message: 'Passwords do not match',
+            errors: ['Passwords do not match'],
+          },
+        };
+      }
+
+      // Get user with password field populated for validation
+      const userWithSecrets = await user.populateSecrets();
+      const hasPassword = userWithSecrets.isPasswordSet();
+
+      // If password is already set, validate old password
+      if (hasPassword) {
+        if (!oldPassword) {
+          return {
+            status: 400 as const,
+            body: {
+              status: 'error' as const,
+              message: 'Current password is required',
+              errors: ['Current password is required'],
+            },
+          };
+        }
+
+        // Validate old password (using legacy 6-character minimum for backward compatibility)
+        if (oldPassword.length < 6) {
+          return {
+            status: 400 as const,
+            body: {
+              status: 'error' as const,
+              message: 'Current password must be at least 6 characters',
+              errors: ['Current password must be at least 6 characters'],
+            },
+          };
+        }
+
+        if (!userWithSecrets.isPasswordValid(oldPassword)) {
+          return {
+            status: 400 as const,
+            body: {
+              status: 'error' as const,
+              message: 'Wrong current password',
+              errors: ['Wrong current password'],
+            },
+          };
+        }
+      }
+
+      // Update password
+      return new Promise((resolve) => {
+        userWithSecrets.updatePassword(newPassword, (err: Error | null) => {
+          if (err) {
+            debug('Error updating password:', err);
+            const error = err as { errors?: Record<string, { message: string }> };
+            const errorMessages: string[] = [];
+
+            if (error.errors) {
+              Object.keys(error.errors).forEach((e) => {
+                errorMessages.push(error.errors![e].message);
+              });
+            } else {
+              errorMessages.push('Failed to update password');
+            }
+
+            return resolve({
+              status: 400 as const,
+              body: {
+                status: 'error' as const,
+                message: errorMessages[0] || 'Failed to update password',
+                errors: errorMessages,
+              },
+            });
+          }
+
+          return resolve({
+            status: 200 as const,
+            body: {
+              status: 'ok' as const,
+              message: 'Password updated',
+            },
+          });
+        });
+      });
+    },
+
+    getApiToken: async ({ req }) => {
+      const user = (req as any).user as UserDocument;
+
+      try {
+        // apiToken is select: false, so we need to populate it explicitly
+        const userWithSecrets = await user.populateSecrets();
+        const apiToken = userWithSecrets.apiToken;
+
+        // If no API token exists yet, generate one
+        if (!apiToken) {
+          const updatedUser = await userWithSecrets.updateApiToken();
+          return {
+            status: 200 as const,
+            body: {
+              status: 'ok' as const,
+              apiToken: updatedUser.apiToken,
+            },
+          };
+        }
+
+        return {
+          status: 200 as const,
+          body: {
+            status: 'ok' as const,
+            apiToken,
+          },
+        };
+      } catch (err) {
+        debug('Error getting API token:', err);
+        return {
+          status: 500 as const,
+          body: {
+            status: 'error' as const,
+            message: 'Failed to get API token',
+          },
+        };
+      }
+    },
+
+    resetApiToken: async ({ req }) => {
+      const user = (req as any).user as UserDocument;
+
+      try {
+        // apiToken is select: false, so we need to populate it explicitly
+        const userWithSecrets = await user.populateSecrets();
+        const updatedUser = await userWithSecrets.updateApiToken();
+
+        return {
+          status: 200 as const,
+          body: {
+            status: 'ok' as const,
+            apiToken: updatedUser.apiToken,
+          },
+        };
+      } catch (err) {
+        debug('Error resetting API token:', err);
+        return {
+          status: 500 as const,
+          body: {
+            status: 'error' as const,
+            message: 'Failed to update API token',
+          },
+        };
+      }
+    },
   });
 
   createExpressEndpoints(apiContract.me, meRouter, router);

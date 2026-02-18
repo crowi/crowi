@@ -12,9 +12,10 @@ import {
 
 interface SettingsLayoutProps {
   profileTab: React.ReactNode;
+  securityTab?: React.ReactNode;
 }
 
-export function SettingsLayout({ profileTab }: SettingsLayoutProps) {
+export function SettingsLayout({ profileTab, securityTab }: SettingsLayoutProps) {
   return (
     <>
       <div className="mb-8">
@@ -41,7 +42,7 @@ export function SettingsLayout({ profileTab }: SettingsLayoutProps) {
             <Bell className="size-4" />
             通知
           </TabsTrigger>
-          <TabsTrigger value="security" className="flex items-center gap-2" disabled>
+          <TabsTrigger value="security" className="flex items-center gap-2">
             <Shield className="size-4" />
             セキュリティ
           </TabsTrigger>
@@ -65,18 +66,8 @@ export function SettingsLayout({ profileTab }: SettingsLayoutProps) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="security">
-          <Card>
-            <CardHeader>
-              <CardTitle>セキュリティ設定</CardTitle>
-              <CardDescription>
-                パスワードとセキュリティ設定を管理します（近日公開予定）
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">この機能は開発中です。</p>
-            </CardContent>
-          </Card>
+        <TabsContent value="security" className="space-y-6">
+          {securityTab}
         </TabsContent>
       </Tabs>
     </>

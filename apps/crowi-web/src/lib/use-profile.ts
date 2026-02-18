@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
-import type { UpdateProfileRequest } from '@crowi/api-contract';
+import type { UpdateProfileRequest, UpdatePasswordRequest } from '@crowi/api-contract';
 
 export function useProfile() {
   return useQuery({
@@ -77,6 +77,55 @@ export function useDeletePicture() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+    },
+  });
+}
+
+export function useUpdatePassword() {
+  return useMutation({
+    mutationFn: async (data: UpdatePasswordRequest) => {
+      const result = await apiClient.me.updatePassword({ body: data });
+      if (result.status === 200) {
+        return result.body;
+      }
+      if (result.status === 400) {
+        const errors = result.body.errors || [];
+        throw new Error(errors.length > 0 ? errors.join(', ') : result.body.message || 'Failed to update password');
+      }
+      throw new Error('Failed to update password');
+    },
+  });
+}
+
+export function useApiToken() {
+  return useQuery({
+    queryKey: ['apiToken'],
+    queryFn: async () => {
+      const result = await apiClient.me.getApiToken();
+      if (result.status === 200) {
+        return result.body;
+      }
+      throw new Error('Failed to fetch API token');
+    },
+  });
+}
+
+export function useResetApiToken() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.me.resetApiToken();
+      if (result.status === 200) {
+        return result.body;
+      }
+      if (result.status === 500) {
+        throw new Error(result.body.message || 'Failed to reset API token');
+      }
+      throw new Error('Failed to reset API token');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiToken'] });
     },
   });
 }

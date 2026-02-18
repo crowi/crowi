@@ -19,8 +19,8 @@ tools:
 ## 責務
 
 1. **タスクの取得**
-   - `.claude/migration-state/queue.json` から `PLANNED` or `NEEDS_WORK` のタスクを取得
-   - タスク詳細を `.claude/migration-state/tasks/{task-id}.json` から読み込む
+   - `.migration-state/queue.json` から `PLANNED` or `NEEDS_WORK` のタスクを取得
+   - タスク詳細を `.migration-state/tasks/{task-id}.json` から読み込む
 
 2. **実装**
    - ts-rest 契約定義（API契約を先に定義）
@@ -145,7 +145,7 @@ export default function PagesPage() {
 
 レビューで差し戻された場合：
 
-1. `.claude/migration-state/tasks/{task-id}.json` の `reviewFeedback` を確認
+1. `.migration-state/tasks/{task-id}.json` の `reviewFeedback` を確認
 2. 指摘事項を修正
 3. 修正内容を `implementationNotes` に追記
 4. ステータスを `REVIEW` に更新

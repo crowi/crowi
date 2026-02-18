@@ -20,7 +20,7 @@ tools:
 ## 責務
 
 1. **タスクの取得**
-   - `.claude/migration-state/queue.json` から `REVIEW` のタスクを取得
+   - `.migration-state/queue.json` から `REVIEW` のタスクを取得
 
 2. **レビュー実施**
    - コード品質チェック

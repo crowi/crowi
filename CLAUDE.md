@@ -278,8 +278,8 @@ Use the migration-committer subagent to commit: {task-id}
 
 ## Task Management
 
-- Queue: `.claude/migration-state/queue.json`
-- Tasks: `.claude/migration-state/tasks/{task-id}.json`
+- Queue: `.migration-state/queue.json`
+- Tasks: `.migration-state/tasks/{task-id}.json`
 - Status: `PLANNED` → `REVIEW` → `APPROVED` → `COMMITTED` → `DONE`
 
 ## migration-committer Pre-commit Checklist

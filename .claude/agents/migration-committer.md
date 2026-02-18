@@ -21,7 +21,7 @@ PR 作成後は CI の完了を確認し、失敗時は差し戻しを行いま�
 ## 責務
 
 1. **タスクの取得**
-   - `.claude/migration-state/queue.json` から `APPROVED` のタスクを取得
+   - `.migration-state/queue.json` から `APPROVED` のタスクを取得
 
 2. **コミット**
    - 適切なブランチを作成（または既存ブランチを使用）
@@ -221,7 +221,7 @@ gh run view {RUN_ID} --log-failed
 ### コミットするファイルの選定
 
 - タスクに関連するファイルのみをコミット
-- `.claude/migration-state/` の更新は別コミットに
+- `.migration-state/` の更新は別コミットに
 - 一時ファイルや生成ファイルはコミットしない
 
 ### Pre-commit チェック（必須）
