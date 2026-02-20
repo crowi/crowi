@@ -199,10 +199,23 @@ export default (crowi: Crowi, _app: Express) => {
      * - Includes recent pages (10) and bookmarks (10) for initial display
      */
     getUserPage: async ({ params, req }) => {
-      const currentUser = (req as any).user as UserDocument | null;
+      const currentUser = (req as any).user as UserDocument | undefined;
       const { username } = params;
 
       debug('getUserPage called with:', { username, currentUserId: currentUser?._id });
+
+      // Authentication check - this endpoint requires login
+      if (!currentUser) {
+        return {
+          status: 401 as const,
+          body: {
+            error: {
+              code: 'AUTHENTICATION_REQUIRED' as const,
+              message: 'Authentication is required' as const,
+            },
+          },
+        };
+      }
 
       try {
         // Find the target user by username
@@ -240,8 +253,8 @@ export default (crowi: Crowi, _app: Express) => {
           redirectTo: null,
           $or: [{ status: null }, { status: 'published' }],
         };
-        // If not viewing own page and not logged in, only show public pages
-        if (!currentUser || !currentUser._id.equals(targetUser._id)) {
+        // If not viewing own page, only show public pages
+        if (!currentUser._id.equals(targetUser._id)) {
           pageCountConditions.grant = Page.GRANT_PUBLIC;
         }
         const createdPagesCount = await Page.countDocuments(pageCountConditions);
@@ -250,7 +263,7 @@ export default (crowi: Crowi, _app: Express) => {
         const bookmarksCount = await Bookmark.countDocuments({ user: targetUser._id });
 
         // Get recent pages (10 items)
-        const recentPagesRaw = await Page.findListByCreator(targetUser, { limit: 10, offset: 0 }, currentUser || targetUser);
+        const recentPagesRaw = await Page.findListByCreator(targetUser, { limit: 10, offset: 0 }, currentUser);
         const recentPages = (await Page.populate(recentPagesRaw, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
 
         // Get recent bookmarks (10 items)
@@ -271,14 +284,14 @@ export default (crowi: Crowi, _app: Express) => {
         };
       } catch (err) {
         const error = err as Error;
-        debug('Error fetching user page:', error.message);
+        debug('Error fetching user page:', error.message, error.stack);
 
         return {
-          status: 404 as const,
+          status: 500 as const,
           body: {
             error: {
-              code: 'USER_NOT_FOUND' as const,
-              message: 'User not found' as const,
+              code: 'INTERNAL_ERROR' as const,
+              message: 'Internal server error' as const,
             },
           },
         };
@@ -363,14 +376,14 @@ export default (crowi: Crowi, _app: Express) => {
         };
       } catch (err) {
         const error = err as Error;
-        debug('Error fetching user bookmarks:', error.message);
+        debug('Error fetching user bookmarks:', error.message, error.stack);
 
         return {
-          status: 404 as const,
+          status: 500 as const,
           body: {
             error: {
-              code: 'USER_NOT_FOUND' as const,
-              message: 'User not found' as const,
+              code: 'INTERNAL_ERROR' as const,
+              message: 'Internal server error' as const,
             },
           },
         };
@@ -466,14 +479,14 @@ export default (crowi: Crowi, _app: Express) => {
         };
       } catch (err) {
         const error = err as Error;
-        debug('Error fetching user pages:', error.message);
+        debug('Error fetching user pages:', error.message, error.stack);
 
         return {
-          status: 404 as const,
+          status: 500 as const,
           body: {
             error: {
-              code: 'USER_NOT_FOUND' as const,
-              message: 'User not found' as const,
+              code: 'INTERNAL_ERROR' as const,
+              message: 'Internal server error' as const,
             },
           },
         };

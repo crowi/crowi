@@ -7,7 +7,7 @@ import {
   UserNotFoundErrorSchema,
   PaginationRequestSchema,
 } from '../schemas/user';
-import { AuthenticationRequiredErrorSchema } from '../schemas/common';
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 
 const c = initContract();
 
@@ -25,7 +25,9 @@ export const userContract = c.router({
     }),
     responses: {
       200: UserPageResponseSchema,
+      401: AuthenticationRequiredErrorSchema,
       404: UserNotFoundErrorSchema,
+      500: InternalServerErrorSchema,
     },
     summary: 'Get user page information',
   },
@@ -46,6 +48,7 @@ export const userContract = c.router({
       200: UserBookmarksResponseSchema,
       401: AuthenticationRequiredErrorSchema,
       404: UserNotFoundErrorSchema,
+      500: InternalServerErrorSchema,
     },
     summary: 'Get user bookmarks',
   },
@@ -66,6 +69,7 @@ export const userContract = c.router({
       200: UserPagesResponseSchema,
       401: AuthenticationRequiredErrorSchema,
       404: UserNotFoundErrorSchema,
+      500: InternalServerErrorSchema,
     },
     summary: 'Get user created pages',
   },

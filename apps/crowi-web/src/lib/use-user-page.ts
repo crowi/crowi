@@ -15,6 +15,9 @@ export function useUserPage(username: string) {
       if (result.status === 200) {
         return result.body;
       }
+      if (result.status === 401) {
+        throw new Error('Authentication required');
+      }
       if (result.status === 404) {
         throw new Error('User not found');
       }
@@ -37,6 +40,9 @@ export function useUserBookmarks(username: string, params: PaginationRequest = {
       });
       if (result.status === 200) {
         return result.body;
+      }
+      if (result.status === 401) {
+        throw new Error('Authentication required');
       }
       if (result.status === 404) {
         throw new Error('User not found');
@@ -61,6 +67,9 @@ export function useUserPages(username: string, params: PaginationRequest = { lim
       if (result.status === 200) {
         return result.body;
       }
+      if (result.status === 401) {
+        throw new Error('Authentication required');
+      }
       if (result.status === 404) {
         throw new Error('User not found');
       }
@@ -83,6 +92,9 @@ export function useUserBookmarksInfinite(username: string, limit: number = 10) {
       });
       if (result.status === 200) {
         return result.body;
+      }
+      if (result.status === 401) {
+        throw new Error('Authentication required');
       }
       if (result.status === 404) {
         throw new Error('User not found');
@@ -113,6 +125,9 @@ export function useUserPagesInfinite(username: string, limit: number = 10) {
       });
       if (result.status === 200) {
         return result.body;
+      }
+      if (result.status === 401) {
+        throw new Error('Authentication required');
       }
       if (result.status === 404) {
         throw new Error('User not found');

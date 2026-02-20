@@ -40,8 +40,16 @@ export const ThirdPartyAuthRequiredErrorSchema = ApiErrorSchema.extend({
   }),
 });
 
+export const InternalServerErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('INTERNAL_ERROR'),
+    message: z.literal('Internal server error'),
+  }),
+});
+
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type ApplicationNotInstalledError = z.infer<typeof ApplicationNotInstalledErrorSchema>;
 export type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
 export type UserStatusError = z.infer<typeof UserStatusErrorSchema>;
 export type ThirdPartyAuthRequiredError = z.infer<typeof ThirdPartyAuthRequiredErrorSchema>;
+export type InternalServerError = z.infer<typeof InternalServerErrorSchema>;
