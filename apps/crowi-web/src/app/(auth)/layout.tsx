@@ -24,7 +24,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isLoading, isAuthenticated, logout } = useAuth();
+  const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
 
   useEffect(() => {
