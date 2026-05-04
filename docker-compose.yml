@@ -1,68 +1,31 @@
-version: '3'
+# Development dependencies only.
+# Run `docker compose up -d` to start MongoDB / Redis / Elasticsearch / PlantUML,
+# then run `pnpm dev` on the host to start @crowi/api and @crowi/web.
 services:
-  crowi:
-    build:
-      context: .
-      args:
-        NODE_ENV: development
-    tty: true
-    environment:
-      DEBUG: "crowi:*"
-      MONGO_URI: mongodb://mongodb:27017/crowi
-      REDIS_URL: redis://redis:6379/crowi
-      ELASTICSEARCH_URI: http://elasticsearch:9200/
-      PLANTUML_URI: //localhost:8080
-      FILE_UPLOAD: local
-    volumes:
-      - ./:/crowi
-      - /crowi/node_modules
-      - /root/.mongo-binaries
-    ports:
-      - 3000:3000
-      - 6001:6001
-    links:
-      - mongodb
-      - elasticsearch
-      - redis
-      - plantuml
-    command: bash -c "npm install && npm run dev"
-
   mongodb:
     image: mongo:8
+    container_name: crowi-mongodb
+    restart: unless-stopped
     volumes:
       - ./data/mongodb:/data/db
-    restart: unless-stopped
     ports:
       - 27017:27017
 
-  elasticsearch:
-    build:
-      context: ./elasticsearch
-    environment:
-      bootstrap.memory_lock: "true"
-      discovery.type: single-node
-      xpack.graph.enabled: "false"
-      xpack.ml.enabled: "false"
-      xpack.monitoring.enabled: "false"
-      xpack.security.enabled: "false"
-      xpack.watcher.enabled: "false"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    volumes:
-      - ./data/elasticsearch:/usr/share/elasticsearch/data
-    ports:
-      - 9200:9200
-
   redis:
     image: redis:7
+    container_name: crowi-redis
     restart: unless-stopped
     ports:
       - 6379:6379
 
+  # elasticsearch is intentionally omitted for now.
+  # The 7.4.0 image cannot read existing 7.14.1 data, and @elastic/elasticsearch
+  # is no longer in package.json — search is effectively disabled in Crowi 2.0 dev.
+  # Re-add this service when search is brought back, with a current ES version.
+
   plantuml:
     image: plantuml/plantuml-server:latest
+    container_name: crowi-plantuml
     restart: unless-stopped
     ports:
       - 8080:8080

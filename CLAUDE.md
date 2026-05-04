@@ -55,8 +55,9 @@ pnpm --filter @crowi/web dev
 # Run both API and frontend
 pnpm dev
 
-# Run with Docker Compose (includes MongoDB, Redis, Elasticsearch, PlantUML)
-docker-compose -f docker-compose.development.yml up
+# Start development dependencies (MongoDB, Redis, Elasticsearch, PlantUML)
+# Run this once, then `pnpm dev` on the host for @crowi/api and @crowi/web.
+docker compose up -d
 ```
 
 ### Testing
