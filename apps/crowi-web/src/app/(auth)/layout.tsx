@@ -14,6 +14,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/use-auth';
+import { ConnectionBanner } from '@/components/connection-banner';
+import { ServerErrorModal } from '@/components/server-error-modal';
+import { useConnection } from '@/lib/connection-context';
 
 export default function AuthLayout({
   children,
@@ -21,17 +24,29 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, isLoading, isAuthenticated, logout } = useAuth();
+  const { isLoading, isAuthenticated, logout } = useAuth();
+  const { state: connectionState } = useConnection();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    // 接続エラー中はリダイレクトしない
+    if (!isLoading && !isAuthenticated && connectionState === 'connected') {
       router.push('/login');
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [isLoading, isAuthenticated, connectionState, router]);
 
-  // If not authenticated and not loading, don't render anything (will redirect)
-  if (!isAuthenticated) {
-    // Show minimal loading state only when we don't have a token
+  // セッション期限切れイベントのリスナー
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      router.push('/login');
+    };
+
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
+  }, [router]);
+
+  // 認証チェック中、または接続正常時の未認証の場合はローディング画面を表示
+  // 接続エラー時は下のレイアウト(エラーバナー/モーダル付き)を表示
+  if (!isAuthenticated && (isLoading || connectionState === 'connected')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--crowi-header)] via-[oklch(0.35_0.03_192)] to-[oklch(0.4_0.04_170)]">
         <div className="text-white text-lg">Loading...</div>
@@ -41,6 +56,12 @@ export default function AuthLayout({
 
   return (
     <div className="min-h-screen bg-background">
+      {/* 接続エラーバナー */}
+      <ConnectionBanner />
+
+      {/* サーバーエラーモーダル */}
+      <ServerErrorModal />
+
       <header className="bg-[var(--crowi-header)] text-white">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">

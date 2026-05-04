@@ -1,7 +1,9 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, useMemo } from 'react';
+import { ConnectionProvider, useConnection } from './connection-context';
+import { ConnectionErrorContext } from './use-auth';
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -17,6 +19,36 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <ConnectionProvider>
+        <ConnectionErrorBridge>{children}</ConnectionErrorBridge>
+      </ConnectionProvider>
+    </QueryClientProvider>
+  );
+}
+
+// ConnectionContextの値をConnectionErrorContextに橋渡しするコンポーネント
+function ConnectionErrorBridge({ children }: { children: ReactNode }) {
+  const connection = useConnection();
+
+  const errorHandlers = useMemo(
+    () => ({
+      setNetworkError: connection.setNetworkError,
+      setServerError: connection.setServerError,
+      setConnected: connection.setConnected,
+      registerRetryCallback: connection.registerRetryCallback,
+    }),
+    [
+      connection.setNetworkError,
+      connection.setServerError,
+      connection.setConnected,
+      connection.registerRetryCallback,
+    ]
+  );
+
+  return (
+    <ConnectionErrorContext.Provider value={errorHandlers}>
+      {children}
+    </ConnectionErrorContext.Provider>
   );
 }

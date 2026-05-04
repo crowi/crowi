@@ -1,9 +1,27 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext, createContext } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
+
+// ネットワークエラーかどうかを判定
+function isNetworkError(error: unknown): boolean {
+  if (error instanceof TypeError) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes('failed to fetch') ||
+      message.includes('network') ||
+      message.includes('connection')
+    );
+  }
+  return false;
+}
+
+// サーバーエラー（5xx）かどうかを判定
+function isServerError(status: number): boolean {
+  return status >= 500 && status < 600;
+}
 
 interface User {
   id: string;
@@ -21,6 +39,22 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
+// 接続エラーハンドラーのコンテキスト（connection-contextとは別に、オプショナルに使用）
+interface ConnectionErrorHandlers {
+  setNetworkError: (error?: string) => void;
+  setServerError: (error?: string) => void;
+  setConnected: () => void;
+  registerRetryCallback: (callback: () => void) => void;
+}
+
+const ConnectionErrorContext = createContext<ConnectionErrorHandlers | null>(null);
+
+export function useConnectionErrorHandlers(): ConnectionErrorHandlers | null {
+  return useContext(ConnectionErrorContext);
+}
+
+export { ConnectionErrorContext };
+
 export function useAuth() {
   const router = useRouter();
   const initialCheckDone = useRef(false);
@@ -29,6 +63,9 @@ export function useAuth() {
     isLoading: true,
     isAuthenticated: false,
   });
+
+  // ConnectionErrorHandlers をオプショナルに取得
+  const connectionHandlers = useConnectionErrorHandlers();
 
   const fetchUser = useCallback(async () => {
     const accessToken = localStorage.getItem('accessToken');
@@ -65,8 +102,20 @@ export function useAuth() {
           isLoading: false,
           isAuthenticated: true,
         });
+        // 接続成功を通知
+        connectionHandlers?.setConnected();
+      } else if (isServerError(response.status)) {
+        // サーバーエラー（5xx）: トークンはクリアせず、サーバーエラーを通知
+        connectionHandlers?.setServerError(
+          `サーバーエラーが発生しました (${response.status})`
+        );
+        // ローディング状態は解除するが、認証状態は維持
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+        }));
       } else {
-        // Token is invalid, clear it
+        // 認証エラー（401等）: トークンをクリア
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         setAuthState({
@@ -75,13 +124,28 @@ export function useAuth() {
           isAuthenticated: false,
         });
       }
-    } catch {
-      setAuthState({
-        user: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
+    } catch (error) {
+      // ネットワークエラー: トークンはクリアせず、エラーを通知
+      if (isNetworkError(error)) {
+        connectionHandlers?.setNetworkError();
+        // ローディング状態は解除するが、認証状態は維持
+        setAuthState((prev) => ({
+          ...prev,
+          isLoading: false,
+        }));
+      } else {
+        // その他のエラー: 安全のためログアウト
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setAuthState({
+          user: null,
+          isLoading: false,
+          isAuthenticated: false,
+        });
+      }
     }
+    // connectionHandlersは依存配列に含めない（最新の値は常に参照される）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const logout = useCallback(async () => {
@@ -116,6 +180,15 @@ export function useAuth() {
 
     router.push('/login');
   }, [router]);
+
+  // リトライコールバックを登録（初回のみ）
+  useEffect(() => {
+    if (connectionHandlers) {
+      connectionHandlers.registerRetryCallback(fetchUser);
+    }
+    // fetchUserは常に最新の関数が参照されるため、初回登録のみでよい
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Initial auth check on mount - valid pattern for client-side authentication
