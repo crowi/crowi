@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch",
+    "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
     "generate-openapi": "node scripts/generate-openapi.js"
   },
