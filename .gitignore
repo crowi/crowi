@@ -32,3 +32,6 @@ dist
 !.migration-state/tasks/
 .migration-state/tasks/*
 !.migration-state/tasks/.gitkeep
+
+# Guard against accidental writes to the legacy nested path
+.claude/migration-state/
