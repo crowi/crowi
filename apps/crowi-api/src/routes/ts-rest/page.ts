@@ -325,8 +325,129 @@ export default (crowi: Crowi, _app: Express) => {
         };
       }
     },
-    createPage: async () => {
-      throw new Error('Not implemented');
+    /**
+     * POST /api/v2/pages
+     * Create new page
+     * - Requires authentication (jwtAuth applied at authenticatedRouter level)
+     * - Rejects requests for paths that already exist
+     * - Delegates portal-path / non-existent-user-page enforcement to Page.createPage
+     * - Returns the populated page (creator / lastUpdateUser / revision.author) to match getPage shape
+     */
+    createPage: async ({ body: requestBody, req }) => {
+      const user = (req as any).user as UserDocument;
+      const { path, body, grant } = requestBody;
+
+      debug('createPage called with:', { path, grant, userId: user._id });
+
+      // Defensive grant range validation. The Zod schema only enforces
+      // `z.number().optional()`, so we reject out-of-range values here to
+      // avoid persisting invalid grants. Strict Zod values are tracked as a
+      // follow-up in the migrate-pages-create task.
+      if (grant !== undefined && ![1, 2, 3, 4].includes(grant)) {
+        return {
+          status: 400 as const,
+          body: {
+            error: {
+              code: 'INVALID_GRANT',
+              message: 'grant must be one of 1 (public), 2 (restricted), 3 (specified), 4 (owner)',
+            },
+          },
+        };
+      }
+
+      try {
+        // Mirror the legacy /_api/pages.create flow: short-circuit when the
+        // path already resolves to a page the user can see.
+        const ignoreNotFound = true;
+        const existing = await Page.findPage(path, user, null, ignoreNotFound);
+        if (existing !== null) {
+          return {
+            status: 400 as const,
+            body: {
+              error: {
+                code: 'PAGE_EXISTS',
+                message: 'Page exists',
+              },
+            },
+          };
+        }
+
+        // Page.createPage handles portal grant coercion, non-existent user
+        // page rejection, and revision creation.
+        const createOptions: { grant?: number } = {};
+        if (grant !== undefined) {
+          createOptions.grant = grant;
+        }
+        const created = (await Page.createPage(path, body, user, createOptions)) as PageDocument | null;
+
+        if (!created) {
+          throw new Error('Failed to create page.');
+        }
+
+        // Populate creator / lastUpdateUser / revision.author so the response
+        // shape matches getPage rather than the bare `.toObject()` of legacy.
+        const populated = await Page.populatePageData(created, null);
+        const pageResponse = pageToResponse(populated);
+
+        return {
+          status: 200 as const,
+          body: {
+            page: pageResponse,
+          },
+        };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error creating page:', error.message);
+
+        // Map known model-level errors to 400 responses.
+        if (error.message === 'Cannot create non existent user page.') {
+          return {
+            status: 400 as const,
+            body: {
+              error: {
+                code: 'NON_EXISTENT_USER_PAGE',
+                message: error.message,
+              },
+            },
+          };
+        }
+
+        if (error.message === 'Cannot create new page to existed path') {
+          return {
+            status: 400 as const,
+            body: {
+              error: {
+                code: 'PAGE_EXISTS',
+                message: 'Page exists',
+              },
+            },
+          };
+        }
+
+        if (error.message === 'Page is not granted for the user') {
+          // Race: a page was created with a stricter grant between findPage and createPage.
+          return {
+            status: 400 as const,
+            body: {
+              error: {
+                code: 'PAGE_EXISTS',
+                message: 'Page exists',
+              },
+            },
+          };
+        }
+
+        // Fallback - surface the message for debugging without leaking stack info.
+        return {
+          status: 400 as const,
+          body: {
+            error: {
+              code: 'PAGE_CREATE_FAILED',
+              message: error.message || 'Failed to create page',
+            },
+          },
+        };
+      }
     },
     updatePage: async () => {
       throw new Error('Not implemented');
