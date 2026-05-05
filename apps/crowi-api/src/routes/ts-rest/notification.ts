@@ -189,7 +189,7 @@ export default (crowi: Crowi, _app: Express) => {
      * Equivalent to legacy GET /_api/notification.list.
      */
     listNotifications: async ({ query, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { limit = 10, offset = 0 } = query;
 
       debug('listNotifications called with:', { limit, offset, userId: user._id });
@@ -228,7 +228,7 @@ export default (crowi: Crowi, _app: Express) => {
      * to { ok: true } since the UI only cares about success / failure.
      */
     markAllAsRead: async ({ req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
 
       debug('markAllAsRead called by:', { userId: user._id });
 
@@ -252,7 +252,7 @@ export default (crowi: Crowi, _app: Express) => {
      * notification id naturally resolves to null and we surface 404 for it.
      */
     openNotification: async ({ params, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { id } = params;
 
       debug('openNotification called with:', { id, userId: user._id });
@@ -296,7 +296,7 @@ export default (crowi: Crowi, _app: Express) => {
      * Return the unread notification count for the current user.
      */
     getUnreadCount: async ({ req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
 
       debug('getUnreadCount called by:', { userId: user._id });
 

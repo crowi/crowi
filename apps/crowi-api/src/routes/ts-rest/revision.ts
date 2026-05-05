@@ -77,7 +77,7 @@ export default (crowi: Crowi, _app: Express) => {
      *   surfaces as 404 to avoid leaking page existence.
      */
     listRevisions: async ({ params, query, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id } = params;
       const { limit, offset } = query;
 
@@ -137,7 +137,7 @@ export default (crowi: Crowi, _app: Express) => {
      *   skipped this check, which we strengthen here.
      */
     getRevision: async ({ params, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { id } = params;
 
       debug('getRevision called with:', { id, userId: user._id });
@@ -181,7 +181,7 @@ export default (crowi: Crowi, _app: Express) => {
      *   simplify authorization semantics.
      */
     getRevisions: async ({ query, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { ids } = query;
 
       debug('getRevisions called with:', { ids, userId: user._id });

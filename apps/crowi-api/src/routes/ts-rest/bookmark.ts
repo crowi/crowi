@@ -128,7 +128,7 @@ export default (crowi: Crowi, _app: Express) => {
      * Equivalent to legacy GET /_api/bookmarks.get.
      */
     getBookmark: async ({ query, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id } = query;
 
       debug('getBookmark called with:', { page_id, userId: user._id });
@@ -163,7 +163,7 @@ export default (crowi: Crowi, _app: Express) => {
      * Equivalent to legacy GET /_api/bookmarks.list (paginate).
      */
     listMyBookmarks: async ({ query, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { limit = 50, offset = 0 } = query;
 
       debug('listMyBookmarks called with:', { limit, offset, userId: user._id });
@@ -204,7 +204,7 @@ export default (crowi: Crowi, _app: Express) => {
      * to preserve legacy /_api/bookmarks.add behavior.
      */
     addBookmark: async ({ body: requestBody, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id } = requestBody;
 
       debug('addBookmark called with:', { page_id, userId: user._id });
@@ -274,7 +274,7 @@ export default (crowi: Crowi, _app: Express) => {
      * (the legacy controller emits ApiResponse.success() unconditionally).
      */
     removeBookmark: async ({ body: requestBody, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id } = requestBody;
 
       debug('removeBookmark called with:', { page_id, userId: user._id });

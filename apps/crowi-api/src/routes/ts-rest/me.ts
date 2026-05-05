@@ -35,7 +35,7 @@ export default (crowi: Crowi, _app: Express) => {
 
   const meRouter = s.router(apiContract.me, {
     getProfile: async ({ req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
 
       // Check if user has password set
       const userWithSecrets = await user.populateSecrets();
@@ -48,7 +48,7 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     updateProfile: async ({ body, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { name, email, lang } = body.userForm;
 
       // Check if email is valid (whitelist check)
@@ -116,7 +116,7 @@ export default (crowi: Crowi, _app: Express) => {
 
     uploadPicture: async ({ req, res }) => {
       return new Promise((resolve) => {
-        const user = (req as any).user as UserDocument;
+        const user = req.user as UserDocument;
         const fileUploader = FileUploader(crowi);
 
         // Handle file upload with multer
@@ -219,7 +219,7 @@ export default (crowi: Crowi, _app: Express) => {
 
     deletePicture: async ({ req }) => {
       return new Promise((resolve) => {
-        const user = (req as any).user as UserDocument;
+        const user = req.user as UserDocument;
 
         // Delete user image
         // TODO: Also delete from S3/storage
@@ -248,7 +248,7 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     updatePassword: async ({ body, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { oldPassword, newPassword, newPasswordConfirm } = body;
 
       // Check if email is set (required for password setting)
@@ -342,7 +342,7 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     getApiToken: async ({ req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
 
       try {
         // apiToken is select: false, so we need to populate it explicitly
@@ -381,7 +381,7 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     resetApiToken: async ({ req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
 
       try {
         // apiToken is select: false, so we need to populate it explicitly

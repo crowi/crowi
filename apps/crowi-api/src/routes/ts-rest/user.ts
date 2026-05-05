@@ -160,7 +160,7 @@ export default (crowi: Crowi, _app: Express) => {
      * - Includes recent pages (10) and bookmarks (10) for initial display
      */
     getUserPage: async ({ params, req }) => {
-      const currentUser = (req as any).user as UserDocument | undefined;
+      const currentUser = req.user;
       const { username } = params;
 
       debug('getUserPage called with:', { username, currentUserId: currentUser?._id });
@@ -266,7 +266,7 @@ export default (crowi: Crowi, _app: Express) => {
      * - Only returns bookmarks for pages the current user can access
      */
     getUserBookmarks: async ({ params, query, req }) => {
-      const currentUser = (req as any).user as UserDocument | undefined;
+      const currentUser = req.user;
       const { username } = params;
       const { limit = 50, offset = 0 } = query;
 
@@ -358,7 +358,7 @@ export default (crowi: Crowi, _app: Express) => {
      * - Only returns pages the current user can access
      */
     getUserPages: async ({ params, query, req }) => {
-      const currentUser = (req as any).user as UserDocument | undefined;
+      const currentUser = req.user;
       const { username } = params;
       const { limit = 50, offset = 0 } = query;
 

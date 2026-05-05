@@ -2,6 +2,7 @@ import { Request } from 'express';
 import { ParsedQs } from 'qs';
 import { Schema, Types } from 'mongoose';
 import { Session, SessionData } from 'express-session';
+import type { UserDocument } from 'src/models/user';
 
 declare module 'express-session' {
   interface SessionData {
@@ -24,7 +25,10 @@ declare global {
       search?: string;
       form?: any;
       config?: any;
-      user?: any;
+      // jwtAuth / loginRequired middlewares set this. Routes mounted under
+      // authenticatedRouter (or behind loginRequired) can rely on it being
+      // present at runtime; everywhere else, treat it as optional.
+      user?: UserDocument;
       skipCsrfVerify?: boolean;
       csrfToken?: string | null;
       session: Session & Partial<SessionData>;

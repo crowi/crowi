@@ -52,7 +52,7 @@ export default (crowi: Crowi, _app: Express) => {
      * - Authentication enforced by jwtAuth at router level.
      */
     listComments: async ({ query, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id, revision_id } = query;
 
       debug('listComments called with:', { page_id, revision_id, userId: user._id });
@@ -112,7 +112,7 @@ export default (crowi: Crowi, _app: Express) => {
      *   Activity entries; we intentionally do not duplicate that work here.
      */
     addComment: async ({ body, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id, revision_id, comment, comment_position } = body;
 
       debug('addComment called with:', { page_id, revision_id, userId: user._id });
@@ -172,7 +172,7 @@ export default (crowi: Crowi, _app: Express) => {
      * we preserve that behavior so nothing is lost.
      */
     deleteComment: async ({ body, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { comment_id, page_id } = body;
 
       debug('deleteComment called with:', { comment_id, page_id, userId: user._id });

@@ -137,7 +137,7 @@ export default (crowi: Crowi, _app: Express) => {
      * - Checks page permissions (grant)
      */
     getPage: async ({ query, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { path, page_id, revision_id } = query;
 
       debug('getPage called with:', { path, page_id, revision_id, userId: user._id });
@@ -248,7 +248,7 @@ export default (crowi: Crowi, _app: Express) => {
      * - Returns pages with populated creator and lastUpdateUser
      */
     listPages: async ({ query, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { path, user: userParam, limit = 50, offset = 0 } = query;
 
       debug('listPages called with:', { path, user: userParam, limit, offset, userId: user._id });
@@ -365,7 +365,7 @@ export default (crowi: Crowi, _app: Express) => {
       }
     },
     createPage: async ({ body: requestBody, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { path, body, grant } = requestBody;
 
       debug('createPage called with:', { path, grant, userId: user._id });
@@ -420,7 +420,7 @@ export default (crowi: Crowi, _app: Express) => {
       }
     },
     updatePage: async ({ body: requestBody, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { page_id, body, revision_id, grant } = requestBody;
 
       debug('updatePage called with:', { page_id, revision_id, grant, userId: user._id });
@@ -464,7 +464,7 @@ export default (crowi: Crowi, _app: Express) => {
     // Idempotent: Page.seen uses addToSet so re-posting from the same user
     // does not inflate seenUsers / seenUsersCount.
     seenPage: async ({ body: requestBody, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id } = requestBody;
 
       debug('seenPage called with:', { page_id, userId: user._id });
@@ -477,7 +477,7 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     getSeenUsers: async ({ query, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id } = query;
 
       debug('getSeenUsers called with:', { page_id, userId: user._id });
@@ -498,7 +498,7 @@ export default (crowi: Crowi, _app: Express) => {
      *   unreachable in the legacy UI; see openQuestions in the task plan.
      */
     likePage: async ({ body: requestBody, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id } = requestBody;
 
       debug('likePage called with:', { page_id, userId: user._id });
@@ -520,7 +520,7 @@ export default (crowi: Crowi, _app: Express) => {
      * - Returns 404 for not-found / not-granted, mirroring likePage.
      */
     unlikePage: async ({ body: requestBody, req }) => {
-      const user = (req as { user: UserDocument }).user;
+      const user = req.user as UserDocument;
       const { page_id } = requestBody;
 
       debug('unlikePage called with:', { page_id, userId: user._id });
@@ -535,7 +535,7 @@ export default (crowi: Crowi, _app: Express) => {
       return { status: 200 as const, body: { page: pageToResponse(populated) } };
     },
     deletePage: async ({ body: requestBody, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { page_id, revision_id, completely } = requestBody;
 
       debug('deletePage called with:', { page_id, revision_id, completely, userId: user._id });
@@ -583,7 +583,7 @@ export default (crowi: Crowi, _app: Express) => {
       }
     },
     revertDeletedPage: async ({ body: requestBody, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { page_id } = requestBody;
 
       debug('revertDeletedPage called with:', { page_id, userId: user._id });
@@ -616,7 +616,7 @@ export default (crowi: Crowi, _app: Express) => {
       }
     },
     renamePage: async ({ body: requestBody, req }) => {
-      const user = (req as any).user as UserDocument;
+      const user = req.user as UserDocument;
       const { page_id, new_path, revision_id, create_redirect } = requestBody;
 
       debug('renamePage called with:', { page_id, new_path, revision_id, create_redirect, userId: user._id });
