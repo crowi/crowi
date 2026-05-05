@@ -1,0 +1,242 @@
+import { createExpressEndpoints, initServer } from '@ts-rest/express';
+import { apiContract } from '@crowi/api-contract';
+import Crowi from 'src/crowi';
+import { Express, Router } from 'express';
+import { Types } from 'mongoose';
+import { UserDocument } from 'src/models/user';
+import { PageDocument } from 'src/models/page';
+import { RevisionDocument } from 'src/models/revision';
+import { isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
+import Debug from 'debug';
+
+const debug = Debug('crowi:routes:ts-rest:revision');
+
+const MAX_REVISION_IDS = 10;
+
+const invalidRequest = (message: string) =>
+  ({
+    status: 400 as const,
+    body: { error: { code: 'INVALID_REQUEST' as const, message } },
+  }) as const;
+
+// Mapped to 404 (not 403) so we do not leak page existence to callers
+// without grant. Mirrors the page route policy.
+const pageNotFoundResponse = {
+  status: 404 as const,
+  body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
+} as const;
+
+const isPopulatedAuthor = (
+  value: unknown,
+): value is { _id: { toString(): string }; username: string; name: string; email: string; image?: string | null; createdAt?: Date } => {
+  return !!value && typeof value === 'object' && 'username' in value && 'email' in value;
+};
+
+/**
+ * Convert a revision document (with optionally populated author) to the
+ * full RevisionSchema shape (body included).
+ */
+const revisionToFullResponse = (revision: RevisionDocument) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const obj = revision.toObject() as any;
+  return {
+    _id: revision._id.toString(),
+    path: revision.path,
+    body: revision.body,
+    format: revision.format || 'markdown',
+    author: isPopulatedAuthor(obj.author) ? toPageUser(obj.author) : null,
+    createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
+  };
+};
+
+/**
+ * Convert to the lightweight RevisionMetaSchema shape (no body, no format).
+ */
+const revisionToMetaResponse = (revision: RevisionDocument) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const obj = revision.toObject() as any;
+  return {
+    _id: revision._id.toString(),
+    path: revision.path,
+    author: isPopulatedAuthor(obj.author) ? toPageUser(obj.author) : null,
+    createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
+  };
+};
+
+export default (crowi: Crowi, _app: Express) => {
+  const s = initServer();
+  const router = Router();
+  const Page = crowi.model('Page');
+  const Revision = crowi.model('Revision');
+
+  const revisionRouter = s.router(apiContract.revision, {
+    /**
+     * GET /api/v2/pages/:page_id/revisions
+     * List the revisions of a page (meta only, newest first).
+     * - Grant is verified via Page.findPageByIdAndGrantedUser; not-granted
+     *   surfaces as 404 to avoid leaking page existence.
+     */
+    listRevisions: async ({ params, query, req }) => {
+      const user = (req as { user: UserDocument }).user;
+      const { page_id } = params;
+      const { limit, offset } = query;
+
+      debug('listRevisions called with:', { page_id, limit, offset, userId: user._id });
+
+      if (!isValidObjectId(page_id)) {
+        return invalidRequest('Invalid page_id');
+      }
+
+      try {
+        const page = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+        if (!page) {
+          return pageNotFoundResponse;
+        }
+
+        // findRevisionIdList returns _id, author, createdAt only and sorts desc.
+        // We populate author for response shaping; path is filled from the page
+        // because findRevisionIdList omits it (it's redundant for a single page).
+        const allRevisions = await Revision.find({ path: page.path })
+          .select('_id path author createdAt')
+          .sort({ createdAt: -1 })
+          .skip(offset)
+          .limit(limit + 1) // fetch +1 to know if there's a next page
+          .populate('author')
+          .exec();
+
+        const hasNext = allRevisions.length > limit;
+        const sliced = hasNext ? allRevisions.slice(0, limit) : allRevisions;
+
+        return {
+          status: 200 as const,
+          body: {
+            revisions: sliced.map(revisionToMetaResponse),
+            pager: {
+              prev: offset > 0 ? Math.max(0, offset - limit) : null,
+              next: hasNext ? offset + limit : null,
+              offset,
+            },
+          },
+        };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error listing revisions:', error.message);
+
+        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+          return pageNotFoundResponse;
+        }
+
+        return invalidRequest(error.message || 'Failed to list revisions');
+      }
+    },
+
+    /**
+     * GET /api/v2/pages/revisions/:id
+     * Fetch a single revision (with body) by id.
+     * - Verifies grant via the revision's path: legacy /_api/revisions.get
+     *   skipped this check, which we strengthen here.
+     */
+    getRevision: async ({ params, req }) => {
+      const user = (req as { user: UserDocument }).user;
+      const { id } = params;
+
+      debug('getRevision called with:', { id, userId: user._id });
+
+      if (!isValidObjectId(id)) {
+        return invalidRequest('Invalid revision id');
+      }
+
+      try {
+        const revision = (await Revision.findRevision(new Types.ObjectId(id))) as RevisionDocument | null;
+        if (!revision) {
+          return pageNotFoundResponse;
+        }
+
+        // Verify grant via the page that owns this revision's path. Hide
+        // existence from non-granted callers (404 not 403).
+        const page = await Page.findOne({ path: revision.path });
+        if (!page) {
+          return pageNotFoundResponse;
+        }
+        if (!page.isGrantedFor(user)) {
+          return pageNotFoundResponse;
+        }
+
+        return {
+          status: 200 as const,
+          body: { revision: revisionToFullResponse(revision) },
+        };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error fetching revision:', error.message);
+        return invalidRequest(error.message || 'Failed to fetch revision');
+      }
+    },
+
+    /**
+     * GET /api/v2/pages/revisions?ids=a,b,...
+     * Fetch multiple revisions in one call (intended for diff-viewer pairs).
+     * - All requested revisions must share the same path so that a single
+     *   grant check is sufficient. Mixed paths are rejected as 400 to
+     *   simplify authorization semantics.
+     */
+    getRevisions: async ({ query, req }) => {
+      const user = (req as { user: UserDocument }).user;
+      const { ids } = query;
+
+      debug('getRevisions called with:', { ids, userId: user._id });
+
+      const idList = ids
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      if (idList.length === 0) {
+        return invalidRequest('ids is required');
+      }
+      if (idList.length > MAX_REVISION_IDS) {
+        return invalidRequest(`ids must contain at most ${MAX_REVISION_IDS} entries`);
+      }
+      if (!idList.every(isValidObjectId)) {
+        return invalidRequest('ids contains an invalid revision id');
+      }
+
+      try {
+        const objectIds = idList.map((id) => new Types.ObjectId(id));
+        const revisions = (await Revision.findRevisions(objectIds)) as RevisionDocument[];
+
+        if (revisions.length === 0) {
+          return pageNotFoundResponse;
+        }
+
+        // All revisions must share the same path (mixed paths are rejected).
+        const paths = new Set(revisions.map((r) => r.path));
+        if (paths.size > 1) {
+          return invalidRequest('All revisions must share the same path');
+        }
+
+        const sharedPath = revisions[0].path;
+        const page = await Page.findOne({ path: sharedPath });
+        if (!page) {
+          return pageNotFoundResponse;
+        }
+        if (!page.isGrantedFor(user)) {
+          return pageNotFoundResponse;
+        }
+
+        return {
+          status: 200 as const,
+          body: { revisions: revisions.map(revisionToFullResponse) },
+        };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error fetching revisions:', error.message);
+        return invalidRequest(error.message || 'Failed to fetch revisions');
+      }
+    },
+  });
+
+  createExpressEndpoints(apiContract.revision, revisionRouter, router);
+
+  return router;
+};

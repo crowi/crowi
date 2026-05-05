@@ -1,10 +1,11 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/breadcrumb';
-import { Clock, User, Lock, FileText, Edit2 } from 'lucide-react';
+import { Clock, User, Lock, FileText, Edit2, History } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { useAuth } from '@/lib/use-auth';
@@ -26,7 +27,20 @@ interface PageHeaderProps {
   showSeenUsers?: boolean;
 }
 
+/**
+ * Build the history URL for the given page path. The catch-all route inspects
+ * the trailing '/history' segment, so we always use a path-based URL here.
+ * The leading slash is preserved; trailing slashes are stripped.
+ */
+function buildHistoryHref(pagePath: string): string {
+  // root '/' has no underlying page (it's a portal), but guard anyway.
+  if (pagePath === '/' || pagePath === '') return '/history';
+  const trimmed = pagePath.replace(/\/$/, '');
+  return `${trimmed}/history`;
+}
+
 export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = true }: PageHeaderProps) {
+  const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
@@ -69,6 +83,10 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
         <div className="flex items-center gap-2 flex-shrink-0">
           {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} />}
           <BookmarkButton pageId={page._id} />
+          <Button variant="outline" size="sm" onClick={() => router.push(buildHistoryHref(page.path))} aria-label="View revision history">
+            <History className="h-4 w-4 mr-1" />
+            History
+          </Button>
           {onEdit && (
             <Button variant="default" size="sm" onClick={onEdit}>
               <Edit2 className="h-4 w-4 mr-1" />
