@@ -1,12 +1,15 @@
 'use client';
 
 import { use } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserProfile, UserRecentPages, UserBookmarks } from '@/components/user-page';
+import { PageHeader, PageContent } from '@/components/page-view';
 import { useUserPage } from '@/lib/use-user-page';
+import { usePage } from '@/lib/use-page';
 
 interface UserPageProps {
   params: Promise<{
@@ -16,7 +19,15 @@ interface UserPageProps {
 
 export default function UserPage({ params }: UserPageProps) {
   const { username } = use(params);
+  const router = useRouter();
   const { data, isLoading, error } = useUserPage(username);
+
+  // Crowi convention: a wiki page may live at /user/<username>. When it
+  // exists, render its content alongside the profile (the legacy app did
+  // the same — the user-page route is a normal wiki page that just happens
+  // to default to the profile view).
+  const userPagePath = `/user/${username}`;
+  const { page: userPageDoc, notFound: userPageNotFound } = usePage({ path: userPagePath });
 
   if (isLoading) {
     return (
@@ -47,6 +58,16 @@ export default function UserPage({ params }: UserPageProps) {
     <div className="space-y-6">
       {/* Profile Card */}
       <UserProfile user={data.user} createdPagesCount={data.createdPagesCount} bookmarksCount={data.bookmarksCount} />
+
+      {/* Page document at /user/<username>, if any */}
+      {userPageDoc && !userPageNotFound && (
+        <Card>
+          <CardContent className="pt-6">
+            <PageHeader page={userPageDoc} onEdit={() => router.push(`/edit?page_id=${encodeURIComponent(userPageDoc._id)}`)} showActions />
+            <PageContent page={userPageDoc} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Content Tabs */}
       <Tabs defaultValue="pages" className="w-full">
