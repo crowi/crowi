@@ -79,8 +79,11 @@ const pageToResponse = (page: PageDocument) => {
     createdAt: toISOStringOrNull(page.createdAt),
     updatedAt: toISOStringOrNull(page.updatedAt),
     latestRevision: pageObj.latestRevision?.toString(),
-    likerCount: pageObj.likerCount,
-    seenUsersCount: pageObj.seenUsersCount,
+    // `likerCount` / `seenUsersCount` are dynamic properties set by
+    // populatePageData on the Mongoose document and are NOT serialized into
+    // toObject() output. Read them off the document directly.
+    likerCount: page.likerCount,
+    seenUsersCount: page.seenUsersCount,
   };
   return result;
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -484,11 +487,88 @@ export default (crowi: Crowi, _app: Express) => {
 
       return { status: 200 as const, body: await buildSeenUsersResponse(loaded.page.seenUsers) };
     },
-    likePage: async () => {
-      throw new Error('Not implemented');
+    /**
+     * POST /api/v2/pages/like
+     * Add the current user to the page's `liker` list.
+     * - Idempotent: liking an already-liked page returns the page unchanged.
+     * - Returns 404 (not 200 with no-op) when the page does not exist or
+     *   the caller has no grant, matching the rest of the page contract
+     *   (cf. updatePage / renamePage). The legacy /_api/likes.add returned
+     *   ApiResponse.success() on errors, but that path was effectively
+     *   unreachable in the legacy UI; see openQuestions in the task plan.
+     */
+    likePage: async ({ body: requestBody, req }) => {
+      const user = (req as { user: UserDocument }).user;
+      const { page_id } = requestBody;
+
+      debug('likePage called with:', { page_id, userId: user._id });
+
+      if (!isValidObjectId(page_id)) {
+        return invalidPageIdResponse;
+      }
+
+      try {
+        const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+        if (!pageData) {
+          return pageNotFoundResponse;
+        }
+
+        // pageData.like is a no-op when the user already liked the page and
+        // returns undefined in that case. Always re-populate `pageData` so we
+        // can serialize a consistent shape regardless of whether the like
+        // mutated the document.
+        await pageData.like(user);
+        const populated = await Page.populatePageData(pageData, null);
+        return { status: 200 as const, body: { page: pageToResponse(populated) } };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error liking page:', error.message);
+
+        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+          return pageNotFoundResponse;
+        }
+
+        return pageNotFoundResponse;
+      }
     },
-    unlikePage: async () => {
-      throw new Error('Not implemented');
+
+    /**
+     * POST /api/v2/pages/unlike
+     * Remove the current user from the page's `liker` list.
+     * - Idempotent: unliking a not-liked page returns the page unchanged.
+     * - Returns 404 for not-found / not-granted, mirroring likePage.
+     */
+    unlikePage: async ({ body: requestBody, req }) => {
+      const user = (req as { user: UserDocument }).user;
+      const { page_id } = requestBody;
+
+      debug('unlikePage called with:', { page_id, userId: user._id });
+
+      if (!isValidObjectId(page_id)) {
+        return invalidPageIdResponse;
+      }
+
+      try {
+        const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+        if (!pageData) {
+          return pageNotFoundResponse;
+        }
+
+        // unlike returns undefined when the user had not liked the page.
+        // Re-populate to keep the response shape stable in either case.
+        await pageData.unlike(user);
+        const populated = await Page.populatePageData(pageData, null);
+        return { status: 200 as const, body: { page: pageToResponse(populated) } };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error unliking page:', error.message);
+
+        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+          return pageNotFoundResponse;
+        }
+
+        return pageNotFoundResponse;
+      }
     },
     deletePage: async ({ body: requestBody, req }) => {
       const user = (req as any).user as UserDocument;
