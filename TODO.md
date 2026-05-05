@@ -16,10 +16,6 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## High Priority — 横断的 advisory (累積)
 
-- [ ] **Web 側 React 19 lint errors を解消** (2 件、pre-push lint hook 有効化の前提)
-  - `apps/crowi-web/src/app/(auth)/edit/edit-page-client.tsx:117` (setState in useEffect)
-  - `apps/crowi-web/src/components/page-comments/comment-form.tsx:20` (同上)
-  - 解消後 `lefthook.yml` の pre-push lint コメントアウトを外す
 - [ ] **UI 共通化**: `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出 (5+ 箇所重複)
 - [ ] **JP/EN 文言の統一 / i18n 戦略確立**: 現状 `page-view` は EN、`use-page-mutations` 等は JP。i18next 等の導入判断を含む
 - [ ] **`req.user` の Express type augmentation**: `apps/crowi-api/src/types/express.d.ts` で global 拡張、3 種類の cast を撲滅
@@ -68,6 +64,10 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## Recently Completed (このセッション)
 
+- [x] **`pnpm lint` を全 workflow で必須化** (`fb6f8b50` + `92c625a3`)
+  - React 19 set-state-in-effect エラー 2 件を解消 (comment-form / edit-page-client)
+  - migration-implementer / reviewer / integrate-worktree の必須チェックに pnpm lint 追加
+  - lefthook pre-push lint を有効化 (errors=0 必須、warnings は advisory)
 - [x] **Biome + lefthook 導入** (`766830cf` + `495bef27`)
   - Prettier → Biome に置換、`.ts/.tsx/.js/.jsx` を root から一括 format
   - lefthook pre-commit で staged ファイル自動 format → 「format 漏れ」根本解決
