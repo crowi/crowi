@@ -33,7 +33,8 @@ description: |
 ## ワークフロー
 
 ```
-worktree 作業確認 → main へ merge → conflict 解消 → 自動チェック → close → simplify
+worktree 作業確認 → main へ merge → conflict 解消 → 自動チェック
+  → gw end → tmux window close → simplify
 ```
 
 ### Step 1: worktree の作業内容を確認
@@ -149,6 +150,59 @@ git branch -d <branch>  # 安全削除 (-D は使わない、merge 済みなら 
 `gw end` が branch 削除まで含む場合もあるので、`gw end --help` で確認してから手順を決める。
 ローカル環境によって挙動が変わるので、`git branch -d` が「already deleted」エラーを
 返したら無視。
+
+### Step 6.5: 該当 tmux window を閉じる (任意)
+
+`gw end` で worktree path 自体は消えるが、対応する tmux window は残る。同じ worktree
+で作業していた pane (Claude session、vim、mongosh 等) はもう不要なので、安全に
+閉じられるなら閉じる。
+
+#### 判定ロジック
+
+worktree path を `pane_current_path` に持つ全 pane を一覧:
+
+```bash
+WORKTREE_PATH=<実 path>
+tmux list-panes -a -F '#{window_id}|#{pane_id}|#{pane_current_path}|#{pane_current_command}|#{pane_title}' \
+  | awk -F'|' -v p="$WORKTREE_PATH" '$3 ~ "^"p"(/|$)"'
+```
+
+各 pane を以下のルールで分類:
+
+- **(a) 通常 process**: `pane_current_command` が `zsh` / `bash` / `vim` / `make` /
+  `mongosh` / `node` 等 → ユーザーの作業道具。**そのまま kill 候補**。
+- **(b) Claude session 作業中**: `pane_current_command` が `2.x.x` 形式 (Claude Code バージョン)
+  かつ pane title 先頭が **`⠐⠴⠼⠦` などのブレイル文字** (進行中スピナー) →
+  **kill しない、Step 6.5 全体を中止**。
+- **(c) Claude session アイドル**: `2.x.x` かつ title 先頭が **`✳` (アスタリスク)** →
+  プロンプト待ちで安全に kill 可能。**そのまま kill 候補**。
+
+`pane_current_command` が `2.x.x` の判定は実用的な heuristic。Claude Code のバージョン
+文字列が常に `<major>.<minor>.<patch>` で始まる前提に依存するので、将来検出が壊れたら
+title 文字 (`✳` vs ブレイル) のみで判定するように退避してよい。
+
+#### 実行
+
+全 pane が (a) または (c) だけなら window 単位で kill:
+
+```bash
+tmux list-panes -a -F '#{window_id}|#{pane_current_path}' \
+  | awk -F'|' -v p="$WORKTREE_PATH" '$2 ~ "^"p"(/|$)" {print $1}' \
+  | sort -u \
+  | while read win; do
+      tmux kill-window -t "$win"
+    done
+```
+
+(b) が 1 つでもあれば中止し、ユーザーに「window <id> で Claude session が作業中。
+手動で確認してから閉じてください」と報告して Step 7 に進む。
+
+#### 想定外時の振る舞い
+
+- そもそも `tmux list-panes -a` が空 / `TMUX` 変数が無い → tmux 環境ではない、Step 6.5 を
+  完全にスキップ
+- 該当 pane が 1 つも見つからない → 既にユーザーが手動で閉じている、スキップ
+- `tmux kill-window` が失敗 → 警告のみ、Step 7 に進む
 
 ### Step 7: simplify で統合後のコードを最適化
 
