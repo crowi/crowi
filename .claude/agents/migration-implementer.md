@@ -52,11 +52,16 @@ pnpm --filter @crowi/web type-check  # web を編集した場合
 # テスト (必須・編集した側だけでよい)
 pnpm --filter @crowi/api test -- {新規テストファイル名}
 
+# Lint (必須・errors=0)
+pnpm lint
+
 # フォーマット (必須)
 pnpm format
 ```
 
-3 つすべてパスしないと REVIEW に進めない。
+すべてパスしないと REVIEW に進めない。`pnpm lint` で warnings は許容するが errors=0 必須。
+errors を残したまま REVIEW に出すのは禁止。直すか、lint 観点での指摘点を openQuestions に
+記録してから差し戻す。
 
 ## コーディング規約
 

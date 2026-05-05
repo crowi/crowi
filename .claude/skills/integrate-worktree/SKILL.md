@@ -109,17 +109,23 @@ git rm --cached <noise file>
 
 ### Step 4: 自動チェック
 
-merge commit を作る前に、統合後のビルド / 型 / テストが通るか確認:
+merge commit を作る前に、統合後のビルド / 型 / テスト / lint が通るか確認:
 
 ```bash
 pnpm --filter @crowi/api-contract build  # contract 編集を含む場合
 pnpm --filter @crowi/api type-check
 pnpm --filter @crowi/web type-check
 pnpm --filter @crowi/api test
+pnpm lint                                 # errors=0 必須
 ```
 
 1 つでも失敗したら中止。conflict 解消の判断ミスや、両側の変更の組み合わせで型が合わなく
 なっているケースが多い。
+
+`pnpm lint` の error が出る場合は merge を `--abort` して原因切り分け。worktree 側のコード
+が新しい lint ルールに引っかかるケースは、**worktree 側で先に直してから** 再 merge する
+(主問題側の責任)。`pnpm lint` warnings は許容するが、merge commit のメッセージ末尾に
+"Note: <warnings 件数> warnings remain (existing)." として記録するのが望ましい。
 
 ### Step 5: merge commit 作成
 

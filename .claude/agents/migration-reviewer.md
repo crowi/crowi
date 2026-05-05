@@ -53,8 +53,13 @@ implementer の必須チェックが本当に通るか念のため再走:
 pnpm --filter @crowi/api type-check
 pnpm --filter @crowi/web type-check  # web 編集時
 pnpm --filter @crowi/api test
-pnpm format --check 2>/dev/null || pnpm format  # diff があれば NEEDS_WORK
+pnpm lint                             # errors=0 必須、warnings は許容
+pnpm format:check 2>/dev/null || pnpm format  # diff があれば NEEDS_WORK
 ```
+
+`pnpm lint` で 1 件でも error が出たら **NEEDS_WORK** に倒す。warnings は accumulate
+されている既存課題なので blocking しない (advisory として `reviewFeedback.advisories`
+に記録)。
 
 ## 判定
 

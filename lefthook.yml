@@ -8,12 +8,7 @@ pre-commit:
       run: pnpm exec biome format --write {staged_files}
       stage_fixed: true
 
-# pre-push lint is intentionally not enabled yet.
-# Two pre-existing React 19 errors must be resolved first
-# (apps/crowi-web/src/app/(auth)/edit/edit-page-client.tsx:117 and
-#  apps/crowi-web/src/components/page-comments/comment-form.tsx:20).
-# Once those are fixed, add:
-#   pre-push:
-#     jobs:
-#       - name: lint
-#         run: pnpm lint
+pre-push:
+  jobs:
+    - name: lint
+      run: pnpm lint
