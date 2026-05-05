@@ -428,11 +428,86 @@ export default (crowi: Crowi, _app: Express) => {
     unlikePage: async () => {
       throw new Error('Not implemented');
     },
-    deletePage: async () => {
-      throw new Error('Not implemented');
+    deletePage: async ({ body: requestBody, req }) => {
+      const user = (req as any).user as UserDocument;
+      const { page_id, revision_id, completely } = requestBody;
+
+      debug('deletePage called with:', { page_id, revision_id, completely, userId: user._id });
+
+      try {
+        const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+        if (!pageData) {
+          return pageNotFoundResponse;
+        }
+
+        // Hard delete bypasses revision check (matches old controllers/page.ts api.remove).
+        if (completely === true) {
+          await Page.completelyDeletePage(pageData, user);
+          // After completelyDeletePage the document is gone from Mongo; we still
+          // return the in-memory pageData so the client knows what was deleted.
+          return { status: 200 as const, body: { page: pageToResponse(pageData) } };
+        }
+
+        if (revision_id && !pageData.isUpdatable(revision_id)) {
+          return {
+            status: 409 as const,
+            body: { error: { code: 'PAGE_REVISION_ERROR' as const, message: 'Revision error.' } },
+          };
+        }
+
+        // Page.deletePage mutates pageData (status -> deleted, path -> /trash/<path>)
+        // and internally calls Page.rename which returns the *redirect* page (a quirk
+        // of the old model). We re-populate the mutated pageData so the response
+        // reflects the soft-deleted page itself, which is what callers actually want.
+        await Page.deletePage(pageData, user);
+        const populated = await Page.populatePageData(pageData, null);
+        return { status: 200 as const, body: { page: pageToResponse(populated) } };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error deleting page:', error.message);
+
+        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+          return pageNotFoundResponse;
+        }
+
+        return {
+          status: 400 as const,
+          body: { error: { code: 'PAGE_DELETE_FAILED', message: error.message || 'Failed to delete page' } },
+        };
+      }
     },
-    revertDeletedPage: async () => {
-      throw new Error('Not implemented');
+    revertDeletedPage: async ({ body: requestBody, req }) => {
+      const user = (req as any).user as UserDocument;
+      const { page_id } = requestBody;
+
+      debug('revertDeletedPage called with:', { page_id, userId: user._id });
+
+      try {
+        const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+        if (!pageData) {
+          return pageNotFoundResponse;
+        }
+
+        // Page.revertDeletedPage mutates pageData (path -> non-trash, status -> published)
+        // and removes the redirect stub at the original /trash path. The function returns
+        // pageData itself, but we re-populate to ensure creator/lastUpdateUser/revision are
+        // resolved for the response.
+        await Page.revertDeletedPage(pageData, user);
+        const populated = await Page.populatePageData(pageData, null);
+        return { status: 200 as const, body: { page: pageToResponse(populated) } };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error reverting deleted page:', error.message);
+
+        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+          return pageNotFoundResponse;
+        }
+
+        return {
+          status: 400 as const,
+          body: { error: { code: 'PAGE_REVERT_FAILED', message: error.message || 'Failed to revert deleted page' } },
+        };
+      }
     },
     renamePage: async ({ body: requestBody, req }) => {
       const user = (req as any).user as UserDocument;

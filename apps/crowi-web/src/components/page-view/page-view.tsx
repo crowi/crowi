@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePage } from '@/lib/use-page';
+import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
 import { PageComments } from '@/components/page-comments';
@@ -18,6 +19,7 @@ interface PageViewProps {
 export function PageView({ path }: PageViewProps) {
   const router = useRouter();
   const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path });
+  const revertMutation = useRevertDeletedPage();
 
   // Handle redirects
   useEffect(() => {
@@ -123,6 +125,18 @@ export function PageView({ path }: PageViewProps) {
 
   // Deleted page - show trash warning
   if (page && isDeleted) {
+    const handleRestore = () => {
+      revertMutation.mutate(
+        { page_id: page._id },
+        {
+          onSuccess: (restored) => {
+            // The reverted page is back at its original (non-/trash) path.
+            router.replace(restored.path);
+          },
+        },
+      );
+    };
+
     return (
       <div className="space-y-4">
         <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
@@ -135,13 +149,23 @@ export function PageView({ path }: PageViewProps) {
                 variant="outline"
                 size="sm"
                 className="border-red-300 text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/40"
-                onClick={() => {
-                  // TODO: Implement restore functionality
-                  console.log('Restore page:', page._id);
-                }}
+                onClick={handleRestore}
+                disabled={revertMutation.isPending}
               >
-                Restore Page
+                {revertMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    Restoring...
+                  </>
+                ) : (
+                  'Restore Page'
+                )}
               </Button>
+              {revertMutation.isError && revertMutation.error instanceof Error && (
+                <p className="mt-2 text-sm text-red-700 dark:text-red-400" role="alert">
+                  {revertMutation.error.message}
+                </p>
+              )}
             </div>
           </AlertDescription>
         </Alert>
@@ -166,6 +190,7 @@ export function PageView({ path }: PageViewProps) {
             onEdit={() => {
               router.push(`/edit?page_id=${encodeURIComponent(page._id)}`);
             }}
+            showDelete
           />
           <PageContent page={page} />
           <PageComments page={page} />

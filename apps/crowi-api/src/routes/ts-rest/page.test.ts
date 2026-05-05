@@ -430,3 +430,216 @@ describe('Routes /api/v2/pages/rename (ts-rest renamePage)', () => {
     });
   });
 });
+
+describe('Routes /api/v2/pages (ts-rest deletePage)', () => {
+  const PATH_PREFIX = '/ts-rest-delete-test/';
+  let Page;
+  let Bookmark;
+  let Comment;
+  let accessToken: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+    Bookmark = crowi.model('Bookmark');
+    Comment = crowi.model('Comment');
+
+    const created = await createTestUser({ name: 'DeletePage Test', username: 'deletePageTester', email: 'delete-page-tester@example.com' });
+    accessToken = created.accessToken;
+    userId = created.user._id.toString();
+  });
+
+  // Cleanup both /<prefix>... and /trash/<prefix>... since soft delete moves pages under /trash.
+  afterEach(async () => {
+    await cleanupPathPrefix(PATH_PREFIX);
+    await cleanupPathPrefix(`/trash${PATH_PREFIX}`);
+  });
+
+  describe('DELETE /api/v2/pages', () => {
+    it('returns 401 when no Authorization header is provided', async () => {
+      const res = await request(app).delete('/api/v2/pages').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('soft-deletes a page when authenticated and returns 200 with /trash/* path and deleted status', async () => {
+      const path = `${PATH_PREFIX}basic`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: pageId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page._id).toBe(pageId);
+      expect(res.body.page.path).toBe(`/trash${path}`);
+      expect(res.body.page.status).toBe('deleted');
+
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc).not.toBeNull();
+      expect(pageDoc.path).toBe(`/trash${path}`);
+      expect(pageDoc.status).toBe('deleted');
+
+      // A redirect page should exist at the original path pointing to /trash/<path>.
+      const redirectPage = await Page.findOne({ path });
+      expect(redirectPage).not.toBeNull();
+      expect(redirectPage.redirectTo).toBe(`/trash${path}`);
+    });
+
+    it('completely deletes a page (hard delete) when completely=true and removes related Bookmarks/Comments', async () => {
+      const path = `${PATH_PREFIX}completely`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# delete me' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      // Seed a Bookmark and a Comment for this page so we can verify cascading cleanup.
+      await Bookmark.create({ page: pageId, user: userId });
+      await Comment.create({ page: pageId, creator: userId, comment: 'bye', commentPosition: -1 });
+
+      expect(await Bookmark.countDocuments({ page: pageId })).toBe(1);
+      expect(await Comment.countDocuments({ page: pageId })).toBe(1);
+
+      const res = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: pageId, completely: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page._id).toBe(pageId);
+
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc).toBeNull();
+      expect(await Bookmark.countDocuments({ page: pageId })).toBe(0);
+      expect(await Comment.countDocuments({ page: pageId })).toBe(0);
+    });
+
+    it('returns 409 PAGE_REVISION_ERROR when revision_id is stale (soft delete)', async () => {
+      const path = `${PATH_PREFIX}stale-revision`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+      const staleRevisionId = createRes.body.page.revision._id;
+
+      // Bump the revision so the originally-issued revision_id becomes stale.
+      const update = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# updated', revision_id: staleRevisionId });
+      expect(update.status).toBe(200);
+
+      const res = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: pageId, revision_id: staleRevisionId });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PAGE_REVISION_ERROR');
+
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.path).toBe(path);
+      expect(pageDoc.status).not.toBe('deleted');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
+      const res = await request(app).delete('/api/v2/pages').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('returns 400 PAGE_DELETE_FAILED for non-deletable paths (e.g. /user/<username>)', async () => {
+      const headers = authHeaders(accessToken);
+      const userPagePath = '/user/deletePageTester';
+
+      // /user/<username> matches isDeletableName's notDeletable patterns, so soft delete
+      // should be rejected by the model. Create the user portal page directly because the
+      // test harness doesn't auto-create it.
+      const Revision = crowi.model('Revision');
+      const revision = await Revision.create({ path: userPagePath, body: '# user portal', author: userId, format: 'markdown' });
+      const userPage = await Page.create({
+        path: userPagePath,
+        revision: revision._id,
+        creator: userId,
+        grant: 1,
+      });
+
+      const res = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: userPage._id.toString() });
+
+      // Cleanup the user portal page so it doesn't leak between tests.
+      await Page.deleteOne({ _id: userPage._id });
+      await Revision.deleteOne({ _id: revision._id });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_DELETE_FAILED');
+    });
+  });
+});
+
+describe('Routes /api/v2/pages/revert (ts-rest revertDeletedPage)', () => {
+  const PATH_PREFIX = '/ts-rest-revert-test/';
+  let Page;
+  let accessToken: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+
+    ({ accessToken } = await createTestUser({
+      name: 'RevertPage Test',
+      username: 'revertPageTester',
+      email: 'revert-page-tester@example.com',
+    }));
+  });
+
+  afterEach(async () => {
+    await cleanupPathPrefix(PATH_PREFIX);
+    await cleanupPathPrefix(`/trash${PATH_PREFIX}`);
+  });
+
+  describe('POST /api/v2/pages/revert', () => {
+    it('returns 401 when no Authorization header is provided', async () => {
+      const res = await request(app).post('/api/v2/pages/revert').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('reverts a soft-deleted page back to its original path and removes the redirect stub', async () => {
+      const path = `${PATH_PREFIX}revert-basic`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const deleteRes = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: pageId });
+      expect(deleteRes.status).toBe(200);
+      expect(deleteRes.body.page.path).toBe(`/trash${path}`);
+
+      // The redirect stub at the original path is the input the UI would consult,
+      // but the revertDeletedPage contract takes the trashed page's id (per planner).
+      const res = await request(app).post('/api/v2/pages/revert').set(headers).send({ page_id: pageId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page._id).toBe(pageId);
+      expect(res.body.page.path).toBe(path);
+      expect(res.body.page.status).toBe('published');
+
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc).not.toBeNull();
+      expect(pageDoc.path).toBe(path);
+      expect(pageDoc.status).toBe('published');
+
+      // The redirect page that was created at the original path on delete should be
+      // completely removed during revert (only the reverted page should remain there).
+      const pagesAtPath = await Page.find({ path });
+      expect(pagesAtPath).toHaveLength(1);
+      expect(pagesAtPath[0]._id.toString()).toBe(pageId);
+      expect(pagesAtPath[0].redirectTo).toBeNull();
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
+      const res = await request(app).post('/api/v2/pages/revert').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+  });
+});
