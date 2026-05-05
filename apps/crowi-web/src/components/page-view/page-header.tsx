@@ -4,9 +4,10 @@ import { formatDistanceToNow } from '@/lib/date-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/breadcrumb';
-import { Bookmark, Clock, User, Lock, FileText, Edit2 } from 'lucide-react';
+import { Clock, User, Lock, FileText, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
+import { BookmarkButton } from './bookmark-button';
 
 interface PageHeaderProps {
   page: PageWithRevision;
@@ -43,18 +44,13 @@ export function PageHeader({ page, onEdit }: PageHeaderProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold truncate">{pageTitle}</h1>
-            {isPrivate && (
-              <Lock className="h-5 w-5 text-muted-foreground flex-shrink-0" aria-label="Private page" />
-            )}
+            {isPrivate && <Lock className="h-5 w-5 text-muted-foreground flex-shrink-0" aria-label="Private page" />}
           </div>
           <p className="text-muted-foreground text-sm mt-1 truncate">{page.path}</p>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Button variant="outline" size="sm" disabled>
-            <Bookmark className="h-4 w-4 mr-1" />
-            Bookmark
-          </Button>
+          <BookmarkButton pageId={page._id} />
           {onEdit && (
             <Button variant="default" size="sm" onClick={onEdit}>
               <Edit2 className="h-4 w-4 mr-1" />
@@ -70,9 +66,7 @@ export function PageHeader({ page, onEdit }: PageHeaderProps) {
           <div className="flex items-center gap-2">
             <Avatar className="h-6 w-6">
               <AvatarImage src={displayUser.image || undefined} alt={displayUser.name} />
-              <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                {displayUser.name.charAt(0).toUpperCase()}
-              </AvatarFallback>
+              <AvatarFallback className="bg-primary/10 text-primary text-xs">{displayUser.name.charAt(0).toUpperCase()}</AvatarFallback>
             </Avatar>
             <span>{displayUser.name}</span>
           </div>
