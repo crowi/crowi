@@ -15,6 +15,9 @@ import {
   SeenPageRequestSchema,
   SeenUsersResponseSchema,
   GetSeenUsersRequestSchema,
+  GetWatchStatusRequestSchema,
+  SetWatchStatusRequestSchema,
+  WatchStatusResponseSchema,
 } from '../schemas/page';
 import { AuthenticationRequiredErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
 
@@ -149,6 +152,49 @@ export const pageContract = c.router({
       404: PageNotFoundErrorSchema,
     },
     summary: 'Unlike a page',
+  },
+
+  /**
+   * Get watch (notification subscription) status for the current user
+   *
+   * If the user has an explicit Watcher record, watching reflects status === WATCH.
+   * Otherwise the default is derived from page.getNotificationTargetUsers()
+   * (creator + comment authors + revision authors), matching the legacy
+   * /_api/pages.watch.status semantics.
+   */
+  getWatchStatus: {
+    method: 'GET',
+    path: '/pages/watch',
+    query: GetWatchStatusRequestSchema,
+    responses: {
+      200: WatchStatusResponseSchema,
+      400: InvalidPageIdErrorSchema,
+      401: AuthenticationRequiredErrorSchema,
+      404: PageNotFoundErrorSchema,
+    },
+    summary: 'Get watch (notification subscription) status for a page',
+  },
+
+  /**
+   * Set watch (notification subscription) status for the current user
+   *
+   * - watching=true upserts the Watcher with status=WATCH
+   * - watching=false upserts the Watcher with status=IGNORE
+   *
+   * Default-unset state (no Watcher record at all) is not exposed via this
+   * 2-state API; clients can only switch between WATCH and IGNORE explicitly.
+   */
+  setWatchStatus: {
+    method: 'PUT',
+    path: '/pages/watch',
+    body: SetWatchStatusRequestSchema,
+    responses: {
+      200: WatchStatusResponseSchema,
+      400: InvalidPageIdErrorSchema,
+      401: AuthenticationRequiredErrorSchema,
+      404: PageNotFoundErrorSchema,
+    },
+    summary: 'Set watch (notification subscription) status for a page',
   },
 
   /**

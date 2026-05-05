@@ -191,3 +191,20 @@ export const GetSeenUsersRequestSchema = z.object({
   page_id: z.string(),
 });
 export type GetSeenUsersRequest = z.infer<typeof GetSeenUsersRequestSchema>;
+
+// Watch (notification subscription) schemas
+export const GetWatchStatusRequestSchema = z.object({
+  page_id: z.string(),
+});
+export type GetWatchStatusRequest = z.infer<typeof GetWatchStatusRequestSchema>;
+
+export const WatchStatusResponseSchema = z.object({
+  watching: z.boolean(),
+});
+export type WatchStatusResponse = z.infer<typeof WatchStatusResponseSchema>;
+
+export const SetWatchStatusRequestSchema = z.object({
+  page_id: z.string(),
+  watching: z.boolean(),
+});
+export type SetWatchStatusRequest = z.infer<typeof SetWatchStatusRequestSchema>;
