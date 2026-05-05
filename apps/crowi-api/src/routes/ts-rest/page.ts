@@ -503,33 +503,14 @@ export default (crowi: Crowi, _app: Express) => {
 
       debug('likePage called with:', { page_id, userId: user._id });
 
-      if (!isValidObjectId(page_id)) {
-        return invalidPageIdResponse;
-      }
+      const loaded = await loadGrantedPage(page_id, user);
+      if ('error' in loaded) return loaded.error;
 
-      try {
-        const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
-        if (!pageData) {
-          return pageNotFoundResponse;
-        }
-
-        // pageData.like is a no-op when the user already liked the page and
-        // returns undefined in that case. Always re-populate `pageData` so we
-        // can serialize a consistent shape regardless of whether the like
-        // mutated the document.
-        await pageData.like(user);
-        const populated = await Page.populatePageData(pageData, null);
-        return { status: 200 as const, body: { page: pageToResponse(populated) } };
-      } catch (err) {
-        const error = err as Error;
-        debug('Error liking page:', error.message);
-
-        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
-          return pageNotFoundResponse;
-        }
-
-        return pageNotFoundResponse;
-      }
+      // pageData.like is a no-op when the user already liked the page. Always
+      // re-populate so the response shape stays stable either way.
+      await loaded.page.like(user);
+      const populated = await Page.populatePageData(loaded.page, null);
+      return { status: 200 as const, body: { page: pageToResponse(populated) } };
     },
 
     /**
@@ -544,31 +525,14 @@ export default (crowi: Crowi, _app: Express) => {
 
       debug('unlikePage called with:', { page_id, userId: user._id });
 
-      if (!isValidObjectId(page_id)) {
-        return invalidPageIdResponse;
-      }
+      const loaded = await loadGrantedPage(page_id, user);
+      if ('error' in loaded) return loaded.error;
 
-      try {
-        const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
-        if (!pageData) {
-          return pageNotFoundResponse;
-        }
-
-        // unlike returns undefined when the user had not liked the page.
-        // Re-populate to keep the response shape stable in either case.
-        await pageData.unlike(user);
-        const populated = await Page.populatePageData(pageData, null);
-        return { status: 200 as const, body: { page: pageToResponse(populated) } };
-      } catch (err) {
-        const error = err as Error;
-        debug('Error unliking page:', error.message);
-
-        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
-          return pageNotFoundResponse;
-        }
-
-        return pageNotFoundResponse;
-      }
+      // unlike is a no-op when the user had not liked the page. Always
+      // re-populate so the response shape stays stable either way.
+      await loaded.page.unlike(user);
+      const populated = await Page.populatePageData(loaded.page, null);
+      return { status: 200 as const, body: { page: pageToResponse(populated) } };
     },
     deletePage: async ({ body: requestBody, req }) => {
       const user = (req as any).user as UserDocument;
