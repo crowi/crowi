@@ -3,8 +3,10 @@
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Breadcrumb } from '@/components/breadcrumb';
+import { IdRedirector } from '@/components/id-redirector';
 import { PageList } from '@/components/page-list/page-list';
 import { PageView } from '@/components/page-view';
+import { isObjectId } from '@/lib/object-id';
 
 export default function CatchAllPage() {
   const pathname = usePathname();
@@ -20,6 +22,12 @@ export default function CatchAllPage() {
   // We need to decode them before using with the API
   const path = pathname === '/' ? '/' : decodeURIComponent(pathname);
   const isPortalPath = path.endsWith('/');
+
+  // Detect /<24-char hex ObjectId> URLs and redirect to the page's actual path.
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 1 && isObjectId(segments[0])) {
+    return <IdRedirector pageId={segments[0]} />;
+  }
 
   // Determine page title for portal views
   const getPortalTitle = (portalPath: string): string => {
