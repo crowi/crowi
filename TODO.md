@@ -1,66 +1,99 @@
 # TODO List
 
-## High Priority
+Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
+ロードマップの詳細は project memory (`migration_roadmap.md`) を参照。
 
-- [ ] Update remaining middleware to return JSON errors
-  - [ ] adminRequired
-  - [ ] applicationNotInstalled
-  - [ ] fileAccessRightOrLoginRequired
-  - [ ] Other middleware that perform redirects
+## High Priority — フェーズ 1 残 (ページ機能の完成)
 
-- [ ] Migrate remaining authentication routes to ts-rest
-  - GET /login/google, GET /login/github
-  - GET /login/invited, POST /login/activateInvited
-  - GET /google/callback, GET /github/callback
-  - GET /logout
+- [ ] **ページ削除・復元 API + UI**
+  - `pages.remove` / `pages.revertRemove` / `pages.unlink`
+  - Trash 表示画面 (`/trash/*`)
+- [ ] **既読 / watch**
+  - `pages.seen` / `pages.watch` / `pages.watch.status`
+- [ ] **リネーム UI** (API は実装済 → `POST /api/v2/pages/rename`)
+  - フォーム + 衝突確認ダイアログ
+  - `pages.checkTreeRenamable` / `pages.renameTree` も検討
 
-- [ ] Migrate API routes (/_api/*) to ts-rest
-  - Start with simple GET endpoints
-  - Then move to more complex POST/PUT/DELETE operations
-  - Ensure proper request/response validation with Zod
+## High Priority — 横断的 advisory (累積)
 
-## Medium Priority
+- [ ] **UI 共通化**: `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出 (5+ 箇所重複)
+- [ ] **JP/EN 文言の統一 / i18n 戦略確立**: 現状 `page-view` は EN、`use-page-mutations` 等は JP。i18next 等の導入判断を含む
+- [ ] **`req.user` の Express type augmentation**: `apps/crowi-api/src/types/express.d.ts` で global 拡張、3 種類の cast を撲滅
+- [ ] **`pageToResponse` 統一**: page.ts (`any` 経由) と user.ts/bookmark.ts (型 strict) を揃える。`PageSchema` の date フィールドを nullable に揃える必要あり
 
-- [ ] Migrate page routes to ts-rest
-  - Page display and editing routes
-  - Search functionality
-  - User pages and bookmarks
+## Medium Priority — フェーズ 2 残 / 周辺機能
 
-- [ ] Enhance ts-rest integration (middleware, error handling)
-  - Move middleware logic into ts-rest handlers
-  - Implement proper error handling with Zod validation
-  - Add request/response transformers where needed
-  - Generate TypeScript client from contracts
+- [ ] **Likes**: `likes.add` / `likes.remove`
+- [ ] **Revisions**: `revisions.get` / `revisions.ids` / `revisions.list`
+- [ ] **Backlinks**: `_api/backlink.list`
+- [ ] **残りの認証 routes**:
+  - `GET /login/google` / `GET /login/github` / 各 callback
+  - `GET /login/invited` / `POST /login/activateInvited`
+- [ ] **残り middleware の JSON 化**:
+  - `adminRequired` / `applicationNotInstalled` / `fileAccessRightOrLoginRequired`
+- [ ] **error code 細分化**: comment.ts などの `INVALID_REQUEST` を `MISSING_REQUIRED_FIELD` / `INVALID_OBJECT_ID` / etc. に分割
+- [ ] **`usePageComments` を 3 hooks に split**
 
-- [ ] Complete server-side TypeScript modernization
-  - Replace `any` types with proper types
-  - Update legacy code patterns
+## Medium Priority — フェーズ 3 (検索 / アセット)
 
-## Low Priority
+- [ ] **検索画面**: `/_search` / `/_api/search`
+- [ ] **Elasticsearch 復活** (現在 docker-compose から外し中、バージョン更新込み)
+- [ ] **Attachments**: `attachments.list` / `attachments.add` / `attachments.remove`
 
-- [ ] Implement frontend in apps/crowi-web
-  - Complete Astro-based frontend implementation
-  - Connect to ts-rest API
+## Low Priority — フェーズ 4 (管理画面、重い)
 
-- [ ] Improve test coverage
-  - Add more unit tests
-  - Enhance integration tests
-  - Test ts-rest endpoints
+- [ ] `/admin/*` 全般 (settings 各カテゴリ、user 管理、notification、search index 再構築)
+- [ ] Slack 連携設定
+- [ ] ユーザー招待 / suspend / makeAdmin
+- [ ] views/admin の Swig が完全に未移行
 
-- [ ] Remove old Express routes after ts-rest migration
-  - Once ts-rest routes are stable, remove old implementations
-  - Update all internal API calls to use new endpoints
-  - Update documentation
+## Low Priority — フェーズ 5 (共有 / 通知 / OAuth)
 
-## Recently Completed
+- [ ] Shares CRUD + secretKeyword
+- [ ] Notification (list / read / open / status)
+- [ ] Slack event endpoint
+- [ ] 招待ログイン
 
-- [x] Updated applicationInstalled middleware to return JSON errors (HTTP 503)
-- [x] Updated loginRequired middleware to return JSON errors (HTTP 401/403)
-- [x] Created common error schemas (ApiError, AuthenticationRequiredError, etc.)
+## Low Priority — クリーンアップ
+
+- [ ] 旧 Express routes / controllers の除去 (ts-rest 移行完了後)
+- [ ] 旧 Swig views の削除
+- [ ] `apps/crowi-api/src/util/apiResponse.ts` (legacy) の整理
+- [ ] テスト整備 (web 側のテスト基盤、API の coverage 強化)
+- [ ] エディタ強化 (Markdown プレビュー / リッチエディタ / 自動保存 / 画像アップロード)
+
+## Recently Completed (このセッション)
+
+- [x] **page-rename 統合** (`5d0942e3` + simplify `0c7621f1`)
+- [x] **page-bookmark 統合** (`a76e4f9c` + simplify `9d74e0de`)
+- [x] **page-comment 統合** (`bbe2a2dd` + simplify `89b45630`)
+- [x] **`integrate-worktree` skill 新設** (worktree → main → simplify ワークフロー)
+- [x] **ID リダイレクター** (`/<24hex>` `/_r/<24hex>`、Web 側のみ)
+- [x] **ページ編集 UI 最小実装** (`/edit?page_id=...` / `?path=...`)
+- [x] **pages.update API** (`PUT /api/v2/pages`)
+- [x] **pages.create API** (`POST /api/v2/pages`)
+- [x] **migration skill / agent 全面書き直し** (実態に合わせ、main-direct + simplify フェーズ追加)
+- [x] **docker-compose を依存サービスのみに整理** (app コンテナは host で `pnpm dev`)
+- [x] **`turbo.json` の `^build` 依存追加** (dev で型解決のレース解消)
+- [x] **api-contract watch を `--no-clean` 化** (TS2305 race fix)
+- [x] **bcrypt パスワードハッシュ移行** (旧 SHA-256 から)
+- [x] **接続エラーハンドリング** (Banner + Modal)
+
+## Recently Completed (過去セッション、PR ベース)
+
+- [x] User Settings (profile + picture / password / API token) — PR #892, #893, #897
+- [x] Page 表示 (single + list + portal, Markdown レンダリング) — PR #894, #895, #896
+- [x] User Page (profile / bookmarks / recent-create) — PR #898
+- [x] Logout / Header dropdown — PR #899
+- [x] `applicationInstalled` middleware を JSON error 化 (HTTP 503)
+- [x] `loginRequired` middleware を JSON error 化 (HTTP 401/403)
+- [x] 共通 error schemas (`ApiError`, `AuthenticationRequiredError`, etc.)
 
 ## Notes
 
-- Working branch: `dev2-ts-rest`
-- ts-rest routes available at `/api/v2` prefix
-- Build api-contract with: `pnpm --filter @crowi/api-contract build`
-- Middleware now returns JSON errors instead of redirects for API-only operation
+- **運用方針**: main 直コミット (`commitStrategy: main-direct`)、push と PR は明示指示待ち
+- **並行作業**: `gw start <name>` で worktree を作成、終わったら `/integrate-worktree <name>` で合流
+- **ts-rest routes**: `/api/v2` prefix
+- **api-contract build**: `pnpm --filter @crowi/api-contract build` (dev では `^build` 依存で自動)
+- **state ディレクトリ**: `.migration-state/` (root、gitignore 済) — `.claude/migration-state/` ではない
+- 旧 controller / 旧 Swig は段階的に削除予定 (新側が安定してから)
