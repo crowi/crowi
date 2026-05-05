@@ -140,6 +140,15 @@ export const UpdatePageRequestSchema = z.object({
 });
 export type UpdatePageRequest = z.infer<typeof UpdatePageRequestSchema>;
 
+// Rename page request schema
+export const RenamePageRequestSchema = z.object({
+  page_id: z.string(),
+  new_path: z.string(),
+  revision_id: z.string().optional(),
+  create_redirect: z.boolean().optional(),
+});
+export type RenamePageRequest = z.infer<typeof RenamePageRequestSchema>;
+
 // Error response schemas
 export const PageNotFoundErrorSchema = z.object({
   error: z.object({

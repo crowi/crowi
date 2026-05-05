@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
-import type { CreatePageRequest, UpdatePageRequest } from '@crowi/api-contract';
+import type { CreatePageRequest, RenamePageRequest, UpdatePageRequest } from '@crowi/api-contract';
 
 /**
  * Error thrown when a page update fails because the revision_id is stale
@@ -61,6 +61,36 @@ export function useCreatePage() {
         throw new Error(result.body.error.message || 'Failed to create page');
       }
       throw new Error('Failed to create page');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['page'] });
+    },
+  });
+}
+
+export function useRenamePage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: RenamePageRequest) => {
+      const result = await apiClient.page.renamePage({ body: data });
+
+      if (result.status === 200) {
+        return result.body.page;
+      }
+      if (result.status === 409) {
+        throw new PageRevisionConflictError(result.body.error.message || 'ページが他で更新されました。再読み込みしてください。');
+      }
+      if (result.status === 400) {
+        throw new Error(result.body.error.message || 'ページ名の変更に失敗しました。');
+      }
+      if (result.status === 403) {
+        throw new Error('このページをリネームする権限がありません。');
+      }
+      if (result.status === 404) {
+        throw new Error('ページが見つかりませんでした。');
+      }
+      throw new Error('ページ名の変更に失敗しました。');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
