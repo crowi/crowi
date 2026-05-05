@@ -1,14 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/breadcrumb';
-import { Clock, User, Lock, FileText, Edit2 } from 'lucide-react';
+import { Clock, User, Lock, FileText, Edit2, MoveRight } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { BookmarkButton } from './bookmark-button';
 import { DeletePageButton } from './delete-page-button';
+import { RenameDialog } from './rename-dialog';
 
 interface PageHeaderProps {
   page: PageWithRevision;
@@ -21,6 +23,7 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ page, onEdit, showDelete = false }: PageHeaderProps) {
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
   const author = page.revision?.author ?? null;
@@ -57,6 +60,10 @@ export function PageHeader({ page, onEdit, showDelete = false }: PageHeaderProps
 
         <div className="flex items-center gap-2 flex-shrink-0">
           <BookmarkButton pageId={page._id} />
+          <Button variant="outline" size="sm" onClick={() => setIsRenameOpen(true)} aria-label="Rename page">
+            <MoveRight className="h-4 w-4 mr-1" />
+            Rename
+          </Button>
           {onEdit && (
             <Button variant="default" size="sm" onClick={onEdit}>
               <Edit2 className="h-4 w-4 mr-1" />
@@ -106,6 +113,8 @@ export function PageHeader({ page, onEdit, showDelete = false }: PageHeaderProps
           </div>
         )}
       </div>
+
+      <RenameDialog page={page} open={isRenameOpen} onOpenChange={setIsRenameOpen} />
     </div>
   );
 }

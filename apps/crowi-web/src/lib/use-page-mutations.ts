@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
-import type { CreatePageRequest, UpdatePageRequest } from '@crowi/api-contract';
+import type { CreatePageRequest, RenamePageRequest, UpdatePageRequest } from '@crowi/api-contract';
 
 interface DeletePageRequest {
   page_id: string;
@@ -147,6 +147,40 @@ export function useRevertDeletedPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
       queryClient.invalidateQueries({ queryKey: ['user'] });
+    },
+  });
+}
+
+/**
+ * Rename (move) a page to a new path. May also unlink an existing redirect
+ * page sitting at the new path on the server side.
+ */
+export function useRenamePage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: RenamePageRequest) => {
+      const result = await apiClient.page.renamePage({ body: data });
+
+      if (result.status === 200) {
+        return result.body.page;
+      }
+      if (result.status === 409) {
+        throw new PageRevisionConflictError(result.body.error.message || 'ページが他で更新されました。再読み込みしてください。');
+      }
+      if (result.status === 400) {
+        throw new Error(result.body.error.message || 'ページ名の変更に失敗しました。');
+      }
+      if (result.status === 403) {
+        throw new Error('このページをリネームする権限がありません。');
+      }
+      if (result.status === 404) {
+        throw new Error('ページが見つかりませんでした。');
+      }
+      throw new Error('ページ名の変更に失敗しました。');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['page'] });
     },
   });
 }

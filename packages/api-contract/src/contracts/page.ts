@@ -7,6 +7,7 @@ import {
   ListPagesResponseSchema,
   CreatePageRequestSchema,
   UpdatePageRequestSchema,
+  RenamePageRequestSchema,
   PageSchema,
   PageNotFoundErrorSchema,
   PageNotGrantedErrorSchema,
@@ -173,12 +174,7 @@ export const pageContract = c.router({
   renamePage: {
     method: 'POST',
     path: '/pages/rename',
-    body: z.object({
-      page_id: z.string(),
-      new_path: z.string(),
-      revision_id: z.string().optional(),
-      create_redirect: z.boolean().optional(),
-    }),
+    body: RenamePageRequestSchema,
     responses: {
       200: z.object({ page: PageSchema }),
       400: z.object({ error: z.object({ code: z.string(), message: z.string() }) }),
