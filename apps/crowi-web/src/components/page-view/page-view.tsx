@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { usePage } from '@/lib/use-page';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
+import { PageComments } from '@/components/page-comments';
 
 interface PageViewProps {
   path: string;
@@ -190,6 +191,7 @@ export function PageView({ path }: PageViewProps) {
             }}
           />
           <PageContent page={page} />
+          <PageComments page={page} />
         </CardContent>
       </Card>
     );
