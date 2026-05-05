@@ -16,6 +16,10 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## High Priority — 横断的 advisory (累積)
 
+- [ ] **Web 側 React 19 lint errors を解消** (2 件、pre-push lint hook 有効化の前提)
+  - `apps/crowi-web/src/app/(auth)/edit/edit-page-client.tsx:117` (setState in useEffect)
+  - `apps/crowi-web/src/components/page-comments/comment-form.tsx:20` (同上)
+  - 解消後 `lefthook.yml` の pre-push lint コメントアウトを外す
 - [ ] **UI 共通化**: `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出 (5+ 箇所重複)
 - [ ] **JP/EN 文言の統一 / i18n 戦略確立**: 現状 `page-view` は EN、`use-page-mutations` 等は JP。i18next 等の導入判断を含む
 - [ ] **`req.user` の Express type augmentation**: `apps/crowi-api/src/types/express.d.ts` で global 拡張、3 種類の cast を撲滅
@@ -64,6 +68,10 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## Recently Completed (このセッション)
 
+- [x] **Biome + lefthook 導入** (`766830cf` + `495bef27`)
+  - Prettier → Biome に置換、`.ts/.tsx/.js/.jsx` を root から一括 format
+  - lefthook pre-commit で staged ファイル自動 format → 「format 漏れ」根本解決
+  - 全コードベースを Biome で再 format
 - [x] **page-rename 統合** (`5d0942e3` + simplify `0c7621f1`)
 - [x] **page-bookmark 統合** (`a76e4f9c` + simplify `9d74e0de`)
 - [x] **page-comment 統合** (`bbe2a2dd` + simplify `89b45630`)

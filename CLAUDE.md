@@ -86,9 +86,15 @@ pnpm --filter @crowi/api build
 
 ### Code Formatting
 ```bash
-# Format all TypeScript and JavaScript files across monorepo
+# Format with Biome (applies to .ts/.tsx/.js/.jsx under apps/ and packages/)
 pnpm format
+
+# Check only (no writes) — useful in CI
+pnpm format:check
 ```
+
+Format is auto-applied on commit by a lefthook pre-commit hook
+(see `lefthook.yml`). Hooks are installed as part of `pnpm install`.
 
 ## Architecture Overview
 
@@ -257,7 +263,7 @@ We are migrating the existing Express.js API to use `ts-rest` with `zod` for typ
 
 ## Development Memories
 
-- pnpm format before push
+- format is automatic on commit via lefthook (Biome). Manual `pnpm format` only needed when bypassing hooks.
 
 
 # Migration Workflow
