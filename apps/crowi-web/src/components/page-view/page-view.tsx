@@ -16,17 +16,7 @@ interface PageViewProps {
 
 export function PageView({ path }: PageViewProps) {
   const router = useRouter();
-  const {
-    page,
-    isLoading,
-    isError,
-    error,
-    notFound,
-    notGranted,
-    redirectTo,
-    isDeleted,
-    refetch,
-  } = usePage({ path });
+  const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path });
 
   // Handle redirects
   useEffect(() => {
@@ -65,12 +55,7 @@ export function PageView({ path }: PageViewProps) {
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
           Failed to load page. {error?.message || 'Please try again later.'}
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-4"
-            onClick={() => refetch()}
-          >
+          <Button variant="outline" size="sm" className="ml-4" onClick={() => refetch()}>
             Retry
           </Button>
         </AlertDescription>
@@ -87,14 +72,10 @@ export function PageView({ path }: PageViewProps) {
             <Lock className="h-5 w-5 text-amber-500" />
             <CardTitle>Access Denied</CardTitle>
           </div>
-          <CardDescription>
-            You do not have permission to view this page.
-          </CardDescription>
+          <CardDescription>You do not have permission to view this page.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">
-            This page is private or you need to be granted access by the owner.
-          </p>
+          <p className="text-muted-foreground">This page is private or you need to be granted access by the owner.</p>
           <div className="mt-4">
             <Button variant="outline" onClick={() => router.back()}>
               Go Back
@@ -119,15 +100,12 @@ export function PageView({ path }: PageViewProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground mb-4">
-            Would you like to create this page?
-          </p>
+          <p className="text-muted-foreground mb-4">Would you like to create this page?</p>
           <div className="flex gap-2">
             <Button
               variant="default"
               onClick={() => {
-                // TODO: Navigate to page editor
-                console.log('Create page:', path);
+                router.push(`/edit?path=${encodeURIComponent(path)}`);
               }}
             >
               <FilePlus2 className="h-4 w-4 mr-2" />
@@ -185,8 +163,7 @@ export function PageView({ path }: PageViewProps) {
           <PageHeader
             page={page}
             onEdit={() => {
-              // TODO: Navigate to page editor
-              console.log('Edit page:', page._id);
+              router.push(`/edit?page_id=${encodeURIComponent(page._id)}`);
             }}
           />
           <PageContent page={page} />
