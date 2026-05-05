@@ -14,17 +14,15 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## High Priority — 横断的 advisory (累積)
 
-- [ ] **UI 共通化**: `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出
-  - 累積 7+ 箇所重複 (page-view / id-redirector / edit-page-client / page-history-view / 各種 user-page / ...)
+- [x] **UI 共通化** (`2c390a55`): `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出。9 ファイル / 13 サイトで重複削減
 - [ ] **JP/EN 文言の統一 / i18n 戦略確立**: 現状 `page-view` は EN、`use-page-mutations` / notification 系は JP。i18next 等の導入判断を含む
-- [ ] **`req.user` の Express type augmentation**: `apps/crowi-api/src/types/express.d.ts` で global 拡張、3 種類の cast を撲滅 (page.ts は `(req as any)`、bookmark/comment/notification は `(req as { user: UserDocument })`)
-- [ ] **`pageToResponse` / `toPageUser` / `toUserPublic` / `isPopulatedUser` の統一**:
-  - `pageToResponse` は page.ts (`any` 経由) と user.ts/bookmark.ts (型 strict) で実装が異なる
-  - `toUserPublic` は util と notification.ts (PopulatedUserLike fallback 付き) で重複
-  - `isPopulatedUser` は page.ts / bookmark.ts / user.ts / notification.ts で各自定義
-  - `pageNotFoundResponse` も page.ts ローカル const と revision.ts inline で重複
-  - `PageSchema` の date フィールドを nullable に揃える必要あり
-- [ ] **`loadGrantedPage` を util に格上げ**: 現状 page.ts のクロージャ内 helper のため revision.ts などからは見えない。bookmark / comment / notification でも使えると DRY
+- [x] **`req.user` の Express type augmentation** (`8e8524ac`): `apps/crowi-api/src/types/express.ts` で global 拡張、35 サイトの cast を撲滅
+- [x] **`pageToResponse` / `toPageUser` / `toUserPublic` / `isPopulatedUser` の統一** (`6c43ef77` + `8b2fe70f`):
+  - `toUserPublic` を util に統合 (`PopulatedUserPublic` 経由で fallback 対応)
+  - `isPopulatedUser` を util に集約 (loose triplet 判定)
+  - `pageNotFoundResponse` / `invalidPageIdResponse` を util の const に
+  - `pageToResponse` の date 系を fallback (createdAt/updatedAt が undefined でも schema を満たす) に
+- [x] **`loadGrantedPage` を util に格上げ** (`0f988d3e`): `PageModelLike` 経由で page / bookmark / comment / notification / revision から呼べるように昇格
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 
