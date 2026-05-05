@@ -643,3 +643,178 @@ describe('Routes /api/v2/pages/revert (ts-rest revertDeletedPage)', () => {
     });
   });
 });
+
+describe('Routes /api/v2/pages/seen + /pages/seen-users (ts-rest seen)', () => {
+  const PATH_PREFIX = '/ts-rest-seen-test/';
+  let Page;
+  let accessToken: string;
+  let otherAccessToken: string;
+  let otherUserId: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+
+    const [owner, other] = await Promise.all([
+      createTestUser({ name: 'SeenPage Test', username: 'seenPageTester', email: 'seen-page-tester@example.com' }),
+      createTestUser({ name: 'SeenPage Other', username: 'seenPageOther', email: 'seen-page-other@example.com' }),
+    ]);
+    accessToken = owner.accessToken;
+    otherAccessToken = other.accessToken;
+    otherUserId = other.user._id.toString();
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  describe('POST /api/v2/pages/seen', () => {
+    it('returns 401 when no Authorization header is provided', async () => {
+      const res = await request(app).post('/api/v2/pages/seen').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
+      const res = await request(app).post('/api/v2/pages/seen').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_PAGE_ID');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND when page_id does not exist', async () => {
+      const res = await request(app).post('/api/v2/pages/seen').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('marks the page as seen and returns the populated seenUsers list', async () => {
+      const path = `${PATH_PREFIX}basic`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# seen me' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).post('/api/v2/pages/seen').set(authHeaders(otherAccessToken)).send({ page_id: pageId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.seenUsersCount).toBe(1);
+      expect(res.body.seenUsers).toHaveLength(1);
+      expect(res.body.seenUsers[0]._id).toBe(otherUserId);
+      expect(res.body.seenUsers[0].username).toBe('seenPageOther');
+
+      // Storage check: page.seenUsers actually contains the user id.
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.seenUsers.map((id: { toString: () => string }) => id.toString())).toContain(otherUserId);
+    });
+
+    it('is idempotent: re-posting from the same user does not inflate seenUsers', async () => {
+      const path = `${PATH_PREFIX}idempotent`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# again' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const otherHeaders = authHeaders(otherAccessToken);
+      const first = await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+      expect(first.status).toBe(200);
+      expect(first.body.seenUsersCount).toBe(1);
+
+      const second = await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+      expect(second.status).toBe(200);
+      expect(second.body.seenUsersCount).toBe(1);
+      expect(second.body.seenUsers).toHaveLength(1);
+      expect(second.body.seenUsers[0]._id).toBe(otherUserId);
+
+      const pageDoc = await Page.findById(pageId);
+      // addToSet must not duplicate the same id.
+      expect(pageDoc.seenUsers).toHaveLength(1);
+    });
+
+    it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
+      const path = `${PATH_PREFIX}private`;
+      const ownerHeaders = authHeaders(accessToken);
+      const otherHeaders = authHeaders(otherAccessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private', grant: 4 });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+
+      // The page must remain unmarked-by-other.
+      const pageDoc = await Page.findById(pageId);
+      const ids = pageDoc.seenUsers.map((id: { toString: () => string }) => id.toString());
+      expect(ids).not.toContain(otherUserId);
+    });
+  });
+
+  describe('GET /api/v2/pages/seen-users', () => {
+    it('returns 401 when no Authorization header is provided', async () => {
+      const res = await request(app).get('/api/v2/pages/seen-users').query({ page_id: '000000000000000000000000' });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
+      const res = await request(app).get('/api/v2/pages/seen-users').set(authHeaders(accessToken)).query({ page_id: 'not-an-objectid' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_PAGE_ID');
+    });
+
+    it('returns empty list when no users have seen the page', async () => {
+      const path = `${PATH_PREFIX}empty`;
+      const createRes = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body: '# none' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).get('/api/v2/pages/seen-users').set(authHeaders(accessToken)).query({ page_id: pageId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.seenUsers).toEqual([]);
+      expect(res.body.seenUsersCount).toBe(0);
+    });
+
+    it('returns the populated seen-user list without recording a new read receipt', async () => {
+      const path = `${PATH_PREFIX}view`;
+      const ownerHeaders = authHeaders(accessToken);
+      const otherHeaders = authHeaders(otherAccessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# look' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const seenRes = await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+      expect(seenRes.status).toBe(200);
+
+      // GET as the page owner who has NOT marked it as seen — the list should
+      // still include `otherUser` but the owner must not be added.
+      const res = await request(app).get('/api/v2/pages/seen-users').set(ownerHeaders).query({ page_id: pageId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.seenUsersCount).toBe(1);
+      expect(res.body.seenUsers).toHaveLength(1);
+      expect(res.body.seenUsers[0]._id).toBe(otherUserId);
+
+      // Storage assertion: the GET did not add the owner.
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.seenUsers).toHaveLength(1);
+    });
+
+    it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
+      const path = `${PATH_PREFIX}forbidden`;
+      const createRes = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body: '# private', grant: 4 });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).get('/api/v2/pages/seen-users').set(authHeaders(otherAccessToken)).query({ page_id: pageId });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+  });
+});

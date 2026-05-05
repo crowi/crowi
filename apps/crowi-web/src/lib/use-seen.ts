@@ -1,0 +1,70 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from './api-client';
+import type { SeenUsersResponse } from '@crowi/api-contract';
+
+export const seenKeys = {
+  all: ['seen-users'] as const,
+  detail: (pageId: string) => ['seen-users', pageId] as const,
+};
+
+const EMPTY_RESULT: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
+
+/**
+ * Fetch the seen-users list for a page. Errors fall back to empty — this is
+ * auxiliary UI and shouldn't break the page view.
+ */
+export function useSeenUsers(pageId: string | undefined, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: pageId ? seenKeys.detail(pageId) : seenKeys.all,
+    queryFn: async (): Promise<SeenUsersResponse> => {
+      if (!pageId) return EMPTY_RESULT;
+      const result = await apiClient.page.getSeenUsers({
+        query: { page_id: pageId },
+      });
+      return result.status === 200 ? result.body : EMPTY_RESULT;
+    },
+    enabled: !!pageId && options?.enabled !== false,
+  });
+}
+
+/**
+ * Mark a page as seen by the current user. Best-effort: errors are silenced
+ * and the cache is seeded with the response so subscribed UIs update without
+ * a follow-up refetch.
+ */
+export function useMarkSeen(pageId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (): Promise<SeenUsersResponse | null> => {
+      if (!pageId) return null;
+      const result = await apiClient.page.seenPage({
+        body: { page_id: pageId },
+      });
+      return result.status === 200 ? result.body : null;
+    },
+    onSuccess: (data) => {
+      if (!data || !pageId) return;
+      queryClient.setQueryData<SeenUsersResponse>(seenKeys.detail(pageId), data);
+    },
+  });
+}
+
+/**
+ * Fire `useMarkSeen` exactly once per `pageId` when `enabled` is true.
+ * Guards React 19 StrictMode double-invocation; useMutation does not auto-dedupe by arg.
+ */
+export function useMarkSeenOnView(pageId: string | undefined, enabled: boolean) {
+  const { mutate } = useMarkSeen(pageId);
+  const firedForRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !pageId) return;
+    if (firedForRef.current === pageId) return;
+    firedForRef.current = pageId;
+    mutate();
+  }, [pageId, enabled, mutate]);
+}

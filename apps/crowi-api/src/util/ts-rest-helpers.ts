@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
-import type { PageUser } from '@crowi/api-contract';
+import type { PageUser, UserPublic } from '@crowi/api-contract';
+import type { UserDocument } from 'src/models/user';
 
 /**
  * Shape of a populated User as it appears on Mongoose documents that have
@@ -31,6 +32,19 @@ export const toPageUser = (user: PopulatedUser): PageUser => ({
   email: user.email,
   image: user.image || null,
   createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
+});
+
+export const toUserPublic = (user: UserDocument): UserPublic => ({
+  _id: user._id.toString(),
+  id: user._id.toString(),
+  username: user.username,
+  name: user.name,
+  email: user.email,
+  image: user.image || null,
+  introduction: user.introduction || '',
+  createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
+  admin: user.admin || false,
+  status: user.status,
 });
 
 /**

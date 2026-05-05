@@ -9,6 +9,7 @@ import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { BookmarkButton } from './bookmark-button';
 import { PageActionsMenu } from './page-actions-menu';
+import { SeenUserList } from './seen-user-list';
 
 interface PageHeaderProps {
   page: PageWithRevision;
@@ -19,9 +20,11 @@ interface PageHeaderProps {
    * directly and rename/delete don't apply).
    */
   showActions?: boolean;
+  /** Show the "Seen by" avatars row. Hidden for deleted pages. */
+  showSeenUsers?: boolean;
 }
 
-export function PageHeader({ page, onEdit, showActions = false }: PageHeaderProps) {
+export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = true }: PageHeaderProps) {
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
   const author = page.revision?.author ?? null;
@@ -107,6 +110,8 @@ export function PageHeader({ page, onEdit, showActions = false }: PageHeaderProp
           </div>
         )}
       </div>
+
+      {showSeenUsers && <SeenUserList pageId={page._id} fallbackCount={page.seenUsersCount} />}
     </div>
   );
 }

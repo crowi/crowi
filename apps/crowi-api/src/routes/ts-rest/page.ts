@@ -1,10 +1,10 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract, PageGrantEnum } from '@crowi/api-contract';
+import { apiContract, PageGrantEnum, UserPublic } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
-import { toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
+import { isValidObjectId, toISOStringOrNull, toPageUser, toUserPublic } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:page');
@@ -27,6 +27,11 @@ const invalidGrantResponse = () =>
 const pageNotFoundResponse = {
   status: 404 as const,
   body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
+} as const;
+
+const invalidPageIdResponse = {
+  status: 400 as const,
+  body: { error: { code: 'INVALID_PAGE_ID' as const, message: 'Invalid page_id' } },
 } as const;
 
 /**
@@ -85,6 +90,40 @@ export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
   const router = Router();
   const Page = crowi.model('Page');
+  const User = crowi.model('User');
+
+  // seenUsersCount stays at the raw ID-array length (matching legacy
+  // populatePageData) so inactive users dropped by findUsersByIds' status
+  // filter do not deflate the count.
+  const buildSeenUsersResponse = async (seenUserIds: ReadonlyArray<unknown>) => {
+    const ids = seenUserIds.filter((id) => id != null);
+    const seenUsersCount = ids.length;
+
+    if (ids.length === 0) {
+      return { seenUsers: [] as UserPublic[], seenUsersCount };
+    }
+
+    const populated = (await User.findUsersByIds(ids)) as UserDocument[];
+    return {
+      seenUsers: populated.map(toUserPublic),
+      seenUsersCount,
+    };
+  };
+
+  type LoadedPage = { page: PageDocument } | { error: typeof pageNotFoundResponse | typeof invalidPageIdResponse };
+
+  const loadGrantedPage = async (pageId: string, user: UserDocument): Promise<LoadedPage> => {
+    if (!isValidObjectId(pageId)) {
+      return { error: invalidPageIdResponse };
+    }
+    try {
+      const page = (await Page.findPageByIdAndGrantedUser(pageId, user)) as PageDocument | null;
+      if (!page) return { error: pageNotFoundResponse };
+      return { page };
+    } catch {
+      return { error: pageNotFoundResponse };
+    }
+  };
 
   const pageRouter = s.router(apiContract.page, {
     /**
@@ -419,8 +458,31 @@ export default (crowi: Crowi, _app: Express) => {
         };
       }
     },
-    seenPage: async () => {
-      throw new Error('Not implemented');
+    // Idempotent: Page.seen uses addToSet so re-posting from the same user
+    // does not inflate seenUsers / seenUsersCount.
+    seenPage: async ({ body: requestBody, req }) => {
+      const user = (req as { user: UserDocument }).user;
+      const { page_id } = requestBody;
+
+      debug('seenPage called with:', { page_id, userId: user._id });
+
+      const loaded = await loadGrantedPage(page_id, user);
+      if ('error' in loaded) return loaded.error;
+
+      const updated = (await loaded.page.seen(user)) as PageDocument;
+      return { status: 200 as const, body: await buildSeenUsersResponse(updated.seenUsers) };
+    },
+
+    getSeenUsers: async ({ query, req }) => {
+      const user = (req as { user: UserDocument }).user;
+      const { page_id } = query;
+
+      debug('getSeenUsers called with:', { page_id, userId: user._id });
+
+      const loaded = await loadGrantedPage(page_id, user);
+      if ('error' in loaded) return loaded.error;
+
+      return { status: 200 as const, body: await buildSeenUsersResponse(loaded.page.seenUsers) };
     },
     likePage: async () => {
       throw new Error('Not implemented');

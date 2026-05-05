@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { usePage } from '@/lib/use-page';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
+import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
 import { PageComments } from '@/components/page-comments';
@@ -20,6 +21,9 @@ export function PageView({ path }: PageViewProps) {
   const router = useRouter();
   const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path });
   const revertMutation = useRevertDeletedPage();
+
+  const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
+  useMarkSeenOnView(page?._id, canMarkSeen);
 
   // Handle redirects
   useEffect(() => {
@@ -172,7 +176,7 @@ export function PageView({ path }: PageViewProps) {
 
         <Card className="opacity-75">
           <CardContent className="pt-6">
-            <PageHeader page={page} />
+            <PageHeader page={page} showSeenUsers={false} />
             <PageContent page={page} />
           </CardContent>
         </Card>
