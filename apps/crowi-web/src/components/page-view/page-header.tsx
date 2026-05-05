@@ -13,6 +13,7 @@ import { BookmarkButton } from './bookmark-button';
 import { LikeButton } from './like-button';
 import { PageActionsMenu } from './page-actions-menu';
 import { SeenUserList } from './seen-user-list';
+import { WatchButton } from './watch-button';
 
 interface PageHeaderProps {
   page: PageWithRevision;
@@ -82,6 +83,7 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
 
         <div className="flex items-center gap-2 flex-shrink-0">
           {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} />}
+          {isAuthenticated && <WatchButton pageId={page._id} />}
           <BookmarkButton pageId={page._id} />
           <Button variant="outline" size="sm" onClick={() => router.push(buildHistoryHref(page.path))} aria-label="View revision history">
             <History className="h-4 w-4 mr-1" />
