@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Save, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -112,12 +112,13 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   const updateMutation = useUpdatePage();
 
   // Re-init when the loaded page's revision changes (e.g., user navigates between edits).
-  useEffect(() => {
-    if (page) {
-      setBody(page.revision.body ?? '');
-      setRevisionId(page.revision._id);
-    }
-  }, [page?.revision._id]);
+  // Following the React docs pattern for "Adjusting some state when a prop changes",
+  // this runs during render rather than in an effect — `set-state-in-effect` is the
+  // discouraged variant.
+  if (page && page.revision._id !== revisionId) {
+    setBody(page.revision.body ?? '');
+    setRevisionId(page.revision._id);
+  }
 
   const handleCancel = () => {
     if (page) {

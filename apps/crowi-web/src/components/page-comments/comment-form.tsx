@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,10 +15,8 @@ export function CommentForm({ isSubmitting, error, onSubmit }: CommentFormProps)
   const [value, setValue] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Reflect external errors on the form.
-  useEffect(() => {
-    if (error) setLocalError(error.message);
-  }, [error]);
+  // Local validation / catch errors take precedence over the external mutation error.
+  const displayError = localError ?? error?.message ?? null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +49,9 @@ export function CommentForm({ isSubmitting, error, onSubmit }: CommentFormProps)
         rows={3}
         aria-label="Comment body"
       />
-      {localError && (
+      {displayError && (
         <p className="text-sm text-destructive" role="alert">
-          {localError}
+          {displayError}
         </p>
       )}
       <div className="flex justify-end">

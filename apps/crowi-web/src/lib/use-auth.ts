@@ -185,8 +185,6 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    // Initial auth check on mount - valid pattern for client-side authentication
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUser();
   }, [fetchUser]);
 
