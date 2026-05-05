@@ -7,7 +7,9 @@ import { Breadcrumb } from '@/components/breadcrumb';
 import { Clock, User, Lock, FileText, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
+import { useAuth } from '@/lib/use-auth';
 import { BookmarkButton } from './bookmark-button';
+import { LikeButton } from './like-button';
 
 interface PageHeaderProps {
   page: PageWithRevision;
@@ -15,9 +17,14 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ page, onEdit }: PageHeaderProps) {
+  const { user, isAuthenticated } = useAuth();
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
   const author = page.revision?.author ?? null;
+
+  // Derive "is liked" from the page document (no separate query needed).
+  // `page.liker` is an array of user id strings populated by the API.
+  const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
 
   // Determine which user to display
   const displayUser = lastUpdateUser ?? creator ?? author;
@@ -50,6 +57,7 @@ export function PageHeader({ page, onEdit }: PageHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} />}
           <BookmarkButton pageId={page._id} />
           {onEdit && (
             <Button variant="default" size="sm" onClick={onEdit}>
