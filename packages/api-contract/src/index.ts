@@ -5,4 +5,5 @@ export * from './schemas/common';
 export * from './schemas/me';
 export * from './schemas/page';
 export * from './schemas/user';
+export * from './schemas/comment';
 export * from './openapi';

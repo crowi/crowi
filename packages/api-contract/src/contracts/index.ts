@@ -5,6 +5,7 @@ import { tokenAuthContract } from './tokenAuth';
 import { meContract } from './me';
 import { pageContract } from './page';
 import { userContract } from './user';
+import { commentContract } from './comment';
 
 const c = initContract();
 
@@ -15,4 +16,5 @@ export const apiContract = c.router({
   me: meContract,
   page: pageContract,
   user: userContract,
+  comment: commentContract,
 });
