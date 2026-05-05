@@ -8,4 +8,5 @@ export * from './schemas/userPublic';
 export * from './schemas/bookmark';
 export * from './schemas/user';
 export * from './schemas/comment';
+export * from './schemas/notification';
 export * from './openapi';
