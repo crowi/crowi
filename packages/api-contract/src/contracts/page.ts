@@ -129,7 +129,7 @@ export const pageContract = c.router({
   },
 
   /**
-   * Delete page (soft delete - moves to trash)
+   * Delete page (soft delete - moves to trash, or completely=true for hard delete)
    */
   deletePage: {
     method: 'DELETE',
@@ -141,6 +141,7 @@ export const pageContract = c.router({
     }),
     responses: {
       200: z.object({ page: PageSchema }),
+      400: z.object({ error: z.object({ code: z.string(), message: z.string() }) }),
       401: AuthenticationRequiredErrorSchema,
       403: PageNotGrantedErrorSchema,
       404: PageNotFoundErrorSchema,
@@ -158,6 +159,7 @@ export const pageContract = c.router({
     body: z.object({ page_id: z.string() }),
     responses: {
       200: z.object({ page: PageSchema }),
+      400: z.object({ error: z.object({ code: z.string(), message: z.string() }) }),
       401: AuthenticationRequiredErrorSchema,
       403: PageNotGrantedErrorSchema,
       404: PageNotFoundErrorSchema,
