@@ -8,6 +8,7 @@ import { userContract } from './user';
 import { commentContract } from './comment';
 import { bookmarkContract } from './bookmark';
 import { revisionContract } from './revision';
+import { notificationContract } from './notification';
 
 const c = initContract();
 
@@ -21,4 +22,5 @@ export const apiContract = c.router({
   comment: commentContract,
   bookmark: bookmarkContract,
   revision: revisionContract,
+  notification: notificationContract,
 });
