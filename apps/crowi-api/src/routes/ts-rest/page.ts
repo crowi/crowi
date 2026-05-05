@@ -457,8 +457,107 @@ export default (crowi: Crowi, _app: Express) => {
     revertDeletedPage: async () => {
       throw new Error('Not implemented');
     },
-    renamePage: async () => {
-      throw new Error('Not implemented');
+    renamePage: async ({ body: requestBody, req }) => {
+      const user = (req as any).user as UserDocument;
+      const { page_id, new_path, revision_id, create_redirect } = requestBody;
+
+      debug('renamePage called with:', { page_id, new_path, revision_id, create_redirect, userId: user._id });
+
+      // Mapped to 404 (not 403) for both 'not found' and 'not granted' so we
+      // do not leak page existence to callers without grant. Mirrors updatePage.
+      const notFoundResponse = {
+        status: 404 as const,
+        body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
+      };
+
+      // Normalize the destination path and validate the name first so we can
+      // reject obviously bad inputs without touching the DB.
+      const newPagePath = Page.normalizePath(new_path);
+      const newPageIsPortal = newPagePath.endsWith('/');
+
+      if (!Page.isCreatableName(newPagePath)) {
+        return {
+          status: 400 as const,
+          body: {
+            error: {
+              code: 'PAGE_INVALID_NAME',
+              message: `Cannot rename to this page name (${newPagePath})`,
+            },
+          },
+        };
+      }
+
+      try {
+        // Authorization: same pattern as updatePage. Hide existence from
+        // callers without grant by returning 404.
+        const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+        if (!pageData) {
+          return notFoundResponse;
+        }
+
+        if (revision_id && !pageData.isUpdatable(revision_id)) {
+          return {
+            status: 409 as const,
+            body: { error: { code: 'PAGE_REVISION_ERROR' as const, message: 'Revision error.' } },
+          };
+        }
+
+        // Detect collision at the destination path. If the existing page is a
+        // redirect that the user is allowed to remove, unlink it first;
+        // otherwise refuse the rename. This mirrors controllers/page.ts.
+        const existingAtNewPath = await Page.findOne({ path: newPagePath });
+        if (existingAtNewPath) {
+          if (existingAtNewPath.isUnlinkable(user)) {
+            try {
+              await existingAtNewPath.unlink(user);
+            } catch (err) {
+              const error = err as Error;
+              return {
+                status: 400 as const,
+                body: {
+                  error: {
+                    code: 'PAGE_RENAME_FAILED',
+                    message: error.message || 'Failed to unlink redirect page at destination',
+                  },
+                },
+              };
+            }
+          } else {
+            return {
+              status: 400 as const,
+              body: {
+                error: {
+                  code: 'PAGE_EXISTS',
+                  message: `Cannot rename to this page name (${newPagePath}). Page exists.`,
+                },
+              },
+            };
+          }
+        }
+
+        // Old controller: `(!newPageIsPortal && createRedirect) || 0` — portal
+        // paths (ending in '/') never get a redirect page even if requested.
+        const options = {
+          createRedirectPage: !newPageIsPortal && Boolean(create_redirect),
+        };
+
+        await Page.rename(pageData, newPagePath, user, options);
+
+        const populated = await Page.populatePageData(pageData, null);
+        return { status: 200 as const, body: { page: pageToResponse(populated) } };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error renaming page:', error.message);
+
+        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+          return notFoundResponse;
+        }
+
+        return {
+          status: 400 as const,
+          body: { error: { code: 'PAGE_RENAME_FAILED', message: error.message || 'Failed to rename page' } },
+        };
+      }
     },
   });
 
