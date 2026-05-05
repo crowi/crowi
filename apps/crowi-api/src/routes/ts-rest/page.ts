@@ -22,6 +22,13 @@ const invalidGrantResponse = () =>
     },
   }) as const;
 
+// Mapped to 404 (not 403) for both 'not found' and 'not granted' so we
+// do not leak page existence to callers without grant.
+const pageNotFoundResponse = {
+  status: 404 as const,
+  body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
+} as const;
+
 /**
  * Populated user serialization treats `_id` as the discriminator: a populated
  * subdocument always exposes the user fields alongside _id, while an
@@ -380,17 +387,10 @@ export default (crowi: Crowi, _app: Express) => {
         return invalidGrantResponse();
       }
 
-      // Mapped to 404 (not 403) for both 'not found' and 'not granted' so we
-      // do not leak page existence to callers without grant.
-      const notFoundResponse = {
-        status: 404 as const,
-        body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
-      };
-
       try {
         const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
         if (!pageData) {
-          return notFoundResponse;
+          return pageNotFoundResponse;
         }
 
         if (revision_id && !pageData.isUpdatable(revision_id)) {
@@ -410,7 +410,7 @@ export default (crowi: Crowi, _app: Express) => {
         debug('Error updating page:', error.message);
 
         if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
-          return notFoundResponse;
+          return pageNotFoundResponse;
         }
 
         return {
@@ -440,13 +440,6 @@ export default (crowi: Crowi, _app: Express) => {
 
       debug('renamePage called with:', { page_id, new_path, revision_id, create_redirect, userId: user._id });
 
-      // Mapped to 404 (not 403) for both 'not found' and 'not granted' so we
-      // do not leak page existence to callers without grant. Mirrors updatePage.
-      const notFoundResponse = {
-        status: 404 as const,
-        body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
-      };
-
       // Normalize the destination path and validate the name first so we can
       // reject obviously bad inputs without touching the DB.
       const newPagePath = Page.normalizePath(new_path);
@@ -469,7 +462,7 @@ export default (crowi: Crowi, _app: Express) => {
         // callers without grant by returning 404.
         const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
         if (!pageData) {
-          return notFoundResponse;
+          return pageNotFoundResponse;
         }
 
         if (revision_id && !pageData.isUpdatable(revision_id)) {
@@ -527,7 +520,7 @@ export default (crowi: Crowi, _app: Express) => {
         debug('Error renaming page:', error.message);
 
         if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
-          return notFoundResponse;
+          return pageNotFoundResponse;
         }
 
         return {
