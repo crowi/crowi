@@ -6,6 +6,7 @@ import tokenAuthRoutes from './tokenAuth';
 import meRoutes from './me';
 import pageRoutes from './page';
 import userRoutes from './user';
+import commentRoutes from './comment';
 import jwtAuth from '../../middlewares/jwtAuth';
 import jwtAdminRequired from '../../middlewares/jwtAdminRequired';
 import Debug from 'debug';
@@ -41,11 +42,13 @@ export default (crowi: Crowi, app: Express) => {
   const meRouter = meRoutes(crowi, app);
   const pageRouter = pageRoutes(crowi, app);
   const userRouter = userRoutes(crowi, app);
+  const commentRouter = commentRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
   authenticatedRouter.use(meRouter);
   authenticatedRouter.use(pageRouter);
   authenticatedRouter.use(userRouter);
+  authenticatedRouter.use(commentRouter);
 
   // Admin Router - JWT authentication + admin permission required
   const adminRouter = Router();
