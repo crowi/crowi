@@ -222,9 +222,15 @@ export default (crowi: Crowi, _app: Express) => {
      */
     listPages: async ({ query, req }) => {
       const user = req.user as UserDocument;
-      const { path, user: userParam, limit = 50, offset = 0 } = query;
+      const { path, user: userParam, limit = 50, offset = 0, include_deleted = false } = query;
 
-      debug('listPages called with:', { path, user: userParam, limit, offset, userId: user._id });
+      // Force-enable include_deleted for /trash and /trash/<sub> requests so the
+      // legacy deletedPageListShow semantics are preserved even when the client
+      // omits the query flag (matches old controllers/page.ts behavior).
+      const isTrashPath = !!path && (path === '/trash' || path.startsWith('/trash/'));
+      const includeDeletedPage = include_deleted || isTrashPath;
+
+      debug('listPages called with:', { path, user: userParam, limit, offset, includeDeletedPage, userId: user._id });
 
       try {
         let pages: PageDocument[] = [];
@@ -253,10 +259,13 @@ export default (crowi: Crowi, _app: Express) => {
           const rawPages = await Page.findListByCreator(targetUser, { limit, offset }, user);
           pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
         } else if (path && path !== '/') {
-          // List pages by path and get portal page
+          // List pages by path. /trash subtrees skip findPortalPage to mirror the
+          // legacy deletedPageListShow which always rendered with page=null.
           debug('Finding pages by path:', path);
-          debug('Query params:', { limit, offset, path, userParam });
-          const [rawPortalPage, rawPages] = await Promise.all([Page.findPortalPage(path, user), Page.findListByStartWith(path, user, { limit, offset })]);
+          debug('Query params:', { limit, offset, path, userParam, includeDeletedPage });
+          const portalPagePromise = isTrashPath ? Promise.resolve(null) : Page.findPortalPage(path, user);
+          const listPromise = Page.findListByStartWith(path, user, { limit, offset, includeDeletedPage });
+          const [rawPortalPage, rawPages] = await Promise.all([portalPagePromise, listPromise]);
           // findListByStartWith doesn't populate creator/lastUpdateUser, so we need to do it manually
           [portalPage, pages] = (await Promise.all([
             rawPortalPage ? Page.populate(rawPortalPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }]) : null,
