@@ -231,9 +231,6 @@ importers:
       '@types/node':
         specifier: ^22.15.30
         version: 22.15.30
-      '@types/prettier':
-        specifier: ^2.0.2
-        version: 2.7.3
       '@types/qs':
         specifier: ^6.14.0
         version: 6.14.0
@@ -5177,10 +5174,6 @@ packages:
   /@types/p-queue@2.3.2:
     resolution: {integrity: sha512-eKAv5Ql6k78dh3ULCsSBxX6bFNuGjTmof5Q/T6PiECDq0Yf8IIn46jCyp3RJvCi8owaEmm3DZH1PEImjBMd/vQ==}
     dev: false
-
-  /@types/prettier@2.7.3:
-    resolution: {integrity: sha512-+68kP9yzs4LMp7VNh8gdzMSPZFL44MLGqiHWvttYJe+6qnuVr4Ek9wSBQoveqY/r+LwjCcU29kNVkidwim+kYA==}
-    dev: true
 
   /@types/qs@6.14.0:
     resolution: {integrity: sha512-eOunJqu0K1923aExK6y8p6fsihYEn/BYuQ4g0CxAAgFc4b/ZLN4CrsRZ55srTdqoiLzU2B2evC+apEIxprEzkQ==}
