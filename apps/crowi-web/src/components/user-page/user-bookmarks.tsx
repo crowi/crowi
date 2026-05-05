@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { Loader2, AlertCircle, Bookmark } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, Bookmark } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { ErrorAlert } from '@/components/ui/error-alert';
 import { PageListItem } from '@/components/page-list/page-list-item';
 import { useUserBookmarksInfinite } from '@/lib/use-user-page';
 import type { Bookmark as BookmarkType } from '@crowi/api-contract';
@@ -25,21 +26,11 @@ export function UserBookmarks({ username, preview = false, previewLimit = 5 }: U
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useUserBookmarksInfinite(username, preview ? previewLimit : 10);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <span className="ml-2 text-muted-foreground">Loading bookmarks...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading bookmarks..." size="md" className="py-8" />;
   }
 
   if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>Failed to load bookmarks. Please try again later.</AlertDescription>
-      </Alert>
-    );
+    return <ErrorAlert message="Failed to load bookmarks. Please try again later." />;
   }
 
   // Flatten all pages of bookmarks

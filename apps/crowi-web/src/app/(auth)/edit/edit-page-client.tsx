@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
 
@@ -150,12 +151,7 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-3 text-muted-foreground">Loading page...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading page..." />;
   }
 
   if (isError || !page) {

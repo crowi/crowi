@@ -2,10 +2,10 @@
 
 import { use } from 'react';
 import { notFound, useRouter } from 'next/navigation';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { ErrorAlert } from '@/components/ui/error-alert';
 import { UserProfile, UserRecentPages, UserBookmarks } from '@/components/user-page';
 import { PageHeader, PageContent } from '@/components/page-view';
 import { useUserPage } from '@/lib/use-user-page';
@@ -30,24 +30,14 @@ export default function UserPage({ params }: UserPageProps) {
   const { page: userPageDoc, notFound: userPageNotFound } = usePage({ path: userPagePath });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2 text-muted-foreground">Loading user profile...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading user profile..." className="py-12" />;
   }
 
   if (error) {
     if (error.message === 'User not found') {
       notFound();
     }
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>Failed to load user profile. Please try again later.</AlertDescription>
-      </Alert>
-    );
+    return <ErrorAlert message="Failed to load user profile. Please try again later." />;
   }
 
   if (!data) {

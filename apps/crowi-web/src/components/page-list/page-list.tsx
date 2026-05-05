@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { ErrorAlert } from '@/components/ui/error-alert';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { PageListItem } from './page-list-item';
 import { Pagination } from './pagination';
@@ -42,21 +42,11 @@ export function PageList({ initialParams = {} }: PageListProps) {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2 text-muted-foreground">Loading pages...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading pages..." className="py-12" />;
   }
 
   if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>Failed to load pages. Please try again later.</AlertDescription>
-      </Alert>
-    );
+    return <ErrorAlert message="Failed to load pages. Please try again later." />;
   }
 
   // Empty: no portal document and no children. Show a minimal header so the

@@ -2,10 +2,14 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, AlertCircle, Trash2, Lock, FilePlus2 } from 'lucide-react';
+import { Loader2, Trash2, FilePlus2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { ErrorAlert } from '@/components/ui/error-alert';
+import { AccessDeniedCard } from '@/components/ui/access-denied-card';
+import { NotFoundCard } from '@/components/ui/not-found-card';
 import { usePage } from '@/lib/use-page';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { useMarkSeenOnView } from '@/lib/use-seen';
@@ -25,96 +29,44 @@ export function PageView({ path }: PageViewProps) {
   const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
   useMarkSeenOnView(page?._id, canMarkSeen);
 
-  // Handle redirects
   useEffect(() => {
     if (redirectTo) {
-      // Add redirectFrom query parameter to track where we came from
       const redirectUrl = `${redirectTo}?redirectFrom=${encodeURIComponent(path)}`;
       router.replace(redirectUrl);
     }
   }, [redirectTo, path, router]);
 
-  // Loading state
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-3 text-muted-foreground">Loading page...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading page..." />;
   }
 
-  // Redirect in progress
   if (redirectTo) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-3 text-muted-foreground">Redirecting to {redirectTo}...</span>
-      </div>
-    );
+    return <LoadingSpinner message={`Redirecting to ${redirectTo}...`} />;
   }
 
-  // Error state
   if (isError) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>
-          Failed to load page. {error?.message || 'Please try again later.'}
-          <Button variant="outline" size="sm" className="ml-4" onClick={() => refetch()}>
-            Retry
-          </Button>
-        </AlertDescription>
-      </Alert>
-    );
+    return <ErrorAlert message={`Failed to load page. ${error?.message || 'Please try again later.'}`} onRetry={() => refetch()} />;
   }
 
-  // Not granted (403)
   if (notGranted) {
-    return (
-      <Card className="border-amber-200 dark:border-amber-800">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Lock className="h-5 w-5 text-amber-500" />
-            <CardTitle>Access Denied</CardTitle>
-          </div>
-          <CardDescription>You do not have permission to view this page.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">This page is private or you need to be granted access by the owner.</p>
-          <div className="mt-4">
-            <Button variant="outline" onClick={() => router.back()}>
-              Go Back
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <AccessDeniedCard onGoBack={() => router.back()} />;
   }
 
-  // Page not found (404) - show create form
   if (notFound) {
     return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <FilePlus2 className="h-5 w-5 text-primary" />
-            <CardTitle>Page Not Found</CardTitle>
-          </div>
-          <CardDescription>
+      <NotFoundCard
+        title="Page Not Found"
+        icon={FilePlus2}
+        iconClassName="text-primary"
+        description={
+          <>
             The page <code className="bg-muted px-2 py-0.5 rounded">{path}</code> does not exist yet.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground mb-4">Would you like to create this page?</p>
+          </>
+        }
+        body="Would you like to create this page?"
+        actions={
           <div className="flex gap-2">
-            <Button
-              variant="default"
-              onClick={() => {
-                router.push(`/edit?path=${encodeURIComponent(path)}`);
-              }}
-            >
+            <Button variant="default" onClick={() => router.push(`/edit?path=${encodeURIComponent(path)}`)}>
               <FilePlus2 className="h-4 w-4 mr-2" />
               Create Page
             </Button>
@@ -122,19 +74,17 @@ export function PageView({ path }: PageViewProps) {
               Go Back
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        }
+      />
     );
   }
 
-  // Deleted page - show trash warning
   if (page && isDeleted) {
     const handleRestore = () => {
       revertMutation.mutate(
         { page_id: page._id },
         {
           onSuccess: (restored) => {
-            // The reverted page is back at its original (non-/trash) path.
             router.replace(restored.path);
           },
         },
@@ -184,7 +134,6 @@ export function PageView({ path }: PageViewProps) {
     );
   }
 
-  // Normal page view
   if (page) {
     return (
       <Card>
@@ -203,6 +152,5 @@ export function PageView({ path }: PageViewProps) {
     );
   }
 
-  // Fallback - should not reach here
   return null;
 }
