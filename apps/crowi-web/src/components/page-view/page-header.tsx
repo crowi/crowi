@@ -1,29 +1,27 @@
 'use client';
 
-import { useState } from 'react';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/breadcrumb';
-import { Clock, User, Lock, FileText, Edit2, MoveRight } from 'lucide-react';
+import { Clock, User, Lock, FileText, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { BookmarkButton } from './bookmark-button';
-import { DeletePageButton } from './delete-page-button';
-import { RenameDialog } from './rename-dialog';
+import { PageActionsMenu } from './page-actions-menu';
 
 interface PageHeaderProps {
   page: PageWithRevision;
   onEdit?: () => void;
   /**
-   * When true, render the Delete button next to Edit. Hidden for already-deleted
-   * pages (PageView's deleted branch shows a Restore button instead).
+   * When true, render the overflow menu (...) with Rename / Delete actions.
+   * Hidden for already-deleted pages (PageView's deleted branch shows Restore
+   * directly and rename/delete don't apply).
    */
-  showDelete?: boolean;
+  showActions?: boolean;
 }
 
-export function PageHeader({ page, onEdit, showDelete = false }: PageHeaderProps) {
-  const [isRenameOpen, setIsRenameOpen] = useState(false);
+export function PageHeader({ page, onEdit, showActions = false }: PageHeaderProps) {
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
   const author = page.revision?.author ?? null;
@@ -60,17 +58,13 @@ export function PageHeader({ page, onEdit, showDelete = false }: PageHeaderProps
 
         <div className="flex items-center gap-2 flex-shrink-0">
           <BookmarkButton pageId={page._id} />
-          <Button variant="outline" size="sm" onClick={() => setIsRenameOpen(true)} aria-label="Rename page">
-            <MoveRight className="h-4 w-4 mr-1" />
-            Rename
-          </Button>
           {onEdit && (
             <Button variant="default" size="sm" onClick={onEdit}>
               <Edit2 className="h-4 w-4 mr-1" />
               Edit
             </Button>
           )}
-          {showDelete && <DeletePageButton pageId={page._id} pagePath={page.path} revisionId={page.revision?._id} />}
+          {showActions && <PageActionsMenu page={page} />}
         </div>
       </div>
 
@@ -113,8 +107,6 @@ export function PageHeader({ page, onEdit, showDelete = false }: PageHeaderProps
           </div>
         )}
       </div>
-
-      <RenameDialog page={page} open={isRenameOpen} onOpenChange={setIsRenameOpen} />
     </div>
   );
 }

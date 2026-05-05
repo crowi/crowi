@@ -190,7 +190,7 @@ export function PageView({ path }: PageViewProps) {
             onEdit={() => {
               router.push(`/edit?page_id=${encodeURIComponent(page._id)}`);
             }}
-            showDelete
+            showActions
           />
           <PageContent page={page} />
           <PageComments page={page} />
