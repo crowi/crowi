@@ -34,9 +34,7 @@ export default function UserPage({ params }: UserPageProps) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Failed to load user profile. Please try again later.
-        </AlertDescription>
+        <AlertDescription>Failed to load user profile. Please try again later.</AlertDescription>
       </Alert>
     );
   }
@@ -48,11 +46,7 @@ export default function UserPage({ params }: UserPageProps) {
   return (
     <div className="space-y-6">
       {/* Profile Card */}
-      <UserProfile
-        user={data.user}
-        createdPagesCount={data.createdPagesCount}
-        bookmarksCount={data.bookmarksCount}
-      />
+      <UserProfile user={data.user} createdPagesCount={data.createdPagesCount} bookmarksCount={data.bookmarksCount} />
 
       {/* Content Tabs */}
       <Tabs defaultValue="pages" className="w-full">

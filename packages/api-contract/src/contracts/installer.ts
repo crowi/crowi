@@ -1,10 +1,6 @@
 import { initContract } from '@ts-rest/core';
 import { z } from 'zod';
-import {
-  InstallerStatusResponseSchema,
-  CreateAdminRequestSchema,
-  CreateAdminResponseSchema,
-} from '../schemas/installer';
+import { InstallerStatusResponseSchema, CreateAdminRequestSchema, CreateAdminResponseSchema } from '../schemas/installer';
 
 const c = initContract();
 

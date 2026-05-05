@@ -57,10 +57,7 @@ export function usePageComments(pageId: string | null | undefined) {
       if (result.status === 200) {
         return result.body.comment;
       }
-      const message =
-        result.status === 400 || result.status === 404 || result.status === 403
-          ? result.body.error.message
-          : 'Failed to add comment';
+      const message = result.status === 400 || result.status === 404 || result.status === 403 ? result.body.error.message : 'Failed to add comment';
       throw new Error(message);
     },
     onSuccess: () => invalidate(),
@@ -75,10 +72,7 @@ export function usePageComments(pageId: string | null | undefined) {
       if (result.status === 200) {
         return true;
       }
-      const message =
-        result.status === 400 || result.status === 404 || result.status === 403
-          ? result.body.error.message
-          : 'Failed to delete comment';
+      const message = result.status === 400 || result.status === 404 || result.status === 403 ? result.body.error.message : 'Failed to delete comment';
       throw new Error(message);
     },
     onSuccess: () => invalidate(),

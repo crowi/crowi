@@ -22,14 +22,7 @@ interface UserRecentPagesProps {
 }
 
 export function UserRecentPages({ username, preview = false, previewLimit = 5 }: UserRecentPagesProps) {
-  const {
-    data,
-    isLoading,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useUserPagesInfinite(username, preview ? previewLimit : 10);
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useUserPagesInfinite(username, preview ? previewLimit : 10);
 
   if (isLoading) {
     return (
@@ -44,9 +37,7 @@ export function UserRecentPages({ username, preview = false, previewLimit = 5 }:
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Failed to load pages. Please try again later.
-        </AlertDescription>
+        <AlertDescription>Failed to load pages. Please try again later.</AlertDescription>
       </Alert>
     );
   }
@@ -79,9 +70,7 @@ export function UserRecentPages({ username, preview = false, previewLimit = 5 }:
       {preview && total > previewLimit && (
         <div className="text-center">
           <Button variant="outline" asChild>
-            <Link href={`/user/${username}/recent-create`}>
-              View all {total} pages
-            </Link>
+            <Link href={`/user/${username}/recent-create`}>View all {total} pages</Link>
           </Button>
         </div>
       )}
@@ -89,11 +78,7 @@ export function UserRecentPages({ username, preview = false, previewLimit = 5 }:
       {/* Full mode: "Load more" button */}
       {!preview && hasNextPage && (
         <div className="text-center">
-          <Button
-            variant="outline"
-            onClick={() => fetchNextPage()}
-            disabled={isFetchingNextPage}
-          >
+          <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
             {isFetchingNextPage ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />

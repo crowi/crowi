@@ -12,10 +12,7 @@ import {
   ApiTokenResponseSchema,
   ApiTokenErrorResponseSchema,
 } from '../schemas/me';
-import {
-  AuthenticationRequiredErrorSchema,
-  ApiErrorSchema,
-} from '../schemas/common';
+import { AuthenticationRequiredErrorSchema, ApiErrorSchema } from '../schemas/common';
 
 const c = initContract();
 

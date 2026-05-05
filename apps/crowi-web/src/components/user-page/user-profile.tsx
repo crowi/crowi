@@ -24,19 +24,11 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserPro
           {/* User Info */}
           <div className="flex-1 min-w-0">
             {/* Name and Username */}
-            <h1 className="text-2xl font-bold text-foreground truncate">
-              {displayName}
-            </h1>
-            <p className="text-muted-foreground">
-              @{user.username}
-            </p>
+            <h1 className="text-2xl font-bold text-foreground truncate">{displayName}</h1>
+            <p className="text-muted-foreground">@{user.username}</p>
 
             {/* Introduction */}
-            {user.introduction && (
-              <p className="mt-3 text-foreground whitespace-pre-wrap">
-                {user.introduction}
-              </p>
-            )}
+            {user.introduction && <p className="mt-3 text-foreground whitespace-pre-wrap">{user.introduction}</p>}
 
             {/* Statistics */}
             <div className="flex items-center gap-6 mt-4 text-sm text-muted-foreground">

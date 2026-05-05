@@ -7,12 +7,7 @@ import { Mail, KeyRound, PenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClient } from '@/lib/api-client';
 
@@ -120,21 +115,13 @@ export function LoginForm() {
             </div>
           </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            size="lg"
-            disabled={isSubmitting}
-          >
+          <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
             {isSubmitting ? 'サインイン中...' : 'サインイン'}
           </Button>
         </form>
 
         <div className="mt-6 pt-6 border-t text-center">
-          <Link
-            href="/register"
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-          >
+          <Link href="/register" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <PenLine className="h-4 w-4" />
             新規登録はこちら
           </Link>

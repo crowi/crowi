@@ -1,13 +1,7 @@
 'use client';
 
 import { AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useConnection } from '@/lib/connection-context';
 
@@ -30,9 +24,7 @@ export function ServerErrorModal() {
             <AlertTriangle className="h-6 w-6 text-red-600" aria-hidden="true" />
           </div>
           <DialogTitle className="text-xl">サーバーエラー</DialogTitle>
-          <DialogDescription className="text-base">
-            {error || 'APIサーバーに問題が発生しています。'}
-          </DialogDescription>
+          <DialogDescription className="text-base">{error || 'APIサーバーに問題が発生しています。'}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -46,9 +38,7 @@ export function ServerErrorModal() {
             {retryIn > 0 ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                <span className="text-sm">
-                  再接続を試みています... (次のリトライ: {retryIn}秒後)
-                </span>
+                <span className="text-sm">再接続を試みています... (次のリトライ: {retryIn}秒後)</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-muted-foreground">
@@ -57,21 +47,12 @@ export function ServerErrorModal() {
               </div>
             )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={retry}
-              className="mt-2"
-            >
+            <Button variant="outline" size="sm" onClick={retry} className="mt-2">
               <RefreshCw className="h-4 w-4 mr-2" />
               今すぐ再接続
             </Button>
 
-            {retryCount > 0 && (
-              <p className="text-xs text-muted-foreground">
-                リトライ回数: {retryCount}
-              </p>
-            )}
+            {retryCount > 0 && <p className="text-xs text-muted-foreground">リトライ回数: {retryCount}</p>}
           </div>
         </div>
       </DialogContent>

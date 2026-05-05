@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-  type ReactNode,
-} from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 
 export type ConnectionState = 'connected' | 'network-error' | 'server-error';
 
@@ -96,7 +88,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         }
       }, interval * 1000);
     },
-    [clearTimers]
+    [clearTimers],
   );
 
   // ネットワークエラー設定
@@ -112,7 +104,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         return newCount;
       });
     },
-    [state, scheduleRetry, clearTimers]
+    [state, scheduleRetry, clearTimers],
   );
 
   // サーバーエラー設定
@@ -127,7 +119,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         return newCount;
       });
     },
-    [state, scheduleRetry, clearTimers]
+    [state, scheduleRetry, clearTimers],
   );
 
   // 手動リトライ
@@ -158,11 +150,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     registerRetryCallback,
   };
 
-  return (
-    <ConnectionContext.Provider value={contextValue}>
-      {children}
-    </ConnectionContext.Provider>
-  );
+  return <ConnectionContext.Provider value={contextValue}>{children}</ConnectionContext.Provider>;
 }
 
 export function useConnection() {

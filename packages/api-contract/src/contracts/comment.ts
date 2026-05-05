@@ -9,10 +9,7 @@ import {
   CommentNotFoundErrorSchema,
   CommentInvalidRequestErrorSchema,
 } from '../schemas/comment';
-import {
-  PageNotFoundErrorSchema,
-  PageNotGrantedErrorSchema,
-} from '../schemas/page';
+import { PageNotFoundErrorSchema, PageNotGrantedErrorSchema } from '../schemas/page';
 import { AuthenticationRequiredErrorSchema } from '../schemas/common';
 
 const c = initContract();

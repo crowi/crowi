@@ -59,18 +59,20 @@ export type ProfileErrorResponse = z.infer<typeof ProfileErrorResponseSchema>;
 const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])[a-zA-Z\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]+$/;
 
 // Password update request schema
-export const UpdatePasswordRequestSchema = z.object({
-  oldPassword: z.string().optional(),
-  newPassword: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .max(100, 'Password must be at most 100 characters')
-    .regex(PASSWORD_REGEX, 'Password must contain at least one letter, one digit, and one special character'),
-  newPasswordConfirm: z.string(),
-}).refine((data) => data.newPassword === data.newPasswordConfirm, {
-  message: 'Passwords do not match',
-  path: ['newPasswordConfirm'],
-});
+export const UpdatePasswordRequestSchema = z
+  .object({
+    oldPassword: z.string().optional(),
+    newPassword: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .max(100, 'Password must be at most 100 characters')
+      .regex(PASSWORD_REGEX, 'Password must contain at least one letter, one digit, and one special character'),
+    newPasswordConfirm: z.string(),
+  })
+  .refine((data) => data.newPassword === data.newPasswordConfirm, {
+    message: 'Passwords do not match',
+    path: ['newPasswordConfirm'],
+  });
 export type UpdatePasswordRequest = z.infer<typeof UpdatePasswordRequestSchema>;
 
 // Password update success response schema

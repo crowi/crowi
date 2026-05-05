@@ -6,23 +6,13 @@ import Link from 'next/link';
 import { LogOut, Settings, User, Bookmark, FileText, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/use-auth';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { useConnection } from '@/lib/connection-context';
 
-export default function AuthLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
@@ -66,21 +56,13 @@ export default function AuthLayout({
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <img
-                src="/logo/500w-inverse.png"
-                alt="Crowi"
-                className="h-6 w-auto"
-              />
+              <img src="/logo/500w-inverse.png" alt="Crowi" className="h-6 w-auto" />
             </Link>
           </div>
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-white hover:bg-white/10 flex items-center gap-2"
-                >
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 flex items-center gap-2">
                   {user && <UserAvatar user={user} size="sm" />}
                   <span className="hidden sm:inline !text-white">{user?.name || user?.username}</span>
                 </Button>
@@ -133,9 +115,7 @@ export default function AuthLayout({
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        {children}
-      </main>
+      <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
     </div>
   );
 }

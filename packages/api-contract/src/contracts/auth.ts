@@ -1,12 +1,6 @@
 import { initContract } from '@ts-rest/core';
 import { z } from 'zod';
-import {
-  LoginRequestSchema,
-  LoginResponseSchema,
-  RegisterRequestSchema,
-  RegisterResponseSchema,
-  ErrorResponseSchema,
-} from '../schemas/auth';
+import { LoginRequestSchema, LoginResponseSchema, RegisterRequestSchema, RegisterResponseSchema, ErrorResponseSchema } from '../schemas/auth';
 import { ApplicationNotInstalledErrorSchema } from '../schemas/common';
 
 const c = initContract();

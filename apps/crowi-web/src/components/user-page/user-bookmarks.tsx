@@ -22,14 +22,7 @@ interface UserBookmarksProps {
 }
 
 export function UserBookmarks({ username, preview = false, previewLimit = 5 }: UserBookmarksProps) {
-  const {
-    data,
-    isLoading,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useUserBookmarksInfinite(username, preview ? previewLimit : 10);
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useUserBookmarksInfinite(username, preview ? previewLimit : 10);
 
   if (isLoading) {
     return (
@@ -44,9 +37,7 @@ export function UserBookmarks({ username, preview = false, previewLimit = 5 }: U
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Failed to load bookmarks. Please try again later.
-        </AlertDescription>
+        <AlertDescription>Failed to load bookmarks. Please try again later.</AlertDescription>
       </Alert>
     );
   }
@@ -79,9 +70,7 @@ export function UserBookmarks({ username, preview = false, previewLimit = 5 }: U
       {preview && total > previewLimit && (
         <div className="text-center">
           <Button variant="outline" asChild>
-            <Link href={`/user/${username}/bookmarks`}>
-              View all {total} bookmarks
-            </Link>
+            <Link href={`/user/${username}/bookmarks`}>View all {total} bookmarks</Link>
           </Button>
         </div>
       )}
@@ -89,11 +78,7 @@ export function UserBookmarks({ username, preview = false, previewLimit = 5 }: U
       {/* Full mode: "Load more" button */}
       {!preview && hasNextPage && (
         <div className="text-center">
-          <Button
-            variant="outline"
-            onClick={() => fetchNextPage()}
-            disabled={isFetchingNextPage}
-          >
+          <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
             {isFetchingNextPage ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />

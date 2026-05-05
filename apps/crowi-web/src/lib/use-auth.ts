@@ -9,11 +9,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
 function isNetworkError(error: unknown): boolean {
   if (error instanceof TypeError) {
     const message = error.message.toLowerCase();
-    return (
-      message.includes('failed to fetch') ||
-      message.includes('network') ||
-      message.includes('connection')
-    );
+    return message.includes('failed to fetch') || message.includes('network') || message.includes('connection');
   }
   return false;
 }
@@ -106,9 +102,7 @@ export function useAuth() {
         connectionHandlers?.setConnected();
       } else if (isServerError(response.status)) {
         // サーバーエラー（5xx）: トークンはクリアせず、サーバーエラーを通知
-        connectionHandlers?.setServerError(
-          `サーバーエラーが発生しました (${response.status})`
-        );
+        connectionHandlers?.setServerError(`サーバーエラーが発生しました (${response.status})`);
         // ローディング状態は解除するが、認証状態は維持
         setAuthState((prev) => ({
           ...prev,

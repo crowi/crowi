@@ -64,9 +64,7 @@ export function ProfilePicture({ profile }: ProfilePictureProps) {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <Avatar className="size-24">
-          {profile.image && (
-            <AvatarImage src={profile.image} alt={profile.name} />
-          )}
+          {profile.image && <AvatarImage src={profile.image} alt={profile.name} />}
           <AvatarFallback>
             <User className="size-12 text-muted-foreground" />
           </AvatarFallback>
@@ -74,34 +72,20 @@ export function ProfilePicture({ profile }: ProfilePictureProps) {
 
         <div className="flex-1 space-y-2">
           <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleUploadClick}
-              disabled={isLoading}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={handleUploadClick} disabled={isLoading}>
               <Upload className="mr-2" />
               {uploadPicture.isPending ? 'アップロード中...' : '画像を選択'}
             </Button>
 
             {profile.image && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleDelete}
-                disabled={isLoading}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={handleDelete} disabled={isLoading}>
                 <Trash2 className="mr-2" />
                 {deletePicture.isPending ? '削除中...' : '削除'}
               </Button>
             )}
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            推奨: 正方形の画像、最大5MB、JPG・PNG・GIF形式
-          </p>
+          <p className="text-xs text-muted-foreground">推奨: 正方形の画像、最大5MB、JPG・PNG・GIF形式</p>
         </div>
       </div>
 
@@ -111,14 +95,7 @@ export function ProfilePicture({ profile }: ProfilePictureProps) {
         </Alert>
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="hidden"
-        aria-label="プロフィール画像を選択"
-      />
+      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" aria-label="プロフィール画像を選択" />
     </div>
   );
 }

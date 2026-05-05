@@ -24,11 +24,7 @@ export function CommentItem({ comment, canDelete, isDeleting, onDelete }: Commen
   return (
     <div className="flex gap-3 py-3">
       <div className="flex-shrink-0 pt-0.5">
-        {creator ? (
-          <UserAvatar user={creator} size="sm" />
-        ) : (
-          <div className="h-6 w-6 rounded-full bg-muted" aria-hidden />
-        )}
+        {creator ? <UserAvatar user={creator} size="sm" /> : <div className="h-6 w-6 rounded-full bg-muted" aria-hidden />}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
@@ -37,14 +33,7 @@ export function CommentItem({ comment, canDelete, isDeleting, onDelete }: Commen
             <span className="text-muted-foreground text-xs">{formatDistanceToNow(comment.createdAt)}</span>
           </div>
           {canDelete && onDelete && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => onDelete(comment._id)}
-              disabled={isDeleting}
-              aria-label="Delete comment"
-            >
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => onDelete(comment._id)} disabled={isDeleting} aria-label="Delete comment">
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </Button>
           )}

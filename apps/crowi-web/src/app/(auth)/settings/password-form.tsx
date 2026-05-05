@@ -81,17 +81,8 @@ function PasswordRequirements({ password }: { password: string }) {
       <p className="text-xs text-muted-foreground mb-1">パスワード要件:</p>
       <ul className="space-y-0.5">
         {requirements.map((req) => (
-          <li
-            key={req.label}
-            className={`flex items-center gap-1.5 text-xs ${
-              req.met ? 'text-green-600' : 'text-muted-foreground'
-            }`}
-          >
-            {req.met ? (
-              <Check className="size-3" />
-            ) : (
-              <X className="size-3 text-muted-foreground/50" />
-            )}
+          <li key={req.label} className={`flex items-center gap-1.5 text-xs ${req.met ? 'text-green-600' : 'text-muted-foreground'}`}>
+            {req.met ? <Check className="size-3" /> : <X className="size-3 text-muted-foreground/50" />}
             {req.label}
           </li>
         ))}
@@ -185,9 +176,7 @@ export function PasswordForm({ profile }: PasswordFormProps) {
         newPasswordConfirm: '',
       });
     } catch (err) {
-      setErrors([
-        err instanceof Error ? err.message : 'パスワードの更新に失敗しました',
-      ]);
+      setErrors([err instanceof Error ? err.message : 'パスワードの更新に失敗しました']);
     }
   };
 
@@ -247,9 +236,7 @@ export function PasswordForm({ profile }: PasswordFormProps) {
 
         {!profile.hasPassword && (
           <Alert>
-            <AlertDescription>
-              パスワードがまだ設定されていません。新しいパスワードを設定してください。
-            </AlertDescription>
+            <AlertDescription>パスワードがまだ設定されていません。新しいパスワードを設定してください。</AlertDescription>
           </Alert>
         )}
 
@@ -316,11 +303,7 @@ export function PasswordForm({ profile }: PasswordFormProps) {
       </div>
 
       <div className="flex justify-end">
-        <Button
-          type="submit"
-          size="lg"
-          disabled={!isFormValid || updatePassword.isPending}
-        >
+        <Button type="submit" size="lg" disabled={!isFormValid || updatePassword.isPending}>
           <Save className="mr-2" />
           {updatePassword.isPending ? '更新中...' : 'パスワードを更新'}
         </Button>

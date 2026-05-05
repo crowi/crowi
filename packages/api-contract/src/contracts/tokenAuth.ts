@@ -1,16 +1,7 @@
 import { initContract } from '@ts-rest/core';
 import { z } from 'zod';
-import {
-  TokenAuthLoginRequestSchema,
-  TokenAuthRegisterRequestSchema,
-  TokenAuthResponseSchema,
-  RefreshTokenRequestSchema,
-} from '../schemas/auth';
-import { 
-  ApplicationNotInstalledErrorSchema,
-  AuthenticationRequiredErrorSchema,
-  ApiErrorSchema,
-} from '../schemas/common';
+import { TokenAuthLoginRequestSchema, TokenAuthRegisterRequestSchema, TokenAuthResponseSchema, RefreshTokenRequestSchema } from '../schemas/auth';
+import { ApplicationNotInstalledErrorSchema, AuthenticationRequiredErrorSchema, ApiErrorSchema } from '../schemas/common';
 
 const c = initContract();
 

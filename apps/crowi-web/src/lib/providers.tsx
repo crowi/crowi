@@ -15,7 +15,7 @@ export function Providers({ children }: { children: ReactNode }) {
             refetchOnWindowFocus: false,
           },
         },
-      })
+      }),
   );
 
   return (
@@ -38,17 +38,8 @@ function ConnectionErrorBridge({ children }: { children: ReactNode }) {
       setConnected: connection.setConnected,
       registerRetryCallback: connection.registerRetryCallback,
     }),
-    [
-      connection.setNetworkError,
-      connection.setServerError,
-      connection.setConnected,
-      connection.registerRetryCallback,
-    ]
+    [connection.setNetworkError, connection.setServerError, connection.setConnected, connection.registerRetryCallback],
   );
 
-  return (
-    <ConnectionErrorContext.Provider value={errorHandlers}>
-      {children}
-    </ConnectionErrorContext.Provider>
-  );
+  return <ConnectionErrorContext.Provider value={errorHandlers}>{children}</ConnectionErrorContext.Provider>;
 }

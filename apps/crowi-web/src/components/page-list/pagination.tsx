@@ -17,27 +17,15 @@ export function Pagination({ pager, limit, onPageChange }: PaginationProps) {
 
   return (
     <div className="flex items-center justify-between gap-4 py-4">
-      <div className="text-sm text-muted-foreground">
-        Page {currentPage}
-      </div>
+      <div className="text-sm text-muted-foreground">Page {currentPage}</div>
 
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => pager.prev !== null && onPageChange(pager.prev)}
-          disabled={!hasPrev}
-        >
+        <Button variant="outline" size="sm" onClick={() => pager.prev !== null && onPageChange(pager.prev)} disabled={!hasPrev}>
           <ChevronLeft className="h-4 w-4 mr-1" />
           Previous
         </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => pager.next !== null && onPageChange(pager.next)}
-          disabled={!hasNext}
-        >
+        <Button variant="outline" size="sm" onClick={() => pager.next !== null && onPageChange(pager.next)} disabled={!hasNext}>
           Next
           <ChevronRight className="h-4 w-4 ml-1" />
         </Button>

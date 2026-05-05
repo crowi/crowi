@@ -12,11 +12,7 @@ export function PageContent({ page }: PageContentProps) {
   const body = page.revision?.body || '';
 
   if (!body) {
-    return (
-      <div className="text-muted-foreground text-center py-8">
-        This page has no content.
-      </div>
-    );
+    return <div className="text-muted-foreground text-center py-8">This page has no content.</div>;
   }
 
   return (
@@ -67,10 +63,7 @@ export function PageContent({ page }: PageContentProps) {
 
             if (isInline) {
               return (
-                <code
-                  className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono"
-                  {...props}
-                >
+                <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
                   {children}
                 </code>
               );
@@ -84,19 +77,13 @@ export function PageContent({ page }: PageContentProps) {
           },
           // Custom pre (code block container) rendering
           pre: ({ children, ...props }) => (
-            <pre
-              className="bg-muted p-4 rounded-lg overflow-x-auto text-sm"
-              {...props}
-            >
+            <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm" {...props}>
               {children}
             </pre>
           ),
           // Custom blockquote rendering
           blockquote: ({ children, ...props }) => (
-            <blockquote
-              className="border-l-4 border-primary/30 pl-4 italic text-muted-foreground"
-              {...props}
-            >
+            <blockquote className="border-l-4 border-primary/30 pl-4 italic text-muted-foreground" {...props}>
               {children}
             </blockquote>
           ),
@@ -109,10 +96,7 @@ export function PageContent({ page }: PageContentProps) {
             </div>
           ),
           th: ({ children, ...props }) => (
-            <th
-              className="border border-border bg-muted px-4 py-2 text-left font-semibold"
-              {...props}
-            >
+            <th className="border border-border bg-muted px-4 py-2 text-left font-semibold" {...props}>
               {children}
             </th>
           ),
@@ -133,15 +117,7 @@ export function PageContent({ page }: PageContentProps) {
             </ol>
           ),
           // Custom image rendering
-          img: ({ src, alt, ...props }) => (
-            <img
-              src={src}
-              alt={alt || ''}
-              className="max-w-full h-auto rounded-lg"
-              loading="lazy"
-              {...props}
-            />
-          ),
+          img: ({ src, alt, ...props }) => <img src={src} alt={alt || ''} className="max-w-full h-auto rounded-lg" loading="lazy" {...props} />,
           // Custom horizontal rule
           hr: ({ ...props }) => <hr className="my-6 border-border" {...props} />,
           // Custom paragraph

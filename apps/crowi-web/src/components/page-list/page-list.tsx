@@ -42,9 +42,7 @@ export function PageList({ initialParams = {} }: PageListProps) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Failed to load pages. Please try again later.
-        </AlertDescription>
+        <AlertDescription>Failed to load pages. Please try again later.</AlertDescription>
       </Alert>
     );
   }
@@ -76,13 +74,7 @@ export function PageList({ initialParams = {} }: PageListProps) {
       )}
 
       {/* Pagination */}
-      {data.pages.length > 0 && (
-        <Pagination
-          pager={data.pager}
-          limit={params.limit}
-          onPageChange={handlePageChange}
-        />
-      )}
+      {data.pages.length > 0 && <Pagination pager={data.pager} limit={params.limit} onPageChange={handlePageChange} />}
     </div>
   );
 }

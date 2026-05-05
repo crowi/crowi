@@ -7,13 +7,7 @@ import { AtSign, User, Mail, KeyRound, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClient } from '@/lib/api-client';
 
@@ -56,11 +50,7 @@ export function RegisterForm() {
 
         // Redirect to home
         router.push('/');
-      } else if (
-        result.status === 400 ||
-        result.status === 409 ||
-        result.status === 503
-      ) {
+      } else if (result.status === 400 || result.status === 409 || result.status === 503) {
         setErrors([result.body.error.message || '登録に失敗しました']);
       } else {
         setErrors(['予期しないエラーが発生しました']);
@@ -76,9 +66,7 @@ export function RegisterForm() {
     <Card className="shadow-2xl">
       <CardHeader className="space-y-1">
         <CardTitle className="text-xl text-center">新規登録</CardTitle>
-        <CardDescription className="text-center">
-          アカウントを作成してください
-        </CardDescription>
+        <CardDescription className="text-center">アカウントを作成してください</CardDescription>
       </CardHeader>
       <CardContent>
         {errors.length > 0 && (
@@ -110,9 +98,7 @@ export function RegisterForm() {
                 autoComplete="username"
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。
-            </p>
+            <p className="text-xs text-muted-foreground">ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。</p>
           </div>
 
           <div className="space-y-2">
@@ -168,26 +154,16 @@ export function RegisterForm() {
                 autoComplete="new-password"
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              パスワードは6文字以上の半角英数字または記号
-            </p>
+            <p className="text-xs text-muted-foreground">パスワードは6文字以上の半角英数字または記号</p>
           </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            size="lg"
-            disabled={isSubmitting}
-          >
+          <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
             {isSubmitting ? '登録中...' : '新規登録'}
           </Button>
         </form>
 
         <div className="mt-6 pt-6 border-t text-center">
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-          >
+          <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <LogIn className="h-4 w-4" />
             サインインはこちら
           </Link>

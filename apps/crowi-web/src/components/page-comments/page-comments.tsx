@@ -25,17 +25,7 @@ export function PageComments({ page }: PageCommentsProps) {
   const revisionId = typeof page.revision === 'object' ? page.revision._id : (page.revision ?? null);
   const isReadOnly = page.status === 'deleted';
 
-  const {
-    comments,
-    isLoading,
-    isError,
-    error,
-    addComment,
-    isAdding,
-    addError,
-    deleteComment,
-    isDeleting,
-  } = usePageComments(pageId);
+  const { comments, isLoading, isError, error, addComment, isAdding, addError, deleteComment, isDeleting } = usePageComments(pageId);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -80,9 +70,7 @@ export function PageComments({ page }: PageCommentsProps) {
         </Alert>
       )}
 
-      {!isLoading && !isError && comments.length === 0 && (
-        <p className="text-sm text-muted-foreground py-4">No comments yet.</p>
-      )}
+      {!isLoading && !isError && comments.length === 0 && <p className="text-sm text-muted-foreground py-4">No comments yet.</p>}
 
       {!isLoading && !isError && comments.length > 0 && (
         <ul className="divide-y">

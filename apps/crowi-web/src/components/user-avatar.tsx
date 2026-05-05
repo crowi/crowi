@@ -32,9 +32,7 @@ export function UserAvatar({ user, size = 'md', className }: UserAvatarProps) {
   return (
     <Avatar className={cn(sizeClasses[size], className)}>
       {user.image ? <AvatarImage src={user.image} alt={displayName} /> : null}
-      <AvatarFallback className={cn('!bg-[#43676b] !text-white font-semibold', textSizeClasses[size])}>
-        {initials}
-      </AvatarFallback>
+      <AvatarFallback className={cn('!bg-[#43676b] !text-white font-semibold', textSizeClasses[size])}>{initials}</AvatarFallback>
     </Avatar>
   );
 }

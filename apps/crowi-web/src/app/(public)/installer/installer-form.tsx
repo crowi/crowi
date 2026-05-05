@@ -6,13 +6,7 @@ import { AtSign, User, Mail, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClient } from '@/lib/api-client';
 
@@ -67,9 +61,7 @@ export function InstallerForm() {
     <Card className="shadow-2xl">
       <CardHeader className="space-y-1">
         <CardTitle className="text-xl text-center">管理者の作成</CardTitle>
-        <CardDescription className="text-center">
-          はじめに、管理者アカウントを作成してください。
-        </CardDescription>
+        <CardDescription className="text-center">はじめに、管理者アカウントを作成してください。</CardDescription>
       </CardHeader>
       <CardContent>
         {errors.length > 0 && (
@@ -100,9 +92,7 @@ export function InstallerForm() {
                 required
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。
-            </p>
+            <p className="text-xs text-muted-foreground">ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。</p>
           </div>
 
           <div className="space-y-2">
@@ -126,16 +116,7 @@ export function InstallerForm() {
             <Label htmlFor="email">メールアドレス</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="E-mail"
-                value={formData.email}
-                onChange={handleChange}
-                className="pl-10"
-                required
-              />
+              <Input id="email" name="email" type="email" placeholder="E-mail" value={formData.email} onChange={handleChange} className="pl-10" required />
             </div>
           </div>
 
@@ -155,17 +136,10 @@ export function InstallerForm() {
                 minLength={6}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              パスワードは6文字以上の半角英数字または記号
-            </p>
+            <p className="text-xs text-muted-foreground">パスワードは6文字以上の半角英数字または記号</p>
           </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            size="lg"
-            disabled={isSubmitting}
-          >
+          <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
             {isSubmitting ? '作成中...' : '作成'}
           </Button>
         </form>

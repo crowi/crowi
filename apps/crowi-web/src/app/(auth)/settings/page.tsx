@@ -7,13 +7,7 @@ import { ProfilePicture } from './profile-picture';
 import { PasswordForm } from './password-form';
 import { ApiTokenSection } from './api-token-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function SettingsPage() {
   const { data: profile, isLoading, error } = useProfile();
@@ -32,9 +26,7 @@ export default function SettingsPage() {
   if (error) {
     return (
       <Alert variant="destructive">
-        <AlertDescription>
-          プロフィールの読み込みに失敗しました。ログインしていることを確認してください。
-        </AlertDescription>
+        <AlertDescription>プロフィールの読み込みに失敗しました。ログインしていることを確認してください。</AlertDescription>
       </Alert>
     );
   }
@@ -42,9 +34,7 @@ export default function SettingsPage() {
   if (!profile) {
     return (
       <Alert variant="destructive">
-        <AlertDescription>
-          プロフィールが見つかりませんでした。
-        </AlertDescription>
+        <AlertDescription>プロフィールが見つかりませんでした。</AlertDescription>
       </Alert>
     );
   }
@@ -56,9 +46,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>プロフィール画像</CardTitle>
-              <CardDescription>
-                あなたのプロフィール画像を変更できます
-              </CardDescription>
+              <CardDescription>あなたのプロフィール画像を変更できます</CardDescription>
             </CardHeader>
             <CardContent>
               <ProfilePicture profile={profile} />
@@ -68,9 +56,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>基本情報</CardTitle>
-              <CardDescription>
-                名前、メールアドレス、言語設定を変更できます
-              </CardDescription>
+              <CardDescription>名前、メールアドレス、言語設定を変更できます</CardDescription>
             </CardHeader>
             <CardContent>
               <ProfileForm profile={profile} />
@@ -102,9 +88,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>パスワード変更</CardTitle>
-              <CardDescription>
-                アカウントのパスワードを変更できます
-              </CardDescription>
+              <CardDescription>アカウントのパスワードを変更できます</CardDescription>
             </CardHeader>
             <CardContent>
               <PasswordForm profile={profile} />
@@ -114,9 +98,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>APIトークン</CardTitle>
-              <CardDescription>
-                API経由でCrowiにアクセスするためのトークンを管理します
-              </CardDescription>
+              <CardDescription>API経由でCrowiにアクセスするためのトークンを管理します</CardDescription>
             </CardHeader>
             <CardContent>
               <ApiTokenSection />

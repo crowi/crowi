@@ -50,9 +50,7 @@ export function PageListItem({ page }: PageListItemProps) {
       {displayUser && (
         <Avatar className="h-10 w-10 flex-shrink-0">
           <AvatarImage src={displayUser.image || undefined} alt={displayName} />
-          <AvatarFallback className="bg-primary/10 text-primary">
-            {displayName.charAt(0).toUpperCase()}
-          </AvatarFallback>
+          <AvatarFallback className="bg-primary/10 text-primary">{displayName.charAt(0).toUpperCase()}</AvatarFallback>
         </Avatar>
       )}
 
@@ -60,18 +58,11 @@ export function PageListItem({ page }: PageListItemProps) {
       <div className="flex-1 min-w-0">
         {/* Page path and icons */}
         <div className="flex items-center gap-2 mb-1">
-          <Link
-            href={page.path}
-            className="font-medium text-foreground hover:text-primary transition-colors truncate"
-          >
+          <Link href={page.path} className="font-medium text-foreground hover:text-primary transition-colors truncate">
             {page.path}
           </Link>
-          {isPortal && (
-            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Portal page" />
-          )}
-          {isPrivate && (
-            <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Private page" />
-          )}
+          {isPortal && <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Portal page" />}
+          {isPrivate && <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Private page" />}
         </div>
 
         {/* User and date info */}
@@ -79,9 +70,7 @@ export function PageListItem({ page }: PageListItemProps) {
           <div className="text-sm text-muted-foreground">
             <span className="font-medium">{displayName}</span>
             {' · '}
-            <time dateTime={page.updatedAt || page.createdAt}>
-              {formatDate(page.updatedAt || page.createdAt)}
-            </time>
+            <time dateTime={page.updatedAt || page.createdAt}>{formatDate(page.updatedAt || page.createdAt)}</time>
           </div>
         )}
 
