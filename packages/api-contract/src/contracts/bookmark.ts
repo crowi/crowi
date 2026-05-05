@@ -6,10 +6,9 @@ import {
   AddBookmarkRequestSchema,
   RemoveBookmarkRequestSchema,
   RemoveBookmarkResponseSchema,
-  InvalidPageIdErrorSchema,
 } from '../schemas/bookmark';
 import { PaginationRequestSchema } from '../schemas/user';
-import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
 
 const c = initContract();
 

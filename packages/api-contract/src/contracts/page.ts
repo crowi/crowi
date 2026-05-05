@@ -11,8 +11,11 @@ import {
   PageNotFoundErrorSchema,
   PageNotGrantedErrorSchema,
   PageRevisionErrorSchema,
+  SeenPageRequestSchema,
+  SeenUsersResponseSchema,
+  GetSeenUsersRequestSchema,
 } from '../schemas/page';
-import { AuthenticationRequiredErrorSchema } from '../schemas/common';
+import { AuthenticationRequiredErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
 
 const c = initContract();
 
@@ -89,13 +92,30 @@ export const pageContract = c.router({
   seenPage: {
     method: 'POST',
     path: '/pages/seen',
-    body: z.object({ page_id: z.string() }),
+    body: SeenPageRequestSchema,
     responses: {
-      200: z.object({ seenUser: z.any() }),
+      200: SeenUsersResponseSchema,
+      400: InvalidPageIdErrorSchema,
       401: AuthenticationRequiredErrorSchema,
       404: PageNotFoundErrorSchema,
     },
     summary: 'Mark page as seen',
+  },
+
+  /**
+   * Get users who have seen a page (read-only)
+   */
+  getSeenUsers: {
+    method: 'GET',
+    path: '/pages/seen-users',
+    query: GetSeenUsersRequestSchema,
+    responses: {
+      200: SeenUsersResponseSchema,
+      400: InvalidPageIdErrorSchema,
+      401: AuthenticationRequiredErrorSchema,
+      404: PageNotFoundErrorSchema,
+    },
+    summary: 'Get users who have seen a page',
   },
 
   /**

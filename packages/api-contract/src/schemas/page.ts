@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { UserPublicSchema } from './userPublic';
 
 // Page grant enum - matches Page model constants
 export const PageGrantSchema = z.enum(['1', '2', '3', '4']).transform((val) => Number(val));
@@ -165,3 +166,19 @@ export const PageRevisionErrorSchema = z.object({
 export type PageNotFoundError = z.infer<typeof PageNotFoundErrorSchema>;
 export type PageNotGrantedError = z.infer<typeof PageNotGrantedErrorSchema>;
 export type PageRevisionError = z.infer<typeof PageRevisionErrorSchema>;
+
+export const SeenPageRequestSchema = z.object({
+  page_id: z.string(),
+});
+export type SeenPageRequest = z.infer<typeof SeenPageRequestSchema>;
+
+export const SeenUsersResponseSchema = z.object({
+  seenUsers: z.array(UserPublicSchema),
+  seenUsersCount: z.number(),
+});
+export type SeenUsersResponse = z.infer<typeof SeenUsersResponseSchema>;
+
+export const GetSeenUsersRequestSchema = z.object({
+  page_id: z.string(),
+});
+export type GetSeenUsersRequest = z.infer<typeof GetSeenUsersRequestSchema>;

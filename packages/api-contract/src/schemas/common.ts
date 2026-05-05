@@ -47,9 +47,17 @@ export const InternalServerErrorSchema = ApiErrorSchema.extend({
   }),
 });
 
+export const InvalidPageIdErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('INVALID_PAGE_ID'),
+    message: z.string(),
+  }),
+});
+
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type ApplicationNotInstalledError = z.infer<typeof ApplicationNotInstalledErrorSchema>;
 export type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
 export type UserStatusError = z.infer<typeof UserStatusErrorSchema>;
 export type ThirdPartyAuthRequiredError = z.infer<typeof ThirdPartyAuthRequiredErrorSchema>;
 export type InternalServerError = z.infer<typeof InternalServerErrorSchema>;
+export type InvalidPageIdError = z.infer<typeof InvalidPageIdErrorSchema>;

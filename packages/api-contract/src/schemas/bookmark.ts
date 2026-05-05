@@ -49,12 +49,3 @@ export const RemoveBookmarkResponseSchema = z.object({
   ok: z.literal(true),
 });
 export type RemoveBookmarkResponse = z.infer<typeof RemoveBookmarkResponseSchema>;
-
-// Errors specific to bookmark
-export const InvalidPageIdErrorSchema = z.object({
-  error: z.object({
-    code: z.literal('INVALID_PAGE_ID'),
-    message: z.string(),
-  }),
-});
-export type InvalidPageIdError = z.infer<typeof InvalidPageIdErrorSchema>;
