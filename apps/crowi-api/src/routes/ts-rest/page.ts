@@ -4,6 +4,7 @@ import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
+import { toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:page');
@@ -22,18 +23,24 @@ const invalidGrantResponse = () =>
   }) as const;
 
 /**
- * Convert PageDocument to serializable object for API response
+ * Populated user serialization treats `_id` as the discriminator: a populated
+ * subdocument always exposes the user fields alongside _id, while an
+ * unpopulated reference is just the ObjectId. Anything else is treated as
+ * "not populated" and dropped to null.
  */
+const isPopulatedUser = (
+  value: unknown,
+): value is { _id: { toString(): string }; username: string; name: string; email: string; image?: string | null; createdAt?: Date } => {
+  return !!value && typeof value === 'object' && 'username' in value && 'email' in value;
+};
+
 const pageToResponse = (page: PageDocument) => {
-  const pageObj = page.toObject() as any; // Use any to handle dynamic mongoose document
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const pageObj = page.toObject() as any;
 
-  // Helper to safely convert date to ISO string
-  const toISOStringOrNull = (date: Date | undefined | null): string | null => {
-    if (!date) return null;
-    return date instanceof Date ? date.toISOString() : String(date);
-  };
-
-  // Convert ObjectIds to strings
+  // Schema (PageSchema) declares some date fields as required strings, but Mongoose
+  // can yield Date | null at runtime. We accept the schema/runtime drift for now —
+  // see migration advisory: align PageSchema timestamps with nullable.
   const result: any = {
     _id: page._id.toString(),
     path: page.path,
@@ -43,17 +50,7 @@ const pageToResponse = (page: PageDocument) => {
           path: pageObj.revision.path,
           body: pageObj.revision.body,
           format: pageObj.revision.format || 'markdown',
-          author: pageObj.revision.author
-            ? {
-                _id: pageObj.revision.author._id.toString(),
-                id: pageObj.revision.author._id.toString(),
-                username: pageObj.revision.author.username,
-                name: pageObj.revision.author.name,
-                email: pageObj.revision.author.email,
-                image: pageObj.revision.author.image || null,
-                createdAt: toISOStringOrNull(pageObj.revision.author.createdAt),
-              }
-            : null,
+          author: isPopulatedUser(pageObj.revision.author) ? toPageUser(pageObj.revision.author) : null,
           createdAt: toISOStringOrNull(pageObj.revision.createdAt),
         }
       : undefined,
@@ -61,28 +58,8 @@ const pageToResponse = (page: PageDocument) => {
     status: page.status || null,
     grant: page.grant,
     grantedUsers: page.grantedUsers?.map((id) => id.toString()) || [],
-    creator: pageObj.creator
-      ? {
-          _id: pageObj.creator._id.toString(),
-          id: pageObj.creator._id.toString(),
-          username: pageObj.creator.username,
-          name: pageObj.creator.name,
-          email: pageObj.creator.email,
-          image: pageObj.creator.image || null,
-          createdAt: toISOStringOrNull(pageObj.creator.createdAt),
-        }
-      : null,
-    lastUpdateUser: pageObj.lastUpdateUser
-      ? {
-          _id: pageObj.lastUpdateUser._id.toString(),
-          id: pageObj.lastUpdateUser._id.toString(),
-          username: pageObj.lastUpdateUser.username,
-          name: pageObj.lastUpdateUser.name,
-          email: pageObj.lastUpdateUser.email,
-          image: pageObj.lastUpdateUser.image || null,
-          createdAt: toISOStringOrNull(pageObj.lastUpdateUser.createdAt),
-        }
-      : null,
+    creator: isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
+    lastUpdateUser: isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
     liker: page.liker?.map((id) => id.toString()) || [],
     seenUsers: page.seenUsers?.map((id) => id.toString()) || [],
     commentCount: page.commentCount || 0,
@@ -93,8 +70,8 @@ const pageToResponse = (page: PageDocument) => {
     likerCount: pageObj.likerCount,
     seenUsersCount: pageObj.seenUsersCount,
   };
-
   return result;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 };
 
 export default (crowi: Crowi, _app: Express) => {

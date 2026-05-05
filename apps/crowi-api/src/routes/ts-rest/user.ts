@@ -1,26 +1,15 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract, UserPublic, Page, PageUser, Bookmark, Revision } from '@crowi/api-contract';
+import { apiContract, UserPublic, Page, Bookmark, Revision } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { BookmarkDocument } from 'src/models/bookmark';
 import { Types } from 'mongoose';
+import { PopulatedUser, toISOStringOrNull, toStringId, toPageUser } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:user');
-
-/**
- * Type for populated user fields in Mongoose documents
- */
-interface PopulatedUser {
-  _id: Types.ObjectId;
-  username: string;
-  name: string;
-  email: string;
-  image?: string | null;
-  createdAt?: Date;
-}
 
 /**
  * Type for populated revision in Mongoose documents
@@ -69,34 +58,6 @@ interface BookmarkLike {
   createdAt?: Date;
   toObject?: () => BookmarkLike;
 }
-
-/**
- * Helper to safely convert date to ISO string
- */
-const toISOStringOrNull = (date: Date | undefined | null): string | null => {
-  if (!date) return null;
-  return date instanceof Date ? date.toISOString() : String(date);
-};
-
-/**
- * Helper to convert ObjectId or string to string
- */
-const toStringId = (id: Types.ObjectId | string): string => {
-  return typeof id === 'string' ? id : id.toString();
-};
-
-/**
- * Convert user data to PageUser response format
- */
-const toPageUser = (user: PopulatedUser): PageUser => ({
-  _id: user._id.toString(),
-  id: user._id.toString(),
-  username: user.username,
-  name: user.name,
-  email: user.email,
-  image: user.image || null,
-  createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
-});
 
 /**
  * Convert UserDocument to serializable object for API response

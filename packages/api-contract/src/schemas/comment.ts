@@ -6,7 +6,7 @@ export const CommentSchema = z.object({
   _id: z.string(),
   page: z.string(),
   // creator is populated to a user object on the API side; allow string fallback for safety
-  creator: z.union([z.string(), PageUserSchema]).nullable().optional(),
+  creator: z.union([z.string(), PageUserSchema]).nullable(),
   revision: z.string(),
   comment: z.string(),
   commentPosition: z.number().default(-1),

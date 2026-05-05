@@ -1,14 +1,17 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract } from '@crowi/api-contract';
+import { apiContract, type PageUser } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { Types } from 'mongoose';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { CommentDocument } from 'src/models/comment';
+import { isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:comment');
+
+const COMMENT_POSITION_DEFAULT = -1;
 
 /**
  * Convert CommentDocument (with optionally populated creator) to API response shape.
@@ -16,38 +19,11 @@ const debug = Debug('crowi:routes:ts-rest:comment');
  * - revision is returned as a string id (UI does not need full revision object)
  */
 const commentToResponse = (comment: CommentDocument) => {
-  // toObject() may include a populated `creator` document; cast to any for traversal
   const obj = comment.toObject() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-  const toISOStringOrNull = (date: Date | undefined | null): string | null => {
-    if (!date) return null;
-    return date instanceof Date ? date.toISOString() : String(date);
-  };
-
-  // creator may be: ObjectId (string), populated user object, or null
-  type SerializedCreator =
-    | string
-    | {
-        _id: string;
-        id: string;
-        username: string;
-        name: string;
-        email: string;
-        image: string | null;
-        createdAt: string;
-      }
-    | null;
-  let creator: SerializedCreator = null;
+  let creator: string | PageUser | null = null;
   if (obj.creator && typeof obj.creator === 'object' && '_id' in obj.creator && 'username' in obj.creator) {
-    creator = {
-      _id: obj.creator._id.toString(),
-      id: obj.creator._id.toString(),
-      username: obj.creator.username,
-      name: obj.creator.name,
-      email: obj.creator.email,
-      image: obj.creator.image || null,
-      createdAt: toISOStringOrNull(obj.creator.createdAt) ?? new Date(0).toISOString(),
-    };
+    creator = toPageUser(obj.creator);
   } else if (obj.creator) {
     creator = obj.creator.toString();
   }
@@ -58,12 +34,10 @@ const commentToResponse = (comment: CommentDocument) => {
     creator,
     revision: comment.revision.toString(),
     comment: comment.comment,
-    commentPosition: typeof comment.commentPosition === 'number' ? comment.commentPosition : -1,
+    commentPosition: typeof comment.commentPosition === 'number' ? comment.commentPosition : COMMENT_POSITION_DEFAULT,
     createdAt: toISOStringOrNull(comment.createdAt) ?? new Date(0).toISOString(),
   };
 };
-
-const isValidObjectId = (id: string | undefined): id is string => !!id && Types.ObjectId.isValid(id);
 
 export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
@@ -164,7 +138,7 @@ export default (crowi: Crowi, _app: Express) => {
           creator: user._id,
           revision: new Types.ObjectId(revision_id),
           comment,
-          commentPosition: comment_position ?? -1,
+          commentPosition: comment_position ?? COMMENT_POSITION_DEFAULT,
         });
         const populated = (await created.populate('creator')) as CommentDocument;
 
