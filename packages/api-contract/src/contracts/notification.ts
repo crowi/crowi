@@ -37,7 +37,10 @@ export const notificationContract = c.router({
   markAllAsRead: {
     method: 'POST',
     path: '/notifications/read',
-    body: z.undefined(),
+    // Body is intentionally empty. We use z.unknown() rather than z.undefined()
+    // because Express body-parser hydrates req.body to `{}` for empty POSTs,
+    // which would fail z.undefined() validation upstream of the handler.
+    body: z.unknown(),
     responses: {
       200: MarkAllAsReadResponseSchema,
       401: AuthenticationRequiredErrorSchema,
@@ -54,7 +57,8 @@ export const notificationContract = c.router({
     method: 'POST',
     path: '/notifications/:id/open',
     pathParams: OpenNotificationParamSchema,
-    body: z.undefined(),
+    // See markAllAsRead for the rationale behind z.unknown().
+    body: z.unknown(),
     responses: {
       200: OpenNotificationResponseSchema,
       401: AuthenticationRequiredErrorSchema,
