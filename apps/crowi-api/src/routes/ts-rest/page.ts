@@ -4,7 +4,15 @@ import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
-import { isValidObjectId, toISOStringOrNull, toPageUser, toUserPublic } from 'src/util/ts-rest-helpers';
+import {
+  invalidPageIdResponse,
+  isPopulatedUser,
+  isValidObjectId,
+  pageNotFoundResponse,
+  toISOStringOrNull,
+  toPageUser,
+  toUserPublic,
+} from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:page');
@@ -21,30 +29,6 @@ const invalidGrantResponse = () =>
       },
     },
   }) as const;
-
-// Mapped to 404 (not 403) for both 'not found' and 'not granted' so we
-// do not leak page existence to callers without grant.
-const pageNotFoundResponse = {
-  status: 404 as const,
-  body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
-} as const;
-
-const invalidPageIdResponse = {
-  status: 400 as const,
-  body: { error: { code: 'INVALID_PAGE_ID' as const, message: 'Invalid page_id' } },
-} as const;
-
-/**
- * Populated user serialization treats `_id` as the discriminator: a populated
- * subdocument always exposes the user fields alongside _id, while an
- * unpopulated reference is just the ObjectId. Anything else is treated as
- * "not populated" and dropped to null.
- */
-const isPopulatedUser = (
-  value: unknown,
-): value is { _id: { toString(): string }; username: string; name: string; email: string; image?: string | null; createdAt?: Date } => {
-  return !!value && typeof value === 'object' && 'username' in value && 'email' in value;
-};
 
 const pageToResponse = (page: PageDocument) => {
   /* eslint-disable @typescript-eslint/no-explicit-any */

@@ -34,16 +34,33 @@ export const toPageUser = (user: PopulatedUser): PageUser => ({
   createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
 });
 
-export const toUserPublic = (user: UserDocument): UserPublic => ({
-  _id: user._id.toString(),
-  id: user._id.toString(),
-  username: user.username,
-  name: user.name,
-  email: user.email,
-  image: user.image || null,
-  introduction: user.introduction || '',
-  createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
-  admin: user.admin || false,
+/**
+ * Looser shape than UserDocument: covers populated subdocuments where _id may
+ * already be a string and most fields can be missing. Falls back gracefully so
+ * the response payload always satisfies UserPublicSchema.
+ */
+export interface PopulatedUserPublic {
+  _id: Types.ObjectId | string;
+  username?: string;
+  name?: string;
+  email?: string;
+  image?: string | null;
+  introduction?: string;
+  createdAt?: Date;
+  admin?: boolean;
+  status?: number;
+}
+
+export const toUserPublic = (user: UserDocument | PopulatedUserPublic): UserPublic => ({
+  _id: toStringId(user._id),
+  id: toStringId(user._id),
+  username: user.username ?? '',
+  name: user.name ?? '',
+  email: user.email ?? '',
+  image: user.image ?? null,
+  introduction: user.introduction ?? '',
+  createdAt: toISOStringOrNull(user.createdAt) ?? new Date().toISOString(),
+  admin: user.admin ?? false,
   status: user.status,
 });
 
@@ -53,3 +70,29 @@ export const toUserPublic = (user: UserDocument): UserPublic => ({
  * only accept the canonical hex string used in URLs and request bodies.
  */
 export const isValidObjectId = (id: string | undefined | null): id is string => typeof id === 'string' && /^[0-9a-f]{24}$/.test(id);
+
+/**
+ * Heuristic for "this is a populated user document, not just an ObjectId".
+ * The 4 ts-rest routes all need this; the loose form (only _id + username +
+ * email) covers all current call sites.
+ */
+export const isPopulatedUser = (value: unknown): value is PopulatedUser => {
+  return !!value && typeof value === 'object' && '_id' in value && 'username' in value && 'email' in value;
+};
+
+/**
+ * Standard 404 for "page not found OR not granted". Mapped to 404 (not 403)
+ * so we do not leak page existence to callers without grant.
+ */
+export const pageNotFoundResponse = {
+  status: 404 as const,
+  body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
+} as const;
+
+/**
+ * Standard 400 for an invalid page_id (not 24-char hex).
+ */
+export const invalidPageIdResponse = {
+  status: 400 as const,
+  body: { error: { code: 'INVALID_PAGE_ID' as const, message: 'Invalid page_id' } },
+} as const;

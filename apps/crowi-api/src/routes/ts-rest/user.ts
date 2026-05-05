@@ -6,7 +6,7 @@ import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { BookmarkDocument } from 'src/models/bookmark';
 import { Types } from 'mongoose';
-import { PopulatedUser, toISOStringOrNull, toStringId, toPageUser } from 'src/util/ts-rest-helpers';
+import { PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:user');
@@ -58,29 +58,6 @@ interface BookmarkLike {
   createdAt?: Date;
   toObject?: () => BookmarkLike;
 }
-
-/**
- * Convert UserDocument to serializable object for API response
- */
-const userToResponse = (user: UserDocument): UserPublic => ({
-  _id: user._id.toString(),
-  id: user._id.toString(),
-  username: user.username,
-  name: user.name,
-  email: user.email,
-  image: user.image || null,
-  introduction: user.introduction || '',
-  createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
-  admin: user.admin || false,
-  status: user.status,
-});
-
-/**
- * Check if a value is a populated user object
- */
-const isPopulatedUser = (value: unknown): value is PopulatedUser => {
-  return typeof value === 'object' && value !== null && '_id' in value && 'username' in value && 'name' in value;
-};
 
 /**
  * Check if a value is a populated revision object
@@ -234,7 +211,7 @@ export default (crowi: Crowi, _app: Express) => {
         return {
           status: 200 as const,
           body: {
-            user: userToResponse(targetUser),
+            user: toUserPublic(targetUser),
             createdPagesCount,
             bookmarksCount,
             recentPages: recentPages.map((page) => pageToResponse(page)),

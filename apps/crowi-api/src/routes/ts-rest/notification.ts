@@ -5,7 +5,7 @@ import { Express, Router } from 'express';
 import { Types } from 'mongoose';
 import { UserDocument } from 'src/models/user';
 import { NotificationDocument } from 'src/models/notification';
-import { isValidObjectId, toISOStringOrNull, toStringId } from 'src/util/ts-rest-helpers';
+import { isValidObjectId, toISOStringOrNull, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:notification');
@@ -56,23 +56,6 @@ const isPopulatedPage = (value: unknown): value is PopulatedPageLike => {
 const isPopulatedActivity = (value: unknown): value is PopulatedActivityLike => {
   return !!value && typeof value === 'object' && '_id' in value && 'user' in value;
 };
-
-/**
- * Convert a populated User-like object (or raw ObjectId/string) into the
- * UserPublic API shape. Returns null when we only have an id reference.
- */
-const toUserPublic = (user: PopulatedUserLike): UserPublic => ({
-  _id: toStringId(user._id),
-  id: toStringId(user._id),
-  username: user.username ?? '',
-  name: user.name ?? '',
-  email: user.email ?? '',
-  image: user.image ?? null,
-  introduction: user.introduction,
-  createdAt: toISOStringOrNull(user.createdAt) ?? new Date(0).toISOString(),
-  admin: user.admin,
-  status: user.status,
-});
 
 const toPageRef = (page: PopulatedPageLike): PageRef => ({
   _id: toStringId(page._id),

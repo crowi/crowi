@@ -6,7 +6,7 @@ import { Types } from 'mongoose';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { RevisionDocument } from 'src/models/revision';
-import { isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
+import { isPopulatedUser, isValidObjectId, pageNotFoundResponse, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:revision');
@@ -18,19 +18,6 @@ const invalidRequest = (message: string) =>
     status: 400 as const,
     body: { error: { code: 'INVALID_REQUEST' as const, message } },
   }) as const;
-
-// Mapped to 404 (not 403) so we do not leak page existence to callers
-// without grant. Mirrors the page route policy.
-const pageNotFoundResponse = {
-  status: 404 as const,
-  body: { error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const } },
-} as const;
-
-const isPopulatedAuthor = (
-  value: unknown,
-): value is { _id: { toString(): string }; username: string; name: string; email: string; image?: string | null; createdAt?: Date } => {
-  return !!value && typeof value === 'object' && 'username' in value && 'email' in value;
-};
 
 /**
  * Convert a revision document (with optionally populated author) to the
@@ -44,7 +31,7 @@ const revisionToFullResponse = (revision: RevisionDocument) => {
     path: revision.path,
     body: revision.body,
     format: revision.format || 'markdown',
-    author: isPopulatedAuthor(obj.author) ? toPageUser(obj.author) : null,
+    author: isPopulatedUser(obj.author) ? toPageUser(obj.author) : null,
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
   };
 };
@@ -58,7 +45,7 @@ const revisionToMetaResponse = (revision: RevisionDocument) => {
   return {
     _id: revision._id.toString(),
     path: revision.path,
-    author: isPopulatedAuthor(obj.author) ? toPageUser(obj.author) : null,
+    author: isPopulatedUser(obj.author) ? toPageUser(obj.author) : null,
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
   };
 };

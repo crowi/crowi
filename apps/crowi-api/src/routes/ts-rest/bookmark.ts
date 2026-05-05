@@ -6,7 +6,7 @@ import { Types } from 'mongoose';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { BookmarkDocument } from 'src/models/bookmark';
-import { PopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
+import { PopulatedUser, invalidPageIdResponse, isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:bookmark');
@@ -49,10 +49,6 @@ interface BookmarkLike {
   createdAt?: Date;
   toObject?: () => BookmarkLike;
 }
-
-const isPopulatedUser = (value: unknown): value is PopulatedUser => {
-  return typeof value === 'object' && value !== null && '_id' in value && 'username' in value && 'name' in value;
-};
 
 const isPopulatedRevision = (value: unknown): value is PopulatedRevision => {
   return typeof value === 'object' && value !== null && '_id' in value && 'path' in value && 'body' in value;
@@ -104,17 +100,6 @@ const bookmarkToResponse = (bookmark: BookmarkDocument | BookmarkLike): Bookmark
   };
 };
 
-const invalidPageIdResponse = () =>
-  ({
-    status: 400 as const,
-    body: {
-      error: {
-        code: 'INVALID_PAGE_ID' as const,
-        message: 'Invalid page_id',
-      },
-    },
-  }) as const;
-
 export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
   const router = Router();
@@ -134,7 +119,7 @@ export default (crowi: Crowi, _app: Express) => {
       debug('getBookmark called with:', { page_id, userId: user._id });
 
       if (!isValidObjectId(page_id)) {
-        return invalidPageIdResponse();
+        return invalidPageIdResponse;
       }
 
       try {
@@ -210,7 +195,7 @@ export default (crowi: Crowi, _app: Express) => {
       debug('addBookmark called with:', { page_id, userId: user._id });
 
       if (!isValidObjectId(page_id)) {
-        return invalidPageIdResponse();
+        return invalidPageIdResponse;
       }
 
       let pageData: PageDocument | null = null;
@@ -280,7 +265,7 @@ export default (crowi: Crowi, _app: Express) => {
       debug('removeBookmark called with:', { page_id, userId: user._id });
 
       if (!isValidObjectId(page_id)) {
-        return invalidPageIdResponse();
+        return invalidPageIdResponse;
       }
 
       try {
