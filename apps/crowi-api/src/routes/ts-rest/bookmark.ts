@@ -1,31 +1,15 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract, Bookmark, Page, PageUser, Revision } from '@crowi/api-contract';
+import { apiContract, Bookmark, Page, Revision } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { Types } from 'mongoose';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { BookmarkDocument } from 'src/models/bookmark';
+import { PopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:bookmark');
-
-/**
- * The shapes below mirror the helpers in routes/ts-rest/user.ts.
- * They are kept locally (rather than imported) because user.ts does not
- * export them and the planner expressly listed bookmark.ts as a new file.
- * If/when these helpers are extracted into a shared util we should switch
- * this file (and user.ts) over.
- */
-
-interface PopulatedUser {
-  _id: Types.ObjectId;
-  username: string;
-  name: string;
-  email: string;
-  image?: string | null;
-  createdAt?: Date;
-}
 
 interface PopulatedRevision {
   _id: Types.ObjectId;
@@ -65,25 +49,6 @@ interface BookmarkLike {
   createdAt?: Date;
   toObject?: () => BookmarkLike;
 }
-
-const toISOStringOrNull = (date: Date | undefined | null): string | null => {
-  if (!date) return null;
-  return date instanceof Date ? date.toISOString() : String(date);
-};
-
-const toStringId = (id: Types.ObjectId | string): string => {
-  return typeof id === 'string' ? id : id.toString();
-};
-
-const toPageUser = (user: PopulatedUser): PageUser => ({
-  _id: user._id.toString(),
-  id: user._id.toString(),
-  username: user.username,
-  name: user.name,
-  email: user.email,
-  image: user.image || null,
-  createdAt: toISOStringOrNull(user.createdAt) || new Date().toISOString(),
-});
 
 const isPopulatedUser = (value: unknown): value is PopulatedUser => {
   return typeof value === 'object' && value !== null && '_id' in value && 'username' in value && 'name' in value;
@@ -163,12 +128,12 @@ export default (crowi: Crowi, _app: Express) => {
      * Equivalent to legacy GET /_api/bookmarks.get.
      */
     getBookmark: async ({ query, req }) => {
-      const user = (req as { user?: UserDocument }).user as UserDocument;
+      const user = (req as { user: UserDocument }).user;
       const { page_id } = query;
 
       debug('getBookmark called with:', { page_id, userId: user._id });
 
-      if (!Types.ObjectId.isValid(page_id)) {
+      if (!isValidObjectId(page_id)) {
         return invalidPageIdResponse();
       }
 
@@ -198,7 +163,7 @@ export default (crowi: Crowi, _app: Express) => {
      * Equivalent to legacy GET /_api/bookmarks.list (paginate).
      */
     listMyBookmarks: async ({ query, req }) => {
-      const user = (req as { user?: UserDocument }).user as UserDocument;
+      const user = (req as { user: UserDocument }).user;
       const { limit = 50, offset = 0 } = query;
 
       debug('listMyBookmarks called with:', { limit, offset, userId: user._id });
@@ -239,12 +204,12 @@ export default (crowi: Crowi, _app: Express) => {
      * to preserve legacy /_api/bookmarks.add behavior.
      */
     addBookmark: async ({ body: requestBody, req }) => {
-      const user = (req as { user?: UserDocument }).user as UserDocument;
+      const user = (req as { user: UserDocument }).user;
       const { page_id } = requestBody;
 
       debug('addBookmark called with:', { page_id, userId: user._id });
 
-      if (!Types.ObjectId.isValid(page_id)) {
+      if (!isValidObjectId(page_id)) {
         return invalidPageIdResponse();
       }
 
@@ -309,12 +274,12 @@ export default (crowi: Crowi, _app: Express) => {
      * (the legacy controller emits ApiResponse.success() unconditionally).
      */
     removeBookmark: async ({ body: requestBody, req }) => {
-      const user = (req as { user?: UserDocument }).user as UserDocument;
+      const user = (req as { user: UserDocument }).user;
       const { page_id } = requestBody;
 
       debug('removeBookmark called with:', { page_id, userId: user._id });
 
-      if (!Types.ObjectId.isValid(page_id)) {
+      if (!isValidObjectId(page_id)) {
         return invalidPageIdResponse();
       }
 
