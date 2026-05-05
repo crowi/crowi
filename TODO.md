@@ -5,34 +5,37 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## High Priority — フェーズ 1 残 (ページ機能の完成)
 
-- [ ] **ページ削除・復元 API + UI**
-  - `pages.remove` / `pages.revertRemove` / `pages.unlink`
-  - Trash 表示画面 (`/trash/*`)
-- [ ] **既読 / watch**
-  - `pages.seen` / `pages.watch` / `pages.watch.status`
-- [ ] **リネーム UI** (API は実装済 → `POST /api/v2/pages/rename`)
-  - フォーム + 衝突確認ダイアログ
-  - `pages.checkTreeRenamable` / `pages.renameTree` も検討
+- [ ] **Trash 表示画面** (`/trash/*`)
+  - 削除済みページの一覧、復元、完全削除
+  - API は既存 `listPages` + `revertDeletedPage` + `deletePage(completely)` で揃っている
+- [ ] **page watch**
+  - `pages.watch` / `pages.watch.status`
+  - 通知の購読関係、`/admin/notification` の page-path mapping とも関連
 
 ## High Priority — 横断的 advisory (累積)
 
-- [ ] **UI 共通化**: `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出 (5+ 箇所重複)
-- [ ] **JP/EN 文言の統一 / i18n 戦略確立**: 現状 `page-view` は EN、`use-page-mutations` 等は JP。i18next 等の導入判断を含む
-- [ ] **`req.user` の Express type augmentation**: `apps/crowi-api/src/types/express.d.ts` で global 拡張、3 種類の cast を撲滅
-- [ ] **`pageToResponse` 統一**: page.ts (`any` 経由) と user.ts/bookmark.ts (型 strict) を揃える。`PageSchema` の date フィールドを nullable に揃える必要あり
+- [ ] **UI 共通化**: `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出
+  - 累積 7+ 箇所重複 (page-view / id-redirector / edit-page-client / page-history-view / 各種 user-page / ...)
+- [ ] **JP/EN 文言の統一 / i18n 戦略確立**: 現状 `page-view` は EN、`use-page-mutations` / notification 系は JP。i18next 等の導入判断を含む
+- [ ] **`req.user` の Express type augmentation**: `apps/crowi-api/src/types/express.d.ts` で global 拡張、3 種類の cast を撲滅 (page.ts は `(req as any)`、bookmark/comment/notification は `(req as { user: UserDocument })`)
+- [ ] **`pageToResponse` / `toPageUser` / `toUserPublic` / `isPopulatedUser` の統一**:
+  - `pageToResponse` は page.ts (`any` 経由) と user.ts/bookmark.ts (型 strict) で実装が異なる
+  - `toUserPublic` は util と notification.ts (PopulatedUserLike fallback 付き) で重複
+  - `isPopulatedUser` は page.ts / bookmark.ts / user.ts / notification.ts で各自定義
+  - `pageNotFoundResponse` も page.ts ローカル const と revision.ts inline で重複
+  - `PageSchema` の date フィールドを nullable に揃える必要あり
+- [ ] **`loadGrantedPage` を util に格上げ**: 現状 page.ts のクロージャ内 helper のため revision.ts などからは見えない。bookmark / comment / notification でも使えると DRY
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 
-- [ ] **Likes**: `likes.add` / `likes.remove`
-- [ ] **Revisions**: `revisions.get` / `revisions.ids` / `revisions.list`
-- [ ] **Backlinks**: `_api/backlink.list`
+- [ ] **Backlinks**: `_api/backlink.list` (Web UI: 編集画面下部にリンク一覧)
 - [ ] **残りの認証 routes**:
   - `GET /login/google` / `GET /login/github` / 各 callback
   - `GET /login/invited` / `POST /login/activateInvited`
 - [ ] **残り middleware の JSON 化**:
   - `adminRequired` / `applicationNotInstalled` / `fileAccessRightOrLoginRequired`
-- [ ] **error code 細分化**: comment.ts などの `INVALID_REQUEST` を `MISSING_REQUIRED_FIELD` / `INVALID_OBJECT_ID` / etc. に分割
-- [ ] **`usePageComments` を 3 hooks に split**
+- [ ] **error code 細分化**: comment.ts / revision.ts などの `INVALID_REQUEST` を `MISSING_REQUIRED_FIELD` / `INVALID_OBJECT_ID` / `*_FAILED` に分割
+- [ ] **`usePageComments` を 3 hooks に split**: 11 fields 返す巨大 hook を `usePageCommentsList` / `useAddComment` / `useDeleteComment` に分割
 
 ## Medium Priority — フェーズ 3 (検索 / アセット)
 
@@ -91,12 +94,11 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - Form validators: `apps/crowi-api/src/form/admin/*`
 - 旧 Swig views は **既に削除済み** (Phase 1 で React/views クリア時に)
 
-## Low Priority — フェーズ 5 (共有 / 通知 / OAuth)
+## Low Priority — フェーズ 5 (共有 / OAuth / 招待)
 
 - [ ] Shares CRUD + secretKeyword
-- [ ] Notification (list / read / open / status)
-- [ ] Slack event endpoint
-- [ ] 招待ログイン
+- [ ] Slack event endpoint (受信側、`/_api/slack/event`)
+- [ ] 招待ログイン (`invited` / `activateInvited`)
 
 ## Low Priority — クリーンアップ
 
@@ -108,22 +110,38 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## Recently Completed (このセッション)
 
+### 並行 worktree 統合 (`/integrate-worktree`)
+- [x] **notification 統合** (`60311ad3`) — Bell + 30s polling + `/notifications` 画面
+- [x] **pages-revisions 統合** (`c8bd4c4e`) — `/page/history` + diff viewer (react-diff-viewer-continued)
+- [x] **pages-likes 統合** (`70cf0656` + simplify `e6fe27be`) — Like button + `loadGrantedPage` への refactor
+- [x] **pages-seen 統合** (`da16f3b6`) — Seen by avatars + auto-mark on view
+- [x] **pages-rename-ui 統合** (`a6ff7104`) — Rename Dialog
+- [x] **pages-remove 統合** (`c63c87e6` + simplify `0c7621f1`) — Delete / Restore + pageNotFoundResponse hoist
+- [x] **page-comment 統合** (`bbe2a2dd` + simplify `89b45630`) — 共有 helper 抽出 (toPageUser / toISOStringOrNull / isValidObjectId)
+- [x] **page-bookmark 統合** (`a76e4f9c` + simplify `9d74e0de`) — Bookmark button
+- [x] **page-rename 統合** (`5d0942e3` + simplify `0c7621f1`) — Rename API
+
+### Web UI 改善 (main 直)
+- [x] **PageActionsMenu (...menu)** (`b224f009`) — Rename / Delete を menu に集約してヘッダーをスッキリ
+- [x] **portal page で PageHeader を表示** (`230110a6`) — Bookmark / Edit / ... menu / SeenBy が portal にも
+- [x] **`/user/<username>` で page document を表示** (`dce8f7df`) — profile + page content + tabs
+
+### 直接実装した API + UI
+- [x] **ID リダイレクター** (`/<24hex>` `/_r/<24hex>`、Web 側のみ)
+- [x] **ページ編集 UI 最小実装** (`/edit?page_id=...` / `?path=...`)
+- [x] **pages.update API** (`PUT /api/v2/pages`)
+- [x] **pages.create API** (`POST /api/v2/pages`)
+
+### 開発運用 / 品質
 - [x] **`pnpm lint` を全 workflow で必須化** (`fb6f8b50` + `92c625a3`)
-  - React 19 set-state-in-effect エラー 2 件を解消 (comment-form / edit-page-client)
+  - React 19 set-state-in-effect エラー 2 件を解消
   - migration-implementer / reviewer / integrate-worktree の必須チェックに pnpm lint 追加
   - lefthook pre-push lint を有効化 (errors=0 必須、warnings は advisory)
 - [x] **Biome + lefthook 導入** (`766830cf` + `495bef27`)
   - Prettier → Biome に置換、`.ts/.tsx/.js/.jsx` を root から一括 format
   - lefthook pre-commit で staged ファイル自動 format → 「format 漏れ」根本解決
   - 全コードベースを Biome で再 format
-- [x] **page-rename 統合** (`5d0942e3` + simplify `0c7621f1`)
-- [x] **page-bookmark 統合** (`a76e4f9c` + simplify `9d74e0de`)
-- [x] **page-comment 統合** (`bbe2a2dd` + simplify `89b45630`)
-- [x] **`integrate-worktree` skill 新設** (worktree → main → simplify ワークフロー)
-- [x] **ID リダイレクター** (`/<24hex>` `/_r/<24hex>`、Web 側のみ)
-- [x] **ページ編集 UI 最小実装** (`/edit?page_id=...` / `?path=...`)
-- [x] **pages.update API** (`PUT /api/v2/pages`)
-- [x] **pages.create API** (`POST /api/v2/pages`)
+- [x] **`integrate-worktree` skill 新設** (worktree → main → simplify ワークフロー、tmux window auto-close 含む)
 - [x] **migration skill / agent 全面書き直し** (実態に合わせ、main-direct + simplify フェーズ追加)
 - [x] **docker-compose を依存サービスのみに整理** (app コンテナは host で `pnpm dev`)
 - [x] **`turbo.json` の `^build` 依存追加** (dev で型解決のレース解消)
@@ -148,4 +166,5 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - **ts-rest routes**: `/api/v2` prefix
 - **api-contract build**: `pnpm --filter @crowi/api-contract build` (dev では `^build` 依存で自動)
 - **state ディレクトリ**: `.migration-state/` (root、gitignore 済) — `.claude/migration-state/` ではない
+- **format / lint**: pre-commit で biome format、pre-push で `pnpm lint` (errors=0)
 - 旧 controller / 旧 Swig は段階的に削除予定 (新側が安定してから)
