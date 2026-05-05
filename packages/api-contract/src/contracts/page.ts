@@ -12,6 +12,7 @@ import {
   PageNotGrantedErrorSchema,
   PageRevisionErrorSchema,
 } from '../schemas/page';
+import { InvalidPageIdErrorSchema } from '../schemas/bookmark';
 import { AuthenticationRequiredErrorSchema } from '../schemas/common';
 
 const c = initContract();
@@ -107,6 +108,7 @@ export const pageContract = c.router({
     body: z.object({ page_id: z.string() }),
     responses: {
       200: z.object({ page: PageSchema }),
+      400: InvalidPageIdErrorSchema,
       401: AuthenticationRequiredErrorSchema,
       404: PageNotFoundErrorSchema,
     },
@@ -122,6 +124,7 @@ export const pageContract = c.router({
     body: z.object({ page_id: z.string() }),
     responses: {
       200: z.object({ page: PageSchema }),
+      400: InvalidPageIdErrorSchema,
       401: AuthenticationRequiredErrorSchema,
       404: PageNotFoundErrorSchema,
     },

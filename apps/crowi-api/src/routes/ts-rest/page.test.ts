@@ -430,3 +430,161 @@ describe('Routes /api/v2/pages/rename (ts-rest renamePage)', () => {
     });
   });
 });
+
+describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (ts-rest)', () => {
+  const PATH_PREFIX = '/ts-rest-like-test/';
+  let Page;
+  let accessToken: string;
+  let otherAccessToken: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+
+    const owner = await createTestUser({
+      name: 'LikePage Test',
+      username: 'likePageTester',
+      email: 'like-page-tester@example.com',
+    });
+    accessToken = owner.accessToken;
+    userId = owner.user._id.toString();
+
+    const other = await createTestUser({
+      name: 'LikePage Other',
+      username: 'likePageOther',
+      email: 'like-page-other@example.com',
+    });
+    otherAccessToken = other.accessToken;
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  const createPageViaApi = async (token: string, path: string, body: string, grant?: number) => {
+    const payload: { path: string; body: string; grant?: number } = { path, body };
+    if (grant !== undefined) payload.grant = grant;
+    const res = await request(app).post('/api/v2/pages').set(authHeaders(token)).send(payload);
+    if (res.status !== 200) {
+      throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
+    }
+    return res.body.page as { _id: string; path: string };
+  };
+
+  describe('POST /api/v2/pages/like', () => {
+    it('returns 401 without auth', async () => {
+      const res = await request(app).post('/api/v2/pages/like').send({ page_id: '000000000000000000000000' });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
+      const res = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_PAGE_ID');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
+      const res = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}private`, '# private', 4);
+
+      const res = await request(app).post('/api/v2/pages/like').set(authHeaders(otherAccessToken)).send({ page_id: page._id });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+
+      // The page should not have been mutated.
+      const pageDoc = await Page.findById(page._id);
+      expect(pageDoc.liker.map((id: { toString(): string }) => id.toString())).not.toContain(userId);
+    });
+
+    it('adds the current user to liker on first call and returns the page', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}like-once`, '# like');
+
+      const res = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page).toBeDefined();
+      expect(res.body.page._id).toBe(page._id);
+      expect(res.body.page.liker).toContain(userId);
+      expect(res.body.page.likerCount).toBe(1);
+
+      const pageDoc = await Page.findById(page._id);
+      expect(pageDoc.liker.map((id: { toString(): string }) => id.toString())).toContain(userId);
+    });
+
+    it('is idempotent: liking twice keeps the user in liker exactly once', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}like-twice`, '# like');
+
+      const first = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      expect(first.status).toBe(200);
+
+      const second = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      expect(second.status).toBe(200);
+      expect(second.body.page.liker).toEqual([userId]);
+      expect(second.body.page.likerCount).toBe(1);
+
+      const pageDoc = await Page.findById(page._id);
+      expect(pageDoc.liker).toHaveLength(1);
+    });
+  });
+
+  describe('POST /api/v2/pages/unlike', () => {
+    it('returns 401 without auth', async () => {
+      const res = await request(app).post('/api/v2/pages/unlike').send({ page_id: '000000000000000000000000' });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
+      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_PAGE_ID');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
+      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}private-unlike`, '# private', 4);
+
+      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(otherAccessToken)).send({ page_id: page._id });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('removes the current user from liker after a like', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}unlike-after-like`, '# u');
+
+      const likeRes = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      expect(likeRes.status).toBe(200);
+      expect(likeRes.body.page.liker).toContain(userId);
+
+      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page._id).toBe(page._id);
+      expect(res.body.page.liker).not.toContain(userId);
+      expect(res.body.page.likerCount).toBe(0);
+
+      const pageDoc = await Page.findById(page._id);
+      expect(pageDoc.liker.map((id: { toString(): string }) => id.toString())).not.toContain(userId);
+    });
+
+    it('is idempotent: unliking a non-liked page returns the page unchanged', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}unlike-noop`, '# u');
+
+      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page._id).toBe(page._id);
+      expect(res.body.page.liker).toEqual([]);
+      expect(res.body.page.likerCount).toBe(0);
+    });
+  });
+});
