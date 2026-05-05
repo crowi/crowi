@@ -46,7 +46,6 @@
         "^build"
       ]
     },
-    "format": {},
     "clean": {
       "cache": false
     }

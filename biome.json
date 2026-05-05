@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "apps/**/*.{ts,tsx,js,jsx}",
+      "packages/**/*.{ts,tsx,js,jsx}",
+      "!**/dist/**",
+      "!**/.next/**",
+      "!**/.turbo/**",
+      "!**/node_modules/**",
+      "!**/coverage/**",
+      "!apps/crowi-api/public/**",
+      "!apps/crowi-api/views/**",
+      "!apps/crowi-api/local_modules/**",
+      "!apps/crowi-api/locales/**",
+      "!apps/crowi-api/bin/**"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 160,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always",
+      "bracketSpacing": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false
+    }
+  }
+}
