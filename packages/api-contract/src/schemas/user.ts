@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { PageSchema, PagerSchema } from './page';
+import { BookmarkSchema } from './bookmark';
+import { UserPublicSchema } from './userPublic';
+
+// NOTE: BookmarkSchema and UserPublicSchema are exported from their own
+// dedicated files (./bookmark, ./userPublic). They are intentionally NOT
+// re-exported here to avoid duplicate-name conflicts in index.ts and to
+// break a circular dependency between user.ts and bookmark.ts.
 
 // User status enum - matches User model constants
 export const UserStatusSchema = z.enum(['1', '2', '3', '4', '5']).transform((val) => Number(val));
@@ -14,31 +21,6 @@ export const UserStatusEnum = {
 // Language enum - matches User model
 export const UserLanguageSchema = z.enum(['en', 'en-US', 'en-GB', 'ja']);
 export type UserLanguage = z.infer<typeof UserLanguageSchema>;
-
-// Public user schema - minimal user information for public display
-// Based on UserDocument fields that are safe to expose publicly
-export const UserPublicSchema = z.object({
-  _id: z.string(),
-  id: z.string().optional(), // for compatibility (virtual field)
-  username: z.string(),
-  name: z.string(),
-  email: z.string().email(),
-  image: z.string().nullable().optional(),
-  introduction: z.string().optional(),
-  createdAt: z.string(),
-  admin: z.boolean().optional(),
-  status: z.number().optional(),
-});
-export type UserPublic = z.infer<typeof UserPublicSchema>;
-
-// Bookmark schema with populated page
-export const BookmarkSchema = z.object({
-  _id: z.string(),
-  page: PageSchema,
-  user: z.union([z.string(), UserPublicSchema]),
-  createdAt: z.string(),
-});
-export type Bookmark = z.infer<typeof BookmarkSchema>;
 
 // Pagination request schema
 export const PaginationRequestSchema = z.object({
