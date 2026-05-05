@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { Notification } from '@crowi/api-contract';
 
@@ -13,6 +13,7 @@ export const notificationKeys = {
   all: ['notifications'] as const,
   status: () => ['notifications', 'status'] as const,
   list: (params: { limit?: number; offset?: number } = {}) => ['notifications', 'list', params] as const,
+  infinite: (limit: number) => ['notifications', 'list', 'infinite', limit] as const,
 };
 
 /**
@@ -76,6 +77,37 @@ export function useNotifications({ limit = 10, offset = 0, enabled = false }: Us
       throw new Error('Failed to fetch notifications');
     },
     enabled,
+  });
+}
+
+/**
+ * Hook to fetch the paginated notification list with infinite scrolling /
+ * "load more" semantics. Pages are accumulated as the user requests more.
+ *
+ * Mirrors the bookmark page pattern (useUserBookmarksInfinite).
+ */
+export function useNotificationsInfinite(limit: number = 20) {
+  return useInfiniteQuery({
+    queryKey: notificationKeys.infinite(limit),
+    queryFn: async ({ pageParam = 0 }) => {
+      const result = await apiClient.notification.listNotifications({
+        query: { limit, offset: pageParam },
+      });
+      if (result.status === 200) {
+        return result.body;
+      }
+      if (result.status === 401) {
+        throw new Error('Authentication required');
+      }
+      throw new Error('Failed to fetch notifications');
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.pager.next !== null) {
+        return lastPage.pager.next;
+      }
+      return undefined;
+    },
   });
 }
 
