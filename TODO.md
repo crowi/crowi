@@ -42,10 +42,54 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## Low Priority — フェーズ 4 (管理画面、重い)
 
-- [ ] `/admin/*` 全般 (settings 各カテゴリ、user 管理、notification、search index 再構築)
-- [ ] Slack 連携設定
-- [ ] ユーザー招待 / suspend / makeAdmin
-- [ ] views/admin の Swig が完全に未移行
+旧実装の管理画面 React は Phase 1 で削除済み。API endpoints だけ
+`apps/crowi-api/src/routes/api/admin.ts` に残っているので、ts-rest 化 + Next.js 管理
+画面 (`apps/crowi-web/src/app/(admin)/`) を新設する。
+
+### 基盤
+- [ ] **adminRequired middleware を JSON 化** (Medium Priority に既出、依存)
+- [ ] **`/admin` index** + Admin layout (sidebar / breadcrumb)
+- [ ] Next.js Route Group `(admin)` 設計、admin 専用認可 (User.admin === true)
+
+### 設定 (Config model に集約、各セクションで部分更新)
+- [ ] **App** (`POST /admin/settings/app`): サイト名、デフォルト言語、`fileUpload` type 等
+- [ ] **Security** (`POST /admin/settings/sec`): ゲスト閲覧許可、招待のみモード等
+- [ ] **Authentication** (`POST /admin/settings/auth`): ローカル認証 / 招待制 ON-OFF
+- [ ] **Mail / SMTP** (`POST /admin/settings/mail`): from / SMTP host / port / auth
+- [ ] **AWS / S3 file storage** (`POST /admin/settings/aws`): bucket / region / accessKey / secret
+- [ ] **Google OAuth** (`POST /admin/settings/google`): clientId / secret
+- [ ] **GitHub OAuth** (`POST /admin/settings/github`): clientId / secret / org
+- [ ] **Share** (`POST /admin/settings/share`): 公開共有の有効/無効
+
+### ユーザー管理
+- [ ] **User 一覧** (`GET /admin/users`) + 検索 (`GET /admin/users.search`)
+- [ ] **招待** (`POST /admin/user/invite`): メールアドレスで招待送信
+- [ ] **編集** (`POST /admin/user/:id/edit`): name / email / status の手動修正
+- [ ] **権限** (`POST /admin/user/:id/makeAdmin` / `removeFromAdmin`)
+- [ ] **アカウント状態** (`POST /admin/user/:id/activate` / `suspend`)
+- [ ] **パスワードリセット** (`POST /admin/users.resetPassword`): 仮 PW 発行 + メール送信
+- [ ] **メール変更** (`POST /admin/users.updateEmail`): 強制変更 (admin のみ)
+
+### 通知 (Page → Slack channel)
+- [ ] **通知一覧 / 編集** (`GET /admin/notification`)
+- [ ] **page-path → channel mapping**
+  - 追加: `POST /admin/notification.add`
+  - 削除: `POST /admin/notification.remove`
+- [ ] **Slack 統合設定** (incoming webhook + 認証情報)
+  - 追加: `POST /admin/notification/slackSetting.add`
+  - 削除: `POST /admin/notification/slackSetting.remove`
+  - Slack OAuth callback: `GET /admin/notification/slackAuth`
+
+### メンテナンス操作
+- [ ] **Elasticsearch インデックス再構築** (`POST /admin/search/build`) — フェーズ 3 の ES 復活が前提
+- [ ] **バックリンク再構築** (`POST /admin/backlink/build`) — 全ページ走査して link 関係を再計算
+
+### 旧実装の参照
+- API endpoints: `apps/crowi-api/src/routes/api/admin.ts`
+- Express ルート (legacy GET, SPA index 返し): `apps/crowi-api/src/routes/admin.ts`
+- Controller: `apps/crowi-api/src/controllers/admin.ts`
+- Form validators: `apps/crowi-api/src/form/admin/*`
+- 旧 Swig views は **既に削除済み** (Phase 1 で React/views クリア時に)
 
 ## Low Priority — フェーズ 5 (共有 / 通知 / OAuth)
 
