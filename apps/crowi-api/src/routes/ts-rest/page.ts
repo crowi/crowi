@@ -8,6 +8,7 @@ import {
   invalidPageIdResponse,
   isPopulatedUser,
   isValidObjectId,
+  loadGrantedPage,
   pageNotFoundResponse,
   toISOStringOrNull,
   toPageUser,
@@ -95,21 +96,6 @@ export default (crowi: Crowi, _app: Express) => {
       seenUsers: populated.map(toUserPublic),
       seenUsersCount,
     };
-  };
-
-  type LoadedPage = { page: PageDocument } | { error: typeof pageNotFoundResponse | typeof invalidPageIdResponse };
-
-  const loadGrantedPage = async (pageId: string, user: UserDocument): Promise<LoadedPage> => {
-    if (!isValidObjectId(pageId)) {
-      return { error: invalidPageIdResponse };
-    }
-    try {
-      const page = (await Page.findPageByIdAndGrantedUser(pageId, user)) as PageDocument | null;
-      if (!page) return { error: pageNotFoundResponse };
-      return { page };
-    } catch {
-      return { error: pageNotFoundResponse };
-    }
   };
 
   const pageRouter = s.router(apiContract.page, {
@@ -453,7 +439,7 @@ export default (crowi: Crowi, _app: Express) => {
 
       debug('seenPage called with:', { page_id, userId: user._id });
 
-      const loaded = await loadGrantedPage(page_id, user);
+      const loaded = await loadGrantedPage(Page, page_id, user);
       if ('error' in loaded) return loaded.error;
 
       const updated = (await loaded.page.seen(user)) as PageDocument;
@@ -466,7 +452,7 @@ export default (crowi: Crowi, _app: Express) => {
 
       debug('getSeenUsers called with:', { page_id, userId: user._id });
 
-      const loaded = await loadGrantedPage(page_id, user);
+      const loaded = await loadGrantedPage(Page, page_id, user);
       if ('error' in loaded) return loaded.error;
 
       return { status: 200 as const, body: await buildSeenUsersResponse(loaded.page.seenUsers) };
@@ -487,7 +473,7 @@ export default (crowi: Crowi, _app: Express) => {
 
       debug('likePage called with:', { page_id, userId: user._id });
 
-      const loaded = await loadGrantedPage(page_id, user);
+      const loaded = await loadGrantedPage(Page, page_id, user);
       if ('error' in loaded) return loaded.error;
 
       // pageData.like is a no-op when the user already liked the page. Always
@@ -509,7 +495,7 @@ export default (crowi: Crowi, _app: Express) => {
 
       debug('unlikePage called with:', { page_id, userId: user._id });
 
-      const loaded = await loadGrantedPage(page_id, user);
+      const loaded = await loadGrantedPage(Page, page_id, user);
       if ('error' in loaded) return loaded.error;
 
       // unlike is a no-op when the user had not liked the page. Always

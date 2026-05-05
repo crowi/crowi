@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import type { PageUser, UserPublic } from '@crowi/api-contract';
 import type { UserDocument } from 'src/models/user';
+import type { PageDocument } from 'src/models/page';
 
 /**
  * Shape of a populated User as it appears on Mongoose documents that have
@@ -96,3 +97,35 @@ export const invalidPageIdResponse = {
   status: 400 as const,
   body: { error: { code: 'INVALID_PAGE_ID' as const, message: 'Invalid page_id' } },
 } as const;
+
+/**
+ * Minimum surface of the Page model that loadGrantedPage needs. We avoid
+ * importing the full Page model type because crowi.model('Page') returns
+ * a Mongoose Model with deeply-nested generics that would force every
+ * caller to mirror the same type.
+ */
+interface PageModelLike {
+  findPageByIdAndGrantedUser(pageId: string, user: UserDocument): Promise<PageDocument | null>;
+}
+
+export type LoadedGrantedPage = { page: PageDocument } | { error: typeof pageNotFoundResponse | typeof invalidPageIdResponse };
+
+/**
+ * Validate `pageId` and resolve a granted Page document, or return the
+ * standard 400 / 404 response otherwise. Centralises the
+ * isValidObjectId + findPageByIdAndGrantedUser + leak-prevention catch
+ * pattern that ts-rest page-related routes (page / bookmark / comment /
+ * revision / notification) all need.
+ */
+export const loadGrantedPage = async (Page: PageModelLike, pageId: string, user: UserDocument): Promise<LoadedGrantedPage> => {
+  if (!isValidObjectId(pageId)) {
+    return { error: invalidPageIdResponse };
+  }
+  try {
+    const page = await Page.findPageByIdAndGrantedUser(pageId, user);
+    if (!page) return { error: pageNotFoundResponse };
+    return { page };
+  } catch {
+    return { error: pageNotFoundResponse };
+  }
+};
