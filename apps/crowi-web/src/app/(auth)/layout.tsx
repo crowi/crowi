@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useAuth } from '@/lib/use-auth';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
+import { NotificationBell } from '@/components/notification-bell';
 import { useConnection } from '@/lib/connection-context';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -60,6 +61,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </Link>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 flex items-center gap-2">
