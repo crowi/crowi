@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePage } from '@/lib/use-page';
+import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
 import { PageComments } from '@/components/page-comments';
@@ -18,6 +19,9 @@ interface PageViewProps {
 export function PageView({ path }: PageViewProps) {
   const router = useRouter();
   const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path });
+
+  const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
+  useMarkSeenOnView(page?._id, canMarkSeen);
 
   // Handle redirects
   useEffect(() => {
@@ -148,7 +152,7 @@ export function PageView({ path }: PageViewProps) {
 
         <Card className="opacity-75">
           <CardContent className="pt-6">
-            <PageHeader page={page} />
+            <PageHeader page={page} showSeenUsers={false} />
             <PageContent page={page} />
           </CardContent>
         </Card>

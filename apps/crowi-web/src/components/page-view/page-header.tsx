@@ -8,13 +8,15 @@ import { Clock, User, Lock, FileText, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { BookmarkButton } from './bookmark-button';
+import { SeenUserList } from './seen-user-list';
 
 interface PageHeaderProps {
   page: PageWithRevision;
   onEdit?: () => void;
+  showSeenUsers?: boolean;
 }
 
-export function PageHeader({ page, onEdit }: PageHeaderProps) {
+export function PageHeader({ page, onEdit, showSeenUsers = true }: PageHeaderProps) {
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
   const author = page.revision?.author ?? null;
@@ -99,6 +101,8 @@ export function PageHeader({ page, onEdit }: PageHeaderProps) {
           </div>
         )}
       </div>
+
+      {showSeenUsers && <SeenUserList pageId={page._id} fallbackCount={page.seenUsersCount} />}
     </div>
   );
 }
