@@ -1,16 +1,24 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { MessageSquare, ThumbsUp, Lock, FileText } from 'lucide-react';
+import { MessageSquare, ThumbsUp, Lock, FileText, MoreHorizontal, RotateCcw, Trash2, Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
 import type { Page } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 
+type PageListItemVariant = 'default' | 'trash';
+
 interface PageListItemProps {
   page: Page;
+  variant?: PageListItemVariant;
 }
 
-export function PageListItem({ page }: PageListItemProps) {
+export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
   // Extract user data from populated fields
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
@@ -26,6 +34,8 @@ export function PageListItem({ page }: PageListItemProps) {
 
   // Check if page is private
   const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
+
+  const isTrash = variant === 'trash';
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -58,11 +68,22 @@ export function PageListItem({ page }: PageListItemProps) {
       <div className="flex-1 min-w-0">
         {/* Page path and icons */}
         <div className="flex items-center gap-2 mb-1">
-          <Link href={page.path} className="font-medium text-foreground hover:text-primary transition-colors truncate">
-            {page.path}
-          </Link>
+          {isTrash ? (
+            <span className="font-medium text-foreground truncate" title={page.path}>
+              {page.path}
+            </span>
+          ) : (
+            <Link href={page.path} className="font-medium text-foreground hover:text-primary transition-colors truncate">
+              {page.path}
+            </Link>
+          )}
           {isPortal && <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Portal page" />}
           {isPrivate && <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Private page" />}
+          {isTrash && (
+            <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive flex-shrink-0">
+              Deleted
+            </span>
+          )}
         </div>
 
         {/* User and date info */}
@@ -90,6 +111,94 @@ export function PageListItem({ page }: PageListItemProps) {
           )}
         </div>
       </div>
+
+      {isTrash && <TrashItemActions pageId={page._id} pagePath={page.path} />}
+    </div>
+  );
+}
+
+interface TrashItemActionsProps {
+  pageId: string;
+  pagePath: string;
+}
+
+function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
+  const [confirmKind, setConfirmKind] = useState<null | 'restore' | 'delete-forever'>(null);
+  const revert = useRevertDeletedPage();
+  const remove = useDeletePage();
+
+  const isPending = revert.isPending || remove.isPending;
+  const errorMessage = revert.error instanceof Error ? revert.error.message : remove.error instanceof Error ? remove.error.message : null;
+
+  const closeDialog = () => {
+    if (isPending) return;
+    setConfirmKind(null);
+    revert.reset();
+    remove.reset();
+  };
+
+  const handleConfirm = () => {
+    if (confirmKind === 'restore') {
+      revert.mutate({ page_id: pageId }, { onSuccess: () => setConfirmKind(null) });
+    } else if (confirmKind === 'delete-forever') {
+      remove.mutate({ page_id: pageId, completely: true }, { onSuccess: () => setConfirmKind(null) });
+    }
+  };
+
+  return (
+    <div className="flex-shrink-0">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label="Trash page actions">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setConfirmKind('restore')}>
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Restore
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setConfirmKind('delete-forever')} className="text-red-600 focus:text-red-600">
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete forever
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={confirmKind !== null} onOpenChange={(next) => !next && closeDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmKind === 'restore' ? 'このページを復元しますか?' : 'このページを完全に削除しますか?'}</DialogTitle>
+            <DialogDescription>
+              {confirmKind === 'restore' ? `「${pagePath}」を元のパスに復元します。` : `「${pagePath}」を完全に削除します。この操作は取り消せません。`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {errorMessage && (
+            <p className="text-sm text-destructive" role="alert">
+              {errorMessage}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDialog} disabled={isPending}>
+              キャンセル
+            </Button>
+            <Button variant={confirmKind === 'restore' ? 'default' : 'destructive'} onClick={handleConfirm} disabled={isPending}>
+              {isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  処理中...
+                </>
+              ) : confirmKind === 'restore' ? (
+                '復元'
+              ) : (
+                '完全に削除'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
