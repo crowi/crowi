@@ -35,9 +35,10 @@ const pageToResponse = (page: PageDocument) => {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const pageObj = page.toObject() as any;
 
-  // Schema (PageSchema) declares some date fields as required strings, but Mongoose
-  // can yield Date | null at runtime. We accept the schema/runtime drift for now —
-  // see migration advisory: align PageSchema timestamps with nullable.
+  // The shape we produce satisfies both PageSchema and PageWithRevisionSchema
+  // depending on whether `revision` is populated. ts-rest contracts pin one
+  // or the other, so this helper returns `any` and each handler narrows at
+  // its return site.
   const result: any = {
     _id: page._id.toString(),
     path: page.path,
@@ -48,7 +49,9 @@ const pageToResponse = (page: PageDocument) => {
           body: pageObj.revision.body,
           format: pageObj.revision.format || 'markdown',
           author: isPopulatedUser(pageObj.revision.author) ? toPageUser(pageObj.revision.author) : null,
-          createdAt: toISOStringOrNull(pageObj.revision.createdAt),
+          // Schema requires createdAt as a string; legacy / no-timestamps
+          // documents may yield null at runtime — fall back to epoch.
+          createdAt: toISOStringOrNull(pageObj.revision.createdAt) ?? new Date(0).toISOString(),
         }
       : undefined,
     redirectTo: page.redirectTo || null,
@@ -61,8 +64,8 @@ const pageToResponse = (page: PageDocument) => {
     seenUsers: page.seenUsers?.map((id) => id.toString()) || [],
     commentCount: page.commentCount || 0,
     extended: page.extended,
-    createdAt: toISOStringOrNull(page.createdAt),
-    updatedAt: toISOStringOrNull(page.updatedAt),
+    createdAt: toISOStringOrNull(page.createdAt) ?? new Date(0).toISOString(),
+    updatedAt: toISOStringOrNull(page.updatedAt) ?? undefined,
     latestRevision: pageObj.latestRevision?.toString(),
     // `likerCount` / `seenUsersCount` are dynamic properties set by
     // populatePageData on the Mongoose document and are NOT serialized into
