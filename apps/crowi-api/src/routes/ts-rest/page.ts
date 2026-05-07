@@ -509,9 +509,6 @@ export default (crowi: Crowi, _app: Express) => {
       return { status: 200 as const, body: { page: pageToResponse(populated) } };
     },
     /**
-     * GET /api/v2/pages/watch
-     * Get the current user's watch (notification subscription) status for a page.
-     *
      * Resolution order matches legacy controllers/page.ts api.watchStatus:
      *   1. If a Watcher record exists for (user, page), use watcher.isWatching().
      *   2. Otherwise derive a default from page.getNotificationTargetUsers()
@@ -541,15 +538,12 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     /**
-     * PUT /api/v2/pages/watch
-     * Upsert the current user's Watcher record for a page.
      * - watching=true  -> status=WATCH
      * - watching=false -> status=IGNORE
      *
-     * Note: this 2-state API cannot remove the Watcher (i.e. revert to the
-     * default-derived behaviour). That deliberate constraint is documented
-     * in the task plan; if a 3-state UI is needed later, the contract will
-     * be extended.
+     * This 2-state API cannot remove the Watcher (i.e. revert to the
+     * default-derived behaviour). If a 3-state UI is needed later, the
+     * contract will be extended.
      */
     setWatchStatus: async ({ body: requestBody, req }) => {
       const user = req.user as UserDocument;

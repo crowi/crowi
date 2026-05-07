@@ -155,11 +155,9 @@ export const pageContract = c.router({
   },
 
   /**
-   * Get watch (notification subscription) status for the current user
-   *
    * If the user has an explicit Watcher record, watching reflects status === WATCH.
    * Otherwise the default is derived from page.getNotificationTargetUsers()
-   * (creator + comment authors + revision authors), matching the legacy
+   * (creator + comment authors + revision authors), matching legacy
    * /_api/pages.watch.status semantics.
    */
   getWatchStatus: {
@@ -176,8 +174,6 @@ export const pageContract = c.router({
   },
 
   /**
-   * Set watch (notification subscription) status for the current user
-   *
    * - watching=true upserts the Watcher with status=WATCH
    * - watching=false upserts the Watcher with status=IGNORE
    *
