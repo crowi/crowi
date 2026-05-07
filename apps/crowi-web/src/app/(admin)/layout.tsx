@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Settings, User, Bookmark, FileText, Trash2 } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -18,6 +18,7 @@ import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
 import { m } from '@/paraglide/messages.js';
 import { LanguageMenuItems } from '@/components/language-menu-items';
+import { UserMenuItems } from '@/components/user-menu-items';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -109,38 +110,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <div className="text-muted-foreground">@{user.username}</div>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href={`/user/${user.username}`}>
-                    <User className="h-4 w-4 mr-2" />
-                    {m['header.user_dropdown_my_page']()}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href={`/user/${user.username}/bookmarks`}>
-                    <Bookmark className="h-4 w-4 mr-2" />
-                    {m['header.user_dropdown_bookmarks']()}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href={`/user/${user.username}/recent-create`}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    {m['header.user_dropdown_created']()}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/trash">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    {m['header.user_dropdown_trash']()}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/settings">
-                    <Settings className="h-4 w-4 mr-2" />
-                    {m['header.user_dropdown_settings']()}
-                  </Link>
-                </DropdownMenuItem>
+                <UserMenuItems username={user.username} />
                 <LanguageMenuItems />
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} className="text-red-600">

@@ -29,13 +29,6 @@ export function formatRelativeTime(dateString: string): string {
 }
 
 /**
- * Backwards-compat alias. Existing callers used `formatJaRelativeTime`; the
- * implementation is now locale-aware so the JA-specific name is misleading.
- * Re-exported only to avoid a sweeping rename in this commit.
- */
-export const formatJaRelativeTime = formatRelativeTime;
-
-/**
  * Build a human-readable notification text. The two templates differ in
  * arity (single user vs many) so both keys exist as separate messages — the
  * pluralisation rules (in JA there's nothing to do; in EN "others" carries

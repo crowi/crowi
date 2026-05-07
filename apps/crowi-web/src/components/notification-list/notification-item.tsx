@@ -4,7 +4,7 @@ import type { Notification } from '@crowi/api-contract';
 
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
-import { buildNotificationMessage, formatJaRelativeTime, isUnopenedNotification } from '@/lib/notification-format';
+import { buildNotificationMessage, formatRelativeTime, isUnopenedNotification } from '@/lib/notification-format';
 import { m } from '@/paraglide/messages.js';
 
 interface NotificationItemProps {
@@ -43,7 +43,7 @@ export function NotificationItem({ notification, onOpen }: NotificationItemProps
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="text-sm break-all text-foreground">{buildNotificationMessage(notification)}</div>
-        <div className="text-xs text-muted-foreground">{formatJaRelativeTime(notification.createdAt)}</div>
+        <div className="text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</div>
       </div>
       {isUnread ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden aria-label={m['notifications.unread_aria']()} /> : null}
     </button>

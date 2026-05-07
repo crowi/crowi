@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 import { useUnreadCount, useNotifications, useMarkAllAsRead, useOpenNotification } from '@/lib/use-notifications';
-import { formatJaRelativeTime, buildNotificationMessage, isUnopenedNotification } from '@/lib/notification-format';
+import { formatRelativeTime, buildNotificationMessage, isUnopenedNotification } from '@/lib/notification-format';
 import { m } from '@/paraglide/messages.js';
 
 interface NotificationRowProps {
@@ -41,7 +41,7 @@ function NotificationRow({ notification, onOpen }: NotificationRowProps) {
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="line-clamp-2 break-all text-foreground">{buildNotificationMessage(notification)}</div>
-        <div className="text-xs text-muted-foreground">{formatJaRelativeTime(notification.createdAt)}</div>
+        <div className="text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</div>
       </div>
       {isUnread ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden /> : null}
     </button>

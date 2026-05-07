@@ -58,7 +58,7 @@
   "page.redirecting": "{path} にリダイレクト中...",
   "page.failed_to_load": "ページの読み込みに失敗しました。{message}",
   "page.not_found_title": "ページが見つかりません",
-  "page.not_found_description": "ページ {path} はまだ存在しません。",
+  "page.not_found_description": "このページはまだ存在しません。",
   "page.not_found_body": "このページを作成しますか?",
   "page.create_page": "ページを作成",
   "page.deleted_alert_title": "このページは削除されています",
@@ -93,7 +93,7 @@
   "page.backlinks_read_more": "さらに表示",
 
   "page.id_redirector_looking_up": "ページを検索中...",
-  "page.id_redirector_not_found_description": "ID {id} のページは存在しません。",
+  "page.id_redirector_not_found_description": "この ID に対応するページは存在しません。",
   "page.id_redirector_not_found_body": "削除済みか、リンクが間違っている可能性があります。",
   "page.id_redirector_failed": "ページの検索に失敗しました。{message}",
 

@@ -43,8 +43,8 @@ export function IdRedirector({ pageId }: IdRedirectorProps) {
         title={m['page.not_found_title']()}
         description={
           <>
-            {m['page.id_redirector_not_found_description']({ id: '' })}
-            <code className="bg-muted px-2 py-0.5 rounded ml-1">{pageId}</code>
+            <code className="bg-muted px-2 py-0.5 rounded">{pageId}</code>
+            <span className="ml-1">{m['page.id_redirector_not_found_description']()}</span>
           </>
         }
         body={m['page.id_redirector_not_found_body']()}

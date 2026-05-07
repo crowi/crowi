@@ -58,7 +58,7 @@
   "page.redirecting": "Redirecting to {path}...",
   "page.failed_to_load": "Failed to load page. {message}",
   "page.not_found_title": "Page Not Found",
-  "page.not_found_description": "The page {path} does not exist yet.",
+  "page.not_found_description": "This page does not exist yet.",
   "page.not_found_body": "Would you like to create this page?",
   "page.create_page": "Create Page",
   "page.deleted_alert_title": "This page has been deleted",
@@ -93,7 +93,7 @@
   "page.backlinks_read_more": "Read More Backlinks",
 
   "page.id_redirector_looking_up": "Looking up page...",
-  "page.id_redirector_not_found_description": "No page exists for id {id}.",
+  "page.id_redirector_not_found_description": "No page exists for this id.",
   "page.id_redirector_not_found_body": "The page may have been deleted or the link may be incorrect.",
   "page.id_redirector_failed": "Failed to look up page. {message}",
 

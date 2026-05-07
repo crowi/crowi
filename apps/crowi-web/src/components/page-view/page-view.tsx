@@ -63,7 +63,7 @@ export function PageView({ path }: PageViewProps) {
         description={
           <>
             <code className="bg-muted px-2 py-0.5 rounded">{path}</code>
-            <span className="ml-1">{m['page.not_found_description']({ path: '' })}</span>
+            <span className="ml-1">{m['page.not_found_description']()}</span>
           </>
         }
         body={m['page.not_found_body']()}
