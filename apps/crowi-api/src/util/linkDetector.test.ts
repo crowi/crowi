@@ -37,4 +37,20 @@ describe('Url test', () => {
       ]),
     );
   });
+
+  test('detects Markdown links with relative paths as backlinks', () => {
+    const linkDetector = LinkDetector(crowi);
+
+    let text = 'see [backlink for xyz2](/xyz2) and [other one](/foo/bar). ';
+    // Markdown link whose href is a full URL is intentionally not picked up as a relative path —
+    // linkRegexp handles that case.
+    text += '[external](http://example.com/baz). ';
+    // Angle-bracket and bare-bracket forms remain detected.
+    text += '</wiki/style/path>';
+
+    const results = linkDetector.search(text);
+
+    expect(results.paths).toEqual(expect.arrayContaining(['/xyz2', '/foo/bar', '/wiki/style/path']));
+    expect(results.paths).not.toContain('/baz');
+  });
 });

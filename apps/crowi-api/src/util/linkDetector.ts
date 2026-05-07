@@ -12,7 +12,11 @@ export default (crowi: Crowi) => {
 
   linkDetector.getObjectIdRegexp = () => new RegExp('/([0-9a-fA-F]{24})');
 
-  linkDetector.getPathRegexps = () => [new RegExp('<(/[^>]+)>', 'g'), /\[(\/[^\]]+)\](?!\()/g];
+  // [0] `<...>`: angle-bracket wiki link
+  // [1] `[/path]`: bare bracket form, only when NOT followed by `(` (= not a Markdown link)
+  // [2] `[label](/path)`: Markdown link whose target is a same-host relative path.
+  //     Markdown links pointing at full URLs (http://…) are handled by linkRegexp instead.
+  linkDetector.getPathRegexps = () => [new RegExp('<(/[^>]+)>', 'g'), /\[(\/[^\]]+)\](?!\()/g, /\[[^\]]+\]\((\/[^)\s#]+)\)/g];
 
   linkDetector.search = function (text) {
     const unique = function (array) {
@@ -36,14 +40,11 @@ export default (crowi: Crowi) => {
       }
     }
 
-    const pathRegexp = linkDetector.getPathRegexps()[0];
-    while (pathRegexp.exec(text)) {
-      paths.push(RegExp.$1);
-    }
-
-    const pathRegexp2 = linkDetector.getPathRegexps()[1];
-    while (pathRegexp2.exec(text)) {
-      paths.push(RegExp.$1);
+    const pathRegexps = linkDetector.getPathRegexps();
+    for (const pathRegexp of pathRegexps) {
+      while (pathRegexp.exec(text)) {
+        paths.push(decodeSpace(decodeURIComponent(RegExp.$1)));
+      }
     }
 
     return {
