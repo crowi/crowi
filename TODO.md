@@ -5,12 +5,8 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## High Priority — フェーズ 1 残 (ページ機能の完成)
 
-- [ ] **Trash 表示画面** (`/trash/*`)
-  - 削除済みページの一覧、復元、完全削除
-  - API は既存 `listPages` + `revertDeletedPage` + `deletePage(completely)` で揃っている
-- [ ] **page watch**
-  - `pages.watch` / `pages.watch.status`
-  - 通知の購読関係、`/admin/notification` の page-path mapping とも関連
+🎉 **フェーズ 1 完了** — Trash / page watch / Seen by 改善まで反映済み。
+詳細は「Recently Completed (このセッション)」を参照。
 
 ## High Priority — 横断的 advisory (累積)
 
@@ -109,6 +105,9 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 ## Recently Completed (このセッション)
 
 ### 並行 worktree 統合 (`/integrate-worktree`)
+- [x] **trash 統合** (`c5a9e8ec` + simplify `0cd08638`) — `/trash/*` 一覧 + Restore / Delete forever。`useDeletePage` / `useRevertDeletedPage` の `['pages']` invalidate 追加で行が即時に消えるよう修正
+- [x] **pages-watch 統合** (`d7538524` + simplify `e2687f87`) — Bell / BellOff の WatchButton + GET/PUT `/pages/watch` (Watcher upsert + `getNotificationTargetUsers` フォールバック)。`useToggleWatch` を `useToggleBookmark` 流の状態導出に整理、`useWatchStatus` に 5min staleTime
+- [x] **notification-subscribe を破棄** — pages-watch と完全重複していたため `gw end -f`
 - [x] **notification 統合** (`60311ad3`) — Bell + 30s polling + `/notifications` 画面
 - [x] **pages-revisions 統合** (`c8bd4c4e`) — `/page/history` + diff viewer (react-diff-viewer-continued)
 - [x] **pages-likes 統合** (`70cf0656` + simplify `e6fe27be`) — Like button + `loadGrantedPage` への refactor
@@ -120,6 +119,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [x] **page-rename 統合** (`5d0942e3` + simplify `0c7621f1`) — Rename API
 
 ### Web UI 改善 (main 直)
+- [x] **Seen by を avatar stack + N+ more dialog 化** (`a2b37dde` + `20da8dbd`) — preview 10 件は重なりアバター、超過分は `+N more` ボタンで Dialog から全件閲覧。`PageSchema` から id 配列の `seenUsers` を撤去 (count のみ)、`getSeenUsers` に `limit` query 追加でペイロードを軽量化
 - [x] **PageActionsMenu (...menu)** (`b224f009`) — Rename / Delete を menu に集約してヘッダーをスッキリ
 - [x] **portal page で PageHeader を表示** (`230110a6`) — Bookmark / Edit / ... menu / SeenBy が portal にも
 - [x] **`/user/<username>` で page document を表示** (`dce8f7df`) — profile + page content + tabs
