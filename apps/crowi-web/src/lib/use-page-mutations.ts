@@ -112,6 +112,8 @@ export function useDeletePage() {
     onSuccess: () => {
       // Invalidate page queries so the trashed view (or 404) is reflected.
       queryClient.invalidateQueries({ queryKey: ['page'] });
+      // The /trash listing must drop the just-(soft|hard)-deleted row.
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
       // /user/:username/pages may surface deleted pages — refresh those too.
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
@@ -146,6 +148,8 @@ export function useRevertDeletedPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
+      // The /trash listing must drop the just-restored row.
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
   });

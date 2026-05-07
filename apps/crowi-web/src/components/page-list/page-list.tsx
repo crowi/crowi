@@ -6,14 +6,12 @@ import { Card } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { Breadcrumb } from '@/components/breadcrumb';
-import { PageListItem } from './page-list-item';
+import { PageListItem, type PageListVariant } from './page-list-item';
 import { Pagination } from './pagination';
 import { PageContent } from '@/components/page-view/page-content';
 import { PageHeader } from '@/components/page-view/page-header';
 import { usePageList } from '@/lib/use-page-list';
 import type { ListPagesRequest, PageWithRevision } from '@crowi/api-contract';
-
-type PageListVariant = 'default' | 'trash';
 
 interface PageListProps {
   initialParams?: Partial<ListPagesRequest>;

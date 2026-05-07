@@ -11,11 +11,11 @@ import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
 import type { Page } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 
-type PageListItemVariant = 'default' | 'trash';
+export type PageListVariant = 'default' | 'trash';
 
 interface PageListItemProps {
   page: Page;
-  variant?: PageListItemVariant;
+  variant?: PageListVariant;
 }
 
 export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
@@ -122,13 +122,35 @@ interface TrashItemActionsProps {
   pagePath: string;
 }
 
+type ConfirmKind = 'restore' | 'delete-forever';
+
+const CONFIRM_COPY: Record<
+  ConfirmKind,
+  { title: string; description: (path: string) => string; confirmLabel: string; buttonVariant: 'default' | 'destructive' }
+> = {
+  restore: {
+    title: 'このページを復元しますか?',
+    description: (path) => `「${path}」を元のパスに復元します。`,
+    confirmLabel: '復元',
+    buttonVariant: 'default',
+  },
+  'delete-forever': {
+    title: 'このページを完全に削除しますか?',
+    description: (path) => `「${path}」を完全に削除します。この操作は取り消せません。`,
+    confirmLabel: '完全に削除',
+    buttonVariant: 'destructive',
+  },
+};
+
 function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
-  const [confirmKind, setConfirmKind] = useState<null | 'restore' | 'delete-forever'>(null);
+  const [confirmKind, setConfirmKind] = useState<ConfirmKind | null>(null);
   const revert = useRevertDeletedPage();
   const remove = useDeletePage();
 
   const isPending = revert.isPending || remove.isPending;
-  const errorMessage = revert.error instanceof Error ? revert.error.message : remove.error instanceof Error ? remove.error.message : null;
+  const error = revert.error ?? remove.error;
+  const errorMessage = error instanceof Error ? error.message : null;
+  const copy = confirmKind ? CONFIRM_COPY[confirmKind] : null;
 
   const closeDialog = () => {
     if (isPending) return;
@@ -168,10 +190,8 @@ function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
       <Dialog open={confirmKind !== null} onOpenChange={(next) => !next && closeDialog()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{confirmKind === 'restore' ? 'このページを復元しますか?' : 'このページを完全に削除しますか?'}</DialogTitle>
-            <DialogDescription>
-              {confirmKind === 'restore' ? `「${pagePath}」を元のパスに復元します。` : `「${pagePath}」を完全に削除します。この操作は取り消せません。`}
-            </DialogDescription>
+            <DialogTitle>{copy?.title}</DialogTitle>
+            <DialogDescription>{copy?.description(pagePath)}</DialogDescription>
           </DialogHeader>
 
           {errorMessage && (
@@ -184,16 +204,14 @@ function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
             <Button variant="outline" onClick={closeDialog} disabled={isPending}>
               キャンセル
             </Button>
-            <Button variant={confirmKind === 'restore' ? 'default' : 'destructive'} onClick={handleConfirm} disabled={isPending}>
+            <Button variant={copy?.buttonVariant ?? 'default'} onClick={handleConfirm} disabled={isPending}>
               {isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                   処理中...
                 </>
-              ) : confirmKind === 'restore' ? (
-                '復元'
               ) : (
-                '完全に削除'
+                copy?.confirmLabel
               )}
             </Button>
           </DialogFooter>
