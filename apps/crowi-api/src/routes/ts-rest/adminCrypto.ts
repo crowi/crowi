@@ -15,9 +15,9 @@ export default (crowi: Crowi, _app: Express) => {
 
   const router_ = s.router(apiContract.adminCrypto, {
     /**
-     * Audit which sensitive Config rows are still plaintext. Reads the raw
-     * `value` column (without our normal decrypt-on-read path) so callers can
-     * tell encrypted from legacy plaintext via the `enc:v1:` prefix check.
+     * Reads the raw `value` column rather than going through loadAllConfig's
+     * decrypt path, so encrypted vs legacy plaintext can be distinguished by
+     * the `enc:v1:` prefix.
      */
     getCryptoStatus: async () => {
       const registry = listSensitiveConfigKeys();
@@ -58,11 +58,9 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     /**
-     * Re-encrypt every plaintext sensitive row in one pass. Reads the raw
-     * value, wraps it with `encrypt()`, and writes it back via a direct
-     * `findOneAndUpdate` so the value is preserved verbatim — JSON parse /
-     * stringify is intentionally NOT done here, the value column is already
-     * the JSON-stringified form that loadAllConfig expects.
+     * The raw value column is JSON-stringified already (= loadAllConfig's
+     * expected shape), so we wrap it verbatim with encrypt() — no parse /
+     * stringify round-trip on the migration path.
      */
     reencryptAll: async () => {
       if (!isEncryptionConfigured()) {

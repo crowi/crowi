@@ -18,22 +18,19 @@ export const SensitiveConfigEntrySchema = z.object({
 export type SensitiveConfigEntry = z.infer<typeof SensitiveConfigEntrySchema>;
 
 export const CryptoStatusResponseSchema = z.object({
-  /** False when CROWI_ENCRYPTION_KEY is not configured. UI should show a setup hint. */
+  /** False when CROWI_ENCRYPTION_KEY is not configured — UI shows a setup hint. */
   encryptionConfigured: z.boolean(),
-  /** Number of sensitive entries that exist in the DB and are still plaintext. */
   unencryptedCount: z.number().int().min(0),
-  /** Number of sensitive entries already encrypted at rest. */
   encryptedCount: z.number().int().min(0),
   entries: z.array(SensitiveConfigEntrySchema),
 });
 export type CryptoStatusResponse = z.infer<typeof CryptoStatusResponseSchema>;
 
 export const ReencryptResponseSchema = z.object({
-  /** Number of rows that were rewritten this run. */
   rewritten: z.number().int().min(0),
-  /** Number of rows that were already encrypted (skipped). */
+  /** Already encrypted, skipped on this run. */
   alreadyEncrypted: z.number().int().min(0),
-  /** Number of sensitive registry entries that had no row in the DB. */
+  /** Sensitive registry entries that had no row in the DB at all. */
   missing: z.number().int().min(0),
 });
 export type ReencryptResponse = z.infer<typeof ReencryptResponseSchema>;
