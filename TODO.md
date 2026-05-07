@@ -44,9 +44,9 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 画面 (`apps/crowi-web/src/app/(admin)/`) を新設する。
 
 ### 基盤
-- [ ] **adminRequired middleware を JSON 化** (Medium Priority に既出、依存)
-- [ ] **`/admin` index** + Admin layout (sidebar / breadcrumb)
-- [ ] Next.js Route Group `(admin)` 設計、admin 専用認可 (User.admin === true)
+- [x] **adminRequired middleware を JSON 化** (Medium Priority に既出、依存) — 8abd0c8f
+- [x] **`/admin` index** + Admin layout (sidebar / breadcrumb) — 5123e06d
+- [x] Next.js Route Group `(admin)` 設計、admin 専用認可 (User.admin === true) — 5123e06d
 
 ### 設定 (Config model に集約、各セクションで部分更新)
 - [ ] **App** (`POST /admin/settings/app`): サイト名、デフォルト言語、`fileUpload` type 等
