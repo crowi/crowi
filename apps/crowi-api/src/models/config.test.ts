@@ -1,4 +1,6 @@
+import crypto from 'crypto';
 import { crowi, Fixture } from 'src/test/setup';
+import { isEncrypted, resetKeyProvider } from 'src/util/crypto';
 
 describe('Config model test', () => {
   let Config;
@@ -38,6 +40,51 @@ describe('Config model test', () => {
       expect(config.crowi).toHaveProperty('test:test3', [1, 2, 3, 4, 5]);
 
       expect(config.plugin).toHaveProperty('other:config', 'this is data');
+    });
+  });
+
+  describe('encryption of sensitive values', () => {
+    const originalKey = process.env.CROWI_ENCRYPTION_KEY;
+
+    beforeAll(() => {
+      process.env.CROWI_ENCRYPTION_KEY = crypto.randomBytes(32).toString('base64');
+      resetKeyProvider();
+    });
+
+    afterAll(async () => {
+      if (originalKey === undefined) {
+        delete process.env.CROWI_ENCRYPTION_KEY;
+      } else {
+        process.env.CROWI_ENCRYPTION_KEY = originalKey;
+      }
+      resetKeyProvider();
+      // Clean up so other tests don't see the encrypted rows.
+      await Config.deleteByParams('crowi', 'google:clientSecret');
+      await Config.deleteByParams('crowi', 'mail:smtpPassword');
+    });
+
+    test('sensitive values are written encrypted and read back as plaintext', async () => {
+      const secret = 'super-secret-google-secret';
+      await Config.updateConfig('crowi', 'google:clientSecret', secret);
+
+      const stored = await Config.findOne({ ns: 'crowi', key: 'google:clientSecret' }).exec();
+      expect(stored).not.toBeNull();
+      expect(isEncrypted(stored!.value)).toBe(true);
+
+      const config = await Config.loadAllConfig();
+      expect(config.crowi['google:clientSecret']).toBe(secret);
+    });
+
+    test('legacy plaintext rows for sensitive keys are still readable (back-compat)', async () => {
+      // Pretend an existing deployment already had this value stored unencrypted.
+      await Config.findOneAndUpdate(
+        { ns: 'crowi', key: 'mail:smtpPassword' },
+        { ns: 'crowi', key: 'mail:smtpPassword', value: JSON.stringify('legacy-plain-password') },
+        { upsert: true },
+      ).exec();
+
+      const config = await Config.loadAllConfig();
+      expect(config.crowi['mail:smtpPassword']).toBe('legacy-plain-password');
     });
   });
 

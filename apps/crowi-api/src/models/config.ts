@@ -1,6 +1,8 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
+import { decrypt, encrypt, isEncrypted, isEncryptionConfigured } from 'src/util/crypto';
+import { isSensitiveConfig } from './config-sensitive';
 
 const SECURITY_REGISTRATION_MODE_OPEN = 'Open';
 const SECURITY_REGISTRATION_MODE_RESTRICTED = 'Resricted';
@@ -140,7 +142,14 @@ export default (crowi: Crowi) => {
   };
 
   configSchema.statics.updateByParams = async function (ns: string, key: string, value: string) {
-    await Config.findOneAndUpdate({ ns, key }, { ns, key, value: JSON.stringify(value) }, { upsert: true }).exec();
+    let serialized = JSON.stringify(value);
+    // Encrypt at rest for sensitive entries when a key is configured. Without
+    // a key we silently fall back to plaintext (legacy behaviour) so missing
+    // CROWI_ENCRYPTION_KEY never blocks an admin save.
+    if (isSensitiveConfig(ns, key) && isEncryptionConfigured()) {
+      serialized = encrypt(serialized);
+    }
+    await Config.findOneAndUpdate({ ns, key }, { ns, key, value: serialized }, { upsert: true }).exec();
   };
 
   configSchema.statics.updateConfig = async function (ns: string, key: string, value: string) {
@@ -196,7 +205,11 @@ export default (crowi: Crowi) => {
         config[ns] = {};
       }
 
-      config[ns][key] = JSON.parse(value);
+      // Encrypted values carry our prefix; everything else (legacy plaintext
+      // and ordinary settings) is parsed as-is. decrypt() throws on tampered
+      // ciphertext but is a no-op for non-prefixed values.
+      const raw = isEncrypted(value) ? decrypt(value) : value;
+      config[ns][key] = JSON.parse(raw);
     });
 
     return config;
