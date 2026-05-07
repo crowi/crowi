@@ -12,4 +12,5 @@ export * from './schemas/revision';
 export * from './schemas/notification';
 export * from './schemas/backlink';
 export * from './schemas/adminCrypto';
+export * from './schemas/adminApp';
 export * from './openapi';

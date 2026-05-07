@@ -12,6 +12,7 @@ import revisionRoutes from './revision';
 import notificationRoutes from './notification';
 import backlinkRoutes from './backlink';
 import adminCryptoRoutes from './adminCrypto';
+import adminAppRoutes from './admin/app';
 import jwtAuth from '../../middlewares/jwtAuth';
 import jwtAdminRequired from '../../middlewares/jwtAdminRequired';
 import Debug from 'debug';
@@ -68,9 +69,11 @@ export default (crowi: Crowi, app: Express) => {
   adminRouter.use(jwtAdminRequired(crowi)); // Apply JWT auth + admin check
 
   const adminCryptoRouter = adminCryptoRoutes(crowi, app);
+  const adminAppRouter = adminAppRoutes(crowi, app);
 
   debug('Mounting admin routes (JWT + admin required)');
   adminRouter.use(adminCryptoRouter);
+  adminRouter.use(adminAppRouter);
 
   // Mount all routers under /api/v2
   app.use('/api/v2', publicRouter);
