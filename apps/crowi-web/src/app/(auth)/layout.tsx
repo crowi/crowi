@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Settings, User, Bookmark, FileText, Trash2 } from 'lucide-react';
+import { LogOut, Settings, Shield, User, Bookmark, FileText, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -61,6 +61,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </Link>
           </div>
           <div className="flex items-center gap-2">
+            {user?.admin && (
+              <Button asChild variant="ghost" size="icon-sm" aria-label="管理画面" title="管理画面" className="text-white hover:bg-white/10 hover:text-white">
+                <Link href="/admin">
+                  <Shield className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
