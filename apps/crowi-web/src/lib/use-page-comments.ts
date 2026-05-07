@@ -4,27 +4,28 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { Comment } from '@crowi/api-contract';
 
-export interface UsePageCommentsResult {
-  comments: Comment[];
-  isLoading: boolean;
-  isError: boolean;
-  error: Error | null;
-  refetch: () => void;
-}
-
-const commentsKey = (pageId: string) => ['comments', { pageId }] as const;
+export const commentKeys = {
+  all: ['comments'] as const,
+  detail: (pageId: string) => ['comments', { pageId }] as const,
+};
 
 /**
- * Fetch and manage comments for a single page.
- * - The list query is keyed by pageId so it invalidates cleanly after add/delete.
- * - On mutation success we also invalidate the page query so commentCount in the
- *   header refreshes from the server (Comment post-save hook is async).
+ * Invalidate the comment list and the page query after a comment mutation.
+ * The page query is invalidated because the page header's commentCount is
+ * updated by an async post-save hook on the Comment model.
  */
-export function usePageComments(pageId: string | null | undefined) {
+function useInvalidateComments(pageId: string | null | undefined) {
   const queryClient = useQueryClient();
+  return () => {
+    if (!pageId) return;
+    queryClient.invalidateQueries({ queryKey: commentKeys.detail(pageId) });
+    queryClient.invalidateQueries({ queryKey: ['page'] });
+  };
+}
 
+export function usePageCommentsList(pageId: string | null | undefined) {
   const query = useQuery({
-    queryKey: commentsKey(pageId ?? ''),
+    queryKey: pageId ? commentKeys.detail(pageId) : commentKeys.all,
     queryFn: async () => {
       if (!pageId) return [] as Comment[];
       const result = await apiClient.comment.listComments({ query: { page_id: pageId } });
@@ -36,14 +37,19 @@ export function usePageComments(pageId: string | null | undefined) {
     enabled: Boolean(pageId),
   });
 
-  const invalidate = () => {
-    if (!pageId) return;
-    queryClient.invalidateQueries({ queryKey: commentsKey(pageId) });
-    // commentCount on the page header is driven by the page query.
-    queryClient.invalidateQueries({ queryKey: ['page'] });
+  return {
+    comments: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error as Error | null,
+    refetch: query.refetch,
   };
+}
 
-  const addMutation = useMutation({
+export function useAddComment(pageId: string | null | undefined) {
+  const invalidate = useInvalidateComments(pageId);
+
+  const mutation = useMutation({
     mutationFn: async (input: { revisionId: string; comment: string; commentPosition?: number }) => {
       if (!pageId) throw new Error('pageId is required');
       const result = await apiClient.comment.addComment({
@@ -63,7 +69,17 @@ export function usePageComments(pageId: string | null | undefined) {
     onSuccess: () => invalidate(),
   });
 
-  const deleteMutation = useMutation({
+  return {
+    addComment: mutation.mutateAsync,
+    isAdding: mutation.isPending,
+    addError: mutation.error as Error | null,
+  };
+}
+
+export function useDeleteComment(pageId: string | null | undefined) {
+  const invalidate = useInvalidateComments(pageId);
+
+  const mutation = useMutation({
     mutationFn: async (commentId: string) => {
       if (!pageId) throw new Error('pageId is required');
       const result = await apiClient.comment.deleteComment({
@@ -79,16 +95,7 @@ export function usePageComments(pageId: string | null | undefined) {
   });
 
   return {
-    comments: query.data ?? [],
-    isLoading: query.isLoading,
-    isError: query.isError,
-    error: query.error as Error | null,
-    refetch: query.refetch,
-    addComment: addMutation.mutateAsync,
-    isAdding: addMutation.isPending,
-    addError: addMutation.error as Error | null,
-    deleteComment: deleteMutation.mutateAsync,
-    isDeleting: deleteMutation.isPending,
-    deleteError: deleteMutation.error as Error | null,
+    deleteComment: mutation.mutateAsync,
+    isDeleting: mutation.isPending,
   };
 }

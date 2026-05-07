@@ -29,7 +29,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] **残り middleware の JSON 化**:
   - `adminRequired` / `applicationNotInstalled` / `fileAccessRightOrLoginRequired`
 - [ ] **error code 細分化**: comment.ts / revision.ts などの `INVALID_REQUEST` を `MISSING_REQUIRED_FIELD` / `INVALID_OBJECT_ID` / `*_FAILED` に分割
-- [ ] **`usePageComments` を 3 hooks に split**: 11 fields 返す巨大 hook を `usePageCommentsList` / `useAddComment` / `useDeleteComment` に分割
+- [x] **`usePageComments` を 3 hooks に split** (`8d6b695c`): 11 fields 返す巨大 hook を `usePageCommentsList` / `useAddComment` / `useDeleteComment` に分割
 - [ ] **`Backlink.createBySavedPage` を bulk insert 化**: 現状 `deleteMany` → N×`isExist*` → N×`Backlink.create()` で 1 ページ保存ごとに ~1+2K round-trips。`insertMany` + (理想的には) 旧/新リンクの set-difference に置き換え。`backlink.ts:98-122` 周辺
 
 ## Medium Priority — フェーズ 3 (検索 / アセット)
