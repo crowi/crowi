@@ -29,7 +29,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] **残り middleware の JSON 化**:
   - `adminRequired` / `applicationNotInstalled` / `fileAccessRightOrLoginRequired`
 - [ ] **error code 細分化**: comment.ts / revision.ts などの `INVALID_REQUEST` を `MISSING_REQUIRED_FIELD` / `INVALID_OBJECT_ID` / `*_FAILED` に分割
-- [ ] **`usePageComments` を 3 hooks に split**: 11 fields 返す巨大 hook を `usePageCommentsList` / `useAddComment` / `useDeleteComment` に分割
+- [x] **`usePageComments` を 3 hooks に split**: 11 fields 返す巨大 hook を `usePageCommentsList` / `useAddComment` / `useDeleteComment` に分割
 
 ## Medium Priority — フェーズ 3 (検索 / アセット)
 

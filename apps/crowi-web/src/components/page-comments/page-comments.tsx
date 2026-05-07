@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Loader2, MessageSquare } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/lib/use-auth';
-import { usePageComments } from '@/lib/use-page-comments';
+import { useAddComment, useDeleteComment, usePageCommentsList } from '@/lib/use-page-comments';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { CommentItem } from './comment-item';
 import { CommentForm } from './comment-form';
@@ -25,7 +25,9 @@ export function PageComments({ page }: PageCommentsProps) {
   const revisionId = typeof page.revision === 'object' ? page.revision._id : (page.revision ?? null);
   const isReadOnly = page.status === 'deleted';
 
-  const { comments, isLoading, isError, error, addComment, isAdding, addError, deleteComment, isDeleting } = usePageComments(pageId);
+  const { comments, isLoading, isError, error } = usePageCommentsList(pageId);
+  const { addComment, isAdding, addError } = useAddComment(pageId);
+  const { deleteComment, isDeleting } = useDeleteComment(pageId);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
