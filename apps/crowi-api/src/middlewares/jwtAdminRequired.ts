@@ -1,6 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import Crowi from 'src/crowi';
+import { AdminRequiredErrorSchema } from '@crowi/api-contract';
+import { z } from 'zod';
 import jwtAuth from './jwtAuth';
+
+type AdminRequiredError = z.infer<typeof AdminRequiredErrorSchema>;
 
 /**
  * JWT authentication middleware with admin permission check
@@ -18,14 +22,15 @@ export default (crowi: Crowi) => {
       }
 
       // Check if user has admin permission
-      const user = (req as any).user;
+      const user = (req as Request & { user?: { admin?: boolean } }).user;
       if (!user?.admin) {
-        return res.status(403).json({
+        const errorResponse: AdminRequiredError = {
           error: {
-            code: 'FORBIDDEN',
+            code: 'ADMIN_REQUIRED',
             message: 'Admin permission required',
           },
-        });
+        };
+        return res.status(403).json(errorResponse);
       }
 
       next();

@@ -105,6 +105,7 @@ export default (crowi: Crowi, app: Express) => {
           email: user.email,
           name: user.name,
           image: user.image,
+          admin: user.admin === true,
         },
       });
     } catch (error) {
@@ -161,6 +162,7 @@ export default (crowi: Crowi, app: Express) => {
         email: string;
         name: string;
         image?: string;
+        admin?: boolean;
       }
 
       const newUser = await new Promise<UserDocument | null>((resolve, reject) => {
@@ -199,6 +201,7 @@ export default (crowi: Crowi, app: Express) => {
           email: newUser.email,
           name: newUser.name,
           image: newUser.image,
+          admin: newUser.admin === true,
         },
       });
     } catch (error) {
@@ -275,6 +278,7 @@ export default (crowi: Crowi, app: Express) => {
           email: user.email,
           name: user.name,
           image: user.image,
+          admin: user.admin === true,
         },
       });
     } catch (error) {
@@ -325,6 +329,7 @@ export default (crowi: Crowi, app: Express) => {
         name: user.name,
         image: user.image,
         status: user.status,
+        admin: user.admin === true,
         createdAt: user.createdAt.toISOString(),
       },
     });
