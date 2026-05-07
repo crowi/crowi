@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { CryptoStatusResponse, ReencryptResponse } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 export const adminCryptoKeys = {
   status: ['admin-crypto-status'] as const,
@@ -32,12 +33,12 @@ export function useReencryptSensitive() {
       const result = await apiClient.adminCrypto.reencryptAll({ body: {} });
       if (result.status === 200) return result.body;
       if (result.status === 503) {
-        throw new Error('CROWI_ENCRYPTION_KEY が設定されていません。サーバ管理者に連絡してください。');
+        throw new Error(m['errors.encryption_key_not_set']());
       }
       if (result.status === 401 || result.status === 403) {
-        throw new Error('権限がありません');
+        throw new Error(m['errors.unauthorized']());
       }
-      throw new Error('再暗号化に失敗しました');
+      throw new Error(m['errors.reencrypt_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminCryptoKeys.status });
