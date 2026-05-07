@@ -116,21 +116,6 @@ importers:
       googleapis:
         specifier: ^44.0.0
         version: 44.0.0
-      i18next:
-        specifier: ~17.0.13
-        version: 17.0.18
-      i18next-browser-languagedetector:
-        specifier: ^3.0.3
-        version: 3.1.1
-      i18next-express-middleware:
-        specifier: ~1.8.1
-        version: 1.8.2
-      i18next-node-fs-backend:
-        specifier: ^2.1.3
-        version: 2.1.3
-      i18next-sprintf-postprocessor:
-        specifier: ~0.2.2
-        version: 0.2.2
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.2
@@ -6062,6 +6047,7 @@ packages:
     resolution: {integrity: sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg==}
     dependencies:
       sprintf-js: 1.0.3
+    dev: true
 
   /argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
@@ -7199,14 +7185,6 @@ packages:
     resolution: {integrity: sha512-LDx6oHrK+PhzLKJU9j5S7/Y3jM/mUHvD/DeI1WQmJn652iPC5Y4TBzC9l+5OMOXlyTTA+SmVUPm0HQUwpD5Jqw==}
     dev: true
 
-  /cookies@0.7.1:
-    resolution: {integrity: sha512-VX3KKCWrKjPnCwF78P60rnMfy1piVeObnjuKO4rBUyiSRYDgY/EqXbw3jX/uXmmdAPmayVJqdbLfJ0BRSfRZFg==}
-    engines: {node: '>= 0.8'}
-    dependencies:
-      depd: 1.1.2
-      keygrip: 1.0.3
-    dev: false
-
   /copy-descriptor@0.1.1:
     resolution: {integrity: sha512-XgZ0pFcakEUlbwQEVNg3+QAis1FyTL3Qel9FYy8pSkQqoG3PNoT0bOCQtOXcOkur21r2Eq2kI+IE+gsmAEVlYw==}
     engines: {node: '>=0.10.0'}
@@ -7507,11 +7485,6 @@ packages:
   /delayed-stream@1.0.0:
     resolution: {integrity: sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==}
     engines: {node: '>=0.4.0'}
-
-  /depd@1.1.2:
-    resolution: {integrity: sha512-7emPTl6Dpo6JRXOXjLRxck+FlLRX5847cLKEn00PLAgc3g2hTZZgr+e4c2v6QpSmLeFP3n5yUo7ft6avBK/5jQ==}
-    engines: {node: '>= 0.6'}
-    dev: false
 
   /depd@2.0.0:
     resolution: {integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==}
@@ -9399,35 +9372,6 @@ packages:
     engines: {node: '>=10.17.0'}
     dev: true
 
-  /i18next-browser-languagedetector@3.1.1:
-    resolution: {integrity: sha512-JBgFWijjI1t6as4WgGvDdX4GLJPZwC/SMHzLQQ3ef7XaJsEkomlXFqXifKvOVJg09Hj2BVWe6strDdIF4J/0ng==}
-    dev: false
-
-  /i18next-express-middleware@1.8.2:
-    resolution: {integrity: sha512-Tg6mxt0WX6fA99f0pPq4VZwknbw7dfvSbn8CunwPTrSuN6qbRL6RWyziXb7fIsoI0C7bm8QQPWzd5Yzwu3iijw==}
-    deprecated: replaced by i18next-http-middleware
-    dependencies:
-      cookies: 0.7.1
-    dev: false
-
-  /i18next-node-fs-backend@2.1.3:
-    resolution: {integrity: sha512-CreMFiVl3ChlMc5ys/e0QfuLFOZyFcL40Jj6jaKD6DxZ/GCUMxPI9BpU43QMWUgC7r+PClpxg2cGXAl0CjG04g==}
-    deprecated: replaced by i18next-fs-backend
-    dependencies:
-      js-yaml: 3.13.1
-      json5: 2.0.0
-    dev: false
-
-  /i18next-sprintf-postprocessor@0.2.2:
-    resolution: {integrity: sha512-c/IT9xuMyTfJ/3Ds+DPtb0vYVuykbMyGChZ5OGZTzFDV7Kgst1nrNOwdbZ+PkcA5kLXEE3U0RKkNbabj07261w==}
-    dev: false
-
-  /i18next@17.0.18:
-    resolution: {integrity: sha512-FpLbLwzYV/qen9ZTA+mOHiNzLxESnF+sQCe5wT7UShssfDiW/df5JdXuxnPsPQiUd+M1kpB3Jaawcn9RN6atig==}
-    dependencies:
-      '@babel/runtime': 7.27.6
-    dev: false
-
   /iconv-lite@0.4.15:
     resolution: {integrity: sha512-RGR+c9Lm+tLsvU57FTJJtdbv2hQw42Yl2n26tVIBaYmZzLN+EGfroUugN/z9nJf9kOXd49hBmpoGr4FEm+A4pw==}
     engines: {node: '>=0.10.0'}
@@ -10451,14 +10395,6 @@ packages:
   /js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  /js-yaml@3.13.1:
-    resolution: {integrity: sha512-YfbcO7jXDdyj0DGxYVSlSeQNHbD7XPWvrVWeVUujrQEoZzWJIRrCPoyk6kL6IAjAG2IolMK4T0hNUe0HOUs5Jw==}
-    hasBin: true
-    dependencies:
-      argparse: 1.0.10
-      esprima: 4.0.1
-    dev: false
-
   /js-yaml@3.14.1:
     resolution: {integrity: sha512-okMH7OXXJ7YrN9Ok3/SXrnu4iX9yOk+25nqX4imS2npuvTYDmo/QEZoqwZkYaIDk3jVvBOTOIEgEhaLOynBS9g==}
     hasBin: true
@@ -10519,14 +10455,6 @@ packages:
     hasBin: true
     dependencies:
       minimist: 1.2.8
-
-  /json5@2.0.0:
-    resolution: {integrity: sha512-0EdQvHuLm7yJ7lyG5dp7Q3X2ku++BG5ZHaJ5FTnaXpKqDrw4pMxel5Bt3oAYMthnrthFBdnZ1FcsXTPyrQlV0w==}
-    engines: {node: '>=6'}
-    hasBin: true
-    dependencies:
-      minimist: 1.2.8
-    dev: false
 
   /json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
@@ -10592,11 +10520,6 @@ packages:
   /kareem@2.5.1:
     resolution: {integrity: sha512-7jFxRVm+jD+rkq3kY0iZDJfsO2/t4BBPeEb2qKn2lR/9KhuksYk5hxzfRYWMPV8P/x2d0kHD306YyWLzjjH+uA==}
     engines: {node: '>=12.0.0'}
-    dev: false
-
-  /keygrip@1.0.3:
-    resolution: {integrity: sha512-/PpesirAIfaklxUzp4Yb7xBper9MwP6hNRA6BGGUFCgbJ+BM5CKBtsoxinNXkLHAr+GXS1/lSlF2rP7cv5Fl+g==}
-    engines: {node: '>= 0.6'}
     dev: false
 
   /keyv@4.5.4:
@@ -13745,6 +13668,7 @@ packages:
 
   /sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
+    dev: true
 
   /sprintf-js@1.1.3:
     resolution: {integrity: sha512-Oo+0REFV59/rz3gfJNKQiBlwfHaSESl1pcGyABQsnnIfWOFt6JNj5gCog2U6MLZ//IGYD+nA8nI+mTShREReaA==}

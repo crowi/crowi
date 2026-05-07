@@ -13,7 +13,9 @@ export default (crowi: Crowi) => {
 
   actions.createAdmin = function (req: Request, res: Response) {
     const registerForm = req.body.registerForm || {};
-    const language = req.language || 'en';
+    // Legacy installer endpoint — language used to be detected by i18next on
+    // the request; without it we just fall back to English for the seed admin.
+    const language = 'en';
 
     if (req.form.isValid) {
       const name = registerForm.name;

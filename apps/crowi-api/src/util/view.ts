@@ -40,8 +40,7 @@ export const picture = (user) => {
 };
 
 const getUserContext = (req): AppContext['user'] => {
-  const { _id = null, name = '', username = '', image = '', email = null, googleId = null, githubId = null, admin = false } = req.user || {};
-  const { language = '' } = req.i18n || {};
+  const { _id = null, name = '', username = '', image = '', email = null, googleId = null, githubId = null, admin = false, lang = '' } = req.user || {};
   return {
     _id,
     name,
@@ -51,7 +50,7 @@ const getUserContext = (req): AppContext['user'] => {
     googleId,
     githubId,
     admin,
-    language,
+    language: lang,
   };
 };
 

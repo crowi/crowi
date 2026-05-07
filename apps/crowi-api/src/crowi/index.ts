@@ -48,8 +48,6 @@ class Crowi {
 
   publicDir: string;
 
-  localeDir: string;
-
   resourceDir: string;
 
   viewsDir: string;
@@ -126,7 +124,6 @@ class Crowi {
     this.rootDir = rootdir;
     this.pluginDir = path.join(this.rootDir, 'node_modules') + sep;
     this.publicDir = path.join(this.rootDir, 'public') + sep;
-    this.localeDir = path.join(this.rootDir, 'locales') + sep;
     this.resourceDir = path.join(this.rootDir, 'resource') + sep;
     this.viewsDir = path.join(this.rootDir, 'views') + sep;
     this.mailDir = path.join(this.viewsDir, 'mail') + sep;

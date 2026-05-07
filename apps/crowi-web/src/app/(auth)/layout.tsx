@@ -41,7 +41,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   if (!isAuthenticated && (isLoading || connectionState === 'connected')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--crowi-header)] via-[oklch(0.35_0.03_192)] to-[oklch(0.4_0.04_170)]">
-        <div className="text-white text-lg">Loading...</div>
+        <div className="text-white text-lg">{m['common.loading']()}</div>
       </div>
     );
   }
