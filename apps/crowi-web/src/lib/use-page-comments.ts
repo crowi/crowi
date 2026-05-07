@@ -10,9 +10,9 @@ export const commentKeys = {
 };
 
 /**
- * Invalidate the comment list and the page query after a comment mutation.
- * The page query is invalidated because the page header's commentCount is
- * updated by an async post-save hook on the Comment model.
+ * The page query is invalidated alongside the comment list because the page
+ * header's commentCount is updated by an async post-save hook on the Comment
+ * model — refetching the page is the cheapest way to keep that count fresh.
  */
 function useInvalidateComments(pageId: string | null | undefined) {
   const queryClient = useQueryClient();
@@ -35,6 +35,10 @@ export function usePageCommentsList(pageId: string | null | undefined) {
       throw new Error('Failed to fetch comments');
     },
     enabled: Boolean(pageId),
+    // Comments rarely change after a page is rendered; avoid the focus-refetch
+    // storm by holding the cache for 30s. Mutations invalidate explicitly.
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   return {
@@ -71,8 +75,8 @@ export function useAddComment(pageId: string | null | undefined) {
 
   return {
     addComment: mutation.mutateAsync,
-    isAdding: mutation.isPending,
-    addError: mutation.error as Error | null,
+    isPending: mutation.isPending,
+    error: mutation.error as Error | null,
   };
 }
 
@@ -96,6 +100,7 @@ export function useDeleteComment(pageId: string | null | undefined) {
 
   return {
     deleteComment: mutation.mutateAsync,
-    isDeleting: mutation.isPending,
+    isPending: mutation.isPending,
+    error: mutation.error as Error | null,
   };
 }

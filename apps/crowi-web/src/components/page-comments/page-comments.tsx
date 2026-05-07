@@ -26,8 +26,8 @@ export function PageComments({ page }: PageCommentsProps) {
   const isReadOnly = page.status === 'deleted';
 
   const { comments, isLoading, isError, error } = usePageCommentsList(pageId);
-  const { addComment, isAdding, addError } = useAddComment(pageId);
-  const { deleteComment, isDeleting } = useDeleteComment(pageId);
+  const { addComment, isPending: isAdding, error: addError } = useAddComment(pageId);
+  const { deleteComment, isPending: isDeleting } = useDeleteComment(pageId);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
