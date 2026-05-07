@@ -64,7 +64,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white flex items-center gap-2">
                   {user && <UserAvatar user={user} size="sm" />}
                   <span className="hidden sm:inline !text-white">{user?.name || user?.username}</span>
                 </Button>

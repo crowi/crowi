@@ -84,8 +84,8 @@ export function NotificationBell() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label="通知" className="relative text-white hover:bg-white/10">
-          <Bell className="h-5 w-5" />
+        <Button variant="ghost" size="icon-sm" aria-label="通知" className="relative text-white hover:bg-white/10 hover:text-white">
+          <Bell className="h-4 w-4" />
           {hasUnread ? (
             <span
               aria-live="polite"
