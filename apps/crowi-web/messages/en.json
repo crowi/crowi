@@ -1,0 +1,14 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "common.loading": "Loading...",
+  "common.error": "Error",
+  "common.retry": "Retry",
+  "common.cancel": "Cancel",
+  "common.save": "Save",
+  "common.delete": "Delete",
+  "common.edit": "Edit",
+  "common.go_back": "Go Back",
+  "common.access_denied_title": "Access Denied",
+  "common.access_denied_description": "You do not have permission to view this page.",
+  "common.access_denied_body": "This page is private or you need to be granted access by the owner."
+}
