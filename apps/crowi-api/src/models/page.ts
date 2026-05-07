@@ -1191,14 +1191,9 @@ export default (crowi: Crowi) => {
     return uniqueUsers;
   };
 
-  pageSchema.post('save', (savedPage) => {
-    const Backlink = crowi.model('Backlink');
-    Backlink.createBySavedPage(savedPage)
-      .then((result) => {
-        debug(result);
-      })
-      .catch((err) => err);
-  });
+  // Backlink registration moved to events/page.ts (pageEvent.on('create'/'update'))
+  // to avoid double-registration on every save and to fire only when content
+  // actually changes via createPage / updatePage. See migrate-backlink task.
 
   const Page = model<PageDocument, PageModel>('Page', pageSchema);
 
