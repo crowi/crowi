@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { m } from '@/paraglide/messages.js';
 
 interface LoadingSpinnerProps {
   message?: string;
@@ -22,11 +23,11 @@ const SIZE_MAP = {
  * Mirrors the legacy inline pattern (`flex items-center justify-center py-16`
  * + Loader2 + grey muted message text).
  */
-export function LoadingSpinner({ message = 'Loading...', className, size = 'lg' }: LoadingSpinnerProps) {
+export function LoadingSpinner({ message, className, size = 'lg' }: LoadingSpinnerProps) {
   return (
     <div className={cn('flex items-center justify-center py-16', className)} role="status">
       <Loader2 className={cn(SIZE_MAP[size], 'animate-spin text-primary')} />
-      <span className="ml-3 text-muted-foreground">{message}</span>
+      <span className="ml-3 text-muted-foreground">{message ?? m['common.loading']()}</span>
     </div>
   );
 }

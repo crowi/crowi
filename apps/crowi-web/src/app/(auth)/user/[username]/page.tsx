@@ -10,6 +10,7 @@ import { UserProfile, UserRecentPages, UserBookmarks } from '@/components/user-p
 import { PageHeader, PageContent } from '@/components/page-view';
 import { useUserPage } from '@/lib/use-user-page';
 import { usePage } from '@/lib/use-page';
+import { m } from '@/paraglide/messages.js';
 
 interface UserPageProps {
   params: Promise<{
@@ -30,14 +31,14 @@ export default function UserPage({ params }: UserPageProps) {
   const { page: userPageDoc, notFound: userPageNotFound } = usePage({ path: userPagePath });
 
   if (isLoading) {
-    return <LoadingSpinner message="Loading user profile..." className="py-12" />;
+    return <LoadingSpinner message={m['user_page.loading_profile']()} className="py-12" />;
   }
 
   if (error) {
     if (error.message === 'User not found') {
       notFound();
     }
-    return <ErrorAlert message="Failed to load user profile. Please try again later." />;
+    return <ErrorAlert message={m['user_page.failed_to_load_profile']()} />;
   }
 
   if (!data) {
@@ -62,8 +63,8 @@ export default function UserPage({ params }: UserPageProps) {
       {/* Content Tabs */}
       <Tabs defaultValue="pages" className="w-full">
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="pages">Created Pages</TabsTrigger>
-          <TabsTrigger value="bookmarks">Bookmarks</TabsTrigger>
+          <TabsTrigger value="pages">{m['user_page.tab_pages']()}</TabsTrigger>
+          <TabsTrigger value="bookmarks">{m['user_page.tab_bookmarks']()}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="pages" className="mt-4">

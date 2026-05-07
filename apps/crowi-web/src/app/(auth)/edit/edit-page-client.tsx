@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
+import { m } from '@/paraglide/messages.js';
 
 type Feedback = { kind: 'conflict' | 'error'; message: string };
 
@@ -35,12 +36,12 @@ function InvalidParamsView() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Invalid editor parameters</CardTitle>
-        <CardDescription>page_id か path のいずれかをクエリで指定してください。</CardDescription>
+        <CardTitle>{m['edit.invalid_params_title']()}</CardTitle>
+        <CardDescription>{m['edit.invalid_params_description']()}</CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="outline" onClick={() => router.back()}>
-          Go Back
+          {m['common.go_back']()}
         </Button>
       </CardContent>
     </Card>
@@ -69,7 +70,7 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
         {feedback && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>{feedback.kind === 'conflict' ? '編集が競合しました' : 'エラー'}</AlertTitle>
+            <AlertTitle>{feedback.kind === 'conflict' ? m['edit.feedback_conflict_title']() : m['edit.feedback_error_title']()}</AlertTitle>
             <AlertDescription>{feedback.message}</AlertDescription>
           </Alert>
         )}
@@ -78,19 +79,19 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
           value={body}
           onChange={(event) => onChangeBody(event.target.value)}
           disabled={isSaving}
-          placeholder="Markdown で本文を入力..."
+          placeholder={m['edit.placeholder']()}
           className="font-mono min-h-[60vh]"
-          aria-label="Page body"
+          aria-label={m['edit.aria_body']()}
         />
 
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" onClick={onCancel} disabled={isSaving} type="button">
             <X className="h-4 w-4 mr-1" />
-            Cancel
+            {m['edit.cancel']()}
           </Button>
           <Button variant="default" onClick={onSave} disabled={isSaving} type="button">
             {isSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-            Save
+            {m['edit.save']()}
           </Button>
         </div>
       </CardContent>
@@ -146,24 +147,24 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
         setFeedback({ kind: 'conflict', message: err.message });
         return;
       }
-      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : 'Failed to update page' });
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : m['edit.failed_to_update']() });
     }
   };
 
   if (isLoading) {
-    return <LoadingSpinner message="Loading page..." />;
+    return <LoadingSpinner message={m['edit.loading_page']()} />;
   }
 
   if (isError || !page) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
+        <AlertTitle>{m['common.error']()}</AlertTitle>
         <AlertDescription>
-          ページを読み込めませんでした。{error?.message ?? ''}
+          {m['edit.failed_to_load_body']({ message: error?.message ?? '' })}
           <div className="mt-3">
             <Button variant="outline" size="sm" onClick={() => router.back()}>
-              Go Back
+              {m['common.go_back']()}
             </Button>
           </div>
         </AlertDescription>
@@ -173,7 +174,7 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
 
   return (
     <EditorShell
-      title="ページを編集"
+      title={m['edit.title_update']()}
       subtitle={page.path}
       body={body ?? ''}
       onChangeBody={setBody}
@@ -202,13 +203,13 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
       const created = await createMutation.mutateAsync({ path, body });
       router.push(created.path);
     } catch (err) {
-      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : 'Failed to create page' });
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : m['edit.failed_to_create']() });
     }
   };
 
   return (
     <EditorShell
-      title="新しいページを作成"
+      title={m['edit.title_create']()}
       subtitle={path}
       body={body}
       onChangeBody={setBody}

@@ -9,6 +9,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { PageListItem } from '@/components/page-list/page-list-item';
 import { useUserBookmarksInfinite } from '@/lib/use-user-page';
 import type { Bookmark as BookmarkType } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 interface UserBookmarksProps {
   username: string;
@@ -26,11 +27,11 @@ export function UserBookmarks({ username, preview = false, previewLimit = 5 }: U
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useUserBookmarksInfinite(username, preview ? previewLimit : 10);
 
   if (isLoading) {
-    return <LoadingSpinner message="Loading bookmarks..." size="md" className="py-8" />;
+    return <LoadingSpinner message={m['user_page.bookmarks_loading']()} size="md" className="py-8" />;
   }
 
   if (error) {
-    return <ErrorAlert message="Failed to load bookmarks. Please try again later." />;
+    return <ErrorAlert message={m['user_page.bookmarks_failed']()} />;
   }
 
   // Flatten all pages of bookmarks
@@ -41,7 +42,7 @@ export function UserBookmarks({ username, preview = false, previewLimit = 5 }: U
     return (
       <Card className="p-8 text-center">
         <Bookmark className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-        <p className="text-muted-foreground">No bookmarks yet.</p>
+        <p className="text-muted-foreground">{m['user_page.bookmarks_empty']()}</p>
       </Card>
     );
   }
@@ -61,7 +62,7 @@ export function UserBookmarks({ username, preview = false, previewLimit = 5 }: U
       {preview && total > previewLimit && (
         <div className="text-center">
           <Button variant="outline" asChild>
-            <Link href={`/user/${username}/bookmarks`}>View all {total} bookmarks</Link>
+            <Link href={`/user/${username}/bookmarks`}>{m['user_page.view_all_bookmarks']({ count: total })}</Link>
           </Button>
         </div>
       )}
@@ -73,10 +74,10 @@ export function UserBookmarks({ username, preview = false, previewLimit = 5 }: U
             {isFetchingNextPage ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Loading...
+                {m['user_page.loading']()}
               </>
             ) : (
-              'Load more'
+              m['user_page.load_more']()
             )}
           </Button>
         </div>

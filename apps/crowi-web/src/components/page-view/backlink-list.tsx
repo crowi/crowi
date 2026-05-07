@@ -6,6 +6,7 @@ import { Link2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { useBacklinks } from '@/lib/use-backlinks';
+import { m } from '@/paraglide/messages.js';
 
 const INITIAL_LIMIT = 5;
 const PAGE_SIZE = 5;
@@ -42,7 +43,7 @@ export function BacklinkList({ pageId }: BacklinkListProps) {
     <section className="mt-6 pt-6 border-t" aria-labelledby="backlinks-heading">
       <h3 id="backlinks-heading" className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3">
         <Link2 className="h-4 w-4" aria-hidden="true" />
-        Backlinks
+        {m['page.backlinks_heading']()}
       </h3>
       <ul className="space-y-2">
         {backlinks.map((b) => {
@@ -69,10 +70,10 @@ export function BacklinkList({ pageId }: BacklinkListProps) {
             {isFetching ? (
               <>
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                Loading...
+                {m['common.loading']()}
               </>
             ) : (
-              'Read More Backlinks'
+              m['page.backlinks_read_more']()
             )}
           </Button>
         </div>

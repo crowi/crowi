@@ -9,6 +9,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { PageListItem } from '@/components/page-list/page-list-item';
 import { useUserPagesInfinite } from '@/lib/use-user-page';
 import type { Page } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 interface UserRecentPagesProps {
   username: string;
@@ -26,11 +27,11 @@ export function UserRecentPages({ username, preview = false, previewLimit = 5 }:
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useUserPagesInfinite(username, preview ? previewLimit : 10);
 
   if (isLoading) {
-    return <LoadingSpinner message="Loading pages..." size="md" className="py-8" />;
+    return <LoadingSpinner message={m['user_page.recent_pages_loading']()} size="md" className="py-8" />;
   }
 
   if (error) {
-    return <ErrorAlert message="Failed to load pages. Please try again later." />;
+    return <ErrorAlert message={m['user_page.recent_pages_failed']()} />;
   }
 
   // Flatten all pages
@@ -41,7 +42,7 @@ export function UserRecentPages({ username, preview = false, previewLimit = 5 }:
     return (
       <Card className="p-8 text-center">
         <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-        <p className="text-muted-foreground">No pages created yet.</p>
+        <p className="text-muted-foreground">{m['user_page.recent_pages_empty']()}</p>
       </Card>
     );
   }
@@ -61,7 +62,7 @@ export function UserRecentPages({ username, preview = false, previewLimit = 5 }:
       {preview && total > previewLimit && (
         <div className="text-center">
           <Button variant="outline" asChild>
-            <Link href={`/user/${username}/recent-create`}>View all {total} pages</Link>
+            <Link href={`/user/${username}/recent-create`}>{m['user_page.view_all_pages']({ count: total })}</Link>
           </Button>
         </div>
       )}
@@ -73,10 +74,10 @@ export function UserRecentPages({ username, preview = false, previewLimit = 5 }:
             {isFetchingNextPage ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Loading...
+                {m['user_page.loading']()}
               </>
             ) : (
-              'Load more'
+              m['user_page.load_more']()
             )}
           </Button>
         </div>

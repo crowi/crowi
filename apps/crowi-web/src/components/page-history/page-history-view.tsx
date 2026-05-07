@@ -11,6 +11,7 @@ import { NotFoundCard } from '@/components/ui/not-found-card';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { usePage } from '@/lib/use-page';
 import { PageHistory } from './page-history';
+import { m } from '@/paraglide/messages.js';
 
 interface PageHistoryViewProps {
   // page を特定するためのオリジナルパス (URL 末尾の '/history' を除いたもの)
@@ -26,11 +27,11 @@ export function PageHistoryView({ path }: PageHistoryViewProps) {
   const { page, isLoading, isError, error, notFound, notGranted, refetch } = usePage({ path });
 
   if (isLoading) {
-    return <LoadingSpinner message="Loading page..." />;
+    return <LoadingSpinner message={m['page_history.loading']()} />;
   }
 
   if (isError) {
-    return <ErrorAlert message={`Failed to load page. ${error?.message || 'Please try again later.'}`} onRetry={() => refetch()} />;
+    return <ErrorAlert message={m['page_history.failed_to_load']({ message: error?.message || m['common.try_again_later']() })} onRetry={() => refetch()} />;
   }
 
   if (notGranted) {
@@ -40,19 +41,19 @@ export function PageHistoryView({ path }: PageHistoryViewProps) {
   if (notFound) {
     return (
       <NotFoundCard
-        title="Page Not Found"
+        title={m['page.not_found_title']()}
         icon={FilePlus2}
         iconClassName="text-primary"
         description={
           <>
-            The page <code className="bg-muted px-2 py-0.5 rounded">{path}</code> does not exist.
+            <code className="bg-muted px-2 py-0.5 rounded">{path}</code>
           </>
         }
-        body="履歴を表示するページが見つかりませんでした。"
+        body={m['page_history.not_found_body']()}
         actions={
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => router.back()}>
-              Go Back
+              {m['common.go_back']()}
             </Button>
           </div>
         }
@@ -72,7 +73,7 @@ export function PageHistoryView({ path }: PageHistoryViewProps) {
           <div className="mt-2">
             <Button variant="ghost" size="sm" onClick={() => router.push(page.path)} type="button" className="-ml-2">
               <ArrowLeft className="h-4 w-4 mr-1" />
-              Back to page
+              {m['page_history.back_to_page']()}
             </Button>
           </div>
         </div>

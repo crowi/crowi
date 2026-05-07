@@ -12,6 +12,7 @@ import { PageContent } from '@/components/page-view/page-content';
 import { PageHeader } from '@/components/page-view/page-header';
 import { usePageList } from '@/lib/use-page-list';
 import type { ListPagesRequest, PageWithRevision } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 interface PageListProps {
   initialParams?: Partial<ListPagesRequest>;
@@ -19,10 +20,10 @@ interface PageListProps {
 }
 
 function getPortalTitle(path: string): string {
-  if (path === '/') return 'All Pages';
+  if (path === '/') return m['page_list.title_all']();
   const cleanPath = path.replace(/\/$/, '');
   const segments = cleanPath.split('/').filter(Boolean);
-  return segments.length > 0 ? segments[segments.length - 1] : 'Pages';
+  return segments.length > 0 ? segments[segments.length - 1] : m['page_list.title_default']();
 }
 
 export function PageList({ initialParams = {}, variant = 'default' }: PageListProps) {
@@ -45,11 +46,11 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
   };
 
   if (isLoading) {
-    return <LoadingSpinner message="Loading pages..." className="py-12" />;
+    return <LoadingSpinner message={m['page_list.loading']()} className="py-12" />;
   }
 
   if (error) {
-    return <ErrorAlert message="Failed to load pages. Please try again later." />;
+    return <ErrorAlert message={m['page_list.failed_to_load']()} />;
   }
 
   // Empty: no portal document and no children. Show a minimal header so the
@@ -59,7 +60,7 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
       <div className="space-y-4">
         {portalPath && <PortalFallbackHeader path={portalPath} />}
         <Card className="p-8 text-center">
-          <p className="text-muted-foreground">{isTrash ? 'No deleted pages.' : 'No pages found.'}</p>
+          <p className="text-muted-foreground">{isTrash ? m['page_list.empty_trash']() : m['page_list.empty_default']()}</p>
         </Card>
       </div>
     );
