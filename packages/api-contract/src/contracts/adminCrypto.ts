@@ -1,4 +1,5 @@
 import { initContract } from '@ts-rest/core';
+import { z } from 'zod';
 import { CryptoStatusResponseSchema, EncryptionNotConfiguredErrorSchema, ReencryptResponseSchema } from '../schemas/adminCrypto';
 import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema } from '../schemas/common';
 
@@ -24,7 +25,9 @@ export const adminCryptoContract = c.router({
   reencryptAll: {
     method: 'POST',
     path: '/admin/crypto/reencrypt',
-    body: c.noBody(),
+    // No request body — declared as an empty object so the call site is
+    // `apiClient.adminCrypto.reencryptAll({ body: {} })`.
+    body: z.object({}),
     responses: {
       200: ReencryptResponseSchema,
       401: AuthenticationRequiredErrorSchema,

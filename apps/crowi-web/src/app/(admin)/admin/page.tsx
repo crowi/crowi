@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ADMIN_NAV_GROUPS } from '@/components/admin/admin-sidebar';
+import { CryptoStatusCard } from '@/components/admin/crypto-status-card';
 
 export default function AdminIndexPage() {
   return (
@@ -11,6 +12,8 @@ export default function AdminIndexPage() {
         <h1 className="text-2xl font-semibold">管理ダッシュボード</h1>
         <p className="text-muted-foreground mt-1 text-sm">Crowi の管理者向け機能の一覧です。各セクションは順次実装予定です。</p>
       </div>
+
+      <CryptoStatusCard />
 
       <div className="space-y-8">
         {ADMIN_NAV_GROUPS.map((group) => (

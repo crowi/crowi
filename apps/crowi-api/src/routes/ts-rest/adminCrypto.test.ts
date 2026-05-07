@@ -95,12 +95,12 @@ describe('Routes /api/v2/admin/crypto (ts-rest)', () => {
 
   describe('POST /api/v2/admin/crypto/reencrypt', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).post('/api/v2/admin/crypto/reencrypt');
+      const res = await request(app).post('/api/v2/admin/crypto/reencrypt').send({});
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for non-admin user', async () => {
-      const res = await request(app).post('/api/v2/admin/crypto/reencrypt').set(authHeaders(memberToken));
+      const res = await request(app).post('/api/v2/admin/crypto/reencrypt').set(authHeaders(memberToken)).send({});
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
@@ -115,7 +115,7 @@ describe('Routes /api/v2/admin/crypto (ts-rest)', () => {
       // Already encrypted row
       await Config.updateConfig('notification', 'slack:token', 'live-token');
 
-      const res = await request(app).post('/api/v2/admin/crypto/reencrypt').set(authHeaders(adminToken));
+      const res = await request(app).post('/api/v2/admin/crypto/reencrypt').set(authHeaders(adminToken)).send({});
 
       expect(res.status).toBe(200);
       expect(res.body.rewritten).toBe(1);
@@ -136,7 +136,7 @@ describe('Routes /api/v2/admin/crypto (ts-rest)', () => {
       delete process.env.CROWI_ENCRYPTION_KEY;
       resetKeyProvider();
 
-      const res = await request(app).post('/api/v2/admin/crypto/reencrypt').set(authHeaders(adminToken));
+      const res = await request(app).post('/api/v2/admin/crypto/reencrypt').set(authHeaders(adminToken)).send({});
 
       expect(res.status).toBe(503);
       expect(res.body.error.code).toBe('ENCRYPTION_NOT_CONFIGURED');
