@@ -26,6 +26,7 @@ interface User {
   name: string;
   image?: string;
   status: number;
+  admin?: boolean;
   createdAt: string;
 }
 
