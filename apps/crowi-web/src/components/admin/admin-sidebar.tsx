@@ -10,6 +10,14 @@ interface AdminNavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /**
+   * 'available' for sections that have a working implementation; missing /
+   * 'coming-soon' shows the placeholder copy on the admin dashboard. Sidebar
+   * links are always clickable — the section page itself owns the empty UX.
+   */
+  status?: 'available' | 'coming-soon';
+  /** One-line summary shown on the admin index card when status='available'. */
+  description?: string;
 }
 
 interface AdminNavGroup {
@@ -22,7 +30,13 @@ const NAV_GROUPS: AdminNavGroup[] = [
     heading: '設定',
     items: [
       { href: '/admin/app', label: 'アプリ設定', icon: Settings },
-      { href: '/admin/security', label: 'セキュリティ', icon: ShieldCheck },
+      {
+        href: '/admin/security',
+        label: 'セキュリティ',
+        icon: ShieldCheck,
+        status: 'available',
+        description: 'Basic 認証 / 登録モード / ホワイトリスト',
+      },
       { href: '/admin/auth', label: '認証', icon: KeyRound },
       { href: '/admin/mail', label: 'メール', icon: Mail },
       { href: '/admin/aws', label: 'AWS', icon: Server },

@@ -22,6 +22,7 @@ export default function AdminIndexPage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {group.items.map((item) => {
                 const Icon = item.icon;
+                const isAvailable = item.status === 'available';
                 return (
                   <Link
                     key={item.href}
@@ -34,10 +35,10 @@ export default function AdminIndexPage() {
                           <Icon className="h-5 w-5 text-primary" />
                           <CardTitle className="text-base">{item.label}</CardTitle>
                         </div>
-                        <CardDescription>Coming soon</CardDescription>
+                        <CardDescription>{isAvailable ? (item.description ?? '設定を開く') : 'Coming soon'}</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-muted-foreground text-sm">この機能は開発中です。</p>
+                        <p className="text-muted-foreground text-sm">{isAvailable ? '設定ページを開きます。' : 'この機能は開発中です。'}</p>
                       </CardContent>
                     </Card>
                   </Link>
