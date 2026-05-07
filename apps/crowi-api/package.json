@@ -30,7 +30,8 @@
     "build": "tsc",
     "type-check": "tsc --noEmit",
     "type-check:watch": "npm run type-check -- --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "crypto:gen-key": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\""
   },
   "dependencies": {
     "@crowi/api-contract": "workspace:^",

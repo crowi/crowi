@@ -23,6 +23,7 @@ import ConfigService from '../service/config';
 import { hasSlackConfig } from '../models/config';
 import mailer from 'src/util/mailer';
 import slack from 'src/util/slack';
+import { resetKeyProvider } from 'src/util/crypto';
 import expressInit from './express-init';
 // import Searcher from 'src/service/search'
 
@@ -140,6 +141,7 @@ class Crowi {
   }
 
   async init() {
+    this.setupEncryption();
     // setup database server and load all modesl
     await this.setupDatabase();
     await this.setupModels();
@@ -244,6 +246,28 @@ class Crowi {
     }
 
     return this.events[name];
+  }
+
+  /**
+   * Validate CROWI_ENCRYPTION_KEY at boot. When set, it must base64-decode to
+   * exactly 32 bytes (AES-256). When unset we log a warning and let Config
+   * fall back to plaintext at-rest storage — same behaviour as pre-encryption
+   * deployments — so a missing key never blocks boot.
+   */
+  setupEncryption() {
+    const raw = process.env.CROWI_ENCRYPTION_KEY;
+    if (!raw) {
+      console.warn('[crowi] CROWI_ENCRYPTION_KEY is not set — sensitive Config values will be stored as plaintext (legacy mode).');
+      console.warn('[crowi] Generate a 32-byte key with: openssl rand -base64 32');
+      return;
+    }
+    const buf = Buffer.from(raw, 'base64');
+    if (buf.length !== 32) {
+      throw new Error(`Invalid CROWI_ENCRYPTION_KEY: expected 32 bytes after base64 decode, got ${buf.length}. Generate one with \`openssl rand -base64 32\`.`);
+    }
+    // Drop any cached key from a previous init in long-lived test processes.
+    resetKeyProvider();
+    debug('CROWI_ENCRYPTION_KEY is configured (sensitive Config values will be encrypted at rest)');
   }
 
   setupDatabase() {
