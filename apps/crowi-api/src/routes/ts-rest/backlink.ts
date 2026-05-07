@@ -3,7 +3,7 @@ import { apiContract, type Backlink as BacklinkResponse } from '@crowi/api-contr
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { Types } from 'mongoose';
-import { isValidObjectId, isPopulatedUser, toUserPublic, toISOStringOrNull, toStringId } from 'src/util/ts-rest-helpers';
+import { invalidPageIdResponse, isValidObjectId, isPopulatedUser, toUserPublic, toISOStringOrNull, toStringId } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:backlink');
@@ -83,10 +83,7 @@ export default (crowi: Crowi, _app: Express) => {
       // catches the unlikely case where validation is bypassed (e.g. test
       // harness that mounts the handler directly).
       if (!isValidObjectId(page_id)) {
-        return {
-          status: 400 as const,
-          body: { error: { code: 'INVALID_PAGE_ID' as const, message: 'Invalid page_id' } },
-        };
+        return invalidPageIdResponse;
       }
 
       const pageObjectId = new Types.ObjectId(page_id);

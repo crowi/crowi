@@ -14,6 +14,11 @@ export const backlinksKeys = {
 
 const EMPTY_RESULT: GetBacklinksResponse = { backlinks: [], hasNext: false };
 
+// Backlinks change only when other pages link to/unlink from this page (i.e. on
+// page save). Hold the result long enough to survive page-view rerenders /
+// window focus without re-hitting the API.
+const BACKLINKS_STALE_TIME = 30 * 1000;
+
 interface UseBacklinksOptions {
   limit?: number;
   offset?: number;
@@ -41,5 +46,7 @@ export function useBacklinks(pageId: string | undefined, options: UseBacklinksOp
       return result.status === 200 ? result.body : EMPTY_RESULT;
     },
     enabled: !!pageId && options.enabled !== false,
+    staleTime: BACKLINKS_STALE_TIME,
+    refetchOnWindowFocus: false,
   });
 }
