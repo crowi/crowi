@@ -65,7 +65,6 @@ export const PageSchema = z.object({
   creator: z.union([z.string(), PageUserSchema]).nullable().optional(),
   lastUpdateUser: z.union([z.string(), PageUserSchema]).nullable().optional(),
   liker: z.array(z.string()).optional(),
-  seenUsers: z.array(z.string()).optional(),
   commentCount: z.number().default(0),
   extended: PageExtendedSchema,
   createdAt: z.string(),
@@ -190,6 +189,9 @@ export type SeenUsersResponse = z.infer<typeof SeenUsersResponseSchema>;
 
 export const GetSeenUsersRequestSchema = z.object({
   page_id: z.string(),
+  // Optional cap on returned `seenUsers`. `seenUsersCount` always reflects
+  // the full count regardless of `limit`. Omit for the full list.
+  limit: z.coerce.number().int().positive().optional(),
 });
 export type GetSeenUsersRequest = z.infer<typeof GetSeenUsersRequestSchema>;
 

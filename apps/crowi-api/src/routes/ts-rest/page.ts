@@ -61,7 +61,6 @@ const pageToResponse = (page: PageDocument) => {
     creator: isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
     lastUpdateUser: isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
     liker: page.liker?.map((id) => id.toString()) || [],
-    seenUsers: page.seenUsers?.map((id) => id.toString()) || [],
     commentCount: page.commentCount || 0,
     extended: page.extended,
     createdAt: toISOStringOrNull(page.createdAt) ?? new Date(0).toISOString(),
@@ -86,8 +85,9 @@ export default (crowi: Crowi, _app: Express) => {
 
   // seenUsersCount stays at the raw ID-array length (matching legacy
   // populatePageData) so inactive users dropped by findUsersByIds' status
-  // filter do not deflate the count.
-  const buildSeenUsersResponse = async (seenUserIds: ReadonlyArray<unknown>) => {
+  // filter do not deflate the count. `limit` only caps the returned
+  // `seenUsers` list; the count always reflects the full set.
+  const buildSeenUsersResponse = async (seenUserIds: ReadonlyArray<unknown>, limit?: number) => {
     const ids = seenUserIds.filter((id) => id != null);
     const seenUsersCount = ids.length;
 
@@ -95,7 +95,8 @@ export default (crowi: Crowi, _app: Express) => {
       return { seenUsers: [] as UserPublic[], seenUsersCount };
     }
 
-    const populated = (await User.findUsersByIds(ids)) as UserDocument[];
+    const idsToFetch = limit !== undefined ? ids.slice(0, limit) : ids;
+    const populated = (await User.findUsersByIds(idsToFetch)) as UserDocument[];
     return {
       seenUsers: populated.map(toUserPublic),
       seenUsersCount,
@@ -461,14 +462,14 @@ export default (crowi: Crowi, _app: Express) => {
 
     getSeenUsers: async ({ query, req }) => {
       const user = req.user as UserDocument;
-      const { page_id } = query;
+      const { page_id, limit } = query;
 
-      debug('getSeenUsers called with:', { page_id, userId: user._id });
+      debug('getSeenUsers called with:', { page_id, limit, userId: user._id });
 
       const loaded = await loadGrantedPage(Page, page_id, user);
       if ('error' in loaded) return loaded.error;
 
-      return { status: 200 as const, body: await buildSeenUsersResponse(loaded.page.seenUsers) };
+      return { status: 200 as const, body: await buildSeenUsersResponse(loaded.page.seenUsers, limit) };
     },
     /**
      * POST /api/v2/pages/like

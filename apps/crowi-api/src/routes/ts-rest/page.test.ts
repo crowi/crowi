@@ -817,6 +817,26 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (ts-rest seen)', () => {
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
+
+    it('caps returned seenUsers via the limit query while seenUsersCount reflects the full count', async () => {
+      const path = `${PATH_PREFIX}limit`;
+      const ownerHeaders = authHeaders(accessToken);
+      const otherHeaders = authHeaders(otherAccessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# limit' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      // Two distinct readers leave seen receipts (owner + otherUser).
+      await request(app).post('/api/v2/pages/seen').set(ownerHeaders).send({ page_id: pageId });
+      await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+
+      const res = await request(app).get('/api/v2/pages/seen-users').set(ownerHeaders).query({ page_id: pageId, limit: 1 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.seenUsersCount).toBe(2);
+      expect(res.body.seenUsers).toHaveLength(1);
+    });
   });
 });
 

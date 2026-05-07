@@ -37,7 +37,6 @@ interface PageLike {
   creator?: PopulatedUser | Types.ObjectId | null;
   lastUpdateUser?: PopulatedUser | Types.ObjectId | null;
   liker?: (Types.ObjectId | string)[];
-  seenUsers?: (Types.ObjectId | string)[];
   commentCount?: number;
   extended?: Record<string, unknown>;
   createdAt?: Date;
@@ -96,7 +95,6 @@ const pageToResponse = (page: PageDocument | PageLike): Page => {
     creator: pageObj.creator && isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
     lastUpdateUser: pageObj.lastUpdateUser && isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
     liker: pageObj.liker?.map(toStringId) || [],
-    seenUsers: pageObj.seenUsers?.map(toStringId) || [],
     commentCount: pageObj.commentCount || 0,
     extended: pageObj.extended,
     createdAt: toISOStringOrNull(pageObj.createdAt) || new Date().toISOString(),
