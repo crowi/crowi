@@ -7,7 +7,11 @@ import type { SeenUsersResponse } from '@crowi/api-contract';
 
 export const seenKeys = {
   all: ['seen-users'] as const,
-  detail: (pageId: string) => ['seen-users', pageId] as const,
+  // `limit` is part of the key so preview (capped) and full-list caches stay
+  // independent. Pass `undefined` for the full list.
+  detail: (pageId: string, limit?: number) => ['seen-users', pageId, { limit }] as const,
+  // Prefix used by invalidate calls to drop every variant of `pageId` at once.
+  pagePrefix: (pageId: string) => ['seen-users', pageId] as const,
 };
 
 const EMPTY_RESULT: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
@@ -15,14 +19,18 @@ const EMPTY_RESULT: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
 /**
  * Fetch the seen-users list for a page. Errors fall back to empty — this is
  * auxiliary UI and shouldn't break the page view.
+ *
+ * `limit` caps the avatar list (server-side); `seenUsersCount` always
+ * reflects the full count.
  */
-export function useSeenUsers(pageId: string | undefined, options?: { enabled?: boolean }) {
+export function useSeenUsers(pageId: string | undefined, options?: { enabled?: boolean; limit?: number }) {
+  const limit = options?.limit;
   return useQuery({
-    queryKey: pageId ? seenKeys.detail(pageId) : seenKeys.all,
+    queryKey: pageId ? seenKeys.detail(pageId, limit) : seenKeys.all,
     queryFn: async (): Promise<SeenUsersResponse> => {
       if (!pageId) return EMPTY_RESULT;
       const result = await apiClient.page.getSeenUsers({
-        query: { page_id: pageId },
+        query: { page_id: pageId, limit },
       });
       return result.status === 200 ? result.body : EMPTY_RESULT;
     },
@@ -32,8 +40,8 @@ export function useSeenUsers(pageId: string | undefined, options?: { enabled?: b
 
 /**
  * Mark a page as seen by the current user. Best-effort: errors are silenced
- * and the cache is seeded with the response so subscribed UIs update without
- * a follow-up refetch.
+ * and every seen-users cache for the page is invalidated so both preview and
+ * full-list subscribers refetch.
  */
 export function useMarkSeen(pageId: string | undefined) {
   const queryClient = useQueryClient();
@@ -48,7 +56,7 @@ export function useMarkSeen(pageId: string | undefined) {
     },
     onSuccess: (data) => {
       if (!data || !pageId) return;
-      queryClient.setQueryData<SeenUsersResponse>(seenKeys.detail(pageId), data);
+      queryClient.invalidateQueries({ queryKey: seenKeys.pagePrefix(pageId) });
     },
   });
 }
