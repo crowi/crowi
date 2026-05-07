@@ -9,6 +9,7 @@ import { commentContract } from './comment';
 import { bookmarkContract } from './bookmark';
 import { revisionContract } from './revision';
 import { notificationContract } from './notification';
+import { backlinkContract } from './backlink';
 
 const c = initContract();
 
@@ -23,4 +24,5 @@ export const apiContract = c.router({
   bookmark: bookmarkContract,
   revision: revisionContract,
   notification: notificationContract,
+  backlink: backlinkContract,
 });
