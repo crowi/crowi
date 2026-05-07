@@ -13,8 +13,11 @@ import { PageHeader } from '@/components/page-view/page-header';
 import { usePageList } from '@/lib/use-page-list';
 import type { ListPagesRequest, PageWithRevision } from '@crowi/api-contract';
 
+type PageListVariant = 'default' | 'trash';
+
 interface PageListProps {
   initialParams?: Partial<ListPagesRequest>;
+  variant?: PageListVariant;
 }
 
 function getPortalTitle(path: string): string {
@@ -24,14 +27,16 @@ function getPortalTitle(path: string): string {
   return segments.length > 0 ? segments[segments.length - 1] : 'Pages';
 }
 
-export function PageList({ initialParams = {} }: PageListProps) {
+export function PageList({ initialParams = {}, variant = 'default' }: PageListProps) {
   const router = useRouter();
   const [params, setParams] = useState<ListPagesRequest>({
     limit: 50,
     offset: 0,
+    include_deleted: false,
     ...initialParams,
   });
   const portalPath = params.path;
+  const isTrash = variant === 'trash';
 
   const { data, isLoading, error } = usePageList(params);
 
@@ -56,13 +61,16 @@ export function PageList({ initialParams = {} }: PageListProps) {
       <div className="space-y-4">
         {portalPath && <PortalFallbackHeader path={portalPath} />}
         <Card className="p-8 text-center">
-          <p className="text-muted-foreground">No pages found.</p>
+          <p className="text-muted-foreground">{isTrash ? 'No deleted pages.' : 'No pages found.'}</p>
         </Card>
       </div>
     );
   }
 
-  const portalPage = data.portalPage as PageWithRevision | undefined;
+  // /trash subtrees never expose a portal document (server forces portalPage=null
+  // for /trash paths). Suppress portal rendering entirely for the trash variant
+  // so the legacy isTrashPage UI is preserved even if the API ever returns one.
+  const portalPage = isTrash ? undefined : (data.portalPage as PageWithRevision | undefined);
 
   return (
     <div className="space-y-4">
@@ -82,7 +90,7 @@ export function PageList({ initialParams = {} }: PageListProps) {
       {data.pages.length > 0 && (
         <Card className="divide-y">
           {data.pages.map((page) => (
-            <PageListItem key={page._id} page={page} />
+            <PageListItem key={page._id} page={page} variant={variant} />
           ))}
         </Card>
       )}

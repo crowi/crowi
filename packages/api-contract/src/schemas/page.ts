@@ -105,6 +105,7 @@ export const ListPagesRequestSchema = z.object({
   user: z.string().optional(),
   limit: z.coerce.number().optional().default(50),
   offset: z.coerce.number().optional().default(0),
+  include_deleted: z.coerce.boolean().optional().default(false),
 });
 export type ListPagesRequest = z.infer<typeof ListPagesRequestSchema>;
 

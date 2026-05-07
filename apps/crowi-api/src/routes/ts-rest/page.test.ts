@@ -1166,3 +1166,102 @@ describe('Routes /api/v2/pages/watch (ts-rest)', () => {
     });
   });
 });
+
+describe('Routes /api/v2/pages/list (ts-rest listPages — trash / include_deleted)', () => {
+  const PATH_PREFIX = '/ts-rest-trash-list-test/';
+  let Page;
+  let accessToken: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+
+    ({ accessToken } = await createTestUser({
+      name: 'TrashList Test',
+      username: 'trashListTester',
+      email: 'trash-list-tester@example.com',
+    }));
+  });
+
+  afterEach(async () => {
+    await cleanupPathPrefix(PATH_PREFIX);
+    await cleanupPathPrefix(`/trash${PATH_PREFIX}`);
+  });
+
+  // Soft-delete a page via the API so it ends up under /trash/<original> with status='deleted'.
+  const softDeleteViaApi = async (pageId: string) => {
+    const res = await request(app).delete('/api/v2/pages').set(authHeaders(accessToken)).send({ page_id: pageId });
+    if (res.status !== 200) {
+      throw new Error(`Failed to soft-delete page (${pageId}): ${res.status} ${JSON.stringify(res.body)}`);
+    }
+    return res.body.page as { _id: string; path: string; status: string };
+  };
+
+  it('returns deleted pages when include_deleted=true is set explicitly', async () => {
+    const path = `${PATH_PREFIX}explicit`;
+    const headers = authHeaders(accessToken);
+
+    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# to be deleted' });
+    expect(createRes.status).toBe(200);
+    const pageId = createRes.body.page._id;
+    const deleted = await softDeleteViaApi(pageId);
+    expect(deleted.path).toBe(`/trash${path}`);
+
+    // Without the flag — even though we query /trash<prefix>/, server still
+    // forces include_deleted=true for /trash/* paths. Use a non-/trash prefix
+    // to verify the flag itself works.
+    const withoutFlag = await request(app).get('/api/v2/pages/list').set(headers).query({ path: PATH_PREFIX });
+    expect(withoutFlag.status).toBe(200);
+    const visiblePathsWithoutFlag = (withoutFlag.body.pages as Array<{ path: string }>).map((p) => p.path);
+    // The original path was rewritten to /trash/<...> on soft delete; only a redirect
+    // page remains at the original path (and it's filtered by redirectTo: null in the query).
+    expect(visiblePathsWithoutFlag).not.toContain(path);
+
+    // With include_deleted=true on a /trash<prefix>/ query, the deleted page surfaces.
+    const withFlag = await request(app)
+      .get('/api/v2/pages/list')
+      .set(headers)
+      .query({ path: `/trash${PATH_PREFIX}`, include_deleted: 'true' });
+    expect(withFlag.status).toBe(200);
+    const visiblePathsWithFlag = (withFlag.body.pages as Array<{ path: string; status?: string | null }>).map((p) => p.path);
+    expect(visiblePathsWithFlag).toContain(`/trash${path}`);
+  });
+
+  it('returns deleted pages for /trash/ paths even when include_deleted is omitted', async () => {
+    const path = `${PATH_PREFIX}implicit`;
+    const headers = authHeaders(accessToken);
+
+    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# to be deleted' });
+    expect(createRes.status).toBe(200);
+    const pageId = createRes.body.page._id;
+    await softDeleteViaApi(pageId);
+
+    const res = await request(app)
+      .get('/api/v2/pages/list')
+      .set(headers)
+      .query({ path: `/trash${PATH_PREFIX}` });
+    expect(res.status).toBe(200);
+
+    const pages = res.body.pages as Array<{ _id: string; path: string; status?: string | null }>;
+    const found = pages.find((p) => p._id === pageId);
+    expect(found).toBeDefined();
+    expect(found?.path).toBe(`/trash${path}`);
+    expect(found?.status).toBe('deleted');
+  });
+
+  it('returns portalPage=null for /trash/ subtrees', async () => {
+    const path = `${PATH_PREFIX}portal-suppressed`;
+    const headers = authHeaders(accessToken);
+
+    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# soon-to-be-trash' });
+    expect(createRes.status).toBe(200);
+    const pageId = createRes.body.page._id;
+    await softDeleteViaApi(pageId);
+
+    const res = await request(app)
+      .get('/api/v2/pages/list')
+      .set(headers)
+      .query({ path: `/trash${PATH_PREFIX}` });
+    expect(res.status).toBe(200);
+    expect(res.body.portalPage).toBeNull();
+  });
+});
