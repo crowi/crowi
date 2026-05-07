@@ -63,19 +63,22 @@ export interface UseRevisionPairResult {
 const revisionPairKey = (idA: string, idB: string) => ['revisions-pair', { idA, idB }] as const;
 
 /**
- * Fetch two revisions in one batch call. Order of returned revisions is not
- * guaranteed; callers should look them up by `_id`.
+ * Fetch two revisions in one batch call. When `idA` is null the call reduces
+ * to a single-revision fetch — used by the history view for pages with only
+ * one revision so the initial creation can be diffed against an empty body.
+ * Order of returned revisions is not guaranteed; callers look them up by `_id`.
  * Backed by GET /pages/revisions?ids=a,b.
  */
 export function useRevisionPair(idA: string | null | undefined, idB: string | null | undefined): UseRevisionPairResult {
-  const enabled = Boolean(idA && idB && idA !== idB);
+  const enabled = Boolean(idB) && (idA == null || idA !== idB);
+  const ids = idA && idB && idA !== idB ? `${idA},${idB}` : (idB ?? '');
 
   const query = useQuery({
     queryKey: revisionPairKey(idA ?? '', idB ?? ''),
     queryFn: async () => {
-      if (!idA || !idB) return [] as Revision[];
+      if (!ids) return [] as Revision[];
       const result = await apiClient.revision.getRevisions({
-        query: { ids: `${idA},${idB}` },
+        query: { ids },
       });
       if (result.status === 200) {
         return result.body.revisions;

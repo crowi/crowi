@@ -107,10 +107,9 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
       )}
 
       {!isLoading && !isError && revisions.length === 1 && (
-        <Alert>
-          <AlertTitle>1 revision only</AlertTitle>
-          <AlertDescription>差分を表示するには 2 件以上のリビジョンが必要です。</AlertDescription>
-        </Alert>
+        <section aria-label="Revision diff">
+          <RevisionDiff fromId={null} toId={revisions[0]._id} />
+        </section>
       )}
 
       {!isLoading && !isError && revisions.length >= 2 && (

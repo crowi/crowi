@@ -21,11 +21,14 @@ const ReactDiffViewer = dynamic(() => import('react-diff-viewer-continued'), {
 });
 
 interface RevisionDiffProps {
-  // 古い側 (oldValue) のリビジョン id
-  fromId: string;
+  // 古い側 (oldValue) のリビジョン id。null を渡すと oldValue は空文字列になり、
+  // ページ作成時の最初の revision を「全文追加」として表示するときに使う。
+  fromId: string | null;
   // 新しい側 (newValue) のリビジョン id
   toId: string;
 }
+
+const INITIAL_LEFT_TITLE = '(empty — initial revision)';
 
 export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   const { revisions, isLoading, isError, error, refetch } = useRevisionPair(fromId, toId);
@@ -34,7 +37,7 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   const { fromRevision, toRevision } = useMemo(() => {
     if (!revisions) return { fromRevision: null, toRevision: null };
     return {
-      fromRevision: revisions.find((r) => r._id === fromId) ?? null,
+      fromRevision: fromId == null ? null : (revisions.find((r) => r._id === fromId) ?? null),
       toRevision: revisions.find((r) => r._id === toId) ?? null,
     };
   }, [revisions, fromId, toId]);
@@ -64,7 +67,7 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
     );
   }
 
-  if (!fromRevision || !toRevision) {
+  if (!toRevision || (fromId != null && !fromRevision)) {
     return (
       <Alert>
         <AlertTitle>Revisions not available</AlertTitle>
@@ -73,11 +76,14 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
     );
   }
 
+  const oldValue = fromRevision?.body ?? '';
+  const fromLabel = fromRevision ? fromRevision._id.slice(-8) : INITIAL_LEFT_TITLE;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          <span className="font-medium">From</span> <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{fromRevision._id.slice(-8)}</code>
+          <span className="font-medium">From</span> <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{fromLabel}</code>
           <span className="mx-2">→</span>
           <span className="font-medium">To</span> <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{toRevision._id.slice(-8)}</code>
         </div>
@@ -87,13 +93,13 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
       </div>
       <div className="rounded-md border overflow-hidden text-sm">
         <ReactDiffViewer
-          oldValue={fromRevision.body ?? ''}
+          oldValue={oldValue}
           newValue={toRevision.body ?? ''}
           splitView={splitView}
           useDarkTheme={false}
           // markdown 本文は行単位での差分が分かりやすい
           compareMethod={DiffMethod.LINES}
-          leftTitle={`From: ${fromRevision._id.slice(-8)}`}
+          leftTitle={`From: ${fromLabel}`}
           rightTitle={splitView ? `To: ${toRevision._id.slice(-8)}` : undefined}
           showDiffOnly={false}
         />
