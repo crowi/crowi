@@ -35,11 +35,17 @@ export default function AdminIndexPage() {
                           <Icon className="h-5 w-5 text-primary" />
                           <CardTitle className="text-base">{item.label}</CardTitle>
                         </div>
-                        <CardDescription>{isAvailable ? (item.description ?? '設定を開く') : 'Coming soon'}</CardDescription>
+                        {isAvailable ? (
+                          item.description && <CardDescription>{item.description}</CardDescription>
+                        ) : (
+                          <CardDescription>Coming soon</CardDescription>
+                        )}
                       </CardHeader>
-                      <CardContent>
-                        <p className="text-muted-foreground text-sm">{isAvailable ? '設定ページを開きます。' : 'この機能は開発中です。'}</p>
-                      </CardContent>
+                      {!isAvailable && (
+                        <CardContent>
+                          <p className="text-muted-foreground text-sm">この機能は開発中です。</p>
+                        </CardContent>
+                      )}
                     </Card>
                   </Link>
                 );
