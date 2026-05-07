@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAdminSecuritySettings } from '@/lib/use-admin-security';
 import { SecurityForm } from './security-form';
+import { m } from '@/paraglide/messages.js';
 
 /**
  * /admin/security
@@ -20,21 +21,21 @@ export default function AdminSecurityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">セキュリティ</h1>
-        <p className="text-muted-foreground mt-1 text-sm">新規ユーザーの登録ポリシーや Basic 認証など、サイト全体のセキュリティ設定を管理します。</p>
+        <h1 className="text-2xl font-semibold">{m['admin.nav_security']()}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{m['admin.nav_security_summary']()}</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>セキュリティ設定</CardTitle>
-          <CardDescription>登録モードと Basic 認証の設定を変更します。</CardDescription>
+          <CardTitle>{m['admin.security.heading']()}</CardTitle>
+          <CardDescription>{m['admin.nav_security_summary']()}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
 
           {!isLoading && error && (
             <Alert variant="destructive">
-              <AlertDescription>{error instanceof Error ? error.message : 'セキュリティ設定の取得に失敗しました'}</AlertDescription>
+              <AlertDescription>{error instanceof Error ? error.message : m['admin.security.failed_to_load']()}</AlertDescription>
             </Alert>
           )}
 

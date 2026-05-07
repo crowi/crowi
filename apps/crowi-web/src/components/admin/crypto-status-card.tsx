@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, KeyRound, Loader2, ShieldAlert } from 'luc
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useCryptoStatus, useReencryptSensitive } from '@/lib/use-admin-crypto';
+import { m } from '@/paraglide/messages.js';
 
 /**
  * Admin dashboard banner for the at-rest encryption migration. Shows one of:
@@ -30,17 +31,16 @@ export function CryptoStatusCard() {
     return (
       <Alert className="border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-900/20">
         <KeyRound className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-        <AlertTitle className="text-amber-800 dark:text-amber-300">暗号化キーが未設定です</AlertTitle>
+        <AlertTitle className="text-amber-800 dark:text-amber-300">{m['admin.crypto.key_missing_title']()}</AlertTitle>
         <AlertDescription className="text-amber-700 dark:text-amber-200">
-          <p>
-            <code className="px-1 rounded bg-amber-100 dark:bg-amber-900/50">CROWI_ENCRYPTION_KEY</code> が設定されていないため、 OAuth secret や SMTP password
-            などは暗号化されずに保存されます。
-          </p>
+          <p>{m['admin.crypto.key_missing_lead']()}</p>
           <p className="mt-2 text-xs">
-            生成コマンド: <code className="px-1 rounded bg-amber-100 dark:bg-amber-900/50">openssl rand -base64 32</code> (または{' '}
-            <code className="px-1 rounded bg-amber-100 dark:bg-amber-900/50">pnpm --filter @crowi/api crypto:gen-key</code>)
+            {m['admin.crypto.key_missing_generate']({
+              cmd1: 'openssl rand -base64 32',
+              cmd2: 'pnpm --filter @crowi/api crypto:gen-key',
+            })}
           </p>
-          <p className="mt-1 text-xs">設定後にサーバを再起動してください。</p>
+          <p className="mt-1 text-xs">{m['admin.crypto.key_missing_restart']()}</p>
         </AlertDescription>
       </Alert>
     );
@@ -51,9 +51,9 @@ export function CryptoStatusCard() {
     return (
       <Alert className="border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-900/20">
         <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-        <AlertTitle className="text-amber-800 dark:text-amber-300">{unencryptedCount} 件の未暗号化データがあります</AlertTitle>
+        <AlertTitle className="text-amber-800 dark:text-amber-300">{m['admin.crypto.unencrypted_title']({ count: unencryptedCount })}</AlertTitle>
         <AlertDescription className="text-amber-700 dark:text-amber-200">
-          <p>暗号化キー導入前に保存された機微なデータが残っています。下のボタンを押すと現在の鍵で一括再暗号化します (内容は変わりません)。</p>
+          <p>{m['admin.crypto.unencrypted_body']()}</p>
           {reencrypt.isError && reencrypt.error instanceof Error && (
             <p className="mt-2 text-sm text-destructive" role="alert">
               {reencrypt.error.message}
@@ -70,18 +70,16 @@ export function CryptoStatusCard() {
               {reencrypt.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  再暗号化中...
+                  {m['admin.crypto.reencrypting']()}
                 </>
               ) : (
-                'すべて再暗号化'
+                m['admin.crypto.reencrypt_button']()
               )}
             </Button>
-            <span className="text-xs text-muted-foreground">
-              対象: {unencryptedCount} 件 / 既に暗号化済: {encryptedCount} 件
-            </span>
+            <span className="text-xs text-muted-foreground">{m['admin.crypto.reencrypt_summary']({ pending: unencryptedCount, done: encryptedCount })}</span>
           </div>
           {reencrypt.isSuccess && reencrypt.data && (
-            <p className="mt-3 text-sm text-amber-900 dark:text-amber-100">✓ 再暗号化が完了しました ({reencrypt.data.rewritten} 件)</p>
+            <p className="mt-3 text-sm text-amber-900 dark:text-amber-100">{m['admin.crypto.reencrypt_done']({ count: reencrypt.data.rewritten })}</p>
           )}
         </AlertDescription>
       </Alert>
@@ -93,8 +91,10 @@ export function CryptoStatusCard() {
     return (
       <Alert className="border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/20">
         <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-        <AlertTitle className="text-emerald-800 dark:text-emerald-300">機微情報はすべて暗号化されています</AlertTitle>
-        <AlertDescription className="text-emerald-700 dark:text-emerald-200">{encryptedCount} 件の機微情報が AES-256-GCM で保存されています。</AlertDescription>
+        <AlertTitle className="text-emerald-800 dark:text-emerald-300">{m['admin.crypto.all_encrypted_title']()}</AlertTitle>
+        <AlertDescription className="text-emerald-700 dark:text-emerald-200">
+          {m['admin.crypto.all_encrypted_body']({ count: encryptedCount })}
+        </AlertDescription>
       </Alert>
     );
   }
@@ -103,8 +103,8 @@ export function CryptoStatusCard() {
   return (
     <Alert className="border-muted">
       <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-      <AlertTitle>暗号化キー設定済み</AlertTitle>
-      <AlertDescription>各セクションで OAuth secret や SMTP password を保存すると自動で暗号化されます。</AlertDescription>
+      <AlertTitle>{m['admin.crypto.empty_title']()}</AlertTitle>
+      <AlertDescription>{m['admin.crypto.empty_body']()}</AlertDescription>
     </Alert>
   );
 }

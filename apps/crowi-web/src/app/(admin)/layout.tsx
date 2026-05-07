@@ -16,6 +16,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
+import { m } from '@/paraglide/messages.js';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!isAuthenticated && (isLoading || connectionState === 'connected')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--crowi-header)] via-[oklch(0.35_0.03_192)] to-[oklch(0.4_0.04_170)]">
-        <div className="text-white text-lg">Loading...</div>
+        <div className="text-white text-lg">{m['common.loading']()}</div>
       </div>
     );
   }
@@ -69,11 +70,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <ServerErrorModal />
         <main className="max-w-2xl mx-auto px-4 py-8">
           <AccessDeniedCard
-            title="管理者権限が必要です"
-            description="このページを表示するには管理者権限が必要です。"
-            body="管理者にお問い合わせください。アクセス権が必要な場合は、ワークスペースの管理者から付与を受けてください。"
+            title={m['admin.access_denied_title']()}
+            description={m['admin.access_denied_description']()}
+            body={m['admin.access_denied_body']()}
             onGoBack={() => router.back()}
-            goBackLabel="戻る"
           />
         </main>
       </div>
@@ -111,38 +111,38 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <DropdownMenuItem asChild>
                   <Link href={`/user/${user.username}`}>
                     <User className="h-4 w-4 mr-2" />
-                    マイページ
+                    {m['header.user_dropdown_my_page']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href={`/user/${user.username}/bookmarks`}>
                     <Bookmark className="h-4 w-4 mr-2" />
-                    ブックマーク
+                    {m['header.user_dropdown_bookmarks']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href={`/user/${user.username}/recent-create`}>
                     <FileText className="h-4 w-4 mr-2" />
-                    作成したページ
+                    {m['header.user_dropdown_created']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/trash">
                     <Trash2 className="h-4 w-4 mr-2" />
-                    ゴミ箱
+                    {m['header.user_dropdown_trash']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/settings">
                     <Settings className="h-4 w-4 mr-2" />
-                    設定
+                    {m['header.user_dropdown_settings']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout} className="text-red-600">
                   <LogOut className="h-4 w-4 mr-2" />
-                  ログアウト
+                  {m['header.user_dropdown_logout']()}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

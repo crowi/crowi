@@ -12,6 +12,7 @@ import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
 import { useConnection } from '@/lib/connection-context';
+import { m } from '@/paraglide/messages.js';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -62,7 +63,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
           <div className="flex items-center gap-2">
             {user?.admin && (
-              <Button asChild variant="ghost" size="icon-sm" aria-label="管理画面" title="管理画面" className="text-white hover:bg-white/10 hover:text-white">
+              <Button
+                asChild
+                variant="ghost"
+                size="icon-sm"
+                aria-label={m['header.admin_aria']()}
+                title={m['header.admin_aria']()}
+                className="text-white hover:bg-white/10 hover:text-white"
+              >
                 <Link href="/admin">
                   <Shield className="h-4 w-4" />
                 </Link>
@@ -85,38 +93,38 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 <DropdownMenuItem asChild>
                   <Link href={`/user/${user?.username}`}>
                     <User className="h-4 w-4 mr-2" />
-                    マイページ
+                    {m['header.user_dropdown_my_page']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href={`/user/${user?.username}/bookmarks`}>
                     <Bookmark className="h-4 w-4 mr-2" />
-                    ブックマーク
+                    {m['header.user_dropdown_bookmarks']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href={`/user/${user?.username}/recent-create`}>
                     <FileText className="h-4 w-4 mr-2" />
-                    作成したページ
+                    {m['header.user_dropdown_created']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/trash">
                     <Trash2 className="h-4 w-4 mr-2" />
-                    ゴミ箱
+                    {m['header.user_dropdown_trash']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/settings">
                     <Settings className="h-4 w-4 mr-2" />
-                    設定
+                    {m['header.user_dropdown_settings']()}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout} className="text-red-600">
                   <LogOut className="h-4 w-4 mr-2" />
-                  ログアウト
+                  {m['header.user_dropdown_logout']()}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

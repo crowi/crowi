@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUpdateAdminSecuritySettings } from '@/lib/use-admin-security';
 import type { RegistrationMode, SecuritySettings } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 interface SecurityFormProps {
   settings: SecuritySettings;
@@ -23,10 +24,10 @@ interface SecurityFormProps {
  * entirely in the UI; the API still accepts and persists the legacy spelling
  * to avoid a data migration. See packages/api-contract/src/schemas/admin/security.ts.
  */
-const REGISTRATION_MODE_OPTIONS: { value: RegistrationMode; label: string; description: string }[] = [
-  { value: 'Open', label: 'Open (誰でも登録可能)', description: '誰でも自由に新規登録できます。' },
-  { value: 'Resricted', label: 'Restricted (許可リストのみ)', description: '登録許可メールアドレスに登録されたアドレスのみ新規登録できます。' },
-  { value: 'Closed', label: 'Closed (登録停止)', description: '新規登録を受け付けません。' },
+const REGISTRATION_MODE_OPTIONS: { value: RegistrationMode; label: () => string; description: () => string }[] = [
+  { value: 'Open', label: () => m['admin.security.mode_open_label'](), description: () => m['admin.security.mode_open_description']() },
+  { value: 'Resricted', label: () => m['admin.security.mode_restricted_label'](), description: () => m['admin.security.mode_restricted_description']() },
+  { value: 'Closed', label: () => m['admin.security.mode_closed_label'](), description: () => m['admin.security.mode_closed_description']() },
 ];
 
 /**
@@ -94,9 +95,9 @@ export function SecurityForm({ settings }: SecurityFormProps) {
         ...prev,
         registrationWhiteListRaw: formatWhiteList(updated.registrationWhiteList),
       }));
-      setSuccessMessage('セキュリティ設定を保存しました');
+      setSuccessMessage(m['admin.security.success_saved']());
     } catch (err) {
-      setErrors([err instanceof Error ? err.message : 'セキュリティ設定の保存に失敗しました']);
+      setErrors([err instanceof Error ? err.message : m['admin.security.failed_to_save']()]);
     }
   };
 
@@ -124,65 +125,63 @@ export function SecurityForm({ settings }: SecurityFormProps) {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">新規ユーザー登録</h2>
-          <p className="text-muted-foreground text-sm">新規ユーザーがアカウントを作成する際の挙動を設定します。</p>
+          <h2 className="text-lg font-semibold">{m['admin.security.section_registration_heading']()}</h2>
+          <p className="text-muted-foreground text-sm">{m['admin.security.section_registration_lead']()}</p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="registrationMode">登録モード</Label>
+          <Label htmlFor="registrationMode">{m['admin.security.field_registration_mode']()}</Label>
           <Select value={formData.registrationMode} onValueChange={handleRegistrationModeChange} name="registrationMode">
             <SelectTrigger id="registrationMode" className="w-full">
-              <SelectValue placeholder="登録モードを選択" />
+              <SelectValue placeholder={m['admin.security.field_registration_mode_placeholder']()} />
             </SelectTrigger>
             <SelectContent>
               {REGISTRATION_MODE_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+                  {option.label()}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {currentModeOption && <p className="text-xs text-muted-foreground">{currentModeOption.description}</p>}
+          {currentModeOption && <p className="text-xs text-muted-foreground">{currentModeOption.description()}</p>}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="registrationWhiteListRaw">登録許可メールアドレス</Label>
+          <Label htmlFor="registrationWhiteListRaw">{m['admin.security.field_whitelist_label']()}</Label>
           <Textarea
             id="registrationWhiteListRaw"
             name="registrationWhiteListRaw"
             value={formData.registrationWhiteListRaw}
             onChange={handleChange}
-            placeholder="example.com&#10;@example.org"
+            placeholder={m['admin.security.field_whitelist_placeholder']()}
             rows={6}
           />
-          <p className="text-xs text-muted-foreground">
-            1 行に 1 つずつ、登録を許可するメールアドレスのドメインまたはアドレスを記述します。Restricted モードでのみ評価されます。
-          </p>
+          <p className="text-xs text-muted-foreground">{m['admin.security.field_whitelist_help']()}</p>
         </div>
       </section>
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Basic 認証</h2>
-          <p className="text-muted-foreground text-sm">設定するとサイト全体に Basic 認証が適用されます。空欄にすると無効化されます。</p>
+          <h2 className="text-lg font-semibold">{m['admin.security.section_basic_heading']()}</h2>
+          <p className="text-muted-foreground text-sm">{m['admin.security.section_basic_lead']()}</p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="basicName">ユーザー名</Label>
+          <Label htmlFor="basicName">{m['admin.security.field_basic_name']()}</Label>
           <Input id="basicName" name="basicName" type="text" value={formData.basicName} onChange={handleChange} autoComplete="off" />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="basicSecret">パスワード</Label>
+          <Label htmlFor="basicSecret">{m['admin.security.field_basic_secret']()}</Label>
           <Input id="basicSecret" name="basicSecret" type="text" value={formData.basicSecret} onChange={handleChange} autoComplete="off" />
-          <p className="text-xs text-muted-foreground">現在の値が平文で表示されます (旧管理画面と同じ挙動)。</p>
+          <p className="text-xs text-muted-foreground">{m['admin.security.field_basic_secret_help']()}</p>
         </div>
       </section>
 
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={updateSettings.isPending}>
           <Save className="mr-2" />
-          {updateSettings.isPending ? '保存中...' : '変更を保存'}
+          {updateSettings.isPending ? m['admin.security.submit_pending']() : m['admin.security.submit']()}
         </Button>
       </div>
     </form>
