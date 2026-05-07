@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { Types } from 'mongoose';
 import { app, crowi, Fixture } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
 
@@ -973,6 +974,195 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (ts-rest)', () => {
       expect(res.body.page._id).toBe(page._id);
       expect(res.body.page.liker).toEqual([]);
       expect(res.body.page.likerCount).toBe(0);
+    });
+  });
+});
+
+describe('Routes /api/v2/pages/watch (ts-rest)', () => {
+  const PATH_PREFIX = '/ts-rest-watch-test/';
+  let Page;
+  let Watcher;
+  let accessToken: string;
+  let otherAccessToken: string;
+  let userId: string;
+  let otherUserId: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+    Watcher = crowi.model('Watcher');
+
+    const owner = await createTestUser({
+      name: 'WatchPage Test',
+      username: 'watchPageTester',
+      email: 'watch-page-tester@example.com',
+    });
+    accessToken = owner.accessToken;
+    userId = owner.user._id.toString();
+
+    const other = await createTestUser({
+      name: 'WatchPage Other',
+      username: 'watchPageOther',
+      email: 'watch-page-other@example.com',
+    });
+    otherAccessToken = other.accessToken;
+    otherUserId = other.user._id.toString();
+  });
+
+  afterEach(async () => {
+    await cleanupPathPrefix(PATH_PREFIX);
+    // Watchers are independent of page paths, so clean by user too.
+    await Watcher.deleteMany({ user: { $in: [userId, otherUserId] } });
+  });
+
+  const createPageViaApi = async (token: string, path: string, body: string, grant?: number) => {
+    const payload: { path: string; body: string; grant?: number } = { path, body };
+    if (grant !== undefined) payload.grant = grant;
+    const res = await request(app).post('/api/v2/pages').set(authHeaders(token)).send(payload);
+    if (res.status !== 200) {
+      throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
+    }
+    return res.body.page as { _id: string; path: string };
+  };
+
+  describe('GET /api/v2/pages/watch', () => {
+    it('returns 401 without auth', async () => {
+      const res = await request(app).get('/api/v2/pages/watch').query({ page_id: '000000000000000000000000' });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
+      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: 'not-an-objectid' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_PAGE_ID');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
+      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: '000000000000000000000000' });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}private`, '# private', 4);
+      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('returns watching=true by default for the page creator (no Watcher record)', async () => {
+      // Default watching is derived from getNotificationTargetUsers, which
+      // includes the creator. The owner therefore appears as watching=true
+      // even without an explicit Watcher row.
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}default-creator`, '# hi');
+
+      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.watching).toBe(true);
+    });
+
+    it('returns watching=false by default for an unrelated reader (no Watcher record)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}default-other`, '# hi');
+
+      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.watching).toBe(false);
+    });
+
+    it('returns watching=true when an explicit WATCH Watcher record exists', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}explicit-watch`, '# w');
+      await Watcher.watchByPageId(new Types.ObjectId(otherUserId), new Types.ObjectId(page._id), Watcher.STATUS_WATCH);
+
+      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.watching).toBe(true);
+    });
+
+    it('returns watching=false when an explicit IGNORE Watcher record exists, even for the creator', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}explicit-ignore`, '# i');
+      // Creator is in getNotificationTargetUsers by default but an explicit
+      // IGNORE record must override the default.
+      await Watcher.watchByPageId(new Types.ObjectId(userId), new Types.ObjectId(page._id), Watcher.STATUS_IGNORE);
+
+      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: page._id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.watching).toBe(false);
+    });
+  });
+
+  describe('PUT /api/v2/pages/watch', () => {
+    it('returns 401 without auth', async () => {
+      const res = await request(app).put('/api/v2/pages/watch').send({ page_id: '000000000000000000000000', watching: true });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
+      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid', watching: true });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_PAGE_ID');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
+      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000', watching: true });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}private-put`, '# private', 4);
+      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('upserts a WATCH record when watching=true and returns the new state', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}set-watch`, '# w');
+
+      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.watching).toBe(true);
+
+      // target is Schema.Types.Mixed: query with ObjectId because the API
+      // handler stores ObjectIds (via loaded.page._id), and Mongoose does
+      // not auto-cast on Mixed paths.
+      const watcher = await Watcher.findOne({ user: otherUserId, target: new Types.ObjectId(page._id) });
+      expect(watcher).not.toBeNull();
+      expect(watcher.status).toBe(Watcher.STATUS_WATCH);
+      expect(watcher.targetModel).toBe('Page');
+    });
+
+    it('upserts an IGNORE record when watching=false and returns the new state', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}set-ignore`, '# i');
+
+      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(accessToken)).send({ page_id: page._id, watching: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.watching).toBe(false);
+
+      const watcher = await Watcher.findOne({ user: userId, target: new Types.ObjectId(page._id) });
+      expect(watcher).not.toBeNull();
+      expect(watcher.status).toBe(Watcher.STATUS_IGNORE);
+    });
+
+    it('flips an existing WATCH record to IGNORE without creating a duplicate', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}flip`, '# flip');
+
+      const first = await request(app).put('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
+      expect(first.status).toBe(200);
+
+      const second = await request(app).put('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: false });
+      expect(second.status).toBe(200);
+      expect(second.body.watching).toBe(false);
+
+      const watchers = await Watcher.find({ user: otherUserId, target: new Types.ObjectId(page._id) });
+      expect(watchers).toHaveLength(1);
+      expect(watchers[0].status).toBe(Watcher.STATUS_IGNORE);
     });
   });
 });

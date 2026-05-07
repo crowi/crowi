@@ -82,6 +82,7 @@ export default (crowi: Crowi, _app: Express) => {
   const router = Router();
   const Page = crowi.model('Page');
   const User = crowi.model('User');
+  const Watcher = crowi.model('Watcher');
 
   // seenUsersCount stays at the raw ID-array length (matching legacy
   // populatePageData) so inactive users dropped by findUsersByIds' status
@@ -507,6 +508,63 @@ export default (crowi: Crowi, _app: Express) => {
       const populated = await Page.populatePageData(loaded.page, null);
       return { status: 200 as const, body: { page: pageToResponse(populated) } };
     },
+    /**
+     * GET /api/v2/pages/watch
+     * Get the current user's watch (notification subscription) status for a page.
+     *
+     * Resolution order matches legacy controllers/page.ts api.watchStatus:
+     *   1. If a Watcher record exists for (user, page), use watcher.isWatching().
+     *   2. Otherwise derive a default from page.getNotificationTargetUsers()
+     *      (creator + comment authors + revision authors). The user is
+     *      "watching by default" iff their id appears in that list.
+     */
+    getWatchStatus: async ({ query, req }) => {
+      const user = req.user as UserDocument;
+      const { page_id } = query;
+
+      debug('getWatchStatus called with:', { page_id, userId: user._id });
+
+      const loaded = await loadGrantedPage(Page, page_id, user);
+      if ('error' in loaded) return loaded.error;
+
+      const watcher = await Watcher.findByUserIdAndTargetId(user._id, loaded.page._id);
+      if (watcher) {
+        return { status: 200 as const, body: { watching: watcher.isWatching() } };
+      }
+
+      // Default: include user when they appear in the page's notification
+      // target users (creator + comment authors + revision authors).
+      const targetUsers = await loaded.page.getNotificationTargetUsers();
+      const userIdStr = user._id.toString();
+      const watching = targetUsers.some((id) => id.toString() === userIdStr);
+      return { status: 200 as const, body: { watching } };
+    },
+
+    /**
+     * PUT /api/v2/pages/watch
+     * Upsert the current user's Watcher record for a page.
+     * - watching=true  -> status=WATCH
+     * - watching=false -> status=IGNORE
+     *
+     * Note: this 2-state API cannot remove the Watcher (i.e. revert to the
+     * default-derived behaviour). That deliberate constraint is documented
+     * in the task plan; if a 3-state UI is needed later, the contract will
+     * be extended.
+     */
+    setWatchStatus: async ({ body: requestBody, req }) => {
+      const user = req.user as UserDocument;
+      const { page_id, watching } = requestBody;
+
+      debug('setWatchStatus called with:', { page_id, watching, userId: user._id });
+
+      const loaded = await loadGrantedPage(Page, page_id, user);
+      if ('error' in loaded) return loaded.error;
+
+      const status = watching ? Watcher.STATUS_WATCH : Watcher.STATUS_IGNORE;
+      await Watcher.watchByPageId(user._id, loaded.page._id, status);
+      return { status: 200 as const, body: { watching } };
+    },
+
     deletePage: async ({ body: requestBody, req }) => {
       const user = req.user as UserDocument;
       const { page_id, revision_id, completely } = requestBody;
