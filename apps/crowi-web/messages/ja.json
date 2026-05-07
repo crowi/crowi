@@ -199,6 +199,9 @@
   "header.user_dropdown_trash": "ゴミ箱",
   "header.user_dropdown_settings": "設定",
   "header.user_dropdown_logout": "ログアウト",
+  "header.language_section": "言語",
+  "header.language_ja": "日本語",
+  "header.language_en": "English",
 
   "admin.dashboard_title": "管理ダッシュボード",
   "admin.dashboard_subtitle": "Crowi の管理者向け機能の一覧です。各セクションは順次実装予定です。",

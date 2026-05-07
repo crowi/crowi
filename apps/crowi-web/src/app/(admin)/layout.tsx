@@ -17,6 +17,7 @@ import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
 import { m } from '@/paraglide/messages.js';
+import { LanguageMenuItems } from '@/components/language-menu-items';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -140,6 +141,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     {m['header.user_dropdown_settings']()}
                   </Link>
                 </DropdownMenuItem>
+                <LanguageMenuItems />
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} className="text-red-600">
                   <LogOut className="h-4 w-4 mr-2" />
                   {m['header.user_dropdown_logout']()}

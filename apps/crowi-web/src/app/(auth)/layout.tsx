@@ -13,6 +13,7 @@ import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
 import { useConnection } from '@/lib/connection-context';
 import { m } from '@/paraglide/messages.js';
+import { LanguageMenuItems } from '@/components/language-menu-items';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -122,6 +123,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                     {m['header.user_dropdown_settings']()}
                   </Link>
                 </DropdownMenuItem>
+                <LanguageMenuItems />
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} className="text-red-600">
                   <LogOut className="h-4 w-4 mr-2" />
                   {m['header.user_dropdown_logout']()}

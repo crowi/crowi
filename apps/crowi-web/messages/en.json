@@ -199,6 +199,9 @@
   "header.user_dropdown_trash": "Trash",
   "header.user_dropdown_settings": "Settings",
   "header.user_dropdown_logout": "Logout",
+  "header.language_section": "Language",
+  "header.language_ja": "日本語",
+  "header.language_en": "English",
 
   "admin.dashboard_title": "Admin Dashboard",
   "admin.dashboard_subtitle": "Index of administrator features. Sections will be implemented over time.",
