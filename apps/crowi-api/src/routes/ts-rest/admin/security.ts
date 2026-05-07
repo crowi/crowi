@@ -21,7 +21,6 @@ const debug = Debug('crowi:routes:ts-rest:admin:security');
 const DEFAULT_BASIC_NAME = '';
 const DEFAULT_BASIC_SECRET = '';
 const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'Open';
-const DEFAULT_REGISTRATION_WHITE_LIST: string[] = [];
 
 /**
  * Coerce an unknown config value to a string. Stored Config values are
@@ -82,7 +81,8 @@ const readSecuritySettings = (crowi: Crowi): SecuritySettings => {
     basicName: toStringValue(ns['security:basicName'], DEFAULT_BASIC_NAME),
     basicSecret: toStringValue(ns['security:basicSecret'], DEFAULT_BASIC_SECRET),
     registrationMode: toRegistrationMode(ns['security:registrationMode']),
-    registrationWhiteList: toStringArray(ns['security:registrationWhiteList']) || DEFAULT_REGISTRATION_WHITE_LIST,
+    // toStringArray already returns [] when the value is missing — that doubles as the default.
+    registrationWhiteList: toStringArray(ns['security:registrationWhiteList']),
   };
 };
 

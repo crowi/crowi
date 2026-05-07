@@ -30,6 +30,10 @@ export function useAdminSecuritySettings() {
       }
       throw new Error('Failed to fetch security settings');
     },
+    // Admin settings rarely change; mutations invalidate explicitly via
+    // setQueryData. No need to re-hit the API on every focus regain.
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
