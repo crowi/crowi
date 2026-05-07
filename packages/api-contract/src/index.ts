@@ -10,4 +10,5 @@ export * from './schemas/user';
 export * from './schemas/comment';
 export * from './schemas/revision';
 export * from './schemas/notification';
+export * from './schemas/backlink';
 export * from './openapi';
