@@ -16,6 +16,7 @@ export const TokenAuthResponseSchema = z.object({
     email: z.string().email(),
     name: z.string(),
     image: z.string().optional(),
+    admin: z.boolean().optional(),
   }),
 });
 

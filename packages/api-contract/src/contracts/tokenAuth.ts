@@ -70,6 +70,7 @@ export const tokenAuthContract = c.router({
           name: z.string(),
           image: z.string().optional(),
           status: z.number(),
+          admin: z.boolean().optional(),
           createdAt: z.string(),
         }),
       }),

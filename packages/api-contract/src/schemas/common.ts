@@ -24,6 +24,14 @@ export const AuthenticationRequiredErrorSchema = ApiErrorSchema.extend({
   }),
 });
 
+export const AdminRequiredErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('ADMIN_REQUIRED'),
+    message: z.literal('Admin permission required'),
+    redirectTo: z.string().optional(),
+  }),
+});
+
 export const UserStatusErrorSchema = ApiErrorSchema.extend({
   error: z.object({
     code: z.enum(['USER_REGISTERED', 'USER_SUSPENDED', 'USER_INVITED']),
@@ -57,6 +65,7 @@ export const InvalidPageIdErrorSchema = z.object({
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type ApplicationNotInstalledError = z.infer<typeof ApplicationNotInstalledErrorSchema>;
 export type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
+export type AdminRequiredError = z.infer<typeof AdminRequiredErrorSchema>;
 export type UserStatusError = z.infer<typeof UserStatusErrorSchema>;
 export type ThirdPartyAuthRequiredError = z.infer<typeof ThirdPartyAuthRequiredErrorSchema>;
 export type InternalServerError = z.infer<typeof InternalServerErrorSchema>;
