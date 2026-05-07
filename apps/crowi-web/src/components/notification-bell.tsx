@@ -89,7 +89,7 @@ export function NotificationBell() {
           {hasUnread ? (
             <span
               aria-live="polite"
-              className="absolute -top-0.5 -right-0.5 flex min-w-[1.1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white"
+              className="absolute -top-0.5 -right-0.5 flex h-[1.1rem] min-w-[1.1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white"
             >
               {badgeLabel}
             </span>
