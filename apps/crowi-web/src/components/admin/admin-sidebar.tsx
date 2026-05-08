@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Database, Github, Globe, KeyRound, Link2, Mail, Search, Server, Settings, Share2, ShieldCheck, Users } from 'lucide-react';
+import { Bell, Database, Github, Globe, KeyRound, Link2, Mail, Plug, Search, Server, Settings, Share2, ShieldCheck, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { m } from '@paraglide/messages.js';
@@ -85,6 +85,13 @@ const NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { href: '/admin/search', label: () => m['admin.nav_search'](), icon: Search },
       { href: '/admin/backlink', label: () => m['admin.nav_backlink'](), icon: Link2 },
+      {
+        href: '/admin/plugins',
+        label: () => m['admin.nav_plugins'](),
+        icon: Plug,
+        status: 'available',
+        description: () => m['admin.nav_plugins_summary'](),
+      },
     ],
   },
 ];

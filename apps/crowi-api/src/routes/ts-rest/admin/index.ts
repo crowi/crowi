@@ -3,6 +3,7 @@ import { Express, Router } from 'express';
 import appRoutes from './app';
 import authRoutes from './auth';
 import mailRoutes from './mail';
+import pluginsRoutes from './plugins';
 import securityRoutes from './security';
 import shareRoutes from './share';
 import usersRoutes from './users';
@@ -22,6 +23,7 @@ export default (crowi: Crowi, app: Express) => {
   router.use(mailRoutes(crowi, app));
   router.use(shareRoutes(crowi, app));
   router.use(usersRoutes(crowi, app));
+  router.use(pluginsRoutes(crowi, app));
 
   return router;
 };

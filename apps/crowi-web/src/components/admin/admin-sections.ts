@@ -19,6 +19,7 @@ export const ADMIN_SECTIONS = {
   notification: () => m['admin.nav_notification'](),
   search: () => m['admin.nav_search'](),
   backlink: () => m['admin.nav_backlink'](),
+  plugins: () => m['admin.nav_plugins'](),
 } as const;
 
 export type AdminSectionKey = keyof typeof ADMIN_SECTIONS;

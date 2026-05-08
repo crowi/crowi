@@ -2,6 +2,7 @@ import { initContract } from '@ts-rest/core';
 import { adminAppContract } from './app';
 import { adminAuthContract } from './auth';
 import { adminMailContract } from './mail';
+import { adminPluginsContract } from './plugins';
 import { adminSecurityContract } from './security';
 import { adminShareContract } from './share';
 import { adminUsersContract } from './users';
@@ -20,4 +21,5 @@ export const adminContract = c.router({
   mail: adminMailContract,
   share: adminShareContract,
   users: adminUsersContract,
+  plugins: adminPluginsContract,
 });
