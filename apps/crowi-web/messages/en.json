@@ -415,5 +415,6 @@
   "admin.users.status_unknown": "Unknown",
   "admin.users.pager_total": "{total} users total",
   "admin.users.pager_previous": "Previous",
-  "admin.users.pager_next": "Next"
+  "admin.users.pager_next": "Next",
+  "admin.users.pager_aria_label": "Pagination"
 }

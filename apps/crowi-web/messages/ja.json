@@ -415,5 +415,6 @@
   "admin.users.status_unknown": "不明",
   "admin.users.pager_total": "{total} 件",
   "admin.users.pager_previous": "前へ",
-  "admin.users.pager_next": "次へ"
+  "admin.users.pager_next": "次へ",
+  "admin.users.pager_aria_label": "ページネーション"
 }

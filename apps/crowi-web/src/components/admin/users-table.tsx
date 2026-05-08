@@ -70,7 +70,7 @@ function Pager({ pager, onPageChange }: { pager: AdminPager; onPageChange: (page
   if (pager.pagesCount <= 1) return null;
 
   return (
-    <nav className="flex items-center justify-center gap-1" aria-label="Pagination">
+    <nav className="flex items-center justify-center gap-1" aria-label={m['admin.users.pager_aria_label']()}>
       <Button
         type="button"
         variant="outline"

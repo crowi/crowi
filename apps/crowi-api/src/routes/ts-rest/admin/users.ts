@@ -24,7 +24,7 @@ const MAX_PAGE_LIST = 5;
  * loop below correctly emits an empty `pages` array in that case (pagerMin
  * collapses to 1 and pagerMax stays at 0, so the for-loop body never runs).
  */
-function createPager(total: number, _limit: number, page: number, pagesCount: number, maxPageList: number): AdminPager {
+function createPager(total: number, page: number, pagesCount: number, maxPageList: number): AdminPager {
   const pager: AdminPager = {
     page,
     pagesCount,
@@ -105,21 +105,23 @@ const paginateUsers = (User: UserModel, options: { page: number; limit: number }
 /**
  * Build the Mongo `$or` filter for the free-text search.
  *
- * Mirrors the legacy controller (admin.ts:232-240) exactly:
- *   1. Trim the input.
- *   2. Replace the *first* whitespace with `|` (so "alice bob" becomes the
- *      regex `alice|bob`). Note: `String.replace(' ', '|')` only replaces the
- *      first occurrence — we preserve that quirk for full parity.
- *   3. Apply as a case-insensitive regex on username / name / email.
+ * Mirrors the legacy controller (admin.ts:232-240): a single space splits
+ * the query into two regex alternatives so "alice bob" matches either
+ * 'alice' OR 'bob'. Each token is regex-escaped (same approach as
+ * `models/user.ts:findUsersByPartOfEmail`) so user input like '(' or '.'
+ * doesn't either crash with `SyntaxError` or match more than expected.
  *
- * Returns an empty filter (matches everything) when the trimmed query is
- * blank, so callers can pass the result directly to mongoose-paginate.
+ * Returns an empty filter when the trimmed query is blank.
  */
+const REGEX_META = /[-/\\^$*+?.()|[\]{}]/g;
+const escapeRegex = (s: string): string => s.replace(REGEX_META, '\\$&');
+
 function buildSearchFilter(q: string | undefined): { $or?: Record<string, { $regex: string; $options: string }>[] } {
   if (!q) return {};
   const trimmed = q.trim();
   if (trimmed.length === 0) return {};
-  const $regex = trimmed.replace(' ', '|');
+  const firstSpace = trimmed.indexOf(' ');
+  const $regex = firstSpace === -1 ? escapeRegex(trimmed) : `${escapeRegex(trimmed.slice(0, firstSpace))}|${escapeRegex(trimmed.slice(firstSpace + 1))}`;
   return {
     $or: ['username', 'name', 'email'].map((field) => ({
       [field]: { $regex, $options: 'i' },
@@ -154,7 +156,7 @@ export default (crowi: Crowi, _app: Express) => {
       try {
         const filter = buildSearchFilter(q);
         const result = await paginateUsers(User, { page, limit }, filter);
-        const pager = createPager(result.total, result.limit, result.page, result.pages, MAX_PAGE_LIST);
+        const pager = createPager(result.total, result.page, result.pages, MAX_PAGE_LIST);
 
         return {
           status: 200 as const,

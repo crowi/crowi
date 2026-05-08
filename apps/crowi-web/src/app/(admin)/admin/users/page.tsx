@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { UsersTable } from '@/components/admin/users-table';
@@ -110,11 +110,7 @@ export default function AdminUsersPage() {
 
           {isLoading && <LoadingSpinner />}
 
-          {!isLoading && error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error instanceof Error ? error.message : m['admin.users.failed_to_load']()}</AlertDescription>
-            </Alert>
-          )}
+          {!isLoading && error && <ErrorAlert message={error instanceof Error ? error.message : m['admin.users.failed_to_load']()} />}
 
           {!isLoading && !error && data && (
             <div aria-busy={isFetching}>
