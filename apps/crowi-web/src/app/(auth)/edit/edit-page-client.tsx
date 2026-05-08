@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Save, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
 import { m } from '@paraglide/messages.js';
@@ -57,9 +58,45 @@ interface EditorShellProps {
   onCancel: () => void;
   isSaving: boolean;
   feedback: Feedback | null;
+  /**
+   * The page id to attach files to. `null` for create-mode (page hasn't
+   * been saved yet) — the attach button is rendered but disabled in
+   * that case, with a tooltip prompting the user to save first.
+   */
+  pageId: string | null;
+  /** Called by the attach button to surface upload errors as Feedback. */
+  onAttachError: (message: string) => void;
 }
 
-function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, isSaving, feedback }: EditorShellProps) {
+function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, isSaving, feedback, pageId, onAttachError }: EditorShellProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Insert a markdown snippet at the current cursor position. We mutate
+   * the body string and call `onChangeBody` so the parent state stays
+   * the source of truth — the textarea is controlled.
+   */
+  const insertAtCursor = (snippet: string): void => {
+    const el = textareaRef.current;
+    if (!el) {
+      // Fallback: append to end if for some reason the ref is unavailable.
+      onChangeBody(body + snippet);
+      return;
+    }
+    const start = el.selectionStart ?? body.length;
+    const end = el.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + snippet + body.slice(end);
+    onChangeBody(next);
+    // Restore cursor position to just after the inserted snippet on the
+    // next paint. Without this the cursor would jump to the end because
+    // React re-renders the textarea.
+    requestAnimationFrame(() => {
+      const cursor = start + snippet.length;
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -76,6 +113,7 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
         )}
 
         <Textarea
+          ref={textareaRef}
           value={body}
           onChange={(event) => onChangeBody(event.target.value)}
           disabled={isSaving}
@@ -84,15 +122,18 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
           aria-label={m['edit.aria_body']()}
         />
 
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={isSaving} type="button">
-            <X className="h-4 w-4 mr-1" />
-            {m['edit.cancel']()}
-          </Button>
-          <Button variant="default" onClick={onSave} disabled={isSaving} type="button">
-            {isSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-            {m['edit.save']()}
-          </Button>
+        <div className="flex items-center justify-between gap-2">
+          <AttachmentInsertButton pageId={pageId} onInsert={insertAtCursor} onError={onAttachError} />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={onCancel} disabled={isSaving} type="button">
+              <X className="h-4 w-4 mr-1" />
+              {m['edit.cancel']()}
+            </Button>
+            <Button variant="default" onClick={onSave} disabled={isSaving} type="button">
+              {isSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              {m['edit.save']()}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -182,6 +223,8 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
       onCancel={handleCancel}
       isSaving={updateMutation.isPending}
       feedback={feedback}
+      pageId={page._id}
+      onAttachError={(message) => setFeedback({ kind: 'error', message })}
     />
   );
 }
@@ -217,6 +260,8 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
       onCancel={() => router.back()}
       isSaving={createMutation.isPending}
       feedback={feedback}
+      pageId={null}
+      onAttachError={(message) => setFeedback({ kind: 'error', message })}
     />
   );
 }
