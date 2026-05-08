@@ -61,6 +61,11 @@ export function SecurityForm({ settings }: SecurityFormProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const updateSettings = useUpdateAdminSecuritySettings();
+  const isDirty =
+    formData.basicName !== settings.basicName ||
+    formData.basicSecret !== settings.basicSecret ||
+    formData.registrationMode !== settings.registrationMode ||
+    formData.registrationWhiteListRaw !== formatWhiteList(settings.registrationWhiteList);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -77,6 +82,7 @@ export function SecurityForm({ settings }: SecurityFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isDirty) return;
     setErrors([]);
     setSuccessMessage(null);
 
@@ -179,7 +185,7 @@ export function SecurityForm({ settings }: SecurityFormProps) {
       </section>
 
       <div className="flex justify-end">
-        <Button type="submit" size="lg" disabled={updateSettings.isPending}>
+        <Button type="submit" size="lg" disabled={updateSettings.isPending || !isDirty}>
           <Save className="mr-2" />
           {updateSettings.isPending ? m['admin.common.submit_pending']() : m['admin.common.submit']()}
         </Button>

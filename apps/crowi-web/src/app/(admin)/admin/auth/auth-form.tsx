@@ -30,6 +30,7 @@ export function AuthForm({ settings }: AuthFormProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const updateSettings = useUpdateAdminAuthSettings();
+  const isDirty = formData.requireThirdPartyAuth !== settings.requireThirdPartyAuth || formData.disablePasswordAuth !== settings.disablePasswordAuth;
 
   const handleToggle = (name: keyof AuthSettings) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, [name]: e.target.checked }));
@@ -39,6 +40,7 @@ export function AuthForm({ settings }: AuthFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isDirty) return;
     setErrors([]);
     setSuccessMessage(null);
 
@@ -119,7 +121,7 @@ export function AuthForm({ settings }: AuthFormProps) {
       </section>
 
       <div className="flex justify-end">
-        <Button type="submit" size="lg" disabled={updateSettings.isPending}>
+        <Button type="submit" size="lg" disabled={updateSettings.isPending || !isDirty}>
           <Save className="mr-2" />
           {updateSettings.isPending ? m['admin.common.submit_pending']() : m['admin.common.submit']()}
         </Button>
