@@ -49,7 +49,13 @@ const NAV_GROUPS: AdminNavGroup[] = [
       { href: '/admin/aws', label: () => m['admin.nav_aws'](), icon: Server },
       { href: '/admin/google', label: () => m['admin.nav_google'](), icon: Globe },
       { href: '/admin/github', label: () => m['admin.nav_github'](), icon: Github },
-      { href: '/admin/share', label: () => m['admin.nav_share'](), icon: Share2 },
+      {
+        href: '/admin/share',
+        label: () => m['admin.nav_share'](),
+        icon: Share2,
+        status: 'available',
+        description: () => m['admin.nav_share_summary'](),
+      },
     ],
   },
   {

@@ -225,6 +225,7 @@
   "admin.nav_google": "Google OAuth",
   "admin.nav_github": "GitHub OAuth",
   "admin.nav_share": "Sharing",
+  "admin.nav_share_summary": "Toggle external sharing of pages via share links",
   "admin.nav_users": "Users",
   "admin.nav_notification": "Notification settings",
   "admin.nav_search": "Search index",
@@ -333,5 +334,19 @@
   "admin.app.submit_pending": "Saving...",
   "admin.app.success_saved": "Saved",
   "admin.app.field_errors_summary": "Some inputs are invalid.",
-  "admin.app.failed_to_save": "Failed to save app settings"
+  "admin.app.failed_to_save": "Failed to save app settings",
+
+  "admin.share.heading": "Share settings",
+  "admin.share.lead": "Control whether pages can be shared externally via share links.",
+  "admin.share.section_external_heading": "External sharing",
+  "admin.share.section_external_lead": "When enabled, page authors can publish a public read-only URL for any page. Disabling this immediately blocks all existing share links and the share CRUD endpoints.",
+  "admin.share.field_external_label": "Enable external sharing",
+  "admin.share.field_external_help": "Off by default. Re-enable to expose share links and the per-page share dialog.",
+  "admin.share.field_external_enabled": "Currently: enabled",
+  "admin.share.field_external_disabled": "Currently: disabled",
+  "admin.share.submit": "Save changes",
+  "admin.share.submit_pending": "Saving...",
+  "admin.share.success_saved": "Share settings saved",
+  "admin.share.failed_to_load": "Failed to load share settings.",
+  "admin.share.failed_to_save": "Failed to save share settings."
 }
