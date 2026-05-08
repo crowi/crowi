@@ -20,7 +20,6 @@ export default (crowi: Crowi, app: Express, form): Router => {
   router.post('/admin/settings/aws', csrf, form.admin.aws, Admin.api.postSettings);
   router.post('/admin/settings/google', csrf, form.admin.google, Admin.api.postSettings);
   router.post('/admin/settings/github', csrf, form.admin.github, Admin.api.postSettings);
-  router.post('/admin/settings/share', csrf, form.admin.share, Admin.api.postSettings);
 
   router.post('/admin/search/build', csrf, Admin.api.search.buildIndex);
 

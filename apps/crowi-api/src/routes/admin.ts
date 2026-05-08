@@ -14,7 +14,6 @@ export default (crowi: Crowi, app: Express, form): Router => {
   router.get('/admin/notification/slackAuth', Admin.notification.slackAuth);
   router.get('/admin/users', Admin.index);
   router.get('/admin/search', Admin.index);
-  router.get('/admin/share', Admin.index);
   router.get('/admin/backlink', Admin.index);
 
   return router;
