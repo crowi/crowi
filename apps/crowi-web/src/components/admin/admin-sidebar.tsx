@@ -30,7 +30,13 @@ const NAV_GROUPS: AdminNavGroup[] = [
   {
     heading: () => m['admin.section_settings'](),
     items: [
-      { href: '/admin/app', label: () => m['admin.nav_app'](), icon: Settings },
+      {
+        href: '/admin/app',
+        label: () => m['admin.nav_app'](),
+        icon: Settings,
+        status: 'available',
+        description: () => m['admin.nav_app_summary'](),
+      },
       {
         href: '/admin/security',
         label: () => m['admin.nav_security'](),

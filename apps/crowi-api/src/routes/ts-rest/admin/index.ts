@@ -1,5 +1,6 @@
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
+import appRoutes from './app';
 import securityRoutes from './security';
 
 /**
@@ -11,6 +12,7 @@ import securityRoutes from './security';
 export default (crowi: Crowi, app: Express) => {
   const router = Router();
 
+  router.use(appRoutes(crowi, app));
   router.use(securityRoutes(crowi, app));
 
   return router;

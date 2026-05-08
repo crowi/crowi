@@ -1,0 +1,64 @@
+'use client';
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from './api-client';
+import type { GetAppSettingsResponse, UpdateAppSettingsRequest, UpdateAppSettingsResponse } from '@crowi/api-contract';
+
+export const adminAppSettingsKeys = {
+  settings: ['admin-app-settings'] as const,
+};
+
+export function useAppSettings(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: adminAppSettingsKeys.settings,
+    queryFn: async (): Promise<GetAppSettingsResponse | null> => {
+      const result = await apiClient.admin.app.getAppSettings();
+      if (result.status === 200) return result.body;
+      // 401/403: caller (admin layout) handles gating; surface as null.
+      return null;
+    },
+    enabled: options?.enabled !== false,
+    // The admin form is the only writer for these values; mutation invalidates
+    // explicitly. Avoid noisy refetches when the operator switches tabs.
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export class AppSettingsValidationFailure extends Error {
+  /** Per-field issues from the server-side Zod parse. Keys are dotted paths
+   * such as `app.title` so the form can map them onto the matching input. */
+  public readonly fieldErrors: Record<string, string>;
+
+  constructor(fieldErrors: Record<string, string>) {
+    super('入力内容に誤りがあります');
+    this.name = 'AppSettingsValidationFailure';
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+export function useUpdateAppSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: UpdateAppSettingsRequest): Promise<UpdateAppSettingsResponse> => {
+      const result = await apiClient.admin.app.updateAppSettings({ body });
+      if (result.status === 200) return result.body;
+      if (result.status === 400) {
+        const fieldErrors: Record<string, string> = {};
+        const issues = result.body?.bodyResult?.issues ?? [];
+        for (const issue of issues) {
+          const key = issue.path.map(String).join('.');
+          if (!(key in fieldErrors)) fieldErrors[key] = issue.message;
+        }
+        throw new AppSettingsValidationFailure(fieldErrors);
+      }
+      if (result.status === 401 || result.status === 403) {
+        throw new Error('権限がありません');
+      }
+      throw new Error('保存に失敗しました');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminAppSettingsKeys.settings });
+    },
+  });
+}
