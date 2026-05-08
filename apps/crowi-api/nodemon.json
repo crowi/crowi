@@ -2,7 +2,21 @@
   "execMap": {
     "ts": "ts-node --files -r tsconfig-paths/register"
   },
-  "watch": ["src/", "locales/"],
-  "ignore": ["*.tsx", "test/", "*.test.ts"],
+  "watch": [
+    "src/",
+    "locales/",
+    "../../packages/plugin-api/dist/",
+    "../../packages/aws/dist/",
+    "../../packages/storage-local/dist/",
+    "../../packages/storage-aws-s3/dist/"
+  ],
+  "ignore": [
+    "*.tsx",
+    "test/",
+    "*.test.ts",
+    "**/*.map",
+    "**/*.d.ts",
+    "**/*.d.mts"
+  ],
   "ext": "ts,tsx,js,jsx,json"
 }
