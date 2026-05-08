@@ -226,6 +226,7 @@
   "admin.nav_google": "Google OAuth",
   "admin.nav_github": "GitHub OAuth",
   "admin.nav_share": "共有設定",
+  "admin.nav_share_summary": "共有リンクによるページの外部公開を有効化／無効化します",
   "admin.nav_users": "ユーザー一覧",
   "admin.nav_notification": "通知設定",
   "admin.nav_search": "検索インデックス",
@@ -416,5 +417,19 @@
   "admin.users.pager_total": "{total} 件",
   "admin.users.pager_previous": "前へ",
   "admin.users.pager_next": "次へ",
-  "admin.users.pager_aria_label": "ページネーション"
+  "admin.users.pager_aria_label": "ページネーション",
+
+  "admin.share.heading": "共有設定",
+  "admin.share.lead": "共有リンク経由でのページ外部公開を許可するかどうかを設定します。",
+  "admin.share.section_external_heading": "外部共有",
+  "admin.share.section_external_lead": "有効化すると、ページ作成者が任意のページに対して公開 URL を発行できるようになります。無効化すると既存の共有リンクと共有 CRUD API はすべてアクセス不可になります。",
+  "admin.share.field_external_label": "外部共有を有効にする",
+  "admin.share.field_external_help": "既定では無効です。有効にすると共有リンクとページの共有ダイアログが利用可能になります。",
+  "admin.share.field_external_enabled": "現在の状態: 有効",
+  "admin.share.field_external_disabled": "現在の状態: 無効",
+  "admin.share.submit": "変更を保存",
+  "admin.share.submit_pending": "保存中...",
+  "admin.share.success_saved": "共有設定を保存しました",
+  "admin.share.failed_to_load": "共有設定の読み込みに失敗しました。",
+  "admin.share.failed_to_save": "共有設定の保存に失敗しました。"
 }

@@ -16,7 +16,6 @@ import github from './admin/github';
 import userInvite from './admin/userInvite';
 import userEdit from './admin/userEdit';
 import slackSetting from './admin/slackSetting';
-import share from './admin/share';
 
 export default {
   login,
@@ -40,6 +39,5 @@ export default {
     userInvite,
     userEdit,
     slackSetting,
-    share,
   },
 };
