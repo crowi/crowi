@@ -62,3 +62,114 @@ export const SearchAdminUsersByEmailResponseSchema = z.object({
   users: z.array(UserPublicSchema),
 });
 export type SearchAdminUsersByEmailResponse = z.infer<typeof SearchAdminUsersByEmailResponseSchema>;
+
+/**
+ * Path-param schema reused by every per-user mutating endpoint
+ * (edit / makeAdmin / removeFromAdmin / activate / suspend / resetPassword /
+ * updateEmail). Strict 24-char hex validation lives in the handler so we can
+ * surface a consistent 400 ValidationError; here we just declare the shape.
+ */
+export const AdminUserIdParamSchema = z.object({
+  id: z.string(),
+});
+export type AdminUserIdParam = z.infer<typeof AdminUserIdParamSchema>;
+
+/**
+ * Request body for POST /admin/users/invite.
+ *
+ * The legacy form accepted a single newline-separated `emailList` string; the
+ * new contract takes a clean `string[]` so the client owns the splitting and
+ * trimming. `sendEmail` toggles the post-invite mailer (template
+ * `admin/userInvitation.txt`); defaults to false to keep the side-effect
+ * opt-in.
+ */
+export const InviteUsersRequestSchema = z.object({
+  emailList: z.array(z.string().email()).min(1),
+  sendEmail: z.boolean().optional().default(false),
+});
+export type InviteUsersRequest = z.infer<typeof InviteUsersRequestSchema>;
+
+/**
+ * Per-email outcome produced by `User.createUsersByInvitation`. Normalized to
+ * a discriminator so clients can render success/duplicate/failure rows with a
+ * simple switch.
+ *
+ * - 'created' -> a new user was inserted; userId is the new ObjectId
+ * - 'exists'  -> an active or invited user already had this email; no insert
+ * - 'failed'  -> save() rejected (rare; e.g. invalid email after coercion).
+ *                We surface it instead of swallowing so admins notice partial
+ *                success.
+ */
+export const InvitedUserResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    email: z.string(),
+    status: z.literal('created'),
+    userId: z.string(),
+  }),
+  z.object({
+    email: z.string(),
+    status: z.literal('exists'),
+  }),
+  z.object({
+    email: z.string(),
+    status: z.literal('failed'),
+  }),
+]);
+export type InvitedUserResult = z.infer<typeof InvitedUserResultSchema>;
+
+export const InviteUsersResponseSchema = z.object({
+  results: z.array(InvitedUserResultSchema),
+});
+export type InviteUsersResponse = z.infer<typeof InviteUsersResponseSchema>;
+
+/**
+ * Request body for PATCH /admin/users/:id.
+ *
+ * Both `name` and `email` are required by the legacy form (userEditForm),
+ * so we keep them required here too. The dedicated PUT /admin/users/:id/email
+ * endpoint exists for partial email-only updates that come from a different
+ * UI affordance (the table row "change email" action).
+ */
+export const EditAdminUserRequestSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+export type EditAdminUserRequest = z.infer<typeof EditAdminUserRequestSchema>;
+
+/**
+ * Response body for the user-mutating endpoints that return the updated user
+ * (edit / makeAdmin / removeFromAdmin / activate / suspend / updateEmail).
+ *
+ * We always shape it as `{ user: UserPublic }` (rather than returning the bare
+ * UserPublic) so future fields like `message` or `previousEmail` can be added
+ * without a breaking response change.
+ */
+export const AdminUserMutationResponseSchema = z.object({
+  user: UserPublicSchema,
+});
+export type AdminUserMutationResponse = z.infer<typeof AdminUserMutationResponseSchema>;
+
+/**
+ * Response body for POST /admin/users/:id/reset-password.
+ *
+ * Mirrors the legacy `User.resetPasswordByRandomString` contract: returns the
+ * generated plaintext password alongside the updated user. The plaintext
+ * disclosure is preserved for parity with the legacy admin UI; switching to
+ * an email-delivered reset is tracked in the task openQuestions.
+ */
+export const ResetPasswordResponseSchema = z.object({
+  user: UserPublicSchema,
+  newPassword: z.string(),
+});
+export type ResetPasswordResponse = z.infer<typeof ResetPasswordResponseSchema>;
+
+/**
+ * Request body for PUT /admin/users/:id/email.
+ *
+ * Email-only update. The legacy endpoint took `{ user_id, email }` in the
+ * body; with the user id now in the path, only `email` remains.
+ */
+export const UpdateAdminUserEmailRequestSchema = z.object({
+  email: z.string().email(),
+});
+export type UpdateAdminUserEmailRequest = z.infer<typeof UpdateAdminUserEmailRequestSchema>;

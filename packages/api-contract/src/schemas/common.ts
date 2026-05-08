@@ -62,6 +62,47 @@ export const InvalidPageIdErrorSchema = z.object({
   }),
 });
 
+/**
+ * Generic 400 returned by endpoints that perform request-level validation
+ * beyond what Zod can express (e.g. missing body fields when the schema is
+ * intentionally permissive, or business-rule guards). The `code` is
+ * `VALIDATION_ERROR` and `message` is a human-readable summary; UIs should
+ * surface it as a toast, not parse it for branching logic.
+ */
+export const ValidationErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('VALIDATION_ERROR'),
+    message: z.string(),
+  }),
+});
+
+/**
+ * Generic 404 for "the resource you addressed does not exist". Currently used
+ * by admin user mutating endpoints (PATCH /admin/users/:id, etc.) where the
+ * id resolves to no document; distinct from page-scoped 404s which carry
+ * domain-specific codes.
+ */
+export const NotFoundErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('NOT_FOUND'),
+    message: z.string(),
+  }),
+});
+
+/**
+ * 409 Conflict, used for "a resource with this unique key already exists".
+ * Admin user endpoints raise it when an email change collides with another
+ * user's address; the legacy controller surfaced this as `ApiResponse.error`
+ * (HTTP 200 with `{ ok: false }`) but the new contract correctly expresses
+ * the conflict at the HTTP layer.
+ */
+export const ConflictErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('CONFLICT'),
+    message: z.string(),
+  }),
+});
+
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type ApplicationNotInstalledError = z.infer<typeof ApplicationNotInstalledErrorSchema>;
 export type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
@@ -70,3 +111,6 @@ export type UserStatusError = z.infer<typeof UserStatusErrorSchema>;
 export type ThirdPartyAuthRequiredError = z.infer<typeof ThirdPartyAuthRequiredErrorSchema>;
 export type InternalServerError = z.infer<typeof InternalServerErrorSchema>;
 export type InvalidPageIdError = z.infer<typeof InvalidPageIdErrorSchema>;
+export type ValidationError = z.infer<typeof ValidationErrorSchema>;
+export type NotFoundError = z.infer<typeof NotFoundErrorSchema>;
+export type ConflictError = z.infer<typeof ConflictErrorSchema>;
