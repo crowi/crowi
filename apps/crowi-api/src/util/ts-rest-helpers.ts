@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import type { PageUser, UserPublic } from '@crowi/api-contract';
+import { UserPublicStatus } from '@crowi/api-contract';
 import type { UserDocument } from 'src/models/user';
 import type { PageDocument } from 'src/models/page';
 
@@ -52,6 +53,19 @@ export interface PopulatedUserPublic {
   status?: number;
 }
 
+type UserPublicStatusValue = (typeof UserPublicStatus)[keyof typeof UserPublicStatus];
+const KNOWN_USER_STATUSES = new Set<number>(Object.values(UserPublicStatus));
+
+/**
+ * Narrow Mongo's `status: number` to the typed enum on the wire. Hand-edited
+ * rows or pre-migration data outside 1..5 collapse to `undefined` so the
+ * response still satisfies the schema instead of 500-ing in the response
+ * validator.
+ */
+const toUserStatus = (status: number | undefined): UserPublicStatusValue | undefined => {
+  return status !== undefined && KNOWN_USER_STATUSES.has(status) ? (status as UserPublicStatusValue) : undefined;
+};
+
 export const toUserPublic = (user: UserDocument | PopulatedUserPublic): UserPublic => ({
   _id: toStringId(user._id),
   id: toStringId(user._id),
@@ -62,7 +76,7 @@ export const toUserPublic = (user: UserDocument | PopulatedUserPublic): UserPubl
   introduction: user.introduction ?? '',
   createdAt: toISOStringOrNull(user.createdAt) ?? new Date().toISOString(),
   admin: user.admin ?? false,
-  status: user.status,
+  status: toUserStatus(user.status),
 });
 
 /**

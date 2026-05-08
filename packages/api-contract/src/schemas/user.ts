@@ -10,13 +10,10 @@ import { UserPublicSchema } from './userPublic';
 
 // User status enum - matches User model constants
 export const UserStatusSchema = z.enum(['1', '2', '3', '4', '5']).transform((val) => Number(val));
-export const UserStatusEnum = {
-  REGISTERED: 1,
-  ACTIVE: 2,
-  SUSPENDED: 3,
-  DELETED: 4,
-  INVITED: 5,
-} as const;
+// Re-export the canonical enum from userPublic so call sites importing
+// `UserStatusEnum` keep working — the values mirror the User model
+// constants (1=REGISTERED ... 5=INVITED).
+export { UserPublicStatus as UserStatusEnum } from './userPublic';
 
 // Language enum - matches User model
 export const UserLanguageSchema = z.enum(['en', 'en-US', 'en-GB', 'ja']);
