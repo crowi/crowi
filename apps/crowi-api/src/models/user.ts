@@ -61,8 +61,37 @@ export interface UserDocument extends Document {
   populateSecrets(): Promise<any>;
 }
 
+/**
+ * Result envelope produced by the `mongoose-paginate` plugin. Re-declared
+ * here because the package does not ship its own type definitions.
+ */
+export interface PaginateResult<T> {
+  docs: T[];
+  total: number;
+  limit: number;
+  page?: number;
+  pages: number;
+  offset?: number;
+}
+
+/**
+ * Subset of mongoose-paginate options actually used by Crowi handlers.
+ * `populate`/`lean`/`leanWithId`/`offset` are accepted by the plugin too
+ * but we don't lean on them today; add them here when needed.
+ */
+export interface PaginateOptions {
+  page?: number;
+  limit?: number;
+  sort?: Record<string, 1 | -1>;
+  select?: string;
+}
+
 export interface UserModel extends Model<UserDocument> {
-  paginate: any;
+  paginate(
+    query: Record<string, unknown>,
+    options?: PaginateOptions,
+    callback?: (err: Error | null, result: PaginateResult<UserDocument>) => void,
+  ): Promise<PaginateResult<UserDocument>>;
 
   getLanguageLabels(): Record<string, string>;
   getUserStatusLabels(): any;

@@ -4,36 +4,20 @@ import { Express, Router } from 'express';
 import Crowi from 'src/crowi';
 import { createPager, MAX_PAGE_LIST } from 'src/util/admin-pager';
 import { internalServerErrorResponse, toUserPublic } from 'src/util/ts-rest-helpers';
-import type { UserDocument, UserModel } from 'src/models/user';
+import type { UserDocument } from 'src/models/user';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:users');
 
 /**
- * Shape of the result emitted by mongoose-paginate via
- * `User.findUsersWithPagination`. Re-declared here because the model layer
- * still exposes `paginate: any`; we re-narrow for this handler instead of
- * loosening the helper signature globally.
+ * Default sort + projection used by the admin list page. Mirrors the
+ * `findUsersWithPagination` static defined in `models/user.ts` (which
+ * the legacy controller still uses); replicated here so the new ts-rest
+ * handler can call `User.paginate` directly (Promise form) without
+ * routing through the callback-only static.
  */
-interface PaginateResult {
-  docs: UserDocument[];
-  total: number;
-  limit: number;
-  page: number;
-  pages: number;
-}
-
-/**
- * Promise wrapper around `User.findUsersWithPagination` (which is still
- * callback-based to match the legacy controller).
- */
-const paginateUsers = (User: UserModel, options: { page: number; limit: number }, query: Record<string, unknown>): Promise<PaginateResult> =>
-  new Promise((resolve, reject) => {
-    User.findUsersWithPagination(options, query, (err: Error | null, result: PaginateResult) => {
-      if (err) return reject(err);
-      resolve(result);
-    });
-  });
+const ADMIN_PAGINATE_SORT = { status: 1, username: 1, createdAt: 1 } as const;
+const ADMIN_PAGINATE_SELECT = '-password -apiToken -googleId -githubId';
 
 /**
  * Build the Mongo `$or` filter for the free-text search.
@@ -84,8 +68,13 @@ export default (crowi: Crowi, _app: Express) => {
 
       try {
         const filter = buildSearchFilter(q);
-        const result = await paginateUsers(User, { page, limit }, filter);
-        const pager = createPager(result.total, result.page, result.pages, MAX_PAGE_LIST);
+        const result = await User.paginate(filter, {
+          page,
+          limit,
+          sort: ADMIN_PAGINATE_SORT,
+          select: ADMIN_PAGINATE_SELECT,
+        });
+        const pager = createPager(result.total, result.page ?? page, result.pages, MAX_PAGE_LIST);
 
         return {
           status: 200 as const,
