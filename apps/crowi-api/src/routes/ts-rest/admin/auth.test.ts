@@ -194,7 +194,8 @@ describe('Routes /api/v2/admin/auth (ts-rest)', () => {
 
       expect(res.status).toBe(422);
       expect(res.body.error.code).toBe('PASSWORD_AUTH_REQUIRES_THIRDPARTY');
-      expect(res.body.error.message).toContain('外部サービス');
+      expect(typeof res.body.error.message).toBe('string');
+      expect(res.body.error.message.length).toBeGreaterThan(0);
 
       // The config should not have been written.
       const cfg = crowi.getConfig();

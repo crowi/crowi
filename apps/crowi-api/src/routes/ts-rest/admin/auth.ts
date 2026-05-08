@@ -17,6 +17,8 @@ const debug = Debug('crowi:routes:ts-rest:admin:auth');
  * If the keys are missing from the in-memory config (e.g. older installs
  * predating these settings) we fall back to false rather than 500ing.
  */
+const KEY_REQUIRE_THIRD_PARTY_AUTH = 'auth:requireThirdPartyAuth';
+const KEY_DISABLE_PASSWORD_AUTH = 'auth:disablePasswordAuth';
 const DEFAULT_REQUIRE_THIRD_PARTY_AUTH = false;
 const DEFAULT_DISABLE_PASSWORD_AUTH = false;
 
@@ -36,8 +38,8 @@ const readAuthSettings = (crowi: Crowi): AuthSettings => {
   const ns = (cfg && typeof cfg === 'object' ? (cfg as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
 
   return {
-    requireThirdPartyAuth: toBoolean(ns['auth:requireThirdPartyAuth'], DEFAULT_REQUIRE_THIRD_PARTY_AUTH),
-    disablePasswordAuth: toBoolean(ns['auth:disablePasswordAuth'], DEFAULT_DISABLE_PASSWORD_AUTH),
+    requireThirdPartyAuth: toBoolean(ns[KEY_REQUIRE_THIRD_PARTY_AUTH], DEFAULT_REQUIRE_THIRD_PARTY_AUTH),
+    disablePasswordAuth: toBoolean(ns[KEY_DISABLE_PASSWORD_AUTH], DEFAULT_DISABLE_PASSWORD_AUTH),
   };
 };
 
@@ -82,6 +84,8 @@ export default (crowi: Crowi, _app: Express) => {
      * - Returns the post-save settings so the UI doesn't need a follow-up GET.
      */
     updateAuthSettings: async ({ body, req }) => {
+      // jwtAdminRequired guarantees req.user is populated; the augmentation
+      // declares it optional so we re-narrow here.
       const user = req.user as UserDocument;
 
       if (body.disablePasswordAuth && !user.hasValidThirdPartyId()) {
@@ -90,7 +94,10 @@ export default (crowi: Crowi, _app: Express) => {
           body: {
             error: {
               code: 'PASSWORD_AUTH_REQUIRES_THIRDPARTY' as const,
-              message: 'パスワードによるログインを禁止するには管理者が有効な外部サービスと連携している必要があります。',
+              // Wire-level fallback; UIs key off `code` and render the
+              // localised message via paraglide. Kept non-empty so legacy
+              // / scripted callers see a hint without grepping for the code.
+              message: 'Disabling password auth requires the acting admin to be connected to a valid third-party identity.',
             },
           },
         };
@@ -98,8 +105,8 @@ export default (crowi: Crowi, _app: Express) => {
 
       try {
         await crowi.getConfigService().saveConfig('crowi', {
-          'auth:requireThirdPartyAuth': body.requireThirdPartyAuth,
-          'auth:disablePasswordAuth': body.disablePasswordAuth,
+          [KEY_REQUIRE_THIRD_PARTY_AUTH]: body.requireThirdPartyAuth,
+          [KEY_DISABLE_PASSWORD_AUTH]: body.disablePasswordAuth,
         });
       } catch (err) {
         const error = err as Error;

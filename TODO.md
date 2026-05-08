@@ -32,6 +32,10 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [x] **`usePageComments` を 3 hooks に split** (`8d6b695c`): 11 fields 返す巨大 hook を `usePageCommentsList` / `useAddComment` / `useDeleteComment` に分割
 - [ ] **`Backlink.createBySavedPage` を bulk insert 化**: 現状 `deleteMany` → N×`isExist*` → N×`Backlink.create()` で 1 ページ保存ごとに ~1+2K round-trips。`insertMany` + (理想的には) 旧/新リンクの set-difference に置き換え。`backlink.ts:98-122` 周辺
 - [ ] **`unwrapResult(result, ...)` ts-rest helper を抽出**: `apps/crowi-web/src/lib/use-{bookmark,watch,like,page-mutations,page-comments,backlinks,...}.ts` の `if (result.status === 200) return result.body; if (status === 401) throw ... ` ladder が 13+ サイトに重複。helper 化で一気に整理可能
+- [ ] **admin config coercion helper の共通化**: `routes/ts-rest/admin/{app,security,auth}.ts` で `toBoolean` / `toStringValue` / `toRegistrationMode` / `toStringArray` がそれぞれ定義されている。`util/ts-rest-helpers.ts` (or new `util/admin-config.ts`) に `coerceBoolean` / `coerceString` / `coerceStringArray` として lift。同時に `(cfg as { crowi?: ... }).crowi` の cast も `getCrowiConfigNamespace(crowi)` へ
+- [ ] **`internalServerErrorResponse` const helper**: `routes/ts-rest/admin/{app,security,auth}.ts` 各 catch に同じ `{ status: 500, body: { error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } } }` リテラルが 6+ サイト。`util/ts-rest-helpers.ts` の既存 `pageNotFoundResponse` 等に揃えて `as const` で抽出
+- [ ] **admin 共通 i18n キー**: `admin.{app,security,auth}.submit` / `submit_pending` がバイトレベルで一致。`admin.common.submit` / `admin.common.submit_pending` に集約 (success_saved / failed_to_load などは内容が違うので残す)
+- [ ] **admin settings: 変更なし時の PUT skip**: `admin/{app,security,auth}/*-form.tsx` は formData が pristine でも保存ボタンで PUT が飛び、サーバ側で `postUpdate()` → Slack/Mailer reload まで走る。フォーム層で `formData` と server state を比較して dirty なら mutate という guard を共通化したい
 
 ## Medium Priority — フェーズ 3 (検索 / アセット)
 

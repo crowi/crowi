@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUpdateAdminAuthSettings } from '@/lib/use-admin-auth-settings';
+import { AdminAuthSettingsValidationError, useUpdateAdminAuthSettings } from '@/lib/use-admin-auth-settings';
 import type { AuthSettings } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -46,6 +46,13 @@ export function AuthForm({ settings }: AuthFormProps) {
       await updateSettings.mutateAsync(formData);
       setSuccessMessage(m['admin.auth.success_saved']());
     } catch (err) {
+      // The 422 self-lockout case is the only validation error this endpoint
+      // returns; surface it via the localised advisory key instead of the
+      // wire message so the text honours the active locale.
+      if (err instanceof AdminAuthSettingsValidationError) {
+        setErrors([m['admin.auth.warning_disable_password_requires_thirdparty']()]);
+        return;
+      }
       setErrors([err instanceof Error ? err.message : m['admin.auth.failed_to_save']()]);
     }
   };
