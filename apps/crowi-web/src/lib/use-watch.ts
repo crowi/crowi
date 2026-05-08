@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 
 /**
  * Query key factory for watch (notification subscription) queries.
@@ -29,20 +30,16 @@ export function useWatchStatus(pageId: string | undefined, options?: { enabled?:
       const result = await apiClient.page.getWatchStatus({
         query: { page_id: pageId },
       });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 401) {
-        // Not authenticated — surface as not watching (button hidden by caller anyway).
-        return { watching: false };
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message);
-      }
-      if (result.status === 404) {
-        throw new Error('Page not found');
-      }
-      throw new Error('Failed to fetch watch status');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        // Not authenticated → surface as not watching (button hidden by caller anyway).
+        silent: { statuses: [401], value: { watching: false } },
+        errors: {
+          400: 'Failed to fetch watch status',
+          404: { message: 'Page not found', preferLocal: true },
+        },
+        fallback: 'Failed to fetch watch status',
+      });
     },
     enabled: !!pageId && options?.enabled !== false,
     staleTime: WATCH_STALE_TIME,
@@ -70,19 +67,15 @@ export function useToggleWatch(pageId: string | undefined) {
       const result = await apiClient.page.setWatchStatus({
         body: { page_id: pageId, watching: next },
       });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message);
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      if (result.status === 404) {
-        throw new Error('Page not found');
-      }
-      throw new Error('Failed to update watch status');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: {
+          400: 'Failed to update watch status',
+          401: { message: 'Authentication required', preferLocal: true },
+          404: { message: 'Page not found', preferLocal: true },
+        },
+        fallback: 'Failed to update watch status',
+      });
     },
     onSuccess: (next) => {
       if (!pageId) return;

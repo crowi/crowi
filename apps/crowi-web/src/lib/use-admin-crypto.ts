@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 import type { CryptoStatusResponse, ReencryptResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -14,9 +15,9 @@ export function useCryptoStatus(options?: { enabled?: boolean }) {
     queryKey: adminCryptoKeys.status,
     queryFn: async (): Promise<CryptoStatusResponse | null> => {
       const result = await apiClient.adminCrypto.getCryptoStatus();
-      if (result.status === 200) return result.body;
-      // 401/403: caller (admin layout) is responsible for gating; surface as null.
-      return null;
+      // Any non-200 (401/403 from backend regressions; the admin layout is
+      // responsible for gating) collapses to null so the card hides itself.
+      return result.status === 200 ? result.body : null;
     },
     enabled: options?.enabled !== false,
     // The status only changes when an admin saves a new value or runs the
@@ -31,14 +32,15 @@ export function useReencryptSensitive() {
   return useMutation({
     mutationFn: async (): Promise<ReencryptResponse> => {
       const result = await apiClient.adminCrypto.reencryptAll({ body: {} });
-      if (result.status === 200) return result.body;
-      if (result.status === 503) {
-        throw new Error(m['errors.encryption_key_not_set']());
-      }
-      if (result.status === 401 || result.status === 403) {
-        throw new Error(m['errors.unauthorized']());
-      }
-      throw new Error(m['errors.reencrypt_failed']());
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: {
+          503: { message: m['errors.encryption_key_not_set'](), preferLocal: true },
+          401: { message: m['errors.unauthorized'](), preferLocal: true },
+          403: { message: m['errors.unauthorized'](), preferLocal: true },
+        },
+        fallback: m['errors.reencrypt_failed'](),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminCryptoKeys.status });

@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 import type { Pager, Revision, RevisionMeta } from '@crowi/api-contract';
 
 export interface UsePageRevisionsResult {
@@ -34,10 +35,10 @@ export function usePageRevisions(pageId: string | null | undefined, params: { li
           offset: params.offset ?? 0,
         },
       });
-      if (result.status === 200) {
-        return { revisions: result.body.revisions, pager: result.body.pager };
-      }
-      throw new Error('Failed to fetch revisions');
+      return unwrapResult(result, {
+        ok: (body) => ({ revisions: body.revisions, pager: body.pager }),
+        fallback: 'Failed to fetch revisions',
+      });
     },
     enabled: Boolean(pageId),
   });
@@ -80,11 +81,11 @@ export function useRevisionPair(idA: string | null | undefined, idB: string | nu
       const result = await apiClient.revision.getRevisions({
         query: { ids },
       });
-      if (result.status === 200) {
-        return result.body.revisions;
-      }
-      const message = result.status === 400 || result.status === 404 || result.status === 403 ? result.body.error.message : 'Failed to fetch revisions';
-      throw new Error(message);
+      return unwrapResult(result, {
+        ok: (body) => body.revisions,
+        errors: { 400: 'Failed to fetch revisions', 403: 'Failed to fetch revisions', 404: 'Failed to fetch revisions' },
+        fallback: 'Failed to fetch revisions',
+      });
     },
     enabled,
   });

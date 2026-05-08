@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 import type { Bookmark } from '@crowi/api-contract';
 
 /**
@@ -27,17 +28,13 @@ export function useBookmark(pageId: string | undefined) {
       const result = await apiClient.bookmark.getBookmark({
         query: { page_id: pageId },
       });
-      if (result.status === 200) {
-        return result.body.bookmark;
-      }
-      if (result.status === 401) {
-        // Not authenticated — treat as not bookmarked, do not throw to avoid noisy errors
-        return null;
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message);
-      }
-      throw new Error('Failed to fetch bookmark');
+      return unwrapResult(result, {
+        ok: (body) => body.bookmark,
+        // Not authenticated → treat as not bookmarked, do not throw to avoid noisy errors.
+        silent: { statuses: [401], value: null },
+        errors: { 400: 'Failed to fetch bookmark' },
+        fallback: 'Failed to fetch bookmark',
+      });
     },
     enabled: !!pageId,
   });
@@ -58,7 +55,7 @@ export function useToggleBookmark(pageId: string | undefined) {
   const isBookmarked = bookmark !== null && bookmark !== undefined;
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<{ bookmark: Bookmark | null }> => {
       if (!pageId) {
         throw new Error('pageId is required');
       }
@@ -67,31 +64,27 @@ export function useToggleBookmark(pageId: string | undefined) {
         const result = await apiClient.bookmark.removeBookmark({
           body: { page_id: pageId },
         });
-        if (result.status === 200) {
-          return { bookmark: null as Bookmark | null };
-        }
-        if (result.status === 400) {
-          throw new Error(result.body.error.message);
-        }
-        if (result.status === 401) {
-          throw new Error('Authentication required');
-        }
-        throw new Error('Failed to remove bookmark');
+        return unwrapResult(result, {
+          ok: () => ({ bookmark: null as Bookmark | null }),
+          errors: {
+            400: 'Failed to remove bookmark',
+            401: { message: 'Authentication required', preferLocal: true },
+          },
+          fallback: 'Failed to remove bookmark',
+        });
       }
 
       const result = await apiClient.bookmark.addBookmark({
         body: { page_id: pageId },
       });
-      if (result.status === 200) {
-        return { bookmark: result.body.bookmark };
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message);
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      throw new Error('Failed to add bookmark');
+      return unwrapResult(result, {
+        ok: (body) => ({ bookmark: body.bookmark }),
+        errors: {
+          400: 'Failed to add bookmark',
+          401: { message: 'Authentication required', preferLocal: true },
+        },
+        fallback: 'Failed to add bookmark',
+      });
     },
     onSuccess: () => {
       if (pageId) {

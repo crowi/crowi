@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 import type { Comment } from '@crowi/api-contract';
 
 export const commentKeys = {
@@ -29,10 +30,10 @@ export function usePageCommentsList(pageId: string | null | undefined) {
     queryFn: async () => {
       if (!pageId) return [] as Comment[];
       const result = await apiClient.comment.listComments({ query: { page_id: pageId } });
-      if (result.status === 200) {
-        return result.body.comments;
-      }
-      throw new Error('Failed to fetch comments');
+      return unwrapResult(result, {
+        ok: (body) => body.comments,
+        fallback: 'Failed to fetch comments',
+      });
     },
     enabled: Boolean(pageId),
     // Comments rarely change after a page is rendered; avoid the focus-refetch
@@ -64,11 +65,11 @@ export function useAddComment(pageId: string | null | undefined) {
           comment_position: input.commentPosition,
         },
       });
-      if (result.status === 200) {
-        return result.body.comment;
-      }
-      const message = result.status === 400 || result.status === 404 || result.status === 403 ? result.body.error.message : 'Failed to add comment';
-      throw new Error(message);
+      return unwrapResult(result, {
+        ok: (body) => body.comment,
+        errors: { 400: 'Failed to add comment', 403: 'Failed to add comment', 404: 'Failed to add comment' },
+        fallback: 'Failed to add comment',
+      });
     },
     onSuccess: () => invalidate(),
   });
@@ -89,11 +90,11 @@ export function useDeleteComment(pageId: string | null | undefined) {
       const result = await apiClient.comment.deleteComment({
         body: { comment_id: commentId, page_id: pageId },
       });
-      if (result.status === 200) {
-        return true;
-      }
-      const message = result.status === 400 || result.status === 404 || result.status === 403 ? result.body.error.message : 'Failed to delete comment';
-      throw new Error(message);
+      return unwrapResult(result, {
+        ok: () => true,
+        errors: { 400: 'Failed to delete comment', 403: 'Failed to delete comment', 404: 'Failed to delete comment' },
+        fallback: 'Failed to delete comment',
+      });
     },
     onSuccess: () => invalidate(),
   });

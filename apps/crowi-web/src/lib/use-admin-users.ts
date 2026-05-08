@@ -2,6 +2,7 @@
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 import type { ListAdminUsersResponse } from '@crowi/api-contract';
 
 /**
@@ -42,13 +43,11 @@ export function useAdminUsers(params: UseAdminUsersParams) {
           limit: params.limit,
         },
       });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 401 || result.status === 403) {
-        throw new Error(result.body.error.message);
-      }
-      throw new Error('Failed to fetch users');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: { 401: 'Failed to fetch users', 403: 'Failed to fetch users' },
+        fallback: 'Failed to fetch users',
+      });
     },
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,

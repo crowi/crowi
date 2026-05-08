@@ -2,7 +2,16 @@
 
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
+import type { ErrorSpec } from './unwrap-result';
 import type { PaginationRequest } from '@crowi/api-contract';
+
+// All five hooks below share the same auth/not-found error shape — keep one
+// copy of the spec so each call site is just `errors: USER_PAGE_ERRORS`.
+const USER_PAGE_ERRORS = {
+  401: { message: 'Authentication required', preferLocal: true } as ErrorSpec,
+  404: { message: 'User not found', preferLocal: true } as ErrorSpec,
+};
 
 /**
  * Hook to fetch user page data (profile with statistics)
@@ -12,16 +21,11 @@ export function useUserPage(username: string) {
     queryKey: ['user', username],
     queryFn: async () => {
       const result = await apiClient.user.getUserPage({ params: { username } });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      if (result.status === 404) {
-        throw new Error('User not found');
-      }
-      throw new Error('Failed to fetch user page');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: USER_PAGE_ERRORS,
+        fallback: 'Failed to fetch user page',
+      });
     },
     enabled: !!username,
   });
@@ -38,16 +42,11 @@ export function useUserBookmarks(username: string, params: PaginationRequest = {
         params: { username },
         query: params,
       });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      if (result.status === 404) {
-        throw new Error('User not found');
-      }
-      throw new Error('Failed to fetch bookmarks');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: USER_PAGE_ERRORS,
+        fallback: 'Failed to fetch bookmarks',
+      });
     },
     enabled: !!username,
   });
@@ -64,16 +63,11 @@ export function useUserPages(username: string, params: PaginationRequest = { lim
         params: { username },
         query: params,
       });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      if (result.status === 404) {
-        throw new Error('User not found');
-      }
-      throw new Error('Failed to fetch pages');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: USER_PAGE_ERRORS,
+        fallback: 'Failed to fetch pages',
+      });
     },
     enabled: !!username,
   });
@@ -90,16 +84,11 @@ export function useUserBookmarksInfinite(username: string, limit: number = 10) {
         params: { username },
         query: { limit, offset: pageParam },
       });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      if (result.status === 404) {
-        throw new Error('User not found');
-      }
-      throw new Error('Failed to fetch bookmarks');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: USER_PAGE_ERRORS,
+        fallback: 'Failed to fetch bookmarks',
+      });
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
@@ -123,16 +112,11 @@ export function useUserPagesInfinite(username: string, limit: number = 10) {
         params: { username },
         query: { limit, offset: pageParam },
       });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      if (result.status === 404) {
-        throw new Error('User not found');
-      }
-      throw new Error('Failed to fetch pages');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: USER_PAGE_ERRORS,
+        fallback: 'Failed to fetch pages',
+      });
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {

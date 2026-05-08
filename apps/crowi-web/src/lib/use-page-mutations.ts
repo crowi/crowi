@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 import type { CreatePageRequest, RenamePageRequest, UpdatePageRequest } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -34,23 +35,16 @@ export function useUpdatePage() {
   return useMutation({
     mutationFn: async (data: UpdatePageRequest) => {
       const result = await apiClient.page.updatePage({ body: data });
-
-      if (result.status === 200) {
-        return result.body.page;
-      }
-      if (result.status === 409) {
-        throw new PageRevisionConflictError(result.body.error.message || m['errors.revision_conflict_edit']());
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message || m['errors.update_failed']());
-      }
-      if (result.status === 403) {
-        throw new Error(m['errors.permission_denied_edit']());
-      }
-      if (result.status === 404) {
-        throw new Error(m['errors.page_not_found']());
-      }
-      throw new Error(m['errors.update_failed']());
+      return unwrapResult(result, {
+        ok: (body) => body.page,
+        errors: {
+          409: { message: m['errors.revision_conflict_edit'](), ErrorClass: PageRevisionConflictError },
+          400: m['errors.update_failed'](),
+          403: { message: m['errors.permission_denied_edit'](), preferLocal: true },
+          404: { message: m['errors.page_not_found'](), preferLocal: true },
+        },
+        fallback: m['errors.update_failed'](),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
@@ -64,14 +58,11 @@ export function useCreatePage() {
   return useMutation({
     mutationFn: async (data: CreatePageRequest) => {
       const result = await apiClient.page.createPage({ body: data });
-
-      if (result.status === 200) {
-        return result.body.page;
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message || m['errors.update_failed']());
-      }
-      throw new Error(m['errors.update_failed']());
+      return unwrapResult(result, {
+        ok: (body) => body.page,
+        errors: { 400: m['errors.update_failed']() },
+        fallback: m['errors.update_failed'](),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
@@ -92,23 +83,16 @@ export function useDeletePage() {
   return useMutation({
     mutationFn: async (data: DeletePageRequest) => {
       const result = await apiClient.page.deletePage({ body: data });
-
-      if (result.status === 200) {
-        return result.body.page;
-      }
-      if (result.status === 409) {
-        throw new PageRevisionConflictError(result.body.error.message || m['errors.revision_conflict_edit']());
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message || m['errors.delete_failed']());
-      }
-      if (result.status === 403) {
-        throw new Error(m['errors.permission_denied_delete']());
-      }
-      if (result.status === 404) {
-        throw new Error(m['errors.page_not_found']());
-      }
-      throw new Error(m['errors.delete_failed']());
+      return unwrapResult(result, {
+        ok: (body) => body.page,
+        errors: {
+          409: { message: m['errors.revision_conflict_edit'](), ErrorClass: PageRevisionConflictError },
+          400: m['errors.delete_failed'](),
+          403: { message: m['errors.permission_denied_delete'](), preferLocal: true },
+          404: { message: m['errors.page_not_found'](), preferLocal: true },
+        },
+        fallback: m['errors.delete_failed'](),
+      });
     },
     onSuccess: () => {
       // Invalidate page queries so the trashed view (or 404) is reflected.
@@ -132,20 +116,15 @@ export function useRevertDeletedPage() {
   return useMutation({
     mutationFn: async (data: RevertDeletedPageRequest) => {
       const result = await apiClient.page.revertDeletedPage({ body: data });
-
-      if (result.status === 200) {
-        return result.body.page;
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message || m['errors.revert_failed']());
-      }
-      if (result.status === 403) {
-        throw new Error(m['errors.permission_denied_revert']());
-      }
-      if (result.status === 404) {
-        throw new Error(m['errors.page_not_found']());
-      }
-      throw new Error(m['errors.revert_failed']());
+      return unwrapResult(result, {
+        ok: (body) => body.page,
+        errors: {
+          400: m['errors.revert_failed'](),
+          403: { message: m['errors.permission_denied_revert'](), preferLocal: true },
+          404: { message: m['errors.page_not_found'](), preferLocal: true },
+        },
+        fallback: m['errors.revert_failed'](),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
@@ -166,23 +145,16 @@ export function useRenamePage() {
   return useMutation({
     mutationFn: async (data: RenamePageRequest) => {
       const result = await apiClient.page.renamePage({ body: data });
-
-      if (result.status === 200) {
-        return result.body.page;
-      }
-      if (result.status === 409) {
-        throw new PageRevisionConflictError(result.body.error.message || m['errors.revision_conflict_update']());
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message || m['errors.rename_failed']());
-      }
-      if (result.status === 403) {
-        throw new Error(m['errors.permission_denied_rename']());
-      }
-      if (result.status === 404) {
-        throw new Error(m['errors.page_not_found']());
-      }
-      throw new Error(m['errors.rename_failed']());
+      return unwrapResult(result, {
+        ok: (body) => body.page,
+        errors: {
+          409: { message: m['errors.revision_conflict_update'](), ErrorClass: PageRevisionConflictError },
+          400: m['errors.rename_failed'](),
+          403: { message: m['errors.permission_denied_rename'](), preferLocal: true },
+          404: { message: m['errors.page_not_found'](), preferLocal: true },
+        },
+        fallback: m['errors.rename_failed'](),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });

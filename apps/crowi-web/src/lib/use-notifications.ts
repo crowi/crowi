@@ -2,6 +2,7 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 import type { Notification } from '@crowi/api-contract';
 
 /**
@@ -31,14 +32,12 @@ export function useUnreadCount() {
     queryKey: notificationKeys.status(),
     queryFn: async (): Promise<number> => {
       const result = await apiClient.notification.getUnreadCount();
-      if (result.status === 200) {
-        return result.body.count;
-      }
-      if (result.status === 401) {
-        // Not authenticated — treat as zero, do not throw to avoid noisy errors
-        return 0;
-      }
-      throw new Error('Failed to fetch unread notification count');
+      return unwrapResult(result, {
+        ok: (body) => body.count,
+        // Not authenticated → treat as zero, do not throw to avoid noisy errors.
+        silent: { statuses: [401], value: 0 },
+        fallback: 'Failed to fetch unread notification count',
+      });
     },
     refetchInterval: UNREAD_COUNT_POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
@@ -68,13 +67,11 @@ export function useNotifications({ limit = 10, offset = 0, enabled = false }: Us
       const result = await apiClient.notification.listNotifications({
         query: { limit, offset },
       });
-      if (result.status === 200) {
-        return { notifications: result.body.notifications, pager: result.body.pager };
-      }
-      if (result.status === 401) {
-        return { notifications: [], pager: { prev: null, next: null, offset: 0 } };
-      }
-      throw new Error('Failed to fetch notifications');
+      return unwrapResult(result, {
+        ok: (body) => ({ notifications: body.notifications, pager: body.pager }),
+        silent: { statuses: [401], value: { notifications: [], pager: { prev: null, next: null, offset: 0 } } },
+        fallback: 'Failed to fetch notifications',
+      });
     },
     enabled,
   });
@@ -93,13 +90,11 @@ export function useNotificationsInfinite(limit: number = 20) {
       const result = await apiClient.notification.listNotifications({
         query: { limit, offset: pageParam },
       });
-      if (result.status === 200) {
-        return result.body;
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      throw new Error('Failed to fetch notifications');
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: { 401: { message: 'Authentication required', preferLocal: true } },
+        fallback: 'Failed to fetch notifications',
+      });
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
@@ -121,13 +116,11 @@ export function useMarkAllAsRead() {
   return useMutation({
     mutationFn: async () => {
       const result = await apiClient.notification.markAllAsRead({ body: {} });
-      if (result.status === 200) {
-        return true;
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      throw new Error('Failed to mark notifications as read');
+      return unwrapResult(result, {
+        ok: () => true,
+        errors: { 401: { message: 'Authentication required', preferLocal: true } },
+        fallback: 'Failed to mark notifications as read',
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });
@@ -149,16 +142,14 @@ export function useOpenNotification() {
         params: { id: notificationId },
         body: {},
       });
-      if (result.status === 200) {
-        return result.body.notification;
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      if (result.status === 404) {
-        throw new Error(result.body.error.message);
-      }
-      throw new Error('Failed to open notification');
+      return unwrapResult(result, {
+        ok: (body) => body.notification,
+        errors: {
+          401: { message: 'Authentication required', preferLocal: true },
+          404: 'Failed to open notification',
+        },
+        fallback: 'Failed to open notification',
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });

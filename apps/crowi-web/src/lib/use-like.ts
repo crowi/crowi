@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { unwrapResult } from './unwrap-result';
 
 /**
  * Query key prefix for like-related caches. We do not cache "is liked" by
@@ -32,41 +33,18 @@ export function useToggleLike(pageId: string | undefined, isLiked: boolean) {
         throw new Error('pageId is required');
       }
 
-      if (isLiked) {
-        const result = await apiClient.page.unlikePage({
-          body: { page_id: pageId },
-        });
-        if (result.status === 200) {
-          return { page: result.body.page };
-        }
-        if (result.status === 400) {
-          throw new Error(result.body.error.message);
-        }
-        if (result.status === 401) {
-          throw new Error('Authentication required');
-        }
-        if (result.status === 404) {
-          throw new Error('Page not found');
-        }
-        throw new Error('Failed to unlike page');
-      }
-
-      const result = await apiClient.page.likePage({
-        body: { page_id: pageId },
+      const endpoint = isLiked ? apiClient.page.unlikePage : apiClient.page.likePage;
+      const fallback = isLiked ? 'Failed to unlike page' : 'Failed to like page';
+      const result = await endpoint({ body: { page_id: pageId } });
+      return unwrapResult(result, {
+        ok: (body) => ({ page: body.page }),
+        errors: {
+          400: fallback,
+          401: { message: 'Authentication required', preferLocal: true },
+          404: { message: 'Page not found', preferLocal: true },
+        },
+        fallback,
       });
-      if (result.status === 200) {
-        return { page: result.body.page };
-      }
-      if (result.status === 400) {
-        throw new Error(result.body.error.message);
-      }
-      if (result.status === 401) {
-        throw new Error('Authentication required');
-      }
-      if (result.status === 404) {
-        throw new Error('Page not found');
-      }
-      throw new Error('Failed to like page');
     },
     onSuccess: () => {
       // Invalidate the page query so liker/likerCount refresh in the UI.
