@@ -1,6 +1,7 @@
 import { initContract } from '@ts-rest/core';
 import { adminAppContract } from './app';
 import { adminAuthContract } from './auth';
+import { adminMailContract } from './mail';
 import { adminSecurityContract } from './security';
 
 const c = initContract();
@@ -14,4 +15,5 @@ export const adminContract = c.router({
   app: adminAppContract,
   auth: adminAuthContract,
   security: adminSecurityContract,
+  mail: adminMailContract,
 });
