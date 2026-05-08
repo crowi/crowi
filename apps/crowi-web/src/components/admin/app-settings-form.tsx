@@ -153,7 +153,7 @@ export function AppSettingsForm() {
     return (
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
         <Loader2 className="h-4 w-4 animate-spin" />
-        {m['admin.app.loading']()}
+        {m['admin.common.loading']()}
       </div>
     );
   }
@@ -164,9 +164,9 @@ export function AppSettingsForm() {
         <AlertCircle className="h-4 w-4 text-destructive" />
         <AlertTitle>{m['admin.app.failed_to_load_title']()}</AlertTitle>
         <AlertDescription className="flex items-center gap-3">
-          <span>{m['admin.app.failed_to_load_body']()}</span>
+          <span>{m['admin.common.failed_to_load_body']()}</span>
           <Button size="sm" variant="outline" onClick={() => refetch()}>
-            {m['admin.app.retry']()}
+            {m['admin.common.retry']()}
           </Button>
         </AlertDescription>
       </Alert>
@@ -351,12 +351,12 @@ export function AppSettingsForm() {
               {hasSecret && !secretClearRequested && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
                   <CheckCircle2 className="h-3 w-3" />
-                  {m['admin.app.secret_saved_badge']()}
+                  {m['admin.common.secret_saved_badge']()}
                 </span>
               )}
               {secretClearRequested && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {m['admin.app.secret_clear_pending_badge']()}
+                  {m['admin.common.secret_clear_pending_badge']()}
                 </span>
               )}
             </div>
@@ -370,7 +370,7 @@ export function AppSettingsForm() {
                 setSecretClearRequested(false);
               }}
               aria-invalid={Boolean(errorOf('upload.aws.secretAccessKey'))}
-              placeholder={hasSecret ? m['admin.app.field_secret_placeholder_set']() : m['admin.app.field_secret_placeholder_unset']()}
+              placeholder={hasSecret ? m['admin.common.field_secret_placeholder_set']() : m['admin.common.field_secret_placeholder_unset']()}
               autoComplete="new-password"
               disabled={secretClearRequested}
             />
@@ -392,7 +392,7 @@ export function AppSettingsForm() {
                       setState({ ...state, awsSecretAccessKey: '' });
                     }}
                   >
-                    {m['admin.app.secret_clear_button']()}
+                    {m['admin.common.secret_clear_button']()}
                   </Button>
                 ) : (
                   <Button
@@ -403,7 +403,7 @@ export function AppSettingsForm() {
                       setSecretClearRequested(false);
                     }}
                   >
-                    {m['admin.app.secret_clear_undo']()}
+                    {m['admin.common.secret_clear_undo']()}
                   </Button>
                 )}
               </div>
@@ -441,10 +441,10 @@ export function AppSettingsForm() {
           {update.isPending ? (
             <>
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              {m['admin.app.submit_pending']()}
+              {m['admin.common.submit_pending']()}
             </>
           ) : (
-            m['admin.app.submit']()
+            m['admin.common.submit']()
           )}
         </Button>
         {savedAt !== null && !update.isPending && !isDirty && (
@@ -460,7 +460,7 @@ export function AppSettingsForm() {
         )}
         {Object.keys(fieldErrors).length > 0 && (
           <span className="text-sm text-destructive" role="alert">
-            {m['admin.app.field_errors_summary']()}
+            {m['admin.common.field_errors_summary']()}
           </span>
         )}
       </div>

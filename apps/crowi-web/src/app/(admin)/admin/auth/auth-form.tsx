@@ -121,7 +121,7 @@ export function AuthForm({ settings }: AuthFormProps) {
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={updateSettings.isPending}>
           <Save className="mr-2" />
-          {updateSettings.isPending ? m['admin.auth.submit_pending']() : m['admin.auth.submit']()}
+          {updateSettings.isPending ? m['admin.common.submit_pending']() : m['admin.common.submit']()}
         </Button>
       </div>
     </form>

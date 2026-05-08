@@ -181,7 +181,7 @@ export function SecurityForm({ settings }: SecurityFormProps) {
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={updateSettings.isPending}>
           <Save className="mr-2" />
-          {updateSettings.isPending ? m['admin.security.submit_pending']() : m['admin.security.submit']()}
+          {updateSettings.isPending ? m['admin.common.submit_pending']() : m['admin.common.submit']()}
         </Button>
       </div>
     </form>

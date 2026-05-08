@@ -131,16 +131,16 @@ export function MailSettingsForm() {
   }, [state, initial, smtpPasswordDirty, smtpPasswordClearRequested, awsSecretDirty, awsSecretClearRequested]);
 
   if (isLoading || !data || !state || !initial) {
-    return <LoadingSpinner message={m['admin.mail.loading']()} size="sm" className="py-4" />;
+    return <LoadingSpinner message={m['admin.common.loading']()} size="sm" className="py-4" />;
   }
 
   if (isError) {
     return (
       <ErrorAlert
         title={m['admin.mail.failed_to_load_title']()}
-        message={m['admin.mail.failed_to_load_body']()}
+        message={m['admin.common.failed_to_load_body']()}
         onRetry={() => refetch()}
-        retryLabel={m['admin.mail.retry']()}
+        retryLabel={m['admin.common.retry']()}
       />
     );
   }
@@ -291,12 +291,12 @@ export function MailSettingsForm() {
               {hasSmtpPassword && !smtpPasswordClearRequested && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
                   <CheckCircle2 className="h-3 w-3" />
-                  {m['admin.mail.secret_saved_badge']()}
+                  {m['admin.common.secret_saved_badge']()}
                 </span>
               )}
               {smtpPasswordClearRequested && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {m['admin.mail.secret_clear_pending_badge']()}
+                  {m['admin.common.secret_clear_pending_badge']()}
                 </span>
               )}
             </div>
@@ -310,7 +310,7 @@ export function MailSettingsForm() {
                 setSmtpPasswordClearRequested(false);
               }}
               aria-invalid={Boolean(errorOf('smtpPassword'))}
-              placeholder={hasSmtpPassword ? m['admin.mail.field_secret_placeholder_set']() : m['admin.mail.field_secret_placeholder_unset']()}
+              placeholder={hasSmtpPassword ? m['admin.common.field_secret_placeholder_set']() : m['admin.common.field_secret_placeholder_unset']()}
               autoComplete="new-password"
               disabled={smtpPasswordClearRequested}
             />
@@ -332,11 +332,11 @@ export function MailSettingsForm() {
                       setState({ ...state, smtpPassword: '' });
                     }}
                   >
-                    {m['admin.mail.secret_clear_button']()}
+                    {m['admin.common.secret_clear_button']()}
                   </Button>
                 ) : (
                   <Button type="button" size="sm" variant="ghost" onClick={() => setSmtpPasswordClearRequested(false)}>
-                    {m['admin.mail.secret_clear_undo']()}
+                    {m['admin.common.secret_clear_undo']()}
                   </Button>
                 )}
               </div>
@@ -391,12 +391,12 @@ export function MailSettingsForm() {
               {hasAwsSecret && !awsSecretClearRequested && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
                   <CheckCircle2 className="h-3 w-3" />
-                  {m['admin.mail.secret_saved_badge']()}
+                  {m['admin.common.secret_saved_badge']()}
                 </span>
               )}
               {awsSecretClearRequested && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {m['admin.mail.secret_clear_pending_badge']()}
+                  {m['admin.common.secret_clear_pending_badge']()}
                 </span>
               )}
             </div>
@@ -410,7 +410,7 @@ export function MailSettingsForm() {
                 setAwsSecretClearRequested(false);
               }}
               aria-invalid={Boolean(errorOf('aws.secretAccessKey'))}
-              placeholder={hasAwsSecret ? m['admin.mail.field_secret_placeholder_set']() : m['admin.mail.field_secret_placeholder_unset']()}
+              placeholder={hasAwsSecret ? m['admin.common.field_secret_placeholder_set']() : m['admin.common.field_secret_placeholder_unset']()}
               autoComplete="new-password"
               disabled={awsSecretClearRequested}
             />
@@ -432,11 +432,11 @@ export function MailSettingsForm() {
                       setState({ ...state, awsSecretAccessKey: '' });
                     }}
                   >
-                    {m['admin.mail.secret_clear_button']()}
+                    {m['admin.common.secret_clear_button']()}
                   </Button>
                 ) : (
                   <Button type="button" size="sm" variant="ghost" onClick={() => setAwsSecretClearRequested(false)}>
-                    {m['admin.mail.secret_clear_undo']()}
+                    {m['admin.common.secret_clear_undo']()}
                   </Button>
                 )}
               </div>
@@ -487,10 +487,10 @@ export function MailSettingsForm() {
           {update.isPending ? (
             <>
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              {m['admin.mail.submit_pending']()}
+              {m['admin.common.submit_pending']()}
             </>
           ) : (
-            m['admin.mail.submit']()
+            m['admin.common.submit']()
           )}
         </Button>
         {savedAt !== null && !update.isPending && !isDirty && (
@@ -506,7 +506,7 @@ export function MailSettingsForm() {
         )}
         {Object.keys(fieldErrors).length > 0 && (
           <span className="text-sm text-destructive" role="alert">
-            {m['admin.mail.field_errors_summary']()}
+            {m['admin.common.field_errors_summary']()}
           </span>
         )}
       </div>

@@ -33,7 +33,7 @@ export class MailSettingsValidationFailure extends Error {
   public readonly fieldErrors: Record<string, string>;
 
   constructor(fieldErrors: Record<string, string>) {
-    super(m['admin.mail.field_errors_summary']());
+    super(m['admin.common.field_errors_summary']());
     this.name = 'MailSettingsValidationFailure';
     this.fieldErrors = fieldErrors;
   }

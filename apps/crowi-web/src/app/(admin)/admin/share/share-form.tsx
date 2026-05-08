@@ -77,7 +77,7 @@ export function ShareForm({ settings }: ShareFormProps) {
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={updateSettings.isPending || !isDirty}>
           <Save className="mr-2" />
-          {updateSettings.isPending ? m['admin.share.submit_pending']() : m['admin.share.submit']()}
+          {updateSettings.isPending ? m['admin.common.submit_pending']() : m['admin.common.submit']()}
         </Button>
       </div>
     </form>
