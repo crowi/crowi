@@ -1,0 +1,30 @@
+/**
+ * @crowi/plugin-api — type-only contract for Crowi 2.0 plugins.
+ *
+ * Plugins author against this package. The runtime (@crowi/server) loads
+ * plugins listed in `crowi.config.json`, calls each plugin's
+ * `register*` callbacks, and routes all the side effects (storage,
+ * search, auth, notifications) through the typed registries declared
+ * here.
+ *
+ * For the design rationale see `docs/rfcs/0001-plugin-architecture.md`
+ * in the Crowi monorepo.
+ */
+
+export type { CrowiPlugin } from './plugin';
+
+export type { PluginContext, PageMetadataAccessor, PluginCrypto, PluginLogger } from './context';
+
+export type { StorageDriver, StorageRegistry, StoragePutMeta, StoragePutResult } from './registries/storage';
+
+export type { SearchDriver, SearchRegistry, SearchableDoc, SearchQuery, SearchHits, SearchHit } from './registries/search';
+
+export type { AuthDriver, AuthRegistry, AuthProfile, AuthVerifyResult } from './registries/auth';
+
+export type { NotifierDriver, NotifierRegistry, NotificationPayload } from './registries/notifier';
+
+export type { EventBus, PluginEvents } from './events';
+
+export type { PluginRouterScope } from './routes';
+
+export { SENSITIVE_FIELD_MARKER, ACTION_FIELD_MARKER, isSensitiveField, getActionAnnotation } from './schema-markers';

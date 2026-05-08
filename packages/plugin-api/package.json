@@ -1,0 +1,31 @@
+{
+  "name": "@crowi/plugin-api",
+  "version": "0.1.0-dev",
+  "description": "Type-only contract for Crowi 2.0 plugins. See docs/rfcs/0001-plugin-architecture.md.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@ts-rest/core": "^3.51.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@ts-rest/core": "^3.51.0",
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "zod": "^3.23.8"
+  }
+}

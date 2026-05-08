@@ -405,6 +405,24 @@ importers:
         specifier: ^5.7.2
         version: 5.8.3
 
+  packages/plugin-api:
+    devDependencies:
+      '@ts-rest/core':
+        specifier: ^3.51.0
+        version: 3.52.1(@types/node@22.15.30)(zod@3.25.56)
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.15.30
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.0(typescript@5.8.3)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.8.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.56
+
 packages:
 
   /@alloc/quick-lru@5.2.0:
@@ -5026,7 +5044,6 @@ packages:
     dependencies:
       '@types/node': 22.15.30
       zod: 3.25.56
-    dev: false
 
   /@ts-rest/express@3.52.1(@ts-rest/core@3.52.1)(express@4.21.2)(zod@3.25.56):
     resolution: {integrity: sha512-ttVynyJSWYnVzn7FazSFvShD5j3Lq1JsIhSKereV2Z51zxWEQwo35CpCO3Q8rELzkfD9CYoT6eNSBJRlJLogIw==}
@@ -8697,7 +8714,7 @@ packages:
   /fix-dts-default-cjs-exports@1.0.1:
     resolution: {integrity: sha512-pVIECanWFC61Hzl2+oOCtoJ3F17kglZC/6N94eRWycFgBH35hHx0Li604ZIzhseh97mf2p0cv7vVrOZGoqhlEg==}
     dependencies:
-      magic-string: 0.30.17
+      magic-string: 0.30.21
       mlly: 1.7.4
       rollup: 4.42.0
     dev: true
@@ -10964,12 +10981,6 @@ packages:
     dependencies:
       react: 19.2.3
     dev: false
-
-  /magic-string@0.30.17:
-    resolution: {integrity: sha512-sNPKHvyjVf7gyjwS4xGTaW/mCnF8wnjtifKBEhxfZ7E/S8tQ0rssrwGNn6q8JH/ohItJfSQp9mBtQYuTlH5QnA==}
-    dependencies:
-      '@jridgewell/sourcemap-codec': 1.5.0
-    dev: true
 
   /magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -13628,6 +13639,7 @@ packages:
   /source-map@0.8.0-beta.0:
     resolution: {integrity: sha512-2ymg6oRBpebeZi9UUNsgQ89bhx01TcTkmNTGnNO88imTmbSgy4nfujrgVEFKWpMTEGA11EDkTt7mqObTPdigIA==}
     engines: {node: '>= 8'}
+    deprecated: The work that was done in this beta branch won't be included in future versions
     dependencies:
       whatwg-url: 7.1.0
     dev: true
@@ -14373,7 +14385,7 @@ packages:
       cac: 6.7.14
       chokidar: 4.0.3
       consola: 3.4.2
-      debug: 4.4.1
+      debug: 4.4.3
       esbuild: 0.25.5
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
@@ -14384,7 +14396,7 @@ packages:
       source-map: 0.8.0-beta.0
       sucrase: 3.35.0
       tinyexec: 0.3.2
-      tinyglobby: 0.2.14
+      tinyglobby: 0.2.15
       tree-kill: 1.2.2
       typescript: 5.8.3
     transitivePeerDependencies:
