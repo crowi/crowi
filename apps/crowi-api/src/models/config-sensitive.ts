@@ -23,8 +23,37 @@ const SENSITIVE_CONFIG_KEYS: ReadonlySet<string> = new Set([
   'notification:slack:token',
 ]);
 
+/**
+ * Runtime-extensible sensitive set. Plugins contribute their
+ * `@sensitive`-marked configSchema fields here at boot via
+ * `registerSensitiveConfigKeys`, so the persisted plugin config
+ * rows (`crowi:plugin:<name>:<field>`) inherit the same encrypt /
+ * decrypt path as the legacy keys above. Stored as the same
+ * `<ns>:<key>` compound shape as the static set.
+ */
+const RUNTIME_SENSITIVE_KEYS = new Set<string>();
+
 export function isSensitiveConfig(ns: string, key: string): boolean {
-  return SENSITIVE_CONFIG_KEYS.has(`${ns}:${key}`);
+  const compound = `${ns}:${key}`;
+  return SENSITIVE_CONFIG_KEYS.has(compound) || RUNTIME_SENSITIVE_KEYS.has(compound);
+}
+
+/**
+ * Add to the runtime sensitive set. The PluginManager calls this once
+ * per loaded plugin during boot, after walking `configSchema` for
+ * `@sensitive` fields. Idempotent — re-registering the same key on a
+ * subsequent boot is a no-op.
+ */
+export function registerSensitiveConfigKeys(compoundKeys: Iterable<string>): void {
+  for (const compound of compoundKeys) RUNTIME_SENSITIVE_KEYS.add(compound);
+}
+
+/**
+ * Drop all runtime-registered keys. Used by long-lived test processes
+ * that boot the Crowi app multiple times across describe blocks.
+ */
+export function resetRuntimeSensitiveConfigKeys(): void {
+  RUNTIME_SENSITIVE_KEYS.clear();
 }
 
 /**
@@ -32,7 +61,8 @@ export function isSensitiveConfig(ns: string, key: string): boolean {
  * tooling. Internal copy; do not mutate.
  */
 export function listSensitiveConfigKeys(): Array<{ ns: string; key: string }> {
-  return Array.from(SENSITIVE_CONFIG_KEYS).map((compound) => {
+  const all = new Set<string>([...SENSITIVE_CONFIG_KEYS, ...RUNTIME_SENSITIVE_KEYS]);
+  return Array.from(all).map((compound) => {
     const idx = compound.indexOf(':');
     return { ns: compound.slice(0, idx), key: compound.slice(idx + 1) };
   });

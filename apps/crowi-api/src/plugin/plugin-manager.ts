@@ -1,6 +1,7 @@
 import Debug from 'debug';
 import type { AuthDriver, CrowiPlugin, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
+import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
 import { type CrowiConfigFile, loadCrowiConfigFile, resolvePluginList } from './config-file';
 import { createPluginContext } from './plugin-context';
 import { DriverRegistry, makeAuthScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
@@ -83,6 +84,12 @@ export class PluginManager {
     const plugins = await this.importWithTransitives(seedNames);
     const ordered = topoSortPlugins(plugins);
     this.loadedPlugins = ordered;
+
+    // Register every plugin's `@sensitive`-marked configSchema fields
+    // with the core sensitive-config registry so values written
+    // through `configService.saveConfig('crowi', { 'plugin:…': … })`
+    // are encrypted at rest just like legacy keys.
+    registerSensitiveConfigKeys(this.listSensitiveKeys().map((k) => `crowi:${k}`));
 
     for (const plugin of ordered) {
       await this.activate(plugin);
