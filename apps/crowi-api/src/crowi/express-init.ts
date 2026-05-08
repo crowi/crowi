@@ -114,6 +114,4 @@ export default (crowi: Crowi, app: Express) => {
   app.use(flash());
 
   app.use(middlewares.LoginChecker);
-
-  app.use(middlewares.I18next);
 };

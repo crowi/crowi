@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { CreatePageRequest, RenamePageRequest, UpdatePageRequest } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 interface DeletePageRequest {
   page_id: string;
@@ -38,18 +39,18 @@ export function useUpdatePage() {
         return result.body.page;
       }
       if (result.status === 409) {
-        throw new PageRevisionConflictError(result.body.error.message || '他の人が編集しました。ページを再読み込みしてください。');
+        throw new PageRevisionConflictError(result.body.error.message || m['errors.revision_conflict_edit']());
       }
       if (result.status === 400) {
-        throw new Error(result.body.error.message || 'Failed to update page');
+        throw new Error(result.body.error.message || m['errors.update_failed']());
       }
       if (result.status === 403) {
-        throw new Error('このページを編集する権限がありません。');
+        throw new Error(m['errors.permission_denied_edit']());
       }
       if (result.status === 404) {
-        throw new Error('ページが見つかりませんでした。');
+        throw new Error(m['errors.page_not_found']());
       }
-      throw new Error('Failed to update page');
+      throw new Error(m['errors.update_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
@@ -68,9 +69,9 @@ export function useCreatePage() {
         return result.body.page;
       }
       if (result.status === 400) {
-        throw new Error(result.body.error.message || 'Failed to create page');
+        throw new Error(result.body.error.message || m['errors.update_failed']());
       }
-      throw new Error('Failed to create page');
+      throw new Error(m['errors.update_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
@@ -96,18 +97,18 @@ export function useDeletePage() {
         return result.body.page;
       }
       if (result.status === 409) {
-        throw new PageRevisionConflictError(result.body.error.message || '他の人が編集しました。ページを再読み込みしてください。');
+        throw new PageRevisionConflictError(result.body.error.message || m['errors.revision_conflict_edit']());
       }
       if (result.status === 400) {
-        throw new Error(result.body.error.message || 'Failed to delete page');
+        throw new Error(result.body.error.message || m['errors.delete_failed']());
       }
       if (result.status === 403) {
-        throw new Error('このページを削除する権限がありません。');
+        throw new Error(m['errors.permission_denied_delete']());
       }
       if (result.status === 404) {
-        throw new Error('ページが見つかりませんでした。');
+        throw new Error(m['errors.page_not_found']());
       }
-      throw new Error('Failed to delete page');
+      throw new Error(m['errors.delete_failed']());
     },
     onSuccess: () => {
       // Invalidate page queries so the trashed view (or 404) is reflected.
@@ -136,15 +137,15 @@ export function useRevertDeletedPage() {
         return result.body.page;
       }
       if (result.status === 400) {
-        throw new Error(result.body.error.message || 'Failed to revert page');
+        throw new Error(result.body.error.message || m['errors.revert_failed']());
       }
       if (result.status === 403) {
-        throw new Error('このページを復元する権限がありません。');
+        throw new Error(m['errors.permission_denied_revert']());
       }
       if (result.status === 404) {
-        throw new Error('ページが見つかりませんでした。');
+        throw new Error(m['errors.page_not_found']());
       }
-      throw new Error('Failed to revert page');
+      throw new Error(m['errors.revert_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
@@ -170,18 +171,18 @@ export function useRenamePage() {
         return result.body.page;
       }
       if (result.status === 409) {
-        throw new PageRevisionConflictError(result.body.error.message || 'ページが他で更新されました。再読み込みしてください。');
+        throw new PageRevisionConflictError(result.body.error.message || m['errors.revision_conflict_update']());
       }
       if (result.status === 400) {
-        throw new Error(result.body.error.message || 'ページ名の変更に失敗しました。');
+        throw new Error(result.body.error.message || m['errors.rename_failed']());
       }
       if (result.status === 403) {
-        throw new Error('このページをリネームする権限がありません。');
+        throw new Error(m['errors.permission_denied_rename']());
       }
       if (result.status === 404) {
-        throw new Error('ページが見つかりませんでした。');
+        throw new Error(m['errors.page_not_found']());
       }
-      throw new Error('ページ名の変更に失敗しました。');
+      throw new Error(m['errors.rename_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });

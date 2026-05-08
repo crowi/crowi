@@ -12,7 +12,7 @@ export function useAppSettings(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: adminAppSettingsKeys.settings,
     queryFn: async (): Promise<GetAppSettingsResponse | null> => {
-      const result = await apiClient.adminApp.getAppSettings();
+      const result = await apiClient.admin.app.getAppSettings();
       if (result.status === 200) return result.body;
       // 401/403: caller (admin layout) handles gating; surface as null.
       return null;
@@ -41,7 +41,7 @@ export function useUpdateAppSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: UpdateAppSettingsRequest): Promise<UpdateAppSettingsResponse> => {
-      const result = await apiClient.adminApp.updateAppSettings({ body });
+      const result = await apiClient.admin.app.updateAppSettings({ body });
       if (result.status === 200) return result.body;
       if (result.status === 400) {
         const fieldErrors: Record<string, string> = {};

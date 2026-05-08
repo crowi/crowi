@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import type { Comment } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 interface CommentItemProps {
   comment: Comment;
@@ -29,11 +30,18 @@ export function CommentItem({ comment, canDelete, isDeleting, onDelete }: Commen
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium">{creator?.name ?? creator?.username ?? 'Unknown user'}</span>
+            <span className="font-medium">{creator?.name ?? creator?.username ?? m['page_comments.unknown_user']()}</span>
             <span className="text-muted-foreground text-xs">{formatDistanceToNow(comment.createdAt)}</span>
           </div>
           {canDelete && onDelete && (
-            <Button type="button" variant="ghost" size="icon-sm" onClick={() => onDelete(comment._id)} disabled={isDeleting} aria-label="Delete comment">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onDelete(comment._id)}
+              disabled={isDeleting}
+              aria-label={m['page_comments.delete_aria']()}
+            >
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </Button>
           )}

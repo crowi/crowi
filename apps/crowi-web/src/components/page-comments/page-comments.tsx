@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { Loader2, MessageSquare } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/lib/use-auth';
-import { usePageComments } from '@/lib/use-page-comments';
+import { useAddComment, useDeleteComment, usePageCommentsList } from '@/lib/use-page-comments';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { CommentItem } from './comment-item';
 import { CommentForm } from './comment-form';
+import { m } from '@/paraglide/messages.js';
 
 interface PageCommentsProps {
   page: PageWithRevision;
@@ -25,7 +26,9 @@ export function PageComments({ page }: PageCommentsProps) {
   const revisionId = typeof page.revision === 'object' ? page.revision._id : (page.revision ?? null);
   const isReadOnly = page.status === 'deleted';
 
-  const { comments, isLoading, isError, error, addComment, isAdding, addError, deleteComment, isDeleting } = usePageComments(pageId);
+  const { comments, isLoading, isError, error } = usePageCommentsList(pageId);
+  const { addComment, isPending: isAdding, error: addError } = useAddComment(pageId);
+  const { deleteComment, isPending: isDeleting } = useDeleteComment(pageId);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -44,10 +47,12 @@ export function PageComments({ page }: PageCommentsProps) {
   };
 
   return (
-    <section className="mt-8 border-t pt-6" aria-label="Comments">
+    <section className="mt-8 border-t pt-6" aria-label={m['page_comments.heading']()}>
       <div className="flex items-center gap-2 mb-4">
         <MessageSquare className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Comments {comments.length > 0 ? `(${comments.length})` : ''}</h2>
+        <h2 className="text-lg font-semibold">
+          {m['page_comments.heading']()} {comments.length > 0 ? `(${comments.length})` : ''}
+        </h2>
       </div>
 
       {!isReadOnly && revisionId && (
@@ -59,18 +64,18 @@ export function PageComments({ page }: PageCommentsProps) {
       {isLoading && (
         <div className="flex items-center gap-2 text-muted-foreground py-4">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Loading comments...</span>
+          <span className="text-sm">{m['page_comments.loading']()}</span>
         </div>
       )}
 
       {isError && (
         <Alert variant="destructive">
-          <AlertTitle>Failed to load comments</AlertTitle>
-          <AlertDescription>{error?.message ?? 'Please try again later.'}</AlertDescription>
+          <AlertTitle>{m['page_comments.failed_to_load']()}</AlertTitle>
+          <AlertDescription>{error?.message ?? m['common.try_again_later']()}</AlertDescription>
         </Alert>
       )}
 
-      {!isLoading && !isError && comments.length === 0 && <p className="text-sm text-muted-foreground py-4">No comments yet.</p>}
+      {!isLoading && !isError && comments.length === 0 && <p className="text-sm text-muted-foreground py-4">{m['page_comments.empty']()}</p>}
 
       {!isLoading && !isError && comments.length > 0 && (
         <ul className="divide-y">

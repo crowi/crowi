@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# paraglide compiled output (generated from messages/ — predev / prebuild script regenerates)
+/src/paraglide

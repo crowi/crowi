@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { usePageRevisions } from '@/lib/use-page-revisions';
 import { RevisionDiff } from './revision-diff';
+import { m } from '@/paraglide/messages.js';
 
 interface PageHistoryProps {
   pageId: string;
@@ -73,7 +74,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
       <header className="border-b pb-4">
         <div className="flex items-center gap-2">
           <HistoryIcon className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-2xl font-bold">Revision History</h1>
+          <h1 className="text-2xl font-bold">{m['page_history.heading']()}</h1>
         </div>
         <p className="text-muted-foreground text-sm mt-1 truncate">{pagePath}</p>
       </header>
@@ -81,18 +82,18 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
       {isLoading && (
         <div className="flex items-center gap-2 text-muted-foreground py-6" role="status">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Loading revisions...</span>
+          <span className="text-sm">{m['page_history.revisions_loading']()}</span>
         </div>
       )}
 
       {isError && (
         <Alert variant="destructive">
-          <AlertTitle>Failed to load revisions</AlertTitle>
+          <AlertTitle>{m['page_history.revisions_failed']()}</AlertTitle>
           <AlertDescription>
-            {error?.message ?? 'Please try again later.'}
+            {error?.message ?? m['common.try_again_later']()}
             <div className="mt-3">
               <Button variant="outline" size="sm" onClick={() => refetch()}>
-                Retry
+                {m['common.retry']()}
               </Button>
             </div>
           </AlertDescription>
@@ -101,8 +102,8 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
 
       {!isLoading && !isError && revisions.length === 0 && (
         <Alert>
-          <AlertTitle>No revisions</AlertTitle>
-          <AlertDescription>このページにはまだリビジョンがありません。</AlertDescription>
+          <AlertTitle>{m['page_history.no_revisions_title']()}</AlertTitle>
+          <AlertDescription>{m['page_history.no_revisions_body']()}</AlertDescription>
         </Alert>
       )}
 
@@ -120,19 +121,19 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                 <thead className="bg-muted/50 text-muted-foreground">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-center font-medium w-16">
-                      From
+                      {m['page_history.col_from']()}
                     </th>
                     <th scope="col" className="px-3 py-2 text-center font-medium w-16">
-                      To
+                      {m['page_history.col_to']()}
                     </th>
                     <th scope="col" className="px-3 py-2 text-left font-medium">
-                      Author
+                      {m['page_history.col_author']()}
                     </th>
                     <th scope="col" className="px-3 py-2 text-left font-medium">
-                      Created
+                      {m['page_history.col_created']()}
                     </th>
                     <th scope="col" className="px-3 py-2 text-left font-medium">
-                      Revision
+                      {m['page_history.col_revision']()}
                     </th>
                   </tr>
                 </thead>
@@ -175,7 +176,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                               <span className="truncate">{author.name}</span>
                             </div>
                           ) : (
-                            <span className="text-muted-foreground">Unknown</span>
+                            <span className="text-muted-foreground">{m['page_history.unknown_author']()}</span>
                           )}
                         </td>
                         <td className="px-3 py-2">
@@ -192,7 +193,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
             <div className="flex items-center justify-end gap-2 mt-3">
               <Button onClick={handleCompare} disabled={!canCompare} type="button" size="sm">
                 <GitCompare className="h-4 w-4 mr-1" />
-                {isPairDirty ? 'Update diff' : 'Compare'}
+                {isPairDirty ? m['page_history.update_diff']() : m['page_history.compare']()}
               </Button>
             </div>
           </section>

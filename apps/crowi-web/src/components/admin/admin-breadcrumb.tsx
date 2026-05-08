@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { ADMIN_SECTIONS, isAdminSectionKey } from './admin-sections';
+import { m } from '@/paraglide/messages.js';
 
 /**
  * Breadcrumb shown above the admin main content area. Renders
@@ -18,12 +19,12 @@ export function AdminBreadcrumb() {
   }
 
   const slug = segments[1];
-  const label = isAdminSectionKey(slug) ? ADMIN_SECTIONS[slug] : slug;
+  const label = isAdminSectionKey(slug) ? ADMIN_SECTIONS[slug]() : slug;
 
   return (
-    <nav className="mb-2 flex items-center gap-1 text-sm text-muted-foreground" aria-label="Admin breadcrumb">
+    <nav className="mb-2 flex items-center gap-1 text-sm text-muted-foreground" aria-label={m['admin.breadcrumb_root']()}>
       <Link href="/admin" className="transition-colors hover:text-foreground">
-        管理
+        {m['admin.breadcrumb_root']()}
       </Link>
       <ChevronRight className="h-3.5 w-3.5" />
       <span className="text-foreground">{label}</span>

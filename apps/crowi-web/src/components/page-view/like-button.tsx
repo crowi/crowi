@@ -3,6 +3,7 @@
 import { Loader2, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToggleLike } from '@/lib/use-like';
+import { m } from '@/paraglide/messages.js';
 
 interface LikeButtonProps {
   pageId: string;
@@ -12,8 +13,8 @@ interface LikeButtonProps {
 export function LikeButton({ pageId, isLiked }: LikeButtonProps) {
   const { toggle, isPending, isError, error } = useToggleLike(pageId, isLiked);
 
-  const label = isLiked ? 'Liked' : 'Like';
-  const ariaLabel = isLiked ? 'Remove like' : 'Like';
+  const label = isLiked ? m['page.like_label_done']() : m['page.like_label']();
+  const ariaLabel = isLiked ? m['page.like_aria_remove']() : m['page.like_aria_add']();
 
   return (
     <Button

@@ -3,6 +3,7 @@
 import { Bookmark, BookmarkCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToggleBookmark } from '@/lib/use-bookmark';
+import { m } from '@/paraglide/messages.js';
 
 interface BookmarkButtonProps {
   pageId: string;
@@ -11,8 +12,8 @@ interface BookmarkButtonProps {
 export function BookmarkButton({ pageId }: BookmarkButtonProps) {
   const { isBookmarked, toggle, isPending, isError, error } = useToggleBookmark(pageId);
 
-  const label = isBookmarked ? 'Bookmarked' : 'Bookmark';
-  const ariaLabel = isBookmarked ? 'Remove bookmark' : 'Add bookmark';
+  const label = isBookmarked ? m['page.bookmark_label_done']() : m['page.bookmark_label']();
+  const ariaLabel = isBookmarked ? m['page.bookmark_aria_remove']() : m['page.bookmark_aria_add']();
 
   return (
     <Button

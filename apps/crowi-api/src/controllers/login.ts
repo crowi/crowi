@@ -296,7 +296,6 @@ export default (crowi: Crowi, app: Express) => {
     }
 
     if (req.method == 'POST' && req.form.isValid) {
-      const { t } = req;
       const { registerForm = {} } = req.form;
       const { name = null, username = null, email = null, password = null, googleId = null, githubId = null, socialImage = null } = registerForm;
 
@@ -315,14 +314,14 @@ export default (crowi: Crowi, app: Express) => {
         }
         if (!isRegisterable) {
           if (!errOn.username) {
-            return registerFailure(t('page_register.error.unavailable_user_id'));
+            return registerFailure('このユーザーIDは使用できません。');
           }
           if (!errOn.email) {
-            return registerFailure(t('page_register.error.already_registered_email'));
+            return registerFailure('このメールアドレスは既に使用されています。');
           }
         }
         if (config.crowi['auth:disablePasswordAuth'] && !googleId && !githubId) {
-          return registerFailure(t('page_register.error.unavailable_password_auth'));
+          return registerFailure('現在、パスワード認証は無効です。外部認証を用いて登録してください。');
         }
 
         User.createUserByEmailAndPassword(name, username, email, password, lang, async function (err, userData) {

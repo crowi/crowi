@@ -11,7 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 import { useUnreadCount, useNotifications, useMarkAllAsRead, useOpenNotification } from '@/lib/use-notifications';
-import { formatJaRelativeTime, buildNotificationMessage, isUnopenedNotification } from '@/lib/notification-format';
+import { formatRelativeTime, buildNotificationMessage, isUnopenedNotification } from '@/lib/notification-format';
+import { m } from '@/paraglide/messages.js';
 
 interface NotificationRowProps {
   notification: Notification;
@@ -40,7 +41,7 @@ function NotificationRow({ notification, onOpen }: NotificationRowProps) {
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="line-clamp-2 break-all text-foreground">{buildNotificationMessage(notification)}</div>
-        <div className="text-xs text-muted-foreground">{formatJaRelativeTime(notification.createdAt)}</div>
+        <div className="text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</div>
       </div>
       {isUnread ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden /> : null}
     </button>
@@ -84,7 +85,7 @@ export function NotificationBell() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="通知" className="relative text-white hover:bg-white/10 hover:text-white">
+        <Button variant="ghost" size="icon-sm" aria-label={m['header.notifications_aria']()} className="relative text-white hover:bg-white/10 hover:text-white">
           <Bell className="h-4 w-4" />
           {hasUnread ? (
             <span
@@ -98,28 +99,28 @@ export function NotificationBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-sm font-medium">通知</span>
+          <span className="text-sm font-medium">{m['notifications.title']()}</span>
           <button
             type="button"
             onClick={handleMarkAllAsRead}
             disabled={!hasUnread || markAllAsRead.isPending}
             className="text-xs text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
-            すべて既読にする
+            {m['notifications.mark_all_read']()}
           </button>
         </div>
         <div className="max-h-96 overflow-y-auto">
           {isLoading ? (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">読み込み中...</div>
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">{m['common.loading']()}</div>
           ) : notifications.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">通知はありません</div>
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">{m['notifications.empty']()}</div>
           ) : (
             notifications.map((n) => <NotificationRow key={n._id} notification={n} onOpen={handleOpenNotification} />)
           )}
         </div>
         <div className="border-t px-3 py-2 text-center">
           <Link href="/notifications" onClick={() => setOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">
-            すべて表示
+            {m['notifications.see_all']()}
           </Link>
         </div>
       </DropdownMenuContent>

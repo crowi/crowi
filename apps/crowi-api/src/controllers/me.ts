@@ -136,8 +136,8 @@ export default (crowi: Crowi, app: Express) => {
           return render({ messages: { error: req.form.errors } });
         }
 
-        req.i18n.changeLanguage(lang);
-        req.flash('successMessage', req.t('Updated'));
+        // Legacy SSR endpoint — fixed JP copy now that Web is on Paraglide.
+        req.flash('successMessage', '更新しました');
         return res.redirect('/me');
       });
     } else {
@@ -267,7 +267,6 @@ export default (crowi: Crowi, app: Express) => {
     const config = crowi.getConfig();
     const googleAuth = GoogleAuth(config);
     const user = req.user as UserDocument;
-    const { t } = req;
     const toDisconnect = !!req.body.disconnectGoogle;
     const toConnect = !!req.body.connectGoogle;
     const callback = req.session.callback || '/me';
@@ -282,7 +281,7 @@ export default (crowi: Crowi, app: Express) => {
         }
         return res.redirect(callback);
       }
-      req.flash('warningMessage.auth.google', t('page_me.can_not_disconnect'));
+      req.flash('warningMessage.auth.google', '1つ以上の外部認証設定が必要なため、接続を解除できません。');
       return res.redirect(callback);
     } else if (toConnect) {
       googleAuth.createAuthUrl(req, function (err, redirectUrl) {
@@ -340,7 +339,6 @@ export default (crowi: Crowi, app: Express) => {
     const config = crowi.getConfig();
     const githubAuth = GitHubAuth(config);
     const user = req.user as UserDocument;
-    const { t } = req;
     const toDisconnect = !!req.body.disconnectGitHub;
     const toConnect = !!req.body.connectGitHub;
     const callback = req.session.callback || '/me';
@@ -355,7 +353,7 @@ export default (crowi: Crowi, app: Express) => {
         }
         return res.redirect(callback);
       }
-      req.flash('warningMessage.auth.github', t('page_me.can_not_disconnect'));
+      req.flash('warningMessage.auth.github', '1つ以上の外部認証設定が必要なため、接続を解除できません。');
       return res.redirect(callback);
     } else if (toConnect) {
       req.session.github = { callbackAction: '/me/auth/github/callback' };

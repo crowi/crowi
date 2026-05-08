@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
+import { m } from '@/paraglide/messages.js';
 import type { Page } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 
@@ -81,7 +82,7 @@ export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
           {isPrivate && <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Private page" />}
           {isTrash && (
             <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive flex-shrink-0">
-              Deleted
+              {m['page_list.deleted_badge']()}
             </span>
           )}
         </div>
@@ -126,18 +127,18 @@ type ConfirmKind = 'restore' | 'delete-forever';
 
 const CONFIRM_COPY: Record<
   ConfirmKind,
-  { title: string; description: (path: string) => string; confirmLabel: string; buttonVariant: 'default' | 'destructive' }
+  { title: () => string; description: (path: string) => string; confirmLabel: () => string; buttonVariant: 'default' | 'destructive' }
 > = {
   restore: {
-    title: 'このページを復元しますか?',
-    description: (path) => `「${path}」を元のパスに復元します。`,
-    confirmLabel: '復元',
+    title: () => m['page_list.confirm_restore_title'](),
+    description: (path) => m['page_list.confirm_restore_description']({ path }),
+    confirmLabel: () => m['page_list.confirm_restore_button'](),
     buttonVariant: 'default',
   },
   'delete-forever': {
-    title: 'このページを完全に削除しますか?',
-    description: (path) => `「${path}」を完全に削除します。この操作は取り消せません。`,
-    confirmLabel: '完全に削除',
+    title: () => m['page_list.confirm_delete_forever_title'](),
+    description: (path) => m['page_list.confirm_delete_forever_description']({ path }),
+    confirmLabel: () => m['page_list.confirm_delete_forever_button'](),
     buttonVariant: 'destructive',
   },
 };
@@ -171,18 +172,18 @@ function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
     <div className="flex-shrink-0">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" aria-label="Trash page actions">
+          <Button variant="ghost" size="sm" aria-label={m['page_list.actions_aria']()}>
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => setConfirmKind('restore')}>
             <RotateCcw className="h-4 w-4 mr-2" />
-            Restore
+            {m['page_list.action_restore']()}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setConfirmKind('delete-forever')} className="text-red-600 focus:text-red-600">
             <Trash2 className="h-4 w-4 mr-2" />
-            Delete forever
+            {m['page_list.action_delete_forever']()}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -190,7 +191,7 @@ function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
       <Dialog open={confirmKind !== null} onOpenChange={(next) => !next && closeDialog()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{copy?.title}</DialogTitle>
+            <DialogTitle>{copy?.title()}</DialogTitle>
             <DialogDescription>{copy?.description(pagePath)}</DialogDescription>
           </DialogHeader>
 
@@ -202,16 +203,16 @@ function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
 
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog} disabled={isPending}>
-              キャンセル
+              {m['common.cancel']()}
             </Button>
             <Button variant={copy?.buttonVariant ?? 'default'} onClick={handleConfirm} disabled={isPending}>
               {isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  処理中...
+                  {m['page_list.confirm_in_progress']()}
                 </>
               ) : (
-                copy?.confirmLabel
+                copy?.confirmLabel()
               )}
             </Button>
           </DialogFooter>

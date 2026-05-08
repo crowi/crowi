@@ -8,6 +8,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { usePage } from '@/lib/use-page';
+import { m } from '@/paraglide/messages.js';
 
 interface IdRedirectorProps {
   pageId: string;
@@ -25,11 +26,11 @@ export function IdRedirector({ pageId }: IdRedirectorProps) {
   }, [page?.path, router]);
 
   if (page) {
-    return <LoadingSpinner message={`Redirecting to ${page.path}...`} />;
+    return <LoadingSpinner message={m['page.redirecting']({ path: page.path })} />;
   }
 
   if (isLoading) {
-    return <LoadingSpinner message="Looking up page..." />;
+    return <LoadingSpinner message={m['page.id_redirector_looking_up']()} />;
   }
 
   if (notGranted) {
@@ -39,20 +40,21 @@ export function IdRedirector({ pageId }: IdRedirectorProps) {
   if (notFound) {
     return (
       <NotFoundCard
-        title="Page Not Found"
+        title={m['page.not_found_title']()}
         description={
           <>
-            No page exists for id <code className="bg-muted px-2 py-0.5 rounded">{pageId}</code>.
+            <code className="bg-muted px-2 py-0.5 rounded">{pageId}</code>
+            <span className="ml-1">{m['page.id_redirector_not_found_description']()}</span>
           </>
         }
-        body="The page may have been deleted or the link may be incorrect."
+        body={m['page.id_redirector_not_found_body']()}
         actions={
           <div className="flex gap-2">
             <Button variant="default" onClick={() => router.push('/')}>
-              Go Home
+              {m['common.go_home']()}
             </Button>
             <Button variant="outline" onClick={() => router.back()}>
-              Go Back
+              {m['common.go_back']()}
             </Button>
           </div>
         }
@@ -61,7 +63,7 @@ export function IdRedirector({ pageId }: IdRedirectorProps) {
   }
 
   if (isError) {
-    return <ErrorAlert message={`Failed to look up page. ${error?.message || 'Please try again later.'}`} />;
+    return <ErrorAlert message={m['page.id_redirector_failed']({ message: error?.message || m['common.try_again_later']() })} />;
   }
 
   return null;

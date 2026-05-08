@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useMarkAllAsRead, useNotificationsInfinite, useOpenNotification, useUnreadCount } from '@/lib/use-notifications';
 import { NotificationItem } from './notification-item';
+import { m } from '@/paraglide/messages.js';
 
 const PAGE_SIZE = 20;
 
@@ -51,16 +52,16 @@ export function NotificationList() {
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Bell className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">通知</h1>
+          <h1 className="text-2xl font-bold">{m['notifications.title']()}</h1>
         </div>
         <Button variant="outline" size="sm" onClick={handleMarkAllAsRead} disabled={!hasUnread || markAllAsRead.isPending}>
           {markAllAsRead.isPending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              処理中...
+              {m['notifications.processing']()}
             </>
           ) : (
-            'すべて既読にする'
+            m['notifications.mark_all_read']()
           )}
         </Button>
       </div>
@@ -75,12 +76,12 @@ export function NotificationList() {
       ) : error ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>通知の取得に失敗しました。時間をおいて再度お試しください。</AlertDescription>
+          <AlertDescription>{m['notifications.failed_to_load']()}</AlertDescription>
         </Alert>
       ) : allNotifications.length === 0 ? (
         <Card className="p-12 text-center">
           <Bell className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-          <p className="text-muted-foreground">通知はありません</p>
+          <p className="text-muted-foreground">{m['notifications.empty']()}</p>
         </Card>
       ) : (
         <>
@@ -96,10 +97,10 @@ export function NotificationList() {
                 {isFetchingNextPage ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    読み込み中...
+                    {m['notifications.loading_more']()}
                   </>
                 ) : (
-                  'さらに読み込む'
+                  m['notifications.load_more']()
                 )}
               </Button>
             </div>

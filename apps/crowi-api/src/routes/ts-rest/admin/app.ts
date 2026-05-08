@@ -21,7 +21,7 @@ export default (crowi: Crowi, _app: Express) => {
   const router = Router();
   const Config = crowi.model('Config');
 
-  const router_ = s.router(apiContract.adminApp, {
+  const router_ = s.router(apiContract.admin.app, {
     /**
      * Returns the current `app:*` and `upload:aws:*` slice. The secret access
      * key is masked — only `{ hasValue }` is reported, never the plaintext.
@@ -96,6 +96,6 @@ export default (crowi: Crowi, _app: Express) => {
     },
   });
 
-  createExpressEndpoints(apiContract.adminApp, router_, router);
+  createExpressEndpoints(apiContract.admin.app, router_, router);
   return router;
 };

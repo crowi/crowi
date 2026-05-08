@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Settings, Shield, User, Bookmark, FileText, Trash2 } from 'lucide-react';
+import { LogOut, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -12,6 +12,9 @@ import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
 import { useConnection } from '@/lib/connection-context';
+import { m } from '@/paraglide/messages.js';
+import { LanguageMenuItems } from '@/components/language-menu-items';
+import { UserMenuItems } from '@/components/user-menu-items';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -40,7 +43,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   if (!isAuthenticated && (isLoading || connectionState === 'connected')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--crowi-header)] via-[oklch(0.35_0.03_192)] to-[oklch(0.4_0.04_170)]">
-        <div className="text-white text-lg">Loading...</div>
+        <div className="text-white text-lg">{m['common.loading']()}</div>
       </div>
     );
   }
@@ -62,7 +65,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
           <div className="flex items-center gap-2">
             {user?.admin && (
-              <Button asChild variant="ghost" size="icon-sm" aria-label="管理画面" title="管理画面" className="text-white hover:bg-white/10 hover:text-white">
+              <Button
+                asChild
+                variant="ghost"
+                size="icon-sm"
+                aria-label={m['header.admin_aria']()}
+                title={m['header.admin_aria']()}
+                className="text-white hover:bg-white/10 hover:text-white"
+              >
                 <Link href="/admin">
                   <Shield className="h-4 w-4" />
                 </Link>
@@ -82,41 +92,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                   <div className="text-muted-foreground">@{user?.username}</div>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href={`/user/${user?.username}`}>
-                    <User className="h-4 w-4 mr-2" />
-                    マイページ
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href={`/user/${user?.username}/bookmarks`}>
-                    <Bookmark className="h-4 w-4 mr-2" />
-                    ブックマーク
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href={`/user/${user?.username}/recent-create`}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    作成したページ
-                  </Link>
-                </DropdownMenuItem>
+                {user && <UserMenuItems username={user.username} />}
+                <LanguageMenuItems />
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/trash">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    ゴミ箱
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/settings">
-                    <Settings className="h-4 w-4 mr-2" />
-                    設定
-                  </Link>
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout} className="text-red-600">
                   <LogOut className="h-4 w-4 mr-2" />
-                  ログアウト
+                  {m['header.user_dropdown_logout']()}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

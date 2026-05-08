@@ -11,7 +11,7 @@ import { revisionContract } from './revision';
 import { notificationContract } from './notification';
 import { backlinkContract } from './backlink';
 import { adminCryptoContract } from './adminCrypto';
-import { adminAppContract } from './admin/app';
+import { adminContract } from './admin';
 
 const c = initContract();
 
@@ -28,5 +28,5 @@ export const apiContract = c.router({
   notification: notificationContract,
   backlink: backlinkContract,
   adminCrypto: adminCryptoContract,
-  adminApp: adminAppContract,
+  admin: adminContract,
 });

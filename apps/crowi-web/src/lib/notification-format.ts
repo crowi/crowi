@@ -1,13 +1,12 @@
 import type { Notification } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 /**
- * Format a date string to a Japanese relative time string.
- * (e.g., "数秒前", "5 分前", "2 時間前")
- *
- * i18n is intentionally out of scope — strings are hardcoded in Japanese to
- * match the rest of the (auth) header UI for now.
+ * Format a date string to a localized relative-time string.
+ * Driven by paraglide messages so it switches to English when the active
+ * locale is `en` (e.g. "5 min ago" instead of "5 分前").
  */
-export function formatJaRelativeTime(dateString: string): string {
+export function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = Math.max(0, now.getTime() - date.getTime());
@@ -20,34 +19,31 @@ export function formatJaRelativeTime(dateString: string): string {
   const diffMonths = Math.floor(diffDays / 30);
   const diffYears = Math.floor(diffDays / 365);
 
-  if (diffSecs < 60) return '数秒前';
-  if (diffMins < 60) return `${diffMins} 分前`;
-  if (diffHours < 24) return `${diffHours} 時間前`;
-  if (diffDays < 7) return `${diffDays} 日前`;
-  if (diffWeeks < 4) return `${diffWeeks} 週間前`;
-  if (diffMonths < 12) return `${diffMonths} ヶ月前`;
-  return `${diffYears} 年前`;
+  if (diffSecs < 60) return m['notifications.relative_seconds']();
+  if (diffMins < 60) return m['notifications.relative_minutes']({ count: diffMins });
+  if (diffHours < 24) return m['notifications.relative_hours']({ count: diffHours });
+  if (diffDays < 7) return m['notifications.relative_days']({ count: diffDays });
+  if (diffWeeks < 4) return m['notifications.relative_weeks']({ count: diffWeeks });
+  if (diffMonths < 12) return m['notifications.relative_months']({ count: diffMonths });
+  return m['notifications.relative_years']({ count: diffYears });
 }
 
 /**
- * Build a human-readable notification text in Japanese.
- *
- * Templates:
- *   - 1 user:    `{user1} さんが「{pagePath}」に{action}しました`
- *   - N users:   `{user1} さん他 {N-1} 名が「{pagePath}」に{action}しました`
- *
- * Action verbs:
- *   - COMMENT: コメント
- *   - LIKE:    いいね
+ * Build a human-readable notification text. The two templates differ in
+ * arity (single user vs many) so both keys exist as separate messages — the
+ * pluralisation rules (in JA there's nothing to do; in EN "others" carries
+ * count) live inside the message strings.
  */
 export function buildNotificationMessage(notification: Notification): string {
   const { actionUsers, target, action } = notification;
   const firstUser = actionUsers[0];
-  const userLabel = firstUser ? firstUser.name || firstUser.username : '誰か';
-  const userPart = actionUsers.length > 1 ? `${userLabel} さん他 ${actionUsers.length - 1} 名` : `${userLabel} さん`;
+  const user = firstUser ? firstUser.name || firstUser.username : m['notifications.unknown_user']();
+  const actionLabel = action === 'COMMENT' ? m['notifications.action_comment']() : m['notifications.action_like']();
 
-  const actionLabel = action === 'COMMENT' ? 'コメント' : 'いいね';
-  return `${userPart}が「${target.path}」に${actionLabel}しました`;
+  if (actionUsers.length > 1) {
+    return m['notifications.message_multi_users']({ user, others: actionUsers.length - 1, path: target.path, action: actionLabel });
+  }
+  return m['notifications.message_one_user']({ user, path: target.path, action: actionLabel });
 }
 
 /**

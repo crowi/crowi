@@ -4,7 +4,7 @@ import {
   GetAppSettingsResponseSchema,
   UpdateAppSettingsRequestSchema,
   UpdateAppSettingsResponseSchema,
-} from '../../schemas/adminApp';
+} from '../../schemas/admin/app';
 import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema } from '../../schemas/common';
 
 const c = initContract();

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AppSettingsValidationFailure, useAppSettings, useUpdateAppSettings } from '@/lib/use-admin-app-settings';
+import { m } from '@/paraglide/messages.js';
 
 /**
  * Editable subset of the App settings — the GET response also surfaces
@@ -83,22 +84,22 @@ function buildUpdateBody(state: FormState, initial: FormState, flags: { secretDi
  * raw key so future modes still render something readable.
  */
 function formatRegistrationMode(modes: Record<string, string>): string {
-  const labels: Record<string, string> = {
-    open: 'Open (誰でも登録可)',
-    restricted: 'Restricted (招待のみ)',
-    closed: 'Closed (登録不可)',
+  const labels: Record<string, () => string> = {
+    open: () => m['admin.app.registration_mode_open'](),
+    restricted: () => m['admin.app.registration_mode_restricted'](),
+    closed: () => m['admin.app.registration_mode_closed'](),
   };
   // The API may shape this as { current: 'open' } or { open: 'Open' } depending
   // on legacy code paths — handle both by preferring a `current` key.
   const current = modes.current;
   if (typeof current === 'string') {
-    return labels[current] ?? current;
+    return labels[current]?.() ?? current;
   }
   // Fallback: pick the first key we recognise.
   for (const key of Object.keys(modes)) {
-    if (key in labels) return labels[key];
+    if (key in labels) return labels[key]();
   }
-  return Object.values(modes)[0] ?? '不明';
+  return Object.values(modes)[0] ?? m['admin.app.registration_mode_unknown']();
 }
 
 export function AppSettingsForm() {
@@ -147,7 +148,7 @@ export function AppSettingsForm() {
     return (
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
         <Loader2 className="h-4 w-4 animate-spin" />
-        読み込み中...
+        {m['admin.app.loading']()}
       </div>
     );
   }
@@ -156,11 +157,11 @@ export function AppSettingsForm() {
     return (
       <Alert className="border-destructive/50">
         <AlertCircle className="h-4 w-4 text-destructive" />
-        <AlertTitle>設定の読み込みに失敗しました</AlertTitle>
+        <AlertTitle>{m['admin.app.failed_to_load_title']()}</AlertTitle>
         <AlertDescription className="flex items-center gap-3">
-          <span>API への接続を確認してください。</span>
+          <span>{m['admin.app.failed_to_load_body']()}</span>
           <Button size="sm" variant="outline" onClick={() => refetch()}>
-            再試行
+            {m['admin.app.retry']()}
           </Button>
         </AlertDescription>
       </Alert>
@@ -176,7 +177,7 @@ export function AppSettingsForm() {
     // Cheap client-side guard for the only field the legacy form blocked outright.
     // Server-side Zod still validates everything — this just gives faster feedback.
     if (state.appTitle.trim() === '') {
-      setFieldErrors({ 'app.title': 'サイト名は必須です' });
+      setFieldErrors({ 'app.title': m['admin.app.field_title_required']() });
       return;
     }
 
@@ -213,12 +214,12 @@ export function AppSettingsForm() {
       {/* Card 1: 基本設定 */}
       <Card>
         <CardHeader>
-          <CardTitle>基本設定</CardTitle>
-          <CardDescription>サイト名と機密情報の取扱についての注意書きです。</CardDescription>
+          <CardTitle>{m['admin.app.section_basic_heading']()}</CardTitle>
+          <CardDescription>{m['admin.app.section_basic_lead']()}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="app-title">サイト名</Label>
+            <Label htmlFor="app-title">{m['admin.app.field_title_label']()}</Label>
             <Input
               id="app-title"
               value={state.appTitle}
@@ -235,7 +236,7 @@ export function AppSettingsForm() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="app-confidential">機密情報の注意書き</Label>
+            <Label htmlFor="app-confidential">{m['admin.app.field_confidential_label']()}</Label>
             <Textarea
               id="app-confidential"
               value={state.appConfidential}
@@ -243,7 +244,7 @@ export function AppSettingsForm() {
               aria-invalid={Boolean(errorOf('app.confidential'))}
               maxLength={500}
               rows={3}
-              placeholder="このページに記載してはいけない情報の注意書きを入力 (上部に表示されます)"
+              placeholder={m['admin.app.field_confidential_placeholder']()}
             />
             {errorOf('app.confidential') && (
               <p className="text-xs text-destructive" role="alert">
@@ -257,8 +258,8 @@ export function AppSettingsForm() {
       {/* Card 2: ファイルアップロード */}
       <Card>
         <CardHeader>
-          <CardTitle>ファイルアップロード</CardTitle>
-          <CardDescription>添付ファイル / 画像アップロード機能の有効化を切り替えます。</CardDescription>
+          <CardTitle>{m['admin.app.section_upload_heading']()}</CardTitle>
+          <CardDescription>{m['admin.app.section_upload_lead']()}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <label className="flex items-center gap-3 cursor-pointer">
@@ -268,15 +269,13 @@ export function AppSettingsForm() {
               checked={state.appFileUpload}
               onChange={(e) => setState({ ...state, appFileUpload: e.target.checked })}
             />
-            <span className="text-sm font-medium">ファイルアップロードを有効にする</span>
+            <span className="text-sm font-medium">{m['admin.app.field_upload_toggle']()}</span>
           </label>
           {state.appFileUpload && !isUploadable && (
             <Alert className="border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-900/20">
               <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <AlertTitle className="text-amber-800 dark:text-amber-300">AWS S3 設定が未完成です</AlertTitle>
-              <AlertDescription className="text-amber-700 dark:text-amber-200">
-                region / bucket / accessKeyId / secretAccessKey をすべて設定するまでアップロードは動作しません。
-              </AlertDescription>
+              <AlertTitle className="text-amber-800 dark:text-amber-300">{m['admin.app.upload_unavailable_title']()}</AlertTitle>
+              <AlertDescription className="text-amber-700 dark:text-amber-200">{m['admin.app.upload_unavailable_body']()}</AlertDescription>
             </Alert>
           )}
         </CardContent>
@@ -285,19 +284,19 @@ export function AppSettingsForm() {
       {/* Card 3: AWS S3 */}
       <Card>
         <CardHeader>
-          <CardTitle>AWS S3</CardTitle>
-          <CardDescription>ファイルアップロードのバックエンド (S3) の認証情報。secretAccessKey は暗号化されて保存されます。</CardDescription>
+          <CardTitle>{m['admin.app.section_aws_heading']()}</CardTitle>
+          <CardDescription>{m['admin.app.section_aws_lead']()}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="aws-region">Region</Label>
+              <Label htmlFor="aws-region">{m['admin.app.field_region_label']()}</Label>
               <Input
                 id="aws-region"
                 value={state.awsRegion}
                 onChange={(e) => setState({ ...state, awsRegion: e.target.value })}
                 aria-invalid={Boolean(errorOf('upload.aws.region'))}
-                placeholder="ap-northeast-1"
+                placeholder={m['admin.app.field_region_placeholder']()}
                 autoComplete="off"
               />
               {errorOf('upload.aws.region') && (
@@ -308,7 +307,7 @@ export function AppSettingsForm() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="aws-bucket">Bucket</Label>
+              <Label htmlFor="aws-bucket">{m['admin.app.field_bucket_label']()}</Label>
               <Input
                 id="aws-bucket"
                 value={state.awsBucket}
@@ -326,7 +325,7 @@ export function AppSettingsForm() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="aws-access-key">Access Key ID</Label>
+            <Label htmlFor="aws-access-key">{m['admin.app.field_access_key_label']()}</Label>
             <Input
               id="aws-access-key"
               value={state.awsAccessKeyId}
@@ -343,16 +342,16 @@ export function AppSettingsForm() {
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="aws-secret-key">Secret Access Key</Label>
+              <Label htmlFor="aws-secret-key">{m['admin.app.field_secret_label']()}</Label>
               {hasSecret && !secretClearRequested && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
                   <CheckCircle2 className="h-3 w-3" />
-                  現在保存済み
+                  {m['admin.app.secret_saved_badge']()}
                 </span>
               )}
               {secretClearRequested && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  保存時にクリアします
+                  {m['admin.app.secret_clear_pending_badge']()}
                 </span>
               )}
             </div>
@@ -366,7 +365,7 @@ export function AppSettingsForm() {
                 setSecretClearRequested(false);
               }}
               aria-invalid={Boolean(errorOf('upload.aws.secretAccessKey'))}
-              placeholder={hasSecret ? '変更しない場合は空のまま' : '未設定'}
+              placeholder={hasSecret ? m['admin.app.field_secret_placeholder_set']() : m['admin.app.field_secret_placeholder_unset']()}
               autoComplete="new-password"
               disabled={secretClearRequested}
             />
@@ -388,7 +387,7 @@ export function AppSettingsForm() {
                       setState({ ...state, awsSecretAccessKey: '' });
                     }}
                   >
-                    保存済みシークレットをクリア
+                    {m['admin.app.secret_clear_button']()}
                   </Button>
                 ) : (
                   <Button
@@ -399,7 +398,7 @@ export function AppSettingsForm() {
                       setSecretClearRequested(false);
                     }}
                   >
-                    クリアを取り消す
+                    {m['admin.app.secret_clear_undo']()}
                   </Button>
                 )}
               </div>
@@ -411,21 +410,23 @@ export function AppSettingsForm() {
       {/* Card 4: 表示のみのステータス */}
       <Card>
         <CardHeader>
-          <CardTitle>ステータス</CardTitle>
-          <CardDescription>関連する設定の現在値を参照表示します。</CardDescription>
+          <CardTitle>{m['admin.app.section_status_heading']()}</CardTitle>
+          <CardDescription>{m['admin.app.section_status_lead']()}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">登録モード</span>
+            <span className="text-muted-foreground">{m['admin.app.status_registration_mode']()}</span>
             <span className="font-medium">{formatRegistrationMode(data.registrationMode)}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">アップロード可能</span>
-            <span className="font-medium">{isUploadable ? '可' : '不可 (AWS 設定が未完成)'}</span>
+            <span className="text-muted-foreground">{m['admin.app.status_uploadable_label']()}</span>
+            <span className="font-medium">{isUploadable ? m['admin.app.status_uploadable_yes']() : m['admin.app.status_uploadable_no']()}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">外部共有</span>
-            <span className="font-medium">{data.app.externalShare ? '有効' : '無効'}</span>
+            <span className="text-muted-foreground">{m['admin.app.status_external_share_label']()}</span>
+            <span className="font-medium">
+              {data.app.externalShare ? m['admin.app.status_external_share_enabled']() : m['admin.app.status_external_share_disabled']()}
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -435,16 +436,16 @@ export function AppSettingsForm() {
           {update.isPending ? (
             <>
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              保存中...
+              {m['admin.app.submit_pending']()}
             </>
           ) : (
-            '変更を保存'
+            m['admin.app.submit']()
           )}
         </Button>
         {savedAt !== null && !update.isPending && !isDirty && (
           <span className="inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 className="h-4 w-4" />
-            保存しました
+            {m['admin.app.success_saved']()}
           </span>
         )}
         {update.isError && !(update.error instanceof AppSettingsValidationFailure) && update.error instanceof Error && (
@@ -454,7 +455,7 @@ export function AppSettingsForm() {
         )}
         {Object.keys(fieldErrors).length > 0 && (
           <span className="text-sm text-destructive" role="alert">
-            入力内容に誤りがあります
+            {m['admin.app.field_errors_summary']()}
           </span>
         )}
       </div>

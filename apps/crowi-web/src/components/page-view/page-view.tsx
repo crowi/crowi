@@ -17,6 +17,7 @@ import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
 import { BacklinkList } from './backlink-list';
 import { PageComments } from '@/components/page-comments';
+import { m } from '@/paraglide/messages.js';
 
 interface PageViewProps {
   path: string;
@@ -38,15 +39,15 @@ export function PageView({ path }: PageViewProps) {
   }, [redirectTo, path, router]);
 
   if (isLoading) {
-    return <LoadingSpinner message="Loading page..." />;
+    return <LoadingSpinner message={m['page.loading']()} />;
   }
 
   if (redirectTo) {
-    return <LoadingSpinner message={`Redirecting to ${redirectTo}...`} />;
+    return <LoadingSpinner message={m['page.redirecting']({ path: redirectTo })} />;
   }
 
   if (isError) {
-    return <ErrorAlert message={`Failed to load page. ${error?.message || 'Please try again later.'}`} onRetry={() => refetch()} />;
+    return <ErrorAlert message={m['page.failed_to_load']({ message: error?.message || m['common.try_again_later']() })} onRetry={() => refetch()} />;
   }
 
   if (notGranted) {
@@ -56,23 +57,24 @@ export function PageView({ path }: PageViewProps) {
   if (notFound) {
     return (
       <NotFoundCard
-        title="Page Not Found"
+        title={m['page.not_found_title']()}
         icon={FilePlus2}
         iconClassName="text-primary"
         description={
           <>
-            The page <code className="bg-muted px-2 py-0.5 rounded">{path}</code> does not exist yet.
+            <code className="bg-muted px-2 py-0.5 rounded">{path}</code>
+            <span className="ml-1">{m['page.not_found_description']()}</span>
           </>
         }
-        body="Would you like to create this page?"
+        body={m['page.not_found_body']()}
         actions={
           <div className="flex gap-2">
             <Button variant="default" onClick={() => router.push(`/edit?path=${encodeURIComponent(path)}`)}>
               <FilePlus2 className="h-4 w-4 mr-2" />
-              Create Page
+              {m['page.create_page']()}
             </Button>
             <Button variant="outline" onClick={() => router.back()}>
-              Go Back
+              {m['common.go_back']()}
             </Button>
           </div>
         }
@@ -96,9 +98,9 @@ export function PageView({ path }: PageViewProps) {
       <div className="space-y-4">
         <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
           <Trash2 className="h-4 w-4 text-red-500" />
-          <AlertTitle className="text-red-700 dark:text-red-400">This page has been deleted</AlertTitle>
+          <AlertTitle className="text-red-700 dark:text-red-400">{m['page.deleted_alert_title']()}</AlertTitle>
           <AlertDescription className="text-red-600 dark:text-red-300">
-            This page is in the trash. You can restore it or view its contents below.
+            {m['page.deleted_alert_description']()}
             <div className="mt-3">
               <Button
                 variant="outline"
@@ -110,10 +112,10 @@ export function PageView({ path }: PageViewProps) {
                 {revertMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    Restoring...
+                    {m['page.restoring']()}
                   </>
                 ) : (
-                  'Restore Page'
+                  m['page.restore']()
                 )}
               </Button>
               {revertMutation.isError && revertMutation.error instanceof Error && (

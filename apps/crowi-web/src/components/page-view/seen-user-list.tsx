@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { UserAvatar } from '@/components/user-avatar';
 import { useSeenUsers } from '@/lib/use-seen';
+import { m } from '@/paraglide/messages.js';
 
 const SEEN_USERS_PREVIEW_LIMIT = 10;
 
@@ -31,9 +32,9 @@ export function SeenUserList({ pageId, fallbackCount }: SeenUserListProps) {
   return (
     <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
       <Eye className="h-4 w-4" aria-hidden="true" />
-      <span>Seen by</span>
+      <span>{m['page.seen_by']()}</span>
       {previewUsers.length > 0 ? (
-        <ul className="flex items-center -space-x-2" aria-label="Users who have seen this page">
+        <ul className="flex items-center -space-x-2" aria-label={m['page.seen_by']()}>
           {previewUsers.map((user) => {
             const tooltip = user.name ? `${user.name} (@${user.username})` : `@${user.username}`;
             return (
@@ -48,15 +49,15 @@ export function SeenUserList({ pageId, fallbackCount }: SeenUserListProps) {
       )}
       {hiddenCount > 0 && (
         <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setDialogOpen(true)}>
-          +{hiddenCount} more
+          {m['page.seen_by_more']({ count: hiddenCount })}
         </Button>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Seen by</DialogTitle>
-            <DialogDescription>{seenUsersCount} users have seen this page.</DialogDescription>
+            <DialogTitle>{m['page.seen_by_dialog_title']()}</DialogTitle>
+            <DialogDescription>{m['page.seen_by_dialog_description']({ count: seenUsersCount })}</DialogDescription>
           </DialogHeader>
           <SeenUsersFullList pageId={pageId} enabled={dialogOpen} />
         </DialogContent>
@@ -73,17 +74,17 @@ function SeenUsersFullList({ pageId, enabled }: { pageId: string; enabled: boole
     return (
       <div className="flex items-center justify-center py-6 text-sm text-muted-foreground" role="status">
         <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        Loading users...
+        {m['page.seen_by_loading']()}
       </div>
     );
   }
 
   if (users.length === 0) {
-    return <p className="text-sm text-muted-foreground py-2">No users to show.</p>;
+    return <p className="text-sm text-muted-foreground py-2">{m['page.seen_by_empty']()}</p>;
   }
 
   return (
-    <ul className="max-h-80 overflow-y-auto divide-y" aria-label="All users who have seen this page">
+    <ul className="max-h-80 overflow-y-auto divide-y" aria-label={m['page.seen_by_dialog_title']()}>
       {users.map((user) => (
         <li key={user._id} className="flex items-center gap-3 py-2">
           <UserAvatar user={user} size="sm" />

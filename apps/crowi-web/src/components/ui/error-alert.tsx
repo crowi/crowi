@@ -3,6 +3,7 @@
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { m } from '@/paraglide/messages.js';
 
 interface ErrorAlertProps {
   title?: string;
@@ -16,16 +17,16 @@ interface ErrorAlertProps {
  * Generic destructive Alert used for "failed to load X" type errors.
  * Optionally renders a retry button inline.
  */
-export function ErrorAlert({ title = 'Error', message = 'Please try again later.', onRetry, retryLabel = 'Retry' }: ErrorAlertProps) {
+export function ErrorAlert({ title, message, onRetry, retryLabel }: ErrorAlertProps) {
   return (
     <Alert variant="destructive">
       <AlertCircle className="h-4 w-4" />
-      <AlertTitle>{title}</AlertTitle>
+      <AlertTitle>{title ?? m['common.error']()}</AlertTitle>
       <AlertDescription>
-        {message}
+        {message ?? m['common.try_again_later']()}
         {onRetry && (
           <Button variant="outline" size="sm" className="ml-4" onClick={onRetry}>
-            {retryLabel}
+            {retryLabel ?? m['common.retry']()}
           </Button>
         )}
       </AlertDescription>

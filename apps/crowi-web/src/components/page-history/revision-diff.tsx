@@ -7,6 +7,7 @@ import { DiffMethod } from 'react-diff-viewer-continued';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useRevisionPair } from '@/lib/use-page-revisions';
+import { m } from '@/paraglide/messages.js';
 
 // react-diff-viewer-continued depends on @emotion which uses browser-only APIs
 // at module load time, so we render it client-side only.
@@ -15,7 +16,7 @@ const ReactDiffViewer = dynamic(() => import('react-diff-viewer-continued'), {
   loading: () => (
     <div className="flex items-center gap-2 text-muted-foreground py-4">
       <Loader2 className="h-4 w-4 animate-spin" />
-      <span className="text-sm">Loading diff viewer...</span>
+      <span className="text-sm">{m['page_history.diff_loading_viewer']()}</span>
     </div>
   ),
 });
@@ -27,8 +28,6 @@ interface RevisionDiffProps {
   // 新しい側 (newValue) のリビジョン id
   toId: string;
 }
-
-const INITIAL_LEFT_TITLE = '(empty — initial revision)';
 
 export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   const { revisions, isLoading, isError, error, refetch } = useRevisionPair(fromId, toId);
@@ -46,7 +45,7 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground py-6" role="status">
         <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-sm">Loading revisions...</span>
+        <span className="text-sm">{m['page_history.diff_loading_revisions']()}</span>
       </div>
     );
   }
@@ -54,12 +53,12 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   if (isError) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>Failed to load diff</AlertTitle>
+        <AlertTitle>{m['page_history.diff_failed_title']()}</AlertTitle>
         <AlertDescription>
-          {error?.message ?? 'Please try again later.'}
+          {error?.message ?? m['common.try_again_later']()}
           <div className="mt-3">
             <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Retry
+              {m['common.retry']()}
             </Button>
           </div>
         </AlertDescription>
@@ -70,25 +69,26 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   if (!toRevision || (fromId != null && !fromRevision)) {
     return (
       <Alert>
-        <AlertTitle>Revisions not available</AlertTitle>
-        <AlertDescription>選択したリビジョンが見つかりませんでした。</AlertDescription>
+        <AlertTitle>{m['page_history.diff_revisions_unavailable_title']()}</AlertTitle>
+        <AlertDescription>{m['page_history.diff_revisions_unavailable_body']()}</AlertDescription>
       </Alert>
     );
   }
 
   const oldValue = fromRevision?.body ?? '';
-  const fromLabel = fromRevision ? fromRevision._id.slice(-8) : INITIAL_LEFT_TITLE;
+  const fromLabel = fromRevision ? fromRevision._id.slice(-8) : m['page_history.diff_initial_revision']();
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          <span className="font-medium">From</span> <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{fromLabel}</code>
+          <span className="font-medium">{m['page_history.diff_from']()}</span> <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{fromLabel}</code>
           <span className="mx-2">→</span>
-          <span className="font-medium">To</span> <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{toRevision._id.slice(-8)}</code>
+          <span className="font-medium">{m['page_history.diff_to']()}</span>{' '}
+          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{toRevision._id.slice(-8)}</code>
         </div>
         <Button variant="outline" size="sm" onClick={() => setSplitView((v) => !v)} type="button">
-          {splitView ? 'Unified view' : 'Split view'}
+          {splitView ? m['page_history.diff_unified_view']() : m['page_history.diff_split_view']()}
         </Button>
       </div>
       <div className="rounded-md border overflow-hidden text-sm">
