@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useContext, createContext } from 'react';
 import { useRouter } from 'next/navigation';
+import { clearTokens } from './auth-token';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
 
@@ -111,8 +112,7 @@ export function useAuth() {
         }));
       } else {
         // 認証エラー（401等）: トークンをクリア
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        clearTokens();
         setAuthState({
           user: null,
           isLoading: false,
@@ -130,8 +130,7 @@ export function useAuth() {
         }));
       } else {
         // その他のエラー: 安全のためログアウト
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        clearTokens();
         setAuthState({
           user: null,
           isLoading: false,
@@ -164,8 +163,7 @@ export function useAuth() {
     }
 
     // Clear tokens
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    clearTokens();
 
     setAuthState({
       user: null,

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClient } from '@/lib/api-client';
+import { storeTokens } from '@/lib/auth-token';
 
 export function LoginForm() {
   const router = useRouter();
@@ -42,9 +43,9 @@ export function LoginForm() {
       });
 
       if (result.status === 200) {
-        // Store tokens
-        localStorage.setItem('accessToken', result.body.accessToken);
-        localStorage.setItem('refreshToken', result.body.refreshToken);
+        // Store tokens (also mirrors access token into a cookie so
+        // browser-built `<img>` requests can authenticate).
+        storeTokens(result.body);
 
         // Redirect to continue URL
         router.push(continueUrl);

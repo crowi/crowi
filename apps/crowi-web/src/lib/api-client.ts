@@ -1,5 +1,6 @@
 import { initClient } from '@ts-rest/core';
 import { apiContract } from '@crowi/api-contract';
+import { clearTokens, storeTokens } from './auth-token';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
 
@@ -28,25 +29,19 @@ async function refreshAccessToken(): Promise<string | null> {
     if (response.ok) {
       const data = await response.json();
       console.log('[api-client] Refresh successful, storing new tokens');
-      localStorage.setItem('accessToken', data.accessToken);
-      if (data.refreshToken) {
-        localStorage.setItem('refreshToken', data.refreshToken);
-      }
+      storeTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
       return data.accessToken;
     } else {
       const errorBody = await response.text();
       console.log('[api-client] Refresh failed:', response.status, errorBody);
-      // Refresh failed - clear tokens and dispatch event for navigation
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      clearTokens();
       // カスタムイベントを発行してReact側でナビゲーションを処理
       window.dispatchEvent(new CustomEvent('auth:session-expired'));
       return null;
     }
   } catch (err) {
     console.log('[api-client] Refresh error:', err);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    clearTokens();
     // カスタムイベントを発行してReact側でナビゲーションを処理
     window.dispatchEvent(new CustomEvent('auth:session-expired'));
     return null;

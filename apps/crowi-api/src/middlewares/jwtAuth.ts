@@ -15,7 +15,23 @@ export default (crowi: Crowi) => {
 
   return async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
-    const token = jwtUtil.extractTokenFromHeader(authHeader);
+    let token = jwtUtil.extractTokenFromHeader(authHeader);
+
+    if (!token) {
+      // Fallback: pull the JWT from a cookie. `<img src="/api/v2/...">`
+      // requests cannot carry an Authorization header (the browser
+      // builds them with no JS hook), so the web client mirrors the
+      // access token into the `crowi.accessToken` cookie at login
+      // time. Same-origin in production / via Next.js rewrite in dev,
+      // so the cookie always reaches the API.
+      const cookieHeader = req.headers.cookie;
+      if (cookieHeader) {
+        const match = cookieHeader.split(';').find((c) => c.trim().startsWith('crowi.accessToken='));
+        if (match) {
+          token = decodeURIComponent(match.split('=', 2)[1] ?? '').trim() || null;
+        }
+      }
+    }
 
     if (!token) {
       const errorResponse: AuthenticationRequiredError = {
