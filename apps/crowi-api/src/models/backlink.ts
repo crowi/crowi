@@ -84,13 +84,32 @@ export default (crowi: Crowi) => {
     return Backlink.create(data);
   };
 
+  /**
+   * Resolve a batch of `{ paths, objectIds }` link references to the existing
+   * Page IDs they point to, in **two** Mongo round-trips total (one $in per
+   * field) regardless of how many links the page contains.
+   *
+   * The old per-link `Page.isExistByPath` / `Page.isExistById` loop did
+   * 2K round-trips for K links — measurable latency on link-heavy pages.
+   */
   const convertLinksToPageIds = async (page, { paths, objectIds }) => {
     const Page = crowi.model('Page');
 
-    let ids = await Promise.all([...paths.map((path) => Page.isExistByPath(path)), ...objectIds.map((id) => Page.isExistById(id))]);
+    const [byPath, byId] = await Promise.all([
+      paths.length > 0 ? Page.find({ path: { $in: paths } }).select('_id') : Promise.resolve([]),
+      objectIds.length > 0 ? Page.find({ _id: { $in: objectIds } }).select('_id') : Promise.resolve([]),
+    ]);
 
-    // Make unique and remove own page
-    ids = ids.filter((id, index, array) => array.indexOf(id) === index && id.toString() !== page._id.toString() && id !== false);
+    const ownId = page._id.toString();
+    const seen = new Set<string>();
+    const ids: Types.ObjectId[] = [];
+
+    for (const doc of [...byPath, ...byId]) {
+      const idStr = doc._id.toString();
+      if (idStr === ownId || seen.has(idStr)) continue;
+      seen.add(idStr);
+      ids.push(doc._id);
+    }
 
     return ids;
   };
@@ -107,17 +126,23 @@ export default (crowi: Crowi) => {
     const links = linkDetector.search(body);
     const ids = await convertLinksToPageIds(savedPage, links);
 
-    const backlinks = await Promise.all(
-      ids.map((id) =>
-        Backlink.createByParameters({
-          page: id,
-          fromPage: savedPage._id,
-          fromRevision: savedPage.revision._id,
-        }),
-      ),
+    if (ids.length === 0) {
+      debug('No backlinks to save');
+      return [];
+    }
+
+    // Single batched write instead of N×Backlink.create()
+    const now = new Date();
+    const backlinks = await Backlink.insertMany(
+      ids.map((id) => ({
+        page: id,
+        fromPage: savedPage._id,
+        fromRevision: savedPage.revision._id,
+        updatedAt: now,
+      })),
     );
 
-    debug('All backlinks saved');
+    debug('All backlinks saved (%d)', backlinks.length);
     return backlinks;
   };
 
@@ -142,17 +167,19 @@ export default (crowi: Crowi) => {
         const links = linkDetector.search(body);
         const ids = await convertLinksToPageIds(page, links);
 
-        const backlinks = await Promise.all(
-          ids.map((id) =>
-            Backlink.createByParameters({
-              page: id,
-              fromPage: pageId,
-              fromRevision: revisionId,
-            }),
-          ),
+        if (ids.length === 0) return [];
+
+        const now = new Date();
+        const backlinks = await Backlink.insertMany(
+          ids.map((id) => ({
+            page: id,
+            fromPage: pageId,
+            fromRevision: revisionId,
+            updatedAt: now,
+          })),
         );
 
-        debug('All backlinks saved');
+        debug('All backlinks saved (%d)', backlinks.length);
         return backlinks;
       }),
     );
