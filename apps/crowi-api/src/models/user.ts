@@ -477,7 +477,15 @@ export default (crowi: Crowi) => {
 
     this.paginate(
       query,
-      { page: options.page || 1, limit: options.limit || PAGE_ITEMS },
+      {
+        page: options.page || 1,
+        limit: options.limit || PAGE_ITEMS,
+        sort,
+        // Drop secret fields at the Mongo layer instead of stripping them
+        // client-side via toUserPublic. Saves bandwidth between Mongo and
+        // Node and ensures no admin handler accidentally leaks a hash.
+        select: '-password -apiToken -googleId -githubId',
+      },
       function (err, result) {
         if (err) {
           debug('Error on pagination:', err);
@@ -486,7 +494,6 @@ export default (crowi: Crowi) => {
 
         return callback(err, result);
       },
-      { sortBy: sort },
     );
   };
 
