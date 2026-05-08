@@ -5,17 +5,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  // - cursor-pointer: hover affordance everywhere
-  // - disabled:cursor-not-allowed: clearer affordance when the button
-  //   doesn't accept clicks (replaces `disabled:pointer-events-none`,
-  //   which made the cursor flicker — pointer-events:none drops cursor
-  //   computation to the parent element, briefly flashing the default
-  //   arrow before the disabled state finished resolving)
-  // - the native `disabled` attribute already blocks click events on
-  //   <button>, so we don't need pointer-events:none for that
-  // - transition-[color,background-color,box-shadow] (not transition-all)
-  //   to keep hover state changes from forcing a full repaint
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-[color,background-color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  // Notes on the small differences from upstream shadcn:
+  // - cursor-pointer: hover affordance (Tailwind v4 dropped the legacy
+  //   pointer cursor on <button>; user-side `@layer base` rule wasn't
+  //   winning the cascade reliably under Turbopack).
+  // - disabled:cursor-not-allowed instead of disabled:pointer-events-none:
+  //   pointer-events:none drops cursor computation to the parent and
+  //   caused a flicker on disabled buttons. <button>'s native `disabled`
+  //   attribute already blocks click events, so we don't need it.
+  // - transition-colors (not transition-all): scope the property list so
+  //   hover-state class swaps don't trigger a full-style repaint cycle.
+  //   Box-shadow on focus-visible is no longer animated, which is a fine
+  //   trade for a stable cursor.
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
