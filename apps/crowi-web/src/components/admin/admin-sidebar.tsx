@@ -54,7 +54,15 @@ const NAV_GROUPS: AdminNavGroup[] = [
   },
   {
     heading: () => m['admin.section_users'](),
-    items: [{ href: '/admin/users', label: () => m['admin.nav_users'](), icon: Users }],
+    items: [
+      {
+        href: '/admin/users',
+        label: () => m['admin.nav_users'](),
+        icon: Users,
+        status: 'available',
+        description: () => m['admin.users.lead'](),
+      },
+    ],
   },
   {
     heading: () => m['admin.section_notification'](),
