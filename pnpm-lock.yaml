@@ -26,6 +26,9 @@ importers:
       '@crowi/api-contract':
         specifier: workspace:^
         version: link:../../packages/api-contract
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../../packages/plugin-api
       '@slack/client':
         specifier: ^5.0.2
         version: 5.0.2(debug@4.1.1)

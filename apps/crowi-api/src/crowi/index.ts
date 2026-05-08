@@ -24,6 +24,7 @@ import { hasSlackConfig } from '../models/config';
 import mailer from 'src/util/mailer';
 import slack from 'src/util/slack';
 import { resetKeyProvider } from 'src/util/crypto';
+import { PluginManager, type PluginRegistries } from 'src/plugin';
 import expressInit from './express-init';
 // import Searcher from 'src/service/search'
 
@@ -106,6 +107,15 @@ class Crowi {
   // FIXME: util/slack に型付けたらやる
   slack: any;
 
+  /**
+   * PluginManager + resolved registries. Available after `setupPlugins`
+   * runs in `init()`. `null` until then so a half-booted process is
+   * obvious in stack traces.
+   */
+  pluginManager: PluginManager | null = null;
+
+  pluginRegistries: PluginRegistries | null = null;
+
   initialized = false;
 
   constructor(rootdir: string, env: typeof process.env) {
@@ -146,6 +156,11 @@ class Crowi {
     await this.setupSessionConfig();
     await this.setupConfig();
     await this.migrateConfig();
+    // Plugins must boot AFTER config/models are ready (so PluginContext
+    // can read config and access models) but BEFORE the legacy
+    // searcher / mailer / slack initialisers — those are migrating to
+    // plugin-provided drivers and any conflict should fail noisily here.
+    await this.setupPlugins();
     await this.setupSearcher();
     await this.setupMailer();
     await this.setupSlack();
@@ -154,6 +169,24 @@ class Crowi {
     await this.buildServer();
 
     this.initialized = true;
+  }
+
+  async setupPlugins() {
+    this.pluginManager = new PluginManager(this);
+    this.pluginRegistries = await this.pluginManager.bootstrap();
+    const loaded = this.pluginManager.getLoadedPlugins();
+    console.log(`[crowi] Loaded ${loaded.length} plugin(s): ${loaded.map((p) => `${p.name}@${p.version}`).join(', ')}`);
+  }
+
+  /**
+   * Active storage / search / auth / notifier drivers resolved from
+   * `crowi.config.json`. Throws if accessed before `setupPlugins` ran.
+   */
+  getPlugins(): PluginRegistries {
+    if (!this.pluginRegistries) {
+      throw new Error('PluginManager has not been bootstrapped yet — call init() first.');
+    }
+    return this.pluginRegistries;
   }
 
   isInitialized() {

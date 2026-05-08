@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@crowi/api-contract": "workspace:^",
+    "@crowi/plugin-api": "workspace:^",
     "@slack/client": "^5.0.2",
     "@ts-rest/express": "^3.52.1",
     "@types/cors": "^2.8.19",
