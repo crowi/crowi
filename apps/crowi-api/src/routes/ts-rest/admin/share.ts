@@ -3,6 +3,7 @@ import { apiContract, type ShareSettings } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { coerceBoolean, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { internalServerErrorResponse } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:share');
@@ -57,10 +58,7 @@ export default (crowi: Crowi, _app: Express) => {
       } catch (err) {
         const error = err as Error;
         debug('Error saving share settings:', error.message);
-        return {
-          status: 500 as const,
-          body: { error: { code: 'INTERNAL_ERROR' as const, message: 'Internal server error' as const } },
-        };
+        return internalServerErrorResponse;
       }
 
       // Re-read from the in-memory cache (saveConfig updates it) so the

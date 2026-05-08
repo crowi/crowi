@@ -2,7 +2,7 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract, type AdminPager } from '@crowi/api-contract';
 import { Express, Router } from 'express';
 import Crowi from 'src/crowi';
-import { toUserPublic } from 'src/util/ts-rest-helpers';
+import { internalServerErrorResponse, toUserPublic } from 'src/util/ts-rest-helpers';
 import type { UserDocument, UserModel } from 'src/models/user';
 import Debug from 'debug';
 
@@ -129,10 +129,6 @@ function buildSearchFilter(q: string | undefined): { $or?: Record<string, { $reg
   };
 }
 
-const internalErrorBody = {
-  error: { code: 'INTERNAL_ERROR' as const, message: 'Internal server error' as const },
-};
-
 export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
   const router = Router();
@@ -168,7 +164,7 @@ export default (crowi: Crowi, _app: Express) => {
       } catch (err) {
         const error = err as Error;
         debug('Error listing users:', error.message);
-        return { status: 500 as const, body: internalErrorBody };
+        return internalServerErrorResponse;
       }
     },
 
@@ -190,7 +186,7 @@ export default (crowi: Crowi, _app: Express) => {
       } catch (err) {
         const error = err as Error;
         debug('Error searching users by email:', error.message);
-        return { status: 500 as const, body: internalErrorBody };
+        return internalServerErrorResponse;
       }
     },
   });

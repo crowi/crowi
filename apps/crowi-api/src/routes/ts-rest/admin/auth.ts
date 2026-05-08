@@ -4,6 +4,7 @@ import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { coerceBoolean, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { internalServerErrorResponse } from 'src/util/ts-rest-helpers';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:auth');
@@ -37,10 +38,7 @@ export default (crowi: Crowi, _app: Express) => {
       } catch (err) {
         const error = err as Error;
         debug('Error reading auth settings:', error.message);
-        return {
-          status: 500 as const,
-          body: { error: { code: 'INTERNAL_ERROR' as const, message: 'Internal server error' as const } },
-        };
+        return internalServerErrorResponse;
       }
     },
 
@@ -87,10 +85,7 @@ export default (crowi: Crowi, _app: Express) => {
       } catch (err) {
         const error = err as Error;
         debug('Error saving auth settings:', error.message);
-        return {
-          status: 500 as const,
-          body: { error: { code: 'INTERNAL_ERROR' as const, message: 'Internal server error' as const } },
-        };
+        return internalServerErrorResponse;
       }
 
       // Re-read from the in-memory cache (saveConfig updates it) so the

@@ -99,6 +99,16 @@ export const invalidPageIdResponse = {
 } as const;
 
 /**
+ * Standard 500 for an unexpected handler failure. Used by every admin
+ * handler that wraps its body in try/catch and needs to surface a typed
+ * `InternalServerError` shape (see `schemas/common.ts:InternalServerErrorSchema`).
+ */
+export const internalServerErrorResponse = {
+  status: 500 as const,
+  body: { error: { code: 'INTERNAL_ERROR' as const, message: 'Internal server error' as const } },
+} as const;
+
+/**
  * Minimum surface of the Page model that loadGrantedPage needs. We avoid
  * importing the full Page model type because crowi.model('Page') returns
  * a Mongoose Model with deeply-nested generics that would force every
