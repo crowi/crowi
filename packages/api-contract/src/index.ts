@@ -14,4 +14,5 @@ export * from './schemas/backlink';
 export * from './schemas/adminCrypto';
 export * from './schemas/admin/app';
 export * from './schemas/admin/security';
+export * from './schemas/admin/users';
 export * from './openapi';
