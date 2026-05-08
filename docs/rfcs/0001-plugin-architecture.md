@@ -1,6 +1,6 @@
 # RFC-0001: Plugin Architecture
 
-- **Status**: Draft
+- **Status**: Draft (round 2 — open-question resolutions integrated)
 - **Target**: Crowi 2.0 release
 - **Owner**: TBD
 - **Last updated**: 2026-05-08
@@ -117,6 +117,18 @@ export interface CrowiPlugin {
   registerNotifier?: (registry: NotifierRegistry, ctx: PluginContext) => void;
 
   /**
+   * Per-Page metadata schema. Each plugin gets a private namespace at
+   * `page.metadata['<plugin-name>']`. Lets a plugin attach config to an
+   * individual page (e.g. Slack's per-page channel mapping) without
+   * polluting the core Page schema.
+   *
+   * The page-edit UI walks installed plugins and renders one section
+   * per plugin that contributes a `pageMetadataSchema`, via the same
+   * schema-driven form used for global config.
+   */
+  pageMetadataSchema?: z.ZodObject<Record<string, z.ZodTypeAny>>;
+
+  /**
    * Lifecycle event subscriptions (page saved, comment added, etc.).
    * Reserved for v2.0 internal use; not yet a stable extension point for
    * community plugins.
@@ -124,10 +136,17 @@ export interface CrowiPlugin {
   registerHooks?: (events: EventBus, ctx: PluginContext) => void;
 
   /**
-   * Custom REST endpoints mounted at `/api/v2/plugins/<name>/*`.
-   * Used for "Test connection" buttons, OAuth callbacks, etc.
+   * ts-rest contract that the plugin contributes. Mounted at
+   * `/api/v2/plugins/<name>/*` (the `<name>` segment guarantees no
+   * collision with core endpoints). Used for "Test connection" buttons,
+   * OAuth callbacks, etc.
+   *
+   * The contract surface uses ts-rest so the admin UI can call into
+   * plugin endpoints with the same `apiClient.<plugin>.<method>` shape
+   * it uses for core endpoints. Plugins depend on the same `@ts-rest/core`
+   * version as core via a peer dependency.
    */
-  registerRoutes?: (router: PluginRouter, ctx: PluginContext) => void;
+  registerRoutes?: (s: PluginRouterScope, ctx: PluginContext) => void;
 
   /**
    * Run-once setup when this plugin is first activated. Typically used
@@ -150,6 +169,11 @@ export interface PluginContext {
   config: <S extends z.ZodTypeAny>() => z.infer<S>;
   /** Write a value to this plugin's config namespace. */
   setConfig: (key: string, value: unknown) => Promise<void>;
+  /** Read/write the plugin's per-Page metadata namespace. */
+  pageMetadata: {
+    get: <T>(pageId: string) => Promise<T | null>;
+    set: <T>(pageId: string, value: T) => Promise<void>;
+  };
   /** Mongoose models exposed by core (Page, User, Config, ...). */
   model: <K extends keyof CoreModels>(name: K) => CoreModels[K];
   /** Encrypt / decrypt — same KeyProvider as core sensitive Config. */
@@ -199,8 +223,9 @@ At boot, after `setupConfig` and before `setupSearcher` / `setupMailer` /
 etc., the runtime runs `PluginManager.loadAll()`:
 
 1. Read `plugins: string[]` from `crowi.config.json`. Always prepend the
-   *implicit defaults* (`@crowi/storage-local`, `@crowi/search-mongo`,
-   `@crowi/auth-local`) so a fresh install starts with a working Wiki.
+   *implicit defaults* (`@crowi/storage-local`, `@crowi/search-mongo`) so
+   a fresh install starts with a working Wiki. Local password auth lives
+   in core itself, not in a plugin, so it doesn't appear here.
 2. For each name, `await import(name)` to load the module. The package's
    default export must satisfy `CrowiPlugin` — fail boot loudly otherwise.
 3. Build a dependency graph from each plugin's `requires` array; topologically
@@ -229,12 +254,15 @@ fails with a clear error pointing at the missing plugin.
 | `@crowi/cli` | `crowi init`, `crowi plugin add/remove`, `crowi start`, `crowi migrate` |
 | `@crowi/storage-local` | Default storage driver — bundled and auto-loaded |
 | `@crowi/storage-aws-s3` | S3 driver |
-| `@crowi/search-mongo` | Default search driver (Mongo regex) — bundled and auto-loaded |
+| `@crowi/search-mongo` | Default search driver (Mongo `$regex` over path / title / body) — bundled and auto-loaded |
 | `@crowi/search-elasticsearch` | ES driver |
-| `@crowi/auth-local` | Default password auth — bundled and auto-loaded |
 | `@crowi/auth-google` | Google OAuth |
 | `@crowi/auth-github` | GitHub OAuth |
 | `@crowi/notify-slack` | Slack notification sink |
+
+Local password / session / JWT auth lives in **core**, not as a plugin.
+Foundational enough that every install needs it and decoupling adds more
+complexity than value.
 
 ### `crowi.config.json`
 
@@ -258,9 +286,11 @@ in this file — it lives in the existing Mongo `Config` collection under
 ### CLI commands
 
 ```
-crowi init <dir>              # scaffold project: data/, crowi.config.json, .env
+crowi init <dir>              # scaffold project: data/, crowi.config.json, .env, package.json
 crowi plugin add <pkg>...     # npm install + append to plugins[]
-crowi plugin remove <pkg>     # npm uninstall + drop from plugins[]
+crowi plugin remove <pkg>     # npm uninstall + drop from plugins[] (config rows kept by default)
+crowi plugin remove <pkg> --purge
+                              # …also delete plugin:<name>:* config rows from Mongo
 crowi plugin list             # show installed plugins + versions + status
 crowi start                   # launch the server (production)
 crowi migrate                 # run any pending data migrations
@@ -269,6 +299,56 @@ crowi migrate                 # run any pending data migrations
 `crowi plugin add` validates the name against the `@crowi/*` allowlist for
 v2.0. The allowlist constraint is removed in a future RFC once we have a
 trust story for community plugins.
+
+The `--purge` flag on remove exists because, by default, removing a plugin
+keeps its config rows in place — the operator may reinstall the plugin
+later (e.g. while reorganising) and would lose AWS keys / OAuth client
+secrets if removal also wiped them. `--purge` is the explicit "I know what
+I'm doing, drop the rows too" gesture.
+
+### Project layout
+
+`crowi init` produces a regular npm project — `package.json`,
+`node_modules/`, lockfile and all — so power users can run `npm install`
+directly, edit `package.json`, or pin plugin versions with their normal
+tooling. The CLI is a convenience wrapper on top, not a replacement.
+
+```
+my-wiki/
+├── package.json           ← regular npm project; CLI writes to it
+├── package-lock.json
+├── node_modules/          ← @crowi/server + @crowi/cli + plugins live here
+├── crowi.config.json      ← CLI's source of truth for installed plugin list
+├── .env                   ← CROWI_ENCRYPTION_KEY, MONGO_URI, etc.
+└── data/                  ← local file uploads (when @crowi/storage-local is active)
+```
+
+CI deploy story: commit `crowi.config.json` + `package.json` +
+`package-lock.json`; CI runs `npm ci && crowi migrate && crowi start`. No
+git clone of the Crowi repo required.
+
+### Docker distribution
+
+Two image variants published to Docker Hub:
+
+- **`crowi/server:2.0`** — `@crowi/cli` + `@crowi/server` + the four
+  default-on / bundled plugins. Sufficient for a fresh install with local
+  storage / Mongo regex search / local password auth.
+- **`crowi/server-full:2.0`** — same plus all official `@crowi/*` plugins
+  preinstalled (S3 / ES / Google OAuth / GitHub OAuth / Slack). Operators
+  pick the drivers they want via `crowi.config.json`.
+
+Custom-plugin operators extend the base image:
+
+```Dockerfile
+FROM crowi/server:2.0
+RUN crowi plugin add @crowi/storage-aws-s3 @crowi/notify-slack
+COPY crowi.config.json /app/
+```
+
+Or they mount their `package.json` + `crowi.config.json` and let the
+container `npm ci` at startup. Both work because the project layout above
+is a regular npm project.
 
 ## Admin UI
 
@@ -355,10 +435,13 @@ In scope:
 - Plugins:
   - `@crowi/storage-local`, `@crowi/storage-aws-s3`
   - `@crowi/search-mongo`, `@crowi/search-elasticsearch`
-  - `@crowi/auth-local`, `@crowi/auth-google`, `@crowi/auth-github`
+  - `@crowi/auth-google`, `@crowi/auth-github`
   - `@crowi/notify-slack`
+- Local password / session / JWT auth stays in **core** (not a plugin)
 - Schema-driven admin form
 - v1.x → v2.0 config migration for the legacy keys above
+- Docker images: `crowi/server:2.0` (default-on plugins) and
+  `crowi/server-full:2.0` (all official plugins preinstalled)
 
 Out of scope (deferred to v2.1 RFCs):
 
@@ -371,38 +454,80 @@ Out of scope (deferred to v2.1 RFCs):
 - Discord / Webhook / Email notifier plugins
 - Hot-reload of plugins (always requires restart in v2.0)
 
+## Resolved decisions (round 2 review)
+
+1. **Search default fallback** → `@crowi/search-mongo` is a thin wrapper
+   over Mongo `$regex` against `path` / `title` / `body`. No inverted
+   index in core; if you need real search, install `@crowi/search-elasticsearch`.
+2. **Plugin routes** → ts-rest contracts, mounted under
+   `/api/v2/plugins/<name>/*`. The `<name>` path prefix is the namespace
+   guarantee — plugins cannot collide with core endpoints or each other.
+3. **`auth-local`** → stays in core. Not packaged as a plugin.
+4. **Uninstall data** → keep config rows by default, `--purge` flag wipes.
+   Files / indices / external state owned by the plugin (S3 objects, ES
+   indices) are *never* touched by uninstall — operators clean those up
+   on their own infrastructure.
+5. **Sensitive key enumeration across plugins** → `PluginManager.listSensitiveKeys()`
+   walks each loaded plugin's `configSchema` and returns the union of all
+   `@sensitive`-marked field paths. Core's "re-encrypt all" routine
+   consults this list instead of the legacy hardcoded
+   `models/config-sensitive.ts`. The legacy list stays as a compat
+   bridge for the v1.x → v2.0 transition; plugins eventually own it.
+6. **Project layout** → regular npm project (visible `package.json`
+   etc., see "Project layout" above). The CLI is a convenience layer on
+   top, not a replacement. Docker-based deployment is supported by
+   shipping `crowi/server:2.0` images, see "Docker distribution".
+
 ## Open questions
 
-1. **Mongo regex search as the default**: is `$regex` against `path` /
-   `title` / `body` good enough as a no-op fallback when the ES plugin
-   isn't installed? Or should we ship a tiny in-process inverted-index
-   driver as `@crowi/search-mongo`?
-2. **Plugin-provided routes vs. ts-rest contract**: should `registerRoutes`
-   take an Express router, or register a ts-rest contract? The latter is
-   typed but forces every plugin to depend on ts-rest.
-3. **Auth-local in core or as a plugin?** It's listed as a plugin
-   (`@crowi/auth-local`) above, but local password auth is so foundational
-   that bundling it directly in core may be cleaner. The cost: harder to
-   later disable for a passwordless installation.
-4. **Plugin uninstall data semantics**: when removing
-   `@crowi/storage-aws-s3`, do we leave the `plugin:storage-aws-s3:*`
-   config rows in place (in case the operator reinstalls), or wipe them?
-   Default: leave them; provide `crowi plugin remove --purge` to wipe.
-5. **Config secret rotation**: today's sensitive Config encryption is
-   centralised in core. When a plugin defines a new sensitive field,
-   re-encryption ("admin: re-encrypt all sensitive values") must enumerate
-   *all installed plugins'* sensitive keys. Mechanism TBD — likely
-   `PluginManager.listSensitiveKeys()` walking each plugin's `configSchema`.
-6. **CLI lockfile semantics**: `crowi plugin add` writes to `package.json`
-   + `package-lock.json` of the project's `node_modules/`. Do we expose
-   the project root as a regular npm project (so `npm install` after
-   `git pull` works), or wrap it behind the CLI? Leaning toward exposing
-   it.
-7. **Plugin UI customisation beyond config form**: Slack notification
-   "Add channel mapping" is a list-management UI, not a single form.
-   Likely needs a richer admin section than what schema-driven generation
-   covers. Open: do we allow plugins to ship a precompiled Next.js page,
-   accept the iframe approach, or define a richer schema vocabulary?
+1. **Plugin-contributed page-scoped metadata** (raised by Slack channel
+   mapping): the legacy "channel mapping" admin table — global
+   `path-glob → slack channel` rules — is widely considered awkward.
+   A cleaner model is per-Page metadata namespaced by plugin:
+
+   ```ts
+   // on the Page document
+   metadata: {
+     'notify-slack': { channel: '#eng-team' },
+     // other plugins' fields, keyed by plugin name
+   }
+   ```
+
+   Plugins read/write through `ctx.pageMetadata(page._id, '<plugin-name>')`.
+   The page-edit UI surfaces a "Plugin settings" panel that walks installed
+   plugins and renders any per-page schema each contributes
+   (`pageMetadataSchema?: z.ZodObject<...>`).
+
+   Open sub-questions:
+   - **Inheritance / glob fallback**: the legacy table allowed
+     `'/eng/*' → '#eng'` so every new page under `/eng/` got the channel
+     for free. Per-page metadata loses this. Two paths:
+     (a) plugin also supports an admin-side "path rules" table that fills
+     `page.metadata` on save, or
+     (b) drop the inheritance feature entirely and require explicit
+     per-page metadata.
+   - **Where the panel lives**: page edit screen, page settings dialog,
+     or a separate `/<path>/metadata` admin route?
+   - **Permission model**: who can edit plugin metadata on a page —
+     anyone with edit rights to the page, or admins only?
+
+   Defer the full design to a follow-up RFC scoped to the Slack plugin
+   redesign; this RFC just commits to providing the `pageMetadata` /
+   `pageMetadataSchema` extension points so the eventual plugin can use
+   them.
+
+2. **Bundled core defaults**: `@crowi/storage-local` and
+   `@crowi/search-mongo` are listed as separate npm packages bundled
+   with `@crowi/server`. Alternatively they could be inline modules in
+   core. The npm-package version is more consistent with the plugin
+   model but adds packaging overhead. Decide during step 1 of the
+   implementation plan.
+
+3. **Plugin API versioning**: `@crowi/plugin-api@2.x` is the contract for
+   all v2.x plugins. When v3 introduces breaking changes, plugins remain
+   on v2 until they migrate. Concretely: should `@crowi/server` accept
+   plugins that depend on multiple major versions of `plugin-api`, or
+   reject mismatches at boot? Lean reject — too easy to silently break.
 
 ## Implementation plan (informational, not part of the contract)
 
@@ -418,7 +543,8 @@ Order of work for the v2.0 release:
    + add `@crowi/search-mongo` as the default fallback.
 5. Convert auth: extract Google / GitHub passport strategies into
    `@crowi/auth-google` / `@crowi/auth-github`. Local password auth stays
-   in core (per open question #3, decide finally here).
+   in core; the AuthRegistry is a list of *additional* providers that the
+   login screen surfaces alongside the always-on email-and-password form.
 6. Convert notification (slack).
 7. Schema-driven admin form generalisation.
 8. CLI + server runtime packaging — `@crowi/cli`, `@crowi/server`,
