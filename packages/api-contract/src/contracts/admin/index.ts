@@ -1,6 +1,7 @@
 import { initContract } from '@ts-rest/core';
 import { adminAppContract } from './app';
 import { adminSecurityContract } from './security';
+import { adminShareContract } from './share';
 
 const c = initContract();
 
@@ -12,4 +13,5 @@ const c = initContract();
 export const adminContract = c.router({
   app: adminAppContract,
   security: adminSecurityContract,
+  share: adminShareContract,
 });
