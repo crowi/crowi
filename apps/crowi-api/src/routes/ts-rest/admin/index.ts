@@ -2,6 +2,7 @@ import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import appRoutes from './app';
 import securityRoutes from './security';
+import shareRoutes from './share';
 
 /**
  * Aggregate router for all admin-only ts-rest endpoints. Mounted under the
@@ -14,6 +15,7 @@ export default (crowi: Crowi, app: Express) => {
 
   router.use(appRoutes(crowi, app));
   router.use(securityRoutes(crowi, app));
+  router.use(shareRoutes(crowi, app));
 
   return router;
 };
