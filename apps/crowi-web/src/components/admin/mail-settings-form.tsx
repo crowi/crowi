@@ -9,6 +9,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { SecretField } from '@/components/admin/secret-field';
 import { useAuth } from '@/lib/use-auth';
 import { MailSettingsValidationFailure, useMailSettings, useSendTestMail, useUpdateMailSettings } from '@/lib/use-admin-mail-settings';
 import { m } from '@paraglide/messages.js';
@@ -285,63 +286,26 @@ export function MailSettingsForm() {
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="smtp-password">{m['admin.mail.field_smtp_password_label']()}</Label>
-              {hasSmtpPassword && !smtpPasswordClearRequested && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
-                  <CheckCircle2 className="h-3 w-3" />
-                  {m['admin.common.secret_saved_badge']()}
-                </span>
-              )}
-              {smtpPasswordClearRequested && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {m['admin.common.secret_clear_pending_badge']()}
-                </span>
-              )}
-            </div>
-            <Input
-              id="smtp-password"
-              type="password"
-              value={state.smtpPassword}
-              onChange={(e) => {
-                setState({ ...state, smtpPassword: e.target.value });
-                setSmtpPasswordDirty(true);
-                setSmtpPasswordClearRequested(false);
-              }}
-              aria-invalid={Boolean(errorOf('smtpPassword'))}
-              placeholder={hasSmtpPassword ? m['admin.common.field_secret_placeholder_set']() : m['admin.common.field_secret_placeholder_unset']()}
-              autoComplete="new-password"
-              disabled={smtpPasswordClearRequested}
-            />
-            {errorOf('smtpPassword') && (
-              <p className="text-xs text-destructive" role="alert">
-                {errorOf('smtpPassword')}
-              </p>
-            )}
-            {hasSmtpPassword && (
-              <div className="pt-1">
-                {!smtpPasswordClearRequested ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSmtpPasswordClearRequested(true);
-                      setSmtpPasswordDirty(false);
-                      setState({ ...state, smtpPassword: '' });
-                    }}
-                  >
-                    {m['admin.common.secret_clear_button']()}
-                  </Button>
-                ) : (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setSmtpPasswordClearRequested(false)}>
-                    {m['admin.common.secret_clear_undo']()}
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
+          <SecretField
+            id="smtp-password"
+            label={m['admin.mail.field_smtp_password_label']()}
+            value={state.smtpPassword}
+            hasValue={hasSmtpPassword}
+            dirty={smtpPasswordDirty}
+            clearRequested={smtpPasswordClearRequested}
+            onChange={(value) => {
+              setState({ ...state, smtpPassword: value });
+              setSmtpPasswordDirty(true);
+              setSmtpPasswordClearRequested(false);
+            }}
+            onClearRequested={() => {
+              setSmtpPasswordClearRequested(true);
+              setSmtpPasswordDirty(false);
+              setState({ ...state, smtpPassword: '' });
+            }}
+            onUndoClear={() => setSmtpPasswordClearRequested(false)}
+            error={errorOf('smtpPassword')}
+          />
         </CardContent>
       </Card>
 
@@ -385,63 +349,26 @@ export function MailSettingsForm() {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="ses-secret-key">{m['admin.mail.field_secret_label']()}</Label>
-              {hasAwsSecret && !awsSecretClearRequested && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
-                  <CheckCircle2 className="h-3 w-3" />
-                  {m['admin.common.secret_saved_badge']()}
-                </span>
-              )}
-              {awsSecretClearRequested && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {m['admin.common.secret_clear_pending_badge']()}
-                </span>
-              )}
-            </div>
-            <Input
-              id="ses-secret-key"
-              type="password"
-              value={state.awsSecretAccessKey}
-              onChange={(e) => {
-                setState({ ...state, awsSecretAccessKey: e.target.value });
-                setAwsSecretDirty(true);
-                setAwsSecretClearRequested(false);
-              }}
-              aria-invalid={Boolean(errorOf('aws.secretAccessKey'))}
-              placeholder={hasAwsSecret ? m['admin.common.field_secret_placeholder_set']() : m['admin.common.field_secret_placeholder_unset']()}
-              autoComplete="new-password"
-              disabled={awsSecretClearRequested}
-            />
-            {errorOf('aws.secretAccessKey') && (
-              <p className="text-xs text-destructive" role="alert">
-                {errorOf('aws.secretAccessKey')}
-              </p>
-            )}
-            {hasAwsSecret && (
-              <div className="pt-1">
-                {!awsSecretClearRequested ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setAwsSecretClearRequested(true);
-                      setAwsSecretDirty(false);
-                      setState({ ...state, awsSecretAccessKey: '' });
-                    }}
-                  >
-                    {m['admin.common.secret_clear_button']()}
-                  </Button>
-                ) : (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setAwsSecretClearRequested(false)}>
-                    {m['admin.common.secret_clear_undo']()}
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
+          <SecretField
+            id="ses-secret-key"
+            label={m['admin.mail.field_secret_label']()}
+            value={state.awsSecretAccessKey}
+            hasValue={hasAwsSecret}
+            dirty={awsSecretDirty}
+            clearRequested={awsSecretClearRequested}
+            onChange={(value) => {
+              setState({ ...state, awsSecretAccessKey: value });
+              setAwsSecretDirty(true);
+              setAwsSecretClearRequested(false);
+            }}
+            onClearRequested={() => {
+              setAwsSecretClearRequested(true);
+              setAwsSecretDirty(false);
+              setState({ ...state, awsSecretAccessKey: '' });
+            }}
+            onUndoClear={() => setAwsSecretClearRequested(false)}
+            error={errorOf('aws.secretAccessKey')}
+          />
         </CardContent>
       </Card>
 

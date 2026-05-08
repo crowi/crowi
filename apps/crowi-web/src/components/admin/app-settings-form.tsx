@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { SecretField } from '@/components/admin/secret-field';
 import { AppSettingsValidationFailure, useAppSettings, useUpdateAppSettings } from '@/lib/use-admin-app-settings';
 import { m } from '@paraglide/messages.js';
 
@@ -345,70 +346,26 @@ export function AppSettingsForm() {
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="aws-secret-key">{m['admin.app.field_secret_label']()}</Label>
-              {hasSecret && !secretClearRequested && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
-                  <CheckCircle2 className="h-3 w-3" />
-                  {m['admin.common.secret_saved_badge']()}
-                </span>
-              )}
-              {secretClearRequested && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {m['admin.common.secret_clear_pending_badge']()}
-                </span>
-              )}
-            </div>
-            <Input
-              id="aws-secret-key"
-              type="password"
-              value={state.awsSecretAccessKey}
-              onChange={(e) => {
-                setState({ ...state, awsSecretAccessKey: e.target.value });
-                setSecretDirty(true);
-                setSecretClearRequested(false);
-              }}
-              aria-invalid={Boolean(errorOf('upload.aws.secretAccessKey'))}
-              placeholder={hasSecret ? m['admin.common.field_secret_placeholder_set']() : m['admin.common.field_secret_placeholder_unset']()}
-              autoComplete="new-password"
-              disabled={secretClearRequested}
-            />
-            {errorOf('upload.aws.secretAccessKey') && (
-              <p className="text-xs text-destructive" role="alert">
-                {errorOf('upload.aws.secretAccessKey')}
-              </p>
-            )}
-            {hasSecret && (
-              <div className="pt-1">
-                {!secretClearRequested ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSecretClearRequested(true);
-                      setSecretDirty(false);
-                      setState({ ...state, awsSecretAccessKey: '' });
-                    }}
-                  >
-                    {m['admin.common.secret_clear_button']()}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setSecretClearRequested(false);
-                    }}
-                  >
-                    {m['admin.common.secret_clear_undo']()}
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
+          <SecretField
+            id="aws-secret-key"
+            label={m['admin.app.field_secret_label']()}
+            value={state.awsSecretAccessKey}
+            hasValue={hasSecret}
+            dirty={secretDirty}
+            clearRequested={secretClearRequested}
+            onChange={(value) => {
+              setState({ ...state, awsSecretAccessKey: value });
+              setSecretDirty(true);
+              setSecretClearRequested(false);
+            }}
+            onClearRequested={() => {
+              setSecretClearRequested(true);
+              setSecretDirty(false);
+              setState({ ...state, awsSecretAccessKey: '' });
+            }}
+            onUndoClear={() => setSecretClearRequested(false)}
+            error={errorOf('upload.aws.secretAccessKey')}
+          />
         </CardContent>
       </Card>
 
