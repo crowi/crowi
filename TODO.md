@@ -48,7 +48,10 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 - [ ] **検索画面**: `/_search` / `/_api/search`
 - [ ] **Elasticsearch 復活** (現在 docker-compose から外し中、バージョン更新込み)
-- [ ] **Attachments**: `attachments.list` / `attachments.add` / `attachments.remove`
+- [x] **Attachments**: `attachments.list` / `attachments.add` / `attachments.remove` — ts-rest 化 (`/api/v2/pages/:pageId/attachments` + `/api/v2/attachments/:id`)、生 Express で stream delivery (`GET /api/v2/attachments/:id` / `GET /api/v2/attachments/by-key/:key` whitelist `user/`)、`/files/:id` は 302 redirect、`Attachment.fileUrl` virtual と `fileUploader.generateUrl` を新ルートに揃え、profile picture round-trip も復活。Web 側は `useAttachments` + `<AttachmentList>` を page-view footer に embed (画像は inline preview / 他は download link)。
+  - 意味論変更: `attachments.add` の暗黙 page 作成 (`page_id=0` + path) は廃止 (フロントエンドが createPage → addAttachment の 2 step に分割する想定)
+  - 意味論変更: `attachments.remove` の権限を `creator OR admin OR page.grantedUsers` に絞る (legacy は誰でも削除可だった)
+  - フォローアップ別タスクに送ったもの: drag-and-drop / inline 画像挿入 (page-edit UI)、Share 経由 anonymous attachment view、サーバ側 MIME / size 強制、user.image legacy URL のマイグレーションスクリプト、attachment list pagination
 
 ## Low Priority — フェーズ 4 (管理画面、重い)
 
