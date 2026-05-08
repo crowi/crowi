@@ -41,9 +41,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   // 認証チェック中、または接続正常時の未認証の場合はローディング画面を表示
   // 接続エラー時は下のレイアウト(エラーバナー/モーダル付き)を表示
   if (!isAuthenticated && (isLoading || connectionState === 'connected')) {
+    // Intentionally locale-agnostic: this Client Component is SSR-rendered
+    // before hydration and Paraglide's getLocale() is bound to a different
+    // runtime instance there than in Server Components, so any localised
+    // string here would mismatch and trip hydration. The full layout below
+    // (which renders after hydration) uses the proper m['*']() lookups.
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--crowi-header)] via-[oklch(0.35_0.03_192)] to-[oklch(0.4_0.04_170)]">
-        <div className="text-white text-lg">{m['common.loading']()}</div>
+        <div className="text-white text-lg">Loading...</div>
       </div>
     );
   }
