@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "jsx": "react",
     "allowJs": true,
-    "checkJs": true,
+    "checkJs": false,
     "outDir": "./dist",
     "sourceMap": true,
     "declaration": true,

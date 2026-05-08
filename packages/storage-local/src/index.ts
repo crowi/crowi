@@ -77,9 +77,13 @@ export function createLocalDriver(config: LocalStorageConfig): StorageDriver {
       const target = resolveSafe(key);
       if (!existsSync(target)) {
         // Mimic the standard `ENOENT` error so callers can branch on it.
-        const err = new Error(`Storage key '${key}' does not exist`) as NodeJS.ErrnoException;
-        err.code = 'ENOENT';
-        throw err;
+        // Use Object.assign instead of a property cast: tsup emits the
+        // assign verbatim with no type info, which keeps the published
+        // `dist/index.js` valid for ts-node when @crowi/api dev imports
+        // this package. The cast form leaves a raw `err.code = …` in
+        // the bundle and ts-node trips on `Property 'code' does not
+        // exist on type 'Error'`.
+        throw Object.assign(new Error(`Storage key '${key}' does not exist`), { code: 'ENOENT' });
       }
       return createReadStream(target);
     },
