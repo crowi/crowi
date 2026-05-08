@@ -79,8 +79,8 @@ export class PluginManager {
     const config = await loadCrowiConfigFile(projectDir);
     debug('loaded crowi.config.json: plugins=%o', config.plugins);
 
-    const names = resolvePluginList(config);
-    const plugins = await this.importAll(names);
+    const seedNames = resolvePluginList(config);
+    const plugins = await this.importWithTransitives(seedNames);
     const ordered = topoSortPlugins(plugins);
     this.loadedPlugins = ordered;
 
@@ -95,6 +95,15 @@ export class PluginManager {
       notifier: this.notifier,
       active: this.resolveActiveDrivers(config),
     };
+  }
+
+  /**
+   * Look up a plugin by npm name from the loaded set. Used by
+   * `PluginContext.dependencyConfig` to resolve another plugin's
+   * configSchema. Returns undefined when the name isn't loaded.
+   */
+  getLoadedPlugin(name: string): CrowiPlugin | undefined {
+    return this.loadedPlugins.find((p) => p.name === name);
   }
 
   /**
@@ -125,30 +134,50 @@ export class PluginManager {
     return out;
   }
 
-  private async importAll(names: string[]): Promise<CrowiPlugin[]> {
-    const plugins: CrowiPlugin[] = [];
-    for (const name of names) {
-      let mod: { default?: unknown };
-      try {
-        mod = (await import(name)) as { default?: unknown };
-      } catch (err) {
-        throw new Error(`Failed to import plugin '${name}': ${(err as Error).message}`);
+  /**
+   * Import the given seed plugin names *and* recursively follow each
+   * loaded plugin's `requires` array, importing any transitive deps
+   * not already in the set. Lets the operator list only the leaf
+   * plugins they care about (`@crowi/storage-aws-s3`) and have base
+   * plugins (`@crowi/aws`) auto-loaded via npm transitive resolution.
+   */
+  private async importWithTransitives(seedNames: string[]): Promise<CrowiPlugin[]> {
+    const loaded = new Map<string, CrowiPlugin>();
+    const queue = [...seedNames];
+
+    while (queue.length > 0) {
+      const name = queue.shift() as string;
+      if (loaded.has(name)) continue;
+      const plugin = await this.importOne(name);
+      loaded.set(name, plugin);
+      for (const dep of plugin.requires ?? []) {
+        if (!loaded.has(dep)) queue.push(dep);
       }
-      const candidate = mod.default;
-      if (!isCrowiPlugin(candidate)) {
-        throw new Error(`Plugin '${name}' default export does not satisfy CrowiPlugin (missing name / version / register* hooks).`);
-      }
-      if (candidate.name !== name) {
-        throw new Error(`Plugin '${name}' declares its own name as '${candidate.name}'. They must match.`);
-      }
-      plugins.push(candidate);
     }
-    return plugins;
+
+    return Array.from(loaded.values());
+  }
+
+  private async importOne(name: string): Promise<CrowiPlugin> {
+    let mod: { default?: unknown };
+    try {
+      mod = (await import(name)) as { default?: unknown };
+    } catch (err) {
+      throw new Error(`Failed to import plugin '${name}': ${(err as Error).message}`);
+    }
+    const candidate = mod.default;
+    if (!isCrowiPlugin(candidate)) {
+      throw new Error(`Plugin '${name}' default export does not satisfy CrowiPlugin (missing name / version / register* hooks).`);
+    }
+    if (candidate.name !== name) {
+      throw new Error(`Plugin '${name}' declares its own name as '${candidate.name}'. They must match.`);
+    }
+    return candidate;
   }
 
   private async activate(plugin: CrowiPlugin): Promise<void> {
     debug('activating %s@%s', plugin.name, plugin.version);
-    const ctx = createPluginContext(plugin, this.crowi);
+    const ctx = createPluginContext(plugin, this.crowi, this);
 
     // onInstall runs unconditionally for now. A follow-up will track
     // installed-once state in Mongo and skip on subsequent boots.

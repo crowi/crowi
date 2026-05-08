@@ -14,6 +14,20 @@ export interface PluginContext {
    */
   config<T>(): T;
 
+  /**
+   * Read a typed dependency plugin's config. The target plugin must
+   * be listed in this plugin's `requires` array — reading another
+   * plugin's config without declaring the dependency is a contract
+   * violation and throws.
+   *
+   * Useful for shared-credential plugins like `@crowi/aws`: the base
+   * plugin owns `region` / `accessKeyId` / `secretAccessKey`, and
+   * dependents (`@crowi/storage-aws-s3`, `@crowi/mail-aws-ses`) read
+   * them through this method instead of duplicating the fields in
+   * their own configSchema.
+   */
+  dependencyConfig<T>(dependencyName: string): T;
+
   /** Write a single config field, persisting to Mongo. */
   setConfig(key: string, value: unknown): Promise<void>;
 

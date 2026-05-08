@@ -172,7 +172,7 @@ export default (crowi: Crowi, _app: Express) => {
 
           try {
             await fileUploader.uploadFile(filePath, tmpFile.mimetype, tmpFileStream, {});
-            const imageUrl = fileUploader.generateUrl(filePath);
+            const imageUrl = await fileUploader.generateUrl(filePath);
 
             // Update user image
             await new Promise<void>((resolveUpdate, rejectUpdate) => {

@@ -51,12 +51,9 @@ export type CrowiConfigFile = z.infer<typeof CrowiConfigFileSchema>;
  * fresh install starts up as a working Wiki without any additional
  * plugin install.
  *
- * Note: this list is empty during the v2.0 transition until the
- * matching plugin packages land (Step 3+ of RFC-0001). Until then,
- * `PluginManager.bootstrap()` returns null active drivers and
- * legacy in-core code paths keep handling storage / search.
+ * `@crowi/search-mongo` is added in a follow-up step.
  */
-export const IMPLICIT_DEFAULT_PLUGINS: readonly string[] = [];
+export const IMPLICIT_DEFAULT_PLUGINS: readonly string[] = ['@crowi/storage-local'];
 
 /**
  * Read and validate `crowi.config.json` from the given project

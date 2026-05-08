@@ -4,6 +4,16 @@ import type Crowi from 'src/crowi';
 import { decrypt, encrypt } from 'src/util/crypto';
 
 /**
+ * Closure over the registry of loaded plugins, used by
+ * `PluginContext.dependencyConfig` to resolve another plugin's
+ * configSchema. Decoupled from the PluginManager so we don't create a
+ * circular import.
+ */
+export interface PluginLookup {
+  getLoadedPlugin(name: string): CrowiPlugin | undefined;
+}
+
+/**
  * Build a `PluginContext` instance for a single plugin. The runtime
  * passes this object to every `register*` callback and to the
  * `onInstall` / `onUninstall` lifecycle hooks; from the plugin's POV
@@ -13,7 +23,7 @@ import { decrypt, encrypt } from 'src/util/crypto';
  * config / pageMetadata reads are scoped without the plugin needing
  * to thread the name everywhere.
  */
-export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi): PluginContext {
+export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: PluginLookup): PluginContext {
   const log: PluginLogger = (() => {
     const debug = Debug(`crowi:plugin:${plugin.name}`);
     return {
@@ -36,6 +46,28 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi): PluginCo
       const result = schema.safeParse(ns);
       if (!result.success) {
         throw new Error(`Plugin '${plugin.name}' config validation failed: ${result.error.message}`);
+      }
+      return result.data as T;
+    },
+
+    dependencyConfig<T>(dependencyName: string): T {
+      if (!plugin.requires?.includes(dependencyName)) {
+        throw new Error(`Plugin '${plugin.name}' tried to read dependency config of '${dependencyName}', but did not list it in 'requires'.`);
+      }
+      const dep = lookup.getLoadedPlugin(dependencyName);
+      if (!dep) {
+        // The PluginManager already validates `requires` at load
+        // time, so this branch only fires on a programming bug.
+        throw new Error(`Dependency plugin '${dependencyName}' is not loaded — PluginManager invariant broken.`);
+      }
+      const schema = dep.configSchema;
+      if (!schema) {
+        throw new Error(`Dependency plugin '${dependencyName}' did not declare a configSchema.`);
+      }
+      const ns = readPluginConfigNamespace(crowi, dependencyName);
+      const result = schema.safeParse(ns);
+      if (!result.success) {
+        throw new Error(`Dependency plugin '${dependencyName}' config validation failed: ${result.error.message}`);
       }
       return result.data as T;
     },

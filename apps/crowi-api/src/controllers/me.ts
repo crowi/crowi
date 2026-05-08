@@ -60,8 +60,8 @@ export default (crowi: Crowi, app: Express) => {
 
     fileUploader
       .uploadFile(filePath, tmpFile.mimetype, tmpFileStream, {})
-      .then(function (data) {
-        const imageUrl = fileUploader.generateUrl(filePath);
+      .then(async function (data) {
+        const imageUrl = await fileUploader.generateUrl(filePath);
         user.updateImage(imageUrl, function (err, data) {
           fs.unlink(tmpPath, function (err) {
             // エラー自体は無視

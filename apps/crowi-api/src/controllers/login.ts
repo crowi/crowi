@@ -401,8 +401,8 @@ export default (crowi: Crowi, app: Express) => {
                   debug('Uploading user socialImage:', filePath, type)
                   fileUploader
                     .uploadFile(filePath, type, fileStream, {})
-                    .then(function (data) {
-                      const imageUrl = fileUploader.generateUrl(filePath)
+                    .then(async function (data) {
+                      const imageUrl = await fileUploader.generateUrl(filePath)
                       debug('user picture uploaded', imageUrl)
                       userData.updateImage(imageUrl, function (err, data) {
                         if (err) {

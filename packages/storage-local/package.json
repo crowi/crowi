@@ -1,0 +1,29 @@
+{
+  "name": "@crowi/storage-local",
+  "version": "0.1.0-dev",
+  "description": "Local filesystem storage driver for Crowi 2.0. Default-on; preserves the v1.x data/uploads/ layout.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}

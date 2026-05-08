@@ -1,0 +1,28 @@
+{
+  "name": "@crowi/aws",
+  "version": "0.1.0-dev",
+  "description": "AWS base configuration for Crowi 2.0 — shared region / accessKeyId / secretAccessKey for downstream AWS service plugins (S3, SES, ...).",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}
