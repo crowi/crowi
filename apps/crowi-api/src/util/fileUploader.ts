@@ -70,8 +70,11 @@ export default (crowi: Crowi): FileUploader => ({
     if (driver.signedUrl) {
       return driver.signedUrl(filePath, expiresInSec);
     }
-    // Drivers without signedUrl (e.g. local) fall back to the API
-    // streaming endpoint. Caller controllers know the route.
-    return `/_api/attachment/${encodeURIComponent(filePath)}`;
+    // Drivers without signedUrl (e.g. local) fall back to the ts-rest
+    // streaming endpoint mounted at `/api/v2/attachments/by-key/:key`.
+    // The `by-key` route only accepts keys under the `user/` prefix
+    // (profile pictures); attachment-row-backed files use the
+    // `/api/v2/attachments/:id` route via `Attachment.fileUrl`.
+    return `/api/v2/attachments/by-key/${encodeURIComponent(filePath)}`;
   },
 });

@@ -31,7 +31,6 @@ export default (crowi: Crowi, app: Express) => {
     Me: me,
     Installer: installer,
     User: user,
-    Attachment: attachment,
     Search: search,
     Share: share,
     ShareAccess: shareAccess,
@@ -71,7 +70,16 @@ export default (crowi: Crowi, app: Express) => {
 
   app.get('/:id([0-9a-z]{24})', loginRequired, page.api.redirector);
   app.get('/_r/:id([0-9a-z]{24})', loginRequired, page.api.redirector); // alias
-  app.get('/files/:id([0-9a-z]{24})', fileAccessRightOrLoginRequired, attachment.api.redirector);
+  // Legacy back-compat: the previous `/files/:id` direct-delivery handler was
+  // broken by Step 3 of the plugin storage RFC (driver.get() now returns a
+  // Readable, which the old `res.sendFile()` codepath cannot consume).
+  // Redirect to the new ts-rest endpoint instead. The fileAccessRightOrLoginRequired
+  // middleware stays so Share-token URLs still pass through (the redirect target
+  // requires JWT auth — Share access for attachments is tracked as a separate
+  // migration task; see openQuestions in migrate-attachments).
+  app.get('/files/:id([0-9a-z]{24})', fileAccessRightOrLoginRequired, (req, res) => {
+    res.redirect(302, `/api/v2/attachments/${req.params.id}`);
+  });
 
   app.get('/_search', loginRequired, search.searchPage);
   app.get('/_api/search', accessTokenParser, loginRequired, search.api.search);
