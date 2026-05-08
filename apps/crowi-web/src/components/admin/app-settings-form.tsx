@@ -124,7 +124,12 @@ export function AppSettingsForm() {
   // pattern for derived-from-prop initial state. We intentionally do not
   // re-sync on subsequent refetches — explicit save+invalidate handles that
   // by re-baselining inside `handleSubmit`.
-  if (data && hydratedFrom === null) {
+  //
+  // The `data.app && data.upload` guard catches stale `@crowi/api-contract`
+  // dist mismatches (e.g. a dev server still serving the previous contract
+  // path returns a 200 with an unrelated body). Without it toFormState would
+  // crash when destructuring nested fields.
+  if (data?.app && data.upload && hydratedFrom === null) {
     const next = toFormState(data);
     setState(next);
     setInitial(next);
@@ -144,7 +149,7 @@ export function AppSettingsForm() {
     );
   }, [state, initial, secretDirty, secretClearRequested]);
 
-  if (isLoading || !data || !state || !initial) {
+  if (isLoading || !data?.app || !data.upload || !state || !initial) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
         <Loader2 className="h-4 w-4 animate-spin" />
