@@ -30,8 +30,8 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
   - `adminRequired` / `applicationNotInstalled` / `fileAccessRightOrLoginRequired`
 - [ ] **error code 細分化**: comment.ts / revision.ts などの `INVALID_REQUEST` を `MISSING_REQUIRED_FIELD` / `INVALID_OBJECT_ID` / `*_FAILED` に分割
 - [x] **`usePageComments` を 3 hooks に split** (`8d6b695c`): 11 fields 返す巨大 hook を `usePageCommentsList` / `useAddComment` / `useDeleteComment` に分割
-- [ ] **`Backlink.createBySavedPage` を bulk insert 化**: 現状 `deleteMany` → N×`isExist*` → N×`Backlink.create()` で 1 ページ保存ごとに ~1+2K round-trips。`insertMany` + (理想的には) 旧/新リンクの set-difference に置き換え。`backlink.ts:98-122` 周辺
-- [ ] **`unwrapResult(result, ...)` ts-rest helper を抽出**: `apps/crowi-web/src/lib/use-{bookmark,watch,like,page-mutations,page-comments,backlinks,...}.ts` の `if (result.status === 200) return result.body; if (status === 401) throw ... ` ladder が 13+ サイトに重複。helper 化で一気に整理可能
+- [x] **`Backlink.createBySavedPage` を bulk insert 化** (`4f12a8c9`): `deleteMany` → N×`isExist*` → N×`Backlink.create()` を `deleteMany` → 2×`Page.find($in)` → 1×`insertMany` に。1+2K round-trips → 4 round-trips。`createByAllPages` も同パターンで修正、dedupe を Set ベースに(O(N²)→O(N))
+- [x] **`unwrapResult(result, ...)` ts-rest helper を抽出** (`5913f93d`): `lib/unwrap-result.ts` に lift、12 hook ファイル(use-page-mutations / bookmark / watch / like / page-list / page-comments / notifications / page-revisions / user-page / profile / admin-users / admin-crypto)を migrate。`SuccessBody<R>` で ts-rest の 200 body 型を抽出、`wireMessage` は `body.error.message` と `body.message` の両 envelope に対応。skip した 5 ファイル(use-page / backlinks / seen / admin-{app,mail}-settings)は inline の方が簡潔/特殊形のため
 - [x] **admin config coercion helper の共通化** (`37b35eda`): `coerceBoolean` / `coerceString` / `coerceNumber` / `coerceStringArray` + `getCrowiConfigNamespace` を `util/admin-config.ts` に集約、5 admin handler を migrate
 - [x] **`internalServerErrorResponse` const helper** (`06392ac4`): `util/ts-rest-helpers.ts` に `as const` で抽出、6+ 重複を解消
 - [x] **admin 共通 i18n キー** (`b6aa27bc`): byte-identical な 12 キーを `admin.common.*` に集約 (5 namespace 横断)
