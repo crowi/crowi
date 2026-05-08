@@ -30,7 +30,7 @@ const reloadConfigCache = async () => {
   await crowi.getConfigService().load();
 };
 
-describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
+describe('Routes /api/v2/admin/app (ts-rest)', () => {
   let Config;
   let adminToken: string;
   let memberToken: string;
@@ -69,14 +69,14 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
     resetKeyProvider();
   });
 
-  describe('GET /api/v2/admin/settings/app', () => {
+  describe('GET /api/v2/admin/app', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/settings/app');
+      const res = await request(app).get('/api/v2/admin/app');
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/settings/app').set(authHeaders(memberToken));
+      const res = await request(app).get('/api/v2/admin/app').set(authHeaders(memberToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
@@ -94,7 +94,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
       await Config.updateConfig('crowi', 'upload:aws:secretAccessKey', 'super-secret');
       await reloadConfigCache();
 
-      const res = await request(app).get('/api/v2/admin/settings/app').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body.app).toEqual({
@@ -120,23 +120,23 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
       await Config.updateConfig('crowi', 'upload:aws:secretAccessKey', '');
       await reloadConfigCache();
 
-      const res = await request(app).get('/api/v2/admin/settings/app').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
       expect(res.status).toBe(200);
       expect(res.body.upload.aws.secretAccessKey).toEqual({ hasValue: false });
     });
   });
 
-  describe('PUT /api/v2/admin/settings/app', () => {
+  describe('PUT /api/v2/admin/app', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/settings/app')
+        .put('/api/v2/admin/app')
         .send({ app: { title: 'x' } });
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for non-admin user', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/settings/app')
+        .put('/api/v2/admin/app')
         .set(authHeaders(memberToken))
         .send({ app: { title: 'x' } });
       expect(res.status).toBe(403);
@@ -145,7 +145,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
 
     it('persists app + upload sections and round-trips via GET', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/settings/app')
+        .put('/api/v2/admin/app')
         .set(authHeaders(adminToken))
         .send({
           app: { title: 'Round Trip Wiki', confidential: 'Internal', fileUpload: true },
@@ -162,7 +162,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
 
-      const get = await request(app).get('/api/v2/admin/settings/app').set(authHeaders(adminToken));
+      const get = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
       expect(get.status).toBe(200);
       expect(get.body.app).toEqual(expect.objectContaining({ title: 'Round Trip Wiki', confidential: 'Internal', fileUpload: true }));
       expect(get.body.upload.aws).toEqual({
@@ -175,7 +175,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
 
     it('rejects empty title with 400', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/settings/app')
+        .put('/api/v2/admin/app')
         .set(authHeaders(adminToken))
         .send({ app: { title: '' } });
       expect(res.status).toBe(400);
@@ -183,7 +183,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
 
     it('rejects invalid AWS region with 400', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/settings/app')
+        .put('/api/v2/admin/app')
         .set(authHeaders(adminToken))
         .send({ upload: { aws: { region: 'not a region' } } });
       expect(res.status).toBe(400);
@@ -195,7 +195,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
       await reloadConfigCache();
 
       const res = await request(app)
-        .put('/api/v2/admin/settings/app')
+        .put('/api/v2/admin/app')
         .set(authHeaders(adminToken))
         .send({ upload: { aws: { region: 'ap-northeast-1' } } });
 
@@ -214,7 +214,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
       await reloadConfigCache();
 
       const res = await request(app)
-        .put('/api/v2/admin/settings/app')
+        .put('/api/v2/admin/app')
         .set(authHeaders(adminToken))
         .send({ upload: { aws: { secretAccessKey: '' } } });
 
@@ -226,7 +226,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
 
     it('encrypts the secret at rest (enc:v1: prefix) when CROWI_ENCRYPTION_KEY is set', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/settings/app')
+        .put('/api/v2/admin/app')
         .set(authHeaders(adminToken))
         .send({
           app: { title: 'Encryption Check' },
@@ -247,7 +247,7 @@ describe('Routes /api/v2/admin/settings/app (ts-rest)', () => {
 
     it('accepts an empty body and is a no-op', async () => {
       const before = await Config.countDocuments({ ns: 'crowi' }).exec();
-      const res = await request(app).put('/api/v2/admin/settings/app').set(authHeaders(adminToken)).send({});
+      const res = await request(app).put('/api/v2/admin/app').set(authHeaders(adminToken)).send({});
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
       const after = await Config.countDocuments({ ns: 'crowi' }).exec();

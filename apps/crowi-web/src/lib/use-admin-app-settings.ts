@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { GetAppSettingsResponse, UpdateAppSettingsRequest, UpdateAppSettingsResponse } from '@crowi/api-contract';
+import { m } from '@/paraglide/messages.js';
 
 export const adminAppSettingsKeys = {
   settings: ['admin-app-settings'] as const,
@@ -19,8 +20,9 @@ export function useAppSettings(options?: { enabled?: boolean }) {
     },
     enabled: options?.enabled !== false,
     // The admin form is the only writer for these values; mutation invalidates
-    // explicitly. Avoid noisy refetches when the operator switches tabs.
-    staleTime: 60 * 1000,
+    // explicitly. 5 min matches useAdminSecuritySettings — admin settings
+    // change less often than the cache freshness we'd save by polling.
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 }
@@ -31,7 +33,7 @@ export class AppSettingsValidationFailure extends Error {
   public readonly fieldErrors: Record<string, string>;
 
   constructor(fieldErrors: Record<string, string>) {
-    super('入力内容に誤りがあります');
+    super(m['admin.app.field_errors_summary']());
     this.name = 'AppSettingsValidationFailure';
     this.fieldErrors = fieldErrors;
   }
@@ -53,9 +55,9 @@ export function useUpdateAppSettings() {
         throw new AppSettingsValidationFailure(fieldErrors);
       }
       if (result.status === 401 || result.status === 403) {
-        throw new Error('権限がありません');
+        throw new Error(m['errors.unauthorized']());
       }
-      throw new Error('保存に失敗しました');
+      throw new Error(m['admin.app.failed_to_save']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminAppSettingsKeys.settings });

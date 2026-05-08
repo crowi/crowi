@@ -332,5 +332,6 @@
   "admin.app.submit": "変更を保存",
   "admin.app.submit_pending": "保存中...",
   "admin.app.success_saved": "保存しました",
-  "admin.app.field_errors_summary": "入力内容に誤りがあります"
+  "admin.app.field_errors_summary": "入力内容に誤りがあります",
+  "admin.app.failed_to_save": "アプリ設定の保存に失敗しました"
 }

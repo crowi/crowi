@@ -22,7 +22,7 @@ const c = initContract();
 export const adminAppContract = c.router({
   getAppSettings: {
     method: 'GET',
-    path: '/admin/settings/app',
+    path: '/admin/app',
     responses: {
       200: GetAppSettingsResponseSchema,
       401: AuthenticationRequiredErrorSchema,
@@ -32,7 +32,7 @@ export const adminAppContract = c.router({
   },
   updateAppSettings: {
     method: 'PUT',
-    path: '/admin/settings/app',
+    path: '/admin/app',
     body: UpdateAppSettingsRequestSchema,
     responses: {
       200: UpdateAppSettingsResponseSchema,

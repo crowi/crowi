@@ -332,5 +332,6 @@
   "admin.app.submit": "Save changes",
   "admin.app.submit_pending": "Saving...",
   "admin.app.success_saved": "Saved",
-  "admin.app.field_errors_summary": "Some inputs are invalid."
+  "admin.app.field_errors_summary": "Some inputs are invalid.",
+  "admin.app.failed_to_save": "Failed to save app settings"
 }
