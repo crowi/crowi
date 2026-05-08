@@ -1,28 +1,5 @@
 import { z } from 'zod';
-
-/**
- * AWS region — matches the legacy express-form regex (e.g. `ap-northeast-1`).
- * Empty string is allowed so the operator can clear the field; if non-empty it
- * must match the AWS region naming convention.
- */
-const AwsRegionSchema = z
-  .string()
-  .trim()
-  .refine((v) => v === '' || /^[a-z]+(-[a-z]+)?-[a-z]+-\d+$/.test(v), {
-    message: 'Must be a valid AWS region name (e.g. ap-northeast-1)',
-  });
-
-/**
- * Access Key ID — alphanumeric only, matches legacy form. Empty allowed.
- * Real AWS keys are 16-128 chars, but legacy did not enforce the length so we
- * keep it loose.
- */
-const AwsAccessKeyIdSchema = z
-  .string()
-  .trim()
-  .refine((v) => v === '' || /^[\dA-Za-z]+$/.test(v), {
-    message: 'Access Key ID must be alphanumeric',
-  });
+import { AwsAccessKeyIdSchema, AwsRegionSchema } from './_aws';
 
 /**
  * GET response: the current `app:*` and `upload:aws:*` config slice.

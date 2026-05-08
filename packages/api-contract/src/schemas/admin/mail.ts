@@ -1,26 +1,5 @@
 import { z } from 'zod';
-
-/**
- * AWS region — same regex as admin/app's AwsRegionSchema, mirrored here so the
- * mail module is independently importable. Empty string is allowed so the
- * operator can clear the field.
- */
-const AwsRegionSchema = z
-  .string()
-  .trim()
-  .refine((v) => v === '' || /^[a-z]+(-[a-z]+)?-[a-z]+-\d+$/.test(v), {
-    message: 'Must be a valid AWS region name (e.g. ap-northeast-1)',
-  });
-
-/**
- * Access Key ID — alphanumeric only, matches the legacy form. Empty allowed.
- */
-const AwsAccessKeyIdSchema = z
-  .string()
-  .trim()
-  .refine((v) => v === '' || /^[\dA-Za-z]+$/.test(v), {
-    message: 'Access Key ID must be alphanumeric',
-  });
+import { AwsAccessKeyIdSchema, AwsRegionSchema } from './_aws';
 
 /**
  * SMTP port — number 1..65535. Empty/blank from the legacy plaintext config
