@@ -1,6 +1,7 @@
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import appRoutes from './app';
+import mailRoutes from './mail';
 import securityRoutes from './security';
 
 /**
@@ -14,6 +15,7 @@ export default (crowi: Crowi, app: Express) => {
 
   router.use(appRoutes(crowi, app));
   router.use(securityRoutes(crowi, app));
+  router.use(mailRoutes(crowi, app));
 
   return router;
 };
