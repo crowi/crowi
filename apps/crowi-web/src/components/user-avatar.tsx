@@ -1,5 +1,6 @@
 'use client';
 
+import BoringAvatar from 'boring-avatars';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
@@ -19,20 +20,24 @@ const sizeClasses = {
   lg: 'h-20 w-20',
 } as const;
 
-const textSizeClasses = {
-  sm: 'text-xs',
-  md: 'text-sm',
-  lg: 'text-2xl',
+const sizePx = {
+  sm: 24,
+  md: 32,
+  lg: 80,
 } as const;
+
+const beamColors = ['#43676b', '#8eb39b', '#f0d264', '#e89a4d', '#d96d68'];
 
 export function UserAvatar({ user, size = 'md', className }: UserAvatarProps) {
   const displayName = user.name || user.username;
-  const initials = displayName.charAt(0).toUpperCase();
+  const seed = user.username || displayName;
 
   return (
     <Avatar className={cn(sizeClasses[size], className)}>
       {user.image ? <AvatarImage src={user.image} alt={displayName} /> : null}
-      <AvatarFallback className={cn('!bg-[#43676b] !text-white font-semibold', textSizeClasses[size])}>{initials}</AvatarFallback>
+      <AvatarFallback className="bg-transparent p-0" aria-label={displayName}>
+        <BoringAvatar size={sizePx[size]} name={seed} variant="beam" colors={beamColors} />
+      </AvatarFallback>
     </Avatar>
   );
 }
