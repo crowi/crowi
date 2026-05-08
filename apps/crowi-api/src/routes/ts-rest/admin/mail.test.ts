@@ -303,8 +303,8 @@ describe('Routes /api/v2/admin/mail (ts-rest)', () => {
       expect(mailArg).toEqual(
         expect.objectContaining({
           to: adminEmail,
-          subject: 'Wiki管理設定のアップデートによるメール通知',
-          text: 'このメールは、WikiのSMTP設定のアップデートにより送信されています。',
+          subject: 'Crowi: SMTP test mail',
+          text: expect.stringContaining('test message'),
         }),
       );
     });

@@ -1,13 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, Send } from 'lucide-react';
+import { CheckCircle2, Loader2, Send } from 'lucide-react';
 import type { GetMailSettingsResponse, SendTestMailRequest, UpdateMailSettingsRequest } from '@crowi/api-contract';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAuth } from '@/lib/use-auth';
 import { MailSettingsValidationFailure, useMailSettings, useSendTestMail, useUpdateMailSettings } from '@/lib/use-admin-mail-settings';
 import { m } from '@paraglide/messages.js';
@@ -130,26 +131,17 @@ export function MailSettingsForm() {
   }, [state, initial, smtpPasswordDirty, smtpPasswordClearRequested, awsSecretDirty, awsSecretClearRequested]);
 
   if (isLoading || !data || !state || !initial) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        {m['admin.mail.loading']()}
-      </div>
-    );
+    return <LoadingSpinner message={m['admin.mail.loading']()} size="sm" className="py-4" />;
   }
 
   if (isError) {
     return (
-      <Alert className="border-destructive/50">
-        <AlertCircle className="h-4 w-4 text-destructive" />
-        <AlertTitle>{m['admin.mail.failed_to_load_title']()}</AlertTitle>
-        <AlertDescription className="flex items-center gap-3">
-          <span>{m['admin.mail.failed_to_load_body']()}</span>
-          <Button size="sm" variant="outline" onClick={() => refetch()}>
-            {m['admin.mail.retry']()}
-          </Button>
-        </AlertDescription>
-      </Alert>
+      <ErrorAlert
+        title={m['admin.mail.failed_to_load_title']()}
+        message={m['admin.mail.failed_to_load_body']()}
+        onRetry={() => refetch()}
+        retryLabel={m['admin.mail.retry']()}
+      />
     );
   }
 

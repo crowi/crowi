@@ -23,6 +23,15 @@ const asPort = (value: unknown): number => {
   return 0;
 };
 
+const KEY_FROM = 'mail:from';
+const KEY_SMTP_HOST = 'mail:smtpHost';
+const KEY_SMTP_PORT = 'mail:smtpPort';
+const KEY_SMTP_USER = 'mail:smtpUser';
+const KEY_SMTP_PASSWORD = 'mail:smtpPassword';
+const KEY_AWS_REGION = 'mail:aws:region';
+const KEY_AWS_ACCESS_KEY = 'mail:aws:accessKeyId';
+const KEY_AWS_SECRET = 'mail:aws:secretAccessKey';
+
 export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
   const router = Router();
@@ -32,20 +41,20 @@ export default (crowi: Crowi, _app: Express) => {
       const config = crowi.getConfig();
       const ns = (config.crowi ?? {}) as Record<string, unknown>;
 
-      const smtpPassword = asString(ns['mail:smtpPassword']);
-      const awsSecret = asString(ns['mail:aws:secretAccessKey']);
+      const smtpPassword = asString(ns[KEY_SMTP_PASSWORD]);
+      const awsSecret = asString(ns[KEY_AWS_SECRET]);
 
       return {
         status: 200 as const,
         body: {
-          from: asString(ns['mail:from']),
-          smtpHost: asString(ns['mail:smtpHost']),
-          smtpPort: asPort(ns['mail:smtpPort']),
-          smtpUser: asString(ns['mail:smtpUser']),
+          from: asString(ns[KEY_FROM]),
+          smtpHost: asString(ns[KEY_SMTP_HOST]),
+          smtpPort: asPort(ns[KEY_SMTP_PORT]),
+          smtpUser: asString(ns[KEY_SMTP_USER]),
           smtpPassword: { hasValue: smtpPassword.length > 0 },
           aws: {
-            region: asString(ns['mail:aws:region']),
-            accessKeyId: asString(ns['mail:aws:accessKeyId']),
+            region: asString(ns[KEY_AWS_REGION]),
+            accessKeyId: asString(ns[KEY_AWS_ACCESS_KEY]),
             secretAccessKey: { hasValue: awsSecret.length > 0 },
           },
         },
@@ -65,17 +74,17 @@ export default (crowi: Crowi, _app: Express) => {
     updateMailSettings: async ({ body }) => {
       const updates: Record<string, unknown> = {};
 
-      if (body.from !== undefined) updates['mail:from'] = body.from;
-      if (body.smtpHost !== undefined) updates['mail:smtpHost'] = body.smtpHost;
-      if (body.smtpPort !== undefined) updates['mail:smtpPort'] = body.smtpPort;
-      if (body.smtpUser !== undefined) updates['mail:smtpUser'] = body.smtpUser;
-      if (body.smtpPassword !== undefined) updates['mail:smtpPassword'] = body.smtpPassword;
+      if (body.from !== undefined) updates[KEY_FROM] = body.from;
+      if (body.smtpHost !== undefined) updates[KEY_SMTP_HOST] = body.smtpHost;
+      if (body.smtpPort !== undefined) updates[KEY_SMTP_PORT] = body.smtpPort;
+      if (body.smtpUser !== undefined) updates[KEY_SMTP_USER] = body.smtpUser;
+      if (body.smtpPassword !== undefined) updates[KEY_SMTP_PASSWORD] = body.smtpPassword;
 
       if (body.aws) {
         const { region, accessKeyId, secretAccessKey } = body.aws;
-        if (region !== undefined) updates['mail:aws:region'] = region;
-        if (accessKeyId !== undefined) updates['mail:aws:accessKeyId'] = accessKeyId;
-        if (secretAccessKey !== undefined) updates['mail:aws:secretAccessKey'] = secretAccessKey;
+        if (region !== undefined) updates[KEY_AWS_REGION] = region;
+        if (accessKeyId !== undefined) updates[KEY_AWS_ACCESS_KEY] = accessKeyId;
+        if (secretAccessKey !== undefined) updates[KEY_AWS_SECRET] = secretAccessKey;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -105,10 +114,10 @@ export default (crowi: Crowi, _app: Express) => {
       const config = crowi.getConfig();
       const ns = (config.crowi ?? {}) as Record<string, unknown>;
 
-      const host = body?.smtpHost ?? asString(ns['mail:smtpHost']);
-      const port = body?.smtpPort ?? asPort(ns['mail:smtpPort']);
-      const smtpUser = body?.smtpUser ?? asString(ns['mail:smtpUser']);
-      const smtpPassword = body?.smtpPassword ?? asString(ns['mail:smtpPassword']);
+      const host = body?.smtpHost ?? asString(ns[KEY_SMTP_HOST]);
+      const port = body?.smtpPort ?? asPort(ns[KEY_SMTP_PORT]);
+      const smtpUser = body?.smtpUser ?? asString(ns[KEY_SMTP_USER]);
+      const smtpPassword = body?.smtpPassword ?? asString(ns[KEY_SMTP_PASSWORD]);
 
       if (!host || !port) {
         return {
@@ -143,8 +152,11 @@ export default (crowi: Crowi, _app: Express) => {
           smtpClient.sendMail(
             {
               to: user.email,
-              subject: 'Wiki管理設定のアップデートによるメール通知',
-              text: 'このメールは、WikiのSMTP設定のアップデートにより送信されています。',
+              // ASCII-only: this is an SMTP smoke test that has to land
+              // in the recipient's inbox even when the configured
+              // transport's character-encoding settings are wrong.
+              subject: 'Crowi: SMTP test mail',
+              text: 'This is a test message dispatched from the Crowi admin SMTP settings page.',
             },
             (err: Error | null) => {
               if (err) reject(err);
