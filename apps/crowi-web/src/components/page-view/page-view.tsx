@@ -16,6 +16,7 @@ import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
 import { BacklinkList } from './backlink-list';
+import { AttachmentList } from './attachment-list';
 import { PageComments } from '@/components/page-comments';
 import { m } from '@paraglide/messages.js';
 
@@ -150,6 +151,7 @@ export function PageView({ path }: PageViewProps) {
           />
           <PageContent page={page} />
           <BacklinkList pageId={page._id} />
+          <AttachmentList pageId={page._id} />
           <PageComments page={page} />
         </CardContent>
       </Card>
