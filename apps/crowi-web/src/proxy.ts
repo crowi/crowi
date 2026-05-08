@@ -1,24 +1,34 @@
 import { paraglideMiddleware } from '@/paraglide/server.js';
 import { NextResponse, type NextRequest } from 'next/server';
 
+export const PARAGLIDE_LOCALE_HEADER = 'x-paraglide-locale';
+
 /**
  * Paraglide JS request entrypoint.
  *
- * Wraps each request with `paraglideMiddleware` so the per-request locale
- * (resolved from the PARAGLIDE_LOCALE cookie) is stored in AsyncLocalStorage
- * before the route handler runs. Without this, `getLocale()` in Server
- * Components always returns the base locale (`ja`), which produces a hydration
- * mismatch when the Client side reads the cookie and renders a different
- * locale.
+ * Resolves the per-request locale from the PARAGLIDE_LOCALE cookie (via
+ * paraglideMiddleware) and forwards it to downstream handlers as an
+ * `x-paraglide-locale` request header. The root layout reads that header and
+ * calls `overwriteGetLocale` so Server Components see the same locale as the
+ * Client side — without this they would all fall back to baseLocale (ja),
+ * producing a hydration mismatch the moment the user switches languages.
+ *
+ * paraglideMiddleware also sets up its AsyncLocalStorage scope, but Next.js'
+ * Server Component rendering happens after `NextResponse.next()` returns and
+ * therefore outside that scope, so the AsyncLocalStorage alone is not enough.
+ * The header forwarding is the bridge.
  *
  * Uses the Next.js 16 `proxy.ts` convention (renamed from `middleware.ts` in
  * v16). The proxy runtime is Node — that's a hard requirement here because
  * paraglideMiddleware relies on AsyncLocalStorage, which is unavailable in
- * the Edge runtime. The legacy `middleware.ts` filename in v16 still defaults
- * to Edge, so a rename is mandatory rather than cosmetic.
+ * the Edge runtime.
  */
 export function proxy(request: NextRequest) {
-  return paraglideMiddleware(request, () => NextResponse.next());
+  return paraglideMiddleware(request, ({ locale }) => {
+    const headers = new Headers(request.headers);
+    headers.set(PARAGLIDE_LOCALE_HEADER, locale);
+    return NextResponse.next({ request: { headers } });
+  });
 }
 
 export const config = {
