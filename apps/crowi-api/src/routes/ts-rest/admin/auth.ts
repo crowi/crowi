@@ -3,43 +3,19 @@ import { apiContract, type AuthSettings } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
+import { coerceBoolean, getCrowiConfigNamespace } from 'src/util/admin-config';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:auth');
 
-/**
- * Default values for the two auth:* config keys, mirroring the
- * `getArrayForInstalling` defaults in `apps/crowi-api/src/models/config.ts`:
- *
- *   'auth:requireThirdPartyAuth': false,
- *   'auth:disablePasswordAuth':   false,
- *
- * If the keys are missing from the in-memory config (e.g. older installs
- * predating these settings) we fall back to false rather than 500ing.
- */
 const KEY_REQUIRE_THIRD_PARTY_AUTH = 'auth:requireThirdPartyAuth';
 const KEY_DISABLE_PASSWORD_AUTH = 'auth:disablePasswordAuth';
-const DEFAULT_REQUIRE_THIRD_PARTY_AUTH = false;
-const DEFAULT_DISABLE_PASSWORD_AUTH = false;
-
-/**
- * Coerce an unknown config value to a boolean. Stored Config values are
- * JSON-parsed at load time (see ConfigModel.loadAllConfig), so for boolean
- * keys we typically already get a boolean. Defensively map non-boolean
- * values back to the provided fallback.
- */
-const toBoolean = (value: unknown, fallback: boolean): boolean => {
-  if (typeof value === 'boolean') return value;
-  return fallback;
-};
 
 const readAuthSettings = (crowi: Crowi): AuthSettings => {
-  const cfg = crowi.getConfig();
-  const ns = (cfg && typeof cfg === 'object' ? (cfg as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
-
+  const ns = getCrowiConfigNamespace(crowi);
   return {
-    requireThirdPartyAuth: toBoolean(ns[KEY_REQUIRE_THIRD_PARTY_AUTH], DEFAULT_REQUIRE_THIRD_PARTY_AUTH),
-    disablePasswordAuth: toBoolean(ns[KEY_DISABLE_PASSWORD_AUTH], DEFAULT_DISABLE_PASSWORD_AUTH),
+    requireThirdPartyAuth: coerceBoolean(ns[KEY_REQUIRE_THIRD_PARTY_AUTH]),
+    disablePasswordAuth: coerceBoolean(ns[KEY_DISABLE_PASSWORD_AUTH]),
   };
 };
 

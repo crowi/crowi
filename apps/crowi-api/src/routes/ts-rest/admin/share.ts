@@ -2,20 +2,10 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract, type ShareSettings } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
+import { coerceBoolean, getCrowiConfigNamespace } from 'src/util/admin-config';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:share');
-
-/**
- * Coerce an unknown config value to boolean using the same convention used
- * by `admin/app.ts:asBoolean`. Stored Config values are JSON-parsed at load
- * time (see ConfigModel.loadAllConfig), so for a boolean key we typically
- * already get `true`/`false`/`undefined`. Only strict `=== true` counts as
- * enabled — anything else (undefined, null, 'true' string, 0, etc.) maps
- * to `false`. This matches the legacy `isExternalShareEnabled()` check in
- * `controllers/share.ts`.
- */
-const asBoolean = (value: unknown): boolean => value === true;
 
 const KEY_EXTERNAL_SHARE = 'app:externalShare';
 
@@ -25,11 +15,9 @@ const KEY_EXTERNAL_SHARE = 'app:externalShare';
  * `models/config.ts` defaults for a fresh install.
  */
 const readShareSettings = (crowi: Crowi): ShareSettings => {
-  const cfg = crowi.getConfig();
-  const ns = (cfg && typeof cfg === 'object' ? (cfg as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
-
+  const ns = getCrowiConfigNamespace(crowi);
   return {
-    externalShare: asBoolean(ns[KEY_EXTERNAL_SHARE]),
+    externalShare: coerceBoolean(ns[KEY_EXTERNAL_SHARE]),
   };
 };
 

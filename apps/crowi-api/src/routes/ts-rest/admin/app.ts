@@ -3,18 +3,10 @@ import { apiContract } from '@crowi/api-contract';
 import { Express, Router } from 'express';
 import Crowi from 'src/crowi';
 import { registrationMode } from 'src/models/config';
+import { coerceBoolean, coerceString, getCrowiConfigNamespace } from 'src/util/admin-config';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:app');
-
-/**
- * Coerce arbitrary stored config values to the typed shape the API exposes.
- * The Config collection stores values as JSON-stringified blobs; while we
- * already pass them through `loadAllConfig`'s decode, mongoose-side defaults
- * may still leave us with `undefined`/`null` for keys the operator never set.
- */
-const asString = (value: unknown): string => (typeof value === 'string' ? value : '');
-const asBoolean = (value: unknown): boolean => value === true;
 
 export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
@@ -29,25 +21,25 @@ export default (crowi: Crowi, _app: Express) => {
      */
     getAppSettings: async () => {
       const config = crowi.getConfig();
-      const crowiNs = (config.crowi ?? {}) as Record<string, unknown>;
+      const crowiNs = getCrowiConfigNamespace(crowi);
       const isUploadable = Config.isUploadable(config);
 
-      const secretAccessKey = asString(crowiNs['upload:aws:secretAccessKey']);
+      const secretAccessKey = coerceString(crowiNs['upload:aws:secretAccessKey']);
 
       return {
         status: 200 as const,
         body: {
           app: {
-            title: asString(crowiNs['app:title']),
-            confidential: asString(crowiNs['app:confidential']),
-            fileUpload: asBoolean(crowiNs['app:fileUpload']),
-            externalShare: asBoolean(crowiNs['app:externalShare']),
+            title: coerceString(crowiNs['app:title']),
+            confidential: coerceString(crowiNs['app:confidential']),
+            fileUpload: coerceBoolean(crowiNs['app:fileUpload']),
+            externalShare: coerceBoolean(crowiNs['app:externalShare']),
           },
           upload: {
             aws: {
-              region: asString(crowiNs['upload:aws:region']),
-              bucket: asString(crowiNs['upload:aws:bucket']),
-              accessKeyId: asString(crowiNs['upload:aws:accessKeyId']),
+              region: coerceString(crowiNs['upload:aws:region']),
+              bucket: coerceString(crowiNs['upload:aws:bucket']),
+              accessKeyId: coerceString(crowiNs['upload:aws:accessKeyId']),
               secretAccessKey: { hasValue: secretAccessKey.length > 0 },
             },
           },

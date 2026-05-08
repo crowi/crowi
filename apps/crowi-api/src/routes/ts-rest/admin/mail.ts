@@ -3,25 +3,10 @@ import { apiContract } from '@crowi/api-contract';
 import { Express, Router } from 'express';
 import Crowi from 'src/crowi';
 import { UserDocument } from 'src/models/user';
+import { coerceNumber, coerceString, getCrowiConfigNamespace } from 'src/util/admin-config';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:mail');
-
-const asString = (value: unknown): string => (typeof value === 'string' ? value : '');
-
-/**
- * Coerce an unknown stored config value to a port number. Legacy installs may
- * persist this as an empty string (the default) or as a numeric string from
- * older form-encoded saves; in both cases we return 0 to mean "not set".
- */
-const asPort = (value: unknown): number => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string' && value !== '') {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-};
 
 const KEY_FROM = 'mail:from';
 const KEY_SMTP_HOST = 'mail:smtpHost';
@@ -38,23 +23,22 @@ export default (crowi: Crowi, _app: Express) => {
 
   const router_ = s.router(apiContract.admin.mail, {
     getMailSettings: async () => {
-      const config = crowi.getConfig();
-      const ns = (config.crowi ?? {}) as Record<string, unknown>;
+      const ns = getCrowiConfigNamespace(crowi);
 
-      const smtpPassword = asString(ns[KEY_SMTP_PASSWORD]);
-      const awsSecret = asString(ns[KEY_AWS_SECRET]);
+      const smtpPassword = coerceString(ns[KEY_SMTP_PASSWORD]);
+      const awsSecret = coerceString(ns[KEY_AWS_SECRET]);
 
       return {
         status: 200 as const,
         body: {
-          from: asString(ns[KEY_FROM]),
-          smtpHost: asString(ns[KEY_SMTP_HOST]),
-          smtpPort: asPort(ns[KEY_SMTP_PORT]),
-          smtpUser: asString(ns[KEY_SMTP_USER]),
+          from: coerceString(ns[KEY_FROM]),
+          smtpHost: coerceString(ns[KEY_SMTP_HOST]),
+          smtpPort: coerceNumber(ns[KEY_SMTP_PORT]),
+          smtpUser: coerceString(ns[KEY_SMTP_USER]),
           smtpPassword: { hasValue: smtpPassword.length > 0 },
           aws: {
-            region: asString(ns[KEY_AWS_REGION]),
-            accessKeyId: asString(ns[KEY_AWS_ACCESS_KEY]),
+            region: coerceString(ns[KEY_AWS_REGION]),
+            accessKeyId: coerceString(ns[KEY_AWS_ACCESS_KEY]),
             secretAccessKey: { hasValue: awsSecret.length > 0 },
           },
         },
@@ -111,13 +95,12 @@ export default (crowi: Crowi, _app: Express) => {
         };
       }
 
-      const config = crowi.getConfig();
-      const ns = (config.crowi ?? {}) as Record<string, unknown>;
+      const ns = getCrowiConfigNamespace(crowi);
 
-      const host = body?.smtpHost ?? asString(ns[KEY_SMTP_HOST]);
-      const port = body?.smtpPort ?? asPort(ns[KEY_SMTP_PORT]);
-      const smtpUser = body?.smtpUser ?? asString(ns[KEY_SMTP_USER]);
-      const smtpPassword = body?.smtpPassword ?? asString(ns[KEY_SMTP_PASSWORD]);
+      const host = body?.smtpHost ?? coerceString(ns[KEY_SMTP_HOST]);
+      const port = body?.smtpPort ?? coerceNumber(ns[KEY_SMTP_PORT]);
+      const smtpUser = body?.smtpUser ?? coerceString(ns[KEY_SMTP_USER]);
+      const smtpPassword = body?.smtpPassword ?? coerceString(ns[KEY_SMTP_PASSWORD]);
 
       if (!host || !port) {
         return {

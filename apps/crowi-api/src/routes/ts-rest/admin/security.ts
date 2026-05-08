@@ -2,6 +2,7 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract, type RegistrationMode, type SecuritySettings } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
+import { coerceString, coerceStringArray, getCrowiConfigNamespace } from 'src/util/admin-config';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:security');
@@ -23,19 +24,6 @@ const DEFAULT_BASIC_SECRET = '';
 const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'Open';
 
 /**
- * Coerce an unknown config value to a string. Stored Config values are
- * JSON-parsed at load time (see ConfigModel.loadAllConfig), so for string
- * keys we typically already get a string. Defensively handle non-string
- * values by stringifying them, except for null/undefined which fall back
- * to the provided default.
- */
-const toStringValue = (value: unknown, fallback: string): string => {
-  if (value === null || value === undefined) return fallback;
-  if (typeof value === 'string') return value;
-  return String(value);
-};
-
-/**
  * Coerce an unknown config value to a RegistrationMode. Anything outside the
  * known enum is treated as the default ('Open') to avoid surfacing a 500 on
  * the GET endpoint when the database holds a stale or hand-edited value.
@@ -48,23 +36,6 @@ const toRegistrationMode = (value: unknown): RegistrationMode => {
 };
 
 /**
- * Coerce an unknown config value to a string[]. The legacy form filter
- * (`stringToArrayFilter`) splits on '\n', so historical writes always store
- * an array. Defensively handle the legacy textarea-string case (single
- * string holding newline-separated values) by splitting; non-array /
- * non-string values fall back to [].
- */
-const toStringArray = (value: unknown): string[] => {
-  if (Array.isArray(value)) {
-    return value.filter((entry): entry is string => typeof entry === 'string');
-  }
-  if (typeof value === 'string' && value.length > 0) {
-    return value.split('\n');
-  }
-  return [];
-};
-
-/**
  * Trim each entry and drop empty strings. Mirrors the legacy
  * `stringToArrayFilter` semantics (after CRLF normalization), but applies
  * to an already-split array since the API contract requires string[].
@@ -74,15 +45,13 @@ const sanitizeWhiteList = (list: string[]): string[] => {
 };
 
 const readSecuritySettings = (crowi: Crowi): SecuritySettings => {
-  const cfg = crowi.getConfig();
-  const ns = (cfg && typeof cfg === 'object' ? (cfg as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
-
+  const ns = getCrowiConfigNamespace(crowi);
   return {
-    basicName: toStringValue(ns['security:basicName'], DEFAULT_BASIC_NAME),
-    basicSecret: toStringValue(ns['security:basicSecret'], DEFAULT_BASIC_SECRET),
+    basicName: coerceString(ns['security:basicName'], DEFAULT_BASIC_NAME),
+    basicSecret: coerceString(ns['security:basicSecret'], DEFAULT_BASIC_SECRET),
     registrationMode: toRegistrationMode(ns['security:registrationMode']),
-    // toStringArray already returns [] when the value is missing — that doubles as the default.
-    registrationWhiteList: toStringArray(ns['security:registrationWhiteList']),
+    // coerceStringArray already returns [] when the value is missing — that doubles as the default.
+    registrationWhiteList: coerceStringArray(ns['security:registrationWhiteList']),
   };
 };
 
