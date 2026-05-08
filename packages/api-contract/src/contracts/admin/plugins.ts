@@ -12,7 +12,13 @@ import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema } from '../
 
 const c = initContract();
 
-const PluginNameParamsSchema = z.object({ name: z.string() });
+/**
+ * Plugin npm names contain a `/` (e.g. `@crowi/storage-local`), which
+ * collides with Express's path-segment matching when used as a path
+ * param. We pass the name as a query string so ts-rest / Express
+ * don't have to deal with the slash in the URL path.
+ */
+const PluginNameQuerySchema = z.object({ name: z.string() });
 
 export const adminPluginsContract = c.router({
   /**
@@ -37,8 +43,8 @@ export const adminPluginsContract = c.router({
    */
   getPluginConfig: {
     method: 'GET',
-    path: '/admin/plugins/:name/config',
-    pathParams: PluginNameParamsSchema,
+    path: '/admin/plugins/config',
+    query: PluginNameQuerySchema,
     responses: {
       200: PluginConfigResponseSchema,
       401: AuthenticationRequiredErrorSchema,
@@ -54,8 +60,8 @@ export const adminPluginsContract = c.router({
    */
   updatePluginConfig: {
     method: 'PUT',
-    path: '/admin/plugins/:name/config',
-    pathParams: PluginNameParamsSchema,
+    path: '/admin/plugins/config',
+    query: PluginNameQuerySchema,
     body: UpdatePluginConfigRequestSchema,
     responses: {
       200: UpdatePluginConfigResponseSchema,

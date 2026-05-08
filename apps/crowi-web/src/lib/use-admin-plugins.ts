@@ -32,7 +32,7 @@ export function useAdminPluginConfig(name: string | null) {
     queryKey: name ? adminPluginsKeys.config(name) : adminPluginsKeys.all,
     queryFn: async () => {
       if (!name) throw new Error('plugin name is required');
-      const result = await apiClient.admin.plugins.getPluginConfig({ params: { name } });
+      const result = await apiClient.admin.plugins.getPluginConfig({ query: { name } });
       return unwrapResult(result, {
         ok: (body) => body,
         errors: {
@@ -67,7 +67,7 @@ export function useUpdateAdminPluginConfig(name: string) {
   return useMutation<void, Error, UpdatePluginConfigRequest>({
     mutationFn: async (data) => {
       const result = await apiClient.admin.plugins.updatePluginConfig({
-        params: { name },
+        query: { name },
         body: data,
       });
       if (result.status === 200) return;

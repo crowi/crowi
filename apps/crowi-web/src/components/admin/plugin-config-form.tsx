@@ -35,7 +35,10 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [issues, setIssues] = useState<Map<string, string>>(new Map());
 
-  if (config.fields.length === 0) {
+  // Defensive: surface "no config" instead of crashing if the server
+  // response shape is unexpected (e.g. stale bundle, transitional
+  // error path).
+  if (!Array.isArray(config.fields) || config.fields.length === 0) {
     return <p className="text-muted-foreground text-sm">{m['admin.plugins.no_config']()}</p>;
   }
 
@@ -262,6 +265,7 @@ interface FieldState {
 
 function deriveInitialState(config: PluginConfigResponse): FieldState {
   const values: Record<string, unknown> = {};
+  if (!Array.isArray(config.fields)) return { values };
   for (const field of config.fields) {
     if (field.kind === 'secret') {
       const meta = config.values[field.name] as { hasValue?: boolean } | undefined;

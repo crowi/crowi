@@ -37,11 +37,11 @@ export default (crowi: Crowi, _app: Express) => {
      * Sensitive fields are masked to `{ hasValue: boolean }` before
      * returning so plaintext secrets never reach the browser.
      */
-    getPluginConfig: async ({ params }) => {
+    getPluginConfig: async ({ query }) => {
       const manager = crowi.pluginManager;
-      const plugin = manager?.getLoadedPlugin(params.name);
+      const plugin = manager?.getLoadedPlugin(query.name);
       if (!plugin) {
-        return pluginNotFound(params.name);
+        return pluginNotFound(query.name);
       }
       if (!plugin.configSchema) {
         // Plugin has no configurable values; return an empty form.
@@ -79,11 +79,11 @@ export default (crowi: Crowi, _app: Express) => {
      *   - empty string         → clear the saved value
      *   - non-empty string     → replace and re-encrypt
      */
-    updatePluginConfig: async ({ params, body }) => {
+    updatePluginConfig: async ({ query, body }) => {
       const manager = crowi.pluginManager;
-      const plugin = manager?.getLoadedPlugin(params.name);
+      const plugin = manager?.getLoadedPlugin(query.name);
       if (!plugin) {
-        return pluginNotFound(params.name);
+        return pluginNotFound(query.name);
       }
       if (!plugin.configSchema) {
         return {
