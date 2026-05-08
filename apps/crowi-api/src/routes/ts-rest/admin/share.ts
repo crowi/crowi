@@ -17,6 +17,8 @@ const debug = Debug('crowi:routes:ts-rest:admin:share');
  */
 const asBoolean = (value: unknown): boolean => value === true;
 
+const KEY_EXTERNAL_SHARE = 'app:externalShare';
+
 /**
  * Read the current share-related settings from the in-memory config cache.
  * Defaults to `{ externalShare: false }` when the key is missing — same as
@@ -27,7 +29,7 @@ const readShareSettings = (crowi: Crowi): ShareSettings => {
   const ns = (cfg && typeof cfg === 'object' ? (cfg as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
 
   return {
-    externalShare: asBoolean(ns['app:externalShare']),
+    externalShare: asBoolean(ns[KEY_EXTERNAL_SHARE]),
   };
 };
 
@@ -43,17 +45,9 @@ export default (crowi: Crowi, _app: Express) => {
      * runs for authenticated admins.
      */
     getShareSettings: async () => {
-      try {
-        const settings = readShareSettings(crowi);
-        return { status: 200 as const, body: settings };
-      } catch (err) {
-        const error = err as Error;
-        debug('Error reading share settings:', error.message);
-        return {
-          status: 500 as const,
-          body: { error: { code: 'INTERNAL_ERROR' as const, message: 'Internal server error' as const } },
-        };
-      }
+      // crowi.getConfig() is a synchronous in-memory cache read; no try/catch
+      // needed here. The PUT path keeps its catch because saveConfig is async.
+      return { status: 200 as const, body: readShareSettings(crowi) };
     },
 
     /**
@@ -70,7 +64,7 @@ export default (crowi: Crowi, _app: Express) => {
 
       try {
         await configService.saveConfig('crowi', {
-          'app:externalShare': body.externalShare,
+          [KEY_EXTERNAL_SHARE]: body.externalShare,
         });
       } catch (err) {
         const error = err as Error;
