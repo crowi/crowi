@@ -227,4 +227,265 @@ describe('Routes /api/v2/admin/users (ts-rest)', () => {
       }
     });
   });
+
+  describe('POST /api/v2/admin/users/invite', () => {
+    let adminToken: string;
+    let userToken: string;
+
+    beforeEach(async () => {
+      await clearUsers();
+
+      const admin = await createTestUser({
+        name: 'Invite Admin',
+        username: 'inviteAdmin',
+        email: 'invite-admin@example.com',
+        admin: true,
+      });
+      adminToken = admin.accessToken;
+
+      const normal = await createTestUser({
+        name: 'Invite Normal',
+        username: 'inviteNormal',
+        email: 'invite-normal@example.com',
+        admin: false,
+      });
+      userToken = normal.accessToken;
+    });
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app)
+        .post('/api/v2/admin/users/invite')
+        .send({ emailList: ['x@example.com'] });
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 403 for a non-admin user', async () => {
+      const res = await request(app)
+        .post('/api/v2/admin/users/invite')
+        .set(authHeaders(userToken))
+        .send({ emailList: ['x@example.com'] });
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 400 when emailList is empty', async () => {
+      const res = await request(app).post('/api/v2/admin/users/invite').set(authHeaders(adminToken)).send({ emailList: [] });
+      expect(res.status).toBe(400);
+    });
+
+    it('creates new users and reports per-email status', async () => {
+      const res = await request(app)
+        .post('/api/v2/admin/users/invite')
+        .set(authHeaders(adminToken))
+        .send({ emailList: ['newcomer1@example.com', 'newcomer2@example.com'], sendEmail: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toHaveLength(2);
+      const byEmail = new Map<string, { status: string; userId?: string }>(
+        (res.body.results as Array<{ email: string; status: string; userId?: string }>).map((r) => [r.email, r]),
+      );
+      expect(byEmail.get('newcomer1@example.com')?.status).toBe('created');
+      expect(byEmail.get('newcomer2@example.com')?.status).toBe('created');
+      expect(byEmail.get('newcomer1@example.com')?.userId).toMatch(/^[0-9a-f]{24}$/);
+    });
+
+    it('reports already-existing emails as status="exists"', async () => {
+      // Pre-create one user; the invite should report it as 'exists' rather than failing.
+      await createPlainUser({ name: 'Existing', username: 'existing', email: 'duplicate@example.com' });
+
+      const res = await request(app)
+        .post('/api/v2/admin/users/invite')
+        .set(authHeaders(adminToken))
+        .send({ emailList: ['duplicate@example.com', 'fresh@example.com'] });
+
+      expect(res.status).toBe(200);
+      const byEmail = new Map<string, { status: string }>((res.body.results as Array<{ email: string; status: string }>).map((r) => [r.email, r]));
+      expect(byEmail.get('duplicate@example.com')?.status).toBe('exists');
+      expect(byEmail.get('fresh@example.com')?.status).toBe('created');
+    });
+  });
+
+  describe('per-user mutating endpoints', () => {
+    let adminToken: string;
+    let userToken: string;
+    let target: UserDocument;
+
+    beforeEach(async () => {
+      await clearUsers();
+
+      const admin = await createTestUser({
+        name: 'Mut Admin',
+        username: 'mutAdmin',
+        email: 'mut-admin@example.com',
+        admin: true,
+      });
+      adminToken = admin.accessToken;
+
+      const normal = await createTestUser({
+        name: 'Mut Normal',
+        username: 'mutNormal',
+        email: 'mut-normal@example.com',
+        admin: false,
+      });
+      userToken = normal.accessToken;
+
+      target = await createPlainUser({ name: 'Target', username: 'target', email: 'target@example.com' });
+    });
+
+    describe('PATCH /api/v2/admin/users/:id', () => {
+      it('returns 401 without auth', async () => {
+        const res = await request(app).patch(`/api/v2/admin/users/${target._id}`).send({ name: 'New', email: 'new@example.com' });
+        expect(res.status).toBe(401);
+      });
+
+      it('returns 403 for a non-admin user', async () => {
+        const res = await request(app).patch(`/api/v2/admin/users/${target._id}`).set(authHeaders(userToken)).send({ name: 'New', email: 'new@example.com' });
+        expect(res.status).toBe(403);
+      });
+
+      it('updates name and email', async () => {
+        const res = await request(app)
+          .patch(`/api/v2/admin/users/${target._id}`)
+          .set(authHeaders(adminToken))
+          .send({ name: 'Renamed', email: 'renamed@example.com' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.user.name).toBe('Renamed');
+        expect(res.body.user.email).toBe('renamed@example.com');
+        expect(res.body.user).not.toHaveProperty('password');
+        expect(res.body.user).not.toHaveProperty('apiToken');
+      });
+
+      it('returns 404 for a non-existent id', async () => {
+        // Random valid 24-char hex that does not match any user.
+        const res = await request(app)
+          .patch('/api/v2/admin/users/0123456789abcdef01234567')
+          .set(authHeaders(adminToken))
+          .send({ name: 'X', email: 'x@example.com' });
+        expect(res.status).toBe(404);
+      });
+
+      it('returns 400 for an invalid id', async () => {
+        const res = await request(app).patch('/api/v2/admin/users/not-a-valid-id').set(authHeaders(adminToken)).send({ name: 'X', email: 'x@example.com' });
+        expect(res.status).toBe(400);
+      });
+
+      it('returns 409 when email collides with another user', async () => {
+        const other = await createPlainUser({ name: 'Other', username: 'other', email: 'other@example.com' });
+        const res = await request(app).patch(`/api/v2/admin/users/${target._id}`).set(authHeaders(adminToken)).send({ name: 'Target', email: other.email });
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('CONFLICT');
+      });
+
+      it('allows setting the same email back to its own user', async () => {
+        // Idempotent edit: name change without an email collision against itself.
+        const res = await request(app)
+          .patch(`/api/v2/admin/users/${target._id}`)
+          .set(authHeaders(adminToken))
+          .send({ name: 'Renamed Only', email: target.email });
+        expect(res.status).toBe(200);
+        expect(res.body.user.name).toBe('Renamed Only');
+      });
+    });
+
+    describe('PUT /api/v2/admin/users/:id/admin', () => {
+      it('grants admin permission', async () => {
+        const res = await request(app).put(`/api/v2/admin/users/${target._id}/admin`).set(authHeaders(adminToken)).send({});
+        expect(res.status).toBe(200);
+        expect(res.body.user.admin).toBe(true);
+      });
+
+      it('returns 404 for a non-existent id', async () => {
+        const res = await request(app).put('/api/v2/admin/users/0123456789abcdef01234567/admin').set(authHeaders(adminToken)).send({});
+        expect(res.status).toBe(404);
+      });
+
+      it('returns 401 without auth', async () => {
+        const res = await request(app).put(`/api/v2/admin/users/${target._id}/admin`).send({});
+        expect(res.status).toBe(401);
+      });
+    });
+
+    describe('DELETE /api/v2/admin/users/:id/admin', () => {
+      it('revokes admin permission', async () => {
+        // Make admin first so the demote actually flips the bit.
+        target.admin = true;
+        await target.save();
+
+        const res = await request(app).delete(`/api/v2/admin/users/${target._id}/admin`).set(authHeaders(adminToken));
+        expect(res.status).toBe(200);
+        expect(res.body.user.admin).toBe(false);
+      });
+
+      it('returns 403 for a non-admin user', async () => {
+        const res = await request(app).delete(`/api/v2/admin/users/${target._id}/admin`).set(authHeaders(userToken));
+        expect(res.status).toBe(403);
+      });
+    });
+
+    describe('PUT /api/v2/admin/users/:id/status/active', () => {
+      it('activates a suspended user and emits the userEvent', async () => {
+        const User = crowi.model('User');
+        target.status = User.STATUS_SUSPENDED;
+        await target.save();
+
+        const userEvent = crowi.event('User');
+        const onActivated = jest.fn();
+        userEvent.on('activated', onActivated);
+
+        const res = await request(app).put(`/api/v2/admin/users/${target._id}/status/active`).set(authHeaders(adminToken)).send({});
+        expect(res.status).toBe(200);
+        expect(res.body.user.status).toBe(User.STATUS_ACTIVE);
+        expect(onActivated).toHaveBeenCalled();
+
+        userEvent.off('activated', onActivated);
+      });
+    });
+
+    describe('PUT /api/v2/admin/users/:id/status/suspended', () => {
+      it('suspends an active user', async () => {
+        const User = crowi.model('User');
+        const res = await request(app).put(`/api/v2/admin/users/${target._id}/status/suspended`).set(authHeaders(adminToken)).send({});
+        expect(res.status).toBe(200);
+        expect(res.body.user.status).toBe(User.STATUS_SUSPENDED);
+      });
+    });
+
+    describe('POST /api/v2/admin/users/:id/reset-password', () => {
+      it('returns the new plaintext password and updated user', async () => {
+        const res = await request(app).post(`/api/v2/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
+        expect(res.status).toBe(200);
+        expect(typeof res.body.newPassword).toBe('string');
+        expect(res.body.newPassword.length).toBeGreaterThan(0);
+        expect(res.body.user._id).toBe(target._id.toString());
+        expect(res.body.user).not.toHaveProperty('password');
+      });
+
+      it('returns 404 for a non-existent id', async () => {
+        const res = await request(app).post('/api/v2/admin/users/0123456789abcdef01234567/reset-password').set(authHeaders(adminToken)).send({});
+        expect(res.status).toBe(404);
+      });
+    });
+
+    describe('PUT /api/v2/admin/users/:id/email', () => {
+      it('updates the email', async () => {
+        const res = await request(app).put(`/api/v2/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: 'updated@example.com' });
+        expect(res.status).toBe(200);
+        expect(res.body.user.email).toBe('updated@example.com');
+      });
+
+      it('returns 409 when the email collides with another user', async () => {
+        const other = await createPlainUser({ name: 'Other2', username: 'other2', email: 'other2@example.com' });
+        const res = await request(app).put(`/api/v2/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: other.email });
+        expect(res.status).toBe(409);
+      });
+
+      it('returns 404 for a non-existent id', async () => {
+        const res = await request(app)
+          .put('/api/v2/admin/users/0123456789abcdef01234567/email')
+          .set(authHeaders(adminToken))
+          .send({ email: 'whatever@example.com' });
+        expect(res.status).toBe(404);
+      });
+    });
+  });
 });
