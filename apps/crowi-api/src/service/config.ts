@@ -141,7 +141,12 @@ export default class ConfigService {
         debug('PubSubId', pubSub.id);
 
         if (subscriber) {
-          subscriber.on('message', async (channel, message) => {
+          // @redis/client v4 takes the message listener as the 2nd argument
+          // to `subscribe`. The v3 `.on('message', ...)` pattern leaves no
+          // listener registered, so when a message arrives the client tries
+          // to invoke `undefined` and crashes the process with
+          // "TypeError: listener is not a function".
+          await subscriber.subscribe(pubSub.channel, async (message: string, channel: string) => {
             if (channel !== pubSub.channel) return;
 
             const { id } = JSON.parse(message);
@@ -152,8 +157,6 @@ export default class ConfigService {
 
             debug(`Config updated by ${id}`);
           });
-
-          await subscriber.subscribe(pubSub.channel);
         }
 
         debug('Redis pub/sub setup completed');
