@@ -3,6 +3,7 @@ import { adminAppContract } from './app';
 import { adminAuthContract } from './auth';
 import { adminMailContract } from './mail';
 import { adminSecurityContract } from './security';
+import { adminUsersContract } from './users';
 
 const c = initContract();
 
@@ -16,4 +17,5 @@ export const adminContract = c.router({
   auth: adminAuthContract,
   security: adminSecurityContract,
   mail: adminMailContract,
+  users: adminUsersContract,
 });

@@ -4,6 +4,7 @@ import appRoutes from './app';
 import authRoutes from './auth';
 import mailRoutes from './mail';
 import securityRoutes from './security';
+import usersRoutes from './users';
 
 /**
  * Aggregate router for all admin-only ts-rest endpoints. Mounted under the
@@ -18,6 +19,7 @@ export default (crowi: Crowi, app: Express) => {
   router.use(authRoutes(crowi, app));
   router.use(securityRoutes(crowi, app));
   router.use(mailRoutes(crowi, app));
+  router.use(usersRoutes(crowi, app));
 
   return router;
 };

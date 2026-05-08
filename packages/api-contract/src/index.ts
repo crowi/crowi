@@ -16,4 +16,5 @@ export * from './schemas/admin/app';
 export * from './schemas/admin/auth';
 export * from './schemas/admin/security';
 export * from './schemas/admin/mail';
+export * from './schemas/admin/users';
 export * from './openapi';
