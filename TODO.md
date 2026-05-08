@@ -61,7 +61,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] **Share** (`POST /admin/settings/share`): 公開共有の有効/無効
 
 ### ユーザー管理
-- [ ] **User 一覧** (`GET /admin/users`) + 検索 (`GET /admin/users.search`)
+- [x] **User 一覧** (`GET /admin/users`) + 検索 (`GET /admin/users.search`) — `0223d46b` + `8316d50a` + `7820711c`: ts-rest contract / API ハンドラ (createPager 移植 + UserPublic 絞込み) / Web 画面 (URL state 同期 + debounce 検索 + numbered pager)。アクション系は別タスク
 - [ ] **招待** (`POST /admin/user/invite`): メールアドレスで招待送信
 - [ ] **編集** (`POST /admin/user/:id/edit`): name / email / status の手動修正
 - [ ] **権限** (`POST /admin/user/:id/makeAdmin` / `removeFromAdmin`)
