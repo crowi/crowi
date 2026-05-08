@@ -1,80 +1,13 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract, type AdminPager } from '@crowi/api-contract';
+import { apiContract } from '@crowi/api-contract';
 import { Express, Router } from 'express';
 import Crowi from 'src/crowi';
+import { createPager, MAX_PAGE_LIST } from 'src/util/admin-pager';
 import { internalServerErrorResponse, toUserPublic } from 'src/util/ts-rest-helpers';
 import type { UserDocument, UserModel } from 'src/models/user';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:admin:users');
-
-/**
- * Maximum number of numbered page buttons rendered around the current page.
- * Mirrors the legacy `MAX_PAGE_LIST = 5` in admin controller (admin.ts:16).
- */
-const MAX_PAGE_LIST = 5;
-
-/**
- * Build a pager bundle compatible with the legacy `createPager`
- * (apps/crowi-api/src/controllers/admin.ts:22-93). Re-implemented in the new
- * code path so the wire format stays identical and the new admin UI can
- * render the same numbered pager + dots without translation.
- *
- * Note: `pagesCount` may be 0 when there are no matching users; the windowing
- * loop below correctly emits an empty `pages` array in that case (pagerMin
- * collapses to 1 and pagerMax stays at 0, so the for-loop body never runs).
- */
-function createPager(total: number, page: number, pagesCount: number, maxPageList: number): AdminPager {
-  const pager: AdminPager = {
-    page,
-    pagesCount,
-    pages: [],
-    total,
-    previous: null,
-    previousDots: false,
-    next: null,
-    nextDots: false,
-  };
-
-  if (page > 1) {
-    pager.previous = page - 1;
-  }
-
-  if (page < pagesCount) {
-    pager.next = page + 1;
-  }
-
-  let pagerMin = Math.max(1, Math.ceil(page - maxPageList / 2));
-  let pagerMax = Math.min(pagesCount, Math.floor(page + maxPageList / 2));
-  if (pagerMin === 1) {
-    if (MAX_PAGE_LIST < pagesCount) {
-      pagerMax = MAX_PAGE_LIST;
-    } else {
-      pagerMax = pagesCount;
-    }
-  }
-  if (pagerMax === pagesCount) {
-    if (pagerMax - MAX_PAGE_LIST < 1) {
-      pagerMin = 1;
-    } else {
-      pagerMin = pagerMax - MAX_PAGE_LIST;
-    }
-  }
-
-  if (pagerMin > 1) {
-    pager.previousDots = true;
-  }
-
-  if (pagerMax < pagesCount) {
-    pager.nextDots = true;
-  }
-
-  for (let i = pagerMin; i <= pagerMax; i++) {
-    pager.pages.push(i);
-  }
-
-  return pager;
-}
 
 /**
  * Shape of the result emitted by mongoose-paginate via

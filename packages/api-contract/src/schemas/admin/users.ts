@@ -1,41 +1,8 @@
 import { z } from 'zod';
 import { UserPublicSchema } from '../userPublic';
+import { AdminPagerSchema } from './_pager';
 
-/**
- * Pager shape for the legacy admin user list. The legacy `createPager` helper
- * (apps/crowi-api/src/controllers/admin.ts:22-93) emits this exact bundle and
- * the React-side admin UI consumes it directly. We re-implement the helper on
- * the new server side so the wire format stays compatible.
- *
- * Differences from `PagerSchema` (schemas/page.ts):
- * - That one is an offset/prev/next bundle for infinite-scroll style lists.
- * - This one is a numbered pager (1..N + "..." dots) suited to a tabular list.
- *
- * Fields:
- * - page          : 1-based current page index.
- * - pagesCount    : Total number of pages (= ceil(total / limit), or 0 when
- *                   total is 0 — mongoose-paginate emits 0 in that case).
- * - pages         : Page numbers to render as buttons (windowed around `page`,
- *                   max length = MAX_PAGE_LIST = 5).
- * - total         : Total number of matching users.
- * - previous      : Previous page number, or null when on the first page.
- * - previousDots  : Whether to render a "..." between the leftmost button and
- *                   the windowed range (i.e. there are pages < pages[0] not
- *                   shown directly).
- * - next          : Next page number, or null when on the last page.
- * - nextDots      : Symmetric to `previousDots` on the right side.
- */
-export const AdminPagerSchema = z.object({
-  page: z.number(),
-  pagesCount: z.number(),
-  pages: z.array(z.number()),
-  total: z.number(),
-  previous: z.number().nullable(),
-  previousDots: z.boolean(),
-  next: z.number().nullable(),
-  nextDots: z.boolean(),
-});
-export type AdminPager = z.infer<typeof AdminPagerSchema>;
+export { AdminPagerSchema, type AdminPager } from './_pager';
 
 /**
  * Query parameters accepted by GET /admin/users.
