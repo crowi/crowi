@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ADMIN_NAV_GROUPS } from '@/components/admin/admin-sidebar';
 import { CryptoStatusCard } from '@/components/admin/crypto-status-card';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 export default function AdminIndexPage() {
   return (

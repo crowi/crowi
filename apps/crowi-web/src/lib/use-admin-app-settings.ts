@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { GetAppSettingsResponse, UpdateAppSettingsRequest, UpdateAppSettingsResponse } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 export const adminAppSettingsKeys = {
   settings: ['admin-app-settings'] as const,

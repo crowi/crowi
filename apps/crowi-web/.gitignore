@@ -41,4 +41,4 @@ yarn-error.log*
 next-env.d.ts
 
 # paraglide compiled output (generated from messages/ — predev / prebuild script regenerates)
-/src/paraglide
+/paraglide

@@ -8,7 +8,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { usePage } from '@/lib/use-page';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface IdRedirectorProps {
   pageId: string;

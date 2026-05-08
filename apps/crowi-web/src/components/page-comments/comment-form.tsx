@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface CommentFormProps {
   isSubmitting: boolean;

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Bell, Database, Github, Globe, KeyRound, Link2, Mail, Search, Server, Settings, Share2, ShieldCheck, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface AdminNavItem {
   href: string;

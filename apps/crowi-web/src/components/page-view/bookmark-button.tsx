@@ -3,7 +3,7 @@
 import { Bookmark, BookmarkCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToggleBookmark } from '@/lib/use-bookmark';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface BookmarkButtonProps {
   pageId: string;

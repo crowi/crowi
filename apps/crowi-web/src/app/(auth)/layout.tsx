@@ -12,7 +12,7 @@ import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
 import { useConnection } from '@/lib/connection-context';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 import { LanguageMenuItems } from '@/components/language-menu-items';
 import { UserMenuItems } from '@/components/user-menu-items';
 

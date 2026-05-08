@@ -5,7 +5,7 @@ import type { Notification } from '@crowi/api-contract';
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 import { buildNotificationMessage, formatRelativeTime, isUnopenedNotification } from '@/lib/notification-format';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface NotificationItemProps {
   notification: Notification;

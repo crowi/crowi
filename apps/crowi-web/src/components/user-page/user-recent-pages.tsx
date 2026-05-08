@@ -9,7 +9,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { PageListItem } from '@/components/page-list/page-list-item';
 import { useUserPagesInfinite } from '@/lib/use-user-page';
 import type { Page } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface UserRecentPagesProps {
   username: string;

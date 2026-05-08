@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Bookmark, FileText, Settings, Trash2, User } from 'lucide-react';
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface UserMenuItemsProps {
   username: string;

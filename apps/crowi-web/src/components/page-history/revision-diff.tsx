@@ -7,7 +7,7 @@ import { DiffMethod } from 'react-diff-viewer-continued';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useRevisionPair } from '@/lib/use-page-revisions';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 // react-diff-viewer-continued depends on @emotion which uses browser-only APIs
 // at module load time, so we render it client-side only.

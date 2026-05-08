@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 type Feedback = { kind: 'conflict' | 'error'; message: string };
 

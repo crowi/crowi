@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAdminSecuritySettings } from '@/lib/use-admin-security';
 import { SecurityForm } from './security-form';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 /**
  * /admin/security

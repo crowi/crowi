@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import type { Comment } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface CommentItemProps {
   comment: Comment;

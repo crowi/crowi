@@ -6,7 +6,7 @@ import { Link2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { useBacklinks } from '@/lib/use-backlinks';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 const INITIAL_LIMIT = 5;
 const PAGE_SIZE = 5;

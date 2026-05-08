@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { CryptoStatusResponse, ReencryptResponse } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 export const adminCryptoKeys = {
   status: ['admin-crypto-status'] as const,

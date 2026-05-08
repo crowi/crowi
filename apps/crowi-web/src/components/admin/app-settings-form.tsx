@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AppSettingsValidationFailure, useAppSettings, useUpdateAppSettings } from '@/lib/use-admin-app-settings';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 /**
  * Editable subset of the App settings — the GET response also surfaces

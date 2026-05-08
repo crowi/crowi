@@ -10,7 +10,7 @@ import { UserProfile, UserRecentPages, UserBookmarks } from '@/components/user-p
 import { PageHeader, PageContent } from '@/components/page-view';
 import { useUserPage } from '@/lib/use-user-page';
 import { usePage } from '@/lib/use-page';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface UserPageProps {
   params: Promise<{

@@ -1,4 +1,4 @@
-import { paraglideMiddleware } from '@/paraglide/server.js';
+import { paraglideMiddleware } from '@paraglide/server.js';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export const PARAGLIDE_LOCALE_HEADER = 'x-paraglide-locale';

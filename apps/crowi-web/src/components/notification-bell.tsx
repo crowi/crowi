@@ -12,7 +12,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 import { useUnreadCount, useNotifications, useMarkAllAsRead, useOpenNotification } from '@/lib/use-notifications';
 import { formatRelativeTime, buildNotificationMessage, isUnopenedNotification } from '@/lib/notification-format';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface NotificationRowProps {
   notification: Notification;

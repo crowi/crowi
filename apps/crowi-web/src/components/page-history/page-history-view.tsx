@@ -11,7 +11,7 @@ import { NotFoundCard } from '@/components/ui/not-found-card';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { usePage } from '@/lib/use-page';
 import { PageHistory } from './page-history';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface PageHistoryViewProps {
   // page を特定するためのオリジナルパス (URL 末尾の '/history' を除いたもの)

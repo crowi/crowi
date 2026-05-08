@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { UserAvatar } from '@/components/user-avatar';
 import { useSeenUsers } from '@/lib/use-seen';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 const SEEN_USERS_PREVIEW_LIMIT = 10;
 

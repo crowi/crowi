@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Providers } from '@/lib/providers';
 import { PARAGLIDE_LOCALE_HEADER } from '@/proxy';
-import { baseLocale, isLocale, overwriteGetLocale } from '@/paraglide/runtime.js';
+import { baseLocale, isLocale, overwriteGetLocale } from '@paraglide/runtime.js';
 import './globals.css';
 
 const geistSans = Geist({

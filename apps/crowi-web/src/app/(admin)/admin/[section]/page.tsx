@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ADMIN_SECTIONS, isAdminSectionKey } from '@/components/admin/admin-sections';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface AdminSectionPageProps {
   params: Promise<{ section: string }>;

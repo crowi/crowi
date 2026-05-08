@@ -12,7 +12,7 @@ import { PageContent } from '@/components/page-view/page-content';
 import { PageHeader } from '@/components/page-view/page-header';
 import { usePageList } from '@/lib/use-page-list';
 import type { ListPagesRequest, PageWithRevision } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface PageListProps {
   initialParams?: Partial<ListPagesRequest>;

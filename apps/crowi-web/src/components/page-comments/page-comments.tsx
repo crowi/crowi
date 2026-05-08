@@ -8,7 +8,7 @@ import { useAddComment, useDeleteComment, usePageCommentsList } from '@/lib/use-
 import type { PageWithRevision } from '@crowi/api-contract';
 import { CommentItem } from './comment-item';
 import { CommentForm } from './comment-form';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface PageCommentsProps {
   page: PageWithRevision;

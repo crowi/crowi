@@ -3,7 +3,7 @@
 import { Loader2, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToggleLike } from '@/lib/use-like';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface LikeButtonProps {
   pageId: string;

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { usePageRevisions } from '@/lib/use-page-revisions';
 import { RevisionDiff } from './revision-diff';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface PageHistoryProps {
   pageId: string;

@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, KeyRound, Loader2, ShieldAlert } from 'luc
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useCryptoStatus, useReencryptSensitive } from '@/lib/use-admin-crypto';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 /**
  * Admin dashboard banner for the at-rest encryption migration. Shows one of:

@@ -1,5 +1,5 @@
 import { AppSettingsForm } from '@/components/admin/app-settings-form';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 /**
  * Dedicated route for the App settings screen. Sits next to the catch-all

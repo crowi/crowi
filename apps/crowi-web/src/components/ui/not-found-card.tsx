@@ -3,7 +3,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface NotFoundCardProps {
   title?: string;

@@ -1,5 +1,5 @@
 import type { Notification } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 /**
  * Format a date string to a localized relative-time string.

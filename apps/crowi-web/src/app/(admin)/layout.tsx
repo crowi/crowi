@@ -16,7 +16,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 import { LanguageMenuItems } from '@/components/language-menu-items';
 import { UserMenuItems } from '@/components/user-menu-items';
 

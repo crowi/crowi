@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { EditPageClient } from './edit-page-client';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 export default function EditPage() {
   return (

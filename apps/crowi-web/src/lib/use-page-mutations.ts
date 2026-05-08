@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { CreatePageRequest, RenamePageRequest, UpdatePageRequest } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface DeletePageRequest {
   page_id: string;

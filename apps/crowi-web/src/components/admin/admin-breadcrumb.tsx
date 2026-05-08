@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { ADMIN_SECTIONS, isAdminSectionKey } from './admin-sections';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 /**
  * Breadcrumb shown above the admin main content area. Renders

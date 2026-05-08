@@ -2,8 +2,8 @@
 
 import { Check, Languages } from 'lucide-react';
 import { DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { getLocale, setLocale, locales } from '@/paraglide/runtime.js';
-import { m } from '@/paraglide/messages.js';
+import { getLocale, setLocale, locales } from '@paraglide/runtime.js';
+import { m } from '@paraglide/messages.js';
 
 const LOCALE_LABELS: Record<string, () => string> = {
   ja: () => m['header.language_ja'](),

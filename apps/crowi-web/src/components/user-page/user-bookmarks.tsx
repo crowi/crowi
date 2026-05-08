@@ -9,7 +9,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { PageListItem } from '@/components/page-list/page-list-item';
 import { useUserBookmarksInfinite } from '@/lib/use-user-page';
 import type { Bookmark as BookmarkType } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface UserBookmarksProps {
   username: string;

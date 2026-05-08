@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useMarkAllAsRead, useNotificationsInfinite, useOpenNotification, useUnreadCount } from '@/lib/use-notifications';
 import { NotificationItem } from './notification-item';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 const PAGE_SIZE = 20;
 

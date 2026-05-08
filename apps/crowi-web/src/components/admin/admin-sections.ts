@@ -1,4 +1,4 @@
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 /**
  * Admin section metadata used by the sidebar, breadcrumb, and dynamic

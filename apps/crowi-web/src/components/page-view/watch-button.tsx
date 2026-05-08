@@ -3,7 +3,7 @@
 import { Bell, BellOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToggleWatch, useWatchStatus } from '@/lib/use-watch';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface WatchButtonProps {
   pageId: string;

@@ -8,7 +8,7 @@
     "start": "next start --port 3301",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
-    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide",
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./paraglide",
     "predev": "pnpm paraglide:compile",
     "prebuild": "pnpm paraglide:compile",
     "pretype-check": "pnpm paraglide:compile"

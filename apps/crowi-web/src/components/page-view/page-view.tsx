@@ -17,7 +17,7 @@ import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
 import { BacklinkList } from './backlink-list';
 import { PageComments } from '@/components/page-comments';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface PageViewProps {
   path: string;

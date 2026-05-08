@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUpdateAdminSecuritySettings } from '@/lib/use-admin-security';
 import type { RegistrationMode, SecuritySettings } from '@crowi/api-contract';
-import { m } from '@/paraglide/messages.js';
+import { m } from '@paraglide/messages.js';
 
 interface SecurityFormProps {
   settings: SecuritySettings;
