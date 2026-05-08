@@ -62,14 +62,14 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [x] Next.js Route Group `(admin)` 設計、admin 専用認可 (User.admin === true) — 5123e06d
 
 ### 設定 (Config model に集約、各セクションで部分更新)
-- [ ] **App** (`POST /admin/settings/app`): サイト名、デフォルト言語、`fileUpload` type 等
-- [ ] **Security** (`POST /admin/settings/sec`): ゲスト閲覧許可、招待のみモード等
-- [ ] **Authentication** (`POST /admin/settings/auth`): ローカル認証 / 招待制 ON-OFF
-- [ ] **Mail / SMTP** (`POST /admin/settings/mail`): from / SMTP host / port / auth
-- [ ] **AWS / S3 file storage** (`POST /admin/settings/aws`): bucket / region / accessKey / secret
+- [x] **App** (`GET/PUT /admin/app`): サイト名 / 機密情報の注意書き / fileUpload toggle / AWS S3 認証情報。secretAccessKey は暗号化保存 + UI で 3 状態(saved / clear pending / dirty)
+- [x] **Security** (`GET/PUT /admin/security`): basic 認証 / registrationMode / registrationWhiteList
+- [x] **Authentication** (`GET/PUT /admin/auth`): requireThirdPartyAuth / disablePasswordAuth + 自分自身のロックアウト防止 (422)
+- [x] **Mail / SMTP** (`GET/PUT /admin/mail` + `POST /admin/mail/test`): from / SMTP host / port / user / password + AWS SES + テスト送信
+- [x] **Share** (`GET/PUT /admin/share`): 外部共有 link の有効/無効 toggle + 旧 form/route 削除
 - [ ] **Google OAuth** (`POST /admin/settings/google`): clientId / secret
 - [ ] **GitHub OAuth** (`POST /admin/settings/github`): clientId / secret / org
-- [ ] **Share** (`POST /admin/settings/share`): 公開共有の有効/無効
+- ~~AWS / S3 file storage~~: `admin/app` の upload section に統合済
 
 ### ユーザー管理
 - [x] **User 一覧** (`GET /admin/users`) + 検索 (`GET /admin/users.search`) — `0223d46b` + `8316d50a` + `7820711c`: ts-rest contract / API ハンドラ (createPager 移植 + UserPublic 絞込み) / Web 画面 (URL state 同期 + debounce 検索 + numbered pager)。アクション系は別タスク
@@ -116,6 +116,29 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] エディタ強化 (Markdown プレビュー / リッチエディタ / 自動保存 / 画像アップロード)
 
 ## Recently Completed (このセッション)
+
+### 管理画面 (フェーズ 4) を一気に整備
+- [x] **/admin/{app,security,auth,mail,share,users}** を ts-rest + Next.js で実装。並行 worktree → `/integrate-worktree` で順次統合 → 各 simplify pass で post-merge cleanup
+  - integrate commits: `39cf0e5c` (auth) / `f9e0c54c` (mail) / `805f8990` (users) / `e163345a` (share)
+- [x] **横断的 advisory 11 件をまとめて解消** (`37b35eda`〜`0bce9def` + `6ca1e0e1`):
+  - `util/admin-config.ts`: `coerceBoolean` / `coerceString` / `coerceNumber` / `coerceStringArray` + `getCrowiConfigNamespace`
+  - `util/ts-rest-helpers.ts`: `internalServerErrorResponse`
+  - `util/admin-pager.ts` + `schemas/admin/_pager.ts`: `createPager` / `AdminPagerSchema` の lift
+  - `schemas/admin/_aws.ts`: AWS region / accessKeyId schema 集約
+  - `messages/{ja,en}.json`: `admin.common.*` (12 キー)
+  - `lib/admin-settings-factory.ts`: `createAdminSettingsHooks` (share/auth/security)
+  - `components/admin/secret-field.tsx`: 3 サイトの secret block 集約
+  - `userPublic.ts`: `UserPublic.status` を `z.nativeEnum` で型付け
+  - `models/user.ts`: `paginate` を typed に + `select` で機密フィールド projection
+  - admin form の pristine PUT skip (auth / security に展開、mail / share / app は元々対応済)
+
+### バグ fix (このセッション)
+- [x] **Redis pub/sub v4 API 移行** (`c18a5857`) — `subscriber.subscribe(channel, listener)` の listener が v3 形式で渡されておらず、config save 時に `TypeError: listener is not a function` でクラッシュしていた問題を修正
+- [x] **`UserStatusEnum` re-export を value alias に** (`347b439a`) — tsup v8 で `export { X as Y } from` 形式が壊れたバンドルを出力する問題を回避(dist の shorthand property エラー)
+- [x] **Button cursor flicker 修正** (`a29d9975` + `c32aa5dd` + `7ba77a2d` + `4901ad0c`):
+  - `cursor-pointer` を Button base に明示(Tailwind v4 で `@layer base` ルールが Turbopack 下で勝てない)
+  - `disabled:pointer-events-none` → `disabled:cursor-not-allowed`(pointer-events:none で cursor が親要素にフォールバックする flicker)
+  - `transition-all` → `transition-colors`(全プロパティ遷移の repaint cycle 抑止)
 
 ### Sensitive data の at-rest 暗号化 (Phase 1 + 2、main 直)
 - [x] **crypto util** (`5cb82a8d`) — AES-256-GCM + KeyProvider 抽象 + `enc:v1:<iv>:<tag>:<ct>` envelope。9 件のテスト
