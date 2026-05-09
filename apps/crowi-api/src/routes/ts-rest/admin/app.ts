@@ -20,9 +20,8 @@ export default (crowi: Crowi, _app: Express) => {
      * `accessKeyId` is returned plain to match legacy display behaviour.
      */
     getAppSettings: async () => {
-      const config = crowi.getConfig();
       const crowiNs = getCrowiConfigNamespace(crowi);
-      const isUploadable = Config.isUploadable(config);
+      const isUploadable = Config.isUploadable();
 
       const secretAccessKey = coerceString(crowiNs['upload:aws:secretAccessKey']);
 

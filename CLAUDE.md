@@ -168,7 +168,11 @@ See `apps/crowi-api/.env.sample`. Required / commonly-set:
   when missing, sensitive values are stored as plaintext (legacy mode) and a
   warning is logged on boot.
 - `ELASTICSEARCH_URI` — optional, search backend
-- `FILE_UPLOAD` — `aws` / `local` / `none`
+
+Storage backend selection moved from a `FILE_UPLOAD` env to the
+runner's `crowi.config.json` (`storage.driver: 'local' | 's3' | …`)
+plus the matching `@crowi/plugin-storage-*` package being installed
+in the runner.
 
 ## TypeScript Guidelines
 

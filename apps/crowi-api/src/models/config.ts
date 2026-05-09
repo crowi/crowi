@@ -75,7 +75,7 @@ export interface ConfigModel extends Model<ConfigDocument> {
   deleteByParams(ns: string, key: string): Promise<void>;
   deleteConfig(ns: string, key: string): Promise<void>;
   loadAllConfig(): Promise<object>;
-  isUploadable(config: Config): boolean;
+  isUploadable(): boolean;
   fileUploadEnabled(config: Config): boolean;
   migrate(): Promise<void>;
 
@@ -215,24 +215,15 @@ export default (crowi: Crowi) => {
     return config;
   };
 
-  // FIXME: export function にするためにはこの FILE_UPLOAD を crowi.env から参照してるのどうにかしないと
-  configSchema.statics.isUploadable = function (config) {
-    const method = crowi.env.FILE_UPLOAD || 'aws';
-    const isConfigured =
-      config.crowi['upload:aws:accessKeyId'] &&
-      config.crowi['upload:aws:secretAccessKey'] &&
-      config.crowi['upload:aws:region'] &&
-      config.crowi['upload:aws:bucket'];
-
-    if (method == 'aws' && !isConfigured) {
-      return false;
-    }
-
-    return method != 'none';
+  // True iff a storage driver is registered for the active plugin
+  // configuration. The driver itself owns "is the bucket configured /
+  // is the path writable" — Config no longer reaches into AWS keys.
+  configSchema.statics.isUploadable = function () {
+    return crowi.getPlugins().active.storage !== null;
   };
 
   configSchema.statics.fileUploadEnabled = function (config) {
-    if (!Config.isUploadable(config)) {
+    if (!Config.isUploadable()) {
       return false;
     }
 

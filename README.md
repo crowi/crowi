@@ -70,7 +70,11 @@ or please write `.env`.
 * `ELASTICSEARCH_URI`: URI to connect to Elasticearch.
 * `PASSWORD_SEED`: A password seed used by password hash generator.
 * `SECRET_TOKEN`: A secret key for verifying the integrity of signed cookies.
-* `FILE_UPLOAD`: `aws` (default), `local`, `none`
+
+The storage backend is selected by the runner's `crowi.config.json`
+(`storage.driver: 'local' | 's3' | …`) plus the corresponding
+`@crowi/plugin-storage-*` package — there is no `FILE_UPLOAD` env
+anymore.
 
 Optional:
 

@@ -82,7 +82,7 @@ export const getAppContext = (crowi: Crowi, req): AppContext => {
       },
     },
     upload: {
-      image: Config.isUploadable(config),
+      image: Config.isUploadable(),
       file: Config.fileUploadEnabled(config),
     },
     search: {
