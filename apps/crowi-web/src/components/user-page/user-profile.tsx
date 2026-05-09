@@ -26,15 +26,24 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserPro
         aria-hidden="true"
         className="h-32 md:h-40 rounded-b-2xl relative overflow-hidden bg-muted/30"
         style={{
-          // Atmospheric mesh: a warm-green light-cone from the top-right
-          // ("sunlight"), a cooler primary pool from the bottom-left
-          // ("shadow"), and a soft sage glow centered low — gives the
-          // band depth without pattern noise.
+          // Default cover: aurora-style mesh built from the Crowi avatar
+          // palette (primary teal, sage, gold, coral) plus the dark
+          // header tint as a depth anchor. Each colour drops in at low
+          // opacity so the band reads as "atmosphere with warmth"
+          // rather than a rainbow.
           backgroundImage: [
-            'radial-gradient(ellipse 90% 110% at 100% 0%, color-mix(in srgb, var(--crowi-primary) 32%, transparent), transparent 60%)',
-            'radial-gradient(ellipse 70% 100% at 0% 110%, color-mix(in srgb, var(--crowi-primary) 22%, transparent), transparent 60%)',
-            'radial-gradient(circle 60% at 50% 100%, color-mix(in srgb, oklch(0.86 0.06 150) 35%, transparent), transparent 70%)',
-            'linear-gradient(180deg, color-mix(in srgb, var(--crowi-primary) 8%, transparent) 0%, transparent 75%)',
+            // Primary teal — top-right anchor (the brand foothold)
+            'radial-gradient(ellipse 75% 100% at 100% 0%, color-mix(in srgb, var(--crowi-primary) 38%, transparent), transparent 58%)',
+            // Sage — quiet warmth bottom-center, the "glow"
+            'radial-gradient(ellipse 60% 100% at 30% 115%, color-mix(in srgb, #8eb39b 32%, transparent), transparent 62%)',
+            // Gold — top-left "morning light"
+            'radial-gradient(ellipse 55% 80% at 0% 0%, color-mix(in srgb, #f0d264 20%, transparent), transparent 60%)',
+            // Coral — bottom-right kiss of warmth
+            'radial-gradient(ellipse 45% 75% at 100% 110%, color-mix(in srgb, #d96d68 16%, transparent), transparent 60%)',
+            // Header dark — subtle vignette along the top edge for depth
+            'radial-gradient(ellipse 60% 40% at 50% -10%, color-mix(in srgb, var(--crowi-header) 14%, transparent), transparent 70%)',
+            // Base wash
+            'linear-gradient(180deg, color-mix(in srgb, var(--crowi-primary) 6%, transparent) 0%, transparent 80%)',
           ].join(', '),
         }}
       >
