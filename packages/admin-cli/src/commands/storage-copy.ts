@@ -29,12 +29,8 @@ function loadApi(): { Crowi: ApiCrowiCtor; runStorageCopy: RunStorageCopy } | nu
   const apiRoot = path.dirname(apiPkgPath);
   const distDir = path.join(apiRoot, 'dist');
 
-  // @crowi/api ships with `main: src/app.ts` (because that's what the
-  // production runner invokes via `node dist/app.js`), so we can't rely
-  // on `require('@crowi/api')` doing the right thing — that would try
-  // to execute the .ts entry point. Reach into dist/ directly. The dist
-  // is already alias-resolved by tsc-alias at build time, so we don't
-  // need a runtime `module-alias` registration step.
+  // The dist is alias-resolved by tsc-alias at build time, so no runtime
+  // `module-alias` registration step is needed.
   const crowiModule = require(path.join(distDir, 'crowi')) as { default: ApiCrowiCtor };
   const copyModule = require(path.join(distDir, 'util', 'storage-copy')) as { runStorageCopy: RunStorageCopy };
 

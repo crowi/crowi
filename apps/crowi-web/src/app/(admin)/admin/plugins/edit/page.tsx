@@ -52,11 +52,7 @@ function PluginEditContent() {
             <CardDescription>{m['admin.plugins.edit_description']()}</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Re-mount the form when the URL switches to a different plugin
-                so its `useState`-initialised field values pick up the new
-                snapshot. Without this key, navigating from one plugin's edit
-                page to another via the sidebar reuses the same component
-                instance and keeps the previous plugin's form state visible. */}
+            {/* key= forces a fresh useState snapshot when the URL plugin changes. */}
             <PluginConfigForm key={data.name} config={data} />
           </CardContent>
         </Card>
