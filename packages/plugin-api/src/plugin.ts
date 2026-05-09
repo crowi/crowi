@@ -130,4 +130,21 @@ export interface CrowiPlugin {
    * `--purge` is passed.
    */
   onUninstall?: (ctx: PluginContext) => Promise<void>;
+
+  /**
+   * Called when this plugin's own config (`plugin:<name>:*`) or any of
+   * its `requires` dependency configs change via the admin UI / API.
+   * Implementations should refresh any cached state — clients,
+   * connection pools, derived values — so subsequent driver method
+   * calls see the new values.
+   *
+   * Optional. If omitted, the plugin is treated as "config changes
+   * require a server restart" (back-compat for the existing
+   * register-once / closure-captured driver pattern).
+   *
+   * Best-effort: a thrown error is logged and reported to the admin
+   * UI but does NOT crash the server — that would lock operators out
+   * of the very UI they need to fix the misconfiguration.
+   */
+  reconfigure?: (ctx: PluginContext) => void | Promise<void>;
 }
