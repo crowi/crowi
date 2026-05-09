@@ -17,7 +17,7 @@ try {
 import Debug from 'debug';
 import { format } from 'date-fns';
 import fs from 'fs';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import Crowi from 'src/crowi';
 import { Query, SearchWithBody, FunctionScoreQueryParams } from 'src/util/elasticsearch/query';
 import { parseQuery } from 'src/service/query';
