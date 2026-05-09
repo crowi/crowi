@@ -19,7 +19,13 @@ services:
       - 6379:6379
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.0
+    # Custom image: stock 9.4.0 + analysis-kuromoji preinstalled so the
+    # `kuromoji` analyzer in the search-plugin admin UI works out of the
+    # box. The `sudachi` analyzer is NOT bundled — see elasticsearch.Dockerfile.
+    build:
+      context: .
+      dockerfile: elasticsearch.Dockerfile
+    image: crowi-elasticsearch:9.4.0
     container_name: crowi-elasticsearch
     restart: unless-stopped
     environment:

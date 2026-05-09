@@ -38,11 +38,18 @@ export const ElasticsearchConfigSchema = z
     indexName: z.string().default('crowi'),
     requestTimeout: z.number().int().positive().default(5000),
     /**
-     * Mapping flavour. Picks the analyzer / tokenizer setup. The
-     * legacy code auto-detected installed cluster plugins; the new
-     * design makes it explicit so the operator can opt in.
+     * Mapping flavour. Cluster requirements:
+     *   - `default`: no extra ES plugin.
+     *   - `kuromoji`: `analysis-kuromoji` plugin (Elastic-distributed).
+     *     The dev image (`elasticsearch.Dockerfile`) preinstalls it.
+     *   - `sudachi`: third-party `analysis-sudachi` plugin + dictionary.
+     *     NOT bundled in the dev image; operators must build a derived
+     *     image. Picking this without the plugin makes `rebuild()` fail.
      */
-    analyzer: z.enum(['default', 'kuromoji', 'sudachi']).default('default'),
+    analyzer: z
+      .enum(['default', 'kuromoji', 'sudachi'])
+      .describe('default / kuromoji (analysis-kuromoji plugin) / sudachi (analysis-sudachi plugin + dictionary, custom image required)')
+      .default('default'),
   })
   .strict();
 
