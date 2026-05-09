@@ -8,6 +8,7 @@
     "start": "NODE_ENV=production node ../crowi-api/dist/app.js"
   },
   "dependencies": {
+    "@crowi/admin-cli": "workspace:^",
     "@crowi/api": "workspace:^",
     "@crowi/plugin-aws": "workspace:^",
     "@crowi/plugin-storage-aws-s3": "workspace:^",

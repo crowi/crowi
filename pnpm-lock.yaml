@@ -282,6 +282,9 @@ importers:
 
   apps/crowi-dev-runner:
     dependencies:
+      '@crowi/admin-cli':
+        specifier: workspace:^
+        version: link:../../packages/admin-cli
       '@crowi/api':
         specifier: workspace:^
         version: link:../crowi-api
@@ -409,6 +412,28 @@ importers:
         version: 1.4.0
       typescript:
         specifier: ^5
+        version: 5.8.3
+
+  packages/admin-cli:
+    dependencies:
+      '@crowi/api':
+        specifier: workspace:^
+        version: link:../../apps/crowi-api
+      commander:
+        specifier: ^12.1.0
+        version: 12.1.0
+      dotenv:
+        specifier: ^16.5.0
+        version: 16.5.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.15.30
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.0(typescript@5.8.3)
+      typescript:
+        specifier: ^5.7.2
         version: 5.8.3
 
   packages/api-contract:
@@ -7610,6 +7635,11 @@ packages:
   /commander@11.1.0:
     resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
     engines: {node: '>=16'}
+    dev: false
+
+  /commander@12.1.0:
+    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
+    engines: {node: '>=18'}
     dev: false
 
   /commander@2.9.0:
