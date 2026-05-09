@@ -86,8 +86,9 @@ gitignore 済み (`.gitkeep` のみ tracked)。
 ```
 
 `config.minScopeSize`: `trivial | small | medium | large`
-spec の `scope:` がこの閾値**を超えた**ときだけ planner が起動する。
+spec の `scope:` がこの閾値より大きい (`>`) ときだけ planner が起動する。
 デフォルト `small` (= medium 以上で planner、small / trivial は skip)。
+順序は `trivial < small < medium < large`。
 
 ### spec.md スキーマ
 
@@ -206,10 +207,9 @@ scope: medium
      scope ≤ minScopeSize: planner skip
      scope >  minScopeSize: planner 起動
 2.3. planner skip の場合は、最小限の task.json を skill 内で生成
-     (specPath / acceptanceCriteria / scope を spec から引き写すだけ)
+     (specPath / acceptanceCriteria / scope を spec から引き写し、
+      status は PLANNED で書き出す。implementer はこの初期状態を期待する)
 ```
-
-scope の順序: `trivial < small < medium < large`
 
 ### 3. agent チェーン
 

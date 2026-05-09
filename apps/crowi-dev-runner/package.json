@@ -2,7 +2,7 @@
   "name": "@crowi/dev-runner",
   "version": "0.0.0-dev",
   "private": true,
-  "description": "Local development runner for Crowi 2.0 — mirrors the structure of a `crowi init` runner repo so dev and prod boot identically. Hosts the dev `crowi.config.json`, `.env`, and runtime data dirs (uploads/) outside the @crowi/api package.",
+  "description": "Local development runner for Crowi 2.0.",
   "scripts": {
     "dev": "DEBUG=crowi:* NODE_ENV=development nodemon ../crowi-api/src/app.ts",
     "start": "NODE_ENV=production node ../crowi-api/dist/app.js"
