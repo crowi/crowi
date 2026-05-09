@@ -1,11 +1,11 @@
 'use client';
 
-import { use } from 'react';
+import { use, useRef, useState } from 'react';
 import { notFound, useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ErrorAlert } from '@/components/ui/error-alert';
-import { UserProfile, UserRecentPages, UserBookmarks } from '@/components/user-page';
+import { UserProfile, UserRecentPages, UserBookmarks, type UserProfileTab } from '@/components/user-page';
 import { PageHeader, PageContent } from '@/components/page-view';
 import { useUserPage } from '@/lib/use-user-page';
 import { usePage } from '@/lib/use-page';
@@ -28,6 +28,14 @@ export default function UserPage({ params }: UserPageProps) {
   const userPagePath = `/user/${username}`;
   const { page: userPageDoc, notFound: userPageNotFound } = usePage({ path: userPagePath });
 
+  const [activeTab, setActiveTab] = useState<UserProfileTab>('pages');
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  const handleStatClick = (tab: UserProfileTab) => {
+    setActiveTab(tab);
+    tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   if (isLoading) {
     return <LoadingSpinner message={m['user_page.loading_profile']()} className="py-12" />;
   }
@@ -47,7 +55,7 @@ export default function UserPage({ params }: UserPageProps) {
 
   return (
     <div>
-      <UserProfile user={data.user} createdPagesCount={data.createdPagesCount} bookmarksCount={data.bookmarksCount} />
+      <UserProfile user={data.user} createdPagesCount={data.createdPagesCount} bookmarksCount={data.bookmarksCount} onStatClick={handleStatClick} />
 
       {hasUserPage && (
         <article className="space-y-12">
@@ -58,20 +66,22 @@ export default function UserPage({ params }: UserPageProps) {
 
       <hr className="my-10 border-foreground/10" />
 
-      <Tabs defaultValue="pages" className="w-full">
-        <TabsList className="w-full justify-start">
-          <TabsTrigger value="pages">{m['user_page.tab_pages']()}</TabsTrigger>
-          <TabsTrigger value="bookmarks">{m['user_page.tab_bookmarks']()}</TabsTrigger>
-        </TabsList>
+      <div ref={tabsRef} className="scroll-mt-24">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UserProfileTab)} className="w-full">
+          <TabsList className="w-full justify-start">
+            <TabsTrigger value="pages">{m['user_page.tab_pages']()}</TabsTrigger>
+            <TabsTrigger value="bookmarks">{m['user_page.tab_bookmarks']()}</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="pages" className="mt-4">
-          <UserRecentPages username={username} preview previewLimit={10} />
-        </TabsContent>
+          <TabsContent value="pages" className="mt-4">
+            <UserRecentPages username={username} preview previewLimit={10} />
+          </TabsContent>
 
-        <TabsContent value="bookmarks" className="mt-4">
-          <UserBookmarks username={username} preview previewLimit={10} />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="bookmarks" className="mt-4">
+            <UserBookmarks username={username} preview previewLimit={10} />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

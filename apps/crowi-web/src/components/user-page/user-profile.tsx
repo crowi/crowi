@@ -1,14 +1,19 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Bookmark, FileText } from 'lucide-react';
 import { UserAvatar } from '@/components/user-avatar';
 import type { UserPublic } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
+export type UserProfileTab = 'pages' | 'bookmarks';
+
 interface UserProfileProps {
   user: UserPublic;
   createdPagesCount: number;
   bookmarksCount: number;
+  /** Invoked when a stat pill is clicked. Caller scrolls + switches the footer tab. */
+  onStatClick?: (tab: UserProfileTab) => void;
 }
 
 /**
@@ -17,7 +22,7 @@ interface UserProfileProps {
  * reaches the page edge; the avatar then steps back to the content
  * column and overlaps the cover's bottom edge.
  */
-export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserProfileProps) {
+export function UserProfile({ user, createdPagesCount, bookmarksCount, onStatClick }: UserProfileProps) {
   const displayName = user.name || user.username;
 
   return (
@@ -65,30 +70,67 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserPro
           <div className="flex-1 min-w-0 pb-1.5">
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight text-foreground">{displayName}</h1>
             <p className="mt-0.5 text-sm text-muted-foreground font-mono">@{user.username}</p>
+
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
+              <StatButton
+                icon={<FileText className="h-3.5 w-3.5" aria-hidden="true" />}
+                count={createdPagesCount}
+                label={m['user_page.stat_pages_label']()}
+                ariaLabel={m['user_page.tab_pages']()}
+                onClick={onStatClick ? () => onStatClick('pages') : undefined}
+              />
+              <StatButton
+                icon={<Bookmark className="h-3.5 w-3.5" aria-hidden="true" />}
+                count={bookmarksCount}
+                label={m['user_page.stat_bookmarks_label']()}
+                ariaLabel={m['user_page.tab_bookmarks']()}
+                onClick={onStatClick ? () => onStatClick('bookmarks') : undefined}
+              />
+            </div>
           </div>
         </div>
 
         {user.introduction && <p className="mt-5 max-w-2xl text-foreground/85 leading-relaxed whitespace-pre-wrap">{user.introduction}</p>}
-
-        <dl className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-2 text-sm text-muted-foreground">
-          <div className="inline-flex items-center gap-1.5">
-            <FileText className="h-4 w-4" aria-hidden="true" />
-            <dt className="sr-only">{m['user_page.tab_pages']()}</dt>
-            <dd>
-              <span className="font-semibold text-foreground tabular-nums">{createdPagesCount}</span>
-              <span className="ml-1">{m['user_page.stat_pages_label']()}</span>
-            </dd>
-          </div>
-          <div className="inline-flex items-center gap-1.5">
-            <Bookmark className="h-4 w-4" aria-hidden="true" />
-            <dt className="sr-only">{m['user_page.tab_bookmarks']()}</dt>
-            <dd>
-              <span className="font-semibold text-foreground tabular-nums">{bookmarksCount}</span>
-              <span className="ml-1">{m['user_page.stat_bookmarks_label']()}</span>
-            </dd>
-          </div>
-        </dl>
       </div>
     </header>
   );
+}
+
+interface StatButtonProps {
+  icon: ReactNode;
+  count: number;
+  label: string;
+  ariaLabel: string;
+  onClick?: () => void;
+}
+
+/**
+ * Pill-style stat shown under @username. When `onClick` is provided
+ * the row becomes a button; otherwise it stays as plain text so the
+ * profile reads correctly even if the consumer doesn't hook up the
+ * scroll-to-tabs behaviour.
+ */
+function StatButton({ icon, count, label, ariaLabel, onClick }: StatButtonProps) {
+  const content = (
+    <>
+      {icon}
+      <span className="font-semibold text-foreground tabular-nums">{count}</span>
+      <span className="text-muted-foreground">{label}</span>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={ariaLabel}
+        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 hover:bg-foreground/5 active:bg-foreground/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <span className="inline-flex items-center gap-1.5 px-2.5 py-1">{content}</span>;
 }
