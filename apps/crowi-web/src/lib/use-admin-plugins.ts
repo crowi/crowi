@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ListPluginsResponse, PluginConfigResponse, UpdatePluginConfigRequest } from '@crowi/api-contract';
+import type { ListPluginsResponse, PluginConfigResponse, UpdatePluginConfigRequest, UpdatePluginConfigResponse } from '@crowi/api-contract';
 import { apiClient } from './api-client';
 import { unwrapResult } from './unwrap-result';
 
@@ -88,13 +88,13 @@ export class PluginConfigValidationError extends Error {
 
 export function useUpdateAdminPluginConfig(name: string) {
   const queryClient = useQueryClient();
-  return useMutation<void, Error, UpdatePluginConfigRequest>({
+  return useMutation<UpdatePluginConfigResponse, Error, UpdatePluginConfigRequest>({
     mutationFn: async (data) => {
       const result = await apiClient.admin.plugins.updatePluginConfig({
         query: { name },
         body: data,
       });
-      if (result.status === 200) return;
+      if (result.status === 200) return result.body;
       if (result.status === 422) {
         throw new PluginConfigValidationError(result.body.error.message, result.body.error.issues);
       }

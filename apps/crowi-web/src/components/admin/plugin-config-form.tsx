@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Loader2, Save, CheckCircle2 } from 'lucide-react';
+import { Loader2, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
 import type { PluginConfigResponse, PluginField, UpdatePluginConfigRequest } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { ErrorAlert } from '@/components/ui/error-alert';
@@ -26,12 +26,15 @@ interface PluginConfigFormProps {
  * three-state convention (untouched / cleared / replaced) maps
  * cleanly onto the wire shape.
  */
+type SaveOutcome = 'hot-applied' | 'restart-required' | 'reconfigure-failed';
+
 export function PluginConfigForm({ config }: PluginConfigFormProps) {
   const update = useUpdateAdminPluginConfig(config.name);
 
   const initialState = useMemo(() => deriveInitialState(config), [config]);
   const [state, setState] = useState<FieldState>(initialState);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [savedOutcome, setSavedOutcome] = useState<SaveOutcome | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [issues, setIssues] = useState<Map<string, string>>(new Map());
 
@@ -49,11 +52,13 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
     setServerError(null);
     setIssues(new Map());
     setSavedAt(null);
+    setSavedOutcome(null);
 
     const body = buildRequest(state, config.fields);
     try {
-      await update.mutateAsync(body);
+      const response = await update.mutateAsync(body);
       setSavedAt(Date.now());
+      setSavedOutcome(deriveOutcome(response));
       // Clear local "cleared / dirty" markers — the just-saved state
       // is the new baseline.
       setState(applySaved(state, config.fields));
@@ -79,12 +84,7 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
       ))}
 
       <div className="flex items-center justify-end gap-3 pt-2">
-        {savedAt !== null && !update.isPending && !dirty && (
-          <span className="inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-300">
-            <CheckCircle2 className="h-4 w-4" />
-            {m['admin.plugins.save_succeeded']()}
-          </span>
-        )}
+        {savedAt !== null && !update.isPending && !dirty && savedOutcome !== null && <SaveOutcomeBadge outcome={savedOutcome} />}
         <Button type="submit" disabled={update.isPending || !dirty}>
           {update.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
           {update.isPending ? m['admin.plugins.save_pending']() : m['admin.plugins.save']()}
@@ -249,6 +249,30 @@ function FieldRow({ field, state, setState, issue }: FieldRowProps) {
         </p>
       )}
     </div>
+  );
+}
+
+function deriveOutcome(response: { hotReloaded: boolean; reconfigureFailed: boolean }): SaveOutcome {
+  if (response.reconfigureFailed) return 'reconfigure-failed';
+  if (response.hotReloaded) return 'hot-applied';
+  return 'restart-required';
+}
+
+function SaveOutcomeBadge({ outcome }: { outcome: SaveOutcome }) {
+  if (outcome === 'reconfigure-failed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-sm text-amber-700 dark:text-amber-300">
+        <AlertTriangle className="h-4 w-4" />
+        {m['admin.plugins.save_succeeded_reconfigure_failed']()}
+      </span>
+    );
+  }
+  const text = outcome === 'hot-applied' ? m['admin.plugins.save_succeeded_hot_applied']() : m['admin.plugins.save_succeeded_restart_required']();
+  return (
+    <span className="inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-300">
+      <CheckCircle2 className="h-4 w-4" />
+      {text}
+    </span>
   );
 }
 
