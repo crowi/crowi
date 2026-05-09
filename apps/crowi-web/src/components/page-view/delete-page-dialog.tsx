@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDeletePage } from '@/lib/use-page-mutations';
+import { m } from '@paraglide/messages.js';
 
 interface DeletePageDialogProps {
   pageId: string;
@@ -61,9 +62,9 @@ export function DeletePageDialog({ pageId, pagePath, revisionId, open, onOpenCha
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>このページを削除しますか?</DialogTitle>
+          <DialogTitle>{m['page.delete.title']()}</DialogTitle>
           <DialogDescription>
-            {completely ? `「${pagePath}」を完全に削除します。この操作は取り消せません。` : `「${pagePath}」をゴミ箱に移動します。あとで復元できます。`}
+            {completely ? m['page.delete.description_hard']({ path: pagePath }) : m['page.delete.description_soft']({ path: pagePath })}
           </DialogDescription>
         </DialogHeader>
 
@@ -77,7 +78,7 @@ export function DeletePageDialog({ pageId, pagePath, revisionId, open, onOpenCha
             className="h-4 w-4 rounded border-input"
           />
           <label htmlFor="delete-page-completely" className="text-sm">
-            完全に削除する (ゴミ箱に残さない)
+            {m['page.delete.completely_label']()}
           </label>
         </div>
 
@@ -89,18 +90,18 @@ export function DeletePageDialog({ pageId, pagePath, revisionId, open, onOpenCha
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>
-            キャンセル
+            {m['page.delete.cancel']()}
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={isPending}>
             {isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                削除中...
+                {m['page.delete.submit_pending']()}
               </>
             ) : completely ? (
-              '完全に削除'
+              m['page.delete.submit_hard']()
             ) : (
-              'ゴミ箱に移動'
+              m['page.delete.submit_soft']()
             )}
           </Button>
         </DialogFooter>

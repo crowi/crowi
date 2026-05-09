@@ -8,6 +8,7 @@ import { Clock, Lock, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { useAuth } from '@/lib/use-auth';
+import { m } from '@paraglide/messages.js';
 import { BookmarkButton } from './bookmark-button';
 import { LikeButton } from './like-button';
 import { PageActionsMenu } from './page-actions-menu';
@@ -49,7 +50,7 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
           {onEdit && (
             <Button variant="default" size="sm" onClick={onEdit} className="ml-1">
               <Edit2 className="h-4 w-4 mr-1" />
-              Edit
+              {m['page.action_edit']()}
             </Button>
           )}
           {showActions && <PageActionsMenu page={page} />}

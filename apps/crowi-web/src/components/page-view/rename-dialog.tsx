@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageRevisionConflictError, useRenamePage } from '@/lib/use-page-mutations';
 import type { PageWithRevision } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 
 interface RenameDialogProps {
   page: PageWithRevision;
@@ -78,7 +79,7 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
       }
       setFeedback({
         kind: 'error',
-        message: err instanceof Error ? err.message : 'ページ名の変更に失敗しました。',
+        message: err instanceof Error ? err.message : m['page.rename.failed'](),
       });
     }
   };
@@ -86,47 +87,47 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <DialogHeader>
-        <DialogTitle>ページをリネーム</DialogTitle>
-        <DialogDescription>新しいパスに移動します。リダイレクトが自動的に作成されます。</DialogDescription>
+        <DialogTitle>{m['page.rename.title']()}</DialogTitle>
+        <DialogDescription>{m['page.rename.description']()}</DialogDescription>
       </DialogHeader>
 
       {feedback && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>{feedback.kind === 'conflict' ? '編集が競合しました' : 'エラー'}</AlertTitle>
+          <AlertTitle>{feedback.kind === 'conflict' ? m['page.rename.conflict_title']() : m['page.rename.error_title']()}</AlertTitle>
           <AlertDescription>{feedback.message}</AlertDescription>
         </Alert>
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="rename-current-path">現在のパス</Label>
+        <Label htmlFor="rename-current-path">{m['page.rename.current_path']()}</Label>
         <Input id="rename-current-path" value={page.path} readOnly className="font-mono text-sm bg-muted" />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="rename-new-path">新しいパス</Label>
+        <Label htmlFor="rename-new-path">{m['page.rename.new_path']()}</Label>
         <Input
           id="rename-new-path"
           value={newPath}
           onChange={(event) => setNewPath(event.target.value)}
           disabled={isSubmitting}
-          placeholder="/path/to/page"
+          placeholder={m['page.rename.placeholder']()}
           className="font-mono text-sm"
           autoFocus
           aria-invalid={isInvalid && newPath.length > 0 ? true : undefined}
         />
-        {isInvalid && newPath.length > 0 && <p className="text-xs text-destructive">パスは &quot;/&quot; から始まる必要があります。</p>}
+        {isInvalid && newPath.length > 0 && <p className="text-xs text-destructive">{m['page.rename.invalid_path']()}</p>}
       </div>
 
       <DialogFooter className="gap-2 sm:gap-0">
         <DialogClose asChild>
           <Button type="button" variant="outline" disabled={isSubmitting}>
-            キャンセル
+            {m['page.rename.cancel']()}
           </Button>
         </DialogClose>
         <Button type="submit" disabled={isSubmitting || isUnchanged || isInvalid}>
           {isSubmitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-          リネーム
+          {m['page.rename.submit']()}
         </Button>
       </DialogFooter>
     </form>
