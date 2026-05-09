@@ -111,17 +111,11 @@ export default (crowi: Crowi, _app: Express) => {
           // TODO: Consider if we should follow the redirect automatically
         }
 
-        // Convert page document to API response format
         const pageResponse = pageToResponse(page);
 
-        // Touch the per-user "recently viewed" LRU (Redis sorted set)
-        // so the global search dropdown can show this page in its
-        // "最近見たページ" list. Fire-and-forget — a Redis hiccup
-        // shouldn't break the page load. The legacy controllers wrote
-        // to the same key (`crowi.lru.add(userId, pageId)`) on every
-        // page show, so this preserves UX parity with the old app.
-        const lru = (crowi as unknown as { lru?: { add(ns: string, key: string): Promise<unknown> | undefined } }).lru;
-        lru?.add?.(user._id.toString(), page._id.toString())?.catch?.((err: unknown) => {
+        // Fire-and-forget recently-viewed touch. Hiccups on the Redis
+        // side mustn't break the page read.
+        crowi.lru.add(user._id.toString(), page._id.toString())?.catch?.((err: unknown) => {
           debug('lru.add failed (non-fatal):', err);
         });
 

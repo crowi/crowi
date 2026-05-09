@@ -409,27 +409,14 @@ export default (crowi: Crowi, _app: Express) => {
       }
     },
 
-    /**
-     * GET /me/recently-viewed-pages
-     *
-     * Pulls the user's recent ids from `crowi.lru` (Redis ZRANGE),
-     * populates the corresponding pages, and returns them in LRU order.
-     * Bounded to 5 entries to fit the dropdown without scrolling. The
-     * portal placeholder ("/") is filtered out — clicking it would just
-     * land on the home page, which is one click away on every screen.
-     *
-     * Soft-fails on missing / disabled Redis: returns an empty array
-     * rather than 500. The UI hides the section when the list is empty,
-     * so a Redis outage degrades gracefully (the search box stays
-     * usable; only the recents shortcut disappears).
-     */
     recentlyViewedPages: async ({ req }) => {
       const user = req.user as UserDocument;
       const Page = crowi.model('Page');
-      const lru = (crowi as unknown as { lru?: { get(ns: string, limit: number): Promise<string[]> | undefined } }).lru;
 
       try {
-        const ids = (await lru?.get(user._id.toString(), 10)) ?? [];
+        // Read 6 to absorb at most one root-portal entry; the dropdown
+        // shows 5.
+        const ids: string[] = (await crowi.lru.get(user._id.toString(), 6)) ?? [];
         if (ids.length === 0) {
           return { status: 200 as const, body: { pages: [] } };
         }
@@ -441,10 +428,7 @@ export default (crowi: Crowi, _app: Express) => {
         const ordered: PageDocument[] = [];
         for (const id of ids) {
           const p = byId.get(id);
-          // Drop ids that don't resolve (e.g. deleted pages). Drop the
-          // root portal — see comment above.
-          if (!p) continue;
-          if (p.path === '/') continue;
+          if (!p || p.path === '/') continue;
           ordered.push(p);
           if (ordered.length >= 5) break;
         }

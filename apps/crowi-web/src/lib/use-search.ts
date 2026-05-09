@@ -26,8 +26,12 @@ export interface UseSearchPagesParams {
 
 export const searchKeys = {
   all: ['search'] as const,
-  query: (params: UseSearchPagesParams) =>
-    [...searchKeys.all, 'pages', params.q, params.type ?? null, params.tree ?? null, params.page ?? 1, params.limit ?? 50] as const,
+  // `limit` is intentionally excluded from the cache key. Both the
+  // header dropdown (5 hits) and the /_search page (50 hits) share the
+  // same `q`/`type`/`tree`/`page` shape; the dropdown asks for the
+  // larger page and slices client-side, so typing in the header
+  // pre-warms the cache for an Enter→/_search navigation.
+  query: (params: UseSearchPagesParams) => [...searchKeys.all, 'pages', params.q, params.type ?? null, params.tree ?? null, params.page ?? 1] as const,
 };
 
 export function useSearchPages(params: UseSearchPagesParams) {

@@ -105,12 +105,6 @@ export const ApiTokenErrorResponseSchema = z.object({
 });
 export type ApiTokenErrorResponse = z.infer<typeof ApiTokenErrorResponseSchema>;
 
-/**
- * Response for GET /me/recently-viewed-pages. Backed by a per-user redis
- * sorted set (`crowi.lru`) — most recent first, capped at the LRU's
- * server-side `max`. Used by the global search dropdown to show "最近見た
- * ページ" when the input is empty + focused.
- */
 export const RecentlyViewedPagesResponseSchema = z.object({
   pages: z.array(PageSchema),
 });

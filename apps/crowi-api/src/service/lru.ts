@@ -30,8 +30,14 @@ export default class LRU {
     const { client } = this;
 
     if (client) {
-      await this.removeByRange(namespace, -this.max - 1);
-      return await client.ZADD(namespace, { score: Date.now(), value: key });
+      // ZREMRANGEBYRANK + ZADD share no read dependency, so pipeline
+      // them into a single round-trip. Halves Redis latency on the
+      // page-view hot path.
+      return await client
+        .multi()
+        .ZREMRANGEBYRANK(namespace, 0, -this.max - 1)
+        .ZADD(namespace, { score: Date.now(), value: key })
+        .exec();
     }
   }
 

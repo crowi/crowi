@@ -2,31 +2,23 @@
 
 import Link from 'next/link';
 import { FileText, Lock } from 'lucide-react';
-import type { Page, SearchHit } from '@crowi/api-contract';
+import type { Page } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { SearchHitSnippet } from './search-hit-snippet';
 
 interface SearchSuggestionItemProps {
-  /** Path to navigate to. Page paths render via the existing slug route. */
   href: string;
-  page: Page | SearchHit['page'];
-  /** Optional snippet (search hits only). When present, rendered below the path. */
+  page: Page;
   snippet?: string;
-  /** Click handler — used by the dropdown to close itself before navigation. */
   onClick?: () => void;
 }
 
 /**
- * Compact one-line entry used inside the global search dropdown — both
- * for recently-viewed pages (no snippet) and inline search results
- * (snippet shown). Trades the rich `SearchHitItem` (avatar + meta row +
- * full snippet) for a denser layout: the dropdown tops out around 5
- * recents or 5 hits, and a row that scrolls is more useful than a row
- * that summarizes.
- *
- * The portal indicator (FileText) and the private indicator (Lock) are
- * the same iconography as `SearchHitItem` so users carry the same
- * visual vocabulary between the two views.
+ * Compact one-line entry used inside the global search dropdown — for
+ * both recently-viewed pages (no snippet) and inline search results
+ * (snippet rendered below the path). The portal / private icons match
+ * `SearchHitItem` so the dropdown and the full results page share the
+ * same visual vocabulary.
  */
 export function SearchSuggestionItem({ href, page, snippet, onClick }: SearchSuggestionItemProps) {
   const isPortal = page.path.endsWith('/');

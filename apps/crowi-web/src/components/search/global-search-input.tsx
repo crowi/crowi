@@ -11,30 +11,8 @@ import { m } from '@paraglide/messages.js';
 const SUGGESTION_DEBOUNCE_MS = 200;
 const SUGGESTION_LIMIT = 5;
 
-/**
- * Global search box embedded in the (auth) header, sits right next to
- * the SiteBrand. Behaviours:
- *
- * - **Empty + focused** → dropdown shows "最近見たページ" (server-side
- *   list backed by `crowi.lru` Redis sorted set; soft-fails to empty
- *   array and we hide the section in that case).
- * - **Typing** → debounced inline search. The dropdown lists the top N
- *   hits with snippets; pressing Enter (or clicking "全結果を表示")
- *   navigates to `/_search?q=<encoded>`.
- * - **Enter on empty** → no-op (don't wipe the user's query when they
- *   tab to the box and accidentally hit Enter).
- * - **Click an item** → navigate to that page; close the dropdown.
- * - **Click outside / Escape** → close.
- *
- * The input is **rounded-full** and **expands on focus** (272px → as
- * wide as the parent flex slot allows, capped by max-w-xl). The
- * dropdown is absolute-positioned so it doesn't reflow the header bar.
- *
- * URL `?q` sync: while on `/_search` the header value mirrors the
- * in-page input via `searchParams`. Off `/_search` the URL has no `q`
- * so the box reads as empty, which is what we want (a fresh search
- * starts blank).
- */
+const buildSearchUrl = (q: string) => `/_search?q=${encodeURIComponent(q)}`;
+
 export function GlobalSearchInput() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,39 +25,26 @@ export function GlobalSearchInput() {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Keep the input in sync with the URL across navigations. `useState(urlQ)`
-  // only captures the initial value, so without this effect a fresh
-  // /_search?q=foo navigation would leave stale text in the box.
+  // Mirror URL → input across navigations (initial useState only fires once).
   useEffect(() => {
     setValue(urlQ);
   }, [urlQ]);
 
-  // Debounce the user's typing. Search-as-you-type fires only after the
-  // input has been still for SUGGESTION_DEBOUNCE_MS — keeps us from
-  // hammering ES on every keystroke.
   useEffect(() => {
-    const trimmed = value.trim();
-    const id = setTimeout(() => setDebouncedQ(trimmed), SUGGESTION_DEBOUNCE_MS);
+    const id = setTimeout(() => setDebouncedQ(value.trim()), SUGGESTION_DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [value]);
 
-  // Search hook only fires while the dropdown is open + the user has
-  // typed something. `enabled` is the gate — we don't want to prefetch
-  // when the box isn't visible.
-  const isTyping = debouncedQ.length > 0;
-  const showDropdown = isFocused;
-  const showResults = showDropdown && isTyping;
-  const showRecents = showDropdown && !isTyping;
+  // Don't pass `limit` — useSearchPages cache key is limit-agnostic, so
+  // the dropdown's request shares cache with the /_search page (typing
+  // pre-warms the eventual full-page render). Slice to 5 client-side.
+  const searchQuery = useSearchPages({ q: debouncedQ });
+  const recentsQuery = useRecentlyViewedPages({ enabled: isFocused && debouncedQ.length === 0 });
 
-  const searchQuery = useSearchPages({ q: debouncedQ, limit: SUGGESTION_LIMIT });
-  const recentsQuery = useRecentlyViewedPages({ enabled: showRecents });
-
-  // Close on outside click. We use mousedown (not click) so that
-  // clicking a result Link still navigates — Link's click runs after
-  // mousedown, which sets isFocused=false; the Link's own click fires
-  // afterward and the navigation succeeds.
+  // mousedown (not click) so a clicked Link still navigates: setting
+  // isFocused=false on click would unmount the Link before its handler runs.
   useEffect(() => {
-    if (!showDropdown) return;
+    if (!isFocused) return;
     const onMouseDown = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsFocused(false);
@@ -87,7 +52,7 @@ export function GlobalSearchInput() {
     };
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [showDropdown]);
+  }, [isFocused]);
 
   const closeAndBlur = () => {
     setIsFocused(false);
@@ -98,7 +63,7 @@ export function GlobalSearchInput() {
     event.preventDefault();
     const trimmed = value.trim();
     if (trimmed.length === 0) return;
-    router.push(`/_search?q=${encodeURIComponent(trimmed)}`);
+    router.push(buildSearchUrl(trimmed));
     closeAndBlur();
   };
 
@@ -109,11 +74,10 @@ export function GlobalSearchInput() {
     }
   };
 
-  // Visual: rounded-full pill, expands on focus. The unfocused width
-  // (`w-72` = 18rem) matches the surrounding header rhythm; on focus
-  // we stretch to fill the parent flex slot, bounded by `max-w-2xl` so
-  // very wide windows don't end up with a stretched input that looks
-  // detached from the rest of the header.
+  const isTyping = debouncedQ.length > 0;
+  const hits = searchQuery.data?.data ?? [];
+  const recents = recentsQuery.data?.pages ?? [];
+
   return (
     <div ref={containerRef} className={`relative ${isFocused ? 'flex-1 max-w-2xl' : 'w-72'} hidden md:block transition-[width,max-width] duration-200`}>
       <form role="search" onSubmit={handleSubmit}>
@@ -131,22 +95,30 @@ export function GlobalSearchInput() {
         />
       </form>
 
-      {showDropdown && (
+      {isFocused && (
         <div className="absolute left-0 right-0 top-full mt-2 max-h-[28rem] overflow-y-auto rounded-2xl border bg-popover text-popover-foreground shadow-lg z-50">
-          {showResults && (
+          {isTyping ? (
             <ResultsSection
               isLoading={searchQuery.isLoading}
               isError={searchQuery.isError}
-              hits={searchQuery.data?.data ?? []}
+              hits={hits.slice(0, SUGGESTION_LIMIT)}
               total={searchQuery.data?.meta.total ?? 0}
               onItemClick={closeAndBlur}
               onShowAll={() => {
-                router.push(`/_search?q=${encodeURIComponent(debouncedQ)}`);
+                router.push(buildSearchUrl(debouncedQ));
                 closeAndBlur();
               }}
             />
+          ) : recents.length > 0 ? (
+            <RecentsSection pages={recents} onItemClick={closeAndBlur} />
+          ) : recentsQuery.isLoading ? (
+            <div className="px-3 py-3 text-sm text-muted-foreground">{m['search.global.loading_recents']()}</div>
+          ) : (
+            <div className="px-3 py-3 text-sm text-muted-foreground flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {m['search.global.empty_hint']()}
+            </div>
           )}
-          {showRecents && <RecentsSection isLoading={recentsQuery.isLoading} pages={recentsQuery.data?.pages ?? []} onItemClick={closeAndBlur} />}
         </div>
       )}
     </div>
@@ -166,11 +138,8 @@ function ResultsSection({ isLoading, isError, hits, total, onItemClick, onShowAl
   if (isError) {
     return <div className="px-3 py-3 text-sm text-muted-foreground">{m['search.global.error']()}</div>;
   }
-  if (isLoading && hits.length === 0) {
-    return <div className="px-3 py-3 text-sm text-muted-foreground">{m['search.global.searching']()}</div>;
-  }
   if (hits.length === 0) {
-    return <div className="px-3 py-3 text-sm text-muted-foreground">{m['search.global.no_results']()}</div>;
+    return <div className="px-3 py-3 text-sm text-muted-foreground">{isLoading ? m['search.global.searching']() : m['search.global.no_results']()}</div>;
   }
   return (
     <div className="p-1.5">
@@ -192,26 +161,11 @@ function ResultsSection({ isLoading, isError, hits, total, onItemClick, onShowAl
 }
 
 interface RecentsSectionProps {
-  isLoading: boolean;
   pages: NonNullable<ReturnType<typeof useRecentlyViewedPages>['data']>['pages'];
   onItemClick: () => void;
 }
 
-function RecentsSection({ isLoading, pages, onItemClick }: RecentsSectionProps) {
-  if (isLoading && pages.length === 0) {
-    return <div className="px-3 py-3 text-sm text-muted-foreground">{m['search.global.loading_recents']()}</div>;
-  }
-  if (pages.length === 0) {
-    // Soft-fail: redis cold / disabled / first session. Hide the
-    // section header and show a generic hint so the dropdown isn't
-    // empty-looking.
-    return (
-      <div className="px-3 py-3 text-sm text-muted-foreground flex items-center gap-2">
-        <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        {m['search.global.empty_hint']()}
-      </div>
-    );
-  }
+function RecentsSection({ pages, onItemClick }: RecentsSectionProps) {
   return (
     <div className="p-1.5">
       <div className="px-3 py-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">

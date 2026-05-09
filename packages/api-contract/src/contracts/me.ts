@@ -95,18 +95,6 @@ export const meContract = c.router({
     },
     summary: 'Reset (regenerate) API token',
   },
-  /**
-   * Per-user recently-viewed page history. Backed by `crowi.lru`
-   * (Redis sorted set keyed by user id, scored by access timestamp).
-   * Each successful `getPage` write-touches the key; this endpoint
-   * reads back the top N populated pages, newest first.
-   *
-   * Used by the global search dropdown: when the input is focused
-   * but empty, the dropdown shows this list as a "最近見たページ"
-   * shortcut. Off the happy path (Redis unconfigured / cold cache /
-   * deleted page IDs) the response just collapses to an empty list —
-   * the UI hides the section in that case.
-   */
   recentlyViewedPages: {
     method: 'GET',
     path: '/me/recently-viewed-pages',
