@@ -119,7 +119,7 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
         {isInvalid && newPath.length > 0 && <p className="text-xs text-destructive">{m['page.rename.invalid_path']()}</p>}
       </div>
 
-      <DialogFooter className="gap-2 sm:gap-0">
+      <DialogFooter>
         <DialogClose asChild>
           <Button type="button" variant="outline" disabled={isSubmitting}>
             {m['page.rename.cancel']()}
