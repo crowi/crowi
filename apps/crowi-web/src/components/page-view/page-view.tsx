@@ -140,21 +140,19 @@ export function PageView({ path }: PageViewProps) {
 
   if (page) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <PageHeader
-            page={page}
-            onEdit={() => {
-              router.push(`/edit?page_id=${encodeURIComponent(page._id)}`);
-            }}
-            showActions
-          />
-          <PageContent page={page} />
-          <BacklinkList pageId={page._id} />
-          <AttachmentList pageId={page._id} />
-          <PageComments page={page} />
-        </CardContent>
-      </Card>
+      <article className="space-y-12">
+        <PageHeader
+          page={page}
+          onEdit={() => {
+            router.push(`/edit?page_id=${encodeURIComponent(page._id)}`);
+          }}
+          showActions
+        />
+        <PageContent page={page} />
+        <BacklinkList pageId={page._id} />
+        <AttachmentList pageId={page._id} />
+        <PageComments page={page} />
+      </article>
     );
   }
 
