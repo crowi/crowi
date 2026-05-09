@@ -12,27 +12,21 @@ interface BookmarkButtonProps {
 export function BookmarkButton({ pageId }: BookmarkButtonProps) {
   const { isBookmarked, toggle, isPending, isError, error } = useToggleBookmark(pageId);
 
-  const label = isBookmarked ? m['page.bookmark_label_done']() : m['page.bookmark_label']();
   const ariaLabel = isBookmarked ? m['page.bookmark_aria_remove']() : m['page.bookmark_aria_add']();
+  const Icon = isPending ? Loader2 : isBookmarked ? BookmarkCheck : Bookmark;
 
   return (
     <Button
-      variant={isBookmarked ? 'default' : 'outline'}
-      size="sm"
+      variant="ghost"
+      size="icon-sm"
       onClick={() => toggle()}
       disabled={isPending}
       aria-label={ariaLabel}
       aria-pressed={isBookmarked}
-      title={isError && error instanceof Error ? error.message : undefined}
+      title={isError && error instanceof Error ? error.message : ariaLabel}
+      className={isBookmarked ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}
     >
-      {isPending ? (
-        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-      ) : isBookmarked ? (
-        <BookmarkCheck className="h-4 w-4 mr-1" />
-      ) : (
-        <Bookmark className="h-4 w-4 mr-1" />
-      )}
-      {label}
+      <Icon className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
     </Button>
   );
 }

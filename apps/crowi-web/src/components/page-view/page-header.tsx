@@ -1,11 +1,10 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/breadcrumb';
-import { Clock, Lock, Edit2, History } from 'lucide-react';
+import { Clock, Lock, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { useAuth } from '@/lib/use-auth';
@@ -22,10 +21,6 @@ interface PageHeaderProps {
   showSeenUsers?: boolean;
 }
 
-function buildHistoryHref(pagePath: string): string {
-  return `/_history?path=${encodeURIComponent(pagePath)}`;
-}
-
 function getPageTitle(path: string): string {
   if (path === '/') return 'Home';
   const segments = path.split('/').filter(Boolean);
@@ -33,7 +28,6 @@ function getPageTitle(path: string): string {
 }
 
 export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = true }: PageHeaderProps) {
-  const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
@@ -52,9 +46,6 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
           {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} />}
           {isAuthenticated && <WatchButton pageId={page._id} />}
           <BookmarkButton pageId={page._id} />
-          <Button variant="ghost" size="sm" onClick={() => router.push(buildHistoryHref(page.path))} aria-label="View revision history" title="History">
-            <History className="h-4 w-4" />
-          </Button>
           {onEdit && (
             <Button variant="default" size="sm" onClick={onEdit} className="ml-1">
               <Edit2 className="h-4 w-4 mr-1" />

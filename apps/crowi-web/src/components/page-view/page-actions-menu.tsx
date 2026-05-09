@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { MoreHorizontal, MoveRight, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { History, MoreHorizontal, MoveRight, Trash2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DeletePageDialog } from './delete-page-dialog';
 import { RenameDialog } from './rename-dialog';
 
@@ -12,11 +13,8 @@ interface PageActionsMenuProps {
   page: PageWithRevision;
 }
 
-/**
- * Overflow menu (...) for secondary page actions (Rename, Delete).
- * Primary actions (Bookmark, Edit) stay as visible buttons in PageHeader.
- */
 export function PageActionsMenu({ page }: PageActionsMenuProps) {
+  const router = useRouter();
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
@@ -24,15 +22,20 @@ export function PageActionsMenu({ page }: PageActionsMenuProps) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" aria-label="More actions">
+          <Button variant="ghost" size="icon-sm" aria-label="More actions" className="text-muted-foreground hover:text-foreground">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => router.push(`/_history?path=${encodeURIComponent(page.path)}`)}>
+            <History className="h-4 w-4 mr-2" />
+            History
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setIsRenameOpen(true)}>
             <MoveRight className="h-4 w-4 mr-2" />
             Rename
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setIsDeleteOpen(true)} className="text-red-600 focus:text-red-600">
             <Trash2 className="h-4 w-4 mr-2" />
             Delete
