@@ -22,6 +22,24 @@ export const PluginFieldSchema = z.object({
 });
 export type PluginField = z.infer<typeof PluginFieldSchema>;
 
+export const AdminSidebarSection = z.enum(['settings', 'shared', 'storage', 'mail', 'notification', 'auth']);
+export type AdminSidebarSectionValue = z.infer<typeof AdminSidebarSection>;
+
+export const PluginAdminPlacementSchema = z.object({
+  /**
+   * Sidebar section to surface this plugin under. The runtime fills
+   * this in — it's either declared by the plugin via `adminPlacement`
+   * or derived from its `register*` hooks. Plugins that fall through
+   * with no inferable section default to `'settings'`.
+   */
+  section: AdminSidebarSection,
+  /** Display label (defaults to the plugin's npm name). */
+  label: z.string(),
+  /** Lucide icon name from a fixed allow-list. */
+  icon: z.string().optional(),
+});
+export type PluginAdminPlacement = z.infer<typeof PluginAdminPlacementSchema>;
+
 export const PluginInfoSchema = z.object({
   name: z.string(),
   version: z.string(),
@@ -33,6 +51,12 @@ export const PluginInfoSchema = z.object({
    * admin "this plugin is the active storage driver" badge.
    */
   registers: z.array(z.string()),
+  /**
+   * Where the plugin appears in the admin sidebar. The server always
+   * populates this even when the plugin didn't declare its own
+   * `adminPlacement`.
+   */
+  adminPlacement: PluginAdminPlacementSchema,
 });
 export type PluginInfo = z.infer<typeof PluginInfoSchema>;
 

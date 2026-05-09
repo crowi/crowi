@@ -49,6 +49,15 @@ const plugin: CrowiPlugin = {
   name: '@crowi/aws',
   version: '0.1.0-dev',
   configSchema: AwsConfigSchema,
+  adminPlacement: {
+    // Base plugin (config-only, no register*). Surfaced under the
+    // sidebar's "shared services" section so operators find AWS
+    // credentials in one place even when both S3 and SES depend on
+    // them.
+    section: 'shared',
+    label: 'AWS',
+    icon: 'cloud',
+  },
   // No register* — config-only plugin. Downstream AWS plugins read
   // these values via ctx.dependencyConfig('@crowi/aws').
   // Legacy v1.x → v2.0 key migration is handled centrally by `crowi

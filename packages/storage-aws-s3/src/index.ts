@@ -31,6 +31,11 @@ const plugin: CrowiPlugin = {
   version: '0.1.0-dev',
   requires: ['@crowi/aws'],
   configSchema: S3StorageConfigSchema,
+  adminPlacement: {
+    label: 'AWS S3',
+    icon: 'cloud',
+    // section omitted: derived from registerStorage → 'storage'
+  },
 
   registerStorage: (registry, ctx) => {
     const own = ctx.config<S3StorageConfig>();

@@ -34,6 +34,11 @@ const plugin: CrowiPlugin = {
   name: '@crowi/storage-local',
   version: '0.1.0-dev',
   configSchema: LocalStorageConfigSchema,
+  adminPlacement: {
+    label: 'ローカルストレージ',
+    icon: 'hard-drive',
+    // section omitted: derived from registerStorage → 'storage'
+  },
 
   registerStorage: (registry, ctx) => {
     const driver: StorageDriver = createLocalDriver(ctx.config<LocalStorageConfig>());

@@ -1,14 +1,25 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
+import type { PluginInfo } from '@crowi/api-contract';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { PluginConfigForm } from '@/components/admin/plugin-config-form';
-import { useAdminPluginConfig, useAdminPlugins } from '@/lib/use-admin-plugins';
-import type { PluginInfo } from '@crowi/api-contract';
+import { useAdminPlugins } from '@/lib/use-admin-plugins';
 import { m } from '@paraglide/messages.js';
 
+/**
+ * Plugin list view. Each loaded plugin shows up here as a row with
+ * its npm name, version, registers list, and a click target that
+ * routes to `/admin/plugins/edit?name=<name>` for the auto-form.
+ *
+ * Plugin config is also reachable directly from the dynamic sidebar
+ * entries each plugin contributes (storage / mail / notification /
+ * auth domain sections plus the "shared services" section). This page
+ * exists for power-user-style "show me everything that's installed"
+ * navigation.
+ */
 export default function AdminPluginsPage() {
   const { data, isLoading, error } = useAdminPlugins();
 
@@ -32,75 +43,56 @@ export default function AdminPluginsPage() {
       )}
 
       {!isLoading && !error && data && data.plugins.length > 0 && (
-        <div className="space-y-4">
-          {data.plugins.map((plugin) => (
-            <PluginCard key={plugin.name} plugin={plugin} />
-          ))}
-        </div>
+        <Card>
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {data.plugins.map((plugin) => (
+                <li key={plugin.name}>
+                  <PluginRow plugin={plugin} />
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
 }
 
-interface PluginCardProps {
+interface PluginRowProps {
   plugin: PluginInfo;
 }
 
-function PluginCard({ plugin }: PluginCardProps) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-mono text-base">
-          {plugin.name}
-          <span className="text-muted-foreground ml-2 text-xs">v{plugin.version}</span>
-        </CardTitle>
-        <CardDescription>
-          <PluginMetaLine plugin={plugin} />
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {plugin.hasConfig ? <PluginConfigSection name={plugin.name} /> : <p className="text-muted-foreground text-sm">{m['admin.plugins.no_config']()}</p>}
-      </CardContent>
-    </Card>
-  );
-}
+function PluginRow({ plugin }: PluginRowProps) {
+  const href = plugin.hasConfig ? `/admin/plugins/edit?name=${encodeURIComponent(plugin.name)}` : null;
 
-function PluginMetaLine({ plugin }: { plugin: PluginInfo }) {
-  const parts: React.ReactNode[] = [];
-  if (plugin.registers && plugin.registers.length > 0) {
-    parts.push(
-      <span key="registers">
-        <strong>{m['admin.plugins.column_registers']()}: </strong>
-        {plugin.registers.join(', ')}
-      </span>,
-    );
-  }
-  if (plugin.requires && plugin.requires.length > 0) {
-    parts.push(
-      <span key="requires">
-        <strong>{m['admin.plugins.column_requires']()}: </strong>
-        {plugin.requires.join(', ')}
-      </span>,
-    );
-  }
-  return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-      {parts.map((part, i) => (
-        <span key={i}>{part}</span>
-      ))}
+  const inner = (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium">{plugin.adminPlacement.label}</span>
+          <span className="text-muted-foreground text-xs font-mono truncate">{plugin.name}</span>
+          <span className="text-muted-foreground text-xs">v{plugin.version}</span>
+        </div>
+        <PluginRowMeta plugin={plugin} />
+      </div>
+      {href && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
     </div>
   );
+
+  if (!href) return inner;
+  return (
+    <Link href={href} className="block hover:bg-muted/50 transition-colors">
+      {inner}
+    </Link>
+  );
 }
 
-function PluginConfigSection({ name }: { name: string }) {
-  const { data, isLoading, error } = useAdminPluginConfig(name);
-  if (isLoading)
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-      </div>
-    );
-  if (error) return <ErrorAlert message={error.message} />;
-  if (!data) return null;
-  return <PluginConfigForm config={data} />;
+function PluginRowMeta({ plugin }: { plugin: PluginInfo }) {
+  const parts: string[] = [];
+  parts.push(`${m['admin.plugins.column_section']()}: ${plugin.adminPlacement.section}`);
+  if (plugin.registers.length > 0) parts.push(`${m['admin.plugins.column_registers']()}: ${plugin.registers.join(', ')}`);
+  if (plugin.requires && plugin.requires.length > 0) parts.push(`${m['admin.plugins.column_requires']()}: ${plugin.requires.join(', ')}`);
+  if (!plugin.hasConfig) parts.push(m['admin.plugins.no_config']());
+  return <p className="text-muted-foreground text-xs mt-0.5">{parts.join(' / ')}</p>;
 }

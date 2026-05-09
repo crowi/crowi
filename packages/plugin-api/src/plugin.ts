@@ -66,6 +66,25 @@ export interface CrowiPlugin {
    */
   pageMetadataSchema?: z.ZodObject<Record<string, z.ZodTypeAny>>;
 
+  /**
+   * How this plugin appears in the admin sidebar. Optional — when
+   * omitted, the runtime derives the section from the plugin's
+   * `register*` hooks (registerStorage → 'storage', registerAuth →
+   * 'auth', etc.). Plugins with no register* hooks (config-only
+   * "base plugins" like `@crowi/aws`) MUST declare `section: 'shared'`
+   * to appear in the sidebar at all.
+   *
+   * `label` overrides the default sidebar text (which would otherwise
+   * be the plugin's npm name). `icon` is the lucide-react icon name
+   * (e.g. `'cloud'`, `'database'`); admin sidebar only renders icons
+   * from a fixed allow-list to keep the bundle small.
+   */
+  adminPlacement?: {
+    section?: 'settings' | 'shared' | 'storage' | 'mail' | 'notification' | 'auth';
+    label?: string;
+    icon?: string;
+  };
+
   /** Storage driver registration. Called once at boot. */
   registerStorage?: (registry: StorageRegistry, ctx: PluginContext) => void;
 

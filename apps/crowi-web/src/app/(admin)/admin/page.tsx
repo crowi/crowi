@@ -17,7 +17,7 @@ export default function AdminIndexPage() {
       <CryptoStatusCard />
 
       <div className="space-y-8">
-        {ADMIN_NAV_GROUPS.map((group) => (
+        {ADMIN_NAV_GROUPS.filter((group) => group.items.length > 0).map((group) => (
           <section key={group.heading()} className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{group.heading()}</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

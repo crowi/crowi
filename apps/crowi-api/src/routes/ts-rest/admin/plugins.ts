@@ -170,6 +170,7 @@ const toPluginInfo = (plugin: CrowiPlugin): PluginInfo => ({
   requires: plugin.requires,
   hasConfig: !!plugin.configSchema,
   registers: collectRegistrySlots(plugin),
+  adminPlacement: resolvePlacement(plugin),
 });
 
 function collectRegistrySlots(plugin: CrowiPlugin): string[] {
@@ -179,6 +180,37 @@ function collectRegistrySlots(plugin: CrowiPlugin): string[] {
   if (plugin.registerAuth) slots.push('auth');
   if (plugin.registerNotifier) slots.push('notifier');
   return slots;
+}
+
+/**
+ * Compute the effective sidebar placement for a plugin. The plugin's
+ * own `adminPlacement` wins where it sets a field; missing fields
+ * fall back to derived defaults:
+ *   - section: derived from register* hooks (storage / search / auth /
+ *     notification → matching section). Plugins with no register*
+ *     hook need to declare `section: 'shared'` themselves to appear
+ *     under the "shared services" section; if they didn't declare it
+ *     either, fall through to `'settings'`.
+ *   - label: defaults to the plugin's npm name.
+ *   - icon: optional, no default.
+ */
+function resolvePlacement(plugin: CrowiPlugin): PluginInfo['adminPlacement'] {
+  const declared = plugin.adminPlacement;
+  const derivedSection = deriveSectionFromHooks(plugin);
+  return {
+    section: declared?.section ?? derivedSection ?? 'settings',
+    label: declared?.label ?? plugin.name,
+    icon: declared?.icon,
+  };
+}
+
+function deriveSectionFromHooks(plugin: CrowiPlugin): PluginInfo['adminPlacement']['section'] | undefined {
+  if (plugin.registerStorage) return 'storage';
+  if (plugin.registerAuth) return 'auth';
+  if (plugin.registerNotifier) return 'notification';
+  // search has no top-level section in the to-be sidebar; surface
+  // search-only plugins under "settings" by default.
+  return undefined;
 }
 
 function readPluginNamespace(crowi: Crowi, pluginName: string): Record<string, unknown> {
