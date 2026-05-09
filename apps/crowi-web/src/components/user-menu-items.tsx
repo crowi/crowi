@@ -13,7 +13,7 @@ export function UserMenuItems({ username }: UserMenuItemsProps) {
   return (
     <>
       <DropdownMenuItem asChild>
-        <Link href="/settings">
+        <Link href="/me">
           <Settings className="h-4 w-4 mr-2" />
           {m['header.user_dropdown_settings']()}
         </Link>

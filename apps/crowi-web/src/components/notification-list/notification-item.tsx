@@ -13,7 +13,7 @@ interface NotificationItemProps {
 }
 
 /**
- * A single row in the full notification list at /notifications.
+ * A single row in the full notification list at /_notifications.
  *
  * Displays the action user's avatar, a Japanese description of the action,
  * the target page path, and a relative timestamp. Unopened notifications

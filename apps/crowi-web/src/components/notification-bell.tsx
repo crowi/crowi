@@ -119,7 +119,7 @@ export function NotificationBell() {
           )}
         </div>
         <div className="border-t px-3 py-2 text-center">
-          <Link href="/notifications" onClick={() => setOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">
+          <Link href="/_notifications" onClick={() => setOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">
             {m['notifications.see_all']()}
           </Link>
         </div>

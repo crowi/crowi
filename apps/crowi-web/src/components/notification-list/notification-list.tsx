@@ -14,7 +14,7 @@ import { m } from '@paraglide/messages.js';
 const PAGE_SIZE = 20;
 
 /**
- * Full-page notification list shown at /notifications.
+ * Full-page notification list shown at /_notifications.
  *
  * - Uses useInfiniteQuery to accumulate pages (matches the user bookmarks UI).
  * - Header has a "すべて既読にする" button which is disabled when there are
