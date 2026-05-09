@@ -15,6 +15,9 @@ public/uploads/*
 # server
 dist
 
+# Paraglide-js generated messages (regenerated on every pnpm predev / prebuild / pretype-check)
+apps/crowi-web/paraglide/
+
 # Turborepo
 .turbo
 **/.turbo/
