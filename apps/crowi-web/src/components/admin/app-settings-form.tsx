@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { SecretField } from '@/components/admin/secret-field';
 import { AppSettingsValidationFailure, useAppSettings, useUpdateAppSettings } from '@/lib/use-admin-app-settings';
 import { m } from '@paraglide/messages.js';
 
@@ -17,63 +16,39 @@ import { m } from '@paraglide/messages.js';
  * Editable subset of the App settings — the GET response also surfaces
  * read-only fields (`externalShare`, `isUploadable`, `registrationMode`) which
  * we keep out of this state and read directly from `data` when rendering.
+ *
+ * Storage credentials (AWS S3 region / bucket / accessKeyId / secretAccessKey)
+ * used to live here too. They moved to the per-plugin settings page
+ * (`/admin/plugins?name=@crowi/plugin-aws`) when the storage plugin
+ * extraction landed; this form is now strictly for `app:*` keys.
  */
 interface FormState {
   appTitle: string;
   appConfidential: string;
-  awsRegion: string;
-  awsBucket: string;
-  awsAccessKeyId: string;
-  /**
-   * Empty string here means "no change" by default — we only forward this to
-   * the API when `secretDirty` is true. The explicit-clear flow uses the
-   * dedicated `secretClearRequested` flag so an empty string + dirty unambiguously
-   * means "save empty".
-   */
-  awsSecretAccessKey: string;
 }
 
 /**
- * Map a {@link GetAppSettingsResponse} into the form's mutable state. The
- * masked secret never roundtrips through state — the input always starts empty
- * and we rely on `hasValue` to render the "already saved" hint.
+ * Map a {@link GetAppSettingsResponse} into the form's mutable state.
  */
 function toFormState(data: GetAppSettingsResponse): FormState {
   return {
     appTitle: data.app.title,
     appConfidential: data.app.confidential,
-    awsRegion: data.upload.aws.region,
-    awsBucket: data.upload.aws.bucket,
-    awsAccessKeyId: data.upload.aws.accessKeyId,
-    awsSecretAccessKey: '',
   };
 }
 
 /**
  * Diff the current form state against the server snapshot and produce a
  * partial PUT body — only changed fields are included so the API can leave the
- * rest untouched. The secret has its own dirty/clear flags because an empty
- * string in the input does not by itself mean "clear it"; the operator must
- * either type a new value or hit the explicit "clear" button.
+ * rest untouched.
  */
-function buildUpdateBody(state: FormState, initial: FormState, flags: { secretDirty: boolean; secretClearRequested: boolean }): UpdateAppSettingsRequest {
+function buildUpdateBody(state: FormState, initial: FormState): UpdateAppSettingsRequest {
   const app: NonNullable<UpdateAppSettingsRequest['app']> = {};
   if (state.appTitle !== initial.appTitle) app.title = state.appTitle;
   if (state.appConfidential !== initial.appConfidential) app.confidential = state.appConfidential;
 
-  const aws: NonNullable<NonNullable<UpdateAppSettingsRequest['upload']>['aws']> = {};
-  if (state.awsRegion !== initial.awsRegion) aws.region = state.awsRegion;
-  if (state.awsBucket !== initial.awsBucket) aws.bucket = state.awsBucket;
-  if (state.awsAccessKeyId !== initial.awsAccessKeyId) aws.accessKeyId = state.awsAccessKeyId;
-  if (flags.secretClearRequested) {
-    aws.secretAccessKey = '';
-  } else if (flags.secretDirty && state.awsSecretAccessKey !== '') {
-    aws.secretAccessKey = state.awsSecretAccessKey;
-  }
-
   const body: UpdateAppSettingsRequest = {};
   if (Object.keys(app).length > 0) body.app = app;
-  if (Object.keys(aws).length > 0) body.upload = { aws };
   return body;
 }
 
@@ -112,8 +87,6 @@ export function AppSettingsForm() {
   // `react-hooks/set-state-in-effect`). Re-baselining after a save bumps this
   // by clearing it back to null + setting the new baseline in the submit handler.
   const [hydratedFrom, setHydratedFrom] = useState<GetAppSettingsResponse | null>(null);
-  const [secretDirty, setSecretDirty] = useState(false);
-  const [secretClearRequested, setSecretClearRequested] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -122,12 +95,7 @@ export function AppSettingsForm() {
   // pattern for derived-from-prop initial state. We intentionally do not
   // re-sync on subsequent refetches — explicit save+invalidate handles that
   // by re-baselining inside `handleSubmit`.
-  //
-  // The `data.app && data.upload` guard catches stale `@crowi/api-contract`
-  // dist mismatches (e.g. a dev server still serving the previous contract
-  // path returns a 200 with an unrelated body). Without it toFormState would
-  // crash when destructuring nested fields.
-  if (data?.app && data.upload && hydratedFrom === null) {
+  if (data?.app && hydratedFrom === null) {
     const next = toFormState(data);
     setState(next);
     setInitial(next);
@@ -136,17 +104,10 @@ export function AppSettingsForm() {
 
   const isDirty = useMemo(() => {
     if (!state || !initial) return false;
-    if (secretDirty || secretClearRequested) return true;
-    return (
-      state.appTitle !== initial.appTitle ||
-      state.appConfidential !== initial.appConfidential ||
-      state.awsRegion !== initial.awsRegion ||
-      state.awsBucket !== initial.awsBucket ||
-      state.awsAccessKeyId !== initial.awsAccessKeyId
-    );
-  }, [state, initial, secretDirty, secretClearRequested]);
+    return state.appTitle !== initial.appTitle || state.appConfidential !== initial.appConfidential;
+  }, [state, initial]);
 
-  if (isLoading || !data?.app || !data.upload || !state || !initial) {
+  if (isLoading || !data?.app || !state || !initial) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -183,7 +144,7 @@ export function AppSettingsForm() {
       return;
     }
 
-    const body = buildUpdateBody(state, initial, { secretDirty, secretClearRequested });
+    const body = buildUpdateBody(state, initial);
 
     // Nothing changed — avoid a no-op request.
     if (Object.keys(body).length === 0) {
@@ -193,11 +154,7 @@ export function AppSettingsForm() {
     try {
       await update.mutateAsync(body);
       // Re-baseline so the form is no longer "dirty" after a successful save.
-      const cleared: FormState = { ...state, awsSecretAccessKey: '' };
-      setState(cleared);
-      setInitial(cleared);
-      setSecretDirty(false);
-      setSecretClearRequested(false);
+      setInitial(state);
       setSavedAt(Date.now());
     } catch (err) {
       if (err instanceof AppSettingsValidationFailure) {
@@ -208,7 +165,6 @@ export function AppSettingsForm() {
   };
 
   const errorOf = (key: string) => fieldErrors[key];
-  const hasSecret = data.upload.aws.secretAccessKey.hasValue;
   const isUploadable = data.isUploadable;
 
   return (
@@ -257,89 +213,7 @@ export function AppSettingsForm() {
         </CardContent>
       </Card>
 
-      {/* Card 2: AWS S3 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{m['admin.app.section_aws_heading']()}</CardTitle>
-          <CardDescription>{m['admin.app.section_aws_lead']()}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="aws-region">{m['admin.app.field_region_label']()}</Label>
-              <Input
-                id="aws-region"
-                value={state.awsRegion}
-                onChange={(e) => setState({ ...state, awsRegion: e.target.value })}
-                aria-invalid={Boolean(errorOf('upload.aws.region'))}
-                placeholder={m['admin.app.field_region_placeholder']()}
-                autoComplete="off"
-              />
-              {errorOf('upload.aws.region') && (
-                <p className="text-xs text-destructive" role="alert">
-                  {errorOf('upload.aws.region')}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="aws-bucket">{m['admin.app.field_bucket_label']()}</Label>
-              <Input
-                id="aws-bucket"
-                value={state.awsBucket}
-                onChange={(e) => setState({ ...state, awsBucket: e.target.value })}
-                aria-invalid={Boolean(errorOf('upload.aws.bucket'))}
-                maxLength={63}
-                autoComplete="off"
-              />
-              {errorOf('upload.aws.bucket') && (
-                <p className="text-xs text-destructive" role="alert">
-                  {errorOf('upload.aws.bucket')}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="aws-access-key">{m['admin.app.field_access_key_label']()}</Label>
-            <Input
-              id="aws-access-key"
-              value={state.awsAccessKeyId}
-              onChange={(e) => setState({ ...state, awsAccessKeyId: e.target.value })}
-              aria-invalid={Boolean(errorOf('upload.aws.accessKeyId'))}
-              autoComplete="off"
-            />
-            {errorOf('upload.aws.accessKeyId') && (
-              <p className="text-xs text-destructive" role="alert">
-                {errorOf('upload.aws.accessKeyId')}
-              </p>
-            )}
-          </div>
-
-          <SecretField
-            id="aws-secret-key"
-            label={m['admin.app.field_secret_label']()}
-            value={state.awsSecretAccessKey}
-            hasValue={hasSecret}
-            dirty={secretDirty}
-            clearRequested={secretClearRequested}
-            onChange={(value) => {
-              setState({ ...state, awsSecretAccessKey: value });
-              setSecretDirty(true);
-              setSecretClearRequested(false);
-            }}
-            onClearRequested={() => {
-              setSecretClearRequested(true);
-              setSecretDirty(false);
-              setState({ ...state, awsSecretAccessKey: '' });
-            }}
-            onUndoClear={() => setSecretClearRequested(false)}
-            error={errorOf('upload.aws.secretAccessKey')}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Card 3: 表示のみのステータス */}
+      {/* Card 2: 表示のみのステータス */}
       <Card>
         <CardHeader>
           <CardTitle>{m['admin.app.section_status_heading']()}</CardTitle>
