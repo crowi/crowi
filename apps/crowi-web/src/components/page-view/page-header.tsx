@@ -4,7 +4,7 @@ import { formatDistanceToNow } from '@/lib/date-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/breadcrumb';
-import { Clock, Lock, Edit2 } from 'lucide-react';
+import { Clock, Lock, Edit2, MessageSquare } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { useAuth } from '@/lib/use-auth';
@@ -84,6 +84,12 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
 
         {page.likerCount !== undefined && page.likerCount > 0 && <span>{m['page.meta_likes']({ count: page.likerCount })}</span>}
         {page.seenUsersCount !== undefined && page.seenUsersCount > 0 && <span>{m['page.meta_views']({ count: page.seenUsersCount })}</span>}
+        {page.commentCount !== undefined && page.commentCount > 0 && (
+          <a href="#comments" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+            <MessageSquare className="h-3.5 w-3.5" />
+            {m['page.meta_comments']({ count: page.commentCount })}
+          </a>
+        )}
       </div>
 
       {showSeenUsers && <SeenUserList pageId={page._id} fallbackCount={page.seenUsersCount} />}

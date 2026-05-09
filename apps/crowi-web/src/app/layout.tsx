@@ -37,7 +37,7 @@ export default async function RootLayout({
   overwriteGetLocale(() => locale);
 
   return (
-    <html lang={locale}>
+    <html lang={locale} className="scroll-smooth">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <InstallerGate>{children}</InstallerGate>

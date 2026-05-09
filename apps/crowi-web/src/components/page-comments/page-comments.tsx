@@ -47,7 +47,7 @@ export function PageComments({ page }: PageCommentsProps) {
   };
 
   return (
-    <section className="mt-8 border-t pt-6" aria-label={m['page_comments.heading']()}>
+    <section id="comments" className="mt-8 border-t pt-6 scroll-mt-4" aria-label={m['page_comments.heading']()}>
       <div className="flex items-center gap-2 mb-4">
         <MessageSquare className="h-5 w-5 text-muted-foreground" />
         <h2 className="text-lg font-semibold">

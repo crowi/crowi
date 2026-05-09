@@ -102,6 +102,7 @@
   "page.meta_updated": "Updated {time}",
   "page.meta_likes": "{count} likes",
   "page.meta_views": "{count} views",
+  "page.meta_comments": "{count} comments",
   "page.rename.title": "Rename page",
   "page.rename.description": "Move the page to a new path. A redirect is created automatically.",
   "page.rename.current_path": "Current path",

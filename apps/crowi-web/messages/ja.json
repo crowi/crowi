@@ -102,6 +102,7 @@
   "page.meta_updated": "{time} に更新",
   "page.meta_likes": "{count} いいね",
   "page.meta_views": "{count} 閲覧",
+  "page.meta_comments": "{count} コメント",
   "page.rename.title": "ページをリネーム",
   "page.rename.description": "新しいパスに移動します。リダイレクトが自動的に作成されます。",
   "page.rename.current_path": "現在のパス",
