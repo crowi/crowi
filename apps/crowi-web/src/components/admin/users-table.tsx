@@ -17,14 +17,6 @@ import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/date-utils';
 import { m } from '@paraglide/messages.js';
 
-/**
- * Per-row action discriminator emitted by `UsersTable` via `onAction`.
- *
- * The table is intentionally dumb — it does not own the dialog state or the
- * mutation hooks. The parent page maps each `kind` to the corresponding
- * dialog (edit / reset-password / update-email) or AlertDialog confirmation
- * (make-admin / remove-admin / activate / suspend).
- */
 export type UserRowActionKind = 'edit' | 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'reset-password' | 'update-email';
 
 export interface UserRowAction {
@@ -36,27 +28,12 @@ interface UsersTableProps {
   users: UserPublic[];
   pager: AdminPager;
   onPageChange: (page: number) => void;
-  /**
-   * Called when the operator picks an action from the row dropdown. The page
-   * stores the chosen user in local state and opens the matching dialog. If
-   * omitted, the dropdown column is not rendered (e.g. for read-only views).
-   */
+  /** When omitted the row dropdown is hidden (e.g. read-only contexts). */
   onAction?: (action: UserRowAction) => void;
-  /**
-   * Current operator's user id. Used to disable destructive self-actions
-   * (demote / suspend) at the UI level. Server-side guards live in
-   * `migrate-admin-user-actions-api` follow-ups.
-   */
+  /** Disables self-destructive actions (demote / suspend) for this user id. */
   currentUserId?: string;
 }
 
-/**
- * Display label for the numeric `status` field on UserPublic.
- *
- * The contract emits raw numbers (1..5 — see UserStatusEnum) so the UI is
- * responsible for translation. Unknown values are rendered as "Unknown" so
- * a stale user document does not break the table.
- */
 function formatStatus(status: number | undefined): string {
   switch (status) {
     case UserStatusEnum.REGISTERED:
@@ -74,10 +51,6 @@ function formatStatus(status: number | undefined): string {
   }
 }
 
-/**
- * Tailwind classes for the status pill — colour-codes the four common states
- * so an operator can scan the table at a glance.
- */
 function statusPillClass(status: number | undefined): string {
   switch (status) {
     case UserStatusEnum.ACTIVE:
@@ -94,14 +67,6 @@ function statusPillClass(status: number | undefined): string {
   }
 }
 
-/**
- * Numbered pager rendered below the table. The shape is dictated by
- * `AdminPager` (matching the legacy pager helper):
- *   prev  ...  pages...  ...  next
- *
- * `previousDots` / `nextDots` flags drive the gap markers; `pages[]` is the
- * windowed range of clickable page numbers.
- */
 function Pager({ pager, onPageChange }: { pager: AdminPager; onPageChange: (page: number) => void }) {
   if (pager.pagesCount <= 1) return null;
 
@@ -147,21 +112,6 @@ interface RowActionMenuProps {
   onAction: (action: UserRowAction) => void;
 }
 
-/**
- * Dropdown menu for a single user row.
- *
- * Visibility rules for items mirror the legacy admin UI:
- * - The promote/demote item flips between "make admin" and "remove admin"
- *   based on the user's current `admin` flag.
- * - The activate/suspend item flips on the user's `status`. The "activate"
- *   item is shown for both REGISTERED and SUSPENDED so admins can approve
- *   newly-registered users from one place.
- * - "Reset password" / "Change email" are always present (no toggle).
- *
- * Self-protection: when the row is the current operator, the demote /
- * suspend options are rendered as `data-disabled` items that show a hint
- * tooltip — *not* hidden — so the operator understands why they can't act.
- */
 function RowActionMenu({ user, isSelf, onAction }: RowActionMenuProps) {
   const showActivate = user.status === UserStatusEnum.SUSPENDED || user.status === UserStatusEnum.REGISTERED;
   const showSuspend = user.status === UserStatusEnum.ACTIVE;

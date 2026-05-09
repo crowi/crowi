@@ -23,20 +23,12 @@ import { cn } from '@/lib/utils';
 import { m } from '@paraglide/messages.js';
 
 /**
- * Permissive RFC-5322-ish check used purely to flag obvious typos in the
- * invite textarea before the request hits the server. The server still does
- * the authoritative validation via Zod (`z.string().email()`); this is just
- * a UX hint so we can tell the user which lines are problematic without a
- * round-trip.
+ * Permissive email check used purely to flag obvious typos before submitting.
+ * Authoritative validation lives in the Zod contract on the server.
  */
 const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * Display label for a user — falls back to username, then email, so the
- * confirm dialog never reads "are you sure about ?" on a freshly-invited row
- * with no name.
- */
-function userLabel(user: UserPublic): string {
+export function userLabel(user: UserPublic): string {
   return user.name || user.username || user.email;
 }
 
@@ -45,16 +37,6 @@ interface InviteUsersDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * Invite-by-email dialog.
- *
- * Layout:
- *   - <textarea> for newline-separated emails
- *   - "send invitation email" checkbox
- *   - submit -> stays open and renders the per-email outcome list
- *   - explicit "Close" button at the end so the operator confirms they read
- *     the results (the planner notes called this out in `openQuestions`).
- */
 export function InviteUsersDialog({ open, onOpenChange }: InviteUsersDialogProps) {
   const invite = useInviteAdminUsers();
   const [text, setText] = useState('');
@@ -62,8 +44,6 @@ export function InviteUsersDialog({ open, onOpenChange }: InviteUsersDialogProps
   const [localError, setLocalError] = useState<string | null>(null);
   const [results, setResults] = useState<InvitedUserResult[] | null>(null);
 
-  // Reset state every time the dialog re-opens so a fresh invite session is
-  // not haunted by stale results from the previous one.
   useEffect(() => {
     if (open) {
       setText('');
@@ -72,8 +52,7 @@ export function InviteUsersDialog({ open, onOpenChange }: InviteUsersDialogProps
       setResults(null);
       invite.reset();
     }
-    // invite is a stable identity per render but invite.reset is new each
-    // render; depending on it would loop.
+    // invite.reset is a fresh closure each render; depending on it would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -129,34 +108,22 @@ export function InviteUsersDialog({ open, onOpenChange }: InviteUsersDialogProps
           <div className="space-y-3">
             <p className="text-sm font-medium">{m['admin.users.action.invite_results_heading']()}</p>
             <div className="space-y-2 text-sm">
-              <details open className="rounded-md border p-3">
-                <summary className="cursor-pointer text-emerald-700 dark:text-emerald-300">
-                  {m['admin.users.action.invite_results_created']({ count: grouped.created.length })}
-                </summary>
-                <ul className="mt-2 space-y-0.5 pl-4 text-muted-foreground">
-                  {grouped.created.map((r) => (
-                    <li key={r.email}>{r.email}</li>
-                  ))}
-                </ul>
-              </details>
-              <details className="rounded-md border p-3">
-                <summary className="cursor-pointer text-amber-700 dark:text-amber-300">
-                  {m['admin.users.action.invite_results_exists']({ count: grouped.exists.length })}
-                </summary>
-                <ul className="mt-2 space-y-0.5 pl-4 text-muted-foreground">
-                  {grouped.exists.map((r) => (
-                    <li key={r.email}>{r.email}</li>
-                  ))}
-                </ul>
-              </details>
-              <details className="rounded-md border p-3">
-                <summary className="cursor-pointer text-destructive">{m['admin.users.action.invite_results_failed']({ count: grouped.failed.length })}</summary>
-                <ul className="mt-2 space-y-0.5 pl-4 text-muted-foreground">
-                  {grouped.failed.map((r) => (
-                    <li key={r.email}>{r.email}</li>
-                  ))}
-                </ul>
-              </details>
+              <InviteResultGroup
+                items={grouped.created}
+                summary={m['admin.users.action.invite_results_created']({ count: grouped.created.length })}
+                summaryClassName="text-emerald-700 dark:text-emerald-300"
+                openByDefault
+              />
+              <InviteResultGroup
+                items={grouped.exists}
+                summary={m['admin.users.action.invite_results_exists']({ count: grouped.exists.length })}
+                summaryClassName="text-amber-700 dark:text-amber-300"
+              />
+              <InviteResultGroup
+                items={grouped.failed}
+                summary={m['admin.users.action.invite_results_failed']({ count: grouped.failed.length })}
+                summaryClassName="text-destructive"
+              />
             </div>
             <DialogFooter>
               <Button type="button" onClick={() => onOpenChange(false)}>
@@ -216,16 +183,34 @@ export function InviteUsersDialog({ open, onOpenChange }: InviteUsersDialogProps
   );
 }
 
+function InviteResultGroup({
+  items,
+  summary,
+  summaryClassName,
+  openByDefault = false,
+}: {
+  items: InvitedUserResult[];
+  summary: string;
+  summaryClassName: string;
+  openByDefault?: boolean;
+}) {
+  return (
+    <details {...(openByDefault ? { open: true } : {})} className="rounded-md border p-3">
+      <summary className={cn('cursor-pointer', summaryClassName)}>{summary}</summary>
+      <ul className="mt-2 space-y-0.5 pl-4 text-muted-foreground">
+        {items.map((r) => (
+          <li key={r.email}>{r.email}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 interface EditUserDialogProps {
   user: UserPublic | null;
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * Edit-name-and-email dialog. Maps `EmailConflictError` (409) onto the
- * email field's `aria-invalid` + inline message; all other errors land in a
- * footer-level alert.
- */
 export function EditUserDialog({ user, onOpenChange }: EditUserDialogProps) {
   const edit = useEditAdminUser();
   const [name, setName] = useState('');
@@ -253,7 +238,6 @@ export function EditUserDialog({ user, onOpenChange }: EditUserDialogProps) {
       if (err instanceof EmailConflictError) {
         setEmailFieldError(err.message);
       }
-      // Non-conflict errors surface via edit.error below.
     }
   };
 
@@ -316,11 +300,6 @@ interface UpdateEmailDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * Email-only update dialog. Sibling of `EditUserDialog` but trimmed to a
- * single field; the legacy admin had a separate "change email" affordance
- * for cases where a user can't sign in to update it themselves.
- */
 export function UpdateEmailDialog({ user, onOpenChange }: UpdateEmailDialogProps) {
   const update = useUpdateAdminUserEmail();
   const [email, setEmail] = useState('');
@@ -400,32 +379,18 @@ export function UpdateEmailDialog({ user, onOpenChange }: UpdateEmailDialogProps
 }
 
 interface ResetPasswordResultDialogProps {
-  /**
-   * Plaintext password from the API; null while idle. The dialog is open iff
-   * this is non-null *or* `pending` is true (the latter shows a loading
-   * placeholder while the mutation runs).
-   */
   newPassword: string | null;
   pending: boolean;
   errorMessage: string | null;
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * One-shot result dialog for `useResetAdminUserPassword`.
- *
- * The plaintext password is shown in a read-only `Input[type=text]` (so the
- * user can triple-click to select) and a Copy button puts it on the
- * clipboard. After the dialog closes the value cannot be retrieved again —
- * the description text spells this out so operators don't dismiss it
- * accidentally.
- */
 export function ResetPasswordResultDialog({ newPassword, pending, errorMessage, onOpenChange }: ResetPasswordResultDialogProps) {
   const open = pending || newPassword !== null || errorMessage !== null;
-  // We derive "copied" from a comparison between the password we most recently
-  // wrote to the clipboard and the password currently shown. This sidesteps a
-  // useEffect-based reset (which the lint rule flags as a cascading render)
-  // and naturally re-arms the badge when a new password lands in the dialog.
+  // Derive "copied" by remembering which password we last wrote to the
+  // clipboard. Using a useEffect-based reset would require chasing the
+  // password identity through deps; this reads cleaner and naturally re-arms
+  // on a new password.
   const [copiedFor, setCopiedFor] = useState<string | null>(null);
   const copied = copiedFor !== null && copiedFor === newPassword;
 
@@ -435,8 +400,8 @@ export function ResetPasswordResultDialog({ newPassword, pending, errorMessage, 
       await navigator.clipboard.writeText(newPassword);
       setCopiedFor(newPassword);
     } catch {
-      // Clipboard might be unavailable (insecure context, browser denied);
-      // we leave the value visible so the operator can copy manually.
+      // Clipboard unavailable (insecure context / denied); the input stays
+      // selectable so the operator can copy manually.
     }
   };
 
@@ -507,11 +472,6 @@ interface ConfirmActionDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * Generic AlertDialog confirmation used for makeAdmin / removeFromAdmin /
- * activate / suspend. The page composes the title + description from the
- * action kind so the dialog itself stays kind-agnostic.
- */
 export function ConfirmActionDialog({ open, title, description, pending, destructive, errorMessage, onConfirm, onOpenChange }: ConfirmActionDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -532,7 +492,7 @@ export function ConfirmActionDialog({ open, title, description, pending, destruc
             className={cn(destructive && 'bg-destructive text-white hover:bg-destructive/90')}
             onClick={(event) => {
               // Don't auto-close — the parent closes after the mutation
-              // resolves so the dialog can show pending / error states.
+              // resolves so we can keep showing pending / error states.
               event.preventDefault();
               onConfirm();
             }}
@@ -551,5 +511,3 @@ export function ConfirmActionDialog({ open, title, description, pending, destruc
     </AlertDialog>
   );
 }
-
-export { userLabel };
