@@ -15,15 +15,18 @@ export default (crowi: Crowi, _app: Express) => {
 
   const router_ = s.router(apiContract.admin.app, {
     /**
-     * Returns the current `app:*` and `upload:aws:*` slice. The secret access
-     * key is masked — only `{ hasValue }` is reported, never the plaintext.
-     * `accessKeyId` is returned plain to match legacy display behaviour.
+     * Returns the current `app:*` slice plus a few derived read-only
+     * fields the App admin page header displays.
+     *
+     * AWS S3 credentials are no longer surfaced here. They live under the
+     * per-plugin settings page (`/admin/plugins?name=@crowi/plugin-aws`)
+     * since the storage plugin extraction. Boot-time migration moves the
+     * legacy `upload:aws:*` keys into the new namespace — see
+     * `src/util/aws-config-migration.ts`.
      */
     getAppSettings: async () => {
       const crowiNs = getCrowiConfigNamespace(crowi);
       const isUploadable = Config.isUploadable();
-
-      const secretAccessKey = coerceString(crowiNs['upload:aws:secretAccessKey']);
 
       return {
         status: 200 as const,
@@ -33,14 +36,6 @@ export default (crowi: Crowi, _app: Express) => {
             confidential: coerceString(crowiNs['app:confidential']),
             externalShare: coerceBoolean(crowiNs['app:externalShare']),
           },
-          upload: {
-            aws: {
-              region: coerceString(crowiNs['upload:aws:region']),
-              bucket: coerceString(crowiNs['upload:aws:bucket']),
-              accessKeyId: coerceString(crowiNs['upload:aws:accessKeyId']),
-              secretAccessKey: { hasValue: secretAccessKey.length > 0 },
-            },
-          },
           isUploadable,
           registrationMode,
         },
@@ -48,17 +43,9 @@ export default (crowi: Crowi, _app: Express) => {
     },
 
     /**
-     * Partial update of `app:*` and `upload:aws:*`. We translate the section
-     * shape to the flat `crowi` namespace keys the legacy controller used so
-     * `configService.saveConfig` does the encryption / persistence in the
-     * same way regardless of whether the request came from this route or the
-     * legacy POST endpoint.
-     *
-     * `secretAccessKey` semantics:
-     * - omitted   → not added to the payload, value stays untouched.
-     * - empty ''  → forwarded as '' so the row is overwritten with the empty
-     *               value. This keeps the "explicitly clear" path open.
-     * - non-empty → forwarded; auto-encryption kicks in via `isSensitiveConfig`.
+     * Partial update of `app:*`. Storage credentials are intentionally
+     * unsupported here; the contract's strict() catches stray `upload`
+     * fields with a 400 so stale clients fail loudly.
      */
     updateAppSettings: async ({ body }) => {
       const updates: Record<string, unknown> = {};
@@ -66,14 +53,6 @@ export default (crowi: Crowi, _app: Express) => {
       if (body.app) {
         if (body.app.title !== undefined) updates['app:title'] = body.app.title;
         if (body.app.confidential !== undefined) updates['app:confidential'] = body.app.confidential;
-      }
-
-      if (body.upload?.aws) {
-        const { region, bucket, accessKeyId, secretAccessKey } = body.upload.aws;
-        if (region !== undefined) updates['upload:aws:region'] = region;
-        if (bucket !== undefined) updates['upload:aws:bucket'] = bucket;
-        if (accessKeyId !== undefined) updates['upload:aws:accessKeyId'] = accessKeyId;
-        if (secretAccessKey !== undefined) updates['upload:aws:secretAccessKey'] = secretAccessKey;
       }
 
       if (Object.keys(updates).length > 0) {
