@@ -65,14 +65,15 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [x] Next.js Route Group `(admin)` 設計、admin 専用認可 (User.admin === true) — 5123e06d
 
 ### 設定 (Config model に集約、各セクションで部分更新)
-- [x] **App** (`GET/PUT /admin/app`): サイト名 / 機密情報の注意書き / AWS S3 認証情報。secretAccessKey は暗号化保存 + UI で 3 状態(saved / clear pending / dirty)。fileUpload toggle はプラグイン化で廃止
+- [x] **App** (`GET/PUT /admin/app`): サイト名 / 機密情報の注意書き。AWS S3 認証情報は `/admin/plugins?name=@crowi/plugin-aws` に移行済(下記 Storage 参照)
 - [x] **Security** (`GET/PUT /admin/security`): basic 認証 / registrationMode / registrationWhiteList
 - [x] **Authentication** (`GET/PUT /admin/auth`): requireThirdPartyAuth / disablePasswordAuth + 自分自身のロックアウト防止 (422)
 - [x] **Mail / SMTP** (`GET/PUT /admin/mail` + `POST /admin/mail/test`): from / SMTP host / port / user / password + AWS SES + テスト送信
 - [x] **Share** (`GET/PUT /admin/share`): 外部共有 link の有効/無効 toggle + 旧 form/route 削除
+- [x] **Storage** (`GET /admin/storage`): active driver + インストール済 driver 一覧 (read-only)。driver 切替は `crowi.config.json:storage.driver` + 再起動。ファイル移行は `crowi-admin storage copy --from <a> --to <b>` (新設の `@crowi/admin-cli` パッケージ)。boot 時に旧 `upload:aws:*` → `plugin:@crowi/plugin-aws:*` を 1-shot copy(新キーが空のときのみ、rollback のため旧キーは温存)
 - [ ] **Google OAuth** (`POST /admin/settings/google`): clientId / secret
 - [ ] **GitHub OAuth** (`POST /admin/settings/github`): clientId / secret / org
-- ~~AWS / S3 file storage~~: `admin/app` の upload section に統合済
+- ~~AWS / S3 file storage~~: `/admin/storage` + `/admin/plugins?name=@crowi/plugin-aws` に分離(`/admin/app` の upload section は廃止)
 
 ### ユーザー管理
 - [x] **User 一覧** (`GET /admin/users`) + 検索 (`GET /admin/users.search`) — `0223d46b` + `8316d50a` + `7820711c`: ts-rest contract / API ハンドラ (createPager 移植 + UserPublic 絞込み) / Web 画面 (URL state 同期 + debounce 検索 + numbered pager)。アクション系は別タスク
@@ -214,3 +215,19 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - **state ディレクトリ**: `.migration-state/` (root、gitignore 済) — `.claude/migration-state/` ではない
 - **format / lint**: pre-commit で biome format、pre-push で `pnpm lint` (errors=0)
 - 旧 controller / 旧 Swig は段階的に削除予定 (新側が安定してから)
+
+## Operator runbooks
+
+### Storage driver の切替 / ファイル移行
+
+1. (任意) 切替前に dry-run でコピー対象件数を確認:
+   - dev: `pnpm --filter @crowi/dev-runner exec crowi-admin storage copy --from local --to s3 --dry-run`
+   - prod: runner directory で `crowi-admin storage copy --from local --to s3 --dry-run`
+2. メンテナンス時間中(server 停止中が安全)に dry-run を外して実行: `crowi-admin storage copy --from local --to s3`。失敗があっても全体は完走し、最後に `{ ok / failed / skipped / total }` summary が出る。再実行は安全(`put` は overwrite-by-key)。
+3. `crowi.config.json:storage.driver` を新 driver 名に変更してプロセスを再起動。
+4. `/admin/storage` を開いて新 driver が active と表示されることを確認。
+5. 旧 driver のデータは温存される(将来 cleanup task で削除を検討)。
+
+### AWS 認証情報の boot-time migration
+
+旧 `upload:aws:*` 設定が Mongo に残っているサイトは、初回起動時に自動で `plugin:@crowi/plugin-aws:*` (region / accessKeyId / secretAccessKey) と `plugin:@crowi/plugin-storage-aws-s3:bucket` にコピーされる。新キーに既に値が入っている場合は触らない(operator が新キーを直接編集したケースを保護)。boot ログに `Migrated N legacy upload:aws:* config key(s)` と出る。rollback 用に旧キーは残るので、安心が確認できたら別タスクで削除する。
