@@ -2,9 +2,17 @@ import Debug from 'debug';
 import { v4 } from 'uuid';
 import { createClient } from 'redis';
 import Crowi from 'src/crowi';
-import ConfigEvent from 'src/events/config';
+import { formatPluginNamespace, parsePluginConfigKey } from 'src/plugin/plugin-namespace';
 
 const debug = Debug('crowi:service:config');
+
+export type ConfigChangeSource = 'local' | 'remote';
+export type ConfigChangeListener = (changedNamespaces: string[], source: ConfigChangeSource) => void | Promise<void>;
+
+interface PubSubPayload {
+  id: string;
+  changedNamespaces?: string[];
+}
 
 export default class ConfigService {
   crowi: Crowi;
@@ -13,8 +21,6 @@ export default class ConfigService {
 
   configModel: any;
 
-  event: ConfigEvent;
-
   pubSub: {
     id: string;
     publisher: any;
@@ -22,12 +28,13 @@ export default class ConfigService {
     channel: string;
   };
 
+  private listeners: ConfigChangeListener[] = [];
+
   constructor(crowi: Crowi) {
     this.crowi = crowi;
     // this config is a local memory cache
     this.config = {};
     this.configModel = this.crowi.model('Config');
-    this.event = this.crowi.event('Config');
 
     this.pubSub = {
       id: v4(),
@@ -37,8 +44,6 @@ export default class ConfigService {
     };
 
     // setupPubSub will be called from Crowi.setupConfig()
-
-    this.event.on('config:updated', this.postUpdate.bind(this));
   }
 
   async load() {
@@ -72,43 +77,75 @@ export default class ConfigService {
     return this.config || {};
   }
 
-  async notifyUpdated() {
-    // To notify config updated to another srever, publish event via pubsub.
-    const { publisher, channel, id } = this.pubSub;
-    if (publisher) {
+  /**
+   * Subscribe to config changes. Listeners receive the list of
+   * namespaces that contained at least one changed key. Listeners run
+   * sequentially and `saveConfig` awaits them, so admin UI responses
+   * reflect "all consumers have applied the change". Returns a
+   * disposer so long-lived processes (HMR / Crowi.reload) can detach.
+   */
+  onConfigChange(listener: ConfigChangeListener): () => void {
+    this.listeners.push(listener);
+    return () => {
+      const i = this.listeners.indexOf(listener);
+      if (i >= 0) this.listeners.splice(i, 1);
+    };
+  }
+
+  private async notifyListeners(changedNamespaces: string[], source: ConfigChangeSource): Promise<void> {
+    if (this.listeners.length === 0) return;
+    for (const listener of this.listeners) {
       try {
-        await publisher.publish(channel, JSON.stringify({ id }));
-      } catch (error) {
-        debug('Failed to publish config update:', (error as Error).message);
+        await listener(changedNamespaces, source);
+      } catch (err) {
+        debug('config change listener threw:', (err as Error).message);
+      }
+    }
+  }
+
+  async notifyUpdated(changedNamespaces: string[] = [], source: ConfigChangeSource = 'local') {
+    // To notify config updated to another srever, publish event via pubsub.
+    if (source === 'local') {
+      const { publisher, channel, id } = this.pubSub;
+      if (publisher) {
+        try {
+          const payload: PubSubPayload = { id, changedNamespaces };
+          await publisher.publish(channel, JSON.stringify(payload));
+        } catch (error) {
+          debug('Failed to publish config update:', (error as Error).message);
+        }
       }
     }
 
-    // To notify config updated to the server itself, emit the event
-    this.event.emit('config:updated');
+    await this.postUpdate(changedNamespaces, source);
   }
 
-  async postUpdate() {
+  async postUpdate(changedNamespaces: string[] = [], source: ConfigChangeSource = 'local') {
     debug('Config updated run postUpdate');
     await Promise.all([this.crowi.setupSlack(), this.crowi.setupMailer()]);
+    await this.notifyListeners(changedNamespaces, source);
   }
 
   async saveConfig(ns: string, config: Record<string, any>) {
     debug('Save config', ns, config);
     await this.configModel.updateConfigByNamespace(ns, config);
 
-    this.update({ ...this.config, [ns]: { ...this.config[ns], ...config } });
+    const changed = deriveChangedNamespaces(ns, Object.keys(config));
+    await this.update({ ...this.config, [ns]: { ...this.config[ns], ...config } }, changed);
   }
 
   async saveConfigValue(ns: string, key: string, value: any) {
     debug('Save config value', ns, key, value);
     await this.configModel.updateConfig(ns, key, value);
-    this.update({ ...this.config, [ns]: { ...this.config[ns], [key]: value } });
+    const changed = deriveChangedNamespaces(ns, [key]);
+    await this.update({ ...this.config, [ns]: { ...this.config[ns], [key]: value } }, changed);
   }
 
   async deleteConfig(ns: string, key: string) {
     await this.configModel.deleteConfig(ns, key);
     delete this.config[ns][key];
-    this.update(this.config);
+    const changed = deriveChangedNamespaces(ns, [key]);
+    await this.update(this.config, changed);
   }
 
   /**
@@ -119,9 +156,9 @@ export default class ConfigService {
    *  - the service like Slack, Mailer etc. would not be reloaded,
    *  - the other server (in multi-server structure) would not be notified the config updated.
    */
-  update(config) {
+  async update(config, changedNamespaces: string[] = [], source: ConfigChangeSource = 'local') {
     this.set(config);
-    this.notifyUpdated();
+    await this.notifyUpdated(changedNamespaces, source);
   }
 
   async setupPubSub() {
@@ -149,13 +186,17 @@ export default class ConfigService {
           await subscriber.subscribe(pubSub.channel, async (message: string, channel: string) => {
             if (channel !== pubSub.channel) return;
 
-            const { id } = JSON.parse(message);
-            if (id === pubSub.id) return;
+            const payload = JSON.parse(message) as PubSubPayload;
+            if (payload.id === pubSub.id) return;
 
             await this.load();
-            this.event.emit('config:updated');
+            // Older publishers won't include `changedNamespaces`; treat
+            // that as "everything changed" so subscribers default to a
+            // safe fan-out instead of skipping reconfigure entirely.
+            const changedNamespaces = payload.changedNamespaces ?? ['*'];
+            await this.postUpdate(changedNamespaces, 'remote');
 
-            debug(`Config updated by ${id}`);
+            debug(`Config updated by ${payload.id}`);
           });
         }
 
@@ -168,4 +209,27 @@ export default class ConfigService {
       }
     }
   }
+}
+
+/**
+ * Plugin configs all live under the `crowi` mongo namespace as
+ * `plugin:<name>:<field>` keys, but listeners want "plugin X changed",
+ * not "the kitchen-sink `crowi` ns changed". Split here so listeners
+ * stay simple.
+ */
+export function deriveChangedNamespaces(mongoNs: string, keys: string[]): string[] {
+  const out = new Set<string>();
+  let sawNonPluginKey = false;
+  for (const key of keys) {
+    const parsed = parsePluginConfigKey(key);
+    if (parsed) {
+      out.add(formatPluginNamespace(parsed.pluginName));
+    } else {
+      sawNonPluginKey = true;
+    }
+  }
+  if (sawNonPluginKey || keys.length === 0) {
+    out.add(mongoNs);
+  }
+  return [...out];
 }

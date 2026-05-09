@@ -2,6 +2,7 @@ import Debug from 'debug';
 import type { CrowiPlugin, PageMetadataAccessor, PluginContext, PluginCrypto, PluginLogger } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
 import { decrypt, encrypt } from 'src/util/crypto';
+import { formatPluginConfigKey, pluginConfigKeyPrefix } from './plugin-namespace';
 
 /**
  * Closure over the registry of loaded plugins, used by
@@ -73,8 +74,7 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
     },
 
     async setConfig(key: string, value: unknown): Promise<void> {
-      const fullKey = `plugin:${plugin.name}:${key}`;
-      await crowi.getConfigService().saveConfigValue('crowi', fullKey, value);
+      await crowi.getConfigService().saveConfigValue('crowi', formatPluginConfigKey(plugin.name, key), value);
     },
 
     pageMetadata: makePageMetadataAccessor(plugin.name, crowi),
@@ -100,7 +100,7 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
 function readPluginConfigNamespace(crowi: Crowi, pluginName: string): Record<string, unknown> {
   const all = crowi.getConfig();
   const crowiNs = (all && typeof all === 'object' ? (all as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
-  const prefix = `plugin:${pluginName}:`;
+  const prefix = pluginConfigKeyPrefix(pluginName);
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(crowiNs)) {
     if (key.startsWith(prefix)) {

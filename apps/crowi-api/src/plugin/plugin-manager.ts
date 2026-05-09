@@ -4,8 +4,10 @@ import Debug from 'debug';
 import type { AuthDriver, CrowiPlugin, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
 import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
+import type { ConfigChangeSource } from 'src/service/config';
 import { type CrowiConfigFile, loadCrowiConfigFile, resolvePluginList } from './config-file';
 import { createPluginContext } from './plugin-context';
+import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
 import { DriverRegistry, makeAuthScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
 import { topoSortPlugins } from './topo-sort';
 
@@ -71,6 +73,8 @@ export class PluginManager {
   private auth = new DriverRegistry<AuthDriver>('auth');
   private notifier = new DriverRegistry<NotifierDriver>('notifier');
   private loadedPlugins: CrowiPlugin[] = [];
+  /** plugin name → set of plugin names that `requires` it */
+  private dependents = new Map<string, Set<string>>();
 
   constructor(private readonly crowi: Crowi) {}
 
@@ -102,6 +106,9 @@ export class PluginManager {
       await this.activate(plugin);
     }
 
+    this.buildDependentsMap();
+    this.crowi.getConfigService().onConfigChange((changedNamespaces, source) => this.handleConfigChange(changedNamespaces, source));
+
     return {
       storage: this.storage,
       search: this.search,
@@ -109,6 +116,109 @@ export class PluginManager {
       notifier: this.notifier,
       active: this.resolveActiveDrivers(config),
     };
+  }
+
+  /**
+   * Walk the loaded plugins' `requires` arrays and invert them into
+   * `dependents: name → set of plugins that require it`. Used to fan
+   * out `reconfigure` calls when a base plugin's config changes (e.g.
+   * `@crowi/plugin-aws` credentials changing should reconfigure
+   * `@crowi/plugin-storage-aws-s3`).
+   */
+  private buildDependentsMap(): void {
+    this.dependents.clear();
+    for (const plugin of this.loadedPlugins) {
+      for (const dep of plugin.requires ?? []) {
+        const set = this.dependents.get(dep) ?? new Set<string>();
+        set.add(plugin.name);
+        this.dependents.set(dep, set);
+      }
+    }
+  }
+
+  /**
+   * Listener bound to ConfigService.onConfigChange. We only auto-fire
+   * reconfigure for `'remote'` changes (= another instance saved via
+   * Redis pub/sub). For `'local'` changes the admin save handler calls
+   * `reconfigureAffected` itself so it can include the result in the
+   * response body — running it here too would double-fire.
+   */
+  private async handleConfigChange(changedNamespaces: string[], source: ConfigChangeSource): Promise<void> {
+    if (source !== 'remote') return;
+    const affected = this.affectedPluginsFromNamespaces(changedNamespaces);
+    if (affected.size === 0) return;
+    await this.runReconfigure(affected);
+  }
+
+  /**
+   * Resolve `changedNamespaces` (e.g. `['plugin:@crowi/plugin-aws']`)
+   * to the concrete set of plugin names that need their `reconfigure`
+   * called: the changed plugin itself plus every plugin that has it in
+   * `requires`. The `'*'` sentinel (used by older pub/sub publishers)
+   * fans out to every loaded plugin.
+   */
+  private affectedPluginsFromNamespaces(changedNamespaces: string[]): Set<string> {
+    const out = new Set<string>();
+    const queue: string[] = [];
+    for (const ns of changedNamespaces) {
+      if (ns === '*') {
+        for (const plugin of this.loadedPlugins) out.add(plugin.name);
+        continue;
+      }
+      const pluginName = parsePluginNamespace(ns);
+      if (pluginName) queue.push(pluginName);
+    }
+    // BFS so transitive dependents are reached and a `requires` cycle
+    // (shouldn't happen, but isn't actively prevented) doesn't loop.
+    while (queue.length > 0) {
+      const name = queue.shift()!;
+      if (out.has(name)) continue;
+      out.add(name);
+      const dependents = this.dependents.get(name);
+      if (dependents) for (const d of dependents) queue.push(d);
+    }
+    return out;
+  }
+
+  /**
+   * Call `reconfigure(ctx)` on each plugin in `affected` that
+   * implements it. Errors are logged + reported via the plugin's debug
+   * logger but never propagated — a single misconfigured plugin must
+   * not lock operators out of the admin UI.
+   *
+   * Returns whether any plugin both (a) implements reconfigure and
+   * (b) completed without throwing — used by the admin save handler
+   * to pick the right toast.
+   */
+  async runReconfigure(affected: Set<string>): Promise<{ attempted: number; succeeded: number }> {
+    let attempted = 0;
+    let succeeded = 0;
+    for (const name of affected) {
+      const plugin = this.getLoadedPlugin(name);
+      if (!plugin?.reconfigure) continue;
+      attempted++;
+      const ctx = createPluginContext(plugin, this.crowi, this);
+      try {
+        await plugin.reconfigure(ctx);
+        succeeded++;
+        debug('reconfigure %s OK', name);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[crowi:plugin:${name}] reconfigure failed: ${message}`);
+        debug('reconfigure %s failed: %s', name, message);
+      }
+    }
+    return { attempted, succeeded };
+  }
+
+  /**
+   * Public entry-point used by the admin "save plugin config" handler
+   * to await reconfigure completion in the same request and surface
+   * the result in the response body.
+   */
+  async reconfigureAffected(changedNamespaces: string[]): Promise<{ attempted: number; succeeded: number }> {
+    const affected = this.affectedPluginsFromNamespaces(changedNamespaces);
+    return this.runReconfigure(affected);
   }
 
   /**
@@ -141,7 +251,7 @@ export class PluginManager {
       for (const [fieldName, field] of Object.entries(schema.shape)) {
         const description = (field as { description?: string }).description;
         if (typeof description === 'string' && description.trimStart().startsWith('@sensitive')) {
-          out.push(`plugin:${plugin.name}:${fieldName}`);
+          out.push(formatPluginConfigKey(plugin.name, fieldName));
         }
       }
     }

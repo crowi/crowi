@@ -57,6 +57,13 @@ export const PluginInfoSchema = z.object({
    * `adminPlacement`.
    */
   adminPlacement: PluginAdminPlacementSchema,
+  /**
+   * Whether this plugin (or — transitively — any plugin that requires
+   * it) implements the `reconfigure` SDK hook. Plugins without it
+   * still apply their config on the next server restart; plugins with
+   * it apply config changes live.
+   */
+  supportsHotReload: z.boolean(),
 });
 export type PluginInfo = z.infer<typeof PluginInfoSchema>;
 
@@ -91,6 +98,23 @@ export type UpdatePluginConfigRequest = z.infer<typeof UpdatePluginConfigRequest
 
 export const UpdatePluginConfigResponseSchema = z.object({
   ok: z.literal(true),
+  /**
+   * Whether at least one plugin's `reconfigure` hook ran successfully
+   * for this save. `true` means the new values are already live on
+   * this instance (and propagated via Redis pub/sub to peers); `false`
+   * means a server restart is required to apply the change. False
+   * also when reconfigure threw — admin UI surfaces a separate
+   * "saved, but apply failed" warning in that case via the response
+   * `reconfigureFailed` flag.
+   */
+  hotReloaded: z.boolean(),
+  /**
+   * True when at least one plugin's `reconfigure` was attempted and
+   * threw. The save itself succeeded (Mongo + cache are updated) so
+   * the next process boot will see the new values, but the *running*
+   * process couldn't apply them. UI surfaces a warning toast.
+   */
+  reconfigureFailed: z.boolean(),
 });
 export type UpdatePluginConfigResponse = z.infer<typeof UpdatePluginConfigResponseSchema>;
 

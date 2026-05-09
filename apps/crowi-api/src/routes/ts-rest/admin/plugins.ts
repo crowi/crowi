@@ -26,7 +26,8 @@ export default (crowi: Crowi, _app: Express) => {
       if (!manager) {
         return { status: 200 as const, body: { plugins: [] } };
       }
-      const plugins = manager.getLoadedPlugins().map(toPluginInfo);
+      const all = manager.getLoadedPlugins();
+      const plugins = all.map((p) => toPluginInfo(p, all));
       return { status: 200 as const, body: { plugins } };
     },
 
@@ -142,11 +143,11 @@ export default (crowi: Crowi, _app: Express) => {
       }
 
       const configService = crowi.getConfigService();
+      const writes: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(toWrite)) {
+        writes[`plugin:${plugin.name}:${key}`] = value;
+      }
       try {
-        const writes: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(toWrite)) {
-          writes[`plugin:${plugin.name}:${key}`] = value;
-        }
         if (Object.keys(writes).length > 0) {
           await configService.saveConfig('crowi', writes);
         }
@@ -156,7 +157,16 @@ export default (crowi: Crowi, _app: Express) => {
         return internalServerErrorResponse;
       }
 
-      return { status: 200 as const, body: { ok: true as const } };
+      let hotReloaded = false;
+      let reconfigureFailed = false;
+      const pluginManager = crowi.pluginManager;
+      if (pluginManager && Object.keys(writes).length > 0) {
+        const result = await pluginManager.reconfigureAffected([`plugin:${plugin.name}`]);
+        hotReloaded = result.attempted > 0 && result.succeeded === result.attempted;
+        reconfigureFailed = result.attempted > result.succeeded;
+      }
+
+      return { status: 200 as const, body: { ok: true as const, hotReloaded, reconfigureFailed } };
     },
   });
 
@@ -164,14 +174,30 @@ export default (crowi: Crowi, _app: Express) => {
   return router;
 };
 
-const toPluginInfo = (plugin: CrowiPlugin): PluginInfo => ({
+const toPluginInfo = (plugin: CrowiPlugin, all: readonly CrowiPlugin[]): PluginInfo => ({
   name: plugin.name,
   version: plugin.version,
   requires: plugin.requires,
   hasConfig: !!plugin.configSchema,
   registers: collectRegistrySlots(plugin),
   adminPlacement: resolvePlacement(plugin),
+  supportsHotReload: hasReconfigureOrDependent(plugin, all),
 });
+
+/**
+ * A plugin "supports hot reload" if changing its config can be applied
+ * live. That is true when the plugin itself implements `reconfigure`
+ * OR when a plugin that requires it does — config-only base plugins
+ * (e.g. `@crowi/plugin-aws`) flow through this transitively because
+ * the dependents fan-out fires their reconfigure.
+ */
+function hasReconfigureOrDependent(plugin: CrowiPlugin, all: readonly CrowiPlugin[]): boolean {
+  if (plugin.reconfigure) return true;
+  for (const other of all) {
+    if (other.requires?.includes(plugin.name) && other.reconfigure) return true;
+  }
+  return false;
+}
 
 function collectRegistrySlots(plugin: CrowiPlugin): string[] {
   const slots: string[] = [];
