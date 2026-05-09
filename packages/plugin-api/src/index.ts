@@ -17,7 +17,17 @@ export type { PluginContext, PageMetadataAccessor, PluginCrypto, PluginLogger } 
 
 export type { StorageDriver, StorageRegistry, StoragePutMeta, StoragePutResult } from './registries/storage';
 
-export type { SearchDriver, SearchRegistry, SearchableDoc, SearchQuery, SearchHits, SearchHit } from './registries/search';
+export type {
+  SearchDriver,
+  SearchRegistry,
+  SearchableDoc,
+  SearchQuery,
+  SearchQueryViewer,
+  SearchQueryGrants,
+  SearchPageType,
+  SearchHits,
+  SearchHit,
+} from './registries/search';
 
 export type { AuthDriver, AuthRegistry, AuthProfile, AuthVerifyResult } from './registries/auth';
 

@@ -19,6 +19,35 @@ export interface SearchableDoc {
 }
 
 /**
+ * Page-type filter. Mirrors the legacy ES Searcher's portal/public/user
+ * filter, generalised so future drivers (Mongo, Meilisearch, Algolia)
+ * can implement them with their own backend semantics.
+ *
+ * - `portal`: directory-style pages (path ends with `/`), excluding `/user/*`
+ * - `public`: leaf pages (path does not end with `/`), excluding `/user/*`
+ * - `user`:   `/user/*` pages
+ */
+export type SearchPageType = 'portal' | 'public' | 'user';
+
+/**
+ * The viewer running the search. Drivers consult this to apply
+ * grant-aware filtering: pages with `GRANT_OWNER` / `GRANT_RESTRICTED`
+ * / `GRANT_SPECIFIED` are only visible to listed users; the driver
+ * builds the filter so callers can stay grant-agnostic.
+ */
+export interface SearchQueryViewer {
+  /** Mongo ObjectId string of the user. */
+  id: string;
+  username: string;
+  isAdmin?: boolean;
+}
+
+export interface SearchQueryGrants {
+  /** Restrict results to one or more page types. */
+  types?: SearchPageType[];
+}
+
+/**
  * Search request. Intentionally minimal in v2.0 — query string + paging
  * + optional filters. Richer queries (faceting, highlighting, custom
  * scoring) are deferred to a future RFC.
@@ -31,6 +60,15 @@ export interface SearchQuery {
   limit?: number;
   /** Optional path-prefix filter (e.g. `/team/eng/`). */
   pathPrefix?: string;
+  /**
+   * Identity of the user running the search. When set, drivers apply
+   * grant-aware filtering so private pages (owner-only / restricted)
+   * are hidden from non-authorised viewers. When omitted, drivers
+   * return only public pages (anonymous behaviour).
+   */
+  viewer?: SearchQueryViewer;
+  /** Page-type / metadata filters. */
+  grants?: SearchQueryGrants;
 }
 
 export interface SearchHit {
