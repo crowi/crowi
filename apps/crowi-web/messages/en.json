@@ -315,6 +315,7 @@
   "header.user_dropdown_bookmarks": "Bookmarks",
   "header.user_dropdown_created": "Created pages",
   "header.user_dropdown_trash": "Trash",
+  "header.user_dropdown_my_page": "My page",
   "header.user_dropdown_settings": "Settings",
   "header.user_dropdown_logout": "Logout",
   "admin.dashboard_title": "Admin Dashboard",

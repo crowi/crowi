@@ -315,6 +315,7 @@
   "header.user_dropdown_bookmarks": "ブックマーク",
   "header.user_dropdown_created": "作成したページ",
   "header.user_dropdown_trash": "ゴミ箱",
+  "header.user_dropdown_my_page": "マイページ",
   "header.user_dropdown_settings": "設定",
   "header.user_dropdown_logout": "ログアウト",
   "admin.dashboard_title": "管理ダッシュボード",
