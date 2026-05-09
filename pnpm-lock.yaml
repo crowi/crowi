@@ -29,9 +29,6 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:^
         version: link:../../packages/plugin-api
-      '@crowi/plugin-storage-local':
-        specifier: workspace:^
-        version: link:../../packages/plugin-storage-local
       '@slack/client':
         specifier: ^5.0.2
         version: 5.0.2(debug@4.1.1)
@@ -177,6 +174,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.56
     devDependencies:
+      '@crowi/plugin-storage-local':
+        specifier: workspace:^
+        version: link:../../packages/plugin-storage-local
       '@types/bcryptjs':
         specifier: ^3.0.0
         version: 3.0.0
@@ -276,6 +276,34 @@ importers:
       ts-node:
         specifier: ^10.9.0
         version: 10.9.2(@types/node@22.15.30)(typescript@5.8.3)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
+
+  apps/crowi-dev-runner:
+    dependencies:
+      '@crowi/api':
+        specifier: workspace:^
+        version: link:../crowi-api
+      '@crowi/plugin-aws':
+        specifier: workspace:^
+        version: link:../../packages/plugin-aws
+      '@crowi/plugin-storage-aws-s3':
+        specifier: workspace:^
+        version: link:../../packages/plugin-storage-aws-s3
+      '@crowi/plugin-storage-local':
+        specifier: workspace:^
+        version: link:../../packages/plugin-storage-local
+    devDependencies:
+      nodemon:
+        specifier: ^1.19.4
+        version: 1.19.4
+      ts-node:
+        specifier: ^10.9.0
+        version: 10.9.2(@types/node@22.15.30)(typescript@5.8.3)
+      tsconfig-paths:
+        specifier: ^3.9.0
+        version: 3.15.0
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -1994,7 +2022,7 @@ packages:
     dependencies:
       '@types/semver': 7.7.0
       conventional-commits-parser: 6.1.0
-      semver: 7.7.2
+      semver: 7.7.3
     dev: true
 
   /@cspotcode/source-map-support@0.8.1:
@@ -7795,7 +7823,7 @@ packages:
       conventional-commits-filter: 5.0.0
       handlebars: 4.7.8
       meow: 13.2.0
-      semver: 7.7.2
+      semver: 7.7.3
     dev: true
 
   /conventional-changelog@6.0.0:
@@ -10588,7 +10616,7 @@ packages:
       '@babel/parser': 7.27.5
       '@istanbuljs/schema': 0.1.3
       istanbul-lib-coverage: 3.2.2
-      semver: 7.7.2
+      semver: 7.7.3
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -11674,7 +11702,7 @@ packages:
     resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
     engines: {node: '>=10'}
     dependencies:
-      semver: 7.7.2
+      semver: 7.7.3
     dev: true
 
   /make-error@1.3.6:
@@ -12296,7 +12324,7 @@ packages:
   /mlly@1.7.4:
     resolution: {integrity: sha512-qmdSIPC4bDJXgZTCR7XosJiNKySV7O215tsPtDN9iEO/7q/76b/ijtgRu/+epFXSJhijtTCCGp3DWS549P3xKw==}
     dependencies:
-      acorn: 8.14.1
+      acorn: 8.15.0
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.1
@@ -12709,7 +12737,7 @@ packages:
     engines: {node: ^16.14.0 || >=18.0.0}
     dependencies:
       hosted-git-info: 7.0.2
-      semver: 7.7.2
+      semver: 7.7.3
       validate-npm-package-license: 3.0.4
     dev: true
 

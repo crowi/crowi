@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import Debug from 'debug';
 import type { AuthDriver, CrowiPlugin, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
@@ -69,6 +71,13 @@ export class PluginManager {
   private auth = new DriverRegistry<AuthDriver>('auth');
   private notifier = new DriverRegistry<NotifierDriver>('notifier');
   private loadedPlugins: CrowiPlugin[] = [];
+  /**
+   * Resolves npm names against the runner project's `node_modules/`.
+   * The runner declares plugins as deps, not @crowi/api — so a bare
+   * `import('@crowi/plugin-…')` from this file would search the wrong
+   * tree. Set in `bootstrap()` based on `projectDir`.
+   */
+  private projectRequire: NodeRequire | null = null;
 
   constructor(private readonly crowi: Crowi) {}
 
@@ -77,8 +86,9 @@ export class PluginManager {
    * active drivers. Call once during `Crowi.init()`.
    */
   async bootstrap(projectDir: string = process.cwd()): Promise<PluginRegistries> {
+    this.projectRequire = createRequire(path.join(projectDir, 'package.json'));
     const config = await loadCrowiConfigFile(projectDir);
-    debug('loaded crowi.config.json: plugins=%o', config.plugins);
+    debug('loaded crowi.config.json from %s: plugins=%o', projectDir, config.plugins);
 
     const seedNames = resolvePluginList(config);
     const plugins = await this.importWithTransitives(seedNames);
@@ -167,9 +177,16 @@ export class PluginManager {
   }
 
   private async importOne(name: string): Promise<CrowiPlugin> {
+    if (!this.projectRequire) {
+      throw new Error('importOne called before bootstrap initialised projectRequire.');
+    }
     let mod: { default?: unknown };
     try {
-      mod = (await import(name)) as { default?: unknown };
+      // Resolve via the runner project's require so plugins listed in
+      // the runner's package.json (rather than @crowi/api's) load
+      // correctly. Falls through to the same error path on miss.
+      const resolved = this.projectRequire.resolve(name);
+      mod = (await import(resolved)) as { default?: unknown };
     } catch (err) {
       throw new Error(`Failed to import plugin '${name}': ${(err as Error).message}`);
     }
