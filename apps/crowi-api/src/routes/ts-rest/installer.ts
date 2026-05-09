@@ -2,43 +2,33 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
-import installerController from '../../controllers/installer';
-import csrfVerify from '../../middlewares/csrfVerify';
-import form from '../../form';
+import type { UserDocument } from 'src/models/user';
+import Debug from 'debug';
 
-export default (crowi: Crowi, app: Express) => {
-  const installer = installerController(crowi);
+const debug = Debug('crowi:routes:ts-rest:installer');
+
+const isAppInstalled = (req: { config?: { crowi?: Record<string, unknown> } }): boolean => {
+  const config = req.config;
+  if (!config || !config.crowi) return false;
+  // Seed only contains 'app:url'; anything beyond that means setup ran.
+  return Object.keys(config.crowi).length > 1;
+};
+
+export default (crowi: Crowi, _app: Express) => {
   const s = initServer();
   const router = Router();
-  const csrf = csrfVerify(crowi);
-
-  // Helper to check if app is already installed
-  const isAppInstalled = (req: any): boolean => {
-    const config = req.config;
-    return Object.keys(config.crowi).length !== 1;
-  };
+  const Config = crowi.model('Config');
+  const User = crowi.model('User');
 
   const installerRouter = s.router(apiContract.installer, {
-    getStatus: async ({ req, res }) => {
-      // Check if app is already installed
+    getStatus: async ({ req }) => {
       if (isAppInstalled(req)) {
-        return {
-          status: 200 as const,
-          body: { status: 'already_installed' },
-        };
+        return { status: 200 as const, body: { status: 'already_installed' } };
       }
-
-      return new Promise((resolve) => {
-        installer.index(
-          req as any,
-          {
-            json: (data) => resolve({ status: 200, body: data }),
-          } as any,
-        );
-      });
+      return { status: 200 as const, body: { status: 'installer_required' } };
     },
-    createAdmin: async ({ body, req, res }) => {
-      // Check if app is already installed
+
+    createAdmin: async ({ body, req }) => {
       if (isAppInstalled(req)) {
         return {
           status: 400 as const,
@@ -46,25 +36,39 @@ export default (crowi: Crowi, app: Express) => {
         };
       }
 
-      return new Promise((resolve) => {
-        const request = req as any;
-        request.body = body;
+      const { name, username, email, password } = body.registerForm;
 
-        installer.createAdmin(request, {
-          json: (data) => {
-            if (data.status === 'error') {
-              resolve({ status: 200, body: data });
-            } else {
-              resolve({ status: 200, body: { status: 'ok', message: 'Admin created successfully' } });
-            }
-          },
-          redirect: () => resolve({ status: 200, body: { status: 'ok', message: 'Admin created successfully' } }),
-        } as any);
-      });
+      try {
+        const userData = await new Promise<UserDocument>((resolve, reject) => {
+          // Seed admin language: legacy detected via i18next on the request;
+          // we don't have that on the new pipeline, so default to English.
+          User.createUserByEmailAndPassword(name, username, email, password, 'en', (err: Error | null, user: UserDocument) => {
+            if (err) return reject(err);
+            resolve(user);
+          });
+        });
+
+        await new Promise<void>((resolve, reject) => {
+          userData.makeAdmin((err: Error | null) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        });
+
+        await Config.applicationInstall();
+
+        return { status: 200 as const, body: { status: 'ok', message: 'Admin created successfully' } };
+      } catch (err) {
+        const message = (err as Error).message;
+        debug('Error creating admin:', message);
+        return {
+          status: 200 as const,
+          body: { status: 'error', errors: [`管理ユーザーの作成に失敗しました。${message}`] },
+        };
+      }
     },
   });
 
   createExpressEndpoints(apiContract.installer, installerRouter, router);
-
   return router;
 };
