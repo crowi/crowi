@@ -87,6 +87,13 @@ export interface SearchHit {
 export interface SearchHits {
   total: number;
   hits: SearchHit[];
+  /**
+   * Optional driver-reported elapsed time in milliseconds. Backends that
+   * surface their own timing (e.g. Elasticsearch's `took`) populate this;
+   * drivers without a meaningful measurement (regex / Mongo `$text`) may
+   * omit it. Surfaced under `meta.took` on the API response.
+   */
+  took?: number;
 }
 
 /**
