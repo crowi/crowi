@@ -16,6 +16,7 @@ import { useConnection } from '@/lib/connection-context';
 import { m } from '@paraglide/messages.js';
 import { LanguageMenuItems } from '@/components/language-menu-items';
 import { UserMenuItems } from '@/components/user-menu-items';
+import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -63,53 +64,47 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* サーバーエラーモーダル */}
       <ServerErrorModal />
 
-      <header className="bg-[var(--crowi-header)] text-white">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+      <header className="crowi-top-border bg-background text-foreground shadow-header relative z-40">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0" aria-label={appInfo?.title ?? 'Crowi'}>
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity min-w-0"
+              aria-label={appInfo?.title ?? 'Crowi'}
+            >
               {appInfo?.title ? (
                 <>
-                  <img src="/logo/icon-inverse.png" alt="" className="h-6 w-6 shrink-0" />
-                  <span className="text-base font-semibold truncate">{appInfo.title}</span>
+                  <img src="/logo/icon.png" alt="" className="h-6 w-6 shrink-0" />
+                  <span className="text-base font-semibold truncate text-primary">{appInfo.title}</span>
                 </>
               ) : (
-                <img src="/logo/500w-inverse.png" alt="Crowi" className="h-6 w-auto shrink-0" />
+                <img src="/logo/500w.png" alt="Crowi" className="h-6 w-auto shrink-0" />
               )}
             </Link>
           </div>
           <div className="flex items-center gap-2">
             {user?.admin && (
-              <Button
-                asChild
-                variant="ghost"
-                size="icon-sm"
-                aria-label={m['header.admin_aria']()}
-                title={m['header.admin_aria']()}
-                className="text-white hover:bg-white/10 hover:text-white"
-              >
-                <Link href="/admin">
+              <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10">
+                <Link href="/admin" aria-label={m['header.admin_aria']()} title={m['header.admin_aria']()}>
                   <Shield className="h-4 w-4" />
+                  <span className="hidden sm:inline ml-1">{m['header.admin_aria']()}</span>
                 </Link>
               </Button>
             )}
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="hover:bg-muted flex items-center gap-2 px-1.5">
                   {user && <UserAvatar user={user} size="sm" />}
-                  <span className="hidden sm:inline !text-white">{user?.name || user?.username}</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-1.5 text-sm">
-                  <div className="font-medium">{user?.name}</div>
-                  <div className="text-muted-foreground">@{user?.username}</div>
-                </div>
+              <DropdownMenuContent align="end" className="w-64">
+                {user && <UserDropdownIdentity user={user} />}
                 <DropdownMenuSeparator />
                 {user && <UserMenuItems username={user.username} />}
                 <LanguageMenuItems />
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout} className="text-red-600">
+                <DropdownMenuItem onClick={logout} className="text-destructive">
                   <LogOut className="h-4 w-4 mr-2" />
                   {m['header.user_dropdown_logout']()}
                 </DropdownMenuItem>
