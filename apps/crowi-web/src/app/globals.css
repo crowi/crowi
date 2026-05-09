@@ -201,3 +201,37 @@
     cursor: pointer;
   }
 }
+
+/*
+ * Animated multi-gradient background used by /installer, /login, /register.
+ * Ports the legacy `.crowi.single.nologin` style from the SCSS theme:
+ * three stacked linear-gradients shifted in hue / saturation / lightness
+ * around `--crowi-header`, panned across a 200% canvas over 20s.
+ */
+@keyframes crowi-login-bg {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.bg-crowi-login {
+  background-color: #406369;
+  background-image:
+    linear-gradient(215deg, #84a3a5, #5285a8, #263a3c),
+    linear-gradient(135deg, #263a3c, #87a9d0, #4d6a6c),
+    linear-gradient(335deg, #c1d2d3, #263a3c, #4779b5);
+  background-size: 100% 100%;
+}
+
+@media (min-width: 768px) {
+  .bg-crowi-login {
+    background-size: 200% 200%;
+    animation: crowi-login-bg 20s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-crowi-login {
+    animation: none;
+  }
+}
