@@ -14,6 +14,7 @@ import { backlinkContract } from './backlink';
 import { attachmentContract } from './attachment';
 import { adminCryptoContract } from './adminCrypto';
 import { adminContract } from './admin';
+import { searchContract } from './search';
 
 const c = initContract();
 
@@ -33,4 +34,5 @@ export const apiContract = c.router({
   attachment: attachmentContract,
   adminCrypto: adminCryptoContract,
   admin: adminContract,
+  search: searchContract,
 });
