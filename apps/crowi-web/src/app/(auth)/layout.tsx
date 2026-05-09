@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/use-auth';
+import { useAppInfo } from '@/lib/use-app-info';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
@@ -20,6 +21,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
+  const { data: appInfo } = useAppInfo();
 
   useEffect(() => {
     // 接続エラー中はリダイレクトしない
@@ -63,9 +65,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
       <header className="bg-[var(--crowi-header)] text-white">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <img src="/logo/500w-inverse.png" alt="Crowi" className="h-6 w-auto" />
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0" aria-label={appInfo?.title ?? 'Crowi'}>
+              {appInfo?.title ? (
+                <>
+                  <img src="/logo/icon-inverse.png" alt="" className="h-6 w-6 shrink-0" />
+                  <span className="text-base font-semibold truncate">{appInfo.title}</span>
+                </>
+              ) : (
+                <img src="/logo/500w-inverse.png" alt="Crowi" className="h-6 w-auto shrink-0" />
+              )}
             </Link>
           </div>
           <div className="flex items-center gap-2">

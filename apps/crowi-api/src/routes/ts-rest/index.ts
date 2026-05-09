@@ -1,5 +1,6 @@
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
+import appRoutes from './app';
 import authRoutes from './auth';
 import installerRoutes from './installer';
 import tokenAuthRoutes from './tokenAuth';
@@ -33,11 +34,13 @@ export default (crowi: Crowi, app: Express) => {
 
   // Public Router - No authentication required
   const publicRouter = Router();
+  const appRouter = appRoutes(crowi, app);
   const authRouter = authRoutes(crowi, app); // Legacy - to be removed
   const installerRouter = installerRoutes(crowi, app);
   const tokenAuthRouter = tokenAuthRoutes(crowi, app);
 
   debug('Mounting public routes (no auth required)');
+  publicRouter.use(appRouter);
   publicRouter.use(authRouter);
   publicRouter.use(installerRouter);
   publicRouter.use(tokenAuthRouter);

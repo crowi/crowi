@@ -1,4 +1,5 @@
 import { initContract } from '@ts-rest/core';
+import { appContract } from './app';
 import { authContract } from './auth';
 import { installerContract } from './installer';
 import { tokenAuthContract } from './tokenAuth';
@@ -17,6 +18,7 @@ import { adminContract } from './admin';
 const c = initContract();
 
 export const apiContract = c.router({
+  app: appContract,
   auth: authContract, // Legacy - to be removed
   installer: installerContract,
   tokenAuth: tokenAuthContract,

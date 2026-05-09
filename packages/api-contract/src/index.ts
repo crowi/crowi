@@ -1,4 +1,5 @@
 export * from './contracts';
+export * from './schemas/app';
 export * from './schemas/auth';
 export * from './schemas/installer';
 export * from './schemas/common';

@@ -61,6 +61,9 @@ export function useUpdateAppSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminAppSettingsKeys.settings });
+      // Site title flows into the header via useAppInfo(); refetch so the
+      // change appears immediately instead of waiting for a hard reload.
+      queryClient.invalidateQueries({ queryKey: ['app', 'info'] });
     },
   });
 }
