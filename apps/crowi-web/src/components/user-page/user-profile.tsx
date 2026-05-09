@@ -21,7 +21,7 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserPro
   const displayName = user.name || user.username;
 
   return (
-    <header className="relative -mx-4 mb-8">
+    <header className="relative -mx-4 -mt-8 mb-8">
       <div
         aria-hidden="true"
         className="h-32 md:h-40 rounded-b-2xl relative overflow-hidden bg-muted/30"
