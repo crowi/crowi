@@ -94,6 +94,7 @@
   "page.action_more": "More actions",
   "page.share.aria_open": "Share link",
   "page.share.title": "Share",
+  "page.share.url_copied": "URL Copied!",
   "page.share.link_label": "Share Link",
   "page.share.markdown_label": "Markdown",
   "page.share.copy": "Copy",

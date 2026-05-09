@@ -59,8 +59,17 @@ export function LinkSharePopover({ page }: LinkSharePopoverProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[480px] p-2">
         <DropdownMenuLabel className="flex items-center gap-2 px-2 pb-1">
-          <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-          {m['page.share.title']()}
+          {copiedKey === 'idUrl' ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="text-emerald-700 dark:text-emerald-400">{m['page.share.url_copied']()}</span>
+            </>
+          ) : (
+            <>
+              <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+              {m['page.share.title']()}
+            </>
+          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <ShareRow label={m['page.share.link_label']()} value={shareLink} copied={copiedKey === 'shareLink'} onCopy={() => copy('shareLink', shareLink)} />
