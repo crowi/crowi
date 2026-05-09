@@ -539,6 +539,15 @@ Order of work for the v2.0 release:
 3. Convert storage to a plugin: extract the existing local + S3 uploaders
    into `@crowi/plugin-storage-local` + `@crowi/plugin-storage-aws-s3`. Validate
    end-to-end that file upload still works.
+3a. Introduce `apps/crowi-dev-runner/` — a thin app workspace that mirrors
+    the structure of a `crowi init` runner repo, holds the dev
+    `crowi.config.json` / `.env`, and declares the optional plugins as
+    its own deps. `@crowi/api` becomes plugin-agnostic at runtime
+    (resolves plugin npm names against the runner's `node_modules/` via
+    `createRequire`), so production runner repos and the dev runner are
+    structurally identical. This step has to land before E2E S3
+    validation in step 3 — without a CWD that owns plugin deps, the
+    bundle-size separation contract is violated.
 4. Convert search: extract the ES client into `@crowi/plugin-search-elasticsearch`
    + add `@crowi/plugin-search-mongo` as the default fallback.
 5. Convert auth: extract Google / GitHub passport strategies into
