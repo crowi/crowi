@@ -1,15 +1,20 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Noto_Sans_JP, Geist_Mono } from 'next/font/google';
 import { Providers } from '@/lib/providers';
 import { InstallerGate } from '@/components/installer-gate';
 import { PARAGLIDE_LOCALE_HEADER } from '@/proxy';
 import { baseLocale, isLocale, overwriteGetLocale } from '@paraglide/runtime.js';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+// Noto Sans JP covers both the JP and the latin glyphs used in the UI,
+// so we pick it as the global sans. `display: 'swap'` avoids the FOIT on
+// first paint (the larger JP weight set is ~70KB per weight subset).
+const notoSansJp = Noto_Sans_JP({
+  variable: '--font-noto-sans-jp',
   subsets: ['latin'],
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
 });
 
 const geistMono = Geist_Mono({
@@ -38,7 +43,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} className="scroll-smooth">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${notoSansJp.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <InstallerGate>{children}</InstallerGate>
         </Providers>
