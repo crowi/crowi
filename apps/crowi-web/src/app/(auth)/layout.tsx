@@ -2,8 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { LogOut, Shield } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -72,14 +71,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
           <GlobalSearchInput />
           <div className="flex items-center gap-2 ml-auto">
-            {user?.admin && (
-              <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10">
-                <Link href="/admin" aria-label={m['header.admin_aria']()} title={m['header.admin_aria']()}>
-                  <Shield className="h-4 w-4" />
-                  <span className="hidden sm:inline ml-1">{m['header.admin_aria']()}</span>
-                </Link>
-              </Button>
-            )}
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -95,7 +86,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <DropdownMenuContent align="end" className="w-64">
                 {user && <UserDropdownIdentity user={user} />}
                 <DropdownMenuSeparator />
-                {user && <UserMenuItems username={user.username} />}
+                {user && <UserMenuItems username={user.username} isAdmin={user.admin === true} />}
                 <DropdownMenuItem onClick={logout} className="text-destructive">
                   <LogOut className="h-4 w-4 mr-2" />
                   {m['header.user_dropdown_logout']()}

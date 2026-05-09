@@ -1,15 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { Bookmark, FileText, Settings, Trash2, User } from 'lucide-react';
+import { Bookmark, FileText, Settings, Shield, Trash2, User } from 'lucide-react';
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { m } from '@paraglide/messages.js';
 
 interface UserMenuItemsProps {
   username: string;
+  isAdmin?: boolean;
 }
 
-export function UserMenuItems({ username }: UserMenuItemsProps) {
+export function UserMenuItems({ username, isAdmin = false }: UserMenuItemsProps) {
   return (
     <>
       <DropdownMenuItem asChild>
@@ -43,6 +44,17 @@ export function UserMenuItems({ username }: UserMenuItemsProps) {
           {m['header.user_dropdown_trash']()}
         </Link>
       </DropdownMenuItem>
+      {isAdmin && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link href="/admin" className="text-primary focus:text-primary">
+              <Shield className="h-4 w-4 mr-2" />
+              {m['header.admin_aria']()}
+            </Link>
+          </DropdownMenuItem>
+        </>
+      )}
       <DropdownMenuSeparator />
     </>
   );
