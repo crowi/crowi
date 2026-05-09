@@ -22,5 +22,6 @@ export * from './schemas/admin/mail';
 export * from './schemas/admin/users';
 export * from './schemas/admin/share';
 export * from './schemas/admin/storage';
+export * from './schemas/admin/search';
 export * from './schemas/admin/plugins';
 export * from './openapi';

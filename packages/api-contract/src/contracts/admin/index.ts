@@ -3,6 +3,7 @@ import { adminAppContract } from './app';
 import { adminAuthContract } from './auth';
 import { adminMailContract } from './mail';
 import { adminPluginsContract } from './plugins';
+import { adminSearchContract } from './search';
 import { adminSecurityContract } from './security';
 import { adminShareContract } from './share';
 import { adminStorageContract } from './storage';
@@ -22,6 +23,7 @@ export const adminContract = c.router({
   mail: adminMailContract,
   share: adminShareContract,
   storage: adminStorageContract,
+  search: adminSearchContract,
   users: adminUsersContract,
   plugins: adminPluginsContract,
 });
