@@ -8,6 +8,8 @@ import { PasswordForm } from './password-form';
 import { ApiTokenSection } from './api-token-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { m } from '@paraglide/messages.js';
+import { getLocale } from '@paraglide/runtime.js';
 
 export default function SettingsPage() {
   const { data: profile, isLoading, error } = useProfile();
@@ -17,7 +19,7 @@ export default function SettingsPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-          <p className="text-muted-foreground">読み込み中...</p>
+          <p className="text-muted-foreground">{m['me.loading']()}</p>
         </div>
       </div>
     );
@@ -26,7 +28,7 @@ export default function SettingsPage() {
   if (error) {
     return (
       <Alert variant="destructive">
-        <AlertDescription>プロフィールの読み込みに失敗しました。ログインしていることを確認してください。</AlertDescription>
+        <AlertDescription>{m['me.failed_to_load']()}</AlertDescription>
       </Alert>
     );
   }
@@ -34,10 +36,12 @@ export default function SettingsPage() {
   if (!profile) {
     return (
       <Alert variant="destructive">
-        <AlertDescription>プロフィールが見つかりませんでした。</AlertDescription>
+        <AlertDescription>{m['me.profile_not_found']()}</AlertDescription>
       </Alert>
     );
   }
+
+  const dateLocale = getLocale() === 'ja' ? 'ja-JP' : 'en-US';
 
   return (
     <SettingsLayout
@@ -45,8 +49,8 @@ export default function SettingsPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>プロフィール画像</CardTitle>
-              <CardDescription>あなたのプロフィール画像を変更できます</CardDescription>
+              <CardTitle>{m['me.profile_picture.heading']()}</CardTitle>
+              <CardDescription>{m['me.profile_picture.lead']()}</CardDescription>
             </CardHeader>
             <CardContent>
               <ProfilePicture profile={profile} />
@@ -55,8 +59,8 @@ export default function SettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>基本情報</CardTitle>
-              <CardDescription>名前、メールアドレス、言語設定を変更できます</CardDescription>
+              <CardTitle>{m['me.profile.heading']()}</CardTitle>
+              <CardDescription>{m['me.profile.lead']()}</CardDescription>
             </CardHeader>
             <CardContent>
               <ProfileForm profile={profile} />
@@ -65,18 +69,18 @@ export default function SettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>アカウント情報</CardTitle>
-              <CardDescription>作成日時とアカウントID</CardDescription>
+              <CardTitle>{m['me.account_info.heading']()}</CardTitle>
+              <CardDescription>{m['me.account_info.lead']()}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground">アカウントID</p>
+                  <p className="text-muted-foreground">{m['me.account_info.account_id']()}</p>
                   <p className="font-mono">{profile.id}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">作成日時</p>
-                  <p>{new Date(profile.createdAt).toLocaleString('ja-JP')}</p>
+                  <p className="text-muted-foreground">{m['me.account_info.created_at']()}</p>
+                  <p>{new Date(profile.createdAt).toLocaleString(dateLocale)}</p>
                 </div>
               </div>
             </CardContent>
@@ -87,8 +91,8 @@ export default function SettingsPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>パスワード変更</CardTitle>
-              <CardDescription>アカウントのパスワードを変更できます</CardDescription>
+              <CardTitle>{m['me.password.heading']()}</CardTitle>
+              <CardDescription>{m['me.password.lead']()}</CardDescription>
             </CardHeader>
             <CardContent>
               <PasswordForm profile={profile} />
@@ -97,8 +101,8 @@ export default function SettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>APIトークン</CardTitle>
-              <CardDescription>API経由でCrowiにアクセスするためのトークンを管理します</CardDescription>
+              <CardTitle>{m['me.api_token.heading']()}</CardTitle>
+              <CardDescription>{m['me.api_token.lead']()}</CardDescription>
             </CardHeader>
             <CardContent>
               <ApiTokenSection />

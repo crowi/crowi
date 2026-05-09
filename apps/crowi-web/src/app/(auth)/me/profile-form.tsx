@@ -9,11 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUpdateProfile } from '@/lib/use-profile';
 import type { UserProfileResponse, Language } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 
 interface ProfileFormProps {
   profile: UserProfileResponse;
 }
 
+// Language labels stay in their native form so a user can find their own
+// language regardless of the active UI locale.
 const LANGUAGE_OPTIONS: { value: Language; label: string }[] = [
   { value: 'en', label: 'English' },
   { value: 'en-US', label: 'English (US)' },
@@ -50,15 +53,14 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     setErrors([]);
     setSuccessMessage(null);
 
-    // Client-side validation
     const validationErrors: string[] = [];
     if (!formData.name.trim()) {
-      validationErrors.push('名前を入力してください');
+      validationErrors.push(m['me.profile.error_name_required']());
     }
     if (!formData.email.trim()) {
-      validationErrors.push('メールアドレスを入力してください');
+      validationErrors.push(m['me.profile.error_email_required']());
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      validationErrors.push('有効なメールアドレスを入力してください');
+      validationErrors.push(m['me.profile.error_email_invalid']());
     }
 
     if (validationErrors.length > 0) {
@@ -74,9 +76,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           lang: formData.lang,
         },
       });
-      setSuccessMessage('プロフィールを更新しました');
+      setSuccessMessage(m['me.profile.success_save']());
     } catch (err) {
-      setErrors([err instanceof Error ? err.message : 'プロフィールの更新に失敗しました']);
+      setErrors([err instanceof Error ? err.message : m['me.profile.error_save']()]);
     }
   };
 
@@ -104,12 +106,21 @@ export function ProfileForm({ profile }: ProfileFormProps) {
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="name">名前</Label>
-          <Input id="name" name="name" type="text" value={formData.name} onChange={handleChange} placeholder="山田 太郎" required aria-required="true" />
+          <Label htmlFor="name">{m['me.profile.field_name']()}</Label>
+          <Input
+            id="name"
+            name="name"
+            type="text"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder={m['me.profile.field_name_placeholder']()}
+            required
+            aria-required="true"
+          />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">メールアドレス</Label>
+          <Label htmlFor="email">{m['me.profile.field_email']()}</Label>
           <Input
             id="email"
             name="email"
@@ -123,10 +134,10 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="lang">言語</Label>
+          <Label htmlFor="lang">{m['me.profile.field_lang']()}</Label>
           <Select value={formData.lang} onValueChange={handleLanguageChange} name="lang">
             <SelectTrigger id="lang" className="w-full">
-              <SelectValue placeholder="言語を選択" />
+              <SelectValue placeholder={m['me.profile.field_lang_placeholder']()} />
             </SelectTrigger>
             <SelectContent>
               {LANGUAGE_OPTIONS.map((option) => (
@@ -139,22 +150,22 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label>ユーザー名</Label>
+          <Label>{m['me.profile.field_username']()}</Label>
           <Input value={profile.username} disabled className="bg-muted" />
-          <p className="text-xs text-muted-foreground">ユーザー名は変更できません</p>
+          <p className="text-xs text-muted-foreground">{m['me.profile.field_username_note']()}</p>
         </div>
 
         {profile.googleId && (
           <div className="space-y-2">
-            <Label>Google アカウント</Label>
-            <Input value="連携済み" disabled className="bg-muted text-muted-foreground" />
+            <Label>{m['me.profile.field_google']()}</Label>
+            <Input value={m['me.profile.connected']()} disabled className="bg-muted text-muted-foreground" />
           </div>
         )}
 
         {profile.githubId && (
           <div className="space-y-2">
-            <Label>GitHub アカウント</Label>
-            <Input value="連携済み" disabled className="bg-muted text-muted-foreground" />
+            <Label>{m['me.profile.field_github']()}</Label>
+            <Input value={m['me.profile.connected']()} disabled className="bg-muted text-muted-foreground" />
           </div>
         )}
       </div>
@@ -162,7 +173,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={!hasChanges || updateProfile.isPending}>
           <Save className="mr-2" />
-          {updateProfile.isPending ? '保存中...' : '変更を保存'}
+          {updateProfile.isPending ? m['me.profile.save_pending']() : m['me.profile.save']()}
         </Button>
       </div>
     </form>
