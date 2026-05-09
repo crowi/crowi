@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ListPluginsResponse, PluginConfigResponse, UpdatePluginConfigRequest } from '@crowi/api-contract';
 import { apiClient } from './api-client';
 import { unwrapResult } from './unwrap-result';
@@ -46,6 +46,30 @@ export function useAdminPluginConfig(name: string | null) {
     enabled: !!name,
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
+  });
+}
+
+// useQueries (rather than N useQuery calls) because `names.length` varies
+// per plugin's `requires` array.
+export function useAdminPluginConfigs(names: string[]) {
+  return useQueries({
+    queries: names.map((name) => ({
+      queryKey: adminPluginsKeys.config(name),
+      queryFn: async (): Promise<PluginConfigResponse> => {
+        const result = await apiClient.admin.plugins.getPluginConfig({ query: { name } });
+        return unwrapResult(result, {
+          ok: (body) => body,
+          errors: {
+            401: 'Failed to fetch plugin config',
+            403: 'Failed to fetch plugin config',
+            404: 'Plugin not found',
+          },
+          fallback: 'Failed to fetch plugin config',
+        });
+      },
+      staleTime: 60 * 1000,
+      refetchOnWindowFocus: false,
+    })),
   });
 }
 
