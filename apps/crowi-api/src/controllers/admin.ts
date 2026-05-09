@@ -185,25 +185,6 @@ export default (crowi: Crowi) => {
     }
   };
 
-  actions.api.search = {};
-  actions.api.search.buildIndex = async function (req: Request, res: Response) {
-    const search = crowi.getSearcher();
-    if (!search || typeof search.rebuild !== 'function') {
-      return res.json(ApiResponse.error('Searcher is not ready.'));
-    }
-
-    search
-      .rebuild()
-      .then(() => {
-        debug('Data is successfully indexed. ------------------ ✧✧');
-      })
-      .catch((err: unknown) => {
-        debug('Error caught.', err);
-      });
-
-    return res.json(ApiResponse.success({ message: 'Now re-building index ... this takes a while.' }));
-  };
-
   actions.user = {};
   actions.api.user = {};
   actions.api.user.index = function (req: Request, res: Response) {

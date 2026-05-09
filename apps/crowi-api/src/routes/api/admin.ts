@@ -21,8 +21,6 @@ export default (crowi: Crowi, app: Express, form): Router => {
   router.post('/admin/settings/google', csrf, form.admin.google, Admin.api.postSettings);
   router.post('/admin/settings/github', csrf, form.admin.github, Admin.api.postSettings);
 
-  router.post('/admin/search/build', csrf, Admin.api.search.buildIndex);
-
   router.get('/admin/notification', Admin.api.notification.index);
   router.post('/admin/notification/slackSetting.add', csrf, form.admin.slackSetting, Admin.api.notification.slackSetting);
   router.post('/admin/notification/slackSetting.remove', csrf, Admin.api.notification.removeSlackSetting);
