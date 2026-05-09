@@ -8,7 +8,7 @@ const baseArgs = {
 };
 
 describe('buildSearchBody', () => {
-  it('emits no _type or doc-type-prefixed fields (ES8 compat)', () => {
+  it('emits no _type or doc-type-prefixed fields (ES9 compat)', () => {
     const body = buildSearchBody({ ...baseArgs, parsed: parseQuery('hello'), viewer: { id: 'u1', username: 'alice' } });
     const wire = JSON.stringify(body);
     expect(wire).not.toContain('"_type"');

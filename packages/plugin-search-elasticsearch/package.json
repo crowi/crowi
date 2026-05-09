@@ -1,7 +1,7 @@
 {
   "name": "@crowi/plugin-search-elasticsearch",
   "version": "0.1.0-dev",
-  "description": "Elasticsearch 8 search driver for Crowi 2.0.",
+  "description": "Elasticsearch 9 search driver for Crowi 2.0.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",
-    "@elastic/elasticsearch": "^8.15.0",
+    "@elastic/elasticsearch": "^9.4.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

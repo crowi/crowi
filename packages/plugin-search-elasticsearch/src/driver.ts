@@ -1,21 +1,11 @@
 /**
- * Elasticsearch 8 driver implementing the `SearchDriver` contract.
- *
- * Responsibilities:
- *   - own the `@elastic/elasticsearch` v8 Client instance
- *   - manage the `${indexName}-current` alias (legacy ops compat)
- *   - index / delete pages on `index()` / `remove()` (single-doc API —
- *     bulk overhead doesn't pay off for one document)
- *   - run `query()` against the current alias
- *   - rebuild the index from scratch on `rebuild()`, bulk-indexing in
- *     2k-doc batches with bookmark counts pre-fetched in a single
- *     aggregate call
- *
- * Wire-format compatibility with the legacy ES7 indexer is preserved
- * for the document fields (path / body / username / grant /
- * granted_users / *_count / *_at) so an admin can switch between
- * legacy and plugin-based deployments without a reindex (provided
- * the cluster is already on ES8).
+ * Elasticsearch 9 driver implementing the `SearchDriver` contract.
+ * Owns the Client, the `${indexName}-current` alias (legacy ops
+ * compat), single-doc index / remove, query against the alias, and
+ * rebuild-from-scratch in 2k-doc bulk batches with bookmark counts
+ * pre-fetched in one aggregate. Document field shape (path / body /
+ * username / grant / granted_users / *_count / *_at) matches the
+ * legacy ES7 indexer for reindex-free migration.
  */
 
 import { Client, type ClientOptions } from '@elastic/elasticsearch';
@@ -134,7 +124,7 @@ export function createElasticsearchDriver(config: ElasticsearchDriverConfig, dep
       try {
         await client.delete({ index: aliasName, id });
       } catch (err) {
-        // Idempotent: a missing doc is fine. ES8 throws a
+        // Idempotent: a missing doc is fine. ES9 throws a
         // `ResponseError` with statusCode 404 when the id doesn't
         // exist; swallow only that case.
         if (isNotFoundError(err)) return;
@@ -167,10 +157,13 @@ export function createElasticsearchDriver(config: ElasticsearchDriverConfig, dep
         size: limit,
       });
 
+      // ES9 client narrows SearchRequest types (esp. `highlight.fields`)
+      // beyond what `buildSearchBody` returns; the runtime shape is correct,
+      // so cast through `unknown` to the SearchRequest shape.
       const response = await client.search({
         index: aliasName,
         ...body,
-      });
+      } as unknown as Parameters<Client['search']>[0]);
 
       const totalRaw = response.hits?.total;
       const total = typeof totalRaw === 'number' ? totalRaw : (totalRaw?.value ?? 0);

@@ -62,7 +62,7 @@ export interface BuildSearchBodyParams {
   size: number;
 }
 
-// Loose typing: ES8 SDK accepts plain JSON for the request body, so we
+// Loose typing: ES9 SDK accepts plain JSON for the request body, so we
 // keep this internal type representation close to the wire format.
 // Using `unknown` keeps the shape opaque; tests rely on snapshot
 // equality rather than structural typing.
@@ -152,7 +152,7 @@ const appendGrantFilter = (buckets: BoolBuckets, viewer?: SearchQueryViewer): vo
 };
 
 /**
- * Build the ES8 search request body. Returns an object suitable for
+ * Build the ES9 search request body. Returns an object suitable for
  * `client.search({ index, ...body })`.
  */
 export function buildSearchBody(params: BuildSearchBodyParams): {

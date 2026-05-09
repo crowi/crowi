@@ -85,7 +85,7 @@ describe('createElasticsearchDriver query()', () => {
     return { driver, fakeSearch };
   };
 
-  it('translates ES8 hits into SearchHits + maps highlight to snippet', async () => {
+  it('translates ES9 hits into SearchHits + maps highlight to snippet', async () => {
     const { driver, fakeSearch } = installFakeClient({
       hits: {
         total: { value: 2 },
@@ -111,7 +111,7 @@ describe('createElasticsearchDriver query()', () => {
     expect(JSON.stringify(call)).not.toContain('"_type"');
   });
 
-  it('handles plain-number total (ES8 with track_total_hits=false)', async () => {
+  it('handles plain-number total (ES9 with track_total_hits=false)', async () => {
     const { driver } = installFakeClient({ hits: { total: 7, hits: [] } });
     const result = await driver.query({ q: 'x' });
     expect(result.total).toBe(7);
@@ -127,7 +127,7 @@ describe('createElasticsearchDriver query()', () => {
 });
 
 describe('createElasticsearchDriver index/remove()', () => {
-  it('index() sends a single ES8 index request (no _type, no bulk overhead)', async () => {
+  it('index() sends a single ES9 index request (no _type, no bulk overhead)', async () => {
     const driver = createElasticsearchDriver({ url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
     const fakeIndex = jest.fn().mockResolvedValue({ result: 'created' });
     (driver.client as unknown as { index: typeof fakeIndex }).index = fakeIndex;
@@ -149,7 +149,7 @@ describe('createElasticsearchDriver index/remove()', () => {
     expect(JSON.stringify(call)).not.toContain('"_type"');
   });
 
-  it('remove() sends a single ES8 delete request', async () => {
+  it('remove() sends a single ES9 delete request', async () => {
     const driver = createElasticsearchDriver({ url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
     const fakeDelete = jest.fn().mockResolvedValue({ result: 'deleted' });
     (driver.client as unknown as { delete: typeof fakeDelete }).delete = fakeDelete;
