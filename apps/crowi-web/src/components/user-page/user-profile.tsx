@@ -64,29 +64,32 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount, onStatCli
         <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px" style={{ background: 'color-mix(in srgb, var(--crowi-primary) 60%, transparent)' }} />
       </div>
 
-      <div className="px-4 -mt-12 md:-mt-14 relative">
-        <div className="flex items-end gap-5 flex-wrap">
-          <UserAvatar user={user} size="lg" className="ring-4 ring-background shadow-md flex-shrink-0" />
-          <div className="flex-1 min-w-0 pb-1.5">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight text-foreground">{displayName}</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground font-mono">@{user.username}</p>
+      <div className="px-4 relative">
+        {/* Avatar floats up over the cover edge; the text column below
+            stays in normal flow so it never collides with the cover. */}
+        <div className="-mt-12 md:-mt-14 inline-block">
+          <UserAvatar user={user} size="lg" className="ring-4 ring-background shadow-md" />
+        </div>
 
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
-              <StatButton
-                icon={<FileText className="h-3.5 w-3.5" aria-hidden="true" />}
-                count={createdPagesCount}
-                label={m['user_page.stat_pages_label']()}
-                ariaLabel={m['user_page.tab_pages']()}
-                onClick={onStatClick ? () => onStatClick('pages') : undefined}
-              />
-              <StatButton
-                icon={<Bookmark className="h-3.5 w-3.5" aria-hidden="true" />}
-                count={bookmarksCount}
-                label={m['user_page.stat_bookmarks_label']()}
-                ariaLabel={m['user_page.tab_bookmarks']()}
-                onClick={onStatClick ? () => onStatClick('bookmarks') : undefined}
-              />
-            </div>
+        <div className="mt-3">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight text-foreground">{displayName}</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground font-mono">@{user.username}</p>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
+            <StatButton
+              icon={<FileText className="h-3.5 w-3.5" aria-hidden="true" />}
+              count={createdPagesCount}
+              label={m['user_page.stat_pages_label']()}
+              ariaLabel={m['user_page.tab_pages']()}
+              onClick={onStatClick ? () => onStatClick('pages') : undefined}
+            />
+            <StatButton
+              icon={<Bookmark className="h-3.5 w-3.5" aria-hidden="true" />}
+              count={bookmarksCount}
+              label={m['user_page.stat_bookmarks_label']()}
+              ariaLabel={m['user_page.tab_bookmarks']()}
+              onClick={onStatClick ? () => onStatClick('bookmarks') : undefined}
+            />
           </div>
         </div>
 
