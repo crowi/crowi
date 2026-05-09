@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PageSchema } from './page';
 
 // Language enum - matches User model
 export const LanguageSchema = z.enum(['en', 'en-US', 'en-GB', 'ja']);
@@ -103,3 +104,14 @@ export const ApiTokenErrorResponseSchema = z.object({
   message: z.string(),
 });
 export type ApiTokenErrorResponse = z.infer<typeof ApiTokenErrorResponseSchema>;
+
+/**
+ * Response for GET /me/recently-viewed-pages. Backed by a per-user redis
+ * sorted set (`crowi.lru`) — most recent first, capped at the LRU's
+ * server-side `max`. Used by the global search dropdown to show "最近見た
+ * ページ" when the input is empty + focused.
+ */
+export const RecentlyViewedPagesResponseSchema = z.object({
+  pages: z.array(PageSchema),
+});
+export type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;
