@@ -13,7 +13,6 @@ export const GetAppSettingsResponseSchema = z.object({
   app: z.object({
     title: z.string(),
     confidential: z.string(),
-    fileUpload: z.boolean(),
     /**
      * Read-only in this endpoint — managed via the Share settings screen.
      * Surfaced here because the App screen displays it, not because it is
@@ -33,8 +32,8 @@ export const GetAppSettingsResponseSchema = z.object({
     }),
   }),
   /**
-   * Whether storage credentials are sufficient for uploads to function.
-   * Equivalent to `Config.isUploadable(config)` in the legacy controller.
+   * Whether a storage driver is registered (i.e. uploads are wired up).
+   * Sourced from `Config.isUploadable()` which now consults PluginManager.
    */
   isUploadable: z.boolean(),
   /**
@@ -61,7 +60,6 @@ export const UpdateAppSettingsRequestSchema = z.object({
     .object({
       title: z.string().trim().min(1).max(100).optional(),
       confidential: z.string().max(500).optional(),
-      fileUpload: z.boolean().optional(),
     })
     .optional(),
   upload: z

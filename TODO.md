@@ -65,7 +65,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [x] Next.js Route Group `(admin)` 設計、admin 専用認可 (User.admin === true) — 5123e06d
 
 ### 設定 (Config model に集約、各セクションで部分更新)
-- [x] **App** (`GET/PUT /admin/app`): サイト名 / 機密情報の注意書き / fileUpload toggle / AWS S3 認証情報。secretAccessKey は暗号化保存 + UI で 3 状態(saved / clear pending / dirty)
+- [x] **App** (`GET/PUT /admin/app`): サイト名 / 機密情報の注意書き / AWS S3 認証情報。secretAccessKey は暗号化保存 + UI で 3 状態(saved / clear pending / dirty)。fileUpload toggle はプラグイン化で廃止
 - [x] **Security** (`GET/PUT /admin/security`): basic 認証 / registrationMode / registrationWhiteList
 - [x] **Authentication** (`GET/PUT /admin/auth`): requireThirdPartyAuth / disablePasswordAuth + 自分自身のロックアウト防止 (422)
 - [x] **Mail / SMTP** (`GET/PUT /admin/mail` + `POST /admin/mail/test`): from / SMTP host / port / user / password + AWS SES + テスト送信

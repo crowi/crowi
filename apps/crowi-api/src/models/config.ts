@@ -76,7 +76,6 @@ export interface ConfigModel extends Model<ConfigDocument> {
   deleteConfig(ns: string, key: string): Promise<void>;
   loadAllConfig(): Promise<object>;
   isUploadable(): boolean;
-  fileUploadEnabled(config: Config): boolean;
   migrate(): Promise<void>;
 
   SECURITY_REGISTRATION_MODE_OPEN: string;
@@ -98,8 +97,6 @@ export default (crowi: Crowi) => {
       // 'app:installed'     : "0.0.0",
       'app:title': 'Crowi',
       'app:confidential': '',
-
-      'app:fileUpload': false,
 
       'app:externalShare': false,
 
@@ -220,14 +217,6 @@ export default (crowi: Crowi) => {
   // is the path writable" — Config no longer reaches into AWS keys.
   configSchema.statics.isUploadable = function () {
     return crowi.getPlugins().active.storage !== null;
-  };
-
-  configSchema.statics.fileUploadEnabled = function (config) {
-    if (!Config.isUploadable()) {
-      return false;
-    }
-
-    return config.crowi['app:fileUpload'] || false;
   };
 
   configSchema.statics.migrate = async function () {

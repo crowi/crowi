@@ -21,7 +21,6 @@ import { m } from '@paraglide/messages.js';
 interface FormState {
   appTitle: string;
   appConfidential: string;
-  appFileUpload: boolean;
   awsRegion: string;
   awsBucket: string;
   awsAccessKeyId: string;
@@ -43,7 +42,6 @@ function toFormState(data: GetAppSettingsResponse): FormState {
   return {
     appTitle: data.app.title,
     appConfidential: data.app.confidential,
-    appFileUpload: data.app.fileUpload,
     awsRegion: data.upload.aws.region,
     awsBucket: data.upload.aws.bucket,
     awsAccessKeyId: data.upload.aws.accessKeyId,
@@ -62,7 +60,6 @@ function buildUpdateBody(state: FormState, initial: FormState, flags: { secretDi
   const app: NonNullable<UpdateAppSettingsRequest['app']> = {};
   if (state.appTitle !== initial.appTitle) app.title = state.appTitle;
   if (state.appConfidential !== initial.appConfidential) app.confidential = state.appConfidential;
-  if (state.appFileUpload !== initial.appFileUpload) app.fileUpload = state.appFileUpload;
 
   const aws: NonNullable<NonNullable<UpdateAppSettingsRequest['upload']>['aws']> = {};
   if (state.awsRegion !== initial.awsRegion) aws.region = state.awsRegion;
@@ -143,7 +140,6 @@ export function AppSettingsForm() {
     return (
       state.appTitle !== initial.appTitle ||
       state.appConfidential !== initial.appConfidential ||
-      state.appFileUpload !== initial.appFileUpload ||
       state.awsRegion !== initial.awsRegion ||
       state.awsBucket !== initial.awsBucket ||
       state.awsAccessKeyId !== initial.awsAccessKeyId
@@ -261,33 +257,7 @@ export function AppSettingsForm() {
         </CardContent>
       </Card>
 
-      {/* Card 2: ファイルアップロード */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{m['admin.app.section_upload_heading']()}</CardTitle>
-          <CardDescription>{m['admin.app.section_upload_lead']()}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-input accent-primary"
-              checked={state.appFileUpload}
-              onChange={(e) => setState({ ...state, appFileUpload: e.target.checked })}
-            />
-            <span className="text-sm font-medium">{m['admin.app.field_upload_toggle']()}</span>
-          </label>
-          {state.appFileUpload && !isUploadable && (
-            <Alert className="border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-900/20">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <AlertTitle className="text-amber-800 dark:text-amber-300">{m['admin.app.upload_unavailable_title']()}</AlertTitle>
-              <AlertDescription className="text-amber-700 dark:text-amber-200">{m['admin.app.upload_unavailable_body']()}</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Card 3: AWS S3 */}
+      {/* Card 2: AWS S3 */}
       <Card>
         <CardHeader>
           <CardTitle>{m['admin.app.section_aws_heading']()}</CardTitle>
@@ -369,7 +339,7 @@ export function AppSettingsForm() {
         </CardContent>
       </Card>
 
-      {/* Card 4: 表示のみのステータス */}
+      {/* Card 3: 表示のみのステータス */}
       <Card>
         <CardHeader>
           <CardTitle>{m['admin.app.section_status_heading']()}</CardTitle>

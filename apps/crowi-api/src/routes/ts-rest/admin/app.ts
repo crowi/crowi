@@ -31,7 +31,6 @@ export default (crowi: Crowi, _app: Express) => {
           app: {
             title: coerceString(crowiNs['app:title']),
             confidential: coerceString(crowiNs['app:confidential']),
-            fileUpload: coerceBoolean(crowiNs['app:fileUpload']),
             externalShare: coerceBoolean(crowiNs['app:externalShare']),
           },
           upload: {
@@ -67,7 +66,6 @@ export default (crowi: Crowi, _app: Express) => {
       if (body.app) {
         if (body.app.title !== undefined) updates['app:title'] = body.app.title;
         if (body.app.confidential !== undefined) updates['app:confidential'] = body.app.confidential;
-        if (body.app.fileUpload !== undefined) updates['app:fileUpload'] = body.app.fileUpload;
       }
 
       if (body.upload?.aws) {

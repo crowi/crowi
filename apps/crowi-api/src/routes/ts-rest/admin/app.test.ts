@@ -38,7 +38,7 @@ describe('Routes /api/v2/admin/app (ts-rest)', () => {
 
   // Keys this suite touches. Used by the per-test cleanup so each test starts
   // from a clean slate even when one test seeds and the next reads.
-  const APP_KEYS = ['app:title', 'app:confidential', 'app:fileUpload', 'app:externalShare'];
+  const APP_KEYS = ['app:title', 'app:confidential', 'app:externalShare'];
   const AWS_KEYS = ['upload:aws:region', 'upload:aws:bucket', 'upload:aws:accessKeyId', 'upload:aws:secretAccessKey'];
 
   beforeAll(async () => {
@@ -87,7 +87,6 @@ describe('Routes /api/v2/admin/app (ts-rest)', () => {
       // the real save path.
       await Config.updateConfig('crowi', 'app:title', 'My Wiki');
       await Config.updateConfig('crowi', 'app:confidential', 'For employees only');
-      await Config.updateConfig('crowi', 'app:fileUpload', true);
       await Config.updateConfig('crowi', 'upload:aws:region', 'ap-northeast-1');
       await Config.updateConfig('crowi', 'upload:aws:bucket', 'my-bucket');
       await Config.updateConfig('crowi', 'upload:aws:accessKeyId', 'AKIAFAKE');
@@ -100,7 +99,6 @@ describe('Routes /api/v2/admin/app (ts-rest)', () => {
       expect(res.body.app).toEqual({
         title: 'My Wiki',
         confidential: 'For employees only',
-        fileUpload: true,
         externalShare: false,
       });
       expect(res.body.upload.aws).toEqual({
@@ -148,7 +146,7 @@ describe('Routes /api/v2/admin/app (ts-rest)', () => {
         .put('/api/v2/admin/app')
         .set(authHeaders(adminToken))
         .send({
-          app: { title: 'Round Trip Wiki', confidential: 'Internal', fileUpload: true },
+          app: { title: 'Round Trip Wiki', confidential: 'Internal' },
           upload: {
             aws: {
               region: 'us-east-1',
@@ -164,7 +162,7 @@ describe('Routes /api/v2/admin/app (ts-rest)', () => {
 
       const get = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
       expect(get.status).toBe(200);
-      expect(get.body.app).toEqual(expect.objectContaining({ title: 'Round Trip Wiki', confidential: 'Internal', fileUpload: true }));
+      expect(get.body.app).toEqual(expect.objectContaining({ title: 'Round Trip Wiki', confidential: 'Internal' }));
       expect(get.body.upload.aws).toEqual({
         region: 'us-east-1',
         bucket: 'rt-bucket',
