@@ -25,7 +25,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 ## High Priority — 横断的 advisory (累積)
 
 - [x] **UI 共通化** (`2c390a55`): `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出。9 ファイル / 13 サイトで重複削減
-- [ ] **JP/EN 文言の統一 / i18n 戦略確立**: 現状 `page-view` は EN、`use-page-mutations` / notification 系は JP。i18next 等の導入判断を含む
+- [x] **i18n 戦略確立 + 主要 surface 移行** (`3c0e7432` + `8a47e65d` + `b6aa27bc`): paraglide-js 採用、page-view / list / history / comments / user-page / edit / admin (`admin.common.*`)、me 配下を全 i18n 化。残: rename-dialog の `'編集が競合しました'` ハードコード、use-bookmark / use-watch / use-notifications / use-like / use-user-page の `'Authentication required'` を既存の `errors.auth_required` に集約 (small advisory)
 - [x] **`req.user` の Express type augmentation** (`8e8524ac`): `apps/crowi-api/src/types/express.ts` で global 拡張、35 サイトの cast を撲滅
 - [x] **`pageToResponse` / `toPageUser` / `toUserPublic` / `isPopulatedUser` の統一** (`6c43ef77` + `8b2fe70f`):
   - `toUserPublic` を util に統合 (`PopulatedUserPublic` 経由で fallback 対応)
@@ -36,7 +36,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 
-- [ ] **Backlinks**: `_api/backlink.list` (Web UI: 編集画面下部にリンク一覧)
+- [x] **Backlinks** (`0213c1bf` event wiring → `786925aa` Web 一覧 → `56c48976` simplify): `/api/v2/backlinks` ts-rest、page-view footer に `<BacklinkList>` (createBySavedPage は bulk insert 化済 — 4 round-trips)
 - [ ] **残りの認証 routes**:
   - `GET /login/google` / `GET /login/github` / 各 callback
   - `GET /login/invited` / `POST /login/activateInvited`
