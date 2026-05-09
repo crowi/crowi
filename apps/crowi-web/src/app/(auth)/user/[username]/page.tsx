@@ -54,7 +54,7 @@ export default function UserPage({ params }: UserPageProps) {
       {userPageDoc && !userPageNotFound && (
         <Card>
           <CardContent className="pt-6">
-            <PageHeader page={userPageDoc} onEdit={() => router.push(`/edit?page_id=${encodeURIComponent(userPageDoc._id)}`)} showActions />
+            <PageHeader page={userPageDoc} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(userPageDoc._id)}`)} showActions />
             <PageContent page={userPageDoc} />
           </CardContent>
         </Card>

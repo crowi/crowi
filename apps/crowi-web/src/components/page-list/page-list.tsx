@@ -77,7 +77,7 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
       {portalPage ? (
         <Card>
           <div className="p-6">
-            <PageHeader page={portalPage} onEdit={() => router.push(`/edit?page_id=${encodeURIComponent(portalPage._id)}`)} showActions />
+            <PageHeader page={portalPage} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(portalPage._id)}`)} showActions />
             <PageContent page={portalPage} />
           </div>
         </Card>

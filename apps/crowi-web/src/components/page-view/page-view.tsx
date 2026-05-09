@@ -70,7 +70,7 @@ export function PageView({ path }: PageViewProps) {
         body={m['page.not_found_body']()}
         actions={
           <div className="flex gap-2">
-            <Button variant="default" onClick={() => router.push(`/edit?path=${encodeURIComponent(path)}`)}>
+            <Button variant="default" onClick={() => router.push(`/_edit?path=${encodeURIComponent(path)}`)}>
               <FilePlus2 className="h-4 w-4 mr-2" />
               {m['page.create_page']()}
             </Button>
@@ -144,7 +144,7 @@ export function PageView({ path }: PageViewProps) {
         <PageHeader
           page={page}
           onEdit={() => {
-            router.push(`/edit?page_id=${encodeURIComponent(page._id)}`);
+            router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
           }}
           showActions
         />
