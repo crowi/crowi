@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/use-auth';
 import { m } from '@paraglide/messages.js';
 import { BookmarkButton } from './bookmark-button';
 import { LikeButton } from './like-button';
+import { LinkSharePopover } from './link-share-popover';
 import { PageActionsMenu } from './page-actions-menu';
 import { SeenUserList } from './seen-user-list';
 import { WatchButton } from './watch-button';
@@ -47,6 +48,7 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
           {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} />}
           {isAuthenticated && <WatchButton pageId={page._id} />}
           <BookmarkButton pageId={page._id} />
+          <LinkSharePopover page={page} />
           {onEdit && (
             <Button variant="default" size="sm" onClick={onEdit} className="ml-1">
               <Edit2 className="h-4 w-4 mr-1" />
