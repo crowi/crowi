@@ -24,20 +24,35 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserPro
     <header className="relative -mx-4 mb-8">
       <div
         aria-hidden="true"
-        className="h-32 md:h-40 rounded-b-2xl relative overflow-hidden"
+        className="h-32 md:h-40 rounded-b-2xl relative overflow-hidden bg-muted/30"
         style={{
-          background:
-            'linear-gradient(135deg, color-mix(in srgb, var(--crowi-primary) 18%, transparent) 0%, color-mix(in srgb, var(--crowi-primary) 6%, transparent) 45%, transparent 100%)',
+          // Atmospheric mesh: a warm-green light-cone from the top-right
+          // ("sunlight"), a cooler primary pool from the bottom-left
+          // ("shadow"), and a soft sage glow centered low — gives the
+          // band depth without pattern noise.
+          backgroundImage: [
+            'radial-gradient(ellipse 90% 110% at 100% 0%, color-mix(in srgb, var(--crowi-primary) 32%, transparent), transparent 60%)',
+            'radial-gradient(ellipse 70% 100% at 0% 110%, color-mix(in srgb, var(--crowi-primary) 22%, transparent), transparent 60%)',
+            'radial-gradient(circle 60% at 50% 100%, color-mix(in srgb, oklch(0.86 0.06 150) 35%, transparent), transparent 70%)',
+            'linear-gradient(180deg, color-mix(in srgb, var(--crowi-primary) 8%, transparent) 0%, transparent 75%)',
+          ].join(', '),
         }}
       >
+        {/* Paper grain — SVG turbulence as data URL, blended in with
+            multiply so it darkens highlights but barely touches shadows.
+            Tile at 160px so the noise doesn't read as a pattern. */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 opacity-[0.05] text-foreground"
+          className="absolute inset-0 mix-blend-multiply opacity-[0.18]"
           style={{
-            backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
-            backgroundSize: '22px 22px',
+            backgroundImage:
+              "url(\"data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+            backgroundSize: '160px 160px',
           }}
         />
+
+        {/* Top accent hairline — Crowi primary at 60%, gives the band
+            its "lip" without a heavy frame. */}
         <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px" style={{ background: 'color-mix(in srgb, var(--crowi-primary) 60%, transparent)' }} />
       </div>
 
