@@ -13,11 +13,11 @@ describe('CrowiConfigFileSchema', () => {
 
   it('preserves plugin list and driver overrides', () => {
     const result = CrowiConfigFileSchema.parse({
-      plugins: ['@crowi/storage-aws-s3'],
+      plugins: ['@crowi/plugin-storage-aws-s3'],
       storage: { driver: 's3' },
       search: { driver: 'elasticsearch' },
     });
-    expect(result.plugins).toEqual(['@crowi/storage-aws-s3']);
+    expect(result.plugins).toEqual(['@crowi/plugin-storage-aws-s3']);
     expect(result.storage.driver).toBe('s3');
     expect(result.search.driver).toBe('elasticsearch');
   });
@@ -31,9 +31,9 @@ describe('resolvePluginList', () => {
   });
 
   it('appends user-listed plugins after the implicit defaults', () => {
-    const config = CrowiConfigFileSchema.parse({ plugins: ['@crowi/storage-aws-s3'] });
+    const config = CrowiConfigFileSchema.parse({ plugins: ['@crowi/plugin-storage-aws-s3'] });
     const list = resolvePluginList(config);
-    expect(list[list.length - 1]).toBe('@crowi/storage-aws-s3');
+    expect(list[list.length - 1]).toBe('@crowi/plugin-storage-aws-s3');
     expect(list.slice(0, IMPLICIT_DEFAULT_PLUGINS.length)).toEqual([...IMPLICIT_DEFAULT_PLUGINS]);
   });
 
@@ -62,9 +62,9 @@ describe('loadCrowiConfigFile', () => {
   });
 
   it('parses a valid file', async () => {
-    await fs.writeFile(path.join(tmpDir, 'crowi.config.json'), JSON.stringify({ plugins: ['@crowi/storage-aws-s3'], storage: { driver: 's3' } }));
+    await fs.writeFile(path.join(tmpDir, 'crowi.config.json'), JSON.stringify({ plugins: ['@crowi/plugin-storage-aws-s3'], storage: { driver: 's3' } }));
     const config = await loadCrowiConfigFile(tmpDir);
-    expect(config.plugins).toEqual(['@crowi/storage-aws-s3']);
+    expect(config.plugins).toEqual(['@crowi/plugin-storage-aws-s3']);
     expect(config.storage.driver).toBe('s3');
   });
 

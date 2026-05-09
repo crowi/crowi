@@ -11,7 +11,7 @@ Make Crowi extensible by moving four orthogonal concerns — file **storage**,
 external **search**, external **auth providers**, and external **notification
 sinks** — out of the core into independently distributable plugins. The core
 ships with sensible defaults that work without any plugin installed. Operators
-add plugins by `crowi plugin add @crowi/<name>` and configure them from the
+add plugins by `crowi-admin plugin add @crowi/<name>` and configure them from the
 admin UI.
 
 ## Goals
@@ -46,13 +46,13 @@ admin UI.
 ## Overview
 
 ```
-┌──────────────────── @crowi/cli ────────────────────┐
-│  crowi init / plugin add / start / migrate         │
+┌──────────────── @crowi/admin-cli ──────────────────┐
+│  crowi-admin init / plugin add / start / migrate   │
 └──────────┬─────────────────────────────────────────┘
            │ writes to / reads from
            ▼
 ┌─────────────────── crowi.config.json ──────────────┐
-│  plugins: ["@crowi/storage-aws-s3", ...]           │
+│  plugins: ["@crowi/plugin-storage-aws-s3", ...]           │
 └──────────┬─────────────────────────────────────────┘
            │ at boot
            ▼
@@ -94,7 +94,7 @@ export interface CrowiPlugin {
   /** Plugin's own version (matches the npm package's semver). */
   version: string;
 
-  /** Other plugins this plugin needs at runtime. e.g. ['@crowi/aws']. */
+  /** Other plugins this plugin needs at runtime. e.g. ['@crowi/plugin-aws']. */
   requires?: string[];
 
   /**
@@ -223,7 +223,7 @@ At boot, after `setupConfig` and before `setupSearcher` / `setupMailer` /
 etc., the runtime runs `PluginManager.loadAll()`:
 
 1. Read `plugins: string[]` from `crowi.config.json`. Always prepend the
-   *implicit defaults* (`@crowi/storage-local`, `@crowi/search-mongo`) so
+   *implicit defaults* (`@crowi/plugin-storage-local`, `@crowi/plugin-search-mongo`) so
    a fresh install starts with a working Wiki. Local password auth lives
    in core itself, not in a plugin, so it doesn't appear here.
 2. For each name, `await import(name)` to load the module. The package's
@@ -240,7 +240,7 @@ etc., the runtime runs `PluginManager.loadAll()`:
    `storage.driver = 's3' | 'local' | …`.
 
 If a configured driver name is not present in the registry (e.g. config says
-`storage.driver = 's3'` but `@crowi/storage-aws-s3` isn't installed), boot
+`storage.driver = 's3'` but `@crowi/plugin-storage-aws-s3` isn't installed), boot
 fails with a clear error pointing at the missing plugin.
 
 ## Distribution & CLI
@@ -251,14 +251,15 @@ fails with a clear error pointing at the missing plugin.
 |---|---|
 | `@crowi/plugin-api` | Type-only contract: `CrowiPlugin`, registries, context |
 | `@crowi/server` | The runtime: Express + ts-rest API + bundled Next.js production build + PluginManager |
-| `@crowi/cli` | `crowi init`, `crowi plugin add/remove`, `crowi start`, `crowi migrate` |
-| `@crowi/storage-local` | Default storage driver — bundled and auto-loaded |
-| `@crowi/storage-aws-s3` | S3 driver |
-| `@crowi/search-mongo` | Default search driver (Mongo `$regex` over path / title / body) — bundled and auto-loaded |
-| `@crowi/search-elasticsearch` | ES driver |
-| `@crowi/auth-google` | Google OAuth |
-| `@crowi/auth-github` | GitHub OAuth |
-| `@crowi/notify-slack` | Slack notification sink |
+| `@crowi/admin-cli` | Operator-facing CLI shipped with the runner image. `crowi-admin init`, `crowi-admin plugin add/remove`, `crowi-admin start`, `crowi-admin migrate`, `crowi-admin storage copy`, … |
+| `@crowi/cli` | *Future, separate package.* End-user CLI for talking to a running Crowi server over HTTP — `crowi login`, `crowi page edit`, `crowi search`, … See **Appendix A**. |
+| `@crowi/plugin-storage-local` | Default storage driver — bundled and auto-loaded |
+| `@crowi/plugin-storage-aws-s3` | S3 driver |
+| `@crowi/plugin-search-mongo` | Default search driver (Mongo `$regex` over path / title / body) — bundled and auto-loaded |
+| `@crowi/plugin-search-elasticsearch` | ES driver |
+| `@crowi/plugin-auth-google` | Google OAuth |
+| `@crowi/plugin-auth-github` | GitHub OAuth |
+| `@crowi/plugin-notify-slack` | Slack notification sink |
 
 Local password / session / JWT auth lives in **core**, not as a plugin.
 Foundational enough that every install needs it and decoupling adds more
@@ -270,9 +271,9 @@ complexity than value.
 {
   "$schema": "https://crowi.io/schema/2.0/config.json",
   "plugins": [
-    "@crowi/storage-aws-s3",
-    "@crowi/search-elasticsearch",
-    "@crowi/auth-google"
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-auth-google"
   ],
   "storage": { "driver": "s3" },
   "search":  { "driver": "elasticsearch" }
@@ -283,20 +284,27 @@ Plugin-specific config (S3 bucket, ES URL, Google client_id, …) is **not**
 in this file — it lives in the existing Mongo `Config` collection under
 `plugin:<name>:<key>` keys, set via the admin UI.
 
-### CLI commands
+### `@crowi/admin-cli` commands
+
+The operator CLI ships as a separate npm package (`@crowi/admin-cli`,
+bin name `crowi-admin`). It runs *inside the server / runner environment*
+— it has direct access to MongoDB, the encryption key, and the plugin
+filesystem layout, and it does not authenticate against an HTTP API.
 
 ```
-crowi init <dir>              # scaffold project: data/, crowi.config.json, .env, package.json
-crowi plugin add <pkg>...     # npm install + append to plugins[]
-crowi plugin remove <pkg>     # npm uninstall + drop from plugins[] (config rows kept by default)
-crowi plugin remove <pkg> --purge
-                              # …also delete plugin:<name>:* config rows from Mongo
-crowi plugin list             # show installed plugins + versions + status
-crowi start                   # launch the server (production)
-crowi migrate                 # run any pending data migrations
+crowi-admin init <dir>          # scaffold project: data/, crowi.config.json, .env, package.json
+crowi-admin plugin add <pkg>... # npm install + append to plugins[]
+crowi-admin plugin remove <pkg> # npm uninstall + drop from plugins[] (config rows kept by default)
+crowi-admin plugin remove <pkg> --purge
+                                # …also delete plugin:<name>:* config rows from Mongo
+crowi-admin plugin list         # show installed plugins + versions + status
+crowi-admin start               # launch the server (production)
+crowi-admin migrate             # run any pending data migrations
+crowi-admin storage copy --from <a> --to <b>
+                                # copy stored files between storage drivers
 ```
 
-`crowi plugin add` validates the name against the `@crowi/*` allowlist for
+`crowi-admin plugin add` validates the name against the `@crowi/*` allowlist for
 v2.0. The allowlist constraint is removed in a future RFC once we have a
 trust story for community plugins.
 
@@ -308,7 +316,7 @@ I'm doing, drop the rows too" gesture.
 
 ### Project layout
 
-`crowi init` produces a regular npm project — `package.json`,
+`crowi-admin init` produces a regular npm project — `package.json`,
 `node_modules/`, lockfile and all — so power users can run `npm install`
 directly, edit `package.json`, or pin plugin versions with their normal
 tooling. The CLI is a convenience wrapper on top, not a replacement.
@@ -317,21 +325,21 @@ tooling. The CLI is a convenience wrapper on top, not a replacement.
 my-wiki/
 ├── package.json           ← regular npm project; CLI writes to it
 ├── package-lock.json
-├── node_modules/          ← @crowi/server + @crowi/cli + plugins live here
+├── node_modules/          ← @crowi/server + @crowi/admin-cli + plugins live here
 ├── crowi.config.json      ← CLI's source of truth for installed plugin list
 ├── .env                   ← CROWI_ENCRYPTION_KEY, MONGO_URI, etc.
-└── data/                  ← local file uploads (when @crowi/storage-local is active)
+└── data/                  ← local file uploads (when @crowi/plugin-storage-local is active)
 ```
 
 CI deploy story: commit `crowi.config.json` + `package.json` +
-`package-lock.json`; CI runs `npm ci && crowi migrate && crowi start`. No
+`package-lock.json`; CI runs `npm ci && crowi-admin migrate && crowi-admin start`. No
 git clone of the Crowi repo required.
 
 ### Docker distribution
 
 Two image variants published to Docker Hub:
 
-- **`crowi/server:2.0`** — `@crowi/cli` + `@crowi/server` + the four
+- **`crowi/server:2.0`** — `@crowi/admin-cli` + `@crowi/server` + the four
   default-on / bundled plugins. Sufficient for a fresh install with local
   storage / Mongo regex search / local password auth.
 - **`crowi/server-full:2.0`** — same plus all official `@crowi/*` plugins
@@ -342,7 +350,7 @@ Custom-plugin operators extend the base image:
 
 ```Dockerfile
 FROM crowi/server:2.0
-RUN crowi plugin add @crowi/storage-aws-s3 @crowi/notify-slack
+RUN crowi-admin plugin add @crowi/plugin-storage-aws-s3 @crowi/plugin-notify-slack
 COPY crowi.config.json /app/
 ```
 
@@ -383,7 +391,7 @@ For each existing v1.x feature being plugin-ified, the migration story:
 
 - Legacy config keys: `upload:aws:region`, `upload:aws:bucket`,
   `upload:aws:accessKeyId`, `upload:aws:secretAccessKey`.
-- New config keys (under `@crowi/storage-aws-s3`): same field names,
+- New config keys (under `@crowi/plugin-storage-aws-s3`): same field names,
   prefixed `plugin:storage-aws-s3:*`.
 - `onInstall` runs once on first activation: copy `upload:aws:*` →
   `plugin:storage-aws-s3:*`. Files in the bucket are not touched.
@@ -392,7 +400,7 @@ For each existing v1.x feature being plugin-ified, the migration story:
 ### Storage (local)
 
 - Legacy: files at `data/uploads/<id>/...`.
-- New: `@crowi/storage-local` reads/writes the same path. No migration
+- New: `@crowi/plugin-storage-local` reads/writes the same path. No migration
   needed beyond marking the plugin as the active driver (which is the
   default anyway).
 
@@ -431,12 +439,13 @@ In scope:
 
 - `@crowi/plugin-api` — the contract
 - `@crowi/server` runtime + PluginManager
-- `@crowi/cli` (`init`, `plugin add/remove/list`, `start`, `migrate`)
+- `@crowi/admin-cli` (`init`, `plugin add/remove/list`, `start`, `migrate`, `storage copy`)
+- *(Future, separate RFC)* `@crowi/cli` — end-user CLI over HTTP; see Appendix A
 - Plugins:
-  - `@crowi/storage-local`, `@crowi/storage-aws-s3`
-  - `@crowi/search-mongo`, `@crowi/search-elasticsearch`
-  - `@crowi/auth-google`, `@crowi/auth-github`
-  - `@crowi/notify-slack`
+  - `@crowi/plugin-storage-local`, `@crowi/plugin-storage-aws-s3`
+  - `@crowi/plugin-search-mongo`, `@crowi/plugin-search-elasticsearch`
+  - `@crowi/plugin-auth-google`, `@crowi/plugin-auth-github`
+  - `@crowi/plugin-notify-slack`
 - Local password / session / JWT auth stays in **core** (not a plugin)
 - Schema-driven admin form
 - v1.x → v2.0 config migration for the legacy keys above
@@ -456,9 +465,9 @@ Out of scope (deferred to v2.1 RFCs):
 
 ## Resolved decisions (round 2 review)
 
-1. **Search default fallback** → `@crowi/search-mongo` is a thin wrapper
+1. **Search default fallback** → `@crowi/plugin-search-mongo` is a thin wrapper
    over Mongo `$regex` against `path` / `title` / `body`. No inverted
-   index in core; if you need real search, install `@crowi/search-elasticsearch`.
+   index in core; if you need real search, install `@crowi/plugin-search-elasticsearch`.
 2. **Plugin routes** → ts-rest contracts, mounted under
    `/api/v2/plugins/<name>/*`. The `<name>` path prefix is the namespace
    guarantee — plugins cannot collide with core endpoints or each other.
@@ -516,8 +525,8 @@ Out of scope (deferred to v2.1 RFCs):
    `pageMetadataSchema` extension points so the eventual plugin can use
    them.
 
-2. **Bundled core defaults**: `@crowi/storage-local` and
-   `@crowi/search-mongo` are listed as separate npm packages bundled
+2. **Bundled core defaults**: `@crowi/plugin-storage-local` and
+   `@crowi/plugin-search-mongo` are listed as separate npm packages bundled
    with `@crowi/server`. Alternatively they could be inline modules in
    core. The npm-package version is more consistent with the plugin
    model but adds packaging overhead. Decide during step 1 of the
@@ -537,20 +546,89 @@ Order of work for the v2.0 release:
 2. Build `PluginManager` in `apps/crowi-api` against the existing monorepo
    layout — no packaging yet, just the loader.
 3. Convert storage to a plugin: extract the existing local + S3 uploaders
-   into `@crowi/storage-local` + `@crowi/storage-aws-s3`. Validate
+   into `@crowi/plugin-storage-local` + `@crowi/plugin-storage-aws-s3`. Validate
    end-to-end that file upload still works.
-4. Convert search: extract the ES client into `@crowi/search-elasticsearch`
-   + add `@crowi/search-mongo` as the default fallback.
+3a. Introduce `apps/crowi-dev-runner/` — a thin app workspace that mirrors
+    the structure of a `crowi-admin init` runner repo, holds the dev
+    `crowi.config.json` / `.env`, and declares the optional plugins as
+    its own deps. `@crowi/api` becomes plugin-agnostic at runtime
+    (resolves plugin npm names against the runner's `node_modules/` via
+    `createRequire`), so production runner repos and the dev runner are
+    structurally identical. This step has to land before E2E S3
+    validation in step 3 — without a CWD that owns plugin deps, the
+    bundle-size separation contract is violated.
+4. Convert search: extract the ES client into `@crowi/plugin-search-elasticsearch`
+   + add `@crowi/plugin-search-mongo` as the default fallback.
 5. Convert auth: extract Google / GitHub passport strategies into
-   `@crowi/auth-google` / `@crowi/auth-github`. Local password auth stays
+   `@crowi/plugin-auth-google` / `@crowi/plugin-auth-github`. Local password auth stays
    in core; the AuthRegistry is a list of *additional* providers that the
    login screen surfaces alongside the always-on email-and-password form.
 6. Convert notification (slack).
 7. Schema-driven admin form generalisation.
-8. CLI + server runtime packaging — `@crowi/cli`, `@crowi/server`,
-   `crowi init` flow.
-9. Legacy config migration runner (`crowi migrate`).
+8. CLI + server runtime packaging — `@crowi/admin-cli`, `@crowi/server`,
+   `crowi-admin init` flow.
+9. Legacy config migration runner (`crowi-admin migrate`).
 10. Documentation: migration guide for v1.x users.
+11. *(Outside the v2.0 critical path)* `@crowi/cli` — end-user CLI over HTTP.
+    Tracked in Appendix A; lands when there is appetite for it.
 
 Each numbered step is a multi-PR effort. Steps 3–6 can run in parallel
 once step 2 lands.
+
+## Appendix A — `@crowi/cli` (end-user CLI; future)
+
+Crowi ships **two** CLIs, separated by audience and access path so the
+command vocabularies never collide:
+
+| Package | bin | Audience | Path to data | Auth | Install |
+|---|---|---|---|---|---|
+| `@crowi/admin-cli` | `crowi-admin` | Operator, on the server | Direct Mongo + filesystem + encryption key | None (= ssh / OS-level) | `npm i -g @crowi/admin-cli` (or shipped in the runner image) |
+| `@crowi/cli` | `crowi` | End-user / developer, from a workstation | HTTP API (`/api/v2/*`) | OAuth (`crowi login`) | `npm i -g @crowi/cli` |
+
+This mirrors the `kubeadm` / `kubectl` split in Kubernetes — a
+cluster-operator tool and an end-user tool, with no overlap.
+
+### Sketch of `@crowi/cli` (subject to its own RFC)
+
+```
+crowi login [--server https://wiki.example.com]
+            # opens an OAuth browser flow, stores token in ~/.config/crowi/credentials
+crowi logout
+crowi whoami
+
+crowi page list [--path /docs]
+crowi page get <path>            # write Markdown to stdout
+crowi page edit <path>           # opens $EDITOR, PUT on save
+crowi page create <path> < FILE  # pipe stdin
+crowi search <query>
+
+crowi attachment upload <path-on-page> <local-file>
+crowi attachment download <attachment-id> <local-file>
+```
+
+Implementation notes (for the future RFC):
+
+- Pure HTTP client, depends only on `@crowi/api-contract` (for typed
+  request/response shapes) and an OAuth client.
+- No knowledge of Mongo, no plugin loading, no encryption key — it
+  cannot escalate beyond what its access token grants.
+- Shares zero runtime code with `@crowi/admin-cli`; the only thing
+  they have in common is the `crowi*` brand.
+- Should work against any Crowi instance the user has an account on;
+  not tied to a specific server build.
+
+### Why split the CLIs
+
+1. **Threat model**. `@crowi/admin-cli` reads the encryption key and
+   talks to Mongo directly. Putting it on a developer workstation is
+   wrong — a user with `npm i -g @crowi/admin-cli` could connect to a
+   production Mongo if they had the URI, bypassing the API. Keeping
+   admin-cli inside the server image, and never publishing it for
+   workstation install, makes the privilege boundary obvious.
+2. **Coupling**. `@crowi/admin-cli` is versioned with the server (it
+   imports `@crowi/server` internals); `@crowi/cli` is versioned
+   against the public API contract and stays compatible across server
+   minors.
+3. **Discoverability**. `crowi login` and `crowi-admin start` doing
+   completely different things from the same binary would surprise
+   users. Different bin names = no surprise.

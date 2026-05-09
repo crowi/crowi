@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import Crowi from 'src/crowi';
 // import Debug from 'debug'
 // const debug = Debug('crowi:events:activity')

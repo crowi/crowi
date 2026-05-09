@@ -101,10 +101,19 @@ const STATIC_GROUPS: AdminNavGroup[] = [
   {
     key: 'storage',
     heading: () => m['admin.section_storage'](),
-    // Core "file upload settings" page lives in /admin/app's upload
-    // section for now. Plugins inject under this heading.
-    items: [],
-    hideWhenEmpty: true,
+    // Static entry first, then storage-driver plugins inject under this
+    // heading via `injectPluginEntries` (so each driver's settings page
+    // is one click away). Always visible — the status page is useful
+    // even on a fresh install with only the implicit-default plugins.
+    items: [
+      {
+        href: '/admin/storage',
+        label: () => m['admin.nav_storage'](),
+        icon: HardDrive,
+        status: 'available',
+        description: () => m['admin.nav_storage_summary'](),
+      },
+    ],
   },
   {
     key: 'mail',

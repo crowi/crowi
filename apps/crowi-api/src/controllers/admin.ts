@@ -95,7 +95,7 @@ export default (crowi: Crowi) => {
   actions.api.app.index = async function (req: Request, res: Response) {
     const config = crowi.getConfig();
     const settingForm = config.crowi;
-    const isUploadable = Config.isUploadable(config);
+    const isUploadable = Config.isUploadable();
 
     return res.json(ApiResponse.success({ settingForm, registrationMode, isUploadable }));
   };

@@ -1,13 +1,13 @@
 /**
- * Integration tests for `@crowi/storage-local`'s driver. The driver
- * implementation lives in the package; we test it from here because
- * the package is a leaf workspace without its own jest setup.
+ * Integration tests for `@crowi/plugin-storage-local`'s driver. The
+ * driver implementation lives in the package; we test it from here
+ * because the package is a leaf workspace without its own jest setup.
  */
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { createLocalDriver } from '@crowi/storage-local';
+import { createLocalDriver } from '@crowi/plugin-storage-local';
 
 async function readAll(stream: Readable): Promise<string> {
   const chunks: Buffer[] = [];
@@ -15,7 +15,7 @@ async function readAll(stream: Readable): Promise<string> {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-describe('@crowi/storage-local driver', () => {
+describe('@crowi/plugin-storage-local driver', () => {
   let tmpDir: string;
 
   beforeEach(async () => {

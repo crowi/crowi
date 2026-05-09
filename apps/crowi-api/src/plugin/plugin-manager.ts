@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import Debug from 'debug';
 import type { AuthDriver, CrowiPlugin, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
@@ -19,7 +21,7 @@ const debug = Debug('crowi:plugin:manager');
  * registered the configured driver name, we log a warning and leave
  * the active slot null so legacy in-core code paths keep handling
  * those concerns. This is the v2.0 transition state — once the
- * built-in `@crowi/storage-local` and `@crowi/search-mongo` plugins
+ * built-in `@crowi/plugin-storage-local` and `@crowi/plugin-search-mongo` plugins
  * land (Step 3+), the active slots are always populated.
  */
 export interface PluginRegistries {
@@ -77,11 +79,16 @@ export class PluginManager {
    * active drivers. Call once during `Crowi.init()`.
    */
   async bootstrap(projectDir: string = process.cwd()): Promise<PluginRegistries> {
+    // Resolve plugin npm names against the runner project's
+    // `node_modules/`. The runner declares plugins as deps, not
+    // @crowi/api — so a bare `import('@crowi/plugin-…')` from this
+    // file would search the wrong tree.
+    const projectRequire = createRequire(path.join(projectDir, 'package.json'));
     const config = await loadCrowiConfigFile(projectDir);
-    debug('loaded crowi.config.json: plugins=%o', config.plugins);
+    debug('loaded crowi.config.json from %s: plugins=%o', projectDir, config.plugins);
 
     const seedNames = resolvePluginList(config);
-    const plugins = await this.importWithTransitives(seedNames);
+    const plugins = await this.importWithTransitives(seedNames, projectRequire);
     const ordered = topoSortPlugins(plugins);
     this.loadedPlugins = ordered;
 
@@ -145,17 +152,18 @@ export class PluginManager {
    * Import the given seed plugin names *and* recursively follow each
    * loaded plugin's `requires` array, importing any transitive deps
    * not already in the set. Lets the operator list only the leaf
-   * plugins they care about (`@crowi/storage-aws-s3`) and have base
-   * plugins (`@crowi/aws`) auto-loaded via npm transitive resolution.
+   * plugins they care about (`@crowi/plugin-storage-aws-s3`) and have
+   * base plugins (`@crowi/plugin-aws`) auto-loaded via npm transitive
+   * resolution.
    */
-  private async importWithTransitives(seedNames: string[]): Promise<CrowiPlugin[]> {
+  private async importWithTransitives(seedNames: string[], projectRequire: NodeRequire): Promise<CrowiPlugin[]> {
     const loaded = new Map<string, CrowiPlugin>();
     const queue = [...seedNames];
 
     while (queue.length > 0) {
       const name = queue.shift() as string;
       if (loaded.has(name)) continue;
-      const plugin = await this.importOne(name);
+      const plugin = await this.importOne(name, projectRequire);
       loaded.set(name, plugin);
       for (const dep of plugin.requires ?? []) {
         if (!loaded.has(dep)) queue.push(dep);
@@ -165,10 +173,11 @@ export class PluginManager {
     return Array.from(loaded.values());
   }
 
-  private async importOne(name: string): Promise<CrowiPlugin> {
+  private async importOne(name: string, projectRequire: NodeRequire): Promise<CrowiPlugin> {
     let mod: { default?: unknown };
     try {
-      mod = (await import(name)) as { default?: unknown };
+      const resolved = projectRequire.resolve(name);
+      mod = (await import(resolved)) as { default?: unknown };
     } catch (err) {
       throw new Error(`Failed to import plugin '${name}': ${(err as Error).message}`);
     }

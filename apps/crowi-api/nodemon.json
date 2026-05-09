@@ -6,9 +6,9 @@
     "src/",
     "locales/",
     "../../packages/plugin-api/dist/",
-    "../../packages/aws/dist/",
-    "../../packages/storage-local/dist/",
-    "../../packages/storage-aws-s3/dist/"
+    "../../packages/plugin-aws/dist/",
+    "../../packages/plugin-storage-local/dist/",
+    "../../packages/plugin-storage-aws-s3/dist/"
   ],
   "ignore": [
     "*.tsx",

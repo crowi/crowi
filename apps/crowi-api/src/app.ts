@@ -5,11 +5,6 @@
  * @author  Sotaro KARASAWA <sotarok@crocos.co.jp>
  */
 
-// Only register module-alias in production
-if (process.env.NODE_ENV === 'production') {
-  require('module-alias/register');
-}
-
 import dotenv from 'dotenv';
 import Crowi from 'src/crowi';
 import { join, resolve } from 'path';

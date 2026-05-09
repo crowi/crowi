@@ -25,6 +25,7 @@ import mailer from 'src/util/mailer';
 import slack from 'src/util/slack';
 import { resetKeyProvider } from 'src/util/crypto';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
+import { runAwsConfigMigration } from 'src/util/aws-config-migration';
 import expressInit from './express-init';
 // import Searcher from 'src/service/search'
 
@@ -149,13 +150,23 @@ class Crowi {
 
   async init() {
     this.setupEncryption();
-    // setup database server and load all modesl
     await this.setupDatabase();
     await this.setupModels();
     await this.setupRedisClient();
     await this.setupSessionConfig();
     await this.setupConfig();
     await this.migrateConfig();
+    // Copy legacy `upload:aws:*` keys into the new plugin namespace
+    // BEFORE setupPlugins runs — @crowi/plugin-aws reads its config at
+    // register time and the storage driver pulls credentials out then.
+    // Idempotent + write-only-when-target-empty, safe on every boot.
+    // Failures here are warnings only: the migration is best-effort and
+    // operators can also configure the new keys directly.
+    try {
+      await runAwsConfigMigration(this);
+    } catch (err) {
+      console.warn('[crowi] AWS config migration failed (continuing boot):', (err as Error).message);
+    }
     // Plugins must boot AFTER config/models are ready (so PluginContext
     // can read config and access models) but BEFORE the legacy
     // searcher / mailer / slack initialisers — those are migrating to
@@ -169,6 +180,49 @@ class Crowi {
     await this.buildServer();
 
     this.initialized = true;
+  }
+
+  /**
+   * Lightweight init for the `@crowi/admin-cli` operator CLI. Brings up
+   * just what's needed to read Config + reach storage drivers — Redis
+   * / sessions / mailer / slack / search / DNS / LRU / express / the
+   * boot-time AWS migration are all skipped (the migration belongs to
+   * `init()` so the long-running server runs it once; the CLI shouldn't
+   * mutate Mongo as a side effect of starting up).
+   *
+   * `setupConfig` works without Redis because `service/config.ts:setupPubSub`
+   * short-circuits when `redisOpts === null`.
+   *
+   * The CLI follows up with `teardownForCli()` to disconnect Mongo so
+   * the Node process exits cleanly.
+   */
+  async initForCli() {
+    this.setupEncryption();
+    await this.setupDatabase();
+    await this.setupModels();
+    await this.setupConfig();
+    await this.setupPlugins();
+    this.initialized = true;
+  }
+
+  /**
+   * Reverse of `initForCli`. Closes any connection the CLI helper opened
+   * so the Node process exits without dangling handles. Defensive about
+   * Redis (we never opened it in CLI mode, but a future helper might).
+   */
+  async teardownForCli() {
+    if (this.redis) {
+      try {
+        await this.redis.quit();
+      } catch {
+        // best-effort — process is exiting anyway
+      }
+      this.redis = null;
+    }
+    if (this.mongoose) {
+      await this.mongoose.disconnect();
+      this.mongoose = null;
+    }
   }
 
   async setupPlugins() {

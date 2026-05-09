@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3"
+  ],
+  "storage": {
+    "driver": "local"
+  },
+  "search": {
+    "driver": "mongo"
+  }
+}

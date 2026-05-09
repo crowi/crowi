@@ -2,14 +2,14 @@ import { Readable } from 'node:stream';
 import { z } from 'zod';
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { AwsConfig } from '@crowi/aws';
+import type { AwsConfig } from '@crowi/plugin-aws';
 import type { CrowiPlugin, StorageDriver } from '@crowi/plugin-api';
 
 /**
- * AWS S3 storage driver. Depends on `@crowi/aws` for shared
+ * AWS S3 storage driver. Depends on `@crowi/plugin-aws` for shared
  * credentials (region / accessKeyId / secretAccessKey) — operators
- * configure those once via the @crowi/aws admin section and S3 +
- * future SES + … all pick them up.
+ * configure those once via the @crowi/plugin-aws admin section and
+ * S3 + future SES + … all pick them up.
  *
  * Object keys are passed through verbatim to S3, preserving the
  * v1.x naming convention. Operators upgrading from v1.x point
@@ -27,9 +27,9 @@ const S3StorageConfigSchema = z
 type S3StorageConfig = z.infer<typeof S3StorageConfigSchema>;
 
 const plugin: CrowiPlugin = {
-  name: '@crowi/storage-aws-s3',
+  name: '@crowi/plugin-storage-aws-s3',
   version: '0.1.0-dev',
-  requires: ['@crowi/aws'],
+  requires: ['@crowi/plugin-aws'],
   configSchema: S3StorageConfigSchema,
   adminPlacement: {
     label: 'AWS S3',
@@ -39,7 +39,7 @@ const plugin: CrowiPlugin = {
 
   registerStorage: (registry, ctx) => {
     const own = ctx.config<S3StorageConfig>();
-    const aws = ctx.dependencyConfig<AwsConfig>('@crowi/aws');
+    const aws = ctx.dependencyConfig<AwsConfig>('@crowi/plugin-aws');
     const driver = createS3Driver({ ...aws, bucket: own.bucket });
     registry.register('s3', driver);
     ctx.log.debug('registered s3 storage driver (bucket=%s, region=%s)', own.bucket || '<unset>', aws.region || '<default>');
@@ -75,7 +75,7 @@ export function createS3Driver(config: S3DriverConfig): StorageDriver {
 
   const requireBucket = (): string => {
     if (!config.bucket) {
-      throw new Error('@crowi/storage-aws-s3: bucket is not configured.');
+      throw new Error('@crowi/plugin-storage-aws-s3: bucket is not configured.');
     }
     return config.bucket;
   };

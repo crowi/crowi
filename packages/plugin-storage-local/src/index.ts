@@ -31,7 +31,7 @@ const LocalStorageConfigSchema = z
 type LocalStorageConfig = z.infer<typeof LocalStorageConfigSchema>;
 
 const plugin: CrowiPlugin = {
-  name: '@crowi/storage-local',
+  name: '@crowi/plugin-storage-local',
   version: '0.1.0-dev',
   configSchema: LocalStorageConfigSchema,
   adminPlacement: {

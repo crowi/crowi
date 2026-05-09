@@ -10,17 +10,36 @@ import type { StorageDriver } from '@crowi/plugin-api';
  * required.
  *
  * Throws a clear error if no storage driver is registered — that
- * means the operator has neither installed `@crowi/storage-local`
- * (default) nor `@crowi/storage-aws-s3`. Until Step 3 wiring lands
- * fully, this can also fire when the new boot order is used without
- * the plugin packages installed in node_modules.
+ * means the operator has neither installed `@crowi/plugin-storage-local`
+ * (default) nor `@crowi/plugin-storage-aws-s3`. Until Step 3 wiring
+ * lands fully, this can also fire when the new boot order is used
+ * without the plugin packages installed in node_modules.
  */
 function activeDriver(crowi: Crowi): StorageDriver {
   const driver = crowi.getPlugins().active.storage;
   if (!driver) {
-    throw new Error('Storage driver not registered. Install @crowi/storage-local (default) or @crowi/storage-aws-s3.');
+    throw new Error('Storage driver not registered. Install @crowi/plugin-storage-local (default) or @crowi/plugin-storage-aws-s3.');
   }
   return driver;
+}
+
+/**
+ * Look up a registered storage driver by its name (the string passed to
+ * `registerStorage().register('<name>', …)`). Throws with the list of
+ * available drivers when the name doesn't match — operators see what's
+ * actually installed instead of having to guess. Used by the
+ * `crowi-admin storage copy` CLI to address `--from` / `--to` drivers
+ * regardless of which one is currently `active`.
+ */
+export function getStorageDriverByName(crowi: Crowi, name: string): StorageDriver {
+  const driver = crowi.getPlugins().storage.get(name);
+  if (driver) return driver;
+  const available = crowi
+    .getPlugins()
+    .storage.list()
+    .map((d) => d.driverName)
+    .join(', ');
+  throw new Error(`Storage driver '${name}' is not registered. Available drivers: ${available || '(none)'}.`);
 }
 
 export interface FileUploader {
@@ -75,6 +94,14 @@ export default (crowi: Crowi): FileUploader => ({
     // The `by-key` route only accepts keys under the `user/` prefix
     // (profile pictures); attachment-row-backed files use the
     // `/api/v2/attachments/:id` route via `Attachment.fileUrl`.
-    return `/api/v2/attachments/by-key/${encodeURIComponent(filePath)}`;
+    return `${BY_KEY_URL_PREFIX}${encodeURIComponent(filePath)}`;
   },
 });
+
+/**
+ * Path prefix used by `generateUrl()` when a driver has no `signedUrl`.
+ * Hoisted so the storage-copy migration can recognise the same shape
+ * when extracting keys from `User.image` URLs without re-encoding the
+ * route knowledge in two places.
+ */
+export const BY_KEY_URL_PREFIX = '/api/v2/attachments/by-key/';

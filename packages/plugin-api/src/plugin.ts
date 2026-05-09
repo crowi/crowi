@@ -35,7 +35,7 @@ export interface CrowiPlugin {
 
   /**
    * Other plugins this plugin needs at runtime, by npm name (e.g.
-   * `['@crowi/aws']`). The PluginManager resolves the dependency graph
+   * `['@crowi/plugin-aws']`). The PluginManager resolves the dependency graph
    * at boot and loads `requires` first; cycles fail boot.
    */
   requires?: string[];
@@ -71,7 +71,7 @@ export interface CrowiPlugin {
    * omitted, the runtime derives the section from the plugin's
    * `register*` hooks (registerStorage → 'storage', registerAuth →
    * 'auth', etc.). Plugins with no register* hooks (config-only
-   * "base plugins" like `@crowi/aws`) MUST declare `section: 'shared'`
+   * "base plugins" like `@crowi/plugin-aws`) MUST declare `section: 'shared'`
    * to appear in the sidebar at all.
    *
    * `label` overrides the default sidebar text (which would otherwise

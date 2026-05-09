@@ -52,7 +52,8 @@ function PluginEditContent() {
             <CardDescription>{m['admin.plugins.edit_description']()}</CardDescription>
           </CardHeader>
           <CardContent>
-            <PluginConfigForm config={data} />
+            {/* key= forces a fresh useState snapshot when the URL plugin changes. */}
+            <PluginConfigForm key={data.name} config={data} />
           </CardContent>
         </Card>
       )}

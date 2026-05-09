@@ -1,5 +1,5 @@
 import Crowi from 'src/crowi';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 // import Debug from 'debug'
 
 export default class SearchEvent extends EventEmitter {

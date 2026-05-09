@@ -5,6 +5,7 @@ import { adminMailContract } from './mail';
 import { adminPluginsContract } from './plugins';
 import { adminSecurityContract } from './security';
 import { adminShareContract } from './share';
+import { adminStorageContract } from './storage';
 import { adminUsersContract } from './users';
 
 const c = initContract();
@@ -20,6 +21,7 @@ export const adminContract = c.router({
   security: adminSecurityContract,
   mail: adminMailContract,
   share: adminShareContract,
+  storage: adminStorageContract,
   users: adminUsersContract,
   plugins: adminPluginsContract,
 });

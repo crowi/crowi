@@ -1,0 +1,31 @@
+{
+  "name": "@crowi/admin-cli",
+  "version": "0.1.0-dev",
+  "description": "Operator-side admin CLI (`crowi-admin`) for Crowi 2.0. Talks directly to MongoDB through @crowi/api's lightweight CLI bootstrap; not a replacement for the upcoming end-user @crowi/cli.",
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
+  "bin": {
+    "crowi-admin": "dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "require": "./dist/cli.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@crowi/api": "workspace:^",
+    "commander": "^12.1.0",
+    "dotenv": "^16.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}

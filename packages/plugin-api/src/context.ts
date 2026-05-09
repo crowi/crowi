@@ -20,11 +20,11 @@ export interface PluginContext {
    * plugin's config without declaring the dependency is a contract
    * violation and throws.
    *
-   * Useful for shared-credential plugins like `@crowi/aws`: the base
-   * plugin owns `region` / `accessKeyId` / `secretAccessKey`, and
-   * dependents (`@crowi/storage-aws-s3`, `@crowi/mail-aws-ses`) read
-   * them through this method instead of duplicating the fields in
-   * their own configSchema.
+   * Useful for shared-credential plugins like `@crowi/plugin-aws`:
+   * the base plugin owns `region` / `accessKeyId` / `secretAccessKey`,
+   * and dependents (`@crowi/plugin-storage-aws-s3`,
+   * `@crowi/plugin-mail-aws-ses`) read them through this method
+   * instead of duplicating the fields in their own configSchema.
    */
   dependencyConfig<T>(dependencyName: string): T;
 

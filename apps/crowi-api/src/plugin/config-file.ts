@@ -15,8 +15,8 @@ import { z } from 'zod';
 export const CrowiConfigFileSchema = z.object({
   /**
    * Names of plugins to load at boot, in addition to the implicit
-   * defaults (`@crowi/storage-local`, `@crowi/search-mongo`). Names
-   * must resolve via the project's `node_modules/`.
+   * defaults (`@crowi/plugin-storage-local`, `@crowi/plugin-search-mongo`).
+   * Names must resolve via the project's `node_modules/`.
    */
   plugins: z.array(z.string()).default([]),
 
@@ -25,7 +25,7 @@ export const CrowiConfigFileSchema = z.object({
       /**
        * Driver name (registered by some plugin) the file uploader
        * service should use. Defaults to `'local'` (provided by the
-       * default-on `@crowi/storage-local` plugin).
+       * default-on `@crowi/plugin-storage-local` plugin).
        */
       driver: z.string().default('local'),
     })
@@ -35,7 +35,7 @@ export const CrowiConfigFileSchema = z.object({
     .object({
       /**
        * Driver name the search service should use. Defaults to
-       * `'mongo'` (provided by the default-on `@crowi/search-mongo`).
+       * `'mongo'` (provided by the default-on `@crowi/plugin-search-mongo`).
        */
       driver: z.string().default('mongo'),
     })
@@ -51,9 +51,9 @@ export type CrowiConfigFile = z.infer<typeof CrowiConfigFileSchema>;
  * fresh install starts up as a working Wiki without any additional
  * plugin install.
  *
- * `@crowi/search-mongo` is added in a follow-up step.
+ * `@crowi/plugin-search-mongo` is added in a follow-up step.
  */
-export const IMPLICIT_DEFAULT_PLUGINS: readonly string[] = ['@crowi/storage-local'];
+export const IMPLICIT_DEFAULT_PLUGINS: readonly string[] = ['@crowi/plugin-storage-local'];
 
 /**
  * Read and validate `crowi.config.json` from the given project

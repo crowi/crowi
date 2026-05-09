@@ -20,7 +20,7 @@ security settings landed). See `TODO.md` for the up-to-date phase status.
 ```
 crowi/
 ├── apps/
-│   ├── crowi-api/                  # Express + ts-rest API server (port 3000)
+│   ├── crowi-api/                  # Express + ts-rest API library (port 3300 in dev)
 │   │   ├── src/
 │   │   │   ├── controllers/        # Legacy Swig-era handlers (still mounted; deprecated)
 │   │   │   ├── routes/
@@ -33,9 +33,15 @@ crowi/
 │   │   │   ├── service/            # Business logic (search, notifications, config)
 │   │   │   ├── events/             # pageEvent / notificationEvent listeners
 │   │   │   ├── util/               # crypto, jwt, ts-rest helpers, link detector
+│   │   │   ├── plugin/             # PluginManager + registries + config-file loader
 │   │   │   ├── types/              # Express Request augmentation
 │   │   │   └── crowi/index.ts      # Crowi class (boot, setup, teardown)
 │   │   └── .env.sample
+│   ├── crowi-dev-runner/           # ★ Local launcher: mirrors a `crowi init` runner repo
+│   │   ├── package.json            # deps: @crowi/api + @crowi/plugin-* (decides which plugins are available)
+│   │   ├── crowi.config.json       # which plugins to load + active driver names
+│   │   ├── .env / .env.sample      # runtime env (CWD-resolved)
+│   │   └── nodemon.json            # watches @crowi/api src + plugin dists, runs ../crowi-api/src/app.ts
 │   └── crowi-web/                  # Next.js 16 frontend (port 3301)
 │       └── src/
 │           ├── app/
@@ -45,11 +51,21 @@ crowi/
 │           ├── components/         # Page, page-view, page-list, admin, ui (shadcn)
 │           └── lib/                # React Query hooks, api-client, auth context
 └── packages/
-    └── api-contract/               # Shared ts-rest contracts + Zod schemas
-        └── src/
-            ├── contracts/          # ts-rest c.router definitions
-            └── schemas/            # Zod schema definitions
+    ├── api-contract/               # Shared ts-rest contracts + Zod schemas
+    │   └── src/
+    │       ├── contracts/          # ts-rest c.router definitions
+    │       └── schemas/            # Zod schema definitions
+    ├── plugin-api/                 # @crowi/plugin-api — plugin SDK (CrowiPlugin / registries / context)
+    ├── plugin-aws/                 # @crowi/plugin-aws — shared AWS credentials base plugin
+    ├── plugin-storage-local/       # @crowi/plugin-storage-local — default-on local FS storage driver
+    └── plugin-storage-aws-s3/      # @crowi/plugin-storage-aws-s3 — S3 storage driver
 ```
+
+The api package is plugin-agnostic at runtime — `PluginManager` resolves
+plugin npm names against the runner project's `node_modules/` via
+`createRequire(<projectDir>/package.json)`. Operators add a plugin by
+declaring it in their runner's `package.json` deps and listing it in
+`crowi.config.json:plugins`; the api never needs to be rebuilt.
 
 ## Tech Stack
 
@@ -69,12 +85,17 @@ pnpm install
 # Start dependency services (MongoDB / Redis / Elasticsearch / PlantUML)
 docker compose up -d
 
-# Run both apps with auto-reload (api on :3000, web on :3301)
+# Run both apps with auto-reload (dev-runner-mediated api on :3300, web on :3301)
 pnpm dev
 
-# Run a single app
-pnpm --filter @crowi/api dev
-pnpm --filter @crowi/web dev
+# Run only the API + plugins through the dev-runner (no Next.js)
+pnpm dev:runner
+
+# Run the API directly (no runner mediation; useful for api-only debug)
+pnpm dev:api
+
+# Run only the Next.js frontend
+pnpm dev:web
 ```
 
 ### Tests / Type-check / Lint
@@ -147,7 +168,11 @@ See `apps/crowi-api/.env.sample`. Required / commonly-set:
   when missing, sensitive values are stored as plaintext (legacy mode) and a
   warning is logged on boot.
 - `ELASTICSEARCH_URI` — optional, search backend
-- `FILE_UPLOAD` — `aws` / `local` / `none`
+
+Storage backend selection moved from a `FILE_UPLOAD` env to the
+runner's `crowi.config.json` (`storage.driver: 'local' | 's3' | …`)
+plus the matching `@crowi/plugin-storage-*` package being installed
+in the runner.
 
 ## TypeScript Guidelines
 
