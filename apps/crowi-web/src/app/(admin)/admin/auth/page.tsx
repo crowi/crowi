@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAdminAuthSettings } from '@/lib/use-admin-auth-settings';
@@ -26,11 +26,7 @@ export default function AdminAuthPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{m['admin.auth.heading']()}</CardTitle>
-          <CardDescription>{m['admin.auth.lead']()}</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {isLoading && <LoadingSpinner />}
 
           {!isLoading && error && (

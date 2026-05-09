@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -94,11 +94,7 @@ export default function AdminUsersPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{m['admin.users.heading']()}</CardTitle>
-          <CardDescription>{m['admin.users.lead']()}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           <Input
             type="search"
             value={inputValue}

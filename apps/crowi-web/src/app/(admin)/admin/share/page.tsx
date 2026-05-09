@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAdminShareSettings } from '@/lib/use-admin-share';
@@ -27,11 +27,7 @@ export default function AdminSharePage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{m['admin.share.heading']()}</CardTitle>
-          <CardDescription>{m['admin.share.lead']()}</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {isLoading && <LoadingSpinner />}
 
           {!isLoading && error && (

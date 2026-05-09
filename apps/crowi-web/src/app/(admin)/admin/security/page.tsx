@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAdminSecuritySettings } from '@/lib/use-admin-security';
@@ -26,11 +26,7 @@ export default function AdminSecurityPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{m['admin.security.heading']()}</CardTitle>
-          <CardDescription>{m['admin.nav_security_summary']()}</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {isLoading && <LoadingSpinner />}
 
           {!isLoading && error && (
