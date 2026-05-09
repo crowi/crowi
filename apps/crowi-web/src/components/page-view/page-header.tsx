@@ -78,12 +78,12 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
         {page.updatedAt && (
           <span className="inline-flex items-center gap-1">
             <Clock className="h-3.5 w-3.5" />
-            Updated {formatDistanceToNow(page.updatedAt)}
+            {m['page.meta_updated']({ time: formatDistanceToNow(page.updatedAt) })}
           </span>
         )}
 
-        {page.likerCount !== undefined && page.likerCount > 0 && <span>{page.likerCount} likes</span>}
-        {page.seenUsersCount !== undefined && page.seenUsersCount > 0 && <span>{page.seenUsersCount} views</span>}
+        {page.likerCount !== undefined && page.likerCount > 0 && <span>{m['page.meta_likes']({ count: page.likerCount })}</span>}
+        {page.seenUsersCount !== undefined && page.seenUsersCount > 0 && <span>{m['page.meta_views']({ count: page.seenUsersCount })}</span>}
       </div>
 
       {showSeenUsers && <SeenUserList pageId={page._id} fallbackCount={page.seenUsersCount} />}
