@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { registerSearchRebuild } from './commands/search-rebuild';
 import { registerStorageCopy } from './commands/storage-copy';
 
 /**
@@ -18,6 +19,7 @@ export function createProgram(): Command {
     .version('0.1.0-dev');
 
   registerStorageCopy(program);
+  registerSearchRebuild(program);
 
   return program;
 }
