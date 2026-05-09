@@ -222,6 +222,21 @@ scope: medium
 3.6. APPROVED → committer が commitPlan に従って複数 commit
 ```
 
+**チェーンは止めない**。spec phase でユーザー承認を取った後 (= skill 起動時の唯一の承認ポイント) は、
+3.1〜3.6 を **連続で実行** する。各 phase の完了報告は短い acknowledgement として残すが、
+「次に進みますか」と user 確認を取らない。途中停止が許されるのは:
+
+- **NEEDS_WORK が `maxReviewAttempts` 回連続** したとき → human escalation
+- **必須チェックの失敗** (type-check / test / lint / format / pre-commit hook) → 停止して報告
+- **commitPlan ⇄ diff の不整合** が committer 段階で解消できないとき → 停止して報告
+- **agent からの明示的な escalate 要求**
+
+それ以外は、status が `COMMITTED` になり `queue.currentTask = null` になるまで進める。
+特に:
+- simplify が「now invoke reviewer」と報告したら → 即 reviewer 起動 (確認待ちしない)
+- reviewer が APPROVED と判定したら → 即 committer 起動 (確認待ちしない)
+- committer が SUCCESS を返したら → 即 step 4 (完了報告) へ
+
 ### 4. 完了
 
 `task.status = COMMITTED`、`queue.currentTask = null`。
