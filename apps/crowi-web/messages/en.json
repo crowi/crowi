@@ -207,6 +207,8 @@
   "edit.attach_failed": "Failed to attach file",
   "user_page.tab_pages": "Created Pages",
   "user_page.tab_bookmarks": "Bookmarks",
+  "user_page.stat_pages_label": "pages",
+  "user_page.stat_bookmarks_label": "bookmarks",
   "user_page.loading_profile": "Loading user profile...",
   "user_page.failed_to_load_profile": "Failed to load user profile. Please try again later.",
   "user_page.recent_pages_loading": "Loading pages...",

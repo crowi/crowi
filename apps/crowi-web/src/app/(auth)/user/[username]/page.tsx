@@ -2,7 +2,6 @@
 
 import { use } from 'react';
 import { notFound, useRouter } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ErrorAlert } from '@/components/ui/error-alert';
@@ -24,9 +23,8 @@ export default function UserPage({ params }: UserPageProps) {
   const { data, isLoading, error } = useUserPage(username);
 
   // Crowi convention: a wiki page may live at /user/<username>. When it
-  // exists, render its content alongside the profile (the legacy app did
-  // the same — the user-page route is a normal wiki page that just happens
-  // to default to the profile view).
+  // exists, it renders below the profile cover (same path the legacy
+  // app served via the `userPage` template).
   const userPagePath = `/user/${username}`;
   const { page: userPageDoc, notFound: userPageNotFound } = usePage({ path: userPagePath });
 
@@ -45,22 +43,21 @@ export default function UserPage({ params }: UserPageProps) {
     return null;
   }
 
+  const hasUserPage = userPageDoc && !userPageNotFound;
+
   return (
-    <div className="space-y-6">
-      {/* Profile Card */}
+    <div>
       <UserProfile user={data.user} createdPagesCount={data.createdPagesCount} bookmarksCount={data.bookmarksCount} />
 
-      {/* Page document at /user/<username>, if any */}
-      {userPageDoc && !userPageNotFound && (
-        <Card>
-          <CardContent className="pt-6">
-            <PageHeader page={userPageDoc} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(userPageDoc._id)}`)} showActions />
-            <PageContent page={userPageDoc} />
-          </CardContent>
-        </Card>
+      {hasUserPage && (
+        <article className="space-y-12">
+          <PageHeader page={userPageDoc} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(userPageDoc._id)}`)} showActions />
+          <PageContent page={userPageDoc} />
+        </article>
       )}
 
-      {/* Content Tabs */}
+      <hr className="my-10 border-foreground/10" />
+
       <Tabs defaultValue="pages" className="w-full">
         <TabsList className="w-full justify-start">
           <TabsTrigger value="pages">{m['user_page.tab_pages']()}</TabsTrigger>
