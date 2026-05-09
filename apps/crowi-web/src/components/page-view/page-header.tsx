@@ -21,6 +21,12 @@ interface PageHeaderProps {
   onEdit?: () => void;
   showActions?: boolean;
   showSeenUsers?: boolean;
+  /**
+   * `false` hides the H1 title row (used by /user/<username>: the
+   * cover above already names the user, and the page title would
+   * just echo the URL basename).
+   */
+  showTitle?: boolean;
 }
 
 function getPageTitle(path: string): string {
@@ -29,7 +35,7 @@ function getPageTitle(path: string): string {
   return segments[segments.length - 1] || 'Untitled';
 }
 
-export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = true }: PageHeaderProps) {
+export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = true, showTitle = true }: PageHeaderProps) {
   const { user, isAuthenticated } = useAuth();
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
@@ -53,16 +59,18 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground flex-1 min-w-0">{pageTitle}</h1>
-        {isPrivate && <Lock className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Private page" />}
-        {onEdit && (
-          <Button variant="ghost" size="sm" onClick={onEdit} className="shrink-0 text-muted-foreground hover:text-foreground">
-            <Edit2 className="h-4 w-4 mr-1" />
-            {m['page.action_edit']()}
-          </Button>
-        )}
-      </div>
+      {showTitle && (
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground flex-1 min-w-0">{pageTitle}</h1>
+          {isPrivate && <Lock className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Private page" />}
+          {onEdit && (
+            <Button variant="ghost" size="sm" onClick={onEdit} className="shrink-0 text-muted-foreground hover:text-foreground">
+              <Edit2 className="h-4 w-4 mr-1" />
+              {m['page.action_edit']()}
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
         {displayUser && (
