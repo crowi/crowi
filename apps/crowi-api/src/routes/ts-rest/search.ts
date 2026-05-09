@@ -19,26 +19,6 @@ export default (crowi: Crowi, _app: Express) => {
   const Bookmark = crowi.model('Bookmark');
 
   const searchRouter = s.router(apiContract.search, {
-    /**
-     * GET /api/v2/search
-     * Full-text search over indexed pages.
-     *
-     * Implementation notes:
-     * - Driver-agnostic: hands viewer + path/type filters to the active
-     *   SearchDriver and lets the driver implement grant filtering. The
-     *   handler stays oblivious to GRANT_OWNER / GRANT_RESTRICTED / etc.
-     * - Page populate is driven by the order of `hits[]`; we then project
-     *   each populated Page into the contract shape and reattach
-     *   driver-supplied `score` + `snippet` (raw, unescaped — the web
-     *   client sanitises before render).
-     * - Bookmark counts come from a single bulk aggregate
-     *   (`Bookmark.getCountsByPageIds`) and the Page populate runs in
-     *   parallel — both joins fan in via `Promise.all` so we pay one
-     *   Mongo round-trip each instead of one per hit.
-     * - 503 SERVICE_UNAVAILABLE is returned when no search driver plugin
-     *   is registered. Operators must install a search plugin in the
-     *   runner project to enable the endpoint.
-     */
     searchPages: async ({ query, req }) => {
       const user = req.user as UserDocument;
       const { q, tree, type, page, limit } = query;

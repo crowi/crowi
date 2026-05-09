@@ -4,16 +4,8 @@ import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
-import {
-  invalidPageIdResponse,
-  isPopulatedUser,
-  isValidObjectId,
-  loadGrantedPage,
-  pageNotFoundResponse,
-  toISOStringOrNull,
-  toPageUser,
-  toUserPublic,
-} from 'src/util/ts-rest-helpers';
+import { invalidPageIdResponse, isValidObjectId, loadGrantedPage, pageNotFoundResponse, toUserPublic } from 'src/util/ts-rest-helpers';
+import { pageToResponse } from 'src/util/page-response';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:page');
@@ -30,51 +22,6 @@ const invalidGrantResponse = () =>
       },
     },
   }) as const;
-
-const pageToResponse = (page: PageDocument) => {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const pageObj = page.toObject() as any;
-
-  // The shape we produce satisfies both PageSchema and PageWithRevisionSchema
-  // depending on whether `revision` is populated. ts-rest contracts pin one
-  // or the other, so this helper returns `any` and each handler narrows at
-  // its return site.
-  const result: any = {
-    _id: page._id.toString(),
-    path: page.path,
-    revision: pageObj.revision
-      ? {
-          _id: pageObj.revision._id.toString(),
-          path: pageObj.revision.path,
-          body: pageObj.revision.body,
-          format: pageObj.revision.format || 'markdown',
-          author: isPopulatedUser(pageObj.revision.author) ? toPageUser(pageObj.revision.author) : null,
-          // Schema requires createdAt as a string; legacy / no-timestamps
-          // documents may yield null at runtime — fall back to epoch.
-          createdAt: toISOStringOrNull(pageObj.revision.createdAt) ?? new Date(0).toISOString(),
-        }
-      : undefined,
-    redirectTo: page.redirectTo || null,
-    status: page.status || null,
-    grant: page.grant,
-    grantedUsers: page.grantedUsers?.map((id) => id.toString()) || [],
-    creator: isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
-    lastUpdateUser: isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
-    liker: page.liker?.map((id) => id.toString()) || [],
-    commentCount: page.commentCount || 0,
-    extended: page.extended,
-    createdAt: toISOStringOrNull(page.createdAt) ?? new Date(0).toISOString(),
-    updatedAt: toISOStringOrNull(page.updatedAt) ?? undefined,
-    latestRevision: pageObj.latestRevision?.toString(),
-    // `likerCount` / `seenUsersCount` are dynamic properties set by
-    // populatePageData on the Mongoose document and are NOT serialized into
-    // toObject() output. Read them off the document directly.
-    likerCount: page.likerCount,
-    seenUsersCount: page.seenUsersCount,
-  };
-  return result;
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-};
 
 export default (crowi: Crowi, _app: Express) => {
   const s = initServer();

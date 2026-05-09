@@ -6,27 +6,13 @@ import { Bookmark, FileText, Lock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { SearchHit } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
-import { formatRelativeDate } from '@/lib/format-relative-date';
+import { formatDistanceToNow } from '@/lib/date-utils';
 import { SearchHitSnippet } from './search-hit-snippet';
 
 interface SearchHitItemProps {
   hit: SearchHit;
 }
 
-/**
- * One row in the search results list. Mirrors the layout of `PageListItem`
- * (avatar / path / metadata) but adds a snippet line below the path when the
- * driver returned highlights.
- *
- * We don't reuse `PageListItem` directly because the search shape carries
- * `bookmarkCount` and `snippet` next to (not inside) the `Page`, and the
- * snippet rendering needs the dedicated `SearchHitSnippet` sanitiser.
- *
- * `memo`-wrapped because this row re-renders cheaply for the parent list but
- * each instance does multiple type-narrowings + a memoised sanitise pass; the
- * `hit` prop is referentially stable across re-renders that don't change the
- * page (react-query keeps result objects identity-stable until invalidation).
- */
 export const SearchHitItem = memo(function SearchHitItem({ hit }: SearchHitItemProps) {
   const page = hit.page;
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
@@ -61,7 +47,7 @@ export const SearchHitItem = memo(function SearchHitItem({ hit }: SearchHitItemP
           <div className="text-sm text-muted-foreground mt-2">
             <span className="font-medium">{displayName}</span>
             {' · '}
-            <time dateTime={page.updatedAt || page.createdAt}>{formatRelativeDate(page.updatedAt || page.createdAt)}</time>
+            <time dateTime={page.updatedAt || page.createdAt}>{formatDistanceToNow(page.updatedAt || page.createdAt)}</time>
           </div>
         )}
 

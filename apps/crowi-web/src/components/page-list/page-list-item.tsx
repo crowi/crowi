@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
-import { formatRelativeDate } from '@/lib/format-relative-date';
+import { formatDistanceToNow } from '@/lib/date-utils';
 import { m } from '@paraglide/messages.js';
 import type { Page } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
@@ -76,7 +76,7 @@ export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
           <div className="text-sm text-muted-foreground">
             <span className="font-medium">{displayName}</span>
             {' · '}
-            <time dateTime={page.updatedAt || page.createdAt}>{formatRelativeDate(page.updatedAt || page.createdAt)}</time>
+            <time dateTime={page.updatedAt || page.createdAt}>{formatDistanceToNow(page.updatedAt || page.createdAt)}</time>
           </div>
         )}
 
