@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Providers } from '@/lib/providers';
+import { InstallerGate } from '@/components/installer-gate';
 import { PARAGLIDE_LOCALE_HEADER } from '@/proxy';
 import { baseLocale, isLocale, overwriteGetLocale } from '@paraglide/runtime.js';
 import './globals.css';
@@ -38,7 +39,9 @@ export default async function RootLayout({
   return (
     <html lang={locale}>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Providers>{children}</Providers>
+        <Providers>
+          <InstallerGate>{children}</InstallerGate>
+        </Providers>
       </body>
     </html>
   );
