@@ -17,6 +17,7 @@ import { UserMenuItems } from '@/components/user-menu-items';
 import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
 import { SiteBrand } from '@/components/site-brand';
 import { LocaleSync } from '@/components/locale-sync';
+import { GlobalSearchInput } from '@/components/search/global-search-input';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -70,6 +71,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <SiteBrand />
           </div>
           <div className="flex items-center gap-2">
+            <GlobalSearchInput />
             {user?.admin && (
               <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10">
                 <Link href="/admin" aria-label={m['header.admin_aria']()} title={m['header.admin_aria']()}>

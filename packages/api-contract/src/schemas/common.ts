@@ -103,6 +103,26 @@ export const ConflictErrorSchema = ApiErrorSchema.extend({
   }),
 });
 
+/**
+ * 503 returned when a feature requires a runtime-pluggable driver/service
+ * that is not currently registered. The shape is deliberately generic so
+ * it can be reused for any pluggable subsystem; the `feature` field lets
+ * clients branch on which subsystem is missing without parsing `message`.
+ *
+ * Examples of `feature` values the API surfaces:
+ *   - `'search'`  — `GET /api/v2/search` when no `@crowi/plugin-search-*`
+ *                    is installed in the runner project.
+ *   - `'notifier'` (future) — when no slack / chat notifier driver is registered.
+ *   - `'mailer'`  (future) — when SMTP transport is not configured.
+ */
+export const ServiceUnavailableErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('SERVICE_UNAVAILABLE'),
+    feature: z.string(),
+    message: z.string(),
+  }),
+});
+
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type ApplicationNotInstalledError = z.infer<typeof ApplicationNotInstalledErrorSchema>;
 export type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
@@ -114,3 +134,4 @@ export type InvalidPageIdError = z.infer<typeof InvalidPageIdErrorSchema>;
 export type ValidationError = z.infer<typeof ValidationErrorSchema>;
 export type NotFoundError = z.infer<typeof NotFoundErrorSchema>;
 export type ConflictError = z.infer<typeof ConflictErrorSchema>;
+export type ServiceUnavailableError = z.infer<typeof ServiceUnavailableErrorSchema>;

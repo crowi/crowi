@@ -17,8 +17,6 @@ export default (crowi: Crowi) => {
   const actions = {} as any;
   actions.api = {} as any;
 
-  const searchEvent = crowi.event('Search');
-
   function createPager(total, limit, page, pagesCount, maxPageList) {
     const pager: {
       page: any;
@@ -190,27 +188,16 @@ export default (crowi: Crowi) => {
   actions.api.search = {};
   actions.api.search.buildIndex = async function (req: Request, res: Response) {
     const search = crowi.getSearcher();
-    if (!search) {
+    if (!search || typeof search.rebuild !== 'function') {
       return res.json(ApiResponse.error('Searcher is not ready.'));
     }
 
-    searchEvent.on('addPageProgress', (total, current, skip) => {
-      /*
-      crowi.getIo().sockets.emit('admin:addPageProgress', { total, current, skip })
-      */
-    });
-    searchEvent.on('finishAddPage', (total, current, skip) => {
-      /*
-      crowi.getIo().sockets.emit('admin:finishAddPage', { total, current, skip })
-      */
-    });
-
     search
-      .buildIndex()
+      .rebuild()
       .then(() => {
         debug('Data is successfully indexed. ------------------ ✧✧');
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         debug('Error caught.', err);
       });
 
@@ -389,20 +376,25 @@ export default (crowi: Crowi) => {
   actions.api.top = {};
   actions.api.top.index = function (req: Request, res: Response) {
     const { version: crowiVersion } = crowi;
-    const searcher = crowi.getSearcher();
+    const searcher = crowi.getSearcher() as { node?: string; baseIndexName?: string } | null;
     const serverInfo = {
       node: {
         arch: process.arch,
         version: process.version,
       },
     };
-    const searchInfo = searcher
-      ? {
-          node: searcher.node,
-          indexName: searcher.indexNames.base,
-          esVersion: searcher.esVersion,
-        }
-      : {};
+    // Legacy admin top page exposed `searchInfo`. The new SearchDriver
+    // contract intentionally hides driver internals, so we only surface
+    // the node / index name when the active driver is the elasticsearch
+    // plugin (which exposes those fields). Other drivers report empty.
+    const searchInfo =
+      searcher && searcher.node && searcher.baseIndexName
+        ? {
+            node: searcher.node,
+            indexName: searcher.baseIndexName,
+            esVersion: 'unknown',
+          }
+        : {};
 
     return res.json(ApiResponse.success({ crowiVersion, serverInfo, searchInfo }));
   };

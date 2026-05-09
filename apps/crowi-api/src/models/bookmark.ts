@@ -24,6 +24,7 @@ export interface BookmarkModel extends Model<BookmarkDocument> {
     data: any;
   }>;
   countByPageId(pageId: Types.ObjectId): Promise<number>;
+  getCountsByPageIds(pageIds: Types.ObjectId[]): Promise<Map<string, number>>;
   findByUser(user: any, option: any): Promise<BookmarkDocument[]>;
   add(page: any, user: any): Promise<BookmarkDocument>;
   removeBookmarksByPageId(pageId: Types.ObjectId): any;
@@ -95,6 +96,22 @@ export default (crowi: Crowi) => {
     const count = await Bookmark.countDocuments({ page: pageId });
 
     return count;
+  };
+
+  /**
+   * Bulk-fetch bookmark counts for many pages in a single Mongo aggregate.
+   * Avoids the N+1 round-trip pattern that callers fall into when they
+   * call `countByPageId` once per page (e.g. search hit lists). Pages
+   * with zero bookmarks are absent from the returned map; callers should
+   * default to 0.
+   */
+  BookmarkSchema.statics.getCountsByPageIds = async function (pageIds: Types.ObjectId[]): Promise<Map<string, number>> {
+    if (pageIds.length === 0) return new Map();
+    const result: Array<{ _id: Types.ObjectId; count: number }> = await Bookmark.aggregate([
+      { $match: { page: { $in: pageIds } } },
+      { $group: { _id: '$page', count: { $sum: 1 } } },
+    ]);
+    return new Map(result.map((r) => [r._id.toString(), r.count]));
   };
 
   BookmarkSchema.statics.findByUser = async function (user, option) {

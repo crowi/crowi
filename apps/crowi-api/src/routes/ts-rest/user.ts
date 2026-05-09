@@ -1,5 +1,5 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract, UserPublic, Page, Bookmark, Revision } from '@crowi/api-contract';
+import { apiContract, Page, Bookmark } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
@@ -7,45 +7,10 @@ import { PageDocument } from 'src/models/page';
 import { BookmarkDocument } from 'src/models/bookmark';
 import { Types } from 'mongoose';
 import { PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
+import { type PageLike, pageToResponse } from 'src/util/page-response';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:user');
-
-/**
- * Type for populated revision in Mongoose documents
- */
-interface PopulatedRevision {
-  _id: Types.ObjectId;
-  path: string;
-  body: string;
-  format?: string;
-  author?: PopulatedUser | null;
-  createdAt?: Date;
-}
-
-/**
- * Type for page data that may be a Mongoose document or plain object
- */
-interface PageLike {
-  _id: Types.ObjectId | string;
-  path: string;
-  revision?: PopulatedRevision | Types.ObjectId | null;
-  redirectTo?: string | null;
-  status?: string | null;
-  grant?: number;
-  grantedUsers?: (Types.ObjectId | string)[];
-  creator?: PopulatedUser | Types.ObjectId | null;
-  lastUpdateUser?: PopulatedUser | Types.ObjectId | null;
-  liker?: (Types.ObjectId | string)[];
-  commentCount?: number;
-  extended?: Record<string, unknown>;
-  createdAt?: Date;
-  updatedAt?: Date;
-  latestRevision?: Types.ObjectId | string;
-  likerCount?: number;
-  seenUsersCount?: number;
-  toObject?: () => PageLike;
-}
 
 /**
  * Type for bookmark data that may be a Mongoose document or plain object
@@ -57,53 +22,6 @@ interface BookmarkLike {
   createdAt?: Date;
   toObject?: () => BookmarkLike;
 }
-
-/**
- * Check if a value is a populated revision object
- */
-const isPopulatedRevision = (value: unknown): value is PopulatedRevision => {
-  return typeof value === 'object' && value !== null && '_id' in value && 'path' in value && 'body' in value;
-};
-
-/**
- * Convert revision data to Revision response format
- */
-const toRevision = (revision: PopulatedRevision): Revision => ({
-  _id: revision._id.toString(),
-  path: revision.path,
-  body: revision.body,
-  format: revision.format || 'markdown',
-  author: revision.author ? toPageUser(revision.author) : null,
-  createdAt: toISOStringOrNull(revision.createdAt) || new Date().toISOString(),
-});
-
-/**
- * Convert PageDocument to serializable object for API response
- */
-const pageToResponse = (page: PageDocument | PageLike): Page => {
-  // Handle both Mongoose documents and plain objects
-  const pageObj: PageLike = typeof (page as PageDocument).toObject === 'function' ? (page as PageDocument).toObject() : (page as PageLike);
-
-  return {
-    _id: toStringId(pageObj._id),
-    path: pageObj.path,
-    revision: pageObj.revision && isPopulatedRevision(pageObj.revision) ? toRevision(pageObj.revision) : undefined,
-    redirectTo: pageObj.redirectTo || null,
-    status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated') || undefined,
-    grant: pageObj.grant,
-    grantedUsers: pageObj.grantedUsers?.map(toStringId) || [],
-    creator: pageObj.creator && isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
-    lastUpdateUser: pageObj.lastUpdateUser && isPopulatedUser(pageObj.lastUpdateUser) ? toPageUser(pageObj.lastUpdateUser) : null,
-    liker: pageObj.liker?.map(toStringId) || [],
-    commentCount: pageObj.commentCount || 0,
-    extended: pageObj.extended,
-    createdAt: toISOStringOrNull(pageObj.createdAt) || new Date().toISOString(),
-    updatedAt: toISOStringOrNull(pageObj.updatedAt) || undefined,
-    latestRevision: pageObj.latestRevision ? toStringId(pageObj.latestRevision) : undefined,
-    likerCount: pageObj.likerCount,
-    seenUsersCount: pageObj.seenUsersCount,
-  };
-};
 
 /**
  * Convert BookmarkDocument to serializable object for API response

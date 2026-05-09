@@ -27,7 +27,6 @@ import { resetKeyProvider } from 'src/util/crypto';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { runAwsConfigMigration } from 'src/util/aws-config-migration';
 import expressInit from './express-init';
-// import Searcher from 'src/service/search'
 
 const pkg = require('../../package.json');
 
@@ -68,8 +67,6 @@ class Crowi {
 
   // FIXME after service/config typed
   config: any;
-
-  searcher: any = null;
 
   mailer: any = {};
 
@@ -163,10 +160,9 @@ class Crowi {
     await runAwsConfigMigration(this);
     // Plugins must boot AFTER config/models are ready (so PluginContext
     // can read config and access models) but BEFORE the legacy
-    // searcher / mailer / slack initialisers — those are migrating to
+    // mailer / slack initialisers — those are migrating to
     // plugin-provided drivers and any conflict should fail noisily here.
     await this.setupPlugins();
-    await this.setupSearcher();
     await this.setupMailer();
     await this.setupSlack();
     await this.setupDNSCache();
@@ -444,8 +440,15 @@ class Crowi {
     return null;
   }
 
+  /**
+   * Backwards-compat shim for legacy controllers that still reference
+   * `crowi.getSearcher()`. Returns the active search driver from the
+   * plugin registry, or `null` if none is configured / registered.
+   * New code should read `crowi.getPlugins().active.search` directly.
+   */
   getSearcher() {
-    return this.searcher;
+    if (!this.pluginRegistries) return null;
+    return this.pluginRegistries.active.search;
   }
 
   getMailer() {
@@ -463,22 +466,6 @@ class Crowi {
     const Config = this.model('Config');
 
     return Config.migrate();
-  }
-
-  async setupSearcher() {
-    const searcherUri = this.env.ELASTICSEARCH_URI || this.env.BONSAI_URL || null;
-
-    /*
-    if (searcherUri) {
-      try {
-        this.searcher = new Searcher(this, searcherUri)
-        this.searcher.initialize()
-      } catch (e) {
-        debug('Error on setup searcher', e)
-        this.searcher = null
-      }
-    }
-      */
   }
 
   setupMailer() {

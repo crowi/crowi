@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
+import { formatRelativeDate } from '@/lib/format-relative-date';
 import { m } from '@paraglide/messages.js';
 import type { Page } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
@@ -37,23 +38,6 @@ export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
   const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
 
   const isTrash = variant === 'trash';
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
 
   return (
     <div className="flex items-start gap-4 p-4 hover:bg-accent/50 transition-colors rounded-lg border-b last:border-0">
@@ -92,7 +76,7 @@ export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
           <div className="text-sm text-muted-foreground">
             <span className="font-medium">{displayName}</span>
             {' · '}
-            <time dateTime={page.updatedAt || page.createdAt}>{formatDate(page.updatedAt || page.createdAt)}</time>
+            <time dateTime={page.updatedAt || page.createdAt}>{formatRelativeDate(page.updatedAt || page.createdAt)}</time>
           </div>
         )}
 

@@ -23,9 +23,11 @@
           "token_chars": ["letter", "digit"]
         }
       },
-      "english": {
-        "tokenizer": "ngram_tokenizer",
-        "filter": ["english_possessive_stemmer", "lowercase", "english_stop", "english_stemmer"]
+      "analyzer": {
+        "english": {
+          "tokenizer": "ngram_tokenizer",
+          "filter": ["english_possessive_stemmer", "lowercase", "english_stop", "english_stemmer"]
+        }
       }
     }
   },
@@ -38,10 +40,6 @@
             "type": "text",
             "analyzer": "keyword"
           },
-          "ja": {
-            "type": "text",
-            "analyzer": "kuromoji"
-          },
           "en": {
             "type": "text",
             "analyzer": "english"
@@ -51,10 +49,6 @@
       "body": {
         "type": "text",
         "fields": {
-          "ja": {
-            "type": "text",
-            "analyzer": "kuromoji"
-          },
           "en": {
             "type": "text",
             "analyzer": "english"
@@ -66,6 +60,9 @@
       },
       "grant": {
         "type": "integer"
+      },
+      "granted_users": {
+        "type": "keyword"
       },
       "comment_count": {
         "type": "integer"
