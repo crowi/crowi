@@ -19,7 +19,7 @@ const debug = Debug('crowi:plugin:manager');
  * registered the configured driver name, we log a warning and leave
  * the active slot null so legacy in-core code paths keep handling
  * those concerns. This is the v2.0 transition state — once the
- * built-in `@crowi/storage-local` and `@crowi/search-mongo` plugins
+ * built-in `@crowi/plugin-storage-local` and `@crowi/plugin-search-mongo` plugins
  * land (Step 3+), the active slots are always populated.
  */
 export interface PluginRegistries {
@@ -145,8 +145,9 @@ export class PluginManager {
    * Import the given seed plugin names *and* recursively follow each
    * loaded plugin's `requires` array, importing any transitive deps
    * not already in the set. Lets the operator list only the leaf
-   * plugins they care about (`@crowi/storage-aws-s3`) and have base
-   * plugins (`@crowi/aws`) auto-loaded via npm transitive resolution.
+   * plugins they care about (`@crowi/plugin-storage-aws-s3`) and have
+   * base plugins (`@crowi/plugin-aws`) auto-loaded via npm transitive
+   * resolution.
    */
   private async importWithTransitives(seedNames: string[]): Promise<CrowiPlugin[]> {
     const loaded = new Map<string, CrowiPlugin>();

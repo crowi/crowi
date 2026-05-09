@@ -52,7 +52,7 @@ admin UI.
            │ writes to / reads from
            ▼
 ┌─────────────────── crowi.config.json ──────────────┐
-│  plugins: ["@crowi/storage-aws-s3", ...]           │
+│  plugins: ["@crowi/plugin-storage-aws-s3", ...]           │
 └──────────┬─────────────────────────────────────────┘
            │ at boot
            ▼
@@ -94,7 +94,7 @@ export interface CrowiPlugin {
   /** Plugin's own version (matches the npm package's semver). */
   version: string;
 
-  /** Other plugins this plugin needs at runtime. e.g. ['@crowi/aws']. */
+  /** Other plugins this plugin needs at runtime. e.g. ['@crowi/plugin-aws']. */
   requires?: string[];
 
   /**
@@ -223,7 +223,7 @@ At boot, after `setupConfig` and before `setupSearcher` / `setupMailer` /
 etc., the runtime runs `PluginManager.loadAll()`:
 
 1. Read `plugins: string[]` from `crowi.config.json`. Always prepend the
-   *implicit defaults* (`@crowi/storage-local`, `@crowi/search-mongo`) so
+   *implicit defaults* (`@crowi/plugin-storage-local`, `@crowi/plugin-search-mongo`) so
    a fresh install starts with a working Wiki. Local password auth lives
    in core itself, not in a plugin, so it doesn't appear here.
 2. For each name, `await import(name)` to load the module. The package's
@@ -240,7 +240,7 @@ etc., the runtime runs `PluginManager.loadAll()`:
    `storage.driver = 's3' | 'local' | …`.
 
 If a configured driver name is not present in the registry (e.g. config says
-`storage.driver = 's3'` but `@crowi/storage-aws-s3` isn't installed), boot
+`storage.driver = 's3'` but `@crowi/plugin-storage-aws-s3` isn't installed), boot
 fails with a clear error pointing at the missing plugin.
 
 ## Distribution & CLI
@@ -252,13 +252,13 @@ fails with a clear error pointing at the missing plugin.
 | `@crowi/plugin-api` | Type-only contract: `CrowiPlugin`, registries, context |
 | `@crowi/server` | The runtime: Express + ts-rest API + bundled Next.js production build + PluginManager |
 | `@crowi/cli` | `crowi init`, `crowi plugin add/remove`, `crowi start`, `crowi migrate` |
-| `@crowi/storage-local` | Default storage driver — bundled and auto-loaded |
-| `@crowi/storage-aws-s3` | S3 driver |
-| `@crowi/search-mongo` | Default search driver (Mongo `$regex` over path / title / body) — bundled and auto-loaded |
-| `@crowi/search-elasticsearch` | ES driver |
-| `@crowi/auth-google` | Google OAuth |
-| `@crowi/auth-github` | GitHub OAuth |
-| `@crowi/notify-slack` | Slack notification sink |
+| `@crowi/plugin-storage-local` | Default storage driver — bundled and auto-loaded |
+| `@crowi/plugin-storage-aws-s3` | S3 driver |
+| `@crowi/plugin-search-mongo` | Default search driver (Mongo `$regex` over path / title / body) — bundled and auto-loaded |
+| `@crowi/plugin-search-elasticsearch` | ES driver |
+| `@crowi/plugin-auth-google` | Google OAuth |
+| `@crowi/plugin-auth-github` | GitHub OAuth |
+| `@crowi/plugin-notify-slack` | Slack notification sink |
 
 Local password / session / JWT auth lives in **core**, not as a plugin.
 Foundational enough that every install needs it and decoupling adds more
@@ -270,9 +270,9 @@ complexity than value.
 {
   "$schema": "https://crowi.io/schema/2.0/config.json",
   "plugins": [
-    "@crowi/storage-aws-s3",
-    "@crowi/search-elasticsearch",
-    "@crowi/auth-google"
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-auth-google"
   ],
   "storage": { "driver": "s3" },
   "search":  { "driver": "elasticsearch" }
@@ -320,7 +320,7 @@ my-wiki/
 ├── node_modules/          ← @crowi/server + @crowi/cli + plugins live here
 ├── crowi.config.json      ← CLI's source of truth for installed plugin list
 ├── .env                   ← CROWI_ENCRYPTION_KEY, MONGO_URI, etc.
-└── data/                  ← local file uploads (when @crowi/storage-local is active)
+└── data/                  ← local file uploads (when @crowi/plugin-storage-local is active)
 ```
 
 CI deploy story: commit `crowi.config.json` + `package.json` +
@@ -342,7 +342,7 @@ Custom-plugin operators extend the base image:
 
 ```Dockerfile
 FROM crowi/server:2.0
-RUN crowi plugin add @crowi/storage-aws-s3 @crowi/notify-slack
+RUN crowi plugin add @crowi/plugin-storage-aws-s3 @crowi/plugin-notify-slack
 COPY crowi.config.json /app/
 ```
 
@@ -383,7 +383,7 @@ For each existing v1.x feature being plugin-ified, the migration story:
 
 - Legacy config keys: `upload:aws:region`, `upload:aws:bucket`,
   `upload:aws:accessKeyId`, `upload:aws:secretAccessKey`.
-- New config keys (under `@crowi/storage-aws-s3`): same field names,
+- New config keys (under `@crowi/plugin-storage-aws-s3`): same field names,
   prefixed `plugin:storage-aws-s3:*`.
 - `onInstall` runs once on first activation: copy `upload:aws:*` →
   `plugin:storage-aws-s3:*`. Files in the bucket are not touched.
@@ -392,7 +392,7 @@ For each existing v1.x feature being plugin-ified, the migration story:
 ### Storage (local)
 
 - Legacy: files at `data/uploads/<id>/...`.
-- New: `@crowi/storage-local` reads/writes the same path. No migration
+- New: `@crowi/plugin-storage-local` reads/writes the same path. No migration
   needed beyond marking the plugin as the active driver (which is the
   default anyway).
 
@@ -433,10 +433,10 @@ In scope:
 - `@crowi/server` runtime + PluginManager
 - `@crowi/cli` (`init`, `plugin add/remove/list`, `start`, `migrate`)
 - Plugins:
-  - `@crowi/storage-local`, `@crowi/storage-aws-s3`
-  - `@crowi/search-mongo`, `@crowi/search-elasticsearch`
-  - `@crowi/auth-google`, `@crowi/auth-github`
-  - `@crowi/notify-slack`
+  - `@crowi/plugin-storage-local`, `@crowi/plugin-storage-aws-s3`
+  - `@crowi/plugin-search-mongo`, `@crowi/plugin-search-elasticsearch`
+  - `@crowi/plugin-auth-google`, `@crowi/plugin-auth-github`
+  - `@crowi/plugin-notify-slack`
 - Local password / session / JWT auth stays in **core** (not a plugin)
 - Schema-driven admin form
 - v1.x → v2.0 config migration for the legacy keys above
@@ -456,9 +456,9 @@ Out of scope (deferred to v2.1 RFCs):
 
 ## Resolved decisions (round 2 review)
 
-1. **Search default fallback** → `@crowi/search-mongo` is a thin wrapper
+1. **Search default fallback** → `@crowi/plugin-search-mongo` is a thin wrapper
    over Mongo `$regex` against `path` / `title` / `body`. No inverted
-   index in core; if you need real search, install `@crowi/search-elasticsearch`.
+   index in core; if you need real search, install `@crowi/plugin-search-elasticsearch`.
 2. **Plugin routes** → ts-rest contracts, mounted under
    `/api/v2/plugins/<name>/*`. The `<name>` path prefix is the namespace
    guarantee — plugins cannot collide with core endpoints or each other.
@@ -516,8 +516,8 @@ Out of scope (deferred to v2.1 RFCs):
    `pageMetadataSchema` extension points so the eventual plugin can use
    them.
 
-2. **Bundled core defaults**: `@crowi/storage-local` and
-   `@crowi/search-mongo` are listed as separate npm packages bundled
+2. **Bundled core defaults**: `@crowi/plugin-storage-local` and
+   `@crowi/plugin-search-mongo` are listed as separate npm packages bundled
    with `@crowi/server`. Alternatively they could be inline modules in
    core. The npm-package version is more consistent with the plugin
    model but adds packaging overhead. Decide during step 1 of the
@@ -537,12 +537,12 @@ Order of work for the v2.0 release:
 2. Build `PluginManager` in `apps/crowi-api` against the existing monorepo
    layout — no packaging yet, just the loader.
 3. Convert storage to a plugin: extract the existing local + S3 uploaders
-   into `@crowi/storage-local` + `@crowi/storage-aws-s3`. Validate
+   into `@crowi/plugin-storage-local` + `@crowi/plugin-storage-aws-s3`. Validate
    end-to-end that file upload still works.
-4. Convert search: extract the ES client into `@crowi/search-elasticsearch`
-   + add `@crowi/search-mongo` as the default fallback.
+4. Convert search: extract the ES client into `@crowi/plugin-search-elasticsearch`
+   + add `@crowi/plugin-search-mongo` as the default fallback.
 5. Convert auth: extract Google / GitHub passport strategies into
-   `@crowi/auth-google` / `@crowi/auth-github`. Local password auth stays
+   `@crowi/plugin-auth-google` / `@crowi/plugin-auth-github`. Local password auth stays
    in core; the AuthRegistry is a list of *additional* providers that the
    login screen surfaces alongside the always-on email-and-password form.
 6. Convert notification (slack).

@@ -13,7 +13,7 @@ import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema } from '../
 const c = initContract();
 
 /**
- * Plugin npm names contain a `/` (e.g. `@crowi/storage-local`), which
+ * Plugin npm names contain a `/` (e.g. `@crowi/plugin-storage-local`), which
  * collides with Express's path-segment matching when used as a path
  * param. We pass the name as a query string so ts-rest / Express
  * don't have to deal with the slash in the URL path.

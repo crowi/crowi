@@ -2,15 +2,16 @@ import { z } from 'zod';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 
 /**
- * Shared AWS configuration. Plugins like `@crowi/storage-aws-s3` and
- * `@crowi/mail-aws-ses` depend on this plugin via `requires` and pull
- * `region` / `accessKeyId` / `secretAccessKey` through
- * `ctx.dependencyConfig('@crowi/aws')`.
+ * Shared AWS configuration. Plugins like `@crowi/plugin-storage-aws-s3`
+ * and `@crowi/plugin-mail-aws-ses` depend on this plugin via `requires`
+ * and pull `region` / `accessKeyId` / `secretAccessKey` through
+ * `ctx.dependencyConfig('@crowi/plugin-aws')`.
  *
  * The plugin itself contributes nothing to any registry — it's a
  * config-holder. Auto-loaded transitively by the PluginManager when
  * any AWS service plugin lists it in `requires`, so operators do not
- * need to add `@crowi/aws` to `crowi.config.json:plugins` themselves.
+ * need to add `@crowi/plugin-aws` to `crowi.config.json:plugins`
+ * themselves.
  *
  * The corresponding admin form section is rendered exactly once, even
  * if multiple AWS-using plugins are installed.
@@ -46,7 +47,7 @@ export const AwsConfigSchema = z
 export type AwsConfig = z.infer<typeof AwsConfigSchema>;
 
 const plugin: CrowiPlugin = {
-  name: '@crowi/aws',
+  name: '@crowi/plugin-aws',
   version: '0.1.0-dev',
   configSchema: AwsConfigSchema,
   adminPlacement: {
@@ -59,7 +60,7 @@ const plugin: CrowiPlugin = {
     icon: 'cloud',
   },
   // No register* — config-only plugin. Downstream AWS plugins read
-  // these values via ctx.dependencyConfig('@crowi/aws').
+  // these values via ctx.dependencyConfig('@crowi/plugin-aws').
   // Legacy v1.x → v2.0 key migration is handled centrally by `crowi
   // migrate` in Step 9 of RFC-0001, not per-plugin onInstall.
 };

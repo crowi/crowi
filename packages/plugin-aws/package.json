@@ -1,7 +1,7 @@
 {
-  "name": "@crowi/storage-local",
+  "name": "@crowi/plugin-aws",
   "version": "0.1.0-dev",
-  "description": "Local filesystem storage driver for Crowi 2.0. Default-on; preserves the v1.x data/uploads/ layout.",
+  "description": "AWS base configuration for Crowi 2.0 — shared region / accessKeyId / secretAccessKey for downstream AWS service plugins (S3, SES, ...).",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -22,7 +22,6 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
   }

@@ -10,15 +10,15 @@ import type { StorageDriver } from '@crowi/plugin-api';
  * required.
  *
  * Throws a clear error if no storage driver is registered — that
- * means the operator has neither installed `@crowi/storage-local`
- * (default) nor `@crowi/storage-aws-s3`. Until Step 3 wiring lands
- * fully, this can also fire when the new boot order is used without
- * the plugin packages installed in node_modules.
+ * means the operator has neither installed `@crowi/plugin-storage-local`
+ * (default) nor `@crowi/plugin-storage-aws-s3`. Until Step 3 wiring
+ * lands fully, this can also fire when the new boot order is used
+ * without the plugin packages installed in node_modules.
  */
 function activeDriver(crowi: Crowi): StorageDriver {
   const driver = crowi.getPlugins().active.storage;
   if (!driver) {
-    throw new Error('Storage driver not registered. Install @crowi/storage-local (default) or @crowi/storage-aws-s3.');
+    throw new Error('Storage driver not registered. Install @crowi/plugin-storage-local (default) or @crowi/plugin-storage-aws-s3.');
   }
   return driver;
 }
