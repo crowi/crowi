@@ -2,16 +2,52 @@
 
 import type { AdminPager, UserPublic } from '@crowi/api-contract';
 import { UserStatusEnum } from '@crowi/api-contract';
+import { MoreHorizontal } from 'lucide-react';
 import { UserAvatar } from '@/components/user-avatar';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/date-utils';
 import { m } from '@paraglide/messages.js';
+
+/**
+ * Per-row action discriminator emitted by `UsersTable` via `onAction`.
+ *
+ * The table is intentionally dumb — it does not own the dialog state or the
+ * mutation hooks. The parent page maps each `kind` to the corresponding
+ * dialog (edit / reset-password / update-email) or AlertDialog confirmation
+ * (make-admin / remove-admin / activate / suspend).
+ */
+export type UserRowActionKind = 'edit' | 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'reset-password' | 'update-email';
+
+export interface UserRowAction {
+  kind: UserRowActionKind;
+  user: UserPublic;
+}
 
 interface UsersTableProps {
   users: UserPublic[];
   pager: AdminPager;
   onPageChange: (page: number) => void;
+  /**
+   * Called when the operator picks an action from the row dropdown. The page
+   * stores the chosen user in local state and opens the matching dialog. If
+   * omitted, the dropdown column is not rendered (e.g. for read-only views).
+   */
+  onAction?: (action: UserRowAction) => void;
+  /**
+   * Current operator's user id. Used to disable destructive self-actions
+   * (demote / suspend) at the UI level. Server-side guards live in
+   * `migrate-admin-user-actions-api` follow-ups.
+   */
+  currentUserId?: string;
 }
 
 /**
@@ -105,7 +141,72 @@ function Pager({ pager, onPageChange }: { pager: AdminPager; onPageChange: (page
   );
 }
 
-export function UsersTable({ users, pager, onPageChange }: UsersTableProps) {
+interface RowActionMenuProps {
+  user: UserPublic;
+  isSelf: boolean;
+  onAction: (action: UserRowAction) => void;
+}
+
+/**
+ * Dropdown menu for a single user row.
+ *
+ * Visibility rules for items mirror the legacy admin UI:
+ * - The promote/demote item flips between "make admin" and "remove admin"
+ *   based on the user's current `admin` flag.
+ * - The activate/suspend item flips on the user's `status`. The "activate"
+ *   item is shown for both REGISTERED and SUSPENDED so admins can approve
+ *   newly-registered users from one place.
+ * - "Reset password" / "Change email" are always present (no toggle).
+ *
+ * Self-protection: when the row is the current operator, the demote /
+ * suspend options are rendered as `data-disabled` items that show a hint
+ * tooltip — *not* hidden — so the operator understands why they can't act.
+ */
+function RowActionMenu({ user, isSelf, onAction }: RowActionMenuProps) {
+  const showActivate = user.status === UserStatusEnum.SUSPENDED || user.status === UserStatusEnum.REGISTERED;
+  const showSuspend = user.status === UserStatusEnum.ACTIVE;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={m['admin.users.action.menu_open']()}>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>{m['admin.users.action.menu_label']()}</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => onAction({ kind: 'edit', user })}>{m['admin.users.action.edit']()}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onAction({ kind: 'update-email', user })}>{m['admin.users.action.update_email']()}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onAction({ kind: 'reset-password', user })}>{m['admin.users.action.reset_password']()}</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {user.admin ? (
+          <DropdownMenuItem
+            disabled={isSelf}
+            title={isSelf ? m['admin.users.action.self_disabled_hint']() : undefined}
+            onSelect={() => !isSelf && onAction({ kind: 'remove-admin', user })}
+          >
+            {m['admin.users.action.remove_admin']()}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={() => onAction({ kind: 'make-admin', user })}>{m['admin.users.action.make_admin']()}</DropdownMenuItem>
+        )}
+        {showActivate && <DropdownMenuItem onSelect={() => onAction({ kind: 'activate', user })}>{m['admin.users.action.activate']()}</DropdownMenuItem>}
+        {showSuspend && (
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={isSelf}
+            title={isSelf ? m['admin.users.action.self_disabled_hint']() : undefined}
+            onSelect={() => !isSelf && onAction({ kind: 'suspend', user })}
+          >
+            {m['admin.users.action.suspend']()}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function UsersTable({ users, pager, onPageChange, onAction, currentUserId }: UsersTableProps) {
   if (users.length === 0) {
     return (
       <div className="rounded-md border bg-muted/30 px-4 py-8 text-center">
@@ -114,6 +215,8 @@ export function UsersTable({ users, pager, onPageChange }: UsersTableProps) {
       </div>
     );
   }
+
+  const showActions = Boolean(onAction);
 
   return (
     <div className="space-y-4">
@@ -129,6 +232,7 @@ export function UsersTable({ users, pager, onPageChange }: UsersTableProps) {
               <th className="px-4 py-2 font-medium">{m['admin.users.column_status']()}</th>
               <th className="px-4 py-2 font-medium">{m['admin.users.column_admin']()}</th>
               <th className="px-4 py-2 font-medium">{m['admin.users.column_created_at']()}</th>
+              {showActions && <th className="px-4 py-2 font-medium sr-only">{m['admin.users.action.menu_label']()}</th>}
             </tr>
           </thead>
           <tbody>
@@ -157,6 +261,11 @@ export function UsersTable({ users, pager, onPageChange }: UsersTableProps) {
                   )}
                 </td>
                 <td className="px-4 py-2 text-muted-foreground">{formatDate(user.createdAt)}</td>
+                {showActions && onAction && (
+                  <td className="px-2 py-2 text-right">
+                    <RowActionMenu user={user} isSelf={user._id === currentUserId} onAction={onAction} />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
