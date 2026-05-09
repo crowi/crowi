@@ -1,11 +1,12 @@
 {
   "plugins": [
-    "@crowi/plugin-storage-aws-s3"
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch"
   ],
   "storage": {
     "driver": "local"
   },
   "search": {
-    "driver": "mongo"
+    "driver": "elasticsearch"
   }
 }
