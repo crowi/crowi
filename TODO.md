@@ -8,6 +8,20 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 🎉 **フェーズ 1 完了** — Trash / page watch / Seen by 改善まで反映済み。
 詳細は「Recently Completed (このセッション)」を参照。
 
+## High Priority — Plugin Architecture (RFC-0001)
+
+`docs/rfcs/0001-plugin-architecture.md` 進行中。Step 7 (admin UI) まで landing 済み、後続ステップが残る。
+
+- [x] **plugin-api パッケージ** — type-only contract (`CrowiPlugin`, `PluginContext`, `*Registry`, `@sensitive` / `@action` Zod markers, `adminPlacement`)
+- [x] **PluginManager + 自動依存解決** — boot 時 topo sort、transitive auto-load、storage / search / auth / notifier registries
+- [x] **`@crowi/storage-local` (default-on)** + **`@crowi/aws` (base/config-only) + `@crowi/storage-aws-s3`** — storage driver の plugin 化
+- [x] **Step 7: schema-driven admin form** — `/admin/plugins` 一覧 + `/admin/plugins/edit?name=...` 編集 (auto-form、kind ベース control 選択、sensitive は `hasValue` のみ往復、@action ボタン)
+- [x] **plugin-driven sidebar 注入** (`a092cd8f`) — `adminPlacement` に section / label / icon、サイドバーが loaded plugin から該当セクション (storage / mail / notification / auth / shared) に entry を inject
+- [ ] **Step 8: notifier plugin 化** — Slack notifier を plugin に切り出し (現在 `util/slack.ts` に直書き)
+- [ ] **Step 9: search driver plugin 化** — Elasticsearch を plugin 化 (Phase 3 の ES 復活と合わせて)
+- [ ] **Step 10: auth provider plugin 化** — Google / GitHub OAuth を plugin に切り出し (フェーズ 4 の admin OAuth 設定と一緒に)
+- [ ] **将来**: encryption KeyProvider plugin (KMS 系)、attachment storage の S3 以外プロバイダ
+
 ## High Priority — 横断的 advisory (累積)
 
 - [x] **UI 共通化** (`2c390a55`): `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出。9 ファイル / 13 サイトで重複削減
@@ -75,13 +89,9 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - ~~AWS / S3 file storage~~: `admin/app` の upload section に統合済
 
 ### ユーザー管理
-- [x] **User 一覧** (`GET /admin/users`) + 検索 (`GET /admin/users.search`) — `0223d46b` + `8316d50a` + `7820711c`: ts-rest contract / API ハンドラ (createPager 移植 + UserPublic 絞込み) / Web 画面 (URL state 同期 + debounce 検索 + numbered pager)。アクション系は別タスク
-- [ ] **招待** (`POST /admin/user/invite`): メールアドレスで招待送信
-- [ ] **編集** (`POST /admin/user/:id/edit`): name / email / status の手動修正
-- [ ] **権限** (`POST /admin/user/:id/makeAdmin` / `removeFromAdmin`)
-- [ ] **アカウント状態** (`POST /admin/user/:id/activate` / `suspend`)
-- [ ] **パスワードリセット** (`POST /admin/users.resetPassword`): 仮 PW 発行 + メール送信
-- [ ] **メール変更** (`POST /admin/users.updateEmail`): 強制変更 (admin のみ)
+- [x] **User 一覧** (`GET /admin/users`) + 検索 (`GET /admin/users.search`) — `0223d46b` + `8316d50a` + `7820711c`: ts-rest contract / API ハンドラ (createPager 移植 + UserPublic 絞込み) / Web 画面 (URL state 同期 + debounce 検索 + numbered pager)。
+- [x] **招待 / 編集 / 権限 / 状態 / パスワードリセット / メール変更** (`49f5f211` + simplify `d63d9457`) — 6 アクションを 1 PR にまとめて統合。`<UserActionDialogs>` (Invite / Edit / UpdateEmail / ResetPasswordResult / ConfirmAction) + dropdown menu。i18n / EmailConflictError / unwrapResult 経由
+- [x] **users table 情報整理** (`e77a1690`) — 3 列 (User/Username/Email) を 1 列に統合、chip の `whitespace-nowrap` で改行解消、role badge は customized のみ表示
 
 ### 通知 (Page → Slack channel)
 - [ ] **通知一覧 / 編集** (`GET /admin/notification`)
@@ -119,6 +129,23 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] エディタ強化 (Markdown プレビュー / リッチエディタ / 自動保存 / 画像アップロード)
 
 ## Recently Completed (このセッション)
+
+### Installer 移行 (フェーズ 0)
+- [x] **未インストール時の自動 redirect** (`/migrate migrate-installer-process` → `ed1c598d`) — `useInstallerStatus()` + `<InstallerGate>` を root layout に mount、`/installer` ⇄ それ以外を双方向制御
+- [x] **`installer.createAdmin` を ts-rest 内に native 化** (`4ec708e8`) — legacy controller への delegation を廃止 (`req.form.isValid` undefined クラッシュ解消)。Zod schema に legacy regex (username `[\da-zA-Z\-_.]+`、password `[\x20-\x7F]{6,}`) 移植
+- [x] **installer status を DB 直クエリに** (`82b6be40`) — boot-time cache が `applicationInstall()` 後に stale になる問題を `Config.countDocuments({ns:'crowi'})` 直参照で解決。install 成功後は `crowi.getConfigService().load()` で cache refresh
+
+### Plugin Architecture (RFC-0001)
+- [x] **adminPlacement + plugin-driven sidebar** (`a092cd8f`) + **不要 card header 整理** (`0b2619fa`)
+- [x] **plugin admin UI Step 7** — `/admin/plugins` 一覧 → 単一 plugin 編集ページ、auto-form (kind ベース control)、`@sensitive` / `@action` 対応、設定の暗号化保存 (`061ae3ed`)
+- [x] **plugin name に `/` を含む npm scope の query string 対応** (`24ec1ef4`) — Express path-param が `@crowi/storage-local` で broken
+- [x] **`@crowi/aws` / `@crowi/storage-aws-s3` / `@crowi/storage-local` の段階的 split** + 共通 base plugin "共通サービス" 名称決定
+
+### Header / Theming
+- [x] **clear header + popover shadow テーマ化** (`986873dd` + simplify `879e3e7a`) — 旧 Crowi の white header + gradient top border + lifted shadow を移植。`--shadow-popover` / `--shadow-header` を `@theme inline` に集約、shadcn dropdown / dialog / alert-dialog 全部に適用。`UserDropdownIdentity` + `SiteBrand` 抽出、`UserMenuItems` を legacy 順 (Settings → Bookmarks → Created → Trash → Logout) に
+- [x] **設定済み site title を header に表示** (`4829ef59`) — `GET /api/v2/app/info` (public)、`useAppInfo` hook、title 設定済 → icon-only + title / 未設定 → full lockup
+- [x] **login / installer / register に旧 nologin gradient + animation 移植** (`97c10d04`) — `.bg-crowi-login` 3層 linear-gradient + 20s pan animation + `prefers-reduced-motion` 対応
+- [x] **`/_history` 予約ルート** (`bef81f83` + `41d47607`) — catch-all `[[...slug]]` の `/foo/history` 検出を撤去、`/_history?path=...` (Next.js 仕様で `%5Fhistory` フォルダ名) に移行
 
 ### 管理画面 (フェーズ 4) を一気に整備
 - [x] **/admin/{app,security,auth,mail,share,users}** を ts-rest + Next.js で実装。並行 worktree → `/integrate-worktree` で順次統合 → 各 simplify pass で post-merge cleanup
