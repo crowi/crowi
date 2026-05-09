@@ -5,7 +5,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { IdRedirector } from '@/components/id-redirector';
 import { PageList } from '@/components/page-list/page-list';
 import { PageView } from '@/components/page-view';
-import { PageHistoryView } from '@/components/page-history/page-history-view';
 import { isObjectId } from '@/lib/object-id';
 
 export default function CatchAllPage() {
@@ -23,14 +22,6 @@ export default function CatchAllPage() {
   const segments = path.split('/').filter(Boolean);
   if (segments.length === 1 && isObjectId(segments[0])) {
     return <IdRedirector pageId={segments[0]} />;
-  }
-
-  // Detect /:path/history sub-route. The catch-all owns the entire URL space, so
-  // we recognize the trailing '/history' segment here rather than as a separate
-  // route file (Next.js does not allow nesting under [[...slug]]).
-  if (!isPortalPath && segments.length >= 2 && segments[segments.length - 1] === 'history') {
-    const basePath = '/' + segments.slice(0, -1).join('/');
-    return <PageHistoryView path={basePath} />;
   }
 
   return (

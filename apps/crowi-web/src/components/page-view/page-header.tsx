@@ -29,15 +29,12 @@ interface PageHeaderProps {
 }
 
 /**
- * Build the history URL for the given page path. The catch-all route inspects
- * the trailing '/history' segment, so we always use a path-based URL here.
- * The leading slash is preserved; trailing slashes are stripped.
+ * Build the history URL for the given page path. We route through the
+ * reserved `/_history` page so any user-created slug ending in 'history'
+ * doesn't collide with the revision-history view.
  */
 function buildHistoryHref(pagePath: string): string {
-  // root '/' has no underlying page (it's a portal), but guard anyway.
-  if (pagePath === '/' || pagePath === '') return '/history';
-  const trimmed = pagePath.replace(/\/$/, '');
-  return `${trimmed}/history`;
+  return `/_history?path=${encodeURIComponent(pagePath)}`;
 }
 
 export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = true }: PageHeaderProps) {
