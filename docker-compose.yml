@@ -18,10 +18,25 @@ services:
     ports:
       - 6379:6379
 
-  # elasticsearch is intentionally omitted for now.
-  # The 7.4.0 image cannot read existing 7.14.1 data, and @elastic/elasticsearch
-  # is no longer in package.json — search is effectively disabled in Crowi 2.0 dev.
-  # Re-add this service when search is brought back, with a current ES version.
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.0
+    container_name: crowi-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      # Dev-only: ES disk watermark blocks indexing when the laptop disk is
+      # ~85% full. Disable so a tight disk doesn't surprise developers.
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
 
   plantuml:
     image: plantuml/plantuml-server:latest
