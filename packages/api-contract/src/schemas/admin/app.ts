@@ -1,13 +1,15 @@
 import { z } from 'zod';
-import { AwsAccessKeyIdSchema, AwsRegionSchema } from './_aws';
 
 /**
- * GET response: the current `app:*` and `upload:aws:*` config slice.
+ * GET response: the current `app:*` config slice (plus a few read-only
+ * derived values used by the admin App page header).
  *
- * `secretAccessKey` is masked — the API never returns the plaintext, only
- * whether a value is currently set. The admin UI uses `hasValue` to decide
- * between rendering an empty input ("set a key") vs. a placeholder ("a key is
- * already set, leave blank to keep").
+ * AWS S3 credentials used to live here under an `upload.aws` block.
+ * Storage credentials are now managed exclusively through the per-plugin
+ * settings page (`/admin/plugins?name=@crowi/plugin-aws`); the App
+ * settings endpoint no longer surfaces them. Boot-time migration copies
+ * the legacy `upload:aws:*` keys into the new `plugin:@crowi/plugin-aws:*`
+ * namespace — see `apps/crowi-api/src/util/aws-config-migration.ts`.
  */
 export const GetAppSettingsResponseSchema = z.object({
   app: z.object({
@@ -19,17 +21,6 @@ export const GetAppSettingsResponseSchema = z.object({
      * editable from here.
      */
     externalShare: z.boolean(),
-  }),
-  upload: z.object({
-    aws: z.object({
-      region: z.string(),
-      bucket: z.string(),
-      accessKeyId: z.string(),
-      /** Plaintext is never returned. */
-      secretAccessKey: z.object({
-        hasValue: z.boolean(),
-      }),
-    }),
   }),
   /**
    * Whether a storage driver is registered (i.e. uploads are wired up).
@@ -47,34 +38,24 @@ export type GetAppSettingsResponse = z.infer<typeof GetAppSettingsResponseSchema
 
 /**
  * PUT request body. All fields are optional so partial updates are supported,
- * but when present they must satisfy the per-field validation. Sections (`app`
- * / `upload.aws`) are themselves optional.
+ * but when present they must satisfy the per-field validation. The `app`
+ * section itself is also optional.
  *
- * Semantics for `secretAccessKey`:
- * - omitted (undefined) → leave the stored value untouched.
- * - empty string         → explicitly clear the stored value.
- * - non-empty            → save (auto-encrypted via `isSensitiveConfig`).
+ * Strict on the top-level so unknown keys (e.g. a stray `upload` from a
+ * stale client) are rejected with a per-field 400 — this is the contract's
+ * way of advertising that storage credentials moved to the plugin settings
+ * page.
  */
-export const UpdateAppSettingsRequestSchema = z.object({
-  app: z
-    .object({
-      title: z.string().trim().min(1).max(100).optional(),
-      confidential: z.string().max(500).optional(),
-    })
-    .optional(),
-  upload: z
-    .object({
-      aws: z
-        .object({
-          region: AwsRegionSchema.optional(),
-          bucket: z.string().trim().max(63).optional(),
-          accessKeyId: AwsAccessKeyIdSchema.optional(),
-          secretAccessKey: z.string().optional(),
-        })
-        .optional(),
-    })
-    .optional(),
-});
+export const UpdateAppSettingsRequestSchema = z
+  .object({
+    app: z
+      .object({
+        title: z.string().trim().min(1).max(100).optional(),
+        confidential: z.string().max(500).optional(),
+      })
+      .optional(),
+  })
+  .strict();
 export type UpdateAppSettingsRequest = z.infer<typeof UpdateAppSettingsRequestSchema>;
 
 export const UpdateAppSettingsResponseSchema = z.object({
