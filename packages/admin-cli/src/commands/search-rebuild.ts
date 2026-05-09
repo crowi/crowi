@@ -95,13 +95,48 @@ export function registerSearchRebuild(program: Command): void {
         console.log('');
         console.log('Index rebuild complete.');
       } catch (err) {
-        console.error('crowi-admin: search rebuild failed:', (err as Error).message);
+        // ES client errors often have an empty `.message` and put the
+        // useful detail on `.meta.body.error` (or wrap an HTTP cause).
+        // Print everything we can find so operators don't have to dig
+        // through plugin source to interpret a failure.
+        console.error('crowi-admin: search rebuild failed.');
+        printError(err);
         exitCode = 1;
       } finally {
         await crowi.teardownForCli().catch(() => undefined);
       }
       process.exit(exitCode);
     });
+}
+
+/**
+ * Render whatever detail we can extract from a thrown error. The ES JS
+ * client's `ResponseError` puts the cluster's actual response on
+ * `meta.body` and leaves `.message` as just the HTTP status string,
+ * which on its own is useless ("response error"). Walk the common
+ * shapes so operators can act on the output without needing to attach
+ * a debugger.
+ */
+function printError(err: unknown): void {
+  if (err instanceof Error) {
+    if (err.message) console.error(`  message: ${err.message}`);
+    const meta = (err as Error & { meta?: { statusCode?: number; body?: unknown } }).meta;
+    if (meta) {
+      if (meta.statusCode !== undefined) console.error(`  status:  ${meta.statusCode}`);
+      if (meta.body !== undefined) {
+        try {
+          console.error(`  body:    ${JSON.stringify(meta.body, null, 2)}`);
+        } catch {
+          console.error(`  body:    ${String(meta.body)}`);
+        }
+      }
+    }
+    const cause = (err as Error & { cause?: unknown }).cause;
+    if (cause !== undefined) console.error(`  cause:   ${cause instanceof Error ? cause.message || cause.name : String(cause)}`);
+    if (err.stack) console.error(err.stack);
+  } else {
+    console.error(`  thrown:  ${String(err)}`);
+  }
 }
 
 /**
