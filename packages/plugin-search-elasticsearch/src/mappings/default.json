@@ -75,11 +75,11 @@
       },
       "created_at": {
         "type": "date",
-        "format": "dateOptionalTime"
+        "format": "strict_date_optional_time"
       },
       "updated_at": {
         "type": "date",
-        "format": "dateOptionalTime"
+        "format": "strict_date_optional_time"
       }
     }
   }
