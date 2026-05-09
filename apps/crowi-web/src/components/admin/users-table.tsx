@@ -177,42 +177,47 @@ export function UsersTable({ users, pager, onPageChange, onAction, currentUserId
           <thead className="bg-muted/50">
             <tr className="text-left">
               <th className="px-4 py-2 font-medium">{m['admin.users.column_user']()}</th>
-              <th className="px-4 py-2 font-medium">{m['admin.users.column_username']()}</th>
-              <th className="px-4 py-2 font-medium">{m['admin.users.column_email']()}</th>
               <th className="px-4 py-2 font-medium">{m['admin.users.column_status']()}</th>
               <th className="px-4 py-2 font-medium">{m['admin.users.column_admin']()}</th>
-              <th className="px-4 py-2 font-medium">{m['admin.users.column_created_at']()}</th>
-              {showActions && <th className="px-4 py-2 font-medium sr-only">{m['admin.users.action.menu_label']()}</th>}
+              <th className="px-4 py-2 font-medium whitespace-nowrap">{m['admin.users.column_created_at']()}</th>
+              {showActions && <th className="px-2 py-2 font-medium sr-only">{m['admin.users.action.menu_label']()}</th>}
             </tr>
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user._id} className="border-t">
-                <td className="px-4 py-2">
-                  <div className="flex items-center gap-2">
+              <tr key={user._id} className="border-t align-top">
+                <td className="px-4 py-3">
+                  <div className="flex items-start gap-3">
                     <UserAvatar user={{ name: user.name, username: user.username, image: user.image ?? null }} size="sm" />
-                    <span className="font-medium">{user.name || user.username}</span>
+                    <div className="min-w-0 leading-tight">
+                      <div className="font-medium">{user.name || user.username}</div>
+                      <div className="text-muted-foreground text-xs truncate">
+                        @{user.username}
+                        {user.email && (
+                          <>
+                            <span className="mx-1.5 opacity-50">·</span>
+                            <span className="font-mono">{user.email}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </td>
-                <td className="px-4 py-2 text-muted-foreground">{user.username}</td>
-                <td className="px-4 py-2">{user.email}</td>
-                <td className="px-4 py-2">
-                  <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', statusPillClass(user.status))}>
+                <td className="px-4 py-3">
+                  <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap', statusPillClass(user.status))}>
                     {formatStatus(user.status)}
                   </span>
                 </td>
-                <td className="px-4 py-2">
-                  {user.admin ? (
-                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                <td className="px-4 py-3">
+                  {user.admin && (
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary whitespace-nowrap">
                       {m['admin.users.role_admin']()}
                     </span>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">{m['admin.users.role_member']()}</span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-muted-foreground">{formatDate(user.createdAt)}</td>
+                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(user.createdAt)}</td>
                 {showActions && onAction && (
-                  <td className="px-2 py-2 text-right">
+                  <td className="px-2 py-3 text-right">
                     <RowActionMenu user={user} isSelf={user._id === currentUserId} onAction={onAction} />
                   </td>
                 )}
