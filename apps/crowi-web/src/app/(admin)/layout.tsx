@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useAuth } from '@/lib/use-auth';
 import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
 import { SiteBrand } from '@/components/site-brand';
+import { LocaleSync } from '@/components/locale-sync';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
@@ -89,6 +90,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-background">
+      <LocaleSync />
       <ConnectionBanner />
       <ServerErrorModal />
 

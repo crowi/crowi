@@ -1,9 +1,18 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getLocale, setLocale, locales, type Locale } from '@paraglide/runtime.js';
 import { apiClient } from './api-client';
 import { unwrapResult } from './unwrap-result';
 import type { UpdateProfileRequest, UpdatePasswordRequest } from '@crowi/api-contract';
+
+function profileLangToLocale(lang: string | undefined | null): Locale | null {
+  if (!lang) return null;
+  const lower = lang.toLowerCase().replace('_', '-');
+  if (locales.includes(lower as Locale)) return lower as Locale;
+  const base = lower.split('-')[0];
+  return locales.includes(base as Locale) ? (base as Locale) : null;
+}
 
 export function useProfile() {
   return useQuery({
@@ -30,8 +39,13 @@ export function useUpdateProfile() {
         fallback: 'Failed to update profile',
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      const target = profileLangToLocale(variables.userForm?.lang);
+      if (target && target !== getLocale()) {
+        // Reloads the page so Server Components re-render in the new locale.
+        setLocale(target);
+      }
     },
   });
 }
