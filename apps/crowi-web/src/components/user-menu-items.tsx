@@ -9,12 +9,6 @@ interface UserMenuItemsProps {
   username: string;
 }
 
-/**
- * User-dropdown body, mirroring the legacy Crowi menu order:
- * Settings → Bookmarks → Created Pages → divider → Deleted Pages → divider.
- * Logout stays in each layout because it's wired to that layout's
- * useAuth callback.
- */
 export function UserMenuItems({ username }: UserMenuItemsProps) {
   return (
     <>

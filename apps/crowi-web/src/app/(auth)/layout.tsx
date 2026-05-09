@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/use-auth';
-import { useAppInfo } from '@/lib/use-app-info';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
@@ -17,12 +16,12 @@ import { m } from '@paraglide/messages.js';
 import { LanguageMenuItems } from '@/components/language-menu-items';
 import { UserMenuItems } from '@/components/user-menu-items';
 import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
+import { SiteBrand } from '@/components/site-brand';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
-  const { data: appInfo } = useAppInfo();
 
   useEffect(() => {
     // 接続エラー中はリダイレクトしない
@@ -67,20 +66,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <header className="crowi-top-border bg-background text-foreground shadow-header relative z-40">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity min-w-0"
-              aria-label={appInfo?.title ?? 'Crowi'}
-            >
-              {appInfo?.title ? (
-                <>
-                  <img src="/logo/icon.png" alt="" className="h-6 w-6 shrink-0" />
-                  <span className="text-base font-semibold truncate text-primary">{appInfo.title}</span>
-                </>
-              ) : (
-                <img src="/logo/500w.png" alt="Crowi" className="h-6 w-auto shrink-0" />
-              )}
-            </Link>
+            <SiteBrand />
           </div>
           <div className="flex items-center gap-2">
             {user?.admin && (
@@ -94,7 +80,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="hover:bg-muted flex items-center gap-2 px-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hover:bg-muted flex items-center gap-2 px-1.5"
+                  aria-label={m['header.user_menu_aria']({ name: user?.name || user?.username || '' })}
+                >
                   {user && <UserAvatar user={user} size="sm" />}
                 </Button>
               </DropdownMenuTrigger>

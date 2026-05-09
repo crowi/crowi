@@ -186,6 +186,7 @@
   "user_page.loading": "Loading...",
   "header.notifications_aria": "Notifications",
   "header.admin_aria": "Admin",
+  "header.user_menu_aria": "{name}'s menu",
   "header.user_dropdown_my_page": "My page",
   "header.user_dropdown_bookmarks": "Bookmarks",
   "header.user_dropdown_created": "Created pages",

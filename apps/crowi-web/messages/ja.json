@@ -186,6 +186,7 @@
   "user_page.loading": "読み込み中...",
   "header.notifications_aria": "通知",
   "header.admin_aria": "管理画面",
+  "header.user_menu_aria": "{name} のメニュー",
   "header.user_dropdown_my_page": "マイページ",
   "header.user_dropdown_bookmarks": "ブックマーク",
   "header.user_dropdown_created": "作成したページ",

@@ -12,11 +12,6 @@ interface UserDropdownIdentityProps {
   };
 }
 
-/**
- * Identity header at the top of the user dropdown — large centred avatar
- * over name (primary colour), `@username`, and an email line. Mirrors the
- * legacy Crowi `header-user .dropdown-menu-right` block.
- */
 export function UserDropdownIdentity({ user }: UserDropdownIdentityProps) {
   const displayName = user.name || user.username;
   return (

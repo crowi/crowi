@@ -62,14 +62,7 @@
   --color-crowi-warning: var(--crowi-warning);
   --color-crowi-danger: var(--crowi-danger);
 
-  /*
-   * Soft "lifted" shadow used on every popover-like surface (dropdowns,
-   * dialogs, alert-dialogs, popovers). Ported from the legacy Crowi
-   * theme — a tight high-detail layer over a wider diffused layer reads
-   * as a refined elevation step instead of a flat drop shadow.
-   */
   --shadow-popover: 0 4px 6px rgba(0, 0, 0, 0.1), 0 8px 20px rgba(0, 0, 0, 0.2);
-  /* Soft separator under the white app header (legacy `box-shadow: 0 -1px 10px`). */
   --shadow-header: 0 1px 10px rgba(0, 0, 0, 0.12);
 }
 
@@ -246,11 +239,6 @@
   }
 }
 
-/*
- * Three-px gradient top border ported from the legacy `.crowi.main-container`
- * style. Sits above the white app header to introduce a subtle hue shift
- * (dark teal → green → blue → pale teal) before the content begins.
- */
 .crowi-top-border {
   border-top: 3px solid transparent;
   border-image: linear-gradient(90deg, #263a3c 0%, #43b150 35%, #6294c5 70%, #84a3a5 100%) 1;
