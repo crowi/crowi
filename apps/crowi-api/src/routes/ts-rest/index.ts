@@ -13,6 +13,7 @@ import revisionRoutes from './revision';
 import notificationRoutes from './notification';
 import backlinkRoutes from './backlink';
 import attachmentRoutes from './attachment';
+import searchRoutes from './search';
 import adminCryptoRoutes from './adminCrypto';
 import adminRoutes from './admin';
 import jwtAuth from '../../middlewares/jwtAuth';
@@ -58,6 +59,7 @@ export default (crowi: Crowi, app: Express) => {
   const notificationRouter = notificationRoutes(crowi, app);
   const backlinkRouter = backlinkRoutes(crowi, app);
   const attachmentRouter = attachmentRoutes(crowi, app);
+  const searchRouter = searchRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
   authenticatedRouter.use(meRouter);
@@ -69,6 +71,7 @@ export default (crowi: Crowi, app: Express) => {
   authenticatedRouter.use(notificationRouter);
   authenticatedRouter.use(backlinkRouter);
   authenticatedRouter.use(attachmentRouter);
+  authenticatedRouter.use(searchRouter);
 
   // Admin Router - JWT authentication + admin permission required
   const adminRouter = Router();
