@@ -141,12 +141,16 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [x] **plugin admin UI Step 7** — `/admin/plugins` 一覧 → 単一 plugin 編集ページ、auto-form (kind ベース control)、`@sensitive` / `@action` 対応、設定の暗号化保存 (`061ae3ed`)
 - [x] **plugin name に `/` を含む npm scope の query string 対応** (`24ec1ef4`) — Express path-param が `@crowi/storage-local` で broken
 - [x] **`@crowi/aws` / `@crowi/storage-aws-s3` / `@crowi/storage-local` の段階的 split** + 共通 base plugin "共通サービス" 名称決定
+- [x] **plugin-s3 worktree 統合** (merge `433166a6` + simplify `c8156b11`) — `@crowi/plugin-{aws,storage-aws-s3,storage-local}` 化、`/admin/storage`、`@crowi/admin-cli` (`crowi-admin storage copy`)、AWS config boot-time migration、`apps/crowi-dev-runner` 導入、`/crowi-feature` skill + 4 agent 新設、`FILE_UPLOAD` env / `app:fileUpload` toggle 廃止
+- [x] **deps-hint banner** (`/crowi-feature feature-admin-plugin-deps-hint` → `5798bea5` + `3004d857`) — `/admin/plugins/edit?name=<X>` で X が `requires` を持つときに依存先 plugin の必須フィールド未設定 / 未インストールを警告。`useAdminPluginConfigs` (parallel `useQueries`、cache key 共有)。i18n 4 keys
 
-### Header / Theming
+### Header / Theming / URL 整理
 - [x] **clear header + popover shadow テーマ化** (`986873dd` + simplify `879e3e7a`) — 旧 Crowi の white header + gradient top border + lifted shadow を移植。`--shadow-popover` / `--shadow-header` を `@theme inline` に集約、shadcn dropdown / dialog / alert-dialog 全部に適用。`UserDropdownIdentity` + `SiteBrand` 抽出、`UserMenuItems` を legacy 順 (Settings → Bookmarks → Created → Trash → Logout) に
 - [x] **設定済み site title を header に表示** (`4829ef59`) — `GET /api/v2/app/info` (public)、`useAppInfo` hook、title 設定済 → icon-only + title / 未設定 → full lockup
 - [x] **login / installer / register に旧 nologin gradient + animation 移植** (`97c10d04`) — `.bg-crowi-login` 3層 linear-gradient + 20s pan animation + `prefers-reduced-motion` 対応
 - [x] **`/_history` 予約ルート** (`bef81f83` + `41d47607`) — catch-all `[[...slug]]` の `/foo/history` 検出を撤去、`/_history?path=...` (Next.js 仕様で `%5Fhistory` フォルダ名) に移行
+- [x] **`/settings` → `/me` / `/notifications` → `/_notifications`** (`0c381291`) — レガシー Crowi の URL 名前空間に合わせる (ユーザー作成ページ slug との衝突回避)。設定の通知タブも撤去 (placeholder のみだったため)
+- [x] **locale 同期 + popover 言語メニュー撤去** (`b4cf720a` + `8a47e65d`) — `<LocaleSync>` を root に mount、`User.lang` ↔ paraglide cookie を双方向同期。popover の言語選択を撤去、`/me` の Language `<Select>` 一本化。`/me` 配下を 80 keys で全面 i18n 化
 
 ### 管理画面 (フェーズ 4) を一気に整備
 - [x] **/admin/{app,security,auth,mail,share,users}** を ts-rest + Next.js で実装。並行 worktree → `/integrate-worktree` で順次統合 → 各 simplify pass で post-merge cleanup
