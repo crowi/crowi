@@ -59,7 +59,7 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
         </div>
       </div>
 
-      {showTitle && (
+      {showTitle ? (
         <div className="flex items-center gap-3">
           <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground flex-1 min-w-0">{pageTitle}</h1>
           {isPrivate && <Lock className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Private page" />}
@@ -70,6 +70,18 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
             </Button>
           )}
         </div>
+      ) : (
+        (isPrivate || onEdit) && (
+          <div className="flex items-center justify-end gap-3">
+            {isPrivate && <Lock className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Private page" />}
+            {onEdit && (
+              <Button variant="ghost" size="sm" onClick={onEdit} className="shrink-0 text-muted-foreground hover:text-foreground">
+                <Edit2 className="h-4 w-4 mr-1" />
+                {m['page.action_edit']()}
+              </Button>
+            )}
+          </div>
+        )
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
