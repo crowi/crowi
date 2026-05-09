@@ -32,18 +32,16 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount }: UserPro
           // opacity so the band reads as "atmosphere with warmth"
           // rather than a rainbow.
           backgroundImage: [
-            // Primary teal — top-right anchor (the brand foothold)
-            'radial-gradient(ellipse 75% 100% at 100% 0%, color-mix(in srgb, var(--crowi-primary) 38%, transparent), transparent 58%)',
-            // Sage — quiet warmth bottom-center, the "glow"
-            'radial-gradient(ellipse 60% 100% at 30% 115%, color-mix(in srgb, #8eb39b 32%, transparent), transparent 62%)',
-            // Gold — top-left "morning light"
-            'radial-gradient(ellipse 55% 80% at 0% 0%, color-mix(in srgb, #f0d264 20%, transparent), transparent 60%)',
+            // Primary teal — top-right anchor (brand foothold)
+            'radial-gradient(ellipse 80% 110% at 100% 0%, color-mix(in srgb, var(--crowi-primary) 78%, transparent), transparent 60%)',
+            // Sage — bottom-left/center glow
+            'radial-gradient(ellipse 70% 110% at 25% 115%, color-mix(in srgb, #8eb39b 70%, transparent), transparent 62%)',
+            // Gold — top-left morning light
+            'radial-gradient(ellipse 60% 90% at 0% 0%, color-mix(in srgb, #f0d264 55%, transparent), transparent 60%)',
             // Coral — bottom-right kiss of warmth
-            'radial-gradient(ellipse 45% 75% at 100% 110%, color-mix(in srgb, #d96d68 16%, transparent), transparent 60%)',
-            // Header dark — subtle vignette along the top edge for depth
-            'radial-gradient(ellipse 60% 40% at 50% -10%, color-mix(in srgb, var(--crowi-header) 14%, transparent), transparent 70%)',
-            // Base wash
-            'linear-gradient(180deg, color-mix(in srgb, var(--crowi-primary) 6%, transparent) 0%, transparent 80%)',
+            'radial-gradient(ellipse 50% 80% at 100% 110%, color-mix(in srgb, #d96d68 48%, transparent), transparent 62%)',
+            // Header dark — top vignette for depth
+            'radial-gradient(ellipse 70% 50% at 50% -10%, color-mix(in srgb, var(--crowi-header) 30%, transparent), transparent 70%)',
           ].join(', '),
         }}
       >
