@@ -5,21 +5,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { AwsConfig } from '@crowi/plugin-aws';
 import type { CrowiPlugin, StorageDriver } from '@crowi/plugin-api';
 
-/**
- * AWS S3 storage driver. Depends on `@crowi/plugin-aws` for shared
- * credentials (region / accessKeyId / secretAccessKey) — operators
- * configure those once via the @crowi/plugin-aws admin section and
- * S3 + future SES + … all pick them up.
- *
- * Object keys are passed through verbatim to S3, preserving the
- * v1.x naming convention. Operators upgrading from v1.x point
- * `bucket` at their existing bucket and files round-trip without
- * migration.
- */
-
 const S3StorageConfigSchema = z
   .object({
-    /** S3 bucket name. Required to be non-empty for the driver to work. */
     bucket: z.string().default(''),
   })
   .strict();
@@ -53,13 +40,9 @@ interface S3DriverConfig extends AwsConfig {
 }
 
 /**
- * Build the StorageDriver. Exported separately so the test suite can
- * exercise the implementation without going through PluginManager.
- *
  * If `accessKeyId` and `secretAccessKey` are both empty, the AWS SDK
- * falls back to its default credential chain (IAM role, env vars,
- * shared file). Operators running on EC2 / ECS / Fargate can use IAM
- * roles by leaving the key fields blank.
+ * falls back to its default credential chain (IAM role / env vars /
+ * shared file).
  */
 export function createS3Driver(config: S3DriverConfig): StorageDriver {
   const client = new S3Client({
@@ -101,8 +84,6 @@ export function createS3Driver(config: S3DriverConfig): StorageDriver {
       if (!body) {
         throw new Error(`S3 returned empty body for key '${key}'`);
       }
-      // The AWS SDK's `Body` is a Readable on Node, but typed as a
-      // wider union. Cast to Readable for the contract surface.
       return body as Readable;
     },
 

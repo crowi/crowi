@@ -10,17 +10,6 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAdminStorage } from '@/lib/use-admin-storage';
 import { m } from '@paraglide/messages.js';
 
-/**
- * /admin/storage
- *
- * Read-only status view for the active storage driver and the list of
- * drivers any loaded plugin has registered. Driver switching is an
- * operator-side action (`crowi.config.json:storage.driver` + restart);
- * file migration runs through `crowi-admin storage copy`.
- *
- * Authorization (admin only) is enforced by the surrounding (admin)
- * layout, so this page only handles fetch / render state.
- */
 export default function AdminStoragePage() {
   const { data, isLoading, error } = useAdminStorage();
 

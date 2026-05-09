@@ -3,11 +3,6 @@ import type { StorageDriver } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
 import { BY_KEY_URL_PREFIX, getStorageDriverByName } from 'src/util/fileUploader';
 
-/**
- * Per-key event the caller can hook into for live progress display.
- * Emitted both before a key is copied (`stage: 'start'`) and after
- * (`stage: 'ok' | 'failed' | 'skipped'`).
- */
 export interface StorageCopyProgress {
   current: number;
   total: number | null;
@@ -17,17 +12,10 @@ export interface StorageCopyProgress {
 }
 
 export interface StorageCopyOptions {
-  /** Driver name to read from (must be registered by some loaded plugin). */
   from: string;
-  /** Driver name to write to (must be registered by some loaded plugin). */
   to: string;
-  /**
-   * When true, enumerate the candidate keys and report them but never
-   * call `to.put`. Useful as a pre-flight check before a maintenance
-   * window.
-   */
+  /** When true, enumerate candidate keys but never call `to.put`. */
   dryRun: boolean;
-  /** Callback invoked once per key. Optional. */
   onProgress?: (event: StorageCopyProgress) => void;
 }
 
@@ -36,36 +24,20 @@ export interface StorageCopySummary {
   failed: number;
   skipped: number;
   total: number;
-  /**
-   * In dry-run mode, the first batch of candidate keys (capped at
-   * `DRY_RUN_SAMPLE_LIMIT`) so the caller can show what would be
-   * copied. Empty in non-dry-run mode.
-   */
+  /** Up to DRY_RUN_SAMPLE_LIMIT keys, populated only on dry-run. */
   sampleKeys: string[];
 }
 
-/**
- * Maximum number of keys reported back in `summary.sampleKeys` for a
- * dry run. Keeps stdout / API responses bounded on installations with
- * tens of thousands of attachments.
- */
 const DRY_RUN_SAMPLE_LIMIT = 20;
 
 /**
- * Copy every stored object from one driver to another. Iterates
- * `Attachment.find({}).cursor()` for page-attached files and
- * `User.find({ image: ... })` for profile pictures (which are not tracked
- * in the Attachment collection — see User.createUserPictureFilePath).
+ * Copy every stored object from `opts.from` to `opts.to`. Both drivers
+ * must be loaded by some plugin; the active-driver concept is irrelevant
+ * (an operator can stage data on the new driver while the old one is
+ * still active, then flip `crowi.config.json` and restart).
  *
- * Both source and destination drivers must be **loaded by some plugin**;
- * the active driver concept is irrelevant to the copy. This lets an
- * operator stage data on `s3` while `local` is still active, then flip
- * `crowi.config.json:storage.driver` and restart.
- *
- * Failure mode: per-key errors are logged via `onProgress` and counted in
- * `summary.failed`; the iteration never aborts. Re-running is safe — both
- * the local and S3 drivers do overwrite-by-key on `put`, so partial runs
- * are restartable.
+ * Re-running is safe: per-key errors increment `summary.failed` without
+ * aborting the iteration, and the local + S3 drivers overwrite by key.
  */
 export async function runStorageCopy(crowi: Crowi, opts: StorageCopyOptions): Promise<StorageCopySummary> {
   const fromDriver = getStorageDriverByName(crowi, opts.from);
@@ -151,47 +123,25 @@ async function copyOne(
 }
 
 /**
- * Extract the `user/<id>.<ext>` storage key from a `User.image` URL.
- *
- * Two URL shapes produced by `fileUploader.generateUrl()` are accepted:
- *   1. Local driver: `<BY_KEY_URL_PREFIX>user%2F<id>.<ext>` — URL-encoded
- *      slash in the path segment (the by-key proxy route).
- *   2. S3 signed URL: `https://<bucket>.s3.<region>.amazonaws.com/user/<id>.<ext>?…`
- *      — the raw path includes the storage key directly.
- *
- * Returns null when no recognisable `user/...` key appears in the URL —
- * the caller treats that as "not backed by our storage" and skips
- * (typically external avatars captured during OAuth login).
- *
- * Exported separately so the unit test can exercise it without bringing
- * up the full Crowi container.
+ * Two URL shapes produced by `fileUploader.generateUrl()`:
+ *   1. Local driver: `<BY_KEY_URL_PREFIX>user%2F<id>.<ext>`
+ *   2. S3 signed URL with the raw `user/<id>.<ext>` segment in the path.
+ * Returns null for external URLs (e.g. OAuth-captured Google avatars).
  */
 export function extractUserPictureKey(image: string | null | undefined): string | null {
   if (!image) return null;
 
-  // by-key proxy form (anchored to the shared route prefix so a route
-  // rename in fileUploader.ts forces this matcher to follow):
   if (image.includes(BY_KEY_URL_PREFIX)) {
     const encoded = image.match(/user%2F([\w.-]+)/i);
     if (encoded) return `user/${encoded[1]}`;
   }
 
-  // raw form: anywhere a `user/<id>.<ext>` substring appears (covers
-  // signed URLs from S3 and any other driver that exposes the key in
-  // the path).
   const raw = image.match(/user\/([\w.-]+)/);
   if (raw) return `user/${raw[1]}`;
 
   return null;
 }
 
-/**
- * Cheap content-type guess from the file extension. Only handles the
- * extensions Crowi's profile-picture upload route allows; anything else
- * falls back to octet-stream. The driver only stores this as metadata
- * (S3 returns it on subsequent GETs); the actual file bytes are
- * untouched.
- */
 function contentTypeFromKey(key: string): string {
   const ext = key.toLowerCase().split('.').pop();
   switch (ext) {

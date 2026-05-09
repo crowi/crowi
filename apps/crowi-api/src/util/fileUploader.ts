@@ -3,18 +3,8 @@ import { Readable } from 'node:stream';
 import type Crowi from 'src/crowi';
 import type { StorageDriver } from '@crowi/plugin-api';
 
-/**
- * Thin facade over the plugin-provided storage driver. The driver is
- * resolved at the moment of each call (not cached at module init)
- * because PluginManager.bootstrap completes after this module is
- * required.
- *
- * Throws a clear error if no storage driver is registered — that
- * means the operator has neither installed `@crowi/plugin-storage-local`
- * (default) nor `@crowi/plugin-storage-aws-s3`. Until Step 3 wiring
- * lands fully, this can also fire when the new boot order is used
- * without the plugin packages installed in node_modules.
- */
+// Resolved per call (not cached at module init) because the
+// PluginManager bootstraps after this module is required.
 function activeDriver(crowi: Crowi): StorageDriver {
   const driver = crowi.getPlugins().active.storage;
   if (!driver) {
@@ -24,12 +14,9 @@ function activeDriver(crowi: Crowi): StorageDriver {
 }
 
 /**
- * Look up a registered storage driver by its name (the string passed to
- * `registerStorage().register('<name>', …)`). Throws with the list of
- * available drivers when the name doesn't match — operators see what's
- * actually installed instead of having to guess. Used by the
- * `crowi-admin storage copy` CLI to address `--from` / `--to` drivers
- * regardless of which one is currently `active`.
+ * Look up a storage driver by its registered name. Throws with the list
+ * of available drivers when no match — used by the `crowi-admin storage
+ * copy` CLI which addresses non-active drivers by name.
  */
 export function getStorageDriverByName(crowi: Crowi, name: string): StorageDriver {
   const driver = crowi.getPlugins().storage.get(name);

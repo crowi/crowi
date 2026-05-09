@@ -156,17 +156,11 @@ class Crowi {
     await this.setupSessionConfig();
     await this.setupConfig();
     await this.migrateConfig();
-    // Copy legacy `upload:aws:*` keys into the new plugin namespace
-    // BEFORE setupPlugins runs — @crowi/plugin-aws reads its config at
-    // register time and the storage driver pulls credentials out then.
-    // Idempotent + write-only-when-target-empty, safe on every boot.
-    // Failures here are warnings only: the migration is best-effort and
-    // operators can also configure the new keys directly.
-    try {
-      await runAwsConfigMigration(this);
-    } catch (err) {
-      console.warn('[crowi] AWS config migration failed (continuing boot):', (err as Error).message);
-    }
+    // Must run before setupPlugins — @crowi/plugin-aws reads its config at
+    // register time. Idempotent (write-only-when-target-empty); a failure
+    // here can leak plaintext secrets, so let it bubble out instead of
+    // continuing boot.
+    await runAwsConfigMigration(this);
     // Plugins must boot AFTER config/models are ready (so PluginContext
     // can read config and access models) but BEFORE the legacy
     // searcher / mailer / slack initialisers — those are migrating to

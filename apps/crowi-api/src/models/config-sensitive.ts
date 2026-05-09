@@ -21,6 +21,11 @@ const SENSITIVE_CONFIG_KEYS: ReadonlySet<string> = new Set([
   'crowi:mail:smtpPassword',
   'notification:slack:clientSecret',
   'notification:slack:token',
+  // The aws-config-migration writes these BEFORE setupPlugins runs, so the
+  // plugin's runtime @sensitive registration hasn't happened yet. List them
+  // statically so the migration's saveConfig still encrypts at rest.
+  'crowi:plugin:@crowi/plugin-aws:accessKeyId',
+  'crowi:plugin:@crowi/plugin-aws:secretAccessKey',
 ]);
 
 /**

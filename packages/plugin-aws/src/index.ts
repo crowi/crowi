@@ -2,23 +2,14 @@ import { z } from 'zod';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 
 /**
- * Shared AWS configuration. Plugins like `@crowi/plugin-storage-aws-s3`
- * and `@crowi/plugin-mail-aws-ses` depend on this plugin via `requires`
- * and pull `region` / `accessKeyId` / `secretAccessKey` through
- * `ctx.dependencyConfig('@crowi/plugin-aws')`.
- *
- * The plugin itself contributes nothing to any registry — it's a
- * config-holder. Auto-loaded transitively by the PluginManager when
- * any AWS service plugin lists it in `requires`, so operators do not
- * need to add `@crowi/plugin-aws` to `crowi.config.json:plugins`
- * themselves.
- *
- * The corresponding admin form section is rendered exactly once, even
- * if multiple AWS-using plugins are installed.
+ * Shared AWS configuration. Storage / mail / etc. plugins list this in
+ * `requires` and read it via `ctx.dependencyConfig('@crowi/plugin-aws')`,
+ * so operators don't have to add it to `crowi.config.json:plugins`
+ * themselves and the admin form section is rendered once regardless of
+ * how many AWS-using plugins are installed.
  */
 export const AwsConfigSchema = z
   .object({
-    /** AWS region (e.g. `ap-northeast-1`). Empty string means unset. */
     region: z
       .string()
       .trim()
@@ -27,10 +18,9 @@ export const AwsConfigSchema = z
       })
       .default(''),
     /**
-     * AWS access key id. Empty string means unset — leave both
-     * accessKeyId and secretAccessKey empty to fall back to the
-     * Node SDK's default credential chain (IAM role, env vars,
-     * shared credentials file, …).
+     * Leave both accessKeyId and secretAccessKey empty to fall back to
+     * the Node SDK's default credential chain (IAM role / env vars /
+     * shared credentials file).
      */
     accessKeyId: z
       .string()
@@ -39,7 +29,6 @@ export const AwsConfigSchema = z
         message: 'Access Key ID must be alphanumeric',
       })
       .default(''),
-    /** AWS secret access key. Empty string means unset. Encrypted at rest. */
     secretAccessKey: z.string().describe('@sensitive AWS secret access key').default(''),
   })
   .strict();
@@ -51,18 +40,10 @@ const plugin: CrowiPlugin = {
   version: '0.1.0-dev',
   configSchema: AwsConfigSchema,
   adminPlacement: {
-    // Base plugin (config-only, no register*). Surfaced under the
-    // sidebar's "shared services" section so operators find AWS
-    // credentials in one place even when both S3 and SES depend on
-    // them.
     section: 'shared',
     label: 'AWS',
     icon: 'cloud',
   },
-  // No register* — config-only plugin. Downstream AWS plugins read
-  // these values via ctx.dependencyConfig('@crowi/plugin-aws').
-  // Legacy v1.x → v2.0 key migration is handled centrally by `crowi
-  // migrate` in Step 9 of RFC-0001, not per-plugin onInstall.
 };
 
 export default plugin;
