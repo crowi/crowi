@@ -41,7 +41,7 @@ function buildSearchUrl(params: { q: string; type: SearchTypeTabValue; tree: str
   if (params.tree.length > 0) next.set('tree', params.tree);
   if (params.page > 1) next.set('page', String(params.page));
   const qs = next.toString();
-  return qs.length > 0 ? `/search?${qs}` : '/search';
+  return qs.length > 0 ? `/_search?${qs}` : '/_search';
 }
 
 function SearchPageInner() {

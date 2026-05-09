@@ -66,12 +66,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <ServerErrorModal />
 
       <header className="crowi-top-border bg-background text-foreground shadow-header relative z-40">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
+          <div className="flex items-center gap-3 min-w-0 shrink-0">
             <SiteBrand />
           </div>
-          <div className="flex items-center gap-2">
-            <GlobalSearchInput />
+          <GlobalSearchInput />
+          <div className="flex items-center gap-2 ml-auto">
             {user?.admin && (
               <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10">
                 <Link href="/admin" aria-label={m['header.admin_aria']()} title={m['header.admin_aria']()}>
