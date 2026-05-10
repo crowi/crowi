@@ -1,6 +1,8 @@
 export { PageView } from './page-view';
 export { PageHeader } from './page-header';
 export { PageContent } from './page-content';
+export { PageToc } from './page-toc';
+export { StaleRevisionBanner } from './stale-revision-banner';
 export { BookmarkButton } from './bookmark-button';
 export { LikeButton } from './like-button';
 export { PageActionsMenu } from './page-actions-menu';

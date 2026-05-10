@@ -1,5 +1,7 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract } from '@crowi/api-contract';
+import { resolveRevisionMeta } from 'src/util/page-response';
+import type { RevisionMetaContent } from 'src/models/revision';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { Types } from 'mongoose';
@@ -23,9 +25,11 @@ const invalidRequest = (message: string) =>
  * Convert a revision document (with optionally populated author) to the
  * full RevisionSchema shape (body included).
  */
-const revisionToFullResponse = (revision: RevisionDocument) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const obj = revision.toObject() as any;
+const revisionToFullResponse = (revision: RevisionDocument, options: { withMeta?: boolean } = {}) => {
+  const obj = revision.toObject() as RevisionDocument & {
+    author: Parameters<typeof toPageUser>[0] | null | undefined;
+    meta?: RevisionMetaContent;
+  };
   return {
     _id: revision._id.toString(),
     path: revision.path,
@@ -33,6 +37,7 @@ const revisionToFullResponse = (revision: RevisionDocument) => {
     format: revision.format || 'markdown',
     author: isPopulatedUser(obj.author) ? toPageUser(obj.author) : null,
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
+    meta: resolveRevisionMeta(obj.meta?.toc, revision.body, options.withMeta),
   };
 };
 
@@ -151,7 +156,7 @@ export default (crowi: Crowi, _app: Express) => {
 
         return {
           status: 200 as const,
-          body: { revision: revisionToFullResponse(revision) },
+          body: { revision: revisionToFullResponse(revision, { withMeta: true }) },
         };
       } catch (err) {
         const error = err as Error;
@@ -213,7 +218,7 @@ export default (crowi: Crowi, _app: Express) => {
 
         return {
           status: 200 as const,
-          body: { revisions: revisions.map(revisionToFullResponse) },
+          body: { revisions: revisions.map((r) => revisionToFullResponse(r)) },
         };
       } catch (err) {
         const error = err as Error;

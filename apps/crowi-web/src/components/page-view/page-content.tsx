@@ -2,11 +2,44 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { PageWithRevision } from '@crowi/api-contract';
+import { Slugger, type PageWithRevision } from '@crowi/api-contract';
 
 interface PageContentProps {
   page: PageWithRevision;
 }
+
+// Inline mdast subset — keeps the plugin dep-free (no @types/mdast).
+type MdastLike = {
+  type?: string;
+  value?: string;
+  children?: MdastLike[];
+  data?: { hProperties?: Record<string, unknown> };
+};
+
+// Stamps heading `id`s using the shared Slugger so anchor hrefs in
+// the server-computed TOC resolve to the rendered DOM.
+const remarkHeadingIds = () => (tree: MdastLike) => {
+  const slugger = new Slugger();
+  walk(tree);
+
+  function walk(node: MdastLike) {
+    if (node.type === 'heading') {
+      node.data = node.data || {};
+      node.data.hProperties = { ...(node.data.hProperties || {}), id: slugger.slug(toText(node)) };
+    }
+    node.children?.forEach(walk);
+  }
+
+  function toText(node: MdastLike): string {
+    if (typeof node.value === 'string') return node.value;
+    return node.children?.map(toText).join('') ?? '';
+  }
+};
+
+// Module-level so the plugin array reference is stable; otherwise
+// react-markdown re-runs the parse pipeline whenever PageContent
+// re-renders for unrelated reasons.
+const REMARK_PLUGINS = [remarkGfm, remarkHeadingIds];
 
 export function PageContent({ page }: PageContentProps) {
   const body = page.revision?.body || '';
@@ -18,27 +51,37 @@ export function PageContent({ page }: PageContentProps) {
   return (
     <div className="crowi-prose">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={REMARK_PLUGINS}
         components={{
           h1: ({ children, ...props }) => (
-            <h1 className="text-3xl font-bold tracking-tight mt-12 mb-4 first:mt-0 leading-tight" {...props}>
+            <h1 className="text-3xl font-bold tracking-tight mt-12 mb-4 first:mt-0 leading-tight scroll-mt-24" {...props}>
               {children}
             </h1>
           ),
           h2: ({ children, ...props }) => (
-            <h2 className="text-2xl font-semibold tracking-tight mt-10 mb-3 leading-snug" {...props}>
+            <h2 className="text-2xl font-semibold tracking-tight mt-10 mb-3 leading-snug scroll-mt-24" {...props}>
               {children}
             </h2>
           ),
           h3: ({ children, ...props }) => (
-            <h3 className="text-xl font-semibold mt-8 mb-2 leading-snug" {...props}>
+            <h3 className="text-xl font-semibold mt-8 mb-2 leading-snug scroll-mt-24" {...props}>
               {children}
             </h3>
           ),
           h4: ({ children, ...props }) => (
-            <h4 className="text-lg font-semibold mt-6 mb-2" {...props}>
+            <h4 className="text-lg font-semibold mt-6 mb-2 scroll-mt-24" {...props}>
               {children}
             </h4>
+          ),
+          h5: ({ children, ...props }) => (
+            <h5 className="text-base font-semibold mt-5 mb-2 scroll-mt-24" {...props}>
+              {children}
+            </h5>
+          ),
+          h6: ({ children, ...props }) => (
+            <h6 className="text-sm font-semibold uppercase tracking-wide mt-5 mb-2 scroll-mt-24" {...props}>
+              {children}
+            </h6>
           ),
 
           a: ({ href, children, ...props }) => {

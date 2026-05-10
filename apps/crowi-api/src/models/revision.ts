@@ -1,7 +1,14 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
+import { extractToc, type RevisionMetaShape, type TocEntryResponse } from '@crowi/api-contract';
 import { PageDocument } from './page';
 // import Debug from 'debug'
+
+export type RevisionTocEntry = TocEntryResponse;
+// `RevisionMetaContent` carries derived metadata (TOC etc.) stored on
+// the revision document. Distinct from api-contract's `RevisionMeta`,
+// which is a lightweight list-entry shape (id/path/author/createdAt).
+export type RevisionMetaContent = RevisionMetaShape;
 
 export interface RevisionDocument extends Document {
   _id: Types.ObjectId;
@@ -10,6 +17,7 @@ export interface RevisionDocument extends Document {
   format: string;
   author: Types.ObjectId;
   createdAt: Date;
+  meta?: RevisionMetaContent;
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
@@ -34,6 +42,29 @@ export default (crowi: Crowi) => {
     format: { type: String, default: 'markdown' },
     author: { type: Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now },
+    // Older revisions without `meta` fall back to on-the-fly TOC
+    // generation in pageToResponse.
+    meta: {
+      type: new Schema<RevisionMetaContent>(
+        {
+          toc: {
+            type: [
+              new Schema<RevisionTocEntry>(
+                {
+                  level: { type: Number, required: true },
+                  text: { type: String, required: true },
+                  anchorId: { type: String, required: true },
+                },
+                { _id: false },
+              ),
+            ],
+            default: undefined,
+          },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
   });
 
   revisionSchema.statics.findLatestRevision = function (path, cb) {
@@ -87,6 +118,7 @@ export default (crowi: Crowi) => {
     newRevision.format = format;
     newRevision.author = user._id;
     newRevision.createdAt = Date.now() as any as Date;
+    newRevision.meta = { toc: extractToc(body || '') };
 
     return newRevision;
   };

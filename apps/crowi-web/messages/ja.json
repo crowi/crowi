@@ -62,6 +62,8 @@
   "page.deleted_alert_description": "ゴミ箱にあります。下のボタンから復元するか、内容を確認できます。",
   "page.restore": "ページを復元",
   "page.restoring": "復元中...",
+  "page.stale_revision_warning": "警告: これは現在のバージョンではありません",
+  "page.stale_revision_show_latest": "最新を表示",
   "page.like_label": "いいね",
   "page.like_label_done": "いいね済み",
   "page.like_aria_add": "いいねを追加",

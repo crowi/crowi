@@ -1,6 +1,8 @@
 import { Types } from 'mongoose';
-import type { Revision } from '@crowi/api-contract';
+import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
+import { extractToc } from '@crowi/api-contract';
 import type { PageDocument } from 'src/models/page';
+import type { RevisionMetaContent } from 'src/models/revision';
 import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId } from './ts-rest-helpers';
 
 /**
@@ -17,6 +19,7 @@ export interface PopulatedRevision {
   format?: string;
   author?: PopulatedUser | null;
   createdAt?: Date;
+  meta?: RevisionMetaContent;
 }
 
 /**
@@ -58,14 +61,38 @@ export const isPopulatedRevision = (value: unknown): value is PopulatedRevision 
 // look like it was just created — schema only requires the field be set.
 const EPOCH_ISO = new Date(0).toISOString();
 
-export const toRevisionResponse = (revision: PopulatedRevision): Revision => ({
+export interface RevisionResponseOptions {
+  /**
+   * If the revision has no stored `meta.toc`, parse it from the body.
+   * Off by default — only single-revision read paths (getPage,
+   * getRevision) need the TOC; lists and diffs ignore it and would
+   * waste a parse on pre-meta revisions.
+   */
+  withMeta?: boolean;
+}
+
+export const toRevisionResponse = (revision: PopulatedRevision, options: RevisionResponseOptions = {}): Revision => ({
   _id: revision._id.toString(),
   path: revision.path,
   body: revision.body,
   format: revision.format || 'markdown',
   author: revision.author ? toPageUser(revision.author) : null,
   createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
+  meta: resolveRevisionMeta(revision.meta?.toc, revision.body, options.withMeta),
 });
+
+export const resolveRevisionMeta = (
+  storedToc: RevisionMetaContent['toc'],
+  body: string,
+  computeWhenMissing: boolean | undefined,
+): RevisionMetaShape | undefined => {
+  if (storedToc && storedToc.length > 0) return { toc: storedToc };
+  if (!computeWhenMissing) return undefined;
+  const toc = extractToc(body);
+  return toc.length > 0 ? { toc } : undefined;
+};
+
+export type PageToResponseOptions = RevisionResponseOptions;
 
 /**
  * Project a populated Page document (or plain `PageLike`) into the contract
@@ -78,7 +105,7 @@ export const toRevisionResponse = (revision: PopulatedRevision): Revision => ({
  * contracts pin one or the other and each handler narrows at its return.
  */
 // biome-ignore lint/suspicious/noExplicitAny: see jsdoc
-export const pageToResponse = (page: PageDocument | PageLike): any => {
+export const pageToResponse = (page: PageDocument | PageLike, options: PageToResponseOptions = {}): any => {
   const pageObj: PageLike = typeof (page as PageDocument).toObject === 'function' ? (page as PageDocument).toObject() : (page as PageLike);
   // likerCount / seenUsersCount are dynamic properties set by populatePageData
   // on the Mongoose document; toObject() drops them, so read off the original.
@@ -87,7 +114,7 @@ export const pageToResponse = (page: PageDocument | PageLike): any => {
   return {
     _id: toStringId(pageObj._id),
     path: pageObj.path,
-    revision: pageObj.revision && isPopulatedRevision(pageObj.revision) ? toRevisionResponse(pageObj.revision) : undefined,
+    revision: pageObj.revision && isPopulatedRevision(pageObj.revision) ? toRevisionResponse(pageObj.revision, { withMeta: options.withMeta }) : undefined,
     redirectTo: pageObj.redirectTo || null,
     status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated') || undefined,
     grant: pageObj.grant,

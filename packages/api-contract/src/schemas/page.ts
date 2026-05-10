@@ -39,6 +39,22 @@ export const PageUserSchema = z.object({
 });
 export type PageUser = z.infer<typeof PageUserSchema>;
 
+// TOC entry — derived from a revision body's headings, populated on
+// save and (for older revisions) computed on the fly during read.
+export const TocEntrySchema = z.object({
+  level: z.number().int().min(1).max(6),
+  text: z.string(),
+  anchorId: z.string(),
+});
+export type TocEntryResponse = z.infer<typeof TocEntrySchema>;
+
+// Revision-bound metadata derived from the body. Future RFC-0002
+// fields (wikiLinks, mentions, codeBlockLanguages, plugins) land here.
+export const RevisionMetaSchemaShape = z.object({
+  toc: z.array(TocEntrySchema).optional(),
+});
+export type RevisionMetaShape = z.infer<typeof RevisionMetaSchemaShape>;
+
 // Revision schema - matches RevisionDocument
 export const RevisionSchema = z.object({
   _id: z.string(),
@@ -47,6 +63,7 @@ export const RevisionSchema = z.object({
   format: z.string().default('markdown'),
   author: PageUserSchema.nullable().optional(),
   createdAt: z.string(),
+  meta: RevisionMetaSchemaShape.optional(),
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 
