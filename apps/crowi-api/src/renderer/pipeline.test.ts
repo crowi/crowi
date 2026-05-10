@@ -1,6 +1,8 @@
+import type { Code, Html, Root } from 'mdast';
 import type { PluginLogger } from '@crowi/plugin-api';
 import { createPipelineEsmDepsLoader, runPipeline } from './pipeline';
 import { RendererRegistryImpl } from './registry';
+import { serializeMdast } from './serialize';
 
 const silentLogger: PluginLogger = {
   debug: () => undefined,
@@ -201,6 +203,83 @@ describe('pipeline + core renderers', () => {
       expect(metadata.wikiLinks.map((w) => w.target)).toEqual(['/install']);
       expect(metadata.mentions.map((m) => m.username)).toEqual(['alice']);
       expect(metadata.codeBlockLanguages).toEqual(['ts']);
+    });
+  });
+
+  describe('renderedAst (transformed mdast persistence — Phase 3)', () => {
+    it('returns a JSON-serialisable tree with no `position` fields', async () => {
+      const md = '# Title\n\nbody.';
+      const { tree } = await runCore(md);
+      const serialised = serializeMdast(tree);
+      // Must round-trip through JSON without throwing.
+      const json = JSON.stringify(serialised);
+      const parsed = JSON.parse(json) as { type: string; children: unknown[] };
+      expect(parsed.type).toBe('root');
+      // Strip leaves no `position` anywhere.
+      expect(json.includes('"position"')).toBe(false);
+    });
+
+    it('preserves heading anchor ids on `data.hProperties.id`', async () => {
+      const md = '## Section A\n\n## Section B';
+      const { tree } = await runCore(md);
+      const ids = tree.children
+        .filter((c): c is { type: 'heading'; data?: { hProperties?: { id?: string } } } & typeof c => c.type === 'heading')
+        .map((h) => h.data?.hProperties?.id);
+      expect(ids).toEqual(['section-a', 'section-b']);
+    });
+
+    it('preserves wikilink-broken / mention className stamps after serialise', async () => {
+      const md = 'See [[Bare]] and ping @alice.';
+      const { tree } = await runCore(md);
+      const out = serializeMdast(tree) as { children: Array<{ children: Array<{ type: string; data?: { hProperties?: { className?: string } } }> }> };
+      const para = out.children[0];
+      const classes = para.children.filter((c) => c.type === 'link').map((c) => c.data?.hProperties?.className);
+      expect(classes).toContain('wikilink-broken');
+      expect(classes).toContain('mention');
+    });
+
+    it('replaces a known-language fence with an `html` node carrying shiki output', async () => {
+      const md = ['```ts', 'const x: number = 1;', '```'].join('\n');
+      const { tree } = await runCore(md);
+      const top = tree.children[0];
+      expect(top.type).toBe('html');
+      const html = (top as Html).value;
+      // shiki always emits a top-level `<pre class="shiki ...">`. The
+      // exact background color from `github-light` should ride along.
+      expect(html).toContain('<pre');
+      expect(html).toContain('shiki');
+    });
+
+    it('keeps unknown-language fences as `code` nodes (web-side fallback)', async () => {
+      const md = ['```brainfuck', '+++[->+<]', '```'].join('\n');
+      const { tree } = await runCore(md);
+      const top = tree.children[0];
+      expect(top.type).toBe('code');
+      expect((top as Code).lang).toBe('brainfuck');
+    });
+
+    it('keeps fences without a language as `code` nodes', async () => {
+      const md = ['```', 'plain', '```'].join('\n');
+      const { tree } = await runCore(md);
+      expect(tree.children[0].type).toBe('code');
+    });
+  });
+
+  describe('on-the-fly fallback (renderedAst recompute for legacy revisions)', () => {
+    it('produces an equivalent AST when the same body is re-run', async () => {
+      // The fallback path runs the pipeline against the body when no
+      // stored AST exists; same input must yield byte-identical JSON
+      // (shiki output is deterministic for the same theme + lang).
+      const md = '# Hello\n\n[[/wiki]] @alice\n\n```ts\nx\n```';
+      const a = serializeMdast((await runCore(md)).tree) as Record<string, unknown>;
+      const b = serializeMdast((await runCore(md)).tree) as Record<string, unknown>;
+      expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+    });
+
+    it('produces an empty Root for empty body (legacy revision with no body)', async () => {
+      const tree: Root = (await runCore('')).tree;
+      expect(tree).toEqual({ type: 'root', children: [] });
+      expect(serializeMdast(tree)).toEqual({ type: 'root', children: [] });
     });
   });
 });
