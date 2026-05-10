@@ -1,8 +1,8 @@
 import { Types } from 'mongoose';
 import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
-import { extractToc } from '@crowi/api-contract';
+import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
-import type { RevisionMetaContent } from 'src/models/revision';
+import { metadataToRevisionMeta, type RevisionMetaContent } from 'src/models/revision';
 import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId } from './ts-rest-helpers';
 
 /**
@@ -78,14 +78,59 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   format: revision.format || 'markdown',
   author: revision.author ? toPageUser(revision.author) : null,
   createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
-  meta: resolveRevisionMeta(revision.meta?.toc, revision.body, options.withMeta),
+  // Sync path: only emits stored meta. Single-page / single-revision
+  // read paths that want the on-the-fly fallback for legacy revisions
+  // use `computeRevisionMetaAsync` after the response is built.
+  meta: resolveRevisionMeta(revision.meta, options.withMeta),
 });
 
-export const resolveRevisionMeta = (storedToc: RevisionMetaContent['toc'], body: string, emit: boolean | undefined): RevisionMetaShape | undefined => {
+export const resolveRevisionMeta = (stored: RevisionMetaContent | undefined, emit: boolean | undefined): RevisionMetaShape | undefined => {
   if (!emit) return undefined;
-  if (storedToc && storedToc.length > 0) return { toc: storedToc };
-  const toc = extractToc(body);
-  return toc.length > 0 ? { toc } : undefined;
+  if (!stored) return undefined;
+  const out = pickStoredMeta(stored);
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
+// Avoids leaking Mongoose internals (the document carries `$__` etc.)
+// into the response shape.
+function pickStoredMeta(stored: RevisionMetaContent): RevisionMetaShape {
+  const out: RevisionMetaShape = {};
+  if (stored.toc !== undefined) out.toc = stored.toc;
+  if (stored.wikiLinks !== undefined) out.wikiLinks = stored.wikiLinks;
+  if (stored.mentions !== undefined) out.mentions = stored.mentions;
+  if (stored.codeBlockLanguages !== undefined) out.codeBlockLanguages = stored.codeBlockLanguages;
+  return out;
+}
+
+/**
+ * Async fallback compute: runs the unified pipeline once to produce
+ * the 4 meta fields when stored meta is missing on legacy revisions.
+ * Single-page detail / single-revision endpoints call this AFTER
+ * `pageToResponse` to attach meta to the response without making the
+ * entire pageToResponse path async (which would cascade through 12+
+ * call sites that don't need meta at all).
+ *
+ * Phase 2-written revisions persist all 4 fields (even as empty
+ * arrays), so the presence of `wikiLinks` / `mentions` /
+ * `codeBlockLanguages` is the marker that no fallback is needed. Phase
+ * 1 revisions only have `toc`, so we re-run the pipeline to fill the
+ * other 3 — but stored `toc` (the authoritative anchor ids that
+ * page-content's heading stamper aligns against) wins on merge.
+ */
+export const computeRevisionMetaAsync = async (
+  crowi: Crowi,
+  stored: RevisionMetaContent | undefined,
+  body: string,
+  emit: boolean | undefined,
+): Promise<RevisionMetaShape | undefined> => {
+  if (!emit) return undefined;
+  const fromStored = stored ? pickStoredMeta(stored) : {};
+  if (fromStored.wikiLinks !== undefined && fromStored.mentions !== undefined && fromStored.codeBlockLanguages !== undefined) {
+    return Object.keys(fromStored).length > 0 ? fromStored : undefined;
+  }
+  const computed = await crowi.getRenderer().runMetadata(body || '', { mode: 'read' });
+  const merged: RevisionMetaShape = { ...pickStoredMeta(metadataToRevisionMeta(computed)), ...fromStored };
+  return Object.keys(merged).length > 0 ? merged : undefined;
 };
 
 export type PageToResponseOptions = RevisionResponseOptions;

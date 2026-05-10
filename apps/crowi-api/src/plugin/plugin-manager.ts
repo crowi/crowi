@@ -8,6 +8,7 @@ import type { ConfigChangeSource } from 'src/service/config';
 import { type CrowiConfigFile, loadCrowiConfigFile, resolvePluginList } from './config-file';
 import { createPluginContext } from './plugin-context';
 import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
+import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
 import { topoSortPlugins } from './topo-sort';
 
@@ -315,6 +316,15 @@ export class PluginManager {
     if (plugin.registerSearch) plugin.registerSearch(makeSearchScope(this.search, plugin.name), ctx);
     if (plugin.registerAuth) plugin.registerAuth(makeAuthScope(this.auth, plugin.name), ctx);
     if (plugin.registerNotifier) plugin.registerNotifier(makeNotifierScope(this.notifier, plugin.name), ctx);
+    if (plugin.registerRenderer) {
+      // Renderer is registered against `crowi.renderer.registry`; it
+      // already has the core 4 transforms in place when we get here
+      // (Crowi.init() runs setupRenderer before setupPlugins). External
+      // plugins append to the back — they cannot insert before core in
+      // v2.1 phase 2.
+      const renderer = this.crowi.getRenderer();
+      plugin.registerRenderer(makeRendererScope(renderer.registry, plugin.name, ctx.log), ctx);
+    }
 
     // registerHooks and registerRoutes are wired in a later step
     // (the EventBus and PluginRouterScope instances are not yet

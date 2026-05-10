@@ -1,6 +1,6 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract } from '@crowi/api-contract';
-import { resolveRevisionMeta } from 'src/util/page-response';
+import { computeRevisionMetaAsync, resolveRevisionMeta } from 'src/util/page-response';
 import type { RevisionMetaContent } from 'src/models/revision';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
@@ -23,7 +23,9 @@ const invalidRequest = (message: string) =>
 
 /**
  * Convert a revision document (with optionally populated author) to the
- * full RevisionSchema shape (body included).
+ * full RevisionSchema shape (body included). Sync path — for legacy
+ * revisions missing `meta`, callers compose with `computeRevisionMetaAsync`
+ * on the side to attach the on-the-fly fallback.
  */
 const revisionToFullResponse = (revision: RevisionDocument, options: { withMeta?: boolean } = {}) => {
   const obj = revision.toObject() as RevisionDocument & {
@@ -37,7 +39,7 @@ const revisionToFullResponse = (revision: RevisionDocument, options: { withMeta?
     format: revision.format || 'markdown',
     author: isPopulatedUser(obj.author) ? toPageUser(obj.author) : null,
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
-    meta: resolveRevisionMeta(obj.meta?.toc, revision.body, options.withMeta),
+    meta: resolveRevisionMeta(obj.meta, options.withMeta),
   };
 };
 
@@ -154,9 +156,14 @@ export default (crowi: Crowi, _app: Express) => {
           return pageNotFoundResponse;
         }
 
+        const response = revisionToFullResponse(revision, { withMeta: false });
+        // On-the-fly fallback for legacy revisions whose `meta` was
+        // not populated at save time (or is missing the new fields).
+        const obj = revision.toObject() as { meta?: RevisionMetaContent };
+        response.meta = await computeRevisionMetaAsync(crowi, obj.meta, revision.body, true);
         return {
           status: 200 as const,
-          body: { revision: revisionToFullResponse(revision, { withMeta: true }) },
+          body: { revision: response },
         };
       } catch (err) {
         const error = err as Error;

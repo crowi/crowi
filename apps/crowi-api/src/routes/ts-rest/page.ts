@@ -5,7 +5,7 @@ import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { invalidPageIdResponse, isValidObjectId, loadGrantedPage, pageNotFoundResponse, toUserPublic } from 'src/util/ts-rest-helpers';
-import { pageToResponse } from 'src/util/page-response';
+import { computeRevisionMetaAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:page');
@@ -112,6 +112,15 @@ export default (crowi: Crowi, _app: Express) => {
         }
 
         const pageResponse = pageToResponse(page, { withMeta: true });
+
+        // On-the-fly fallback for legacy revisions: compute the 4 meta
+        // fields (toc / wikiLinks / mentions / codeBlockLanguages) when
+        // the persisted `meta` is missing or partial. Stored values
+        // are authoritative when present (anchor ids match
+        // page-content's heading stamper).
+        if (pageResponse.revision && isPopulatedRevision(page.revision)) {
+          pageResponse.revision.meta = await computeRevisionMetaAsync(crowi, page.revision.meta, page.revision.body, true);
+        }
 
         // Fire-and-forget recently-viewed touch. Hiccups on the Redis
         // side mustn't break the page read.

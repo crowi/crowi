@@ -919,7 +919,7 @@ export default (crowi: Crowi) => {
       grantedUsers: user ? [user] : [],
     });
 
-    const newRevision = Revision.prepareRevision(newPage, body, user, { format });
+    const newRevision = await Revision.prepareRevision(newPage, body, user, { format });
     try {
       const revisionData = await Page.pushRevision(newPage, newRevision, user);
       pageEvent.emit('create', revisionData, user);
@@ -935,7 +935,7 @@ export default (crowi: Crowi) => {
     const Bookmark = crowi.model('Bookmark');
     const grant = options.grant || null;
     // update existing page
-    const newRevision = Revision.prepareRevision(pageData, body, user);
+    const newRevision = await Revision.prepareRevision(pageData, body, user);
 
     await Page.pushRevision(pageData, newRevision, user);
     const bookmarkCount = await Bookmark.countByPageId(pageData._id);

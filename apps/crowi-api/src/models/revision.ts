@@ -1,10 +1,12 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
-import { extractToc, type RevisionMetaShape, type TocEntryResponse } from '@crowi/api-contract';
+import type { MentionResponse, RevisionMetaShape, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
 import { PageDocument } from './page';
 // import Debug from 'debug'
 
 export type RevisionTocEntry = TocEntryResponse;
+export type RevisionWikiLink = WikiLinkResponse;
+export type RevisionMention = MentionResponse;
 // `RevisionMetaContent` carries derived metadata (TOC etc.) stored on
 // the revision document. Distinct from api-contract's `RevisionMeta`,
 // which is a lightweight list-entry shape (id/path/author/createdAt).
@@ -27,7 +29,7 @@ export interface RevisionModel extends Model<RevisionDocument> {
   findRevisionIdList(path): Promise<RevisionDocument[]>;
   findRevisionList(path, options): Promise<RevisionDocument[]>;
   updateRevisionListByPath(path, updateData): Promise<RevisionDocument>;
-  prepareRevision(pageData: PageDocument, body, user, options?): RevisionDocument;
+  prepareRevision(pageData: PageDocument, body, user, options?): Promise<RevisionDocument>;
   removeRevisionsByPath(path): Promise<{ deletedCount: number }>;
   updatePath(pathName): void;
   findAuthorsByPage(page): Promise<RevisionDocument['author'][]>;
@@ -42,8 +44,8 @@ export default (crowi: Crowi) => {
     format: { type: String, default: 'markdown' },
     author: { type: Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now },
-    // Older revisions without `meta` fall back to on-the-fly TOC
-    // generation in pageToResponse.
+    // Older revisions without `meta` fall back to on-the-fly metadata
+    // generation in pageToResponse / resolveRevisionMeta.
     meta: {
       type: new Schema<RevisionMetaContent>(
         {
@@ -58,6 +60,34 @@ export default (crowi: Crowi) => {
                 { _id: false },
               ),
             ],
+            default: undefined,
+          },
+          wikiLinks: {
+            type: [
+              new Schema<RevisionWikiLink>(
+                {
+                  raw: { type: String, required: true },
+                  target: { type: String, required: true },
+                  displayText: { type: String, required: false },
+                },
+                { _id: false },
+              ),
+            ],
+            default: undefined,
+          },
+          mentions: {
+            type: [
+              new Schema<RevisionMention>(
+                {
+                  username: { type: String, required: true },
+                },
+                { _id: false },
+              ),
+            ],
+            default: undefined,
+          },
+          codeBlockLanguages: {
+            type: [String],
             default: undefined,
           },
         },
@@ -102,7 +132,7 @@ export default (crowi: Crowi) => {
     return Revision.updateMany({ path: path }, { $set: updateData }).exec();
   };
 
-  revisionSchema.statics.prepareRevision = function (pageData, body, user, options) {
+  revisionSchema.statics.prepareRevision = async function (pageData, body, user, options) {
     if (!options) {
       options = {};
     }
@@ -118,7 +148,12 @@ export default (crowi: Crowi) => {
     newRevision.format = format;
     newRevision.author = user._id;
     newRevision.createdAt = Date.now() as any as Date;
-    newRevision.meta = { toc: extractToc(body || '') };
+    // Run the unified pipeline once at save time and persist the
+    // derived metadata (TOC + wikilinks + mentions + code-block langs).
+    // Old revisions without `meta` fall back to on-the-fly compute in
+    // resolveRevisionMeta.
+    const metadata = await crowi.getRenderer().runMetadata(body || '', { mode: 'save' });
+    newRevision.meta = metadataToRevisionMeta(metadata);
 
     return newRevision;
   };
@@ -137,3 +172,27 @@ export default (crowi: Crowi) => {
 
   return Revision;
 };
+
+interface PipelineMetadataLike {
+  toc?: RevisionTocEntry[];
+  wikiLinks?: RevisionWikiLink[];
+  mentions?: RevisionMention[];
+  codeBlockLanguages?: string[];
+}
+
+/**
+ * Persist the 4 sub-fields verbatim (including empty arrays). The
+ * presence of `wikiLinks` / `mentions` / `codeBlockLanguages` is what
+ * `computeRevisionMetaAsync` uses to skip the on-the-fly pipeline run
+ * for revisions written under Phase 2 — collapsing empty arrays to
+ * `undefined` would defeat that fast-path on every "no mentions, no
+ * embeds" page.
+ */
+export function metadataToRevisionMeta(metadata: PipelineMetadataLike): RevisionMetaContent {
+  return {
+    toc: metadata.toc ?? [],
+    wikiLinks: metadata.wikiLinks ?? [],
+    mentions: metadata.mentions ?? [],
+    codeBlockLanguages: metadata.codeBlockLanguages ?? [],
+  };
+}
