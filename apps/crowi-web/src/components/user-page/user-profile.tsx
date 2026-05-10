@@ -65,17 +65,21 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount, onStatCli
       </div>
 
       <div className="px-4 relative">
-        {/* Avatar floats up over the cover edge; the text column below
-            stays in normal flow so it never collides with the cover. */}
-        <div className="-mt-12 md:-mt-14 inline-block">
-          <UserAvatar user={user} size="lg" className="ring-4 ring-background shadow-md" />
+        {/* Avatar + display name share the cover edge. `mb-5` on the
+            h1 itself opens breathing room below the name. */}
+        <div className="-mt-12 md:-mt-14 flex items-center gap-4 flex-wrap">
+          <UserAvatar user={user} size="lg" className="ring-4 ring-background shadow-md flex-shrink-0" />
+          <h1 className="mb-5 text-3xl md:text-4xl font-bold tracking-tight leading-tight text-foreground min-w-0">{displayName}</h1>
         </div>
 
-        <div className="mt-3">
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight text-foreground">{displayName}</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground font-mono">@{user.username}</p>
+        {/* Below the cover. `ml-24` = avatar w-20 (80px) + gap-4 (16px)
+            so @username / stats / intro line up with the display name's
+            left edge. `mt-[-30px]` pulls the sub-block up to sit close
+            to the name without colliding with the cover. */}
+        <div className="ml-24 mt-[-30px]">
+          <p className="text-sm text-muted-foreground font-mono">@{user.username}</p>
 
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
+          <div className="-ml-2.5 mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
             <StatButton
               icon={<FileText className="h-3.5 w-3.5" aria-hidden="true" />}
               count={createdPagesCount}
@@ -91,9 +95,9 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount, onStatCli
               onClick={onStatClick ? () => onStatClick('bookmarks') : undefined}
             />
           </div>
-        </div>
 
-        {user.introduction && <p className="mt-5 max-w-2xl text-foreground/85 leading-relaxed whitespace-pre-wrap">{user.introduction}</p>}
+          {user.introduction && <p className="mt-5 max-w-2xl text-foreground/85 leading-relaxed whitespace-pre-wrap">{user.introduction}</p>}
+        </div>
       </div>
     </header>
   );
