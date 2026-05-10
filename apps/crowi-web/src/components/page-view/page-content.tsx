@@ -6,6 +6,8 @@ import remarkGfm from 'remark-gfm';
 import { Check, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { remarkMention } from '@/lib/remark-mention';
+import { remarkWikiLink } from '@/lib/remark-wikilink';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -195,9 +197,11 @@ export function PageContent({ page }: PageContentProps) {
 
   // Plugin array — recompute only when the heading set changes so
   // ReactMarkdown's parse pipeline isn't re-run on unrelated renders.
+  // Order matters: GFM first → heading-id stamper (uses server toc) →
+  // wikilink and mention rewrites (text-node walks; safe to run after).
   const remarkPlugins = useMemo(() => {
     const ids = tocEntries?.map((t) => t.anchorId) ?? [];
-    return [remarkGfm, buildRemarkHeadingIds(ids)];
+    return [remarkGfm, buildRemarkHeadingIds(ids), remarkWikiLink, remarkMention];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tocEntries?.map((t) => t.anchorId).join('|')]);
 
@@ -242,12 +246,23 @@ export function PageContent({ page }: PageContentProps) {
           {children}
         </h6>
       ),
-      a: ({ href, children, ...props }: { href?: string; children?: React.ReactNode }) => {
+      a: ({ href, children, className, ...props }: { href?: string; children?: React.ReactNode; className?: string }) => {
         const isExternal = href?.startsWith('http://') || href?.startsWith('https://');
+        // Wikilinks / mentions stamp `className` from
+        // `data.hProperties.className` in the remark plugin.
+        // Broken wikilinks render dimmed without underline; mentions
+        // pick up the primary colour with weight bump.
+        const isBrokenWikiLink = className === 'wikilink-broken';
+        const isMention = className === 'mention';
+        const composedClassName = isBrokenWikiLink
+          ? 'text-muted-foreground/80 decoration-dotted decoration-muted-foreground/40 underline underline-offset-[3px] cursor-help'
+          : isMention
+            ? 'text-primary font-medium decoration-primary/40 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors'
+            : 'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors';
         return (
           <a
             href={href}
-            className="text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors"
+            className={composedClassName}
             target={isExternal ? '_blank' : undefined}
             rel={isExternal ? 'noopener noreferrer' : undefined}
             {...props}
