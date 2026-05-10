@@ -1,0 +1,47 @@
+{
+  "nav": {
+    "docs": "ドキュメント",
+    "github": "GitHub",
+    "language": "言語"
+  },
+  "hero": {
+    "tagline": "チームのナレッジを、Markdown で。",
+    "description": "Crowi は Markdown ベースの Wiki アプリケーションです。シンプルで強力、自分たちのインフラで動かせる、チームの知識共有のためのオープンソース。",
+    "ctaPrimary": "ドキュメントを読む",
+    "ctaSecondary": "GitHub で見る"
+  },
+  "features": {
+    "title": "Crowi の特徴",
+    "items": [
+      {
+        "title": "Markdown ファースト",
+        "description": "ページは Markdown で書く。GFM、コードブロック、PlantUML、数式に対応。"
+      },
+      {
+        "title": "ツリー構造で整理",
+        "description": "URL パスがそのままページの階層になる。`/team/handbook/onboarding` のように直感的に整理できる。"
+      },
+      {
+        "title": "セルフホスト",
+        "description": "自分たちのインフラで動かせる。データも、運用も、自分たちの手の中に。"
+      },
+      {
+        "title": "拡張可能",
+        "description": "プラグインでストレージ・検索・認証を差し替え可能。S3、Elasticsearch、OAuth に対応。"
+      }
+    ]
+  },
+  "cta": {
+    "title": "Crowi を始める",
+    "description": "オープンソースで自由に使えます。",
+    "button": "ドキュメントを読む"
+  },
+  "footer": {
+    "copyright": "Crowi is open source software released under the MIT License.",
+    "links": {
+      "docs": "ドキュメント",
+      "github": "GitHub",
+      "issues": "Issues"
+    }
+  }
+}

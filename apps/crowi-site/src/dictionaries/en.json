@@ -1,0 +1,47 @@
+{
+  "nav": {
+    "docs": "Docs",
+    "github": "GitHub",
+    "language": "Language"
+  },
+  "hero": {
+    "tagline": "Team knowledge, in Markdown.",
+    "description": "Crowi is a Markdown-based wiki application. Simple, powerful, self-hostable — open source software for sharing what your team knows.",
+    "ctaPrimary": "Read the docs",
+    "ctaSecondary": "View on GitHub"
+  },
+  "features": {
+    "title": "What Crowi gives you",
+    "items": [
+      {
+        "title": "Markdown-first",
+        "description": "Write pages in Markdown. GFM, code blocks, PlantUML, and math notation are all supported out of the box."
+      },
+      {
+        "title": "Tree-structured pages",
+        "description": "URL paths are page hierarchies. Organize naturally as `/team/handbook/onboarding`."
+      },
+      {
+        "title": "Self-hostable",
+        "description": "Run it on your own infrastructure. Your data, your operations — under your control."
+      },
+      {
+        "title": "Extensible",
+        "description": "Swap storage, search, and auth via plugins. S3, Elasticsearch, and OAuth are supported."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Get started with Crowi",
+    "description": "Free to use, free to modify — it's open source.",
+    "button": "Read the docs"
+  },
+  "footer": {
+    "copyright": "Crowi is open source software released under the MIT License.",
+    "links": {
+      "docs": "Docs",
+      "github": "GitHub",
+      "issues": "Issues"
+    }
+  }
+}
