@@ -33,6 +33,18 @@ export type { AuthDriver, AuthRegistry, AuthProfile, AuthVerifyResult } from './
 
 export type { NotifierDriver, NotifierRegistry, NotificationPayload } from './registries/notifier';
 
+export type {
+  RendererRegistry,
+  NodeRenderer,
+  CodeBlockRenderer,
+  CodeBlockInfo,
+  EmbedRenderer,
+  EmbedFragment,
+  UrlInlineExpansionRule,
+  RenderContext,
+  RenderPhase,
+} from './renderer';
+
 export type { EventBus, PluginEvents } from './events';
 
 export type { PluginRouterScope } from './routes';

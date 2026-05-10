@@ -5,6 +5,7 @@ import type { SearchRegistry } from './registries/search';
 import type { AuthRegistry } from './registries/auth';
 import type { NotifierRegistry } from './registries/notifier';
 import type { EventBus } from './events';
+import type { RendererRegistry } from './renderer';
 import type { PluginRouterScope } from './routes';
 
 /**
@@ -96,6 +97,15 @@ export interface CrowiPlugin {
 
   /** Notification sink registration. Called once at boot. */
   registerNotifier?: (registry: NotifierRegistry, ctx: PluginContext) => void;
+
+  /**
+   * Renderer extension registration. Called once at boot, AFTER the
+   * core bundled renderer (TOC / wikilinks / mentions / code-block
+   * languages) has already populated the registry. Phase 2 honours
+   * `addUnifiedPlugin({ phase: 'transform' })` and `addNodeRenderer`;
+   * other registrations warn-noop until Phase 3. See RFC-0002.
+   */
+  registerRenderer?: (registry: RendererRegistry, ctx: PluginContext) => void;
 
   /**
    * Event subscription registration. Reserved for v2.0 internal use;
