@@ -194,6 +194,7 @@ export default (crowi: Crowi) => {
 
   pageEvent.on('create', pageEvent.onCreate);
   pageEvent.on('update', pageEvent.onUpdate);
+  pageEvent.on('delete', pageEvent.onDelete);
 
   pageSchema.methods.isWIP = function () {
     return this.status === STATUS_WIP;
