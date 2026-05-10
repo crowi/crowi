@@ -1,10 +1,5 @@
 import { Slugger } from './slug';
-
-export interface TocEntry {
-  level: number;
-  text: string;
-  anchorId: string;
-}
+import type { TocEntryResponse } from '../schemas/page';
 
 const FENCE_RE = /^(?:```|~~~)/;
 const ATX_HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
@@ -14,9 +9,13 @@ const ATX_HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
  * headings inside fenced code blocks. Setext headings and HTML-inline
  * markup are out of scope — adding them requires a real MDAST parser.
  */
-export function extractToc(body: string): TocEntry[] {
+export function extractToc(body: string): TocEntryResponse[] {
+  // Cheap pre-screen: bodies with no `#` can't have ATX headings, skip
+  // the line scan entirely.
+  if (!body.includes('#')) return [];
+
   const lines = body.split(/\r?\n/);
-  const entries: TocEntry[] = [];
+  const entries: TocEntryResponse[] = [];
   const slugger = new Slugger();
 
   let inFence = false;

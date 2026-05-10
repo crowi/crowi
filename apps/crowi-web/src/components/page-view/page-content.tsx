@@ -1,8 +1,9 @@
 'use client';
 
+import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Slugger, type PageWithRevision } from '@crowi/api-contract';
+import type { PageWithRevision } from '@crowi/api-contract';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -16,33 +17,39 @@ type MdastLike = {
   data?: { hProperties?: Record<string, unknown> };
 };
 
-// Stamps heading `id`s using the shared Slugger so anchor hrefs in
-// the server-computed TOC resolve to the rendered DOM.
-const remarkHeadingIds = () => (tree: MdastLike) => {
-  const slugger = new Slugger();
+// Index-aligned stamper: walk headings in document order and stamp
+// each with the matching server-computed anchorId. Avoids running a
+// second slugger client-side, which had a parity risk against the
+// regex-based extractor on the server (image-in-heading, inline HTML).
+const buildRemarkHeadingIds = (anchorIds: ReadonlyArray<string>) => () => (tree: MdastLike) => {
+  let i = 0;
   walk(tree);
 
   function walk(node: MdastLike) {
     if (node.type === 'heading') {
-      node.data = node.data || {};
-      node.data.hProperties = { ...(node.data.hProperties || {}), id: slugger.slug(toText(node)) };
+      const id = anchorIds[i];
+      if (id !== undefined) {
+        node.data = node.data || {};
+        node.data.hProperties = { ...(node.data.hProperties || {}), id };
+      }
+      i++;
     }
     node.children?.forEach(walk);
   }
-
-  function toText(node: MdastLike): string {
-    if (typeof node.value === 'string') return node.value;
-    return node.children?.map(toText).join('') ?? '';
-  }
 };
-
-// Module-level so the plugin array reference is stable; otherwise
-// react-markdown re-runs the parse pipeline whenever PageContent
-// re-renders for unrelated reasons.
-const REMARK_PLUGINS = [remarkGfm, remarkHeadingIds];
 
 export function PageContent({ page }: PageContentProps) {
   const body = page.revision?.body || '';
+  const tocEntries = page.revision?.meta?.toc;
+
+  // Recompute the plugin array only when the heading set changes.
+  // ReactMarkdown re-parses if `remarkPlugins` identity changes, so we
+  // memo on the joined anchor ids (cheap and stable).
+  const remarkPlugins = useMemo(() => {
+    const ids = tocEntries?.map((t) => t.anchorId) ?? [];
+    return [remarkGfm, buildRemarkHeadingIds(ids)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tocEntries?.map((t) => t.anchorId).join('|')]);
 
   if (!body) {
     return <div className="text-muted-foreground text-center py-8">This page has no content.</div>;
@@ -51,7 +58,7 @@ export function PageContent({ page }: PageContentProps) {
   return (
     <div className="crowi-prose">
       <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
+        remarkPlugins={remarkPlugins}
         components={{
           h1: ({ children, ...props }) => (
             <h1 className="text-3xl font-bold tracking-tight mt-12 mb-4 first:mt-0 leading-tight scroll-mt-24" {...props}>

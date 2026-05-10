@@ -63,10 +63,10 @@ const EPOCH_ISO = new Date(0).toISOString();
 
 export interface RevisionResponseOptions {
   /**
-   * If the revision has no stored `meta.toc`, parse it from the body.
-   * Off by default — only single-revision read paths (getPage,
-   * getRevision) need the TOC; lists and diffs ignore it and would
-   * waste a parse on pre-meta revisions.
+   * Emit `revision.meta` (currently just `meta.toc`). Off by default —
+   * only single-revision read paths (getPage, getRevision) consume it.
+   * List endpoints (listPages, search hits, recently-viewed, bookmarks,
+   * me) skip it: the TOC adds payload weight without being rendered.
    */
   withMeta?: boolean;
 }
@@ -81,13 +81,9 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   meta: resolveRevisionMeta(revision.meta?.toc, revision.body, options.withMeta),
 });
 
-export const resolveRevisionMeta = (
-  storedToc: RevisionMetaContent['toc'],
-  body: string,
-  computeWhenMissing: boolean | undefined,
-): RevisionMetaShape | undefined => {
+export const resolveRevisionMeta = (storedToc: RevisionMetaContent['toc'], body: string, emit: boolean | undefined): RevisionMetaShape | undefined => {
+  if (!emit) return undefined;
   if (storedToc && storedToc.length > 0) return { toc: storedToc };
-  if (!computeWhenMissing) return undefined;
   const toc = extractToc(body);
   return toc.length > 0 ? { toc } : undefined;
 };
