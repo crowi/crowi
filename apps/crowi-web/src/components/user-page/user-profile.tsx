@@ -74,9 +74,9 @@ export function UserProfile({ user, createdPagesCount, bookmarksCount, onStatCli
 
         {/* Below the cover. `ml-24` = avatar w-20 (80px) + gap-4 (16px)
             so @username / stats / intro line up with the display name's
-            left edge. `mt-[-30px]` pulls the sub-block up to sit close
+            left edge. `mt-[-12px]` pulls the sub-block up to sit close
             to the name without colliding with the cover. */}
-        <div className="ml-24 mt-[-30px]">
+        <div className="ml-24 mt-[-12px]">
           <p className="text-sm text-muted-foreground font-mono">@{user.username}</p>
 
           <div className="-ml-2.5 mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
