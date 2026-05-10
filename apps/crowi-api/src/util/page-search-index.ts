@@ -1,90 +1,64 @@
 import type { SearchableDoc } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
+import { STATUS_DELETED } from 'src/models/page';
 import Debug from 'debug';
+import { isPopulatedUser, toStringId } from './ts-rest-helpers';
+import { type PageLike, isPopulatedRevision } from './page-response';
 
 const debug = Debug('crowi:util:page-search-index');
 
-interface PageLike {
-  _id?: { toString: () => string } | string;
-  path?: string;
-  status?: string | null;
-  redirectTo?: string | null;
-  grant?: number;
-  grantedUsers?: Array<{ toString: () => string } | string>;
-  creator?: { username?: string } | { toString: () => string } | string | null;
-  liker?: unknown[];
-  commentCount?: number;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-const pickId = (page: PageLike | string): string | null => {
-  if (typeof page === 'string') return page;
-  if (!page._id) return null;
-  return typeof page._id === 'string' ? page._id : page._id.toString();
-};
-
 /**
  * Push a page into the active search driver after a save / rename.
- * Re-fetches the page with revision + creator populated so we always
- * forward a consistent body — the `pageEvent` payload may carry only
- * an ObjectId revision ref (renames don't repopulate). Pages that
- * have become redirects or `status='deleted'` are removed from the
- * index instead, mirroring the driver-level `shouldIndex` filter
- * used by `rebuild()`.
+ * Pages that have become redirects or `status='deleted'` are removed
+ * from the index instead — mirrors `shouldIndex()` in the ES driver's
+ * rebuild path.
  *
  * Fire-and-forget at the call site: the helper logs and swallows
- * errors so a Redis / search-cluster hiccup never breaks page CRUD.
+ * errors so a search-cluster outage never breaks page CRUD.
  */
-export async function indexPageInSearch(crowi: Crowi, pageOrId: PageLike | string): Promise<void> {
+export async function indexPageInSearch(crowi: Crowi, page: PageLike): Promise<void> {
   const searcher = crowi.getSearcher();
   if (!searcher) return;
 
-  const id = pickId(pageOrId);
-  if (!id) {
-    debug('indexPageInSearch: no id resolvable from input, skipping');
-    return;
-  }
+  const id = toStringId(page._id);
 
   try {
-    const Page = crowi.model('Page');
-    const populated = (await Page.findById(id).populate('revision').populate('creator')) as PageLike | null;
-
-    if (!populated) {
-      debug('page %s no longer exists, removing from index', id);
-      if (typeof searcher.remove === 'function') await searcher.remove(id);
+    if (page.redirectTo || page.status === STATUS_DELETED) {
+      await searcher.remove(id);
       return;
     }
 
-    if (populated.redirectTo || populated.status === 'deleted') {
-      debug('page %s is redirect or deleted, removing from index', id);
-      if (typeof searcher.remove === 'function') await searcher.remove(id);
+    // The rename path emits 'update' with revision still as an
+    // ObjectId ref, so refetch when the payload isn't already
+    // carrying a populated revision body.
+    const target = isPopulatedRevision(page.revision) ? page : await refetchPopulated(crowi, id);
+    if (!target) {
+      await searcher.remove(id);
+      return;
+    }
+    if (target.redirectTo || target.status === STATUS_DELETED) {
+      await searcher.remove(id);
+      return;
+    }
+    if (!isPopulatedRevision(target.revision) || !target.revision.body) {
+      debug('skip: no revision body for page %s', id);
       return;
     }
 
-    const revision = populated as unknown as { revision?: { body?: string } };
-    const body = revision.revision?.body;
-    if (body === undefined) {
-      debug('page %s has no revision body, skipping index', id);
-      return;
-    }
-
-    const grantedUsers = (populated.grantedUsers ?? []).map((u) => (typeof u === 'string' ? u : u.toString()));
-    const creator = populated.creator;
-    const username = creator && typeof creator === 'object' && 'username' in creator ? (creator as { username?: string }).username : undefined;
+    const creator = isPopulatedUser(target.creator) ? target.creator : null;
 
     const doc: SearchableDoc = {
       id,
-      path: populated.path ?? '',
-      body,
+      path: target.path,
+      body: target.revision.body,
       meta: {
-        username,
-        grant: populated.grant,
-        granted_users: grantedUsers,
-        comment_count: populated.commentCount ?? 0,
-        like_count: populated.liker?.length ?? 0,
-        created_at: populated.createdAt,
-        updated_at: populated.updatedAt,
+        username: creator?.username,
+        grant: target.grant,
+        granted_users: (target.grantedUsers ?? []).map(toStringId),
+        comment_count: target.commentCount ?? 0,
+        like_count: target.liker?.length ?? 0,
+        created_at: target.createdAt,
+        updated_at: target.updatedAt,
       },
     };
 
@@ -94,16 +68,19 @@ export async function indexPageInSearch(crowi: Crowi, pageOrId: PageLike | strin
   }
 }
 
-export async function removePageFromSearch(crowi: Crowi, pageOrId: PageLike | string): Promise<void> {
+export async function removePageFromSearch(crowi: Crowi, page: PageLike): Promise<void> {
   const searcher = crowi.getSearcher();
-  if (!searcher || typeof searcher.remove !== 'function') return;
+  if (!searcher) return;
 
-  const id = pickId(pageOrId);
-  if (!id) return;
-
+  const id = toStringId(page._id);
   try {
     await searcher.remove(id);
   } catch (err) {
     debug('search remove failed for page %s: %s', id, (err as Error).message);
   }
+}
+
+async function refetchPopulated(crowi: Crowi, id: string): Promise<PageLike | null> {
+  const Page = crowi.model('Page');
+  return (await Page.findById(id).populate('revision').populate('creator')) as PageLike | null;
 }
