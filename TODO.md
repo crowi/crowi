@@ -131,6 +131,11 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 ## Recently Completed (このセッション)
 
+### RFC-0002 Renderer Plugin Architecture
+- [x] **Phase 1 — TOC + stale-revision detection** (`f38ea56a` + simplify `15dda424`) — `Page.metadata.toc` の永続化 (regex extractor + Slugger) と revision_id ベースの stale-edit detection。client は `meta.toc` の anchorId を heading に stamp して anchor 同期を保つ
+- [x] **Phase 2 — renderer pipeline 基盤 + metadata 拡張** — `@crowi/plugin-api` に `RendererRegistry` / `NodeRenderer` / `CodeBlockRenderer` / `EmbedRenderer` / `UrlInlineExpansionRule` / `RenderContext` 型を追加 + `CrowiPlugin.registerRenderer?` 拡張ポイント。api 側に unified.js ベースの parse → transform pipeline (`apps/crowi-api/src/renderer/`) を新規導入し、core 4 transform (TOC via github-slugger / wikilinks / mentions / codeBlockLanguages) を bundled 配置。`Revision.meta` に `wikiLinks` / `mentions` / `codeBlockLanguages` を追加して `prepareRevision` で persist、`pageToResponse` の on-the-fly fallback も extend (`computeRevisionMetaAsync`)。Phase 1 の regex extractToc / Slugger は削除。Web は `remarkWikiLink` + `remarkMention` plugin を独立に追加して `[[…]]` / `@username` を link 化 (broken は `wikilink-broken`、mention は primary color)。ESM-only な unified.js を CJS Express から呼ぶために `jiti` 経由で sync `require`-of-ESM (jest の `--experimental-vm-modules` は使わない)。`addEmbedTag` / `addUrlInlineExpander` / `addCodeBlockRenderer` は interface のみ expose、impl は warn-noop (Phase 3 で実装)
+- [ ] **Phase 3** — Reservation API + cache contract、AuthContext、optional plugins (katex / mermaid / plantuml / github-embed / crowi-legacy)、SSR HTML 化 (`Page.renderedHtml`)、`addEmbedTag` / `addUrlInlineExpander` の実体実装、mention notifier hook、外部 plugin の core 前後挿入
+
 ### Installer 移行 (フェーズ 0)
 - [x] **未インストール時の自動 redirect** (`/migrate migrate-installer-process` → `ed1c598d`) — `useInstallerStatus()` + `<InstallerGate>` を root layout に mount、`/installer` ⇄ それ以外を双方向制御
 - [x] **`installer.createAdmin` を ts-rest 内に native 化** (`4ec708e8`) — legacy controller への delegation を廃止 (`req.form.isValid` undefined クラッシュ解消)。Zod schema に legacy regex (username `[\da-zA-Z\-_.]+`、password `[\x20-\x7F]{6,}`) 移植
