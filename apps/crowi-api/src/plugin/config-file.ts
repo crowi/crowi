@@ -4,8 +4,8 @@ import { z } from 'zod';
 
 /**
  * Schema for the project-level `crowi.config.json` that ships with a
- * `crowi init` workspace. Validated at boot. Plugin authors edit this
- * via `crowi plugin add/remove`; operators may also hand-edit.
+ * `crowi-admin init` workspace. Validated at boot. Plugin authors edit
+ * this via `crowi-admin plugin add/remove`; operators may also hand-edit.
  *
  * Plugin-specific *configuration values* (S3 bucket, OAuth client_id,
  * etc.) live in the Mongo Config collection under `plugin:<name>:*`,

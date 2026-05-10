@@ -37,7 +37,7 @@ crowi/
 │   │   │   ├── types/              # Express Request augmentation
 │   │   │   └── crowi/index.ts      # Crowi class (boot, setup, teardown)
 │   │   └── .env.sample
-│   ├── crowi-dev-runner/           # ★ Local launcher: mirrors a `crowi init` runner repo
+│   ├── crowi-dev-runner/           # ★ Local launcher: mirrors a `crowi-admin init` runner repo
 │   │   ├── package.json            # deps: @crowi/api + @crowi/plugin-* (decides which plugins are available)
 │   │   ├── crowi.config.json       # which plugins to load + active driver names
 │   │   ├── .env / .env.sample      # runtime env (CWD-resolved)
