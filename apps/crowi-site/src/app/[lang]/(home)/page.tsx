@@ -28,7 +28,7 @@ export default async function MarketingHome({ params }: { params: Promise<{ lang
             {dict.hero.badge}
           </span>
           <div className="mt-8 w-full max-w-2xl">
-            <Image src="/crowi-reignite.webp" alt={dict.hero.reigniteAlt} width={920} height={500} priority className="h-auto w-full" />
+            <Image src="/crowi-reignite.webp" alt={dict.hero.reigniteAlt} width={1920} height={1080} priority className="h-auto w-full" />
           </div>
           <h1 className="mt-10 text-balance text-3xl font-bold tracking-tight md:text-5xl">
             <span className="text-fd-primary">Crowi</span>
