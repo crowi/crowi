@@ -20,6 +20,17 @@ export interface RevisionDocument extends Document {
   author: Types.ObjectId;
   createdAt: Date;
   meta?: RevisionMetaContent;
+  /**
+   * Phase 3 (RFC-0002): JSON-serialised mdast tree produced by the
+   * full parse + transform pipeline (core plugins + shiki). Persisted
+   * verbatim as a `Schema.Types.Mixed` blob; the contract type is
+   * `z.unknown().optional()` because mdast is too deep / external-spec
+   * to maintain a strict Zod schema for. Older revisions written
+   * before Phase 3 fall through with `renderedAst === undefined` and
+   * the read path uses `computeRevisionRenderedAstAsync` to compute on
+   * the fly.
+   */
+  renderedAst?: unknown;
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
@@ -95,6 +106,16 @@ export default (crowi: Crowi) => {
       ),
       default: undefined,
     },
+    // RFC-0002 Phase 3: transformed mdast persisted verbatim. Mixed
+    // because Mongoose strict-schema for the deep mdast shape isn't
+    // worth the maintenance — the AST is opaque JSON from the
+    // contract's perspective. `default: undefined` is critical:
+    // omitting it would have older revisions return `{}` for
+    // renderedAst and bypass the on-the-fly fallback path.
+    renderedAst: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
   });
 
   revisionSchema.statics.findLatestRevision = function (path, cb) {
@@ -148,12 +169,17 @@ export default (crowi: Crowi) => {
     newRevision.format = format;
     newRevision.author = user._id;
     newRevision.createdAt = Date.now() as any as Date;
-    // Run the unified pipeline once at save time and persist the
-    // derived metadata (TOC + wikilinks + mentions + code-block langs).
-    // Old revisions without `meta` fall back to on-the-fly compute in
-    // resolveRevisionMeta.
-    const metadata = await crowi.getRenderer().runMetadata(body || '', { mode: 'save' });
+    // Run the unified pipeline once at save time and persist BOTH
+    // (a) the derived metadata (TOC + wikilinks + mentions + code-
+    //     block langs) for backlinks / search / notify consumers, and
+    // (b) the JSON-serialised transformed mdast (`renderedAst`) which
+    //     the web client renders directly without re-parsing the body.
+    // RFC-0002 Phase 3. Older revisions written under Phase 1/2 lack
+    // `renderedAst` and fall through to the on-the-fly fallback path
+    // in `computeRevisionRenderedAstAsync`.
+    const { metadata, renderedAst } = await crowi.getRenderer().runRender(body || '', { mode: 'save' });
     newRevision.meta = metadataToRevisionMeta(metadata);
+    newRevision.renderedAst = renderedAst;
 
     return newRevision;
   };
