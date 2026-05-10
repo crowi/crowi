@@ -20,6 +20,8 @@ export interface PopulatedRevision {
   author?: PopulatedUser | null;
   createdAt?: Date;
   meta?: RevisionMetaContent;
+  /** RFC-0002 Phase 3 — transformed mdast persisted verbatim. */
+  renderedAst?: unknown;
 }
 
 /**
@@ -69,6 +71,15 @@ export interface RevisionResponseOptions {
    * me) skip it: the TOC adds payload weight without being rendered.
    */
   withMeta?: boolean;
+  /**
+   * RFC-0002 Phase 3: emit `revision.renderedAst` (transformed mdast
+   * the web client renders directly). Off by default — list endpoints
+   * skip it because the AST is 5-10x the body size in JSON form.
+   * Only single-page detail (getPage) and single-revision detail
+   * (getRevision) opt in. Legacy revisions without a stored
+   * `renderedAst` are filled in by `computeRevisionRenderedAstAsync`.
+   */
+  withRenderedAst?: boolean;
 }
 
 export const toRevisionResponse = (revision: PopulatedRevision, options: RevisionResponseOptions = {}): Revision => ({
@@ -78,10 +89,11 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   format: revision.format || 'markdown',
   author: revision.author ? toPageUser(revision.author) : null,
   createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
-  // Sync path: only emits stored meta. Single-page / single-revision
-  // read paths that want the on-the-fly fallback for legacy revisions
-  // use `computeRevisionMetaAsync` after the response is built.
+  // Sync path: only emits stored meta + renderedAst. Detail endpoints
+  // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`
+  // afterwards to fold in the on-the-fly fallback for legacy revisions.
   meta: resolveRevisionMeta(revision.meta, options.withMeta),
+  ...(options.withRenderedAst ? { renderedAst: revision.renderedAst } : {}),
 });
 
 export const resolveRevisionMeta = (stored: RevisionMetaContent | undefined, emit: boolean | undefined): RevisionMetaShape | undefined => {
@@ -103,34 +115,55 @@ function pickStoredMeta(stored: RevisionMetaContent): RevisionMetaShape {
 }
 
 /**
- * Async fallback compute: runs the unified pipeline once to produce
- * the 4 meta fields when stored meta is missing on legacy revisions.
- * Single-page detail / single-revision endpoints call this AFTER
- * `pageToResponse` to attach meta to the response without making the
- * entire pageToResponse path async (which would cascade through 12+
- * call sites that don't need meta at all).
+ * Async fallback compute for revision render artifacts (meta +
+ * renderedAst). Detail endpoints (getPage, getRevision) call this AFTER
+ * `pageToResponse` so the projection path stays sync; meta + AST get
+ * attached to the populated revision response in one go.
  *
- * Phase 2-written revisions persist all 4 fields (even as empty
- * arrays), so the presence of `wikiLinks` / `mentions` /
- * `codeBlockLanguages` is the marker that no fallback is needed. Phase
- * 1 revisions only have `toc`, so we re-run the pipeline to fill the
- * other 3 — but stored `toc` (the authoritative anchor ids that
- * page-content's heading stamper aligns against) wins on merge.
+ * Why one call instead of two: legacy revisions (Phase 1: only `toc`
+ * stored / Phase 2: meta but no `renderedAst`) would otherwise trigger
+ * back-to-back `runMetadata` + `runRender` invocations, each running a
+ * full parse+transform+shiki pipeline on the same body. `runRender`
+ * already produces both, so fold the calls into one and pull the
+ * needed pieces out.
+ *
+ * Stored values stay authoritative on merge: Phase 1's `toc` (the
+ * anchor ids the heading stamper aligns against) wins over recomputed
+ * ones, and a stored `renderedAst` is returned verbatim without
+ * re-rendering.
  */
-export const computeRevisionMetaAsync = async (
+export const computeRevisionRenderArtifactsAsync = async (
   crowi: Crowi,
-  stored: RevisionMetaContent | undefined,
+  storedMeta: RevisionMetaContent | undefined,
+  storedAst: unknown,
   body: string,
-  emit: boolean | undefined,
-): Promise<RevisionMetaShape | undefined> => {
-  if (!emit) return undefined;
-  const fromStored = stored ? pickStoredMeta(stored) : {};
-  if (fromStored.wikiLinks !== undefined && fromStored.mentions !== undefined && fromStored.codeBlockLanguages !== undefined) {
-    return Object.keys(fromStored).length > 0 ? fromStored : undefined;
+): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown }> => {
+  const fromStored = storedMeta ? pickStoredMeta(storedMeta) : {};
+  // Phase 2-written revisions persist all 4 meta fields (even empty
+  // arrays); the presence of these 3 is the marker that no fallback
+  // is needed for meta.
+  const metaIsComplete = fromStored.wikiLinks !== undefined && fromStored.mentions !== undefined && fromStored.codeBlockLanguages !== undefined;
+  const astIsStored = storedAst !== undefined;
+
+  if (metaIsComplete && astIsStored) {
+    return {
+      meta: Object.keys(fromStored).length > 0 ? fromStored : undefined,
+      renderedAst: storedAst,
+    };
   }
-  const computed = await crowi.getRenderer().runMetadata(body || '', { mode: 'read' });
-  const merged: RevisionMetaShape = { ...pickStoredMeta(metadataToRevisionMeta(computed)), ...fromStored };
-  return Object.keys(merged).length > 0 ? merged : undefined;
+  if (!body) {
+    return {
+      meta: metaIsComplete && Object.keys(fromStored).length > 0 ? fromStored : undefined,
+      renderedAst: astIsStored ? storedAst : undefined,
+    };
+  }
+
+  const { metadata, renderedAst } = await crowi.getRenderer().runRender(body, { mode: 'read' });
+  const mergedMeta: RevisionMetaShape = { ...pickStoredMeta(metadataToRevisionMeta(metadata)), ...fromStored };
+  return {
+    meta: Object.keys(mergedMeta).length > 0 ? mergedMeta : undefined,
+    renderedAst: astIsStored ? storedAst : renderedAst,
+  };
 };
 
 export type PageToResponseOptions = RevisionResponseOptions;
@@ -155,7 +188,10 @@ export const pageToResponse = (page: PageDocument | PageLike, options: PageToRes
   return {
     _id: toStringId(pageObj._id),
     path: pageObj.path,
-    revision: pageObj.revision && isPopulatedRevision(pageObj.revision) ? toRevisionResponse(pageObj.revision, { withMeta: options.withMeta }) : undefined,
+    revision:
+      pageObj.revision && isPopulatedRevision(pageObj.revision)
+        ? toRevisionResponse(pageObj.revision, { withMeta: options.withMeta, withRenderedAst: options.withRenderedAst })
+        : undefined,
     redirectTo: pageObj.redirectTo || null,
     status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated') || undefined,
     grant: pageObj.grant,

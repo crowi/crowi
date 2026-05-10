@@ -1,6 +1,6 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract } from '@crowi/api-contract';
-import { computeRevisionMetaAsync, resolveRevisionMeta } from 'src/util/page-response';
+import { computeRevisionRenderArtifactsAsync, resolveRevisionMeta } from 'src/util/page-response';
 import type { RevisionMetaContent } from 'src/models/revision';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
@@ -24,13 +24,15 @@ const invalidRequest = (message: string) =>
 /**
  * Convert a revision document (with optionally populated author) to the
  * full RevisionSchema shape (body included). Sync path — for legacy
- * revisions missing `meta`, callers compose with `computeRevisionMetaAsync`
- * on the side to attach the on-the-fly fallback.
+ * revisions missing `meta` / `renderedAst`, callers compose with
+ * `computeRevisionMetaAsync` / `computeRevisionRenderedAstAsync` on the
+ * side to attach the on-the-fly fallback.
  */
-const revisionToFullResponse = (revision: RevisionDocument, options: { withMeta?: boolean } = {}) => {
+const revisionToFullResponse = (revision: RevisionDocument, options: { withMeta?: boolean; withRenderedAst?: boolean } = {}) => {
   const obj = revision.toObject() as RevisionDocument & {
     author: Parameters<typeof toPageUser>[0] | null | undefined;
     meta?: RevisionMetaContent;
+    renderedAst?: unknown;
   };
   return {
     _id: revision._id.toString(),
@@ -40,6 +42,7 @@ const revisionToFullResponse = (revision: RevisionDocument, options: { withMeta?
     author: isPopulatedUser(obj.author) ? toPageUser(obj.author) : null,
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
     meta: resolveRevisionMeta(obj.meta, options.withMeta),
+    renderedAst: options.withRenderedAst ? obj.renderedAst : undefined,
   };
 };
 
@@ -156,11 +159,14 @@ export default (crowi: Crowi, _app: Express) => {
           return pageNotFoundResponse;
         }
 
-        const response = revisionToFullResponse(revision, { withMeta: false });
-        // On-the-fly fallback for legacy revisions whose `meta` was
-        // not populated at save time (or is missing the new fields).
-        const obj = revision.toObject() as { meta?: RevisionMetaContent };
-        response.meta = await computeRevisionMetaAsync(crowi, obj.meta, revision.body, true);
+        const response = revisionToFullResponse(revision, { withMeta: false, withRenderedAst: false });
+        // On-the-fly fallback for legacy revisions: one pipeline run
+        // produces both meta + renderedAst, so use the combined helper
+        // to avoid running parse+transform+shiki twice.
+        const obj = revision.toObject() as { meta?: RevisionMetaContent; renderedAst?: unknown };
+        const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(crowi, obj.meta, obj.renderedAst, revision.body);
+        response.meta = meta;
+        response.renderedAst = renderedAst;
         return {
           status: 200 as const,
           body: { revision: response },
