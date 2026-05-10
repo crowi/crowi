@@ -8,7 +8,9 @@
  * legacy ES7 indexer for reindex-free migration.
  */
 
-import { Client, type ClientOptions } from '@elastic/elasticsearch';
+import { Client } from '@elastic/elasticsearch';
+
+type ClientOptions = NonNullable<ConstructorParameters<typeof Client>[0]>;
 import type { SearchDriver, SearchHits, SearchQuery, SearchableDoc, PluginLogger } from '@crowi/plugin-api';
 import { parseQuery } from './parse-query';
 import { buildSearchBody, type FunctionScoreParams } from './query-builder';
