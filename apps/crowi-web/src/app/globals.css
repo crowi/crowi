@@ -243,3 +243,35 @@
   border-top: 3px solid transparent;
   border-image: linear-gradient(90deg, #263a3c 0%, #43b150 35%, #6294c5 70%, #84a3a5 100%) 1;
 }
+
+/*
+ * Markdown body section wrapping. Every heading + its following content
+ * is wrapped in a `<section data-section-id>` (see rehypeWrapSection in
+ * page-content.tsx) so the whole block can be highlighted when the
+ * heading is the URL fragment target. The heading itself keeps `id`,
+ * which is what anchor jumps + the TOC scroll-spy resolve.
+ */
+.crowi-prose section[data-section-id] {
+  /* Each section is its own scroll target reach, but scroll-mt is already
+   * on the heading inside; section is a layout container only. */
+}
+
+/* Spacing between consecutive sections — replaces the heading-mt
+ * gap that `first:mt-0` removes when the heading becomes the
+ * section's first child. */
+.crowi-prose > section:not(:first-child) {
+  margin-top: 2.5rem;
+}
+
+/* Section highlight when its heading is the URL fragment target.
+ * Toggled in JS (page-content.tsx) rather than via CSS `:target` so it
+ * survives the case where the URL fragment is set before ReactMarkdown
+ * has committed the heading to the DOM (e.g. opening `…#anchor` in a
+ * new tab). */
+.crowi-prose section.is-target {
+  background: rgba(240, 210, 100, 0.18);
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+  border-radius: 0.5rem;
+  transition: background 200ms;
+}
