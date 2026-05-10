@@ -83,6 +83,7 @@
     "redis": "^4.7.1",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
+    "shiki": "^4.0.2",
     "tsconfig-paths": "^3.9.0",
     "unified": "^11.0.5",
     "uuid": "^11.1.0",

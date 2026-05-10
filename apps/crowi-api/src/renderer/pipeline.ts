@@ -24,11 +24,11 @@ export interface PipelineMetadata {
 
 /**
  * Lazily-resolved ESM-only handles needed by the pipeline + core
- * plugins. unified, remark-parse, remark-gfm, github-slugger, and
- * mdast-util-to-string are all ESM-only; they are loaded from CJS
- * Express via a wrapped `Function('return import(...)')` call so
- * TypeScript with `module: commonjs` doesn't downlevel the import to
- * `require()` (which fails on ESM packages with `ERR_REQUIRE_ESM`).
+ * plugins. unified, remark-parse, remark-gfm, github-slugger,
+ * mdast-util-to-string, and shiki are all ESM-only; they are loaded
+ * from CJS Express via a wrapped `Function('return import(...)')` call
+ * so TypeScript with `module: commonjs` doesn't downlevel the import
+ * to `require()` (which fails on ESM packages with `ERR_REQUIRE_ESM`).
  *
  * Loaded once and cached process-wide for the lifetime of the
  * Crowi instance.
@@ -39,6 +39,24 @@ export interface PipelineEsmDeps {
   remarkGfm: unknown;
   GithubSlugger: new () => { slug(text: string): string };
   mdastToString: (node: unknown) => string;
+  /**
+   * Pre-warmed shiki highlighter bound to a fixed theme (`github-light`
+   * for Phase 3) and the bundled language set. Lazily initialised on
+   * first pipeline run; subsequent runs share the same instance.
+   * Theme switching / dynamic language loading is deferred to Phase 6+.
+   */
+  shikiHighlighter: ShikiHighlighter;
+}
+
+/**
+ * Subset of shiki's `Highlighter` we actually use. Bound to a
+ * single theme so callers don't have to re-pass it at every call.
+ */
+export interface ShikiHighlighter {
+  /** Synchronously render `code` to themed `<pre><code>...</code></pre>` HTML. */
+  codeToHtml(code: string, lang: string): string;
+  /** Best-effort check; cheap, does NOT throw on unknown langs. */
+  hasLang(lang: string): boolean;
 }
 
 interface UnifiedProcessor {
@@ -73,6 +91,43 @@ export type LoadPipelineEsmDeps = () => Promise<PipelineEsmDeps>;
 // loader that bypasses both, so all paths agree.
 import { createJiti } from 'jiti';
 
+// Phase 3: bundled language set for shiki. Picked to cover the
+// common cases (TS / JS / Python / shell / config files / Go /
+// Rust / Java / SQL / HTML / CSS / Markdown) without dragging in the
+// full ~150-language pack. Unknown languages fall through unhighlighted
+// and the web client renders them as plain `<pre><code>` (parity with
+// Phase 2 behaviour).
+const SHIKI_BUNDLED_LANGS = [
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'python',
+  'json',
+  'yaml',
+  'shell',
+  'bash',
+  'html',
+  'css',
+  'markdown',
+  'sql',
+  'go',
+  'rust',
+  'java',
+] as const;
+
+const SHIKI_THEME = 'github-light';
+
+interface ShikiCreateHighlighter {
+  (opts: {
+    themes: string[];
+    langs: readonly string[];
+  }): Promise<{
+    codeToHtml(code: string, opts: { lang: string; theme: string }): string;
+    getLoadedLanguages(): string[];
+  }>;
+}
+
 export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
   let cached: PipelineEsmDeps | null = null;
   return async () => {
@@ -86,12 +141,31 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
     const remarkGfmMod = jiti('remark-gfm') as { default: unknown };
     const sluggerMod = jiti('github-slugger') as { default: new () => { slug(text: string): string } };
     const mdastToStringMod = jiti('mdast-util-to-string') as { toString: (node: unknown) => string };
+    // shiki is ESM-only too; its bundled core entry exposes
+    // `createHighlighter` (^1.x and ^2.x and ^4.x). We init once with
+    // the fixed Phase 3 theme + language set so per-block calls don't
+    // pay the cold-load every time.
+    const shikiMod = jiti('shiki') as { createHighlighter: ShikiCreateHighlighter };
+    const rawHighlighter = await shikiMod.createHighlighter({
+      themes: [SHIKI_THEME],
+      langs: [...SHIKI_BUNDLED_LANGS],
+    });
+    const loadedLangs = new Set(rawHighlighter.getLoadedLanguages());
+    const shikiHighlighter: ShikiHighlighter = {
+      codeToHtml(code, lang) {
+        return rawHighlighter.codeToHtml(code, { lang, theme: SHIKI_THEME });
+      },
+      hasLang(lang) {
+        return loadedLangs.has(lang);
+      },
+    };
     cached = {
       unified: unifiedMod.unified,
       remarkParse: remarkParseMod.default,
       remarkGfm: remarkGfmMod.default,
       GithubSlugger: sluggerMod.default,
       mdastToString: mdastToStringMod.toString,
+      shikiHighlighter,
     };
     return cached;
   };
