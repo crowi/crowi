@@ -1,47 +1,52 @@
 {
-  "nav": {
-    "docs": "ドキュメント",
-    "github": "GitHub",
-    "language": "言語"
-  },
+  "tagline": "The Markdown Wiki",
+  "subtitle": "Empower the team with sharing your knowledge",
   "hero": {
-    "tagline": "チームのナレッジを、Markdown で。",
-    "description": "Crowi は Markdown ベースの Wiki アプリケーションです。シンプルで強力、自分たちのインフラで動かせる、チームの知識共有のためのオープンソース。",
-    "ctaPrimary": "ドキュメントを読む",
-    "ctaSecondary": "GitHub で見る"
+    "badge": "Coming Soon",
+    "reigniteAlt": "Crowi Reignite",
+    "intro": "Crowi v2 開発再起動中。コードネーム ",
+    "introHighlight": "Reignite",
+    "introTail": "。",
+    "ctaArticle": "開発再起動の記事を読む",
+    "ctaGithub": "GitHub で見る"
   },
-  "features": {
-    "title": "Crowi の特徴",
+  "about": {
+    "title": "Crowi について",
+    "description": "Crowi は Markdown ベースのオープンソース Wiki アプリケーションです。チームのナレッジ共有のために 2014 年から開発されてきました。"
+  },
+  "reignite": {
+    "title": "Crowi Reignite で起こること",
     "items": [
       {
-        "title": "Markdown ファースト",
-        "description": "ページは Markdown で書く。GFM、コードブロック、PlantUML、数式に対応。"
+        "title": "フロントエンド完全リニューアル",
+        "description": "Express + Swig + jQuery の旧構成から、Next.js (App Router) + React + Tailwind の現代スタックへ。"
       },
       {
-        "title": "ツリー構造で整理",
-        "description": "URL パスがそのままページの階層になる。`/team/handbook/onboarding` のように直感的に整理できる。"
+        "title": "API ファースト",
+        "description": "サーバとビューを分離し、ts-rest による型安全な API 契約を採用。プログラマブルに Crowi を扱えるようになります。"
       },
       {
-        "title": "セルフホスト",
-        "description": "自分たちのインフラで動かせる。データも、運用も、自分たちの手の中に。"
+        "title": "既存データとの互換性",
+        "description": "v1 のデータをそのまま引き継げる移行パスを用意。これまで蓄積したナレッジは失われません。"
       },
       {
-        "title": "拡張可能",
-        "description": "プラグインでストレージ・検索・認証を差し替え可能。S3、Elasticsearch、OAuth に対応。"
+        "title": "現代的な動作環境",
+        "description": "Node.js 22.x、MongoDB、Redis、Elasticsearch、プラグイン式のストレージ／検索／認証。"
       }
     ]
   },
-  "cta": {
-    "title": "Crowi を始める",
-    "description": "オープンソースで自由に使えます。",
-    "button": "ドキュメントを読む"
+  "status": {
+    "title": "現在の状況",
+    "description": "main ブランチで継続的に開発中です。コア機能 (ページ CRUD / 一覧 / 履歴 / コメント / 通知 / ブックマーク / お気に入り / ゴミ箱 / バックリンク / ユーザーページ) はすでに新スタックへ移行済み。管理画面と検索周りを進めています。",
+    "ctaGithub": "コードを見る",
+    "ctaIssues": "Issues を見る"
   },
   "footer": {
     "copyright": "Crowi is open source software released under the MIT License.",
     "links": {
-      "docs": "ドキュメント",
       "github": "GitHub",
-      "issues": "Issues"
+      "issues": "Issues",
+      "article": "開発再起動記事"
     }
   }
 }

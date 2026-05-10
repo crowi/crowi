@@ -1,47 +1,52 @@
 {
-  "nav": {
-    "docs": "Docs",
-    "github": "GitHub",
-    "language": "Language"
-  },
+  "tagline": "The Markdown Wiki",
+  "subtitle": "Empower the team with sharing your knowledge",
   "hero": {
-    "tagline": "Team knowledge, in Markdown.",
-    "description": "Crowi is a Markdown-based wiki application. Simple, powerful, self-hostable — open source software for sharing what your team knows.",
-    "ctaPrimary": "Read the docs",
-    "ctaSecondary": "View on GitHub"
+    "badge": "Coming Soon",
+    "reigniteAlt": "Crowi Reignite",
+    "intro": "Crowi v2 is back in active development under the codename ",
+    "introHighlight": "Reignite",
+    "introTail": ".",
+    "ctaArticle": "Read the announcement",
+    "ctaGithub": "View on GitHub"
   },
-  "features": {
-    "title": "What Crowi gives you",
+  "about": {
+    "title": "About Crowi",
+    "description": "Crowi is an open-source Markdown-based wiki application. Originally released in 2014, it's built so teams can share what they know."
+  },
+  "reignite": {
+    "title": "What Reignite brings",
     "items": [
       {
-        "title": "Markdown-first",
-        "description": "Write pages in Markdown. GFM, code blocks, PlantUML, and math notation are all supported out of the box."
+        "title": "Brand-new frontend",
+        "description": "Express + Swig + jQuery is out. Next.js (App Router) + React + Tailwind is in — built for the modern web."
       },
       {
-        "title": "Tree-structured pages",
-        "description": "URL paths are page hierarchies. Organize naturally as `/team/handbook/onboarding`."
+        "title": "API-first",
+        "description": "Server and view fully separated. A type-safe ts-rest contract makes Crowi programmable from anywhere."
       },
       {
-        "title": "Self-hostable",
-        "description": "Run it on your own infrastructure. Your data, your operations — under your control."
+        "title": "Compatible with v1 data",
+        "description": "A clean migration path keeps everything your team has already written. No knowledge left behind."
       },
       {
-        "title": "Extensible",
-        "description": "Swap storage, search, and auth via plugins. S3, Elasticsearch, and OAuth are supported."
+        "title": "Modern runtime",
+        "description": "Node.js 22.x, MongoDB, Redis, optional Elasticsearch — plus pluggable storage, search, and auth."
       }
     ]
   },
-  "cta": {
-    "title": "Get started with Crowi",
-    "description": "Free to use, free to modify — it's open source.",
-    "button": "Read the docs"
+  "status": {
+    "title": "Where we are",
+    "description": "Active development on main. Core features (page CRUD / list / history / comments / notifications / bookmarks / likes / trash / backlinks / user pages) have all migrated to the new stack. Admin section and search are next.",
+    "ctaGithub": "Browse the code",
+    "ctaIssues": "Open issues"
   },
   "footer": {
     "copyright": "Crowi is open source software released under the MIT License.",
     "links": {
-      "docs": "Docs",
       "github": "GitHub",
-      "issues": "Issues"
+      "issues": "Issues",
+      "article": "Announcement"
     }
   }
 }

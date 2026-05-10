@@ -25,6 +25,7 @@
     "dev:runner": "turbo run dev --filter @crowi/dev-runner --filter \"@crowi/plugin-*\" --filter @crowi/api-contract",
     "dev:api": "turbo run dev --filter @crowi/api --filter \"@crowi/plugin-*\" --filter @crowi/api-contract",
     "dev:web": "turbo run dev --filter @crowi/web",
+    "dev:site": "turbo run dev --filter @crowi/site",
     "build": "turbo run build",
     "test": "turbo run test",
     "test:server": "turbo run test:server",
