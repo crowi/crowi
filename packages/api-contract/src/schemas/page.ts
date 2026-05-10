@@ -86,6 +86,13 @@ export const RevisionSchema = z.object({
   author: PageUserSchema.nullable().optional(),
   createdAt: z.string(),
   meta: RevisionMetaSchemaShape.optional(),
+  // RFC-0002 Phase 3: transformed mdast (parse + core plugins +
+  // shiki) for the web client to render without re-parsing the body.
+  // Typed as opaque `unknown` because mdast is too deep / external-
+  // spec to maintain a strict Zod schema for. Only single-page detail
+  // (`getPage`) and single-revision detail (`getRevision`) emit it;
+  // list endpoints skip it for payload weight.
+  renderedAst: z.unknown().optional(),
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 
