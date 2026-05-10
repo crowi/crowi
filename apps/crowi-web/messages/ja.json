@@ -63,6 +63,7 @@
   "page.restore": "ページを復元",
   "page.restoring": "復元中...",
   "page.stale_revision_warning": "警告: これは現在のバージョンではありません",
+  "page.dismiss_highlight": "ハイライトを解除",
   "page.stale_revision_show_latest": "最新を表示",
   "page.like_label": "いいね",
   "page.like_label_done": "いいね済み",

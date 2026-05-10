@@ -63,6 +63,7 @@
   "page.restore": "Restore Page",
   "page.restoring": "Restoring...",
   "page.stale_revision_warning": "Warning: This is not the current version.",
+  "page.dismiss_highlight": "Dismiss highlight",
   "page.stale_revision_show_latest": "Show latest",
   "page.like_label": "Like",
   "page.like_label_done": "Liked",

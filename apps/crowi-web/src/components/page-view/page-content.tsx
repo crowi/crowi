@@ -1,10 +1,11 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Link2 } from 'lucide-react';
+import { Check, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -80,9 +81,13 @@ const rehypeWrapSection = () => (tree: HastLike) => {
 
 // Context delivers the URL fragment target (decoded, no leading `#`)
 // to the section component so it can render `className="is-target"`
-// reactively. Putting the class through React keeps it from being
-// wiped by reconciliation on unrelated re-renders.
-const TargetHashContext = createContext<string>('');
+// reactively. `clear` strips the hash from the URL + state without
+// scrolling, used by the X dismiss button in the highlighted section.
+interface TargetHashContextValue {
+  hash: string;
+  clear: () => void;
+}
+const TargetHashContext = createContext<TargetHashContextValue>({ hash: '', clear: () => {} });
 
 interface TargetedSectionProps extends React.HTMLAttributes<HTMLElement> {
   // react-markdown attaches the underlying hast node here so plugins
@@ -91,7 +96,7 @@ interface TargetedSectionProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 function TargetedSection({ children, node, ...rest }: TargetedSectionProps) {
-  const targetHash = useContext(TargetHashContext);
+  const { hash: targetHash, clear } = useContext(TargetHashContext);
   // react-markdown's typing strips data-* off the props bag in some
   // versions; fall back to the hast node properties.
   const restRecord = rest as unknown as Record<string, string | undefined>;
@@ -102,7 +107,22 @@ function TargetedSection({ children, node, ...rest }: TargetedSectionProps) {
     (node?.properties?.dataSectionId as string | undefined);
   const isTarget = !!sectionId && !!targetHash && sectionId === targetHash;
   return (
-    <section {...rest} className={isTarget ? 'is-target' : undefined}>
+    <section {...rest} className={isTarget ? 'is-target relative group/section' : undefined}>
+      {isTarget && (
+        // `z-10` lifts the dismiss button above the heading, which
+        // otherwise (as a positioned sibling later in DOM order)
+        // captures the pointer over the right-edge area where this
+        // button lives.
+        <button
+          type="button"
+          onClick={clear}
+          aria-label={m['page.dismiss_highlight']()}
+          title={m['page.dismiss_highlight']()}
+          className="absolute top-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover/section:opacity-100 hover:text-foreground hover:bg-foreground/10 transition-opacity"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
       {children}
     </section>
   );
@@ -162,6 +182,16 @@ export function PageContent({ page }: PageContentProps) {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+
+  // Strip the hash without scrolling (replaceState skips the
+  // hashchange event, so we sync state by hand).
+  const clearTarget = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    setTargetHash('');
+  }, []);
+
+  const targetHashContextValue = useMemo<TargetHashContextValue>(() => ({ hash: targetHash, clear: clearTarget }), [targetHash, clearTarget]);
 
   // Plugin array — recompute only when the heading set changes so
   // ReactMarkdown's parse pipeline isn't re-run on unrelated renders.
@@ -355,7 +385,7 @@ export function PageContent({ page }: PageContentProps) {
   }
 
   return (
-    <TargetHashContext.Provider value={targetHash}>
+    <TargetHashContext.Provider value={targetHashContextValue}>
       <div className="crowi-prose">
         <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={REHYPE_PLUGINS} components={components}>
           {body}
