@@ -111,7 +111,7 @@ export default (crowi: Crowi, _app: Express) => {
           // TODO: Consider if we should follow the redirect automatically
         }
 
-        const pageResponse = pageToResponse(page);
+        const pageResponse = pageToResponse(page, { withMeta: true });
 
         // Fire-and-forget recently-viewed touch. Hiccups on the Redis
         // side mustn't break the page read.

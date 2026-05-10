@@ -12,6 +12,7 @@ export default function CatchAllPage() {
   const searchParams = useSearchParams();
 
   const redirectFrom = searchParams.get('redirectFrom');
+  const revisionId = searchParams.get('revision_id') || undefined;
 
   // Next.js usePathname() returns URL-encoded paths (e.g., /%E3%83%A6%E3%83%BC%E3%82%B6%E3%83%BC).
   // Decode so the value matches what the API expects.
@@ -34,7 +35,7 @@ export default function CatchAllPage() {
         </Alert>
       )}
 
-      {isPortalPath ? <PageList initialParams={{ path }} /> : <PageView path={path} />}
+      {isPortalPath ? <PageList initialParams={{ path }} /> : <PageView path={path} revisionId={revisionId} />}
     </>
   );
 }

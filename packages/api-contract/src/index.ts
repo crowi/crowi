@@ -24,4 +24,6 @@ export * from './schemas/admin/share';
 export * from './schemas/admin/storage';
 export * from './schemas/admin/search';
 export * from './schemas/admin/plugins';
+export * from './util/slug';
+export * from './util/toc';
 export * from './openapi';

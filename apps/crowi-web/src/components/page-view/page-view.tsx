@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import type { TocEntryResponse } from '@crowi/api-contract';
 import { Loader2, Trash2, FilePlus2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,18 +16,29 @@ import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
+import { PageToc } from './page-toc';
+import { StaleRevisionBanner } from './stale-revision-banner';
 import { BacklinkList } from './backlink-list';
 import { AttachmentList } from './attachment-list';
 import { PageComments } from '@/components/page-comments';
 import { m } from '@paraglide/messages.js';
 
+// Stable empty array so PageToc's effect dep doesn't churn when meta.toc is absent.
+const EMPTY_TOC: TocEntryResponse[] = [];
+
 interface PageViewProps {
   path: string;
+  /**
+   * When set, fetch this specific revision and render the stale-revision
+   * banner if it isn't the page's current latest. Driven by the
+   * `?revision_id=...` query param on the catch-all route.
+   */
+  revisionId?: string;
 }
 
-export function PageView({ path }: PageViewProps) {
+export function PageView({ path, revisionId }: PageViewProps) {
   const router = useRouter();
-  const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path });
+  const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path, revision_id: revisionId });
   const revertMutation = useRevertDeletedPage();
 
   const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
@@ -139,20 +151,30 @@ export function PageView({ path }: PageViewProps) {
   }
 
   if (page) {
+    const toc = page.revision?.meta?.toc ?? EMPTY_TOC;
+    const isStaleRevision = Boolean(page.latestRevision && page.revision?._id && page.latestRevision !== page.revision._id);
     return (
-      <article className="space-y-12">
-        <PageHeader
-          page={page}
-          onEdit={() => {
-            router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
-          }}
-          showActions
-        />
-        <PageContent page={page} />
-        <BacklinkList pageId={page._id} />
-        <AttachmentList pageId={page._id} />
-        <PageComments page={page} />
-      </article>
+      <>
+        <article className="space-y-12">
+          {isStaleRevision && <StaleRevisionBanner pagePath={page.path} />}
+          <PageHeader
+            page={page}
+            onEdit={() => {
+              router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
+            }}
+            showActions={!isStaleRevision}
+          />
+          <PageContent page={page} />
+          {!isStaleRevision && (
+            <>
+              <BacklinkList pageId={page._id} />
+              <AttachmentList pageId={page._id} />
+              <PageComments page={page} />
+            </>
+          )}
+        </article>
+        <PageToc toc={toc} />
+      </>
     );
   }
 

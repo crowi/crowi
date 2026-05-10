@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { GitCompare, History as HistoryIcon, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -182,7 +183,15 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                         <td className="px-3 py-2">
                           <span title={formatDateTime(rev.createdAt)}>{formatDistanceToNow(rev.createdAt)}</span>
                         </td>
-                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{rev._id.slice(-8)}</td>
+                        <td className="px-3 py-2 font-mono text-xs">
+                          <Link
+                            href={`${pagePath}?revision_id=${rev._id}`}
+                            className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                            title={`Open revision ${rev._id}`}
+                          >
+                            {rev._id.slice(-8)}
+                          </Link>
+                        </td>
                       </tr>
                     );
                   })}

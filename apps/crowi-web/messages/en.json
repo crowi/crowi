@@ -62,6 +62,8 @@
   "page.deleted_alert_description": "This page is in the trash. You can restore it or view its contents below.",
   "page.restore": "Restore Page",
   "page.restoring": "Restoring...",
+  "page.stale_revision_warning": "Warning: This is not the current version.",
+  "page.stale_revision_show_latest": "Show latest",
   "page.like_label": "Like",
   "page.like_label_done": "Liked",
   "page.like_aria_add": "Like",
