@@ -26,6 +26,7 @@ import slack from 'src/util/slack';
 import { resetKeyProvider } from 'src/util/crypto';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { type Renderer, createRenderer } from 'src/renderer';
+import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { runAwsConfigMigration } from 'src/util/aws-config-migration';
 import expressInit from './express-init';
 
@@ -232,7 +233,19 @@ class Crowi {
   }
 
   setupRenderer() {
-    this.renderer = createRenderer();
+    this.renderer = createRenderer(this);
+    // Register cache invalidation listeners on pageEvent. Needs to
+    // happen here (not in setupEvents) because the listener captures
+    // the renderer.cache handle constructed one line above.
+    registerRenderCacheInvalidation(this);
+    // Eagerly initialise heavy ESM-only deps (jiti + shiki +
+    // remark-*). The first pipeline run otherwise pays ~200ms cold-
+    // load latency; we move that cost to boot time. Fire-and-forget —
+    // a warmup failure is logged inside `Renderer.warmup` and does
+    // not block boot.
+    if (this.renderer) {
+      void this.renderer.warmup();
+    }
   }
 
   /**

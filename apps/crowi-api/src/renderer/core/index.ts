@@ -1,11 +1,19 @@
+import type { Root } from 'mdast';
+import type { RenderContext } from '@crowi/plugin-api';
+import type { MongoCacheStorage } from '../cache';
 import type { PipelineEsmDeps, PipelineMetadata } from '../pipeline';
+import type { RendererRegistryImpl } from '../registry';
 import { remarkCodeBlockLanguages } from './code-blocks';
+import { makeEmbedTagDispatch } from './embed-tags';
 import { makeRemarkHeadings, type UnifiedTransformPlugin } from './headings';
 import { remarkMentions } from './mentions';
 import { makeRemarkSyntaxHighlight } from './syntax-highlight';
+import { makeUrlInlineExpandDispatch } from './url-inline-expand';
 import { remarkWikiLinks } from './wikilinks';
 
 export type { UnifiedTransformPlugin } from './headings';
+export { makeEmbedTagDispatch } from './embed-tags';
+export { makeUrlInlineExpandDispatch } from './url-inline-expand';
 
 /**
  * Build the bundled core renderer transform plugins, in their fixed
@@ -48,4 +56,21 @@ export function runCorePluginsDirectly(deps: PipelineEsmDeps, tree: unknown, met
     const transformer = plugin(metadata);
     transformer(tree as Parameters<ReturnType<UnifiedTransformPlugin>>[0]);
   }
+}
+
+/**
+ * Build the Phase 4 plugin-dispatch transforms — async post-processors
+ * that run AFTER `runSync` because they need to call cache I/O +
+ * plugin `render()` (both async).
+ *
+ * Order: embed-tags first, url-inline-expand second. Both walk the
+ * tree once and rewrite matched nodes in-place. Both no-op when their
+ * respective registry is empty.
+ */
+export function buildPluginDispatchPlugins(
+  registry: RendererRegistryImpl,
+  ctx: RenderContext,
+  deps: { cache: MongoCacheStorage; pageId: string },
+): Array<(tree: Root) => Promise<void>> {
+  return [makeEmbedTagDispatch(registry, ctx, deps), makeUrlInlineExpandDispatch(registry, ctx, deps)];
 }

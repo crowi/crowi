@@ -1,7 +1,7 @@
 import type { Code, Html, Root } from 'mdast';
 import type { PluginLogger } from '@crowi/plugin-api';
 import { createPipelineEsmDepsLoader, runPipeline } from './pipeline';
-import { RendererRegistryImpl } from './registry';
+import { RendererRegistryImpl, createAuthContextStub } from './registry';
 import { serializeMdast } from './serialize';
 
 const silentLogger: PluginLogger = {
@@ -16,7 +16,9 @@ const loadDeps = createPipelineEsmDepsLoader();
 
 // The pipeline always prepends the bundled core 4 transforms on every
 // run — runPipeline against a fresh empty registry is what we want to
-// test for "core renderer behaviour".
+// test for "core renderer behaviour". No `dispatch` is passed, so the
+// plugin-dispatch transforms (embed-tags / url-inline-expand) are
+// skipped entirely.
 const runCore = async (body: string) => {
   const reg = new RendererRegistryImpl();
   return runPipeline(body, reg, { mode: 'save', log: silentLogger }, loadDeps);
@@ -284,20 +286,53 @@ describe('pipeline + core renderers', () => {
   });
 });
 
-describe('RendererRegistryImpl warn-noops', () => {
+describe('RendererRegistryImpl warn-noops (Phase 4: only addCodeBlockRenderer remains noop)', () => {
   it('discards code-block-renderer registrations and warns', () => {
     const warn = jest.fn();
     const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
     const reg = new RendererRegistryImpl();
-    // Direct registration via the impl skipped; use the scope to
-    // exercise the warn-noop path the way external plugins will.
-    // (Imports tested at the integration level.)
     const { makeRendererScope } = require('./registry');
     const scope = makeRendererScope(reg, '@crowi/plugin-test', log);
     scope.addCodeBlockRenderer('mermaid', () => ({ html: '' }));
-    scope.addEmbedTag('youtube', () => ({ html: '' }));
-    scope.addUrlInlineExpander({ match: /x/, expand: () => ({ html: '' }) });
-    expect(warn).toHaveBeenCalledTimes(3);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists addEmbedTag and addUrlInlineExpander registrations (Phase 4)', () => {
+    const warn = jest.fn();
+    const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
+    const reg = new RendererRegistryImpl();
+    const { makeRendererScope } = require('./registry');
+    const scope = makeRendererScope(reg, '@crowi/plugin-test', log);
+
+    const embedRenderer = { cacheVersion: 1, render: () => ({ html: '<x/>' }) };
+    scope.addEmbedTag('youtube', embedRenderer);
+    expect(warn).not.toHaveBeenCalled();
+    expect(reg.getEmbedTag('youtube')?.renderer).toBe(embedRenderer);
+    expect(reg.getEmbedTag('youtube')?.plugin).toBe('@crowi/plugin-test');
+
+    const rule = { cacheVersion: 1, match: /x/, expand: () => ({ kind: 'unchanged' as const }) };
+    scope.addUrlInlineExpander(rule);
+    const list = reg.getUrlInlineExpanders();
+    expect(list).toHaveLength(1);
+    expect(list[0].rule).toBe(rule);
+    expect(list[0].plugin).toBe('@crowi/plugin-test');
+  });
+
+  it('addEmbedTag collision is last-wins + boot warn', () => {
+    const warn = jest.fn();
+    const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
+    const reg = new RendererRegistryImpl();
+    const { makeRendererScope } = require('./registry');
+    const scopeA = makeRendererScope(reg, '@crowi/plugin-a', log);
+    const scopeB = makeRendererScope(reg, '@crowi/plugin-b', log);
+    const rendererA = { cacheVersion: 1, render: () => ({ html: 'A' }) };
+    const rendererB = { cacheVersion: 1, render: () => ({ html: 'B' }) };
+    scopeA.addEmbedTag('shared', rendererA);
+    scopeB.addEmbedTag('shared', rendererB);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/collision on 'shared'/);
+    expect(reg.getEmbedTag('shared')?.plugin).toBe('@crowi/plugin-b');
+    expect(reg.getEmbedTag('shared')?.renderer).toBe(rendererB);
   });
 
   it('discards non-transform unified-plugin phases and warns', () => {
@@ -310,5 +345,12 @@ describe('RendererRegistryImpl warn-noops', () => {
     scope.addUnifiedPlugin(() => () => undefined, { phase: 'post' });
     expect(warn).toHaveBeenCalledTimes(2);
     expect(reg.getTransformPlugins()).toHaveLength(0);
+  });
+});
+
+describe('AuthContext stub (Phase 4 — Phase 7 implements)', () => {
+  it('config() throws because Phase 4 only ships the interface', () => {
+    const auth = createAuthContextStub();
+    expect(() => auth.config({} as never)).toThrow(/AuthContext not yet implemented — Phase 7/);
   });
 });
