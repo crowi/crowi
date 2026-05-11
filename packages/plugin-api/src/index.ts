@@ -39,10 +39,20 @@ export type {
   CodeBlockRenderer,
   CodeBlockInfo,
   EmbedRenderer,
+  EmbedInput,
   EmbedFragment,
   UrlInlineExpansionRule,
+  InlineExpansion,
   RenderContext,
   RenderPhase,
+  RenderResult,
+  RenderError,
+  Reservation,
+  CacheStorage,
+  ScopedCacheStorage,
+  CacheKey,
+  CacheEntry,
+  AuthContext,
 } from './renderer';
 
 export type { EventBus, PluginEvents } from './events';
