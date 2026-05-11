@@ -28,6 +28,7 @@
     "boring-avatars": "^2.0.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "hast-util-raw": "^9.1.0",
     "hast-util-to-jsx-runtime": "^2.3.6",
     "lucide-react": "^0.562.0",
     "mdast-util-to-hast": "^13.2.1",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/hast": "^3.0.4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

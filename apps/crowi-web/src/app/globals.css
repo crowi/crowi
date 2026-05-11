@@ -333,3 +333,25 @@
     background-position: -100% 0;
   }
 }
+
+/* Shiki-rendered fenced code blocks ship with their own
+ * `<pre class="shiki ...">` and inline `style="background-color: ..."`
+ * from the theme. They never reach the React `components.pre` wrapper
+ * (raw HTML path), so the Crowi codeblock styling has to be applied
+ * via CSS instead — using the *same* `bg-muted/60` token as the
+ * unhighlighted fallback `<pre>` (`components.pre`) so highlighted and
+ * plain codeblocks share one background. The `!` modifier promotes
+ * the bg utility to `!important` so the inline shiki theme bg loses. */
+.crowi-prose pre.shiki {
+  @apply bg-muted/60! border border-border/60 rounded-xl px-4 py-3 my-6 text-[0.875rem] leading-relaxed font-mono overflow-x-auto;
+}
+
+/* Some grammars (notably PHP via `meta.embedded.block.php`) include
+ * token-level background colours that the github-light theme renders
+ * as pink bands. Suppress span-level backgrounds — token text colours
+ * are preserved. Diff markers (`markup.inserted/deleted`) lose their
+ * tinted backgrounds too, acceptable until a diff-specific renderer
+ * lands. */
+.crowi-prose pre.shiki span {
+  background-color: transparent !important;
+}

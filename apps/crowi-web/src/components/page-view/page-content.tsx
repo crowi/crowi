@@ -3,7 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { toHast } from 'mdast-util-to-hast';
+import { raw } from 'hast-util-raw';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
+import type { Nodes as HastNodes } from 'hast';
 import { Check, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
@@ -223,11 +225,12 @@ const components = {
   code: ({ className, children, ...props }: { className?: string; children?: React.ReactNode }) => {
     const isInline = !className;
     if (isInline) {
+      // Background-less inline code: font + foreground color do the
+      // identifying work, no muted pill. The `before/after:content-none`
+      // strips the default `&grave;…&grave;` decorators some prose
+      // themes inject.
       return (
-        <code
-          className="bg-muted/70 text-foreground/90 px-[0.4em] py-[0.15em] rounded text-[0.875em] font-mono before:content-none after:content-none"
-          {...props}
-        >
+        <code className="text-foreground font-mono text-[0.95em] before:content-none after:content-none" {...props}>
           {children}
         </code>
       );
@@ -345,10 +348,18 @@ export function PageContent({ page }: PageContentProps) {
     if (!renderedAst) return null;
     const hast = toHast(renderedAst as Parameters<typeof toHast>[0], { allowDangerousHtml: true });
     if (!hast) return null;
+    // `mdast-util-to-hast` with `allowDangerousHtml: true` converts
+    // `html` mdast nodes into `raw` hast nodes (a marker, not an
+    // element). `hast-util-to-jsx-runtime` ignores `raw` nodes, so
+    // shiki-rendered `<pre class="shiki ...">` html nodes would
+    // disappear entirely. `hast-util-raw` parses the raw HTML string
+    // into real hast elements that the JSX runtime can render.
+    const parsed = raw(hast as HastNodes) as HastLike;
     // Section wrap (URL-hash highlight) is a UI concern and stays
-    // client-side; mutates `hast` in place.
-    wrapSections(hast as HastLike);
-    return toJsxRuntime(hast, {
+    // client-side; mutates the hast in place after raw expansion so
+    // any html-derived top-level elements are wrappable too.
+    wrapSections(parsed);
+    return toJsxRuntime(parsed as unknown as HastNodes, {
       Fragment,
       jsx,
       jsxs,
@@ -356,7 +367,13 @@ export function PageContent({ page }: PageContentProps) {
       // hast types; our component prop signatures are React-typed,
       // so we cast at the boundary.
       components: components as unknown as Parameters<typeof toJsxRuntime>[1]['components'],
-      passNode: true,
+      // `passNode: false` — otherwise every component receives a
+      // `node` prop which React stringifies onto the DOM as
+      // `node="[object Object]"`. `data-*` attributes are still
+      // forwarded normally via the rest props bag, so
+      // `TargetedSection` can keep reading `data-section-id` without
+      // the hast node escape hatch.
+      passNode: false,
     });
   }, [revisionId]);
 
