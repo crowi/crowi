@@ -348,18 +348,21 @@ export function PageContent({ page }: PageContentProps) {
     if (!renderedAst) return null;
     const hast = toHast(renderedAst as Parameters<typeof toHast>[0], { allowDangerousHtml: true });
     if (!hast) return null;
+    // Section wrap (URL-hash highlight) runs BEFORE `raw()` so its
+    // walker only sees the shallow mdast-derived top-level tree —
+    // raw expansion of shiki output would otherwise inflate the
+    // walked node count by the size of every highlighted block.
+    // `<pre>` arrives here as a `raw` hast node; wrapSections groups
+    // it into the surrounding `<section>` either way.
+    wrapSections(hast as HastLike);
     // `mdast-util-to-hast` with `allowDangerousHtml: true` converts
     // `html` mdast nodes into `raw` hast nodes (a marker, not an
     // element). `hast-util-to-jsx-runtime` ignores `raw` nodes, so
     // shiki-rendered `<pre class="shiki ...">` html nodes would
     // disappear entirely. `hast-util-raw` parses the raw HTML string
     // into real hast elements that the JSX runtime can render.
-    const parsed = raw(hast as HastNodes) as HastLike;
-    // Section wrap (URL-hash highlight) is a UI concern and stays
-    // client-side; mutates the hast in place after raw expansion so
-    // any html-derived top-level elements are wrappable too.
-    wrapSections(parsed);
-    return toJsxRuntime(parsed as unknown as HastNodes, {
+    const parsed = raw(hast as HastNodes);
+    return toJsxRuntime(parsed, {
       Fragment,
       jsx,
       jsxs,
