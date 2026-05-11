@@ -92,20 +92,22 @@ export type LoadPipelineEsmDeps = () => Promise<PipelineEsmDeps>;
 // loader that bypasses both, so all paths agree.
 import { createJiti } from 'jiti';
 
-// Phase 3: bundled language set for shiki. Picked to cover the
-// common cases (TS / JS / Python / shell / config files / Go /
-// Rust / Java / SQL / HTML / CSS / Markdown) without dragging in the
-// full ~150-language pack. Unknown languages fall through unhighlighted
-// and the web client renders them as plain `<pre><code>` (parity with
-// Phase 2 behaviour).
+// Bundled language set for shiki. Covers the languages we actually
+// see in Crowi pages without dragging in the full ~150-language pack;
+// unknown languages fall through unhighlighted and the web client
+// renders them as plain `<pre><code>` (parity with Phase 2 behaviour).
+// Add to this list when a new language shows up in real content.
 const SHIKI_BUNDLED_LANGS = [
   'ts',
   'tsx',
   'js',
   'jsx',
   'python',
+  'ruby',
+  'php',
   'json',
   'yaml',
+  'toml',
   'shell',
   'bash',
   'html',
@@ -115,6 +117,11 @@ const SHIKI_BUNDLED_LANGS = [
   'go',
   'rust',
   'java',
+  'c',
+  'cpp',
+  'csharp',
+  'dockerfile',
+  'diff',
 ] as const;
 
 const SHIKI_THEME = 'github-light';

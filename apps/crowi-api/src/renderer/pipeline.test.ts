@@ -265,6 +265,21 @@ describe('pipeline + core renderers', () => {
       const { tree } = await runCore(md);
       expect(tree.children[0].type).toBe('code');
     });
+
+    it('highlights PHP fences (bundled lang)', async () => {
+      const md = ['```php', '<?php declare(strict_types = 1);', 'namespace PHPStan;', '```'].join('\n');
+      const { tree } = await runCore(md);
+      const top = tree.children[0];
+      expect(top.type).toBe('html');
+      const html = (top as Html).value;
+      expect(html).toContain('<pre');
+      expect(html).toContain('shiki');
+      // shiki emits inline `style="color: #..."` spans per token —
+      // proof that the highlighter actually tokenised the body
+      // (otherwise it'd just escape the raw text).
+      expect(html).toMatch(/<span[^>]*style="color:/);
+      expect(html).toContain('PHPStan');
+    });
   });
 
   describe('on-the-fly fallback (renderedAst recompute for legacy revisions)', () => {
