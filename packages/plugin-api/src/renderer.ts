@@ -52,10 +52,41 @@ export interface NodeRenderer {
 /**
  * Code-block renderer — invoked for fenced code blocks whose `lang`
  * matches the registered language tag (e.g. `mermaid`, `plantuml`,
- * `katex`). Phase 6 lights this up; Phase 4 keeps the warn-noop.
+ * `katex`). Phase 6 lights this up.
+ *
+ * Shape mirrors `EmbedRenderer`: a required `cacheVersion` so the core
+ * can route renders through the same SWR + error-cache wrapper, an
+ * optional `reservation` for layout-stable placeholders, and an
+ * optional `computeEmbedKey` override (the default hashes
+ * `{lang, source}`).
+ *
+ * Phase 4 declared a bare callable; Phase 6 expands the shape to an
+ * object so plugins can declare cacheVersion / reservation alongside
+ * `render`. This is non-breaking because the Phase 4 stub discarded all
+ * registrations — there is no production implementer to migrate.
  */
 export interface CodeBlockRenderer {
-  (info: CodeBlockInfo, ctx: RenderContext): EmbedFragment | Promise<EmbedFragment>;
+  /**
+   * Bumped by the plugin whenever the rendered HTML shape changes.
+   * Read-side cache hits ignore entries with a stale version, so
+   * version bumps are an instant "invalidate all my cached output"
+   * without operator action.
+   */
+  cacheVersion: number;
+  /**
+   * Optional placeholder declaration. Used in the same two cases as
+   * `EmbedRenderer.reservation`: layout placeholder while rendering,
+   * and fall-back when cache rejects on size limit or `render` errors.
+   */
+  reservation?: Reservation;
+  /**
+   * Optional custom cache-key computer. Default = sha256(JSON.stringify({
+   * lang, source})). Plugins can override to canonicalise whitespace,
+   * strip comments, etc.
+   */
+  computeEmbedKey?(info: CodeBlockInfo): string;
+  /** Render a single code block. */
+  render(info: CodeBlockInfo, ctx: RenderContext): EmbedFragment | RenderResult | Promise<EmbedFragment | RenderResult>;
 }
 
 export interface CodeBlockInfo {
