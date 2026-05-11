@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import type { PluginInfo } from '@crowi/api-contract';
+import { ClearAllRenderCacheButton } from '@/components/admin/plugin-clear-cache-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -25,9 +26,12 @@ export default function AdminPluginsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{m['admin.plugins.heading']()}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">{m['admin.plugins.lead']()}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{m['admin.plugins.heading']()}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">{m['admin.plugins.lead']()}</p>
+        </div>
+        <ClearAllRenderCacheButton />
       </div>
 
       {isLoading && <LoadingSpinner />}
