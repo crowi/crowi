@@ -91,6 +91,9 @@
   },
   "devDependencies": {
     "@crowi/plugin-renderer-crowi-legacy": "workspace:^",
+    "@crowi/plugin-renderer-emoji": "workspace:^",
+    "@crowi/plugin-renderer-katex": "workspace:^",
+    "@crowi/plugin-renderer-plantuml": "workspace:^",
     "@crowi/plugin-storage-aws-s3": "workspace:^",
     "@crowi/plugin-storage-local": "workspace:^",
     "@types/bcryptjs": "^3.0.0",
