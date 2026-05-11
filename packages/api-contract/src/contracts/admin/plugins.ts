@@ -1,6 +1,7 @@
 import { initContract } from '@ts-rest/core';
 import { z } from 'zod';
 import {
+  ClearRenderCacheResponseSchema,
   ListPluginsResponseSchema,
   PluginConfigResponseSchema,
   PluginConfigValidationErrorSchema,
@@ -69,6 +70,40 @@ export const adminPluginsContract = c.router({
       403: AdminRequiredErrorSchema,
       404: PluginNotFoundErrorSchema,
       422: PluginConfigValidationErrorSchema,
+    },
+  },
+
+  /**
+   * Clear all renderer plugin cache entries. Used by the admin
+   * "Clear all render cache" button — equivalent to
+   * `MongoCacheStorage.invalidateAll()`. Returns the row delete count.
+   */
+  clearRenderCacheAll: {
+    method: 'POST',
+    path: '/admin/plugins/render-cache/clear-all',
+    body: z.object({}).optional(),
+    responses: {
+      200: ClearRenderCacheResponseSchema,
+      401: AuthenticationRequiredErrorSchema,
+      403: AdminRequiredErrorSchema,
+    },
+  },
+
+  /**
+   * Clear renderer plugin cache entries scoped to a single plugin.
+   * Used by the per-plugin "Clear cache for this plugin" button.
+   * Returns 404 when the named plugin is not loaded.
+   */
+  clearRenderCachePlugin: {
+    method: 'POST',
+    path: '/admin/plugins/render-cache/clear-plugin',
+    query: PluginNameQuerySchema,
+    body: z.object({}).optional(),
+    responses: {
+      200: ClearRenderCacheResponseSchema,
+      401: AuthenticationRequiredErrorSchema,
+      403: AdminRequiredErrorSchema,
+      404: PluginNotFoundErrorSchema,
     },
   },
 });
