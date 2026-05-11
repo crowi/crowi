@@ -4,6 +4,7 @@ import type { MongoCacheStorage } from '../cache';
 import type { PipelineEsmDeps, PipelineMetadata } from '../pipeline';
 import type { RendererRegistryImpl } from '../registry';
 import { remarkCodeBlockLanguages } from './code-blocks';
+import { makeCodeBlockDispatch } from './code-block-dispatch';
 import { makeEmbedTagDispatch } from './embed-tags';
 import { makeRemarkHeadings, type UnifiedTransformPlugin } from './headings';
 import { remarkMentions } from './mentions';
@@ -12,6 +13,7 @@ import { makeUrlInlineExpandDispatch } from './url-inline-expand';
 import { remarkWikiLinks } from './wikilinks';
 
 export type { UnifiedTransformPlugin } from './headings';
+export { makeCodeBlockDispatch } from './code-block-dispatch';
 export { makeEmbedTagDispatch } from './embed-tags';
 export { makeUrlInlineExpandDispatch } from './url-inline-expand';
 
@@ -59,18 +61,25 @@ export function runCorePluginsDirectly(deps: PipelineEsmDeps, tree: unknown, met
 }
 
 /**
- * Build the Phase 4 plugin-dispatch transforms — async post-processors
- * that run AFTER `runSync` because they need to call cache I/O +
- * plugin `render()` (both async).
+ * Build the Phase 4 + 6 plugin-dispatch transforms — async post-
+ * processors that run AFTER `runSync` because they need to call cache
+ * I/O + plugin `render()` (both async).
  *
- * Order: embed-tags first, url-inline-expand second. Both walk the
- * tree once and rewrite matched nodes in-place. Both no-op when their
- * respective registry is empty.
+ * Order: embed-tags first, url-inline-expand second, code-block-
+ * dispatch third. Each walks the tree once and rewrites matched
+ * nodes in-place. Each no-ops when its respective registry is empty.
+ *
+ * Code-block-dispatch runs last on purpose: PlantUML / Mermaid output
+ * SHOULD NOT contain `@[tag](url)` or bare-URL constructs that earlier
+ * dispatchers would re-process, but putting code-block-dispatch last
+ * makes that defensive ordering explicit — the new `html` node it
+ * produces is opaque to the earlier walkers, which only operate on
+ * phrasing content / autolinks.
  */
 export function buildPluginDispatchPlugins(
   registry: RendererRegistryImpl,
   ctx: RenderContext,
   deps: { cache: MongoCacheStorage; pageId: string },
 ): Array<(tree: Root) => Promise<void>> {
-  return [makeEmbedTagDispatch(registry, ctx, deps), makeUrlInlineExpandDispatch(registry, ctx, deps)];
+  return [makeEmbedTagDispatch(registry, ctx, deps), makeUrlInlineExpandDispatch(registry, ctx, deps), makeCodeBlockDispatch(registry, ctx, deps)];
 }

@@ -17,19 +17,19 @@ import type {
  *     `registerRenderer(scope, ctx)` with a per-plugin scope that
  *     forwards into this same impl.
  *
- * Phase 4 honours:
+ * Phase 4 + 6 honours:
  *   - `addUnifiedPlugin({ phase: 'transform' })`
  *   - `addNodeRenderer`
  *   - `addEmbedTag` (last-wins + boot warn on collision)
  *   - `addUrlInlineExpander` (registration-order list)
- *
- * Phase 4 stubs (warn-noop):
- *   - `addCodeBlockRenderer` (Phase 6 lights this up)
+ *   - `addCodeBlockRenderer` (last-wins + boot warn on collision —
+ *     Phase 6 lit this up alongside the bundled PlantUML plugin)
  */
 export class RendererRegistryImpl {
   private unifiedTransform: { plugin: unknown; registeringPlugin: string }[] = [];
   private nodeRenderers = new Map<string, { renderer: NodeRenderer; registeringPlugin: string }[]>();
   private embedTags = new Map<string, { plugin: string; renderer: EmbedRenderer }>();
+  private codeBlockRenderers = new Map<string, { plugin: string; renderer: CodeBlockRenderer }>();
   private urlExpanders: { plugin: string; rule: UrlInlineExpansionRule }[] = [];
 
   /** Snapshot of registered transform-phase unified plugins, in registration order. */
@@ -50,6 +50,16 @@ export class RendererRegistryImpl {
   /** Look up an embed-tag renderer by tag. Returns undefined when no plugin registered the tag. */
   getEmbedTag(tag: string): { plugin: string; renderer: EmbedRenderer } | undefined {
     return this.embedTags.get(tag);
+  }
+
+  /** Look up a code-block renderer by lang. Returns undefined when no plugin registered the lang. */
+  getCodeBlockRenderer(lang: string): { plugin: string; renderer: CodeBlockRenderer } | undefined {
+    return this.codeBlockRenderers.get(lang);
+  }
+
+  /** True when at least one code-block renderer is registered — dispatch can short-circuit on empty. */
+  hasCodeBlockRenderers(): boolean {
+    return this.codeBlockRenderers.size > 0;
   }
 
   /** Snapshot of URL inline-expanders, in registration order. */
@@ -88,6 +98,19 @@ export class RendererRegistryImpl {
     this.embedTags.set(name, { plugin: registeringPlugin, renderer });
   }
 
+  /**
+   * Phase 6: last-wins on collision, mirror of `addEmbedTag`. The boot
+   * warn surfaces the conflict so an operator can either fix the
+   * misnamed lang or accept the override.
+   */
+  addCodeBlockRenderer(lang: string, renderer: CodeBlockRenderer, registeringPlugin: string, log: PluginLogger): void {
+    const existing = this.codeBlockRenderers.get(lang);
+    if (existing) {
+      log.warn(`[renderer] code-block-renderer collision on '${lang}': plugin '${existing.plugin}' is being overridden by '${registeringPlugin}' (last-wins)`);
+    }
+    this.codeBlockRenderers.set(lang, { plugin: registeringPlugin, renderer });
+  }
+
   addUrlInlineExpander(rule: UrlInlineExpansionRule, registeringPlugin: string): void {
     this.urlExpanders.push({ plugin: registeringPlugin, rule });
   }
@@ -118,11 +141,10 @@ export const makeRendererScope = (registry: RendererRegistryImpl, plugin: string
 
   addNodeRenderer: (type, renderer) => registry.addNodeRenderer(type, renderer, plugin),
 
-  // Phase 4 stub — Phase 6 lights this up alongside the bundled
-  // PlantUML / KaTeX / Mermaid plugins.
-  addCodeBlockRenderer: (lang: string, _renderer: CodeBlockRenderer) => {
-    log.warn(`addCodeBlockRenderer('${lang}') is not yet implemented in v2.1 phase 4 — discarding registration (Phase 6)`);
-  },
+  // Phase 6: live. Last-wins + boot warn on collision (mirror of
+  // addEmbedTag). PlantUML is the first user; Mermaid (Phase 6.1) and
+  // any future code-block plugin will share this path.
+  addCodeBlockRenderer: (lang: string, renderer: CodeBlockRenderer) => registry.addCodeBlockRenderer(lang, renderer, plugin, log),
 
   addEmbedTag: (name: string, renderer: EmbedRenderer) => registry.addEmbedTag(name, renderer, plugin, log),
 

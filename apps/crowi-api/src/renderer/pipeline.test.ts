@@ -301,15 +301,36 @@ describe('pipeline + core renderers', () => {
   });
 });
 
-describe('RendererRegistryImpl warn-noops (Phase 4: only addCodeBlockRenderer remains noop)', () => {
-  it('discards code-block-renderer registrations and warns', () => {
+describe('RendererRegistryImpl registrations (Phase 6: addCodeBlockRenderer is live)', () => {
+  it('persists code-block-renderer registrations without warn', () => {
     const warn = jest.fn();
     const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
     const reg = new RendererRegistryImpl();
     const { makeRendererScope } = require('./registry');
     const scope = makeRendererScope(reg, '@crowi/plugin-test', log);
-    scope.addCodeBlockRenderer('mermaid', () => ({ html: '' }));
+    const renderer = { cacheVersion: 1, render: () => ({ html: '<x/>' }) };
+    scope.addCodeBlockRenderer('mermaid', renderer);
+    expect(warn).not.toHaveBeenCalled();
+    expect(reg.getCodeBlockRenderer('mermaid')?.renderer).toBe(renderer);
+    expect(reg.getCodeBlockRenderer('mermaid')?.plugin).toBe('@crowi/plugin-test');
+    expect(reg.hasCodeBlockRenderers()).toBe(true);
+  });
+
+  it('addCodeBlockRenderer collision is last-wins + boot warn', () => {
+    const warn = jest.fn();
+    const log: PluginLogger = { debug: () => undefined, info: () => undefined, warn, error: () => undefined };
+    const reg = new RendererRegistryImpl();
+    const { makeRendererScope } = require('./registry');
+    const scopeA = makeRendererScope(reg, '@crowi/plugin-a', log);
+    const scopeB = makeRendererScope(reg, '@crowi/plugin-b', log);
+    const rendererA = { cacheVersion: 1, render: () => ({ html: 'A' }) };
+    const rendererB = { cacheVersion: 1, render: () => ({ html: 'B' }) };
+    scopeA.addCodeBlockRenderer('plantuml', rendererA);
+    scopeB.addCodeBlockRenderer('plantuml', rendererB);
     expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/code-block-renderer collision on 'plantuml'/);
+    expect(reg.getCodeBlockRenderer('plantuml')?.plugin).toBe('@crowi/plugin-b');
+    expect(reg.getCodeBlockRenderer('plantuml')?.renderer).toBe(rendererB);
   });
 
   it('persists addEmbedTag and addUrlInlineExpander registrations (Phase 4)', () => {
