@@ -10,7 +10,6 @@ export default (crowi) => {
   const config = crowi.getConfig();
   const mailConfig: any = {};
   let mailer: any = {};
-  const MAIL_TEMPLATE_DIR = crowi.mailDir;
 
   function createSMTPClient(option?) {
     debug('createSMTPClient option', option);

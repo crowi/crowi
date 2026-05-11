@@ -51,12 +51,6 @@ class Crowi {
 
   resourceDir: string;
 
-  viewsDir: string;
-
-  mailDir: string;
-
-  viewsDirs: string[];
-
   tmpDir: string;
 
   cacheDir: string;
@@ -133,10 +127,6 @@ class Crowi {
     this.pluginDir = path.join(this.rootDir, 'node_modules') + sep;
     this.publicDir = path.join(this.rootDir, 'public') + sep;
     this.resourceDir = path.join(this.rootDir, 'resource') + sep;
-    this.viewsDir = path.join(this.rootDir, 'views') + sep;
-    this.mailDir = path.join(this.viewsDir, 'mail') + sep;
-    const pagesDir = path.join(this.rootDir, ...(this.node_env === 'development' ? ['lib'] : ['dist', 'server']), 'pages') + sep;
-    this.viewsDirs = [this.viewsDir, pagesDir];
     this.tmpDir = path.join(this.rootDir, 'tmp') + sep;
     this.cacheDir = path.join(this.tmpDir, 'cache');
 
