@@ -16,6 +16,7 @@ import { UserMenuItems } from '@/components/user-menu-items';
 import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
 import { SiteBrand } from '@/components/site-brand';
 import { LocaleSync } from '@/components/locale-sync';
+import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -26,14 +27,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     // 接続エラー中はリダイレクトしない
     if (!isLoading && !isAuthenticated && connectionState === 'connected') {
-      router.push('/login');
+      router.push(buildLoginRedirectUrl(window.location.pathname + window.location.search));
     }
   }, [isLoading, isAuthenticated, connectionState, router]);
 
   // セッション期限切れイベントのリスナー
   useEffect(() => {
     const handleSessionExpired = () => {
-      router.push('/login');
+      router.push(buildLoginRedirectUrl(window.location.pathname + window.location.search));
     };
 
     window.addEventListener('auth:session-expired', handleSessionExpired);

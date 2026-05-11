@@ -18,6 +18,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
+import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
 import { UserMenuItems } from '@/components/user-menu-items';
 
@@ -29,14 +30,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     // 接続エラー中はリダイレクトしない
     if (!isLoading && !isAuthenticated && connectionState === 'connected') {
-      router.push('/login');
+      router.push(buildLoginRedirectUrl(window.location.pathname + window.location.search));
     }
   }, [isLoading, isAuthenticated, connectionState, router]);
 
   // セッション期限切れイベントのリスナー
   useEffect(() => {
     const handleSessionExpired = () => {
-      router.push('/login');
+      router.push(buildLoginRedirectUrl(window.location.pathname + window.location.search));
     };
 
     window.addEventListener('auth:session-expired', handleSessionExpired);

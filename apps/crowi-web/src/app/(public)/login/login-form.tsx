@@ -11,11 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClient } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
+import { safeContinueUrl } from '@/lib/login-redirect';
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const continueUrl = searchParams.get('continue') || '/';
+  // Anything not a same-origin relative path is dropped — prevents
+  // open-redirect via a crafted `?continue=https://evil.example/` link.
+  const continueUrl = safeContinueUrl(searchParams.get('continue'));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
