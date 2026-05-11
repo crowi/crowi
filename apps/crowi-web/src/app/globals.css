@@ -1,5 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/*
+ * KaTeX styles for server-side rendered math (`$inline$` / `$$display$$`).
+ * Required by `@crowi/plugin-renderer-katex`. Even when the plugin is
+ * disabled, importing the stylesheet is cheap (~30KB minified) and
+ * avoids a flash-of-unstyled-math when an operator turns the plugin on
+ * later. KaTeX webfonts load lazily on first math render.
+ */
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 
