@@ -1,0 +1,39 @@
+{
+  "name": "@crowi/plugin-renderer-katex",
+  "version": "0.1.0-dev",
+  "description": "KaTeX math renderer for Crowi 2.x. Parses `$inline$` and `$$display$$` via remark-math and renders to HTML server-side via katex.renderToString.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit",
+    "test": "jest --passWithNoTests"
+  },
+  "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
+    "jiti": "^2.7.0",
+    "katex": "^0.16.11",
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/katex": "^0.16.7",
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^22.10.2",
+    "jest": "^29.7.0",
+    "remark-parse": "^11.0.0",
+    "ts-jest": "^29.3.4",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "unified": "^11.0.5"
+  }
+}
