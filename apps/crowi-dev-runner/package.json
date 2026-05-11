@@ -11,6 +11,7 @@
     "@crowi/admin-cli": "workspace:^",
     "@crowi/api": "workspace:^",
     "@crowi/plugin-aws": "workspace:^",
+    "@crowi/plugin-renderer-crowi-legacy": "workspace:^",
     "@crowi/plugin-search-elasticsearch": "workspace:^",
     "@crowi/plugin-storage-aws-s3": "workspace:^",
     "@crowi/plugin-storage-local": "workspace:^"
