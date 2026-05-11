@@ -168,6 +168,66 @@ export default (crowi: Crowi, _app: Express) => {
 
       return { status: 200 as const, body: { ok: true as const, hotReloaded, reconfigureFailed } };
     },
+
+    /**
+     * POST /api/v2/admin/plugins/render-cache/clear-all
+     *
+     * Drops every PluginRenderCache document. Surfaced by the
+     * "Clear all render cache" button in the admin UI. The next
+     * render of any embed-bearing page repopulates the cache.
+     */
+    clearRenderCacheAll: async () => {
+      const renderer = crowi.renderer;
+      if (!renderer) {
+        return internalServerErrorResponse;
+      }
+      try {
+        const removedCount = await renderer.cache.invalidateAll();
+        return {
+          status: 200 as const,
+          body: {
+            ok: true as const,
+            clearedAt: new Date().toISOString(),
+            removedCount,
+          },
+        };
+      } catch (err) {
+        debug('clearRenderCacheAll failed:', (err as Error).message);
+        return internalServerErrorResponse;
+      }
+    },
+
+    /**
+     * POST /api/v2/admin/plugins/render-cache/clear-plugin?name=…
+     *
+     * Drops PluginRenderCache documents whose `pluginName` matches.
+     * Returns 404 when the named plugin is not loaded; that prevents
+     * typos from silently succeeding ("nothing matched, but ok").
+     */
+    clearRenderCachePlugin: async ({ query }) => {
+      const renderer = crowi.renderer;
+      const manager = crowi.pluginManager;
+      if (!renderer) {
+        return internalServerErrorResponse;
+      }
+      if (manager && !manager.getLoadedPlugin(query.name)) {
+        return pluginNotFound(query.name);
+      }
+      try {
+        const removedCount = await renderer.cache.invalidatePlugin(query.name);
+        return {
+          status: 200 as const,
+          body: {
+            ok: true as const,
+            clearedAt: new Date().toISOString(),
+            removedCount,
+          },
+        };
+      } catch (err) {
+        debug('clearRenderCachePlugin failed:', (err as Error).message);
+        return internalServerErrorResponse;
+      }
+    },
   });
 
   createExpressEndpoints(apiContract.admin.plugins, pluginsRouter, router);
