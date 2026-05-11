@@ -222,20 +222,44 @@ scope: medium
 3.6. APPROVED → committer が commitPlan に従って複数 commit
 ```
 
-**チェーンは止めない**。spec phase でユーザー承認を取った後 (= skill 起動時の唯一の承認ポイント) は、
-3.1〜3.6 を **連続で実行** する。各 phase の完了報告は短い acknowledgement として残すが、
-「次に進みますか」と user 確認を取らない。途中停止が許されるのは:
+#### 連続実行ルール (最重要)
 
-- **NEEDS_WORK が `maxReviewAttempts` 回連続** したとき → human escalation
-- **必須チェックの失敗** (type-check / test / lint / format / pre-commit hook) → 停止して報告
-- **commitPlan ⇄ diff の不整合** が committer 段階で解消できないとき → 停止して報告
-- **agent からの明示的な escalate 要求**
+spec phase でユーザー承認を取った後 (= skill 起動時の **唯一** の承認ポイント) は、
+**`task.status = COMMITTED` になるまで一度も止まらない**。各 phase 完了 = 次 phase の即時起動。
+ユーザー確認を取らない。**phase 出力が「次に進める状態です」「ready to proceed」「次は ◯◯ です」**
+等の予告で終わったら **その同じ assistant turn 内で必ず次 phase を起動する** — 予告だけで turn を
+締めることは禁止。
 
-それ以外は、status が `COMMITTED` になり `queue.currentTask = null` になるまで進める。
-特に:
-- simplify が「now invoke reviewer」と報告したら → 即 reviewer 起動 (確認待ちしない)
-- reviewer が APPROVED と判定したら → 即 committer 起動 (確認待ちしない)
-- committer が SUCCESS を返したら → 即 step 4 (完了報告) へ
+**各 phase の出口で必ずやるアクション** (条件分岐なし、phase 出力の文字列に依存しない):
+
+| 完了 phase | 次に必ず起動するもの |
+|---|---|
+| planner | implementer |
+| implementer (必須チェック pass、status=REVIEW) | simplify (`config.runSimplify`=true) → reviewer |
+| simplify | **reviewer を即起動** ("進める状態です" 等の予告で停止禁止) |
+| reviewer (APPROVED) | **committer を即起動** ("review APPROVED した、commit する" 等の予告で停止禁止) |
+| reviewer (NEEDS_WORK, attempts < max) | implementer に戻す |
+| reviewer (NEEDS_WORK, attempts == max) | 停止 + human escalation |
+| committer (SUCCESS) | step 4 (完了報告) |
+
+「`simplify` が "now invoke reviewer" と書いたら起動する」のようなマジック文字列ハンドシェイクは
+**禁止**。phase の status / 戻り値 (成功・失敗・NEEDS_WORK) だけを判断材料にする。
+
+#### 停止が許される条件 (これ以外で turn を終えることは禁止)
+
+1. **NEEDS_WORK が `maxReviewAttempts` 回連続** → human escalation
+2. **必須チェックの失敗** (type-check / test / lint / format / pre-commit hook) → 停止して報告
+3. **commitPlan ⇄ diff の不整合** が committer 段階で解消できないとき → 停止して報告
+4. **agent からの明示的な escalate 要求** (例: spec 読解で曖昧、設計判断が必要、外部 secret 要求)
+
+#### 言い回しチェックリスト (turn を締める前に必ず確認)
+
+- ❌ 「task は REVIEW ステータス。reviewer phase に進める状態です」 → reviewer 未起動なので NG
+- ❌ 「simplify 完了。次は reviewer です」 → 予告だけ、起動してない
+- ❌ 「ready for review / ready to commit」 → 同上
+- ✅ reviewer の Agent / Skill 呼び出しが **同じ turn 内** に発火している
+- ✅ committer の commit コマンドが **同じ turn 内** に発火している
+- ✅ 上の停止条件 1-4 のいずれかが明示的に該当している
 
 ### 4. 完了
 
