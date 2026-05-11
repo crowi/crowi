@@ -302,6 +302,38 @@ export class PluginManager {
     return candidate;
   }
 
+  /**
+   * Deactivate a loaded plugin. Phase 4 only touches the render
+   * cache: every cached entry contributed by the named plugin is
+   * removed (`invalidatePlugin(name)`). Phase 5+ will broaden this
+   * to (a) drop the plugin from the loaded set + driver registries,
+   * (b) emit a deactivation event for dependents, (c) wire the
+   * `--purge` CLI path.
+   *
+   * Returns true when at least the render-cache invalidation ran
+   * (false when the plugin wasn't loaded). Failures are logged but
+   * never propagated — operators trigger deactivate from the admin
+   * UI or CLI and a partial cleanup is still better than no cleanup.
+   */
+  async deactivate(name: string): Promise<boolean> {
+    const plugin = this.getLoadedPlugin(name);
+    if (!plugin) {
+      debug('deactivate: plugin %s not loaded; nothing to do', name);
+      return false;
+    }
+    try {
+      const renderer = this.crowi.renderer;
+      if (renderer) {
+        await renderer.cache.invalidatePlugin(name);
+        debug('deactivate %s: render-cache invalidated', name);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[crowi:plugin:${name}] deactivate failed during render-cache invalidation: ${message}`);
+    }
+    return true;
+  }
+
   private async activate(plugin: CrowiPlugin): Promise<void> {
     debug('activating %s@%s', plugin.name, plugin.version);
     const ctx = createPluginContext(plugin, this.crowi, this);
