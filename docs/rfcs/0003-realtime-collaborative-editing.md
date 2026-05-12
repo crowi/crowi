@@ -1,11 +1,11 @@
 # RFC-0003: Real-time Collaborative Editing
 
-- **Status**: Draft (round 1)
+- **Status**: Draft (round 2 — integrated with RFC-0002 round 3 contracts)
 - **Target**: Crowi 2.1 release
 - **Owner**: TBD
-- **Last updated**: 2026-05-10
-- **Depends on**: RFC-0001 (Plugin Architecture), RFC-0002 (Renderer Plugin Architecture)
-- **Related**: RFC-0004 (Editor UX Enhancement, future), RFC-0005 (Page Presence, future)
+- **Last updated**: 2026-05-12
+- **Depends on**: RFC-0001 (Plugin Architecture), RFC-0002 (Renderer Plugin Architecture, round 3)
+- **Related**: RFC-0004 (Editor UX Enhancement, future), RFC-0005 (Page Presence, future), RFC-0008 (Migration Command Framework, future)
 
 ## Summary
 
@@ -13,14 +13,39 @@ Add real-time collaborative editing to Crowi 2.1, using Yjs as the
 synchronisation engine and Hocuspocus as the WebSocket backend. Multiple
 users can edit the same page simultaneously; their changes converge
 deterministically via CRDT semantics; the canonical Markdown source is
-periodically materialised back to the `Page` document on explicit save.
+periodically materialised to a `Revision` document on explicit save,
+which simultaneously invokes the renderer pipeline from RFC-0002.
 
 This RFC covers the **synchronisation layer**, the **persistence
 strategy**, the **editor stack**, and **save semantics**. It deliberately
 excludes editor UX enhancements (toolbar, autocomplete, paste/D&D
-upload, slash commands, keybindings) which are deferred to RFC-0004,
-and page-level presence (avatar stack, viewer count) which is deferred
+upload) which are deferred to RFC-0004 / RFC-0006 / RFC-0007, and
+page-level presence (avatar stack, viewer count) which is deferred
 to RFC-0005.
+
+## Round 2 changes
+
+- Persistence model aligned with **RFC-0002 round 3**: `Revision.body`
+  is the per-save Markdown snapshot, `Revision.renderedAst` is the
+  per-save mdast JSON output. `Page.body` remains the canonical
+  pointer-to-current-content.
+- **Save transaction contract** explicitly defers to RFC-0002's
+  `Revision.prepareRevision()` helper; this RFC documents *when* save
+  is triggered, not *what* save does internally.
+- **`mode: 'edit'` semantic** clarified: the editor never invokes the
+  renderer pipeline for embeds; placeholders only. Aligned with
+  RFC-0002 round 3's mode enum.
+- **`pageEvent` contract** referenced for RFC-0005 coordination.
+- **Hocuspocus → presence service** integration call (`markEditing`)
+  documented.
+- **Keybindings** language clarified: deferred indefinitely, not
+  parked in RFC-0004.
+- **Slash commands** reference corrected: RFC-0007, not RFC-0004.
+- **`PageYjsUpdate` TTL** tightened from 1 day to 1 hour.
+- **`bodyAtSave`** in incremental revisions removed; `Revision.body`
+  already provides the resolved snapshot.
+- **Migration framework** reference added: revision schema upgrade
+  goes through RFC-0008's framework.
 
 ## Goals
 
@@ -31,33 +56,45 @@ to RFC-0005.
 - **Deterministic convergence**. Two users editing simultaneously
   always end up seeing the same document state (CRDT property).
 - **Markdown source as the canonical record**. The Yjs document is the
-  live edit state; `Page.body` is the durable record updated on save.
+  live edit state; `Revision.body` is the durable record updated on
+  save.
 - **Revision history preserved**. Explicit "save" creates revisions,
   with significantly reduced storage cost compared to v1.x.
-- **Operates on existing Crowi infrastructure**. MongoDB for persistence,
-  Redis for cross-server coordination — no new datastores.
-- **Scales to 20 simultaneous editors per page**. Beyond that, additional
-  users get a read-only view.
+- **Operates on existing Crowi infrastructure**. MongoDB for
+  persistence, Redis for cross-server coordination — no new datastores.
+- **Scales to 20 simultaneous editors per page**. Beyond that,
+  additional users get a read-only view.
+- **Honours RFC-0002's contracts**: the save flow invokes the renderer
+  pipeline synchronously in the same transaction; the editor never
+  triggers renders for async embeds.
 
 ## Non-goals (this RFC)
 
-- **Editor UX features**: toolbar, keyboard shortcuts beyond CodeMirror's
-  defaults, slash commands, autocomplete (`@user`, `[[Page`), paste-image
-  upload, drag-and-drop upload, Vim mode. All deferred to RFC-0004.
-- **Markdown source "decoration" rendering** (e.g. showing `**bold**` as
-  inline-styled but with the asterisks preserved, Zenn-style). Explicit
-  decision: Crowi shows raw Markdown source in the editor, period.
-  Non-engineer support is provided via a future toolbar (RFC-0004),
-  not by hiding/styling the source.
+- **Editor UX features**: toolbar (RFC-0006), keyboard shortcuts
+  (deferred indefinitely; see below), slash commands (RFC-0007),
+  autocomplete `@user` / `[[Page` (RFC-0004), paste-image upload
+  (RFC-0004), drag-and-drop upload (RFC-0004), Vim mode (deferred).
+- **Keyboard shortcuts**. Cross-platform binding design (Mac
+  `Ctrl+B` conflict, etc.) is deferred indefinitely; no specific RFC
+  owns this. CodeMirror's platform-aware defaults remain.
+- **Markdown source "decoration" rendering** (e.g. showing `**bold**`
+  as inline-styled but with the asterisks preserved, Zenn-style).
+  Explicit decision: Crowi shows raw Markdown source in the editor,
+  period. Non-engineer support is provided via a future toolbar
+  (RFC-0006), not by hiding/styling the source.
 - **Page-level presence UI**: viewer avatar stack on the read page,
   "editing now" indicators. Deferred to RFC-0005.
 - **Explicit merge resolution UI** for conflicting edits. Real-time
-  cursor visibility (this RFC) covers most cases; explicit merge UI is
-  a future possibility (see Open Question 2).
+  cursor visibility (this RFC) covers most cases; explicit merge UI
+  is a future possibility (see Open Question 2).
 - **Per-page-tree permissions for editing**. v2.1 inherits Crowi's
   existing page-level permission model unchanged.
 - **Hot-reload of editor plugins**. The editor is a single fixed
   configuration in v2.1.
+- **Generic migration command framework**. The revision schema
+  evolution is handled by the framework defined in RFC-0008; this
+  RFC only describes *what* changes, not *how* migrations are
+  registered or orchestrated.
 
 ## Overview
 
@@ -76,15 +113,20 @@ to RFC-0005.
 │  - Auth hook (verify wsToken)             │
 │  - Load/persist Y.Doc                     │
 │  - Awareness routing                      │
-│  - Multi-server pub/sub via Redis ────┐   │
-└──────────────────────┬────────────────┼───┘
-                       │                │
-                       ▼                ▼
+│  - Save trigger → Revision.prepareRevision│ ──┐ invokes RFC-0002
+│    (renderer pipeline runs synchronously) │   │  pipeline in the
+│  - presence.markEditing on connect        │   │  same transaction
+│  - Multi-server pub/sub via Redis ────┐   │   │
+└──────────────────────┬────────────────┼───┘   │
+                       │                │       │
+                       ▼                ▼       ▼
               ┌──────────────┐  ┌──────────────┐
               │  MongoDB     │  │  Redis       │
               │  - Page      │  │  - pub/sub   │
-              │  - PageRev   │  │  - wsTokens  │
-              │  - YjsHist   │  └──────────────┘
+              │  - Revision  │  │  - wsTokens  │
+              │  - PageYjsUpd│  │  - editor    │
+              │  - PluginRen │  │    counter   │
+              │    derCache  │  └──────────────┘
               └──────────────┘
 ```
 
@@ -93,10 +135,10 @@ Two transport paths:
 1. **HTTP** for everything that already exists: page CRUD, search, etc.
 2. **WebSocket** for Yjs sync + awareness, terminated at Hocuspocus.
 
-The HTTP layer remains the source of truth for `Page.body` (the
-canonical Markdown). Yjs state is supplementary: it captures
-in-progress edits and converges them; on save, the result is
-materialised back to `Page.body`.
+The HTTP layer remains the source of truth for `Page.body` (which
+points to the current revision's content). Yjs state is supplementary:
+it captures in-progress edits and converges them; on save, the result
+is materialised to a new `Revision` and `Page.body` updated.
 
 ## Y.Doc structure
 
@@ -117,11 +159,9 @@ We considered storing title, tags, and inline comments as additional
 Y.Map/Y.Array fields in the same doc. **Rejected for v2.1**:
 
 - **Title/tags**: edited rarely and from outside the editor (page
-  metadata form). HTTP API is sufficient; no need for sub-second
-  sync.
+  metadata form). HTTP API is sufficient.
 - **Inline comments**: not implemented in Crowi v1 either; out of
-  scope. If added later, comments can join the same Y.Doc without
-  breaking existing clients (Yjs is forward-compatible).
+  scope.
 
 ## WebSocket server: Hocuspocus
 
@@ -133,8 +173,8 @@ team) over `y-websocket` (the reference implementation).
   that match our short-lived-token model directly.
 - Built-in persistence hooks for loading from / writing to MongoDB.
 - Built-in Redis extension for multi-server pub/sub.
-- Built-in webhooks for save events (useful for triggering render —
-  see "Save semantics").
+- Built-in webhooks for save events (useful for triggering the
+  renderer pipeline — see "Save semantics").
 - Active maintenance, broad production use in the Tiptap ecosystem.
 
 We do not adopt Hocuspocus's commercial features (Hocuspocus Pro);
@@ -150,24 +190,48 @@ they are split for independent scaling.
 WebSocket endpoint: `wss://<crowi-host>/collab/`. The HTTP server
 reverse-proxies `/collab/*` to Hocuspocus.
 
-## Persistence strategy: hybrid
+## Persistence strategy
 
-Three layers of persistence, each with different update cadence:
+Three persistence layers, each with different update cadence:
 
 ```
-┌──────────────────────────────────────────┐
-│  Page.body                                │  ← canonical Markdown
-│  Page.yjsState                            │  ← current Y.Doc snapshot
-│  PageRevision  (incremental + snapshot)   │  ← edit history
-│  PageYjsUpdate (live edit increments)     │  ← high-frequency stream
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Page                                                 │
+│    body              ← canonical Markdown (pointer)   │
+│    currentRevision   ← _id of latest Revision         │
+│    yjsState          ← current Y.Doc state            │
+│    yjsCheckpointAt                                    │
+├──────────────────────────────────────────────────────┤
+│  Revision (per save)                                  │
+│    body              ← Markdown snapshot              │
+│    renderedAst       ← mdast JSON (from RFC-0002)     │
+│    metadata          ← TOC, mentions, etc. (RFC-0002) │
+│    rendererVersion   ← (RFC-0002)                     │
+│    type              ← 'snapshot' | 'incremental'     │
+│    yjsUpdate?        ← for 'incremental': delta       │
+│    parentRevisionId                                   │
+│    savedBy                                            │
+│    contributors                                       │
+├──────────────────────────────────────────────────────┤
+│  PageYjsUpdate (per Yjs delta, high-frequency)        │
+│    update            ← binary Yjs update              │
+│    createdAt         ← TTL: 1 hour                    │
+└──────────────────────────────────────────────────────┘
 ```
 
-### `Page.body`
+### `Page.body` and `Page.currentRevision`
 
-The canonical Markdown source. Updated **only on explicit save**.
-HTTP API consumers (search, export, plugins, other servers) read from
-here. This is the field that has existed in Crowi since v1.
+`Page.body` is the canonical Markdown source — equal to the most
+recent `Revision.body`. It's kept on `Page` for compatibility with
+HTTP API consumers (search, export, plugins) that already read from
+`Page.body`.
+
+`Page.currentRevision` points to the latest `Revision` document, so
+view-time rendering can fetch `Revision.renderedAst` (RFC-0002's
+authoritative render artifact) without scanning the Revision
+collection.
+
+Both are updated atomically on save.
 
 ### `Page.yjsState`
 
@@ -178,14 +242,16 @@ in. This is what makes editing resilient across server restarts.
 ```ts
 Page {
   // ... existing fields
-  body: string;                    // canonical Markdown
+  body: string;                    // canonical Markdown (= latest Revision.body)
+  currentRevision: ObjectId;       // latest Revision._id
   yjsState: Buffer | null;         // current Y.Doc state, base64 in Mongo
   yjsCheckpointAt: Date | null;    // last full snapshot timestamp
 }
 ```
 
-A null `yjsState` means "no live edit session has been initiated yet";
-Hocuspocus initialises a fresh Y.Doc from `body` in that case.
+A null `yjsState` means "no live edit session has been initiated yet,
+OR external edit has invalidated the live state"; Hocuspocus
+initialises a fresh Y.Doc from `Page.body` in that case.
 
 ### `PageYjsUpdate` (high-frequency)
 
@@ -202,7 +268,7 @@ PageYjsUpdate {
 
 // Indexes
 { pageId: 1, createdAt: 1 }
-{ createdAt: 1 } TTL, expireAfterSeconds: 86400  // 1 day
+{ createdAt: 1 } TTL, expireAfterSeconds: 3600  // 1 hour
 ```
 
 **Compaction**: Every 100 updates or every 10 minutes (whichever
@@ -210,24 +276,32 @@ comes first), Hocuspocus computes a fresh `yjsState` snapshot, writes
 it to `Page.yjsState`, and deletes the now-redundant `PageYjsUpdate`
 entries up to that point. This keeps the collection bounded.
 
-### `PageRevision` (low-frequency)
+**TTL choice**: 1 hour is sufficient because Hocuspocus checkpoints
+to `Page.yjsState` every 10 minutes; an update that's an hour old
+is well past its useful recovery window. Tighter than the round-1
+proposal of 1 day, which was conservative.
 
-Created **only on explicit save**. This is the user-facing history.
+### `Revision` (low-frequency, on explicit save)
+
+`Revision` is shared with RFC-0002. This RFC adds collaboration-
+specific fields; RFC-0002 owns `renderedAst`, `metadata`, and
+`rendererVersion`.
 
 ```ts
-PageRevision {
+Revision {
   _id, pageId,
   parentRevisionId: ObjectId | null,
   type: 'snapshot' | 'incremental',
 
-  // For type='snapshot':
-  body?: string,               // full Markdown at this revision
+  body: string,                // Markdown at this revision (always present)
+  yjsUpdate?: Buffer,          // For type='incremental': delta from parent's Y.Doc
 
-  // For type='incremental':
-  yjsUpdate?: Buffer,          // Yjs update from parent
-  bodyAtSave?: string,         // resolved Markdown (for search/quick view)
+  // RFC-0002 fields:
+  renderedAst: object | null,
+  rendererVersion: string,
+  metadata: RevisionMetadata,
 
-  // Common fields:
+  // RFC-0003 fields:
   savedBy: UserRef,            // user who triggered the save
   contributors: UserRef[],     // users who edited since previous revision
   createdAt: Date,
@@ -236,18 +310,14 @@ PageRevision {
 ```
 
 **Snapshot/incremental cadence**: every 10th revision is a `snapshot`
-(stores full `body`); the 9 in between are `incremental` (store the
-Yjs update from the previous revision plus a resolved `bodyAtSave`
-for cheap reads).
+(stores full `body` plus a reset of the Y.Doc state); the 9 in between
+are `incremental` (store the Yjs update from the previous revision
+plus `body`).
 
-Reading an old revision:
-- `snapshot`: return `body` directly.
-- `incremental`: return `bodyAtSave` for display. (The `yjsUpdate` is
-  there for future use — e.g. exact char-level blame — but the UI
-  reads `bodyAtSave` for simplicity.)
-
-`bodyAtSave` is denormalised but acceptable: revisions are immutable
-once created, so consistency isn't an ongoing concern.
+Reading an old revision: `body` and `renderedAst` are always
+present, so the UI doesn't need to replay. The `yjsUpdate` field on
+`incremental` revisions is there for future use (per-character blame,
+detailed diff), not for current display.
 
 ### Storage size estimate
 
@@ -255,22 +325,30 @@ For a page edited 100 times:
 
 | Strategy | Storage |
 |---|---|
-| v1.x (full snapshot each revision) | 100 × ~10KB = ~1MB |
-| v2.1 (10 snapshots + 90 incrementals with bodyAtSave) | 10 × ~10KB + 90 × ~10.5KB = ~1.05MB |
-| v2.1 (10 snapshots + 90 incrementals **without** bodyAtSave) | 10 × ~10KB + 90 × ~500B = ~145KB |
+| v1.x (full snapshot each revision) | 100 × ~10KB body = ~1MB |
+| v2.1 (10 snapshots + 90 incrementals with body + yjsUpdate) | ~10KB × 100 + 500B × 90 = ~1.05MB body |
+| v2.1 (incrementals without body, replay-on-read) | 10 × ~10KB + 90 × 500B = ~145KB body |
 
-The **with-bodyAtSave** variant doesn't save much storage over v1.x.
-The win is in read simplicity (no replay needed) and forward
-compatibility — we can drop `bodyAtSave` and switch to pure replay in
-a future version if storage cost becomes a concern.
+The **with-body-always** variant doesn't save much storage over v1.x
+on the Markdown side, but `renderedAst` adds significant volume
+(~30KB JSON per revision for typical pages, vs HTML which would
+be slightly smaller). Net storage is *higher* than v1.x.
 
-**Decision for v2.1**: keep `bodyAtSave`. Optimise storage later if
-needed.
+The win isn't storage — it's **read simplicity** (no replay needed
+for either Markdown or AST) and **historical fidelity** (every
+revision's exact rendered form is preserved per RFC-0002's choice).
+A future optimisation could drop `renderedAst` from incremental
+revisions and regenerate on demand from the nearest snapshot, but
+that's deferred.
+
+**Decision for v2.1**: keep `body` and `renderedAst` on every
+revision. Optimise storage later if needed.
 
 ### Y.Doc garbage collection
 
-Yjs documents accumulate tombstones (markers for deleted content) over
-their lifetime. After many edits, the binary state can grow large.
+Yjs documents accumulate tombstones (markers for deleted content)
+over their lifetime. After many edits, the binary state can grow
+large.
 
 Hocuspocus's persistence layer is configured to call
 `Y.encodeStateAsUpdate(ydoc)` (which compacts tombstones) on every
@@ -280,42 +358,34 @@ This keeps `yjsState` size bounded over time.
 ## Migration from v1.x revisions
 
 Crowi v1.x stores every revision as a full-text snapshot. We do not
-migrate these to the new format. Strategy:
+migrate these to the new format on upgrade.
 
 ### Phase A: v2.1 release — no migration
 
-- Existing `PageRevision` documents remain in the v1.x schema.
-- Code paths that read revisions check for both shapes:
-  - v1.x shape: `{ body: string, ... }`
-  - v2.1 shape: `{ type: 'snapshot'|'incremental', body?, yjsUpdate?, bodyAtSave?, ... }`
+- Existing `Revision` documents remain in the v1.x schema (just
+  `body`, no `renderedAst` / `type` / `parentRevisionId` etc.).
+- Code paths that read revisions check for both shapes.
 - New revisions created post-upgrade use the v2.1 shape.
-- Zero migration risk, zero downtime, zero data loss.
+- `renderedAst` is populated lazily by `crowi-admin renderer rebuild`
+  (RFC-0002).
 
-### Phase B: post-v2.1 lightweight migration (optional)
+### Phase B: schema-unifying migration (post-v2.1)
 
-A separate, optional command:
+Once RFC-0008's migration command framework lands, a separate
+migration unifies the schema:
 
 ```bash
 crowi-admin migrate --only=revisions-schema-unify --dry-run
 crowi-admin migrate --only=revisions-schema-unify
 ```
 
-This pass:
-- Adds `type: 'snapshot'` to every v1 revision document.
-- Adds `contributors: [savedBy]` (only the saver is known).
-- Renames `body` field if necessary.
-- Does NOT attempt to delta-compress historical revisions. The Phase B
-  goal is *schema uniformity*, not space saving.
-
-Runs in batches of 1000 documents with `bulkWrite`; expected runtime
-~30 seconds per 10K revisions. Safe to run on a live system because
-each document update is atomic and doesn't affect other parts of the
-schema.
+This pass adds `type: 'snapshot'` and `contributors: [savedBy]` to
+every v1 revision. It does NOT delta-compress historical revisions.
 
 ### Phase C: distant future
 
-Eventually (Crowi v3?), require schema-unified revisions and remove
-the v1.x code path. Out of scope for now.
+Crowi v3 may require schema-unified revisions and remove the v1.x
+code path.
 
 ## Authentication flow
 
@@ -339,15 +409,18 @@ tokens.
    - Accepts or rejects
 5. Connection accepted: Hocuspocus joins the user to the doc;
    Yjs sync begins; awareness exchange begins.
+6. Hocuspocus calls presence.markEditing(pageId, userId)
+   to inform RFC-0005's presence service. (No-op until RFC-0005
+   lands in v2.2.)
 ```
 
 ### Why short-lived tokens, not cookies?
 
 - WebSocket cookie semantics across origins are unreliable.
 - Short-lived JWT keeps the auth surface narrow: revoking access
-  takes at most 5 minutes (we don't need real-time revocation for v2.1).
-- Aligns with the existing pattern Crowi already uses for other
-  WebSocket-like features (if any) — single auth model.
+  takes at most 5 minutes.
+- Aligns with the pattern Crowi will use for RFC-0005's presence
+  service (read-permission-gated tokens).
 
 ### Read-only fallback
 
@@ -356,8 +429,8 @@ get a wsToken. The page renders without an editor; viewing only.
 
 If a user has edit permission but the 20-user cap is reached, they
 get a token marked `readonly: true`. The editor renders in read-only
-mode, and they see the live document update as others edit, but
-their own input is disabled.
+mode; they see the live document update as others edit, but their
+own input is disabled.
 
 ## Save semantics
 
@@ -369,7 +442,8 @@ no autosave.
 **Rationale**: Crowi's culture (engineer-facing, Git-flavoured) values
 explicit save points. Combined with Yjs (which means edits aren't
 *lost* even without save — they live in `yjsState` and `PageYjsUpdate`),
-explicit save is purely about creating a revision marker.
+explicit save is purely about creating a revision marker and
+triggering the renderer pipeline.
 
 Autosave can be added in a future RFC if needed; the Yjs layer already
 provides the durability that autosave is usually invented to give.
@@ -378,30 +452,49 @@ provides the durability that autosave is usually invented to give.
 
 ```
 1. Client emits "save" intent to Hocuspocus (custom message).
-2. Hocuspocus:
+2. Hocuspocus invokes Revision.prepareRevision(pageId, options)
+   (the helper defined by RFC-0002).
+3. prepareRevision begins a MongoDB transaction and:
    a. Reads the current Y.Doc state.
    b. Extracts current Markdown from Y.Text.
    c. Reads accumulated contributors from awareness session log.
-   d. Begins a MongoDB transaction:
-      - Update Page.body = current Markdown
-      - Update Page.yjsState = encoded current state
-      - Create PageRevision (incremental or snapshot based on counter)
-      - Clear contributors session log for next round
-   e. On transaction success:
-      - Invoke render pipeline (RFC-0002): produce HTML + metadata.
-      - Update Page.renderedHtml + Page.metadata.
-      - Update PluginRenderCache for embeds (RFC-0002).
-      - Emit PageHtmlUpdated event.
-      - Reply "save success" to client.
-   f. On transaction failure:
-      - Reply "save failed" to client; user can retry.
-      - Y.Doc state is unchanged; no data lost.
+   d. Creates a new Revision with body, type, contributors, etc.
+   e. Runs the renderer pipeline (mode='save'):
+      - parse → transform → render
+      - produces renderedAst + metadata
+      - updates PluginRenderCache for embeds inside the page
+   f. Sets Revision.renderedAst, Revision.metadata,
+      Revision.rendererVersion.
+   g. Updates Page.body, Page.currentRevision, Page.yjsState.
+4. Transaction commits.
+5. pageEvent.emit('update', pageData, savedBy, bookmarkCount)
+   for downstream listeners (render-cache invalidator for OTHER
+   pages with backlinks, future RFC-0005 presence service, etc.).
+6. Reply "save success" to client.
+
+On transaction failure (any step):
+- Roll back. No partial state.
+- Reply "save failed" to client; user can retry.
+- Y.Doc state in Hocuspocus memory is unchanged; no data lost.
 ```
 
-The render step (e) is **inside the save transaction's success path
-but outside the DB transaction itself**. If render fails (e.g. a
-plugin times out), the save itself succeeded; the cached HTML may be
-stale but `Page.body` is correct. Subsequent renders will retry.
+This RFC defines steps 1, 2, 3a–3c, 3g, 5, 6. RFC-0002 defines the
+internals of `prepareRevision` (steps 3d–3f).
+
+**Synchronicity is contractual**: `prepareRevision` runs in the same
+MongoDB transaction as the body update. The renderer pipeline runs
+synchronously inside that transaction. This matters because:
+
+- Yjs edits don't trigger renders. Only save does. So save must
+  produce the authoritative render in one atomic step.
+- A reader who lands on the page right after save MUST see the
+  rendered output, not a stale one. The transaction guarantees this.
+
+If `prepareRevision` becomes expensive enough that the transaction
+holds locks too long, RFC-0002's `renderer:rebuild` command can be
+adapted into a "stale revision" pattern (commit body, mark
+`renderedAst` as null, render asynchronously). For v2.1 the
+synchronous path is correct.
 
 ### Contributors tracking
 
@@ -409,12 +502,12 @@ Hocuspocus maintains a per-page, in-memory log of "userIds that
 participated in awareness since the last save". On every awareness
 update where a user is present in the doc, their userId is added.
 
-On save, this log becomes `PageRevision.contributors`. After save, the
+On save, this log becomes `Revision.contributors`. After save, the
 log is cleared.
 
 If Hocuspocus restarts mid-session, the log is lost — the next save
 will have an incomplete contributors list. This is acceptable: the
-list is a "best-effort" record, not a correctness-critical field.
+list is best-effort, not correctness-critical.
 
 ### The "whose save is it" question
 
@@ -433,6 +526,52 @@ We address this by reframing:
 
 This is closer to how Notion presents history than how Git presents it.
 It accepts that "save" in a CRDT world is a checkpoint, not a commit.
+
+### `pageEvent` contract
+
+After successful save, the core emits a `pageEvent`:
+
+```ts
+pageEvent.emit('update', pageData, savedBy, bookmarkCount);
+
+// On page deletion:
+pageEvent.emit('delete', pageData, deletedBy);
+```
+
+Payload shape is fixed: `(pageData, user, bookmarkCount?)`. Listeners
+include (from RFC-0002) the render-cache invalidator for pages with
+backlinks, and (from RFC-0005, future) the presence service for the
+"page updated" indicator.
+
+**Listener execution order**: defined by registration order. New
+listeners (e.g. RFC-0005's) MUST tolerate other listeners running
+before them and MUST NOT block downstream listeners on their own
+failures (each listener should catch its own errors).
+
+## Edit mode contract with RFC-0002
+
+The editor side of RFC-0002's `mode: 'edit'` semantic:
+
+- The client editor parses Markdown for syntax highlighting (CodeMirror
+  + lang-markdown) but does NOT invoke the server-side renderer
+  pipeline.
+- For async embeds (`@[card](url)`, `@[github-pr](url)`, etc.), the
+  client renders a **placeholder** based on the registered embed's
+  `reservation` (RFC-0002). No fetch, no cache lookup.
+- If the user clicks the placeholder, the client fires a one-shot
+  HTTP `POST /api/v2/render/embed-preview` with the embed input. The
+  server invokes the renderer with `mode: 'view'` (RFC-0002), which
+  bypasses stale-while-revalidate. Result is shown in the editor
+  in-place but does NOT modify the Y.Doc — it's purely a UI preview.
+
+This contract guarantees that real-time editing never triggers
+external API calls or cache writes.
+
+For now (v2.1 minimal editor scope), the editor doesn't even render
+inline placeholders for embeds — the raw Markdown `@[card](url)` text
+is shown as-is, like any other Markdown source. The placeholder UI
+is RFC-0004 territory. But the contract is documented here so RFC-0004
+can build on it.
 
 ## Conflict and failure modes
 
@@ -486,25 +625,21 @@ Resolution policy: **DB wins, Y.Doc rebuilds**.
 - All currently-connected editors of that page receive a `force-reload`
   message via Hocuspocus, with the reason "external change detected".
   Client shows: "This page was modified externally. Reloading..."
-  The browser reloads the editor, loses any in-flight changes that
-  weren't synced before the admin edit.
+  The browser reloads the editor, discarding any in-flight changes
+  that weren't synced before the admin edit.
 
 This is a deliberately stark policy — admin direct edits are rare
-and intentional. Tools that do bulk edits (e.g.
-`crowi-admin migrate --only=wikilink` from RFC-0002) MUST follow
-this contract.
+and intentional. Tools that do bulk edits (e.g. `crowi-admin
+wikilink-migrate` from RFC-0002) MUST follow this contract.
 
 ### Y.Doc corruption
 
-If Hocuspocus's `onLoadDocument` fails to decode `Page.yjsState`
-(e.g. file corruption, schema mismatch), the fallback is identical
-to the admin-edit case:
+If Hocuspocus's `onLoadDocument` fails to decode `Page.yjsState`,
+the fallback is identical to the admin-edit case:
 
 - Treat as `yjsState === null`.
 - Rebuild Y.Doc from `Page.body`.
 - Log a high-priority alert for the operator.
-- Editing history (intermediate Yjs states) is lost, but the latest
-  canonical Markdown is preserved.
 
 This is why `Page.body` is treated as the ultimate source of truth:
 it's recoverable even if everything else fails.
@@ -514,16 +649,33 @@ it's recoverable even if everything else fails.
 - Hocuspocus replies "save failed" to the client.
 - Y.Doc state is unchanged; user can press Save again.
 - No partial revision is created.
-- Other connected editors continue editing unaffected (their Y.Doc
-  state hasn't changed).
+- Other connected editors continue editing unaffected.
+
+### Renderer pipeline fails inside save
+
+Per RFC-0002 round 3, the renderer pipeline runs synchronously inside
+`prepareRevision`. If a plugin throws during render:
+
+- The save transaction rolls back. No revision is created.
+- Hocuspocus replies "save failed: renderer error".
+- The user can retry. If the failure is persistent (e.g. plugin bug
+  with their content), they must either fix the content or contact
+  an operator to disable the failing plugin.
+
+If a plugin returns a soft error (`RenderResult.kind: 'error'`), the
+save *succeeds* — the error placeholder is part of the rendered output
+and gets persisted in `renderedAst`. The page renders with an error
+indicator on the affected embed. This is the normal flow for things
+like "GitHub API rate limited"; not a save failure.
 
 ### Plugin uninstall while page is being edited
 
 If a renderer plugin is uninstalled while a page containing its
 syntax is being edited, the editor itself is unaffected (it only
 shows Markdown source). Render on next save falls back to plain
-Markdown rendering for the now-unrecognised syntax. RFC-0002 cache
-is invalidated as part of plugin uninstall.
+Markdown rendering for the now-unrecognised syntax. RFC-0002's cache
+is invalidated as part of plugin uninstall (unconditional, regardless
+of `--purge`).
 
 ### 20-user cap reached
 
@@ -531,8 +683,7 @@ The 21st user who attempts to edit receives a `readonly: true` token.
 Their editor renders in read-only mode but receives live updates.
 
 If a user disconnects, the next reader-mode user is not automatically
-promoted; they must reload to attempt re-entry as an editor. This
-keeps server logic simple.
+promoted; they must reload to attempt re-entry as an editor.
 
 The 20-user limit is configurable via instance config
 (`COLLAB_MAX_EDITORS_PER_PAGE`, default 20).
@@ -563,18 +714,22 @@ The editor is created with:
 **Explicitly NOT included in v2.1:**
 
 - No custom keybindings beyond CodeMirror defaults (Ctrl/Cmd+B, +I, +K
-  etc. are not bound to anything). RFC-0004 will design these with
-  proper platform handling.
-- No toolbar.
+  etc. are not bound to anything). Custom keybinding design is deferred
+  indefinitely — cross-platform binding choices (Mac vs Windows,
+  conflicts with OS defaults like Mac's `Ctrl+B` cursor-left) need
+  dedicated design work that no current RFC owns.
+- No toolbar. → RFC-0006.
 - No autocomplete sources (`@user`, `[[Page` triggers are inert in v2.1).
-- No paste handlers for images/files.
-- No drag-and-drop handlers.
-- No slash commands.
+  → RFC-0004.
+- No paste handlers for images/files. → RFC-0004.
+- No drag-and-drop handlers. → RFC-0004.
+- No slash commands. → RFC-0007.
 - No Vim/Emacs mode.
 - No source decoration (raw Markdown is displayed as-is, asterisks
-  and all).
-
-These are RFC-0004 territory.
+  and all). Decided in round 1; not reopened.
+- No inline embed placeholder rendering. The editor shows raw Markdown
+  text for `@[card](url)` etc. RFC-0004 may add placeholder rendering
+  on top of this.
 
 ### Awareness rendering
 
@@ -610,9 +765,12 @@ pub/sub layer; the Redis counter for the user cap still applies.
 In scope:
 
 - Hocuspocus integration as a separate Node.js process.
-- `Page.yjsState` + `PageYjsUpdate` schema additions.
-- `PageRevision` schema upgrade (snapshot/incremental).
-- `Page.body` materialised on explicit save.
+- `Page` schema additions: `currentRevision`, `yjsState`,
+  `yjsCheckpointAt`.
+- `PageYjsUpdate` collection with TTL (1 hour).
+- `Revision` schema additions for collaboration: `parentRevisionId`,
+  `type`, `yjsUpdate`, `savedBy`, `contributors`, `message`.
+  (Other Revision fields per RFC-0002.)
 - HTTP endpoint for short-lived wsToken issuance.
 - WebSocket auth via JWT.
 - 20-user cap with read-only fallback.
@@ -621,21 +779,25 @@ In scope:
 - CodeMirror 6 + lang-markdown + y-codemirror.next editor.
 - Awareness rendering: remote cursors with user-colored labels.
 - Same-paragraph warning indicator.
-- Explicit "Save" button with revision creation.
+- Explicit "Save" button.
+- Save flow integration: triggers RFC-0002's `Revision.prepareRevision`.
 - Contributors tracking on save.
 - "External edit detected" force-reload flow.
-- Hocuspocus webhook → render pipeline (RFC-0002) integration.
-- Read-side `PageHtmlUpdated` event for viewers of the page to soft-
-  refresh.
+- `pageEvent.emit('update'|'delete')` contract.
+- Hocuspocus → presence service `markEditing` call (no-op until
+  RFC-0005 lands in v2.2; the call site is in scope, the receiver
+  is not).
+- Read-side soft-refresh when `pageEvent('update')` fires for a page
+  being viewed.
 
 Out of scope (deferred):
 
 - Autosave.
-- Toolbar (RFC-0004).
-- Custom keybindings (RFC-0004).
+- Toolbar (RFC-0006).
+- Custom keybindings (deferred indefinitely; no RFC owns this).
 - Autocomplete: `@user`, `[[Page` (RFC-0004).
 - Paste/D&D upload (RFC-0004).
-- Slash commands (RFC-0004).
+- Slash commands (RFC-0007).
 - Markdown source decorations / Zenn-style rendering
   (rejected entirely; not deferred).
 - Page-level viewer presence (RFC-0005).
@@ -644,23 +806,28 @@ Out of scope (deferred):
 - Inline comments.
 - Suggestion / proposal mode (track changes).
 - Per-character authorship / blame view.
-- Schema-unifying migration of v1.x revisions (Phase B, post-v2.1).
+- Editor-side inline placeholder rendering for embeds (RFC-0004).
+- Schema-unifying migration of v1.x revisions (RFC-0008's framework).
 
 ## Resolved decisions
 
 1. **Y.Doc structure** → Single `Y.Text` for Markdown content.
    Title/tags/comments not in the doc.
 2. **WebSocket server** → Hocuspocus (open-source core).
-3. **Persistence** → Hybrid: `Page.body` (canonical) +
+3. **Persistence** → Hybrid: `Page.body` (canonical pointer) +
    `Page.yjsState` (live) + `PageYjsUpdate` (high-frequency increments,
-   1-day TTL) + `PageRevision` (low-frequency, snapshot/incremental).
+   1-hour TTL) + `Revision` (low-frequency, snapshot/incremental, body
+   always present alongside `renderedAst`).
 4. **v1.x revision migration** → No migration in Phase A.
-   Optional schema-unifying migration in Phase B post-v2.1.
+   Schema-unifying migration in Phase B post-v2.1, via RFC-0008's
+   framework.
 5. **Authentication** → Short-lived JWT wsToken issued by HTTP server,
    verified by Hocuspocus.
 6. **Save trigger** → Explicit save only, no autosave.
 7. **Save semantics** → Checkpoint model: `savedBy` is the triggering
-   user, `contributors` lists all participants since previous revision.
+   user, `contributors` lists all participants. Save invokes
+   `Revision.prepareRevision` (RFC-0002) synchronously in one
+   transaction.
 8. **Conflict handling** → Real-time cursor visibility + same-paragraph
    warning. No explicit merge UI in v2.1.
 9. **Server-side direct edits** → DB wins, Y.Doc rebuilds, connected
@@ -670,80 +837,90 @@ Out of scope (deferred):
     in v2.1.
 11. **Markdown source rendering in editor** → Raw source displayed as-is.
     Zenn-style decoration explicitly rejected (not just deferred).
-    Non-engineer support comes from a future toolbar (RFC-0004), not
-    from hiding source.
 12. **User limit** → 20 simultaneous editors per page (configurable).
     21st+ user gets read-only mode.
 13. **Multi-server coordination** → Redis pub/sub via Hocuspocus's
     Redis extension. No sticky sessions needed.
+14. **`PageYjsUpdate` TTL** → 1 hour (round 1's 1 day was over-conservative).
+15. **`bodyAtSave` in incremental revisions** → not needed;
+    `Revision.body` is always present.
+16. **Edit mode contract with RFC-0002** → Editor never invokes
+    renderer pipeline. Embed placeholders are RFC-0004 territory;
+    one-shot `view`-mode preview via dedicated HTTP endpoint when
+    needed.
+17. **Custom keybindings** → deferred indefinitely. No specific RFC
+    owns this.
 
 ## Open questions
 
-1. **`bodyAtSave` long-term**. Keeping `bodyAtSave` on every
-   incremental revision gives us cheap reads but negates most of the
-   delta-storage savings. Future option: drop `bodyAtSave` and require
-   replay from the nearest snapshot. Defer until measured: if revision
-   storage proves expensive in practice, this is the next lever.
+1. **Save message UI**. The `Revision.message` field is in the schema
+   but no UI surfaces it in v2.1. Future RFC could add an optional
+   commit-message-like prompt on save.
 
 2. **Explicit merge resolution UI**. Some users may want a Git-like
-   "your version vs their version vs current merge — pick one" UI on
-   save when semantic conflicts are detected. v2.1 ships without this;
-   real-time cursor visibility likely covers most cases. If user
-   feedback indicates pain, a future RFC could add this.
+   "your version vs their version" UI on save when semantic conflicts
+   are detected. v2.1 ships without this; real-time cursor visibility
+   covers most cases.
 
-3. **Save message / commit message**. The `PageRevision.message` field
-   is in the schema but no UI surfaces it in v2.1. Future RFC could
-   add an optional commit-message-like prompt on save, especially for
-   significant changes.
-
-4. **Awareness performance ceiling**. The 20-user cap is intuition-
+3. **Awareness performance ceiling**. The 20-user cap is intuition-
    based, not measured. Hocuspocus + Yjs awareness should scale much
-   higher (50–100 users per doc); we cap at 20 conservatively. After
-   v2.1 ships, measure actual sync latency under load and adjust the
-   default.
+   higher; we cap at 20 conservatively. After v2.1 ships, measure and
+   adjust.
 
-5. **Read-only fallback UX**. When the 21st user opens a page, do we
+4. **Read-only fallback UX**. When the 21st user opens a page, do we
    (a) silently put them in read-only mode and show a banner, or
-   (b) refuse the connection entirely with "Try again later"? Lean (a)
-   — read-only is still useful — but the UX wording matters and is
-   deferred to implementation review.
+   (b) refuse the connection entirely? Lean (a).
 
-6. **PageYjsUpdate compaction interval**. 100 updates or 10 minutes is
-   a guess. Could be tuned post-launch based on actual update rates.
+5. **`PageYjsUpdate` compaction interval**. 100 updates or 10 minutes
+   is a guess. Tune post-launch based on actual update rates.
+
+6. **Stale `renderedAst` after force-reload**. When admin edits
+   `Page.body` directly and clients are force-reloaded, the existing
+   `Revision.renderedAst` may not match the new body. The admin's
+   tool MUST also clear or rebuild `renderedAst` (via RFC-0002's
+   `renderer:rebuild`). This is documented contract but easy to
+   forget; should we add a runtime check that warns when `Page.body`
+   ≠ latest `Revision.body`?
 
 ## Implementation plan (informational)
 
-1. **Schema migrations**: add `yjsState`, `yjsCheckpointAt` to `Page`;
-   create `PageYjsUpdate` collection with TTL index; extend
-   `PageRevision` with `type`, `parentRevisionId`, `contributors`,
-   `yjsUpdate`, `bodyAtSave`, `message`.
+1. **Schema migrations**: add `currentRevision`, `yjsState`,
+   `yjsCheckpointAt` to `Page`. Create `PageYjsUpdate` collection
+   with TTL index. Extend `Revision` with `parentRevisionId`, `type`,
+   `contributors`, `yjsUpdate`, `message`. (Other Revision fields
+   per RFC-0002's migration.)
 2. **Hocuspocus deployment**: containerise as separate process; wire
    into reverse proxy at `/collab/`.
 3. **wsToken endpoint**: implement `GET /api/v2/pages/:id/yjs-token`
    with JWT signing.
-4. **Hocuspocus auth hook**: implement `onAuthenticate`, `onConnect`,
-   `onLoadDocument`, `onStoreDocument`.
+4. **Hocuspocus hooks**: `onAuthenticate`, `onConnect`, `onLoadDocument`,
+   `onStoreDocument`.
 5. **Yjs persistence layer**: load from `Page.yjsState`, append updates
    to `PageYjsUpdate`, compact to `Page.yjsState` periodically.
-6. **Save flow**: implement `onSaveRequest` custom message; integrate
-   with render pipeline (RFC-0002).
+6. **Save flow**: implement Hocuspocus custom "save" message handler
+   that invokes `Revision.prepareRevision` (RFC-0002 contract).
 7. **Contributors tracking**: in-memory awareness log per pageId,
-   persisted to `PageRevision.contributors` on save.
+   persisted to `Revision.contributors` on save.
 8. **20-user cap**: Redis counter, `onConnect` check.
 9. **External-edit reload flow**: `onLoadDocument` checks
    `yjsState === null` and signals connected clients to reload.
-10. **Editor (browser-side)**: CodeMirror 6 build with minimal
+10. **`pageEvent` emission**: ensure `update` / `delete` events fire
+    with `(pageData, user, bookmarkCount)` payload.
+11. **`presence.markEditing` call site**: invoke from `onConnect` /
+    `onDisconnect`. Receiver is a no-op stub until RFC-0005.
+12. **Editor (browser-side)**: CodeMirror 6 build with minimal
     extensions; integrate `y-codemirror.next`.
-11. **Awareness UI**: remote cursors with user-color labels;
+13. **Awareness UI**: remote cursors with user-color labels;
     same-paragraph warning indicator.
-12. **Save button + revision UI**: surface the new schema in the
+14. **Save button + revision UI**: surface the new schema in the
     revision list view; show `contributors` honestly.
-13. **End-to-end test**: two-browser test of common scenarios
-    (simultaneous edits, disconnect/reconnect, save, force-reload).
-14. **Multi-server smoke test**: spin up two Hocuspocus instances
+15. **End-to-end test**: two-browser test of common scenarios
+    (simultaneous edits, disconnect/reconnect, save, force-reload,
+    renderer pipeline integration).
+16. **Multi-server smoke test**: spin up two Hocuspocus instances
     against the same Redis + Mongo, verify cross-instance sync.
-15. **Documentation**: operator deployment guide (Hocuspocus process,
+17. **Documentation**: operator deployment guide (Hocuspocus process,
     Redis config); user guide for save/revision semantics.
 
-Steps 1–9 are server-side and can be done in parallel with 10–12
-(client-side). Step 13 is the integration gate before release.
+Steps 1–11 are server-side and can be done in parallel with 12–14
+(client-side). Step 15 is the integration gate before release.
