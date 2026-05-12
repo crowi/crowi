@@ -1,0 +1,221 @@
+import mongoose from 'mongoose';
+import faker from 'faker';
+import type { NotifierDriver, NotificationPayload } from '@crowi/plugin-api';
+import { crowi, Fixture } from 'src/test/setup';
+import { dispatchMentions } from './mention-dispatch';
+
+/**
+ * RFC-0002 Phase 8 mention-dispatch unit tests.
+ *
+ * Exercises the dispatcher's diff / self-skip / inactive-skip /
+ * unknown-username-skip branches and verifies that the produced
+ * notification is forwarded to registered notifier drivers.
+ *
+ * We call `dispatchMentions` directly rather than going through the
+ * EventEmitter — the event wiring is a one-liner whose only job is to
+ * route `(savedPage, user)` to this function, so testing the function
+ * gives us full branch coverage without async event-loop coordination.
+ */
+describe('events/mention-dispatch (RFC-0002 Phase 8)', () => {
+  const ObjectId = mongoose.Types.ObjectId;
+
+  let Page: ReturnType<typeof crowi.model>;
+  let User: ReturnType<typeof crowi.model>;
+  let Revision: ReturnType<typeof crowi.model>;
+  let Notification: ReturnType<typeof crowi.model>;
+  let Activity: ReturnType<typeof crowi.model>;
+
+  beforeAll(() => {
+    Page = crowi.model('Page');
+    User = crowi.model('User');
+    Revision = crowi.model('Revision');
+    Notification = crowi.model('Notification');
+    Activity = crowi.model('Activity');
+  });
+
+  beforeEach(async () => {
+    await Promise.all([Page, User, Revision, Notification, Activity].map((m) => m.deleteMany({})));
+  });
+
+  // Build a Page + latest Revision pair with the given mention usernames.
+  // Optionally seeds a prior revision with `previousMentions` so the diff
+  // path can be exercised.
+  async function seedPage(args: {
+    authorId: mongoose.Types.ObjectId;
+    path?: string;
+    mentions: string[];
+    previousMentions?: string[];
+  }): Promise<{ page: any; revisionId: mongoose.Types.ObjectId }> {
+    const path = args.path ?? `/${faker.lorem.word()}-${Date.now()}`;
+    const [page] = await Fixture.generate('Page', [{ _id: new ObjectId(), path, grant: 1 /* PUBLIC */, creator: args.authorId }]);
+    if (args.previousMentions) {
+      await Fixture.generate('Revision', [
+        {
+          _id: new ObjectId(),
+          path,
+          body: ' ',
+          author: args.authorId,
+          createdAt: new Date(Date.now() - 60_000),
+          meta: { mentions: args.previousMentions.map((u) => ({ username: u })) },
+        },
+      ]);
+    }
+    const [latest] = await Fixture.generate('Revision', [
+      {
+        _id: new ObjectId(),
+        path,
+        body: ' ',
+        author: args.authorId,
+        createdAt: new Date(),
+        meta: { mentions: args.mentions.map((u) => ({ username: u })) },
+      },
+    ]);
+    page.revision = latest._id;
+    await page.save();
+    return { page, revisionId: latest._id };
+  }
+
+  it('creates a Notification for each new mentioned user (active, not self)', async () => {
+    const authorId = new ObjectId();
+    const aliceId = new ObjectId();
+    const bobId = new ObjectId();
+    await Fixture.generate('User', [
+      { _id: authorId, username: 'author', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+      { _id: aliceId, username: 'alice', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+      { _id: bobId, username: 'bob', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+    ]);
+
+    const { page } = await seedPage({ authorId, mentions: ['alice', 'bob'] });
+
+    await dispatchMentions(crowi, page, { _id: authorId });
+
+    const aliceNotif = await Notification.find({ user: aliceId, action: 'MENTION' });
+    const bobNotif = await Notification.find({ user: bobId, action: 'MENTION' });
+    expect(aliceNotif).toHaveLength(1);
+    expect(bobNotif).toHaveLength(1);
+    expect(String(aliceNotif[0].target)).toBe(String(page._id));
+  });
+
+  it('only notifies usernames added in the latest revision (diff against previous)', async () => {
+    const authorId = new ObjectId();
+    const aliceId = new ObjectId();
+    const carolId = new ObjectId();
+    await Fixture.generate('User', [
+      { _id: authorId, username: 'author', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+      { _id: aliceId, username: 'alice', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+      { _id: carolId, username: 'carol', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+    ]);
+
+    // Previous revision already mentioned alice; current mentions alice + carol.
+    // Only carol should be notified (alice was already noticed before).
+    const { page } = await seedPage({
+      authorId,
+      mentions: ['alice', 'carol'],
+      previousMentions: ['alice'],
+    });
+
+    await dispatchMentions(crowi, page, { _id: authorId });
+
+    const aliceNotif = await Notification.find({ user: aliceId, action: 'MENTION' });
+    const carolNotif = await Notification.find({ user: carolId, action: 'MENTION' });
+    expect(aliceNotif).toHaveLength(0);
+    expect(carolNotif).toHaveLength(1);
+  });
+
+  it('skips self-mention (author === mentioned user)', async () => {
+    const authorId = new ObjectId();
+    await Fixture.generate('User', [{ _id: authorId, username: 'selfie', email: faker.internet.email(), status: User.STATUS_ACTIVE }]);
+
+    const { page } = await seedPage({ authorId, mentions: ['selfie'] });
+    await dispatchMentions(crowi, page, { _id: authorId });
+
+    const notifs = await Notification.find({ user: authorId, action: 'MENTION' });
+    expect(notifs).toHaveLength(0);
+  });
+
+  it('skips inactive (suspended) users + emits debug log only', async () => {
+    const authorId = new ObjectId();
+    const suspendedId = new ObjectId();
+    await Fixture.generate('User', [
+      { _id: authorId, username: 'author', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+      { _id: suspendedId, username: 'gone', email: faker.internet.email(), status: User.STATUS_SUSPENDED },
+    ]);
+
+    const { page } = await seedPage({ authorId, mentions: ['gone'] });
+    await dispatchMentions(crowi, page, { _id: authorId });
+
+    const notifs = await Notification.find({ user: suspendedId });
+    expect(notifs).toHaveLength(0);
+  });
+
+  it('skips unknown usernames and logs a warning (silent drop)', async () => {
+    const authorId = new ObjectId();
+    await Fixture.generate('User', [{ _id: authorId, username: 'author', email: faker.internet.email(), status: User.STATUS_ACTIVE }]);
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { page } = await seedPage({ authorId, mentions: ['nobody'] });
+      await dispatchMentions(crowi, page, { _id: authorId });
+
+      const notifs = await Notification.find({ action: 'MENTION' });
+      expect(notifs).toHaveLength(0);
+      const warnedAboutNobody = warnSpy.mock.calls.some((call) => String(call[0]).includes("'@nobody'"));
+      expect(warnedAboutNobody).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('forwards the upserted notification to every active notifier plugin (fire-and-forget)', async () => {
+    const authorId = new ObjectId();
+    const aliceId = new ObjectId();
+    await Fixture.generate('User', [
+      { _id: authorId, username: 'author', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+      { _id: aliceId, username: 'alice', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+    ]);
+
+    const sent: NotificationPayload[] = [];
+    const fixtureDriver: NotifierDriver = {
+      async send(p) {
+        sent.push(p);
+      },
+    };
+
+    // Patch the active.notifiers list directly. We don't go through
+    // PluginManager.activate here because that would require a fully-
+    // loaded plugin package; the registry shape is the only contract
+    // upsertByActivity depends on.
+    const original = crowi.pluginRegistries;
+    const patched = {
+      ...(original ?? ({} as never)),
+      active: {
+        ...(original?.active ?? {}),
+        notifiers: [fixtureDriver],
+      },
+    };
+    crowi.pluginRegistries = patched as never;
+
+    try {
+      const { page } = await seedPage({ authorId, mentions: ['alice'] });
+      await dispatchMentions(crowi, page, { _id: authorId });
+      // Forwarder is fire-and-forget — flush the microtask queue once.
+      await new Promise((r) => setImmediate(r));
+
+      expect(sent).toHaveLength(1);
+      expect(sent[0].event).toBe('notification:MENTION');
+      expect(sent[0].title).toContain('MENTION');
+    } finally {
+      crowi.pluginRegistries = original;
+    }
+  });
+
+  it('tolerates listener failures (fire-and-forget, save unaffected)', async () => {
+    const authorId = new ObjectId();
+    await Fixture.generate('User', [{ _id: authorId, username: 'author', email: faker.internet.email(), status: User.STATUS_ACTIVE }]);
+
+    // Page with revision pointer that doesn't exist → dispatchMentions returns early.
+    const [page] = await Fixture.generate('Page', [{ _id: new ObjectId(), path: '/missing-rev', grant: 1, creator: authorId, revision: new ObjectId() }]);
+
+    await expect(dispatchMentions(crowi, page, { _id: authorId })).resolves.toBeUndefined();
+  });
+});

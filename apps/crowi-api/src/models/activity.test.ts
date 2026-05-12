@@ -147,4 +147,48 @@ describe('Activity', function () {
       });
     });
   });
+
+  // RFC-0002 Phase 8: createByPageMention + MENTION skip-fan-out guard.
+  describe('.createByPageMention (RFC-0002 Phase 8)', () => {
+    const authorId = new ObjectId();
+    const mentionedId = new ObjectId();
+    const pageId = new ObjectId();
+
+    beforeEach(async () => {
+      await Activity.deleteMany({});
+    });
+
+    it('creates a MENTION activity for (page, mentionedUser, author)', async () => {
+      const activity = await Activity.createByPageMention({ _id: pageId }, { _id: mentionedId }, { _id: authorId });
+      expect(activity.action).toBe('MENTION');
+      expect(activity.targetModel).toBe('Page');
+      expect(String(activity.target)).toBe(String(pageId));
+      expect(String(activity.user)).toBe(String(authorId));
+    });
+
+    it('accepts MENTION via schema enum (i.e. ActivityDefine.getSupportActionNames includes MENTION)', async () => {
+      const activity = await Activity.createByParameters({
+        user: authorId,
+        target: pageId,
+        targetModel: 'Page',
+        action: 'MENTION',
+      });
+      expect(activity.action).toBe('MENTION');
+    });
+
+    it('post-save hook skips watchers fan-out for MENTION', async () => {
+      // If the post-save hook ran getNotificationTargetUsers + upsertByActivity
+      // for MENTION, Notification would have rows after we save. The hook is
+      // intentionally a no-op for MENTION (the dispatcher writes directly).
+      const Notification = crowi.model('Notification');
+      await Notification.deleteMany({});
+
+      await Activity.createByPageMention({ _id: pageId }, { _id: mentionedId }, { _id: authorId });
+      // Give the synchronous post-save microtask a chance to (not) run.
+      await new Promise((r) => setImmediate(r));
+
+      const created = await Notification.find({ action: 'MENTION' });
+      expect(created).toHaveLength(0);
+    });
+  });
 });
