@@ -1,14 +1,22 @@
 {
   "execMap": {
-    "ts": "ts-node --files -r tsconfig-paths/register"
+    "ts": "ts-node --files -r tsconfig-paths/register --project packages/api/tsconfig.json"
   },
   "watch": [
-    "src/",
-    "locales/",
-    "../plugin-api/dist/",
-    "../plugin-aws/dist/",
-    "../plugin-storage-local/dist/",
-    "../plugin-storage-aws-s3/dist/"
+    "crowi.config.json",
+    "packages/api/src/",
+    "packages/api/locales/",
+    "packages/api-contract/dist/",
+    "packages/plugin-api/dist/",
+    "packages/plugin-aws/dist/",
+    "packages/plugin-renderer-crowi-legacy/dist/",
+    "packages/plugin-renderer-emoji/dist/",
+    "packages/plugin-renderer-katex/dist/",
+    "packages/plugin-renderer-plantuml/dist/",
+    "packages/plugin-search-elasticsearch/dist/",
+    "packages/plugin-storage-local/dist/",
+    "packages/plugin-storage-aws-s3/dist/",
+    "packages/runner/dist/"
   ],
   "ignore": [
     "*.tsx",

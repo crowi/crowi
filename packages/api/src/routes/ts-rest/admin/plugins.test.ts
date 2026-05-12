@@ -117,7 +117,7 @@ describe('Routes /api/v2/admin/plugins (ts-rest) — Phase 4 cache clear endpoin
 
     it('clears only the named plugin entries when the plugin is loaded', async () => {
       // The dev runner loads `@crowi/plugin-storage-local` by default
-      // (see apps/crowi-dev-runner/crowi.config.json) — use it as the
+      // (see repo root crowi.config.json) — use it as the
       // existing-plugin probe.
       const loaded = crowi.pluginManager?.getLoadedPlugins() ?? [];
       const targetName = loaded[0]?.name;

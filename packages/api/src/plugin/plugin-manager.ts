@@ -1,11 +1,9 @@
-import { createRequire } from 'node:module';
-import path from 'node:path';
 import Debug from 'debug';
 import type { AuthDriver, CrowiPlugin, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
+import { type CrowiConfigFile, resolvePlugins } from '@crowi/runner';
 import type Crowi from 'src/crowi';
 import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
 import type { ConfigChangeSource } from 'src/service/config';
-import { type CrowiConfigFile, loadCrowiConfigFile, resolvePluginList } from './config-file';
 import { createPluginContext } from './plugin-context';
 import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
 import { makeRendererScope } from 'src/renderer';
@@ -84,16 +82,14 @@ export class PluginManager {
    * active drivers. Call once during `Crowi.init()`.
    */
   async bootstrap(projectDir: string = process.cwd()): Promise<PluginRegistries> {
-    // Resolve plugin npm names against the runner project's
-    // `node_modules/`. The runner declares plugins as deps, not
-    // @crowi/api — so a bare `import('@crowi/plugin-…')` from this
-    // file would search the wrong tree.
-    const projectRequire = createRequire(path.join(projectDir, 'package.json'));
-    const config = await loadCrowiConfigFile(projectDir);
+    // `@crowi/runner` reads `crowi.config.json` and resolves each
+    // plugin npm name (plus transitive `requires`) against the project
+    // dir's `node_modules/`. Topological ordering, activation, and
+    // registry wiring stay here in the manager — runner is a pure
+    // config/loader library with no Crowi-runtime coupling.
+    const { config, plugins } = await resolvePlugins(projectDir);
     debug('loaded crowi.config.json from %s: plugins=%o', projectDir, config.plugins);
 
-    const seedNames = resolvePluginList(config);
-    const plugins = await this.importWithTransitives(seedNames, projectRequire);
     const ordered = topoSortPlugins(plugins);
     this.loadedPlugins = ordered;
 
@@ -260,49 +256,6 @@ export class PluginManager {
   }
 
   /**
-   * Import the given seed plugin names *and* recursively follow each
-   * loaded plugin's `requires` array, importing any transitive deps
-   * not already in the set. Lets the operator list only the leaf
-   * plugins they care about (`@crowi/plugin-storage-aws-s3`) and have
-   * base plugins (`@crowi/plugin-aws`) auto-loaded via npm transitive
-   * resolution.
-   */
-  private async importWithTransitives(seedNames: string[], projectRequire: NodeRequire): Promise<CrowiPlugin[]> {
-    const loaded = new Map<string, CrowiPlugin>();
-    const queue = [...seedNames];
-
-    while (queue.length > 0) {
-      const name = queue.shift() as string;
-      if (loaded.has(name)) continue;
-      const plugin = await this.importOne(name, projectRequire);
-      loaded.set(name, plugin);
-      for (const dep of plugin.requires ?? []) {
-        if (!loaded.has(dep)) queue.push(dep);
-      }
-    }
-
-    return Array.from(loaded.values());
-  }
-
-  private async importOne(name: string, projectRequire: NodeRequire): Promise<CrowiPlugin> {
-    let mod: { default?: unknown };
-    try {
-      const resolved = projectRequire.resolve(name);
-      mod = (await import(resolved)) as { default?: unknown };
-    } catch (err) {
-      throw new Error(`Failed to import plugin '${name}': ${(err as Error).message}`);
-    }
-    const candidate = mod.default;
-    if (!isCrowiPlugin(candidate)) {
-      throw new Error(`Plugin '${name}' default export does not satisfy CrowiPlugin (missing name / version / register* hooks).`);
-    }
-    if (candidate.name !== name) {
-      throw new Error(`Plugin '${name}' declares its own name as '${candidate.name}'. They must match.`);
-    }
-    return candidate;
-  }
-
-  /**
    * Deactivate a loaded plugin. Phase 4 only touches the render
    * cache: every cached entry contributed by the named plugin is
    * removed (`invalidatePlugin(name)`). Phase 5+ will broaden this
@@ -397,9 +350,3 @@ export class PluginManager {
     return null;
   }
 }
-
-const isCrowiPlugin = (value: unknown): value is CrowiPlugin => {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return typeof v.name === 'string' && typeof v.version === 'string';
-};
