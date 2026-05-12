@@ -20,19 +20,11 @@ security settings landed). See `TODO.md` for the up-to-date phase status.
 ```
 crowi/
 ├── apps/
-│   ├── crowi-dev-runner/           # ★ Local launcher: mirrors a `crowi-admin init` runner repo
-│   │   ├── package.json            # deps: @crowi/api + @crowi/plugin-* (decides which plugins are available)
-│   │   ├── crowi.config.json       # which plugins to load + active driver names
-│   │   ├── .env / .env.sample      # runtime env (CWD-resolved)
-│   │   └── nodemon.json            # watches @crowi/api src + plugin dists, runs ../../packages/api/src/app.ts
-│   └── crowi-web/                  # Next.js 16 frontend (port 3301)
-│       └── src/
-│           ├── app/
-│           │   ├── (public)/       # Login / register / installer
-│           │   ├── (auth)/         # Logged-in pages (page-view, edit, trash, user, ...)
-│           │   └── (admin)/        # Admin dashboard + sections (admin-only via layout)
-│           ├── components/         # Page, page-view, page-list, admin, ui (shadcn)
-│           └── lib/                # React Query hooks, api-client, auth context
+│   └── crowi-dev-runner/           # ★ Local launcher: mirrors a `crowi-admin init` runner repo
+│       ├── package.json            # deps: @crowi/api + @crowi/plugin-* (decides which plugins are available)
+│       ├── crowi.config.json       # which plugins to load + active driver names
+│       ├── .env / .env.sample      # runtime env (CWD-resolved)
+│       └── nodemon.json            # watches @crowi/api src + plugin dists, runs ../../packages/api/src/app.ts
 └── packages/
     ├── api/                        # Express + ts-rest API library (port 3300 in dev)
     │   ├── src/
@@ -58,7 +50,15 @@ crowi/
     ├── plugin-api/                 # @crowi/plugin-api — plugin SDK (CrowiPlugin / registries / context)
     ├── plugin-aws/                 # @crowi/plugin-aws — shared AWS credentials base plugin
     ├── plugin-storage-local/       # @crowi/plugin-storage-local — default-on local FS storage driver
-    └── plugin-storage-aws-s3/      # @crowi/plugin-storage-aws-s3 — S3 storage driver
+    ├── plugin-storage-aws-s3/      # @crowi/plugin-storage-aws-s3 — S3 storage driver
+    └── web/                        # Next.js 16 frontend (port 3301)
+        └── src/
+            ├── app/
+            │   ├── (public)/       # Login / register / installer
+            │   ├── (auth)/         # Logged-in pages (page-view, edit, trash, user, ...)
+            │   └── (admin)/        # Admin dashboard + sections (admin-only via layout)
+            ├── components/         # Page, page-view, page-list, admin, ui (shadcn)
+            └── lib/                # React Query hooks, api-client, auth context
 ```
 
 The api package is plugin-agnostic at runtime — `PluginManager` resolves
@@ -140,7 +140,7 @@ manual-only when bypassing hooks.
   - Page (with grant), Revision, User, Comment, Bookmark, Like (on Page), Watcher, Notification, Activity, Config, Backlink, Share, Attachment.
 - **Sensitive Config encryption**: `packages/api/src/util/crypto.ts` provides AES-256-GCM `encrypt` / `decrypt` / `isEncrypted`. Sensitive keys (OAuth secrets, AWS keys, SMTP password, Slack token) are listed in `models/config-sensitive.ts` and auto-encrypted by `Config.updateByParams` / decrypted by `Config.loadAllConfig` when `CROWI_ENCRYPTION_KEY` is set. Legacy plaintext rows pass through; admin can re-encrypt them via `/admin/crypto/reencrypt`.
 
-### Web frontend (`apps/crowi-web`)
+### Web frontend (`packages/web`)
 - **Routing**: App Router (`src/app/...`) with three Route Groups:
   - `(public)/`: login / register / installer
   - `(auth)/`: gated by `useAuth` redirect; mounts shared header (NotificationBell + admin shortcut + user dropdown)
@@ -259,4 +259,4 @@ User-invocable skills (see `.claude/skills/`):
 ```
 
 Avatars use `--crowi-primary` as background with white text for the initials
-fallback (see `apps/crowi-web/src/components/user-avatar.tsx`).
+fallback (see `packages/web/src/components/user-avatar.tsx`).

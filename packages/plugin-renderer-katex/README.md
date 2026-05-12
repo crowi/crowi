@@ -29,7 +29,7 @@ generated HTML.
 
 KaTeX's HTML output references `class="katex"` rules that ship in
 `katex/dist/katex.min.css`. The web side imports the CSS at the top
-of `apps/crowi-web/src/app/globals.css`:
+of `packages/web/src/app/globals.css`:
 
 ```css
 @import 'katex/dist/katex.min.css';

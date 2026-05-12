@@ -18,24 +18,23 @@ Crowi の旧 Express + Swig + jQuery を、新 ts-rest API + Next.js に段階�
 
 ```
 crowi/
-├── apps/
-│   ├── crowi-api/              # Express + ts-rest, port 3000
-│   │   ├── src/
-│   │   │   ├── controllers/    # 旧実装(Swig render)
-│   │   │   ├── routes/
-│   │   │   │   ├── api/        # 旧 /_api/* (HTTP RPC)
-│   │   │   │   ├── admin.ts    # 旧管理画面
-│   │   │   │   ├── login.ts    # 旧ログインフォーム
-│   │   │   │   ├── me.ts       # 旧マイページ
-│   │   │   │   └── ts-rest/    # ★ 新実装はここ
-│   │   │   ├── models/         # Mongoose
-│   │   │   └── middlewares/
-│   │   └── views/              # ★ 旧 Swig テンプレート(置き換え対象)
-│   └── crowi-web/              # Next.js 16, port 3301
-│       └── src/app/
-│           ├── (public)/       # ログイン前
-│           └── (auth)/         # ログイン後 (jwtAuth)
 └── packages/
+    ├── api/                    # Express + ts-rest, port 3000
+    │   ├── src/
+    │   │   ├── controllers/    # 旧実装(Swig render)
+    │   │   ├── routes/
+    │   │   │   ├── api/        # 旧 /_api/* (HTTP RPC)
+    │   │   │   ├── admin.ts    # 旧管理画面
+    │   │   │   ├── login.ts    # 旧ログインフォーム
+    │   │   │   ├── me.ts       # 旧マイページ
+    │   │   │   └── ts-rest/    # ★ 新実装はここ
+    │   │   ├── models/         # Mongoose
+    │   │   └── middlewares/
+    │   └── views/              # ★ 旧 Swig テンプレート(置き換え対象)
+    ├── web/                    # Next.js 16, port 3301
+    │   └── src/app/
+    │       ├── (public)/       # ログイン前
+    │       └── (auth)/         # ログイン後 (jwtAuth)
     └── api-contract/           # ts-rest + Zod 契約
         └── src/{contracts,schemas}/
 ```
@@ -84,7 +83,7 @@ createPage: async ({ body, req }) => {
 ```
 
 ```tsx
-// 新: apps/crowi-web/src/app/(auth)/[[...slug]]/page.tsx
+// 新: packages/web/src/app/(auth)/[[...slug]]/page.tsx
 'use client';
 const { data } = useQuery(['pages'], () => client.page.listPages());
 return data?.body.pages.map(p => <div key={p._id}>{p.path}</div>);

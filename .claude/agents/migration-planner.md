@@ -41,7 +41,7 @@ Crowi 2.0 移行プロジェクトの **プランナー**。
    - 契約: `packages/api-contract/src/contracts/{feature}.ts`
    - スキーマ: `packages/api-contract/src/schemas/{feature}.ts`
    - API: `packages/api/src/routes/ts-rest/{feature}.ts`
-   - UI: `apps/crowi-web/src/app/(auth or public)/...`
+   - UI: `packages/web/src/app/(auth or public)/...`
 
 4. **task ファイルの作成**
    `.migration-state/tasks/{id}.json` を書き、`context` セクションを完全に埋める。
@@ -69,7 +69,7 @@ packages/api/src/models/       # Mongoose
 
 # 新実装
 packages/api/src/routes/ts-rest/   # ts-rest 実装
-apps/crowi-web/src/app/              # Next.js App Router
+packages/web/src/app/              # Next.js App Router
 packages/api-contract/src/           # ts-rest 契約 + Zod スキーマ
 ```
 

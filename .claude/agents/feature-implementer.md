@@ -33,7 +33,7 @@ planner が用意した task ファイルを読んで、ts-rest API / Next.js UI
 3. context.reuseTargets を Read して再利用方針を確定
 4. 必要なら契約を追加・修正 (packages/api-contract/)
 5. API 実装 (packages/api/src/routes/ts-rest/)
-6. UI 実装 (apps/crowi-web/src/app/) ※ task の stack に応じて
+6. UI 実装 (packages/web/src/app/) ※ task の stack に応じて
 7. テスト追加 (jest + supertest + MongoDB Memory Server)
 8. 必須チェック (下記) を全部走らせる
 9. commitPlan の各エントリに `files: [...]` を埋める

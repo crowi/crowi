@@ -31,7 +31,7 @@ planner が用意した task ファイルを読んで、ts-rest API / Next.js UI
 3. context.contracts の状態を確認 (契約あり/なし、スタブのみ等)
 4. 必要なら契約を追加・修正 (packages/api-contract/)
 5. API 実装 (packages/api/src/routes/ts-rest/)
-6. UI 実装 (apps/crowi-web/src/app/) ※ task の scope に応じて
+6. UI 実装 (packages/web/src/app/) ※ task の scope に応じて
 7. テスト追加 (jest + supertest + MongoDB Memory Server)
 8. 必須チェック (下記) を全部走らせる
 9. status を REVIEW に更新、history に entry 追加

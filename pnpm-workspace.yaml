@@ -7,7 +7,7 @@ packages:
 # mongoose / express / @aws-sdk/* etc.) stay out of the catalog — they are
 # intentionally allowed to drift per package.
 #
-# Note: apps/crowi-web and apps/crowi-site keep `@types/node: ^20` locally
+# Note: packages/web and apps/crowi-site keep `@types/node: ^20` locally
 # (NOT catalog-ized) because Next.js Vercel runtime alignment with Node 22
 # typings has not been validated yet. They will be folded into the catalog
 # once verified.

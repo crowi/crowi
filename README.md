@@ -33,12 +33,12 @@ This repository is a Turborepo + pnpm workspace.
 ```
 crowi/
 ├── apps/
-│   ├── crowi-web/         # Next.js 16 frontend (port 3301)
 │   ├── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 3401)
 │   └── crowi-dev-runner/  # Local launcher; mirrors `crowi-admin init` runner repo
 └── packages/
     ├── api/                          # Express 4 + ts-rest 3 API library (port 3300)
     ├── api-contract/                  # Shared ts-rest contracts + Zod schemas
+    ├── web/                           # Next.js 16 frontend (port 3301)
     ├── plugin-api/                    # Plugin SDK (CrowiPlugin / registries / context)
     ├── plugin-aws/                    # Shared AWS credentials base plugin
     ├── plugin-storage-local/          # Default-on local FS storage driver

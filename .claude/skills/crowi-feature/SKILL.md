@@ -6,7 +6,7 @@ description: |
   キーワード: feature, 新機能, 開発, build, 設計, spec
 globs:
   - "packages/api/src/routes/ts-rest/**"
-  - "apps/crowi-web/src/app/**"
+  - "packages/web/src/app/**"
   - "packages/api-contract/src/**"
 ---
 
@@ -159,7 +159,7 @@ phase ごとに分けて書いてある場合、reviewer は **その phase の 
     "specPath": ".feature-state/specs/feature-attachment-thumbnail.md",
     "reuseTargets": [
       "packages/api/src/util/fileUploader.ts (driver 抽象を再利用)",
-      "apps/crowi-web/src/components/page-view/AttachmentList.tsx (一覧 UI に組み込み)"
+      "packages/web/src/components/page-view/AttachmentList.tsx (一覧 UI に組み込み)"
     ],
     "newFiles": [
       "packages/api/src/util/thumbnail.ts (sharp ラッパー)",
@@ -405,7 +405,7 @@ migration skill と同じパターン。
 - ts-rest ルートは `authenticatedRouter` 配下なら `jwtAuth` が自動適用、CSRF 不要
 - 新契約は `packages/api-contract/src/contracts/{feature}.ts` に追加、build 必須
   (`pnpm --filter @crowi/api-contract build`)
-- 新 UI は `apps/crowi-web/src/app/(auth or admin)/...` 配下、shadcn/ui + tanstack/react-query
+- 新 UI は `packages/web/src/app/(auth or admin)/...` 配下、shadcn/ui + tanstack/react-query
 
 ## Crowi テーマ
 

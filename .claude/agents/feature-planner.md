@@ -43,9 +43,9 @@ context 完備の task 定義を作成する。
      - `packages/api/src/util/` — admin-config / ts-rest-helpers / pageToResponse 等の helper
      - `packages/api/src/routes/ts-rest/` — 隣接ハンドラのパターン
    - **Web**:
-     - `apps/crowi-web/src/lib/` — useXxx hook (admin-settings-factory / unwrap-result 等)
-     - `apps/crowi-web/src/components/ui/` — shadcn primitive
-     - `apps/crowi-web/src/components/admin/` — secret-field / 共通フォーム
+     - `packages/web/src/lib/` — useXxx hook (admin-settings-factory / unwrap-result 等)
+     - `packages/web/src/components/ui/` — shadcn primitive
+     - `packages/web/src/components/admin/` — secret-field / 共通フォーム
    - **モデル**:
      - `packages/api/src/models/` — Mongoose schema 既存フィールド
 
@@ -53,8 +53,8 @@ context 完備の task 定義を作成する。
    - 契約: `packages/api-contract/src/contracts/{feature}.ts`
    - スキーマ: `packages/api-contract/src/schemas/{feature}.ts`
    - API: `packages/api/src/routes/ts-rest/{feature}.ts`
-   - UI: `apps/crowi-web/src/app/(auth or admin)/...`
-   - util: `packages/api/src/util/{name}.ts` または `apps/crowi-web/src/lib/{name}.ts`
+   - UI: `packages/web/src/app/(auth or admin)/...`
+   - util: `packages/api/src/util/{name}.ts` または `packages/web/src/lib/{name}.ts`
 
 4. **新規依存の妥当性判断**
    spec で言及があれば現行 `package.json` を確認し、bundle / セキュリティ観点で
@@ -84,13 +84,13 @@ context 完備の task 定義を作成する。
 packages/api/src/util/
 packages/api/src/routes/ts-rest/
 packages/api/src/models/
-apps/crowi-web/src/lib/
-apps/crowi-web/src/components/{ui,admin,page-view}/
+packages/web/src/lib/
+packages/web/src/components/{ui,admin,page-view}/
 packages/api-contract/src/{contracts,schemas}/
 
 # 新規実装の置き場所
 packages/api/src/routes/ts-rest/{feature}.ts
-apps/crowi-web/src/app/(auth|admin)/...
+packages/web/src/app/(auth|admin)/...
 packages/api-contract/src/contracts/{feature}.ts
 ```
 
@@ -110,7 +110,7 @@ packages/api-contract/src/contracts/{feature}.ts
     "specPath": ".feature-state/specs/{id}.md",
     "reuseTargets": [
       "packages/api/src/util/admin-config.ts (coerceBoolean / coerceString helper)",
-      "apps/crowi-web/src/lib/admin-settings-factory.ts (createAdminSettingsHooks)"
+      "packages/web/src/lib/admin-settings-factory.ts (createAdminSettingsHooks)"
     ],
     "newFiles": [
       "packages/api/src/routes/ts-rest/{feature}.ts",
