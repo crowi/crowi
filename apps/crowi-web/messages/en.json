@@ -40,6 +40,7 @@
   "notifications.unknown_user": "Someone",
   "notifications.action_comment": "commented on",
   "notifications.action_like": "liked",
+  "notifications.action_mention": "mentioned you in",
   "notifications.message_one_user": "{user} {action} \"{path}\"",
   "notifications.message_multi_users": "{user} and {others} others {action} \"{path}\"",
   "notifications.title": "Notifications",

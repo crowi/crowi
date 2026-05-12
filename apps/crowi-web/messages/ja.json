@@ -40,6 +40,7 @@
   "notifications.unknown_user": "誰か",
   "notifications.action_comment": "コメント",
   "notifications.action_like": "いいね",
+  "notifications.action_mention": "メンション",
   "notifications.message_one_user": "{user} さんが「{path}」に{action}しました",
   "notifications.message_multi_users": "{user} さん他 {others} 名が「{path}」に{action}しました",
   "notifications.title": "通知",
