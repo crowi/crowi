@@ -10,7 +10,7 @@ for shared region / access-key configuration.
 crowi-admin plugin add @crowi/plugin-storage-aws-s3
 ```
 
-(or, in dev: `pnpm --filter @crowi/dev-runner add @crowi/plugin-storage-aws-s3`)
+(or, in dev: `pnpm --filter @crowi/api add -D @crowi/plugin-storage-aws-s3`)
 
 The plugin auto-loads its dependency `@crowi/plugin-aws`. You don't need
 to add it explicitly.

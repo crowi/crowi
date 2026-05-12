@@ -39,8 +39,8 @@ brief PlantUML outage doesn't hammer the server.
 Bundled in the Crowi monorepo:
 
 ```bash
-# in your runner directory (the one with crowi.config.json)
-pnpm --filter @crowi/dev-runner add @crowi/plugin-renderer-plantuml
+# in the Crowi monorepo (dev path):
+pnpm --filter @crowi/api add -D @crowi/plugin-renderer-plantuml
 # or in a standalone runner:
 npm install @crowi/plugin-renderer-plantuml
 ```

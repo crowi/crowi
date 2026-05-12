@@ -37,7 +37,7 @@ the emoji's CLDR name rather than reading the raw codepoint.
 Bundled in the Crowi monorepo:
 
 ```bash
-pnpm --filter @crowi/dev-runner add @crowi/plugin-renderer-emoji
+pnpm --filter @crowi/api add -D @crowi/plugin-renderer-emoji
 # or in a standalone runner:
 npm install @crowi/plugin-renderer-emoji
 ```

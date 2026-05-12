@@ -20,11 +20,9 @@ security settings landed). See `TODO.md` for the up-to-date phase status.
 ```
 crowi/
 ├── apps/
-│   └── crowi-dev-runner/           # ★ Local launcher: mirrors a `crowi-admin init` runner repo
-│       ├── package.json            # deps: @crowi/api + @crowi/plugin-* (decides which plugins are available)
-│       ├── crowi.config.json       # which plugins to load + active driver names
-│       ├── .env / .env.sample      # runtime env (CWD-resolved)
-│       └── nodemon.json            # watches @crowi/api src + plugin dists, runs ../../packages/api/src/app.ts
+│   └── crowi-site/                 # crowi.wiki LP + docs (Next.js + Fumadocs, port 3401)
+├── crowi.config.json               # ★ Dev runner config: plugins + active driver names (read by @crowi/runner at boot)
+├── .env / .env.sample              # ★ Dev runtime env (loaded by packages/api/src/app.ts at CWD)
 └── packages/
     ├── api/                        # Express + ts-rest API library (port 3300 in dev)
     │   ├── src/
@@ -42,7 +40,7 @@ crowi/
     │   │   ├── plugin/             # PluginManager + registries + config-file loader
     │   │   ├── types/              # Express Request augmentation
     │   │   └── crowi/index.ts      # Crowi class (boot, setup, teardown)
-    │   └── .env.sample
+    │   └── (.env.sample is at the repo root, CWD-loaded)
     ├── api-contract/               # Shared ts-rest contracts + Zod schemas
     │   └── src/
     │       ├── contracts/          # ts-rest c.router definitions
@@ -51,6 +49,7 @@ crowi/
     ├── plugin-aws/                 # @crowi/plugin-aws — shared AWS credentials base plugin
     ├── plugin-storage-local/       # @crowi/plugin-storage-local — default-on local FS storage driver
     ├── plugin-storage-aws-s3/      # @crowi/plugin-storage-aws-s3 — S3 storage driver
+    ├── runner/                     # @crowi/runner — config loader + plugin resolver (used by @crowi/api boot)
     └── web/                        # Next.js 16 frontend (port 3301)
         └── src/
             ├── app/
@@ -61,11 +60,14 @@ crowi/
             └── lib/                # React Query hooks, api-client, auth context
 ```
 
-The api package is plugin-agnostic at runtime — `PluginManager` resolves
-plugin npm names against the runner project's `node_modules/` via
+The api package is plugin-agnostic at runtime — `@crowi/runner` (via
+`PluginManager.bootstrap()`) resolves plugin npm names against the
+runner project's `node_modules/` via
 `createRequire(<projectDir>/package.json)`. Operators add a plugin by
 declaring it in their runner's `package.json` deps and listing it in
-`crowi.config.json:plugins`; the api never needs to be rebuilt.
+`crowi.config.json:plugins`; the api never needs to be rebuilt. In
+the monorepo's dev path, `projectDir` defaults to the repo root and
+plugins resolve via pnpm's hoisted `node_modules/`.
 
 ## Tech Stack
 
@@ -85,13 +87,10 @@ pnpm install
 # Start dependency services (MongoDB / Redis / Elasticsearch / PlantUML)
 docker compose up -d
 
-# Run both apps with auto-reload (dev-runner-mediated api on :3300, web on :3301)
+# Run both apps with auto-reload (api on :3300, web on :3301)
 pnpm dev
 
-# Run only the API + plugins through the dev-runner (no Next.js)
-pnpm dev:runner
-
-# Run the API directly (no runner mediation; useful for api-only debug)
+# Run only the API + plugins (no Next.js)
 pnpm dev:api
 
 # Run only the Next.js frontend
@@ -157,7 +156,7 @@ manual-only when bypassing hooks.
 
 ## Key Environment Variables
 
-See `packages/api/.env.sample`. Required / commonly-set:
+See `.env.sample` at the repo root. Required / commonly-set:
 - `MONGO_URI` — MongoDB connection
 - `REDIS_URL` — session / socket.io adapter
 - `PASSWORD_SEED` — legacy password hashing seed (still used for fallback verification)

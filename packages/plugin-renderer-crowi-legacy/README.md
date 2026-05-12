@@ -19,8 +19,8 @@ runner project the same way they add any other plugin:
 ```bash
 # in your runner directory (the one with crowi.config.json)
 npm install @crowi/plugin-renderer-crowi-legacy
-# or, in dev:
-pnpm --filter @crowi/dev-runner add @crowi/plugin-renderer-crowi-legacy
+# or, in dev (Crowi monorepo):
+pnpm --filter @crowi/api add -D @crowi/plugin-renderer-crowi-legacy
 ```
 
 ## Configure
