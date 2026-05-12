@@ -90,12 +90,12 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@crowi/plugin-renderer-crowi-legacy": "workspace:^",
-    "@crowi/plugin-renderer-emoji": "workspace:^",
-    "@crowi/plugin-renderer-katex": "workspace:^",
-    "@crowi/plugin-renderer-plantuml": "workspace:^",
-    "@crowi/plugin-storage-aws-s3": "workspace:^",
-    "@crowi/plugin-storage-local": "workspace:^",
+    "@crowi/plugin-renderer-crowi-legacy": "workspace:*",
+    "@crowi/plugin-renderer-emoji": "workspace:*",
+    "@crowi/plugin-renderer-katex": "workspace:*",
+    "@crowi/plugin-renderer-plantuml": "workspace:*",
+    "@crowi/plugin-storage-aws-s3": "workspace:*",
+    "@crowi/plugin-storage-local": "workspace:*",
     "@types/bcryptjs": "^3.0.0",
     "@types/classnames": "^2.2.9",
     "@types/connect-flash": "^0.0.40",
