@@ -127,7 +127,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] 旧 Swig views の削除
 - [ ] `packages/api/src/util/apiResponse.ts` (legacy) の整理
 - [ ] テスト整備 (web 側のテスト基盤、API の coverage 強化)
-- [ ] エディタ強化 (Markdown プレビュー / リッチエディタ / 自動保存 / 画像アップロード)
+- [x] **エディタ基盤 (CodeMirror 化 + 2 column preview)** — `/_edit` の `<textarea>` を CodeMirror 6 生 `EditorView` ラッパに置き換え、2 column live preview (狭幅は Tabs 切替、両カラム mount-keep) を再導入。`MarkdownEditor` は controlled (`value` / `onChange` / `readonly` / `extraExtensions`) + `forwardRef` + `useImperativeHandle` で `insertAtCursor` / `focus` を公開。プレビューは新規 `POST /api/v2/pages/preview` を 250ms debounce で叩いて mdast を取得し、show page と共通の `renderMdastToReactNode` ヘルパで描画 (single source of truth)。layout は親 `(auth)/layout.tsx` の `max-w-4xl` を CSS escape (`mx-[calc(50%-50vw)] w-screen`) で打ち消す局所対処 — show 系を触らない。`extraExtensions` 口は RFC-0003 Phase 7 で `yCollab` を流し込むための土台。残り: 自動保存 / 画像 D&D upload (RFC-0004) / toolbar (RFC-0006) / slash commands (RFC-0007)
 
 ## Recently Completed (このセッション)
 
