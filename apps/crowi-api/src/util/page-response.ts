@@ -3,6 +3,7 @@ import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import { metadataToRevisionMeta, type RevisionMetaContent } from 'src/models/revision';
+import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId } from './ts-rest-helpers';
 
 /**
@@ -22,6 +23,8 @@ export interface PopulatedRevision {
   meta?: RevisionMetaContent;
   /** RFC-0002 Phase 3 — transformed mdast persisted verbatim. */
   renderedAst?: unknown;
+  /** RFC-0002 round 3.1 — semver of the pipeline that produced `renderedAst`. */
+  rendererVersion?: string;
 }
 
 /**
@@ -93,7 +96,7 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`
   // afterwards to fold in the on-the-fly fallback for legacy revisions.
   meta: resolveRevisionMeta(revision.meta, options.withMeta),
-  ...(options.withRenderedAst ? { renderedAst: revision.renderedAst } : {}),
+  ...(options.withRenderedAst ? { renderedAst: revision.renderedAst, rendererVersion: revision.rendererVersion } : {}),
 });
 
 export const resolveRevisionMeta = (stored: RevisionMetaContent | undefined, emit: boolean | undefined): RevisionMetaShape | undefined => {
@@ -137,6 +140,7 @@ export const computeRevisionRenderArtifactsAsync = async (
   storedMeta: RevisionMetaContent | undefined,
   storedAst: unknown,
   body: string,
+  storedRendererVersion?: string,
 ): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown }> => {
   const fromStored = storedMeta ? pickStoredMeta(storedMeta) : {};
   // Phase 2-written revisions persist all 4 meta fields (even empty
@@ -144,8 +148,16 @@ export const computeRevisionRenderArtifactsAsync = async (
   // is needed for meta.
   const metaIsComplete = fromStored.wikiLinks !== undefined && fromStored.mentions !== undefined && fromStored.codeBlockLanguages !== undefined;
   const astIsStored = storedAst !== undefined;
+  // RFC-0002 round 3.1: a stored `rendererVersion` that does NOT match
+  // the running pipeline marks the AST as stale. A missing
+  // `rendererVersion` (revisions saved before this field landed) is
+  // treated as "trust the stored AST" — re-rendering every pre-existing
+  // revision on every read would be unaffordable, and the user-facing
+  // workaround (re-save the page) is already documented. Once
+  // `renderer:rebuild` lands (RFC-0008), operators can backfill.
+  const astIsFresh = astIsStored && (storedRendererVersion === undefined || storedRendererVersion === RENDERER_PIPELINE_VERSION);
 
-  if (metaIsComplete && astIsStored) {
+  if (metaIsComplete && astIsFresh) {
     return {
       meta: Object.keys(fromStored).length > 0 ? fromStored : undefined,
       renderedAst: storedAst,
@@ -154,7 +166,7 @@ export const computeRevisionRenderArtifactsAsync = async (
   if (!body) {
     return {
       meta: metaIsComplete && Object.keys(fromStored).length > 0 ? fromStored : undefined,
-      renderedAst: astIsStored ? storedAst : undefined,
+      renderedAst: astIsFresh ? storedAst : undefined,
     };
   }
 
@@ -162,7 +174,7 @@ export const computeRevisionRenderArtifactsAsync = async (
   const mergedMeta: RevisionMetaShape = { ...pickStoredMeta(metadataToRevisionMeta(metadata)), ...fromStored };
   return {
     meta: Object.keys(mergedMeta).length > 0 ? mergedMeta : undefined,
-    renderedAst: astIsStored ? storedAst : renderedAst,
+    renderedAst: astIsFresh ? storedAst : renderedAst,
   };
 };
 

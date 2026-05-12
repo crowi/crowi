@@ -93,6 +93,11 @@ export const RevisionSchema = z.object({
   // (`getPage`) and single-revision detail (`getRevision`) emit it;
   // list endpoints skip it for payload weight.
   renderedAst: z.unknown().optional(),
+  // RFC-0002 round 3.1: semver of the renderer pipeline that produced
+  // `renderedAst`. The read path uses this to detect stale entries
+  // (rebuilt by `renderer:rebuild` once RFC-0008 lands). Absent on
+  // revisions saved before this field was introduced.
+  rendererVersion: z.string().optional(),
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 

@@ -1,6 +1,7 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import type { MentionResponse, RevisionMetaShape, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
+import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { PageDocument } from './page';
 // import Debug from 'debug'
 
@@ -31,6 +32,14 @@ export interface RevisionDocument extends Document {
    * the fly.
    */
   renderedAst?: unknown;
+  /**
+   * RFC-0002 round 3.1: semver of the renderer pipeline that produced
+   * `renderedAst`. Read path uses this to detect stale entries; until
+   * `renderer:rebuild` ships (deferred to RFC-0008), this is
+   * informational only and the parse-on-read fallback handles
+   * mismatches transparently.
+   */
+  rendererVersion?: string;
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
@@ -116,6 +125,14 @@ export default (crowi: Crowi) => {
       type: Schema.Types.Mixed,
       default: undefined,
     },
+    // RFC-0002 round 3.1: stamp the renderer pipeline version that
+    // produced the persisted `renderedAst`. Older revisions written
+    // before this field landed leave it `undefined`; the read path
+    // treats undefined as "definitely stale, fall back to parse-on-read".
+    rendererVersion: {
+      type: String,
+      default: undefined,
+    },
   });
 
   revisionSchema.statics.findLatestRevision = function (path, cb) {
@@ -180,6 +197,7 @@ export default (crowi: Crowi) => {
     const { metadata, renderedAst } = await crowi.getRenderer().runRender(body || '', { mode: 'save' });
     newRevision.meta = metadataToRevisionMeta(metadata);
     newRevision.renderedAst = renderedAst;
+    newRevision.rendererVersion = RENDERER_PIPELINE_VERSION;
 
     return newRevision;
   };

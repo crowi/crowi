@@ -118,7 +118,13 @@ export default (crowi: Crowi, _app: Express) => {
         // to avoid running parse+transform+shiki twice. Stored values
         // win on merge (anchor ids match page-content's stamper).
         if (pageResponse.revision && isPopulatedRevision(page.revision)) {
-          const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(crowi, page.revision.meta, page.revision.renderedAst, page.revision.body);
+          const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(
+            crowi,
+            page.revision.meta,
+            page.revision.renderedAst,
+            page.revision.body,
+            page.revision.rendererVersion,
+          );
           pageResponse.revision.meta = meta;
           pageResponse.revision.renderedAst = renderedAst;
         }
