@@ -124,6 +124,7 @@ export default (crowi: Crowi, _app: Express) => {
             page.revision.renderedAst,
             page.revision.body,
             page.revision.rendererVersion,
+            page._id?.toString(),
           );
           pageResponse.revision.meta = meta;
           pageResponse.revision.renderedAst = renderedAst;

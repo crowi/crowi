@@ -164,7 +164,14 @@ export default (crowi: Crowi, _app: Express) => {
         // produces both meta + renderedAst, so use the combined helper
         // to avoid running parse+transform+shiki twice.
         const obj = revision.toObject() as { meta?: RevisionMetaContent; renderedAst?: unknown; rendererVersion?: string };
-        const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(crowi, obj.meta, obj.renderedAst, revision.body, obj.rendererVersion);
+        const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(
+          crowi,
+          obj.meta,
+          obj.renderedAst,
+          revision.body,
+          obj.rendererVersion,
+          page._id?.toString(),
+        );
         response.meta = meta;
         response.renderedAst = renderedAst;
         return {

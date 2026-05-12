@@ -194,7 +194,17 @@ export default (crowi: Crowi) => {
     // RFC-0002 Phase 3. Older revisions written under Phase 1/2 lack
     // `renderedAst` and fall through to the on-the-fly fallback path
     // in `computeRevisionRenderedAstAsync`.
-    const { metadata, renderedAst } = await crowi.getRenderer().runRender(body || '', { mode: 'save' });
+    //
+    // `pageId` is required for the Phase 4+ plugin-dispatch transforms
+    // (embed-tag / url-inline-expand / code-block) to fire — without
+    // it, `runPipeline` skips dispatch and `code` nodes for
+    // PlantUML / Mermaid / etc. survive as plain code blocks. The
+    // mongoose `_id` is populated on document construction, so even on
+    // first-save (page not yet persisted) this is a real id.
+    const { metadata, renderedAst } = await crowi.getRenderer().runRender(body || '', {
+      mode: 'save',
+      pageId: pageData._id?.toString(),
+    });
     newRevision.meta = metadataToRevisionMeta(metadata);
     newRevision.renderedAst = renderedAst;
     newRevision.rendererVersion = RENDERER_PIPELINE_VERSION;

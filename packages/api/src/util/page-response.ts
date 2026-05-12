@@ -141,6 +141,7 @@ export const computeRevisionRenderArtifactsAsync = async (
   storedAst: unknown,
   body: string,
   storedRendererVersion?: string,
+  pageId?: string,
 ): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown }> => {
   const fromStored = storedMeta ? pickStoredMeta(storedMeta) : {};
   // Phase 2-written revisions persist all 4 meta fields (even empty
@@ -170,7 +171,13 @@ export const computeRevisionRenderArtifactsAsync = async (
     };
   }
 
-  const { metadata, renderedAst } = await crowi.getRenderer().runRender(body, { mode: 'read' });
+  // `pageId` threads through so the Phase 4+ plugin-dispatch transforms
+  // (embed-tag / url-inline-expand / code-block) can fire on the
+  // fallback path the same way they do at save time. Callers that
+  // genuinely don't know the page (unit tests, orphan revision bodies)
+  // can omit it — dispatch then degrades to no-op and the `code` /
+  // `@[tag](url)` nodes survive as plain text.
+  const { metadata, renderedAst } = await crowi.getRenderer().runRender(body, { mode: 'read', pageId });
   const mergedMeta: RevisionMetaShape = { ...pickStoredMeta(metadataToRevisionMeta(metadata)), ...fromStored };
   return {
     meta: Object.keys(mergedMeta).length > 0 ? mergedMeta : undefined,
