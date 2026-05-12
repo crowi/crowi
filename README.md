@@ -1,118 +1,154 @@
-<div align=center>
+<div align="center">
   <img src="https://raw.githubusercontent.com/crowi/crowi/master/public/logo/800x200.png" width="500" alt="Crowi">
 </div>
 
-<h1 align=center>Crowi</h1>
-<p align=center>Empower the team with sharing your knowledge.</p>
+<h1 align="center">Crowi</h1>
+<p align="center"><strong>The Markdown Wiki — empower the team with sharing your knowledge.</strong></p>
 
-<div align=center>
-  <p align=center>
+<div align="center">
+  <p align="center">
     <img src="https://github.com/crowi/crowi/actions/workflows/ci.yml/badge.svg" alt="GitHub Actions CI">
   </p>
 </div>
 
 > [!CAUTION]
-> **Crowi v2 is currently under active development.**
+> **Crowi v2 — codename *Reignite* — is under active development.**
 >
-> - There is no stable release available at this time
-> - Crowi v1.x is deprecated and no longer maintained
-> - Do not use this repository in production until v2 is officially released
+> - No stable v2 release yet. Do not run this branch in production.
+> - Crowi v1.x is deprecated and unmaintained.
+> - Track progress in [`TODO.md`](./TODO.md) and the [v2 announcement on Zenn](https://zenn.dev/sotarok/articles/34795a35a4ef74).
 
-Crowi is a **Markdown Wiki** like:
+## What is Crowi
 
-* Easy to edit and share,
-* Markdown supported,
-* Useful timeline list view,
-* Fast.
+Crowi is a **Markdown Wiki** for team knowledge sharing. URL paths *are* the
+page hierarchy, so `/team/handbook/onboarding` reads exactly the way it's
+written. v2 ("Reignite") rebuilds the frontend from Express + Swig + jQuery
+to **Next.js 16 (App Router) + React 19 + ts-rest 3**, while keeping v1's
+MongoDB data shape intact — your existing wiki migrates over.
 
+## Monorepo layout
 
-Install
----------
-
-Install dependencies and build CSS and JavaScript:
-
-    $ pnpm install
-
-More info is [here](https://github.com/crowi/crowi/wiki/Install-and-Configuration).
-
-Dependencies
--------------
-
-* Node.js 22.x
-* MongoDB 4.2.x
-* Elasticsearch 6.x.x or 7.x.x (optional) ([Doc is here](https://github.com/crowi/crowi/wiki/Configure-Search-Functions))
-* Redis (optional)
-* Amazon S3 (optional)
-* Google Project (optional)
-* Slack App (optional)
-
-
-Start Up on Local
--------------------
-
-Crowi is designed to be set up on Heroku or some PaaS, but you can also start up Crowi with ENV parameter on your local.
+This repository is a Turborepo + pnpm workspace.
 
 ```
-$ PASSWORD_SEED=somesecretstring MONGO_URI=mongodb://username:password@localhost/crowi node app.js
-```
-or please write `.env`.
-
-### Environment
-
-
-* `PORT`: Server port. default: `3000`.
-* `BASE_URL`: Server base URL (e.g. https://demo.crowi.wiki/). If this env is not set, it is detected by accessing URL.
-* `NODE_ENV`: `production` OR `development`.
-* `MONGO_URI`: URI to connect to MongoDB. This parameter is also by `MONGOHQ_URL` OR `MONGOLAB_URI`.
-* `REDIS_URL`: URI to connect to Redis (used for session store and socket.io). This parameter is also by `REDISTOGO_URL`.
-    * Use `rediss://` scheme if you want to TLS connection to Redis.
-    * `REDIS_REJECT_UNAUTHORIZED`: Set "0" if you want to skip the verification of certificate.
-* `ELASTICSEARCH_URI`: URI to connect to Elasticearch.
-* `PASSWORD_SEED`: A password seed used by password hash generator.
-* `SECRET_TOKEN`: A secret key for verifying the integrity of signed cookies.
-
-The storage backend is selected by the runner's `crowi.config.json`
-(`storage.driver: 'local' | 's3' | …`) plus the corresponding
-`@crowi/plugin-storage-*` package — there is no `FILE_UPLOAD` env
-anymore.
-
-Optional:
-
-* `MATHJAX`: If set `1`, enable MathJax feature.
-* `PLANTUML_URI`: If set the url of PlantUML server, then enable PlantUML feature. e.g. `http://localhost:18080`.
-* `ENABLE_DNSCACHE`: If set `true`, Use internal DNS cache for crowi in Linux VMs. (See also: [#407](https://github.com/crowi/crowi/pull/407))
-
-see: [.env.sample](./.env.sample)
-
-For develop
--------------
-
-We can use docker-compose for develop without complicated settings.
-
-```
-$ docker-compose -f docker-compose.development.yml up
+crowi/
+├── apps/
+│   ├── crowi-api/         # Express 4 + ts-rest 3 API library (port 3300)
+│   ├── crowi-web/         # Next.js 16 frontend (port 3301)
+│   ├── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 3401)
+│   └── crowi-dev-runner/  # Local launcher; mirrors `crowi-admin init` runner repo
+└── packages/
+    ├── api-contract/                  # Shared ts-rest contracts + Zod schemas
+    ├── plugin-api/                    # Plugin SDK (CrowiPlugin / registries / context)
+    ├── plugin-aws/                    # Shared AWS credentials base plugin
+    ├── plugin-storage-local/          # Default-on local FS storage driver
+    ├── plugin-storage-aws-s3/         # S3 storage driver
+    ├── plugin-search-elasticsearch/   # Elasticsearch search driver
+    ├── plugin-renderer-emoji/         # `:emoji:` → 🎉 renderer
+    ├── plugin-renderer-katex/         # KaTeX math renderer
+    ├── plugin-renderer-plantuml/      # PlantUML diagram renderer
+    ├── plugin-renderer-crowi-legacy/  # v1-era wikilinks / strikethrough / etc.
+    └── admin-cli/                     # `crowi-admin` CLI (init / migrate / re-encrypt)
 ```
 
-- Express restarts when a file changed
-- Webpack compiled assets automatically
+The API package is plugin-agnostic at runtime — `PluginManager` resolves
+plugin npm names against the runner project's `node_modules/` via
+`createRequire(<projectDir>/package.json)`. Operators add a plugin by
+declaring it in their runner's `package.json` deps and listing it in
+`crowi.config.json:plugins`; the api never needs to be rebuilt.
 
-### Troubleshooting
+## Tech stack
 
-Please try the following commands.
+- **API**: Express 4 + ts-rest 3 + Mongoose + JWT auth (`jwtAuth` middleware)
+- **Web**: Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS v4 + shadcn/ui + @tanstack/react-query
+- **Site**: Next.js 16 (static export) + Fumadocs UI + i18n (ja / en)
+- **Shared**: TypeScript 5.x strict, pnpm workspaces, Turborepo
+- **Lint / Format**: Biome (format) + ESLint (lint), lefthook hooks
+- **Tests**: Jest + supertest + mongodb-memory-server (API)
 
+## Requirements
+
+- Node.js 22.x
+- pnpm 8.x or later
+- MongoDB
+- Redis
+- Elasticsearch (optional, plugin-driven)
+- Docker / Docker Compose (for local infrastructure)
+
+## Local development
+
+```bash
+# 1. Install dependencies
+pnpm install
+
+# 2. Start dependency services (MongoDB / Redis / Elasticsearch / PlantUML)
+docker compose up -d
+
+# 3. Set up env file for the API
+cp apps/crowi-api/.env.sample apps/crowi-api/.env
+# Edit MONGO_URI / REDIS_URL / PASSWORD_SEED / CROWI_ENCRYPTION_KEY etc.
+
+# 4. Run everything (api on :3300, web on :3301, plugins compiled in watch mode)
+pnpm dev
 ```
-# Stop containers
-$ docker-compose -f docker-compose.development.yml stop
-# Remove containers
-$ docker-compose -f docker-compose.development.yml rm
-# Remove images
-$ docker-compose -f docker-compose.development.yml images -q | xargs docker rmi -f
-# Build images
-$ docker-compose -f docker-compose.development.yml build
+
+Other targeted scripts:
+
+```bash
+pnpm dev:api       # just the API (no Next.js)
+pnpm dev:runner    # API + plugins via the dev-runner only
+pnpm dev:web       # just the Next.js frontend
+pnpm dev:site      # crowi.wiki LP + docs (port 3401)
 ```
 
-License
----------
+## Environment variables
 
-* The MIT License (MIT)
-* See LICENSE file.
+`apps/crowi-api/.env.sample` lists the full set. Highlights:
+
+| Variable | Purpose |
+| --- | --- |
+| `MONGO_URI` | MongoDB connection string |
+| `REDIS_URL` | Sessions + socket.io adapter (use `rediss://` for TLS) |
+| `PASSWORD_SEED` | Legacy password hashing seed (still used for fallback verification) |
+| `CLIENT_URL` | CORS allowlist origin in production (defaults allow localhost in dev) |
+| `CROWI_ENCRYPTION_KEY` | Base64-encoded 32-byte AES-256 key for sensitive Config encryption. Generate via `openssl rand -base64 32` or `pnpm --filter @crowi/api crypto:gen-key`. Strongly recommended to set; missing key falls back to plaintext (legacy behaviour) with a startup warning. |
+| `ELASTICSEARCH_URI` | Optional search backend (paired with `@crowi/plugin-search-elasticsearch`) |
+| `PORT` | API server port (default `3300`) |
+| `NODE_ENV` | `production` or `development` |
+
+Storage backend selection is driven by the runner's `crowi.config.json`
+(`storage.driver: 'local' | 's3' | ...`) plus the corresponding
+`@crowi/plugin-storage-*` package — there is no `FILE_UPLOAD` env any
+more.
+
+## Tests / type-check / lint / build
+
+```bash
+pnpm test                                  # all apps
+pnpm --filter @crowi/api test              # api only
+pnpm type-check                            # api + web + site
+pnpm lint                                  # all apps; errors=0 required
+pnpm build                                 # all
+pnpm --filter @crowi/api-contract build    # required after editing contracts
+```
+
+Format runs automatically via lefthook on commit (Biome).
+Manual: `pnpm format` / `pnpm format:check`.
+
+## Plugins
+
+Plugins are regular npm packages declared in the runner project's
+dependencies and listed in `crowi.config.json:plugins`. The shipped
+first-party plugins live under `packages/plugin-*/`:
+
+- **Storage**: `plugin-storage-local` (default), `plugin-storage-aws-s3`
+- **Search**: `plugin-search-elasticsearch`
+- **Renderers**: `plugin-renderer-emoji`, `plugin-renderer-katex`, `plugin-renderer-plantuml`, `plugin-renderer-crowi-legacy`
+
+Write your own by depending on `@crowi/plugin-api`, exporting a default
+`CrowiPlugin`, and adding the package name to your runner's
+`crowi.config.json`.
+
+## License
+
+The MIT License (MIT). See [`LICENSE`](./LICENSE).

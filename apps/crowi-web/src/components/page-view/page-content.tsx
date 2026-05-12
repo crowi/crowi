@@ -161,10 +161,18 @@ const subscribeHash = (cb: () => void) => {
 const getHashSnapshot = () => (typeof window === 'undefined' ? '' : decodeURIComponent(window.location.hash.slice(1)));
 const getHashServerSnapshot = () => '';
 
+// Marks the subtree as being inside a fenced code block's <pre>. The
+// `code` override below reads this to decide between inline pill
+// styling and "let the surrounding <pre> handle the chrome" styling.
+// className alone can't distinguish the two because ``` blocks
+// without a language come through with `className === undefined`,
+// same as inline backtick code.
+const InsidePreContext = createContext(false);
+
 // Components map for hast-util-to-jsx-runtime. Keeps the same Tailwind
 // look as the Phase 1/2 ReactMarkdown setup — only the bridge layer
-// changed. Note `code` distinguishes inline (no `className`) from
-// fenced fallback (has `className="language-x"`); shiki-highlighted
+// changed. Note `code` distinguishes inline from block via
+// `InsidePreContext` set by the `pre` override; shiki-highlighted
 // blocks come through as raw `<pre>` HTML and skip this map entirely.
 type ChildrenProps = { children?: React.ReactNode };
 
@@ -218,33 +226,48 @@ const components = {
       </a>
     );
   },
-  // Inline code: no `className` (markdown's `inlineCode` node turns
-  // into a `<code>` without language). Fenced code WITHOUT a known
-  // language reaches us with `className="language-x"`; shiki-highlighted
-  // fences arrive as raw HTML and never hit this component.
+  // Inline vs block code is decided by `InsidePreContext` set by the
+  // `pre` override below. className alone is unreliable: a ``` block
+  // without a language tag reaches us with `className === undefined`,
+  // same as inline backtick code, so a className-only check
+  // mis-classified those as inline and applied the pill chrome inside
+  // the <pre>. Shiki-highlighted fences arrive as raw HTML and never
+  // hit this component at all.
   code: ({ className, children, ...props }: { className?: string; children?: React.ReactNode }) => {
-    const isInline = !className;
-    if (isInline) {
-      // Background-less inline code: font + foreground color do the
-      // identifying work, no muted pill. The `before/after:content-none`
-      // strips the default `&grave;…&grave;` decorators some prose
-      // themes inject.
+    // The lowercase `code` is the components-map key handed to
+    // hast-util-to-jsx-runtime — it renders this as a React component,
+    // so `useContext` is a legitimate hook call here.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const isBlock = useContext(InsidePreContext);
+    if (isBlock) {
       return (
-        <code className="text-foreground font-mono text-[0.95em] before:content-none after:content-none" {...props}>
+        <code className={className} {...props}>
           {children}
         </code>
       );
     }
+    // Background-less inline code: font + foreground color do the
+    // identifying work, no muted pill. The `before/after:content-none`
+    // strips the default `&grave;…&grave;` decorators some prose
+    // themes inject.
     return (
-      <code className={className} {...props}>
+      <code className="text-foreground font-mono text-[0.95em] before:content-none after:content-none" {...props}>
         {children}
       </code>
     );
   },
   pre: ({ children, ...props }: ChildrenProps) => (
-    <pre className="bg-muted/60 border border-border/60 rounded-xl px-4 py-3 my-6 text-[0.875rem] leading-relaxed font-mono overflow-x-auto" {...props}>
-      {children}
-    </pre>
+    <InsidePreContext.Provider value={true}>
+      {/* `min-w-0` lets the parent flex/grid track shrink below the
+          <pre>'s natural width, otherwise long lines push the column
+          wider than the viewport instead of triggering `overflow-x-auto`. */}
+      <pre
+        className="bg-muted border border-border/60 rounded-xl px-4 py-3 my-6 text-[0.875rem] leading-relaxed font-mono overflow-x-auto max-w-full min-w-0"
+        {...props}
+      >
+        {children}
+      </pre>
+    </InsidePreContext.Provider>
   ),
   blockquote: ({ children, ...props }: ChildrenProps) => (
     <blockquote className="border-l-2 border-foreground/25 pl-4 my-6 text-foreground/75 [&>p]:my-2" {...props}>
@@ -427,7 +450,7 @@ export function PageContent({ page }: PageContentProps) {
 
   return (
     <TargetHashContext.Provider value={targetHashContextValue}>
-      <div className="crowi-prose">{renderedNode}</div>
+      <div className="crowi-prose min-w-0">{renderedNode}</div>
     </TargetHashContext.Provider>
   );
 }

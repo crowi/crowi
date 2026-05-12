@@ -1,0 +1,52 @@
+{
+  "tagline": "The Markdown Wiki",
+  "subtitle": "Empower the team with sharing your knowledge",
+  "hero": {
+    "badge": "Coming Soon",
+    "reigniteAlt": "Crowi Reignite",
+    "intro": "Crowi v2 is back in active development under the codename ",
+    "introHighlight": "Reignite",
+    "introTail": ".",
+    "ctaArticle": "Read the announcement",
+    "ctaGithub": "View on GitHub"
+  },
+  "about": {
+    "title": "About Crowi",
+    "description": "Crowi is an open-source Markdown-based wiki application. Originally released in 2014, it's built so teams can share what they know."
+  },
+  "reignite": {
+    "title": "What Reignite brings",
+    "items": [
+      {
+        "title": "Brand-new frontend",
+        "description": "Express + Swig + jQuery is out. Next.js (App Router) + React + Tailwind is in — built for the modern web."
+      },
+      {
+        "title": "API-first",
+        "description": "Server and view fully separated. A type-safe ts-rest contract makes Crowi programmable from anywhere."
+      },
+      {
+        "title": "Compatible with v1 data",
+        "description": "A clean migration path keeps everything your team has already written. No knowledge left behind."
+      },
+      {
+        "title": "Modern runtime",
+        "description": "Node.js 22.x, MongoDB, Redis, optional Elasticsearch — plus pluggable storage, search, and auth."
+      }
+    ]
+  },
+  "status": {
+    "title": "Where we are",
+    "description": "Active development on main. Core features (page CRUD / list / history / comments / notifications / bookmarks / likes / trash / backlinks / user pages) have all migrated to the new stack. Admin section and search are next.",
+    "ctaGithub": "Browse the code",
+    "ctaIssues": "Open issues"
+  },
+  "footer": {
+    "copyright": "Crowi is open source software released under the MIT License.",
+    "links": {
+      "github": "GitHub",
+      "issues": "Issues",
+      "article": "Announcement"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "tagline": "The Markdown Wiki",
+  "subtitle": "Empower the team with sharing your knowledge",
+  "hero": {
+    "badge": "Coming Soon",
+    "reigniteAlt": "Crowi Reignite",
+    "intro": "Crowi v2 開発再起動中。コードネーム ",
+    "introHighlight": "Reignite",
+    "introTail": "。",
+    "ctaArticle": "開発再起動の記事を読む",
+    "ctaGithub": "GitHub で見る"
+  },
+  "about": {
+    "title": "Crowi について",
+    "description": "Crowi は Markdown ベースのオープンソース Wiki アプリケーションです。チームのナレッジ共有のために 2014 年から開発されてきました。"
+  },
+  "reignite": {
+    "title": "Crowi Reignite で起こること",
+    "items": [
+      {
+        "title": "フロントエンド完全リニューアル",
+        "description": "Express + Swig + jQuery の旧構成から、Next.js (App Router) + React + Tailwind の現代スタックへ。"
+      },
+      {
+        "title": "API ファースト",
+        "description": "サーバとビューを分離し、ts-rest による型安全な API 契約を採用。プログラマブルに Crowi を扱えるようになります。"
+      },
+      {
+        "title": "既存データとの互換性",
+        "description": "v1 のデータをそのまま引き継げる移行パスを用意。これまで蓄積したナレッジは失われません。"
+      },
+      {
+        "title": "現代的な動作環境",
+        "description": "Node.js 22.x、MongoDB、Redis、Elasticsearch、プラグイン式のストレージ／検索／認証。"
+      }
+    ]
+  },
+  "status": {
+    "title": "現在の状況",
+    "description": "main ブランチで継続的に開発中です。コア機能 (ページ CRUD / 一覧 / 履歴 / コメント / 通知 / ブックマーク / お気に入り / ゴミ箱 / バックリンク / ユーザーページ) はすでに新スタックへ移行済み。管理画面と検索周りを進めています。",
+    "ctaGithub": "コードを見る",
+    "ctaIssues": "Issues を見る"
+  },
+  "footer": {
+    "copyright": "Crowi is open source software released under the MIT License.",
+    "links": {
+      "github": "GitHub",
+      "issues": "Issues",
+      "article": "開発再起動記事"
+    }
+  }
+}

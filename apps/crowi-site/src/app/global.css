@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/style.css';
+
+/*
+ * Crowi brand overrides on top of the default Fumadocs (neutral) theme.
+ * Source colors from apps/crowi-api/resource/css/_theme.scss:
+ * - Primary: #43676b (teal green)  → oklch(0.465 0.04 192)
+ * - Header:  #263a3c (dark teal)
+ *
+ * Fumadocs uses `--color-fd-*` tokens; we override the ones that
+ * touch brand identity and leave everything else (sidebar / muted
+ * / borders) on the neutral baseline.
+ */
+@theme {
+  --color-fd-primary: oklch(0.465 0.04 192);
+  --color-fd-primary-foreground: oklch(0.985 0 0);
+  --color-fd-ring: oklch(0.465 0.04 192);
+}
+
+@layer base {
+  body {
+    font-family: 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+  }
+}
