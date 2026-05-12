@@ -3,7 +3,7 @@ import { PageSchema, PagerSchema } from './page';
 import { UserPublicSchema } from './userPublic';
 
 // Notification status enum - matches Notification model constants
-// (apps/crowi-api/src/models/notification.ts)
+// (packages/api/src/models/notification.ts)
 export const NotificationStatusSchema = z.enum(['UNREAD', 'UNOPENED', 'OPENED']);
 export const NotificationStatusEnum = {
   UNREAD: 'UNREAD',

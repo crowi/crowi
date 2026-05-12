@@ -4,9 +4,9 @@ description: |
   Crowi 2.0 移行ワークフロー。Express/Swig から Next.js + ts-rest への移行時に自動適用。
   キーワード: migrate, 移行, Express, Swig, legacy, 旧実装
 globs:
-  - "apps/crowi-api/src/controllers/**"
-  - "apps/crowi-api/src/routes/**"
-  - "apps/crowi-api/views/**"
+  - "packages/api/src/controllers/**"
+  - "packages/api/src/routes/**"
+  - "packages/api/views/**"
 ---
 
 # Crowi 2.0 Migration Skill
@@ -18,29 +18,28 @@ Crowi の旧 Express + Swig + jQuery を、新 ts-rest API + Next.js に段階�
 
 ```
 crowi/
-├── apps/
-│   ├── crowi-api/              # Express + ts-rest, port 3000
-│   │   ├── src/
-│   │   │   ├── controllers/    # 旧実装(Swig render)
-│   │   │   ├── routes/
-│   │   │   │   ├── api/        # 旧 /_api/* (HTTP RPC)
-│   │   │   │   ├── admin.ts    # 旧管理画面
-│   │   │   │   ├── login.ts    # 旧ログインフォーム
-│   │   │   │   ├── me.ts       # 旧マイページ
-│   │   │   │   └── ts-rest/    # ★ 新実装はここ
-│   │   │   ├── models/         # Mongoose
-│   │   │   └── middlewares/
-│   │   └── views/              # ★ 旧 Swig テンプレート(置き換え対象)
-│   └── crowi-web/              # Next.js 16, port 3301
-│       └── src/app/
-│           ├── (public)/       # ログイン前
-│           └── (auth)/         # ログイン後 (jwtAuth)
 └── packages/
+    ├── api/                    # Express + ts-rest, port 3000
+    │   ├── src/
+    │   │   ├── controllers/    # 旧実装(Swig render)
+    │   │   ├── routes/
+    │   │   │   ├── api/        # 旧 /_api/* (HTTP RPC)
+    │   │   │   ├── admin.ts    # 旧管理画面
+    │   │   │   ├── login.ts    # 旧ログインフォーム
+    │   │   │   ├── me.ts       # 旧マイページ
+    │   │   │   └── ts-rest/    # ★ 新実装はここ
+    │   │   ├── models/         # Mongoose
+    │   │   └── middlewares/
+    │   └── views/              # ★ 旧 Swig テンプレート(置き換え対象)
+    ├── web/                    # Next.js 16, port 3301
+    │   └── src/app/
+    │       ├── (public)/       # ログイン前
+    │       └── (auth)/         # ログイン後 (jwtAuth)
     └── api-contract/           # ts-rest + Zod 契約
         └── src/{contracts,schemas}/
 ```
 
-旧実装と新実装は同じ apps/crowi-api リポジトリに同居している。lib/ ディレクトリは存在しない。
+旧実装と新実装は同じ packages/api リポジトリに同居している。lib/ ディレクトリは存在しない。
 
 ## 技術スタック
 
@@ -55,7 +54,7 @@ crowi/
 旧 `controllers/page.ts` の `actions.api.create` を例に:
 
 ```typescript
-// 旧: apps/crowi-api/src/routes/api/page.ts
+// 旧: packages/api/src/routes/api/page.ts
 router.post('/pages.create', AccessTokenParser, LoginRequired, csrf, Page.api.create);
 
 // 新: packages/api-contract/src/contracts/page.ts (既存に追加)
@@ -68,7 +67,7 @@ export const pageContract = c.router({
   },
 });
 
-// 新: apps/crowi-api/src/routes/ts-rest/page.ts
+// 新: packages/api/src/routes/ts-rest/page.ts
 createPage: async ({ body, req }) => {
   const user = req.user;
   const created = await Page.createPage(body.path, body.body, user, { grant: body.grant });
@@ -79,12 +78,12 @@ createPage: async ({ body, req }) => {
 ### 旧 Swig → Next.js
 
 ```html
-<!-- 旧: apps/crowi-api/views/page/list.html -->
+<!-- 旧: packages/api/views/page/list.html -->
 {% for page in pages %}<div>{{ page.path }}</div>{% endfor %}
 ```
 
 ```tsx
-// 新: apps/crowi-web/src/app/(auth)/[[...slug]]/page.tsx
+// 新: packages/web/src/app/(auth)/[[...slug]]/page.tsx
 'use client';
 const { data } = useQuery(['pages'], () => client.page.listPages());
 return data?.body.pages.map(p => <div key={p._id}>{p.path}</div>);
@@ -140,17 +139,17 @@ planner ──→ implementer ──→ simplify ──→ reviewer ─┬→ co
   "status": "PLANNED",
   "context": {
     "oldImpl": [
-      "apps/crowi-api/src/controllers/page.ts:554-583 (api.create)",
-      "apps/crowi-api/src/routes/api/page.ts:10"
+      "packages/api/src/controllers/page.ts:554-583 (api.create)",
+      "packages/api/src/routes/api/page.ts:10"
     ],
     "newImpl": [
-      "apps/crowi-api/src/routes/ts-rest/page.ts (createPage)"
+      "packages/api/src/routes/ts-rest/page.ts (createPage)"
     ],
     "contracts": [
       "packages/api-contract/src/contracts/page.ts (createPage)",
       "packages/api-contract/src/schemas/page.ts (CreatePageRequestSchema)"
     ],
-    "models": ["apps/crowi-api/src/models/page.ts"],
+    "models": ["packages/api/src/models/page.ts"],
     "relatedPRs": ["#894", "#896"],
     "architecturalNotes": "authenticatedRouter で jwtAuth 適用済み、CSRF 不要"
   },

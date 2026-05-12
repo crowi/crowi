@@ -13,11 +13,19 @@
       "require": "./dist/cli.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "prepublishOnly": "chmod +x dist/bin.js"
   },
   "dependencies": {
     "@crowi/api": "workspace:^",
@@ -25,11 +33,12 @@
     "dotenv": "^16.5.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.14",
-    "@types/node": "^22.10.2",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.3.4",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2"
+    "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "jest": "catalog:",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
   }
 }

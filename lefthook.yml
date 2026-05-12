@@ -7,6 +7,9 @@ pre-commit:
       glob: "*.{ts,tsx,js,jsx}"
       run: pnpm exec biome format --write {staged_files}
       stage_fixed: true
+    - name: workspace-protocol
+      glob: "**/package.json"
+      run: node scripts/check-workspace-protocol.mjs
 
 pre-push:
   jobs:

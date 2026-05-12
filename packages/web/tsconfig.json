@@ -1,0 +1,18 @@
+{
+  "extends": "@crowi/tsconfig/app-web.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@paraglide/*": ["./paraglide/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": ["node_modules"]
+}

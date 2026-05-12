@@ -5,7 +5,7 @@
 ## スタック
 
 - **Next.js 16** (App Router, static export)
-- **Tailwind CSS v4** + Crowi テーマ (`apps/crowi-web` と同じトークン)
+- **Tailwind CSS v4** + Crowi テーマ (`packages/web` と同じトークン)
 - **Fumadocs UI** (Docs 部分の TOC / sidebar / 検索)
 - **i18n**: `ja` (default) と `en`、`[lang]` セグメントベース
 

@@ -19,53 +19,30 @@ security settings landed). See `TODO.md` for the up-to-date phase status.
 
 ```
 crowi/
-├── apps/
-│   ├── crowi-api/                  # Express + ts-rest API library (port 3300 in dev)
-│   │   ├── src/
-│   │   │   ├── controllers/        # Legacy Swig-era handlers (still mounted; deprecated)
-│   │   │   ├── routes/
-│   │   │   │   ├── api/            # Legacy /_api/* endpoints
-│   │   │   │   ├── ts-rest/        # ★ New ts-rest handlers (mounted at /api/v2)
-│   │   │   │   ├── login.ts        # Legacy auth form routes
-│   │   │   │   └── admin.ts        # Legacy admin GET routes
-│   │   │   ├── models/             # Mongoose schemas
-│   │   │   ├── middlewares/        # jwtAuth / jwtAdminRequired / loginRequired / etc.
-│   │   │   ├── service/            # Business logic (search, notifications, config)
-│   │   │   ├── events/             # pageEvent / notificationEvent listeners
-│   │   │   ├── util/               # crypto, jwt, ts-rest helpers, link detector
-│   │   │   ├── plugin/             # PluginManager + registries + config-file loader
-│   │   │   ├── types/              # Express Request augmentation
-│   │   │   └── crowi/index.ts      # Crowi class (boot, setup, teardown)
-│   │   └── .env.sample
-│   ├── crowi-dev-runner/           # ★ Local launcher: mirrors a `crowi-admin init` runner repo
-│   │   ├── package.json            # deps: @crowi/api + @crowi/plugin-* (decides which plugins are available)
-│   │   ├── crowi.config.json       # which plugins to load + active driver names
-│   │   ├── .env / .env.sample      # runtime env (CWD-resolved)
-│   │   └── nodemon.json            # watches @crowi/api src + plugin dists, runs ../crowi-api/src/app.ts
-│   └── crowi-web/                  # Next.js 16 frontend (port 3301)
-│       └── src/
-│           ├── app/
-│           │   ├── (public)/       # Login / register / installer
-│           │   ├── (auth)/         # Logged-in pages (page-view, edit, trash, user, ...)
-│           │   └── (admin)/        # Admin dashboard + sections (admin-only via layout)
-│           ├── components/         # Page, page-view, page-list, admin, ui (shadcn)
-│           └── lib/                # React Query hooks, api-client, auth context
+├── apps/crowi-site/          # crowi.wiki LP + docs (Next.js + Fumadocs, :3401)
+├── crowi.config.json         # dev runner config (plugins + active drivers)
+├── .env(.sample)             # dev runtime env (loaded at CWD by packages/api)
 └── packages/
-    ├── api-contract/               # Shared ts-rest contracts + Zod schemas
-    │   └── src/
-    │       ├── contracts/          # ts-rest c.router definitions
-    │       └── schemas/            # Zod schema definitions
-    ├── plugin-api/                 # @crowi/plugin-api — plugin SDK (CrowiPlugin / registries / context)
-    ├── plugin-aws/                 # @crowi/plugin-aws — shared AWS credentials base plugin
-    ├── plugin-storage-local/       # @crowi/plugin-storage-local — default-on local FS storage driver
-    └── plugin-storage-aws-s3/      # @crowi/plugin-storage-aws-s3 — S3 storage driver
+    ├── api/                  # Express + ts-rest API (:3300)
+    ├── api-contract/         # ts-rest contracts + Zod schemas
+    ├── web/                  # Next.js 16 App Router (:3301)
+    ├── runner/               # config loader + plugin resolver (used by api boot)
+    ├── tsconfig/             # shared library/app-node/app-web tsconfig presets
+    ├── admin-cli/            # `crowi-admin` CLI
+    └── plugin-{api,aws,storage-*,renderer-*,search-elasticsearch}/
 ```
 
-The api package is plugin-agnostic at runtime — `PluginManager` resolves
-plugin npm names against the runner project's `node_modules/` via
-`createRequire(<projectDir>/package.json)`. Operators add a plugin by
-declaring it in their runner's `package.json` deps and listing it in
-`crowi.config.json:plugins`; the api never needs to be rebuilt.
+`ls packages/` and `tree -L 2 packages/api/src` give the rest. Highlights
+worth knowing without reading code:
+
+- `packages/api/src/routes/ts-rest/` — new endpoints; `routes/api/` + `controllers/` are legacy
+- `packages/api/src/crowi/index.ts` — boot sequence (encryption → DB → config → plugins → server)
+- Plugin resolution: `@crowi/runner` reads `crowi.config.json` + uses
+  `createRequire(<projectDir>/package.json)` to load plugin npm packages from
+  the runner's `node_modules/`. Operators add a plugin by declaring it in
+  their runner's deps + listing in `crowi.config.json:plugins`; the api never
+  needs to be rebuilt. Dev path: `projectDir` = repo root, plugins resolve
+  via pnpm's hoisted `node_modules/` (see `.npmrc`).
 
 ## Tech Stack
 
@@ -77,70 +54,35 @@ declaring it in their runner's `package.json` deps and listing it in
 
 ## Development Commands
 
-### Setup and Run
-```bash
-# Install (root)
-pnpm install
+Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
+`turbo` automatically. Non-obvious points:
 
-# Start dependency services (MongoDB / Redis / Elasticsearch / PlantUML)
-docker compose up -d
-
-# Run both apps with auto-reload (dev-runner-mediated api on :3300, web on :3301)
-pnpm dev
-
-# Run only the API + plugins through the dev-runner (no Next.js)
-pnpm dev:runner
-
-# Run the API directly (no runner mediation; useful for api-only debug)
-pnpm dev:api
-
-# Run only the Next.js frontend
-pnpm dev:web
-```
-
-### Tests / Type-check / Lint
-```bash
-pnpm test                                    # all apps
-pnpm --filter @crowi/api test                # api only
-pnpm --filter @crowi/api test -- --testPathPattern=foo
-
-pnpm type-check                              # all apps (api + web)
-pnpm --filter @crowi/api type-check
-pnpm --filter @crowi/web type-check
-
-pnpm lint                                    # all apps; errors=0 required
-pnpm --filter @crowi/api lint
-```
-
-### Build
-```bash
-pnpm build                                   # all
-pnpm --filter @crowi/api-contract build      # required after editing contracts/schemas
-```
-
-### Format
-```bash
-pnpm format                                  # write
-pnpm format:check                            # CI
-```
-Auto-applied on commit via lefthook pre-commit (Biome). `pnpm format` is
-manual-only when bypassing hooks.
+- **Dev**: `docker compose up -d` for infra (mongo/redis/es/plantuml) →
+  `pnpm dev` for api+web+plugins. `pnpm dev:api` / `pnpm dev:web` for one side.
+- **Targeted run**: `pnpm --filter @crowi/api <script>` to run a script in
+  one package only.
+- **Lint must be errors=0** (warnings tolerated). pre-push lefthook enforces.
+- **Format**: Biome auto-runs on staged files (lefthook pre-commit). `pnpm
+  format` only when bypassing hooks.
+- **api-contract**: edit contracts/schemas → `pnpm --filter @crowi/api-contract
+  build` to regenerate dts before api/web consumers pick them up (turbo `^build`
+  handles this in `dev` / `build` / `test`).
 
 ## Architecture Overview
 
-### API server (`apps/crowi-api`)
+### API server (`packages/api`)
 - **Boot**: `Crowi.init()` runs `setupEncryption` → `setupDatabase` → `setupModels` → `setupRedisClient` → `setupSessionConfig` → `setupConfig` → `migrateConfig` → `setupSearcher` → `setupMailer` → `setupSlack` → `buildServer`.
 - **Routing**:
   - Public ts-rest routes (no auth)
   - Authenticated ts-rest routes under `jwtAuth(crowi)` (most page / user / comment / etc. endpoints)
   - Admin ts-rest routes under `jwtAdminRequired(crowi)` (= JWT + `user.admin === true`)
   - Legacy Express routes still mounted at `/_api/*`, `/login`, `/register`, etc. for back-compat
-- **Auth**: JWT (access + refresh tokens). `req.user` is augmented to `UserDocument` via `apps/crowi-api/src/types/express.ts`.
+- **Auth**: JWT (access + refresh tokens). `req.user` is augmented to `UserDocument` via `packages/api/src/types/express.ts`.
 - **Models** (Mongoose):
   - Page (with grant), Revision, User, Comment, Bookmark, Like (on Page), Watcher, Notification, Activity, Config, Backlink, Share, Attachment.
-- **Sensitive Config encryption**: `apps/crowi-api/src/util/crypto.ts` provides AES-256-GCM `encrypt` / `decrypt` / `isEncrypted`. Sensitive keys (OAuth secrets, AWS keys, SMTP password, Slack token) are listed in `models/config-sensitive.ts` and auto-encrypted by `Config.updateByParams` / decrypted by `Config.loadAllConfig` when `CROWI_ENCRYPTION_KEY` is set. Legacy plaintext rows pass through; admin can re-encrypt them via `/admin/crypto/reencrypt`.
+- **Sensitive Config encryption**: `packages/api/src/util/crypto.ts` provides AES-256-GCM `encrypt` / `decrypt` / `isEncrypted`. Sensitive keys (OAuth secrets, AWS keys, SMTP password, Slack token) are listed in `models/config-sensitive.ts` and auto-encrypted by `Config.updateByParams` / decrypted by `Config.loadAllConfig` when `CROWI_ENCRYPTION_KEY` is set. Legacy plaintext rows pass through; admin can re-encrypt them via `/admin/crypto/reencrypt`.
 
-### Web frontend (`apps/crowi-web`)
+### Web frontend (`packages/web`)
 - **Routing**: App Router (`src/app/...`) with three Route Groups:
   - `(public)/`: login / register / installer
   - `(auth)/`: gated by `useAuth` redirect; mounts shared header (NotificationBell + admin shortcut + user dropdown)
@@ -157,7 +99,7 @@ manual-only when bypassing hooks.
 
 ## Key Environment Variables
 
-See `apps/crowi-api/.env.sample`. Required / commonly-set:
+See `.env.sample` at the repo root. Required / commonly-set:
 - `MONGO_URI` — MongoDB connection
 - `REDIS_URL` — session / socket.io adapter
 - `PASSWORD_SEED` — legacy password hashing seed (still used for fallback verification)
@@ -234,6 +176,50 @@ go to `TODO.md`.
 - End with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`
   on Claude-driven commits.
 
+### Changesets (release notes accumulation)
+
+Phase 9 で `@changesets/cli` を導入済み。v2 開発中も `pnpm changeset add`
+で各リリース対象の変更を `.changeset/*.md` として **蓄積していく** ことで、
+2.0.0-alpha1 / 安定版リリース時に過去変更のリリースノートが自動生成される。
+
+**Add のタイミング — 「ユーザー価値の単位」で 1 つ**:
+- ✅ 機能追加・バグ修正・破壊的変更 → 1 changeset
+- ✅ 同じ機能を分割した複数 commit でも、ユーザー視点で 1 つなら 1 changeset
+  (実装途中の小さな commit ごとに changeset は **作らない**)
+- ❌ 内部 refactor / コード整理 / lint fix / format / 内部 build infra
+  / test 追加だけ → changeset 不要 (ユーザーから見える変化なし)
+- ❌ docs(todo) / CLAUDE.md / `.claude/` 更新 → changeset 不要
+- ❌ `feature-monorepo-packages-restructure` の各 phase commit → 全体で 1
+  changeset (`.changeset/initial-release.md` で既に拾われている)
+
+判断基準: 「次の changelog に書いて意味があるか」。`feat:` / `fix:` で
+ユーザー behavior が変わるなら add、`refactor:` / `chore:` / `test:` /
+`docs:` だけなら add しない。
+
+**Bump レベルの選び方**:
+- `patch` — bug fix、内部最適化が露出するもの、依存 bump (semver-safe)
+- `minor` — 新機能、新エンドポイント、既存挙動を壊さない設定追加
+- `major` — 破壊的変更 (API 削除、エンドポイント仕様変更、required 設定追加)
+
+**対象 package の選び方**:
+- API 振る舞いを変えた → `@crowi/api`
+- Web UI を変えた → `@crowi/web` (private なので登録しても publish はされない
+  が、CHANGELOG.md は生成される)
+- ts-rest contract を変えた → `@crowi/api-contract` (linked group なので
+  api / web も同時 bump される)
+- Plugin SDK を拡張した → `@crowi/plugin-api` + 影響する個別 plugin
+- Plugin 1 つだけ更新 → その plugin のみ
+
+**コマンド**:
+```bash
+pnpm changeset add        # 対話的に package + bump level + 概要を選ぶ
+pnpm changeset status     # 蓄積された未公開 changeset 一覧
+```
+
+PR を main に merge する直前 (or PR の中) で 1 ファイル add する運用。
+初版 (`.changeset/initial-release.md`) は restructure 全体を覆う sentinel
+として `feature-monorepo-packages-restructure` 完了時に置いた、消さない。
+
 ### State directories
 - `.migration-state/` (repo root, gitignored except `.gitkeep`): per-task
   files for the `/migrate` workflow.
@@ -252,11 +238,6 @@ User-invocable skills (see `.claude/skills/`):
 
 ## Crowi Theme
 
-```
---crowi-primary: #43676b      /* logo green */
---crowi-header:  #263a3c      /* dark header */
---crowi-sidebar: #f8f9fa      /* sidebar background */
-```
-
-Avatars use `--crowi-primary` as background with white text for the initials
-fallback (see `apps/crowi-web/src/components/user-avatar.tsx`).
+Tokens live in `packages/web/src/app/globals.css` (`--crowi-primary` /
+`--crowi-header` / `--crowi-sidebar` etc.). Avatars use `--crowi-primary` as
+initials-fallback background (`packages/web/src/components/user-avatar.tsx`).

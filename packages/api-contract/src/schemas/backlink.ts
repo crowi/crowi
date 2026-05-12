@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { UserPublicSchema } from './userPublic';
 
 // 24-character hex ObjectId string. Mirrors isValidObjectId in
-// apps/crowi-api/src/util/ts-rest-helpers.ts so request validation rejects
+// packages/api/src/util/ts-rest-helpers.ts so request validation rejects
 // non-ObjectId strings at the contract boundary.
 const ObjectIdString = z.string().regex(/^[0-9a-f]{24}$/, 'Invalid ObjectId');
 

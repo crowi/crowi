@@ -2,7 +2,7 @@
  * Search-string parser for the Elasticsearch driver.
  *
  * Splits a free-form query into positive / negative keywords and
- * phrases. Lifted from the legacy `apps/crowi-api/src/service/query.ts`
+ * phrases. Lifted from the legacy `packages/api/src/service/query.ts`
  * with no behaviour changes — preserved here as a plugin-private
  * helper because the parser is currently ES-specific (the +/- and
  * `"phrase"` syntax maps directly to ES `multi_match` queries). When

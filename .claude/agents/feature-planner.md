@@ -40,21 +40,21 @@ context 完備の task 定義を作成する。
    - **API**:
      - `packages/api-contract/src/contracts/` — 既存契約に追加できないか
      - `packages/api-contract/src/schemas/` — 既存 schema を拡張できないか
-     - `apps/crowi-api/src/util/` — admin-config / ts-rest-helpers / pageToResponse 等の helper
-     - `apps/crowi-api/src/routes/ts-rest/` — 隣接ハンドラのパターン
+     - `packages/api/src/util/` — admin-config / ts-rest-helpers / pageToResponse 等の helper
+     - `packages/api/src/routes/ts-rest/` — 隣接ハンドラのパターン
    - **Web**:
-     - `apps/crowi-web/src/lib/` — useXxx hook (admin-settings-factory / unwrap-result 等)
-     - `apps/crowi-web/src/components/ui/` — shadcn primitive
-     - `apps/crowi-web/src/components/admin/` — secret-field / 共通フォーム
+     - `packages/web/src/lib/` — useXxx hook (admin-settings-factory / unwrap-result 等)
+     - `packages/web/src/components/ui/` — shadcn primitive
+     - `packages/web/src/components/admin/` — secret-field / 共通フォーム
    - **モデル**:
-     - `apps/crowi-api/src/models/` — Mongoose schema 既存フィールド
+     - `packages/api/src/models/` — Mongoose schema 既存フィールド
 
 3. **新規ファイルの置き場所決定**
    - 契約: `packages/api-contract/src/contracts/{feature}.ts`
    - スキーマ: `packages/api-contract/src/schemas/{feature}.ts`
-   - API: `apps/crowi-api/src/routes/ts-rest/{feature}.ts`
-   - UI: `apps/crowi-web/src/app/(auth or admin)/...`
-   - util: `apps/crowi-api/src/util/{name}.ts` または `apps/crowi-web/src/lib/{name}.ts`
+   - API: `packages/api/src/routes/ts-rest/{feature}.ts`
+   - UI: `packages/web/src/app/(auth or admin)/...`
+   - util: `packages/api/src/util/{name}.ts` または `packages/web/src/lib/{name}.ts`
 
 4. **新規依存の妥当性判断**
    spec で言及があれば現行 `package.json` を確認し、bundle / セキュリティ観点で
@@ -81,16 +81,16 @@ context 完備の task 定義を作成する。
 
 ```
 # 既存資産 (再利用候補)
-apps/crowi-api/src/util/
-apps/crowi-api/src/routes/ts-rest/
-apps/crowi-api/src/models/
-apps/crowi-web/src/lib/
-apps/crowi-web/src/components/{ui,admin,page-view}/
+packages/api/src/util/
+packages/api/src/routes/ts-rest/
+packages/api/src/models/
+packages/web/src/lib/
+packages/web/src/components/{ui,admin,page-view}/
 packages/api-contract/src/{contracts,schemas}/
 
 # 新規実装の置き場所
-apps/crowi-api/src/routes/ts-rest/{feature}.ts
-apps/crowi-web/src/app/(auth|admin)/...
+packages/api/src/routes/ts-rest/{feature}.ts
+packages/web/src/app/(auth|admin)/...
 packages/api-contract/src/contracts/{feature}.ts
 ```
 
@@ -109,15 +109,15 @@ packages/api-contract/src/contracts/{feature}.ts
   "context": {
     "specPath": ".feature-state/specs/{id}.md",
     "reuseTargets": [
-      "apps/crowi-api/src/util/admin-config.ts (coerceBoolean / coerceString helper)",
-      "apps/crowi-web/src/lib/admin-settings-factory.ts (createAdminSettingsHooks)"
+      "packages/api/src/util/admin-config.ts (coerceBoolean / coerceString helper)",
+      "packages/web/src/lib/admin-settings-factory.ts (createAdminSettingsHooks)"
     ],
     "newFiles": [
-      "apps/crowi-api/src/routes/ts-rest/{feature}.ts",
+      "packages/api/src/routes/ts-rest/{feature}.ts",
       "packages/api-contract/src/contracts/{feature}.ts",
       "packages/api-contract/src/schemas/{feature}.ts"
     ],
-    "models": ["apps/crowi-api/src/models/{model}.ts (新フィールド追加 or 新規モデル)"],
+    "models": ["packages/api/src/models/{model}.ts (新フィールド追加 or 新規モデル)"],
     "newDeps": ["sharp (画像処理)"],
     "architecturalNotes": "認可は jwtAdminRequired。バリデーションは Zod、エラーは ApiError 使う。"
   },

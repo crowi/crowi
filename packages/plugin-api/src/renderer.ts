@@ -164,7 +164,7 @@ export interface EmbedInput {
  * (html + error meta + ttl) so a subsequent read can short-circuit.
  * Stale-while-revalidate uses `ttlSec * DEFAULT_STALE_MULTIPLIER` as the
  * background-refresh window (see
- * `apps/crowi-api/src/renderer/cache/index.ts:cachedRender`).
+ * `packages/api/src/renderer/cache/index.ts:cachedRender`).
  */
 export interface RenderResult {
   /** Already-sanitised HTML the core will inline. */
@@ -194,7 +194,7 @@ export interface RenderResult {
 
 /**
  * Error categories cached with their own per-code TTLs. See
- * `apps/crowi-api/src/renderer/cache/index.ts:RENDER_ERROR_TTL` for the
+ * `packages/api/src/renderer/cache/index.ts:RENDER_ERROR_TTL` for the
  * concrete numbers.
  */
 export interface RenderError {
@@ -287,7 +287,7 @@ export interface CacheEntry {
 
 /**
  * MongoDB-backed cache surface. Phase 4 ships exactly one
- * implementation (`apps/crowi-api/src/renderer/cache/mongodb-cache.ts`);
+ * implementation (`packages/api/src/renderer/cache/mongodb-cache.ts`);
  * the interface is abstracted so a future Redis hot tier can plug in
  * without contract changes.
  *
@@ -324,7 +324,7 @@ export interface ScopedCacheStorage {
  * (encrypted) config / per-user tokens.
  *
  * **Phase 4 ships the interface only.** The registry impl in
- * `apps/crowi-api/src/renderer/registry.ts` throws
+ * `packages/api/src/renderer/registry.ts` throws
  * `Error('AuthContext not yet implemented — Phase 7')` from the
  * `config()` callsite. Phase 7 will wire this against RFC-0001's
  * encrypted-config lookup and a per-plugin namespace.

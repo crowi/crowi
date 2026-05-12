@@ -9,7 +9,7 @@ import { z } from 'zod';
  * settings page (`/admin/plugins?name=@crowi/plugin-aws`); the App
  * settings endpoint no longer surfaces them. Boot-time migration copies
  * the legacy `upload:aws:*` keys into the new `plugin:@crowi/plugin-aws:*`
- * namespace — see `apps/crowi-api/src/util/aws-config-migration.ts`.
+ * namespace — see `packages/api/src/util/aws-config-migration.ts`.
  */
 export const GetAppSettingsResponseSchema = z.object({
   app: z.object({

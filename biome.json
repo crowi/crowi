@@ -14,11 +14,11 @@
       "!**/.turbo/**",
       "!**/node_modules/**",
       "!**/coverage/**",
-      "!apps/crowi-api/public/**",
-      "!apps/crowi-api/views/**",
-      "!apps/crowi-api/local_modules/**",
-      "!apps/crowi-api/locales/**",
-      "!apps/crowi-api/bin/**"
+      "!packages/api/public/**",
+      "!packages/api/views/**",
+      "!packages/api/local_modules/**",
+      "!packages/api/locales/**",
+      "!packages/api/bin/**"
     ]
   },
   "formatter": {

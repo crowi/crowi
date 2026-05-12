@@ -60,7 +60,7 @@ export function registerSearchRebuild(program: Command): void {
     .description("Rebuild the search index from scratch using the active driver's rebuild() implementation.")
     .action(async () => {
       // Load .env so MONGO_URI / CROWI_ENCRYPTION_KEY / etc. flow through
-      // to Crowi's constructor the same way `apps/crowi-api/src/app.ts`
+      // to Crowi's constructor the same way `packages/api/src/app.ts`
       // does at server boot. Silent if no .env file is present.
       dotenv.config();
 

@@ -12,26 +12,37 @@
       "require": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
     "test": "jest --passWithNoTests"
   },
+  "peerDependencies": {
+    "@crowi/plugin-api": "^0.1.0"
+  },
   "dependencies": {
-    "@crowi/plugin-api": "workspace:^",
     "jiti": "^2.7.0",
     "remark-breaks": "^4.0.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.14",
+    "@crowi/plugin-api": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
     "@types/mdast": "^4.0.4",
-    "@types/node": "^22.10.2",
-    "jest": "^29.7.0",
+    "@types/node": "catalog:",
+    "jest": "catalog:",
     "remark-parse": "^11.0.0",
-    "ts-jest": "^29.3.4",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
     "unified": "^11.0.5"
   }
 }

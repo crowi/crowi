@@ -13,25 +13,34 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
     "test": "jest"
   },
+  "peerDependencies": {
+    "@crowi/plugin-api": "^0.1.0",
+    "zod": "catalog:"
+  },
   "dependencies": {
-    "@crowi/plugin-api": "workspace:^",
-    "@elastic/elasticsearch": "^9.4.0",
-    "zod": "^3.23.8"
+    "@elastic/elasticsearch": "^9.4.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.14",
-    "@types/node": "^22.10.2",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.3.4",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2"
+    "@crowi/plugin-api": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "jest": "catalog:",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
   }
 }

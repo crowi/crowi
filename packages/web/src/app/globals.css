@@ -1,0 +1,365 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+/*
+ * KaTeX styles for server-side rendered math (`$inline$` / `$$display$$`).
+ * Required by `@crowi/plugin-renderer-katex`. Even when the plugin is
+ * disabled, importing the stylesheet is cheap (~30KB minified) and
+ * avoids a flash-of-unstyled-math when an operator turns the plugin on
+ * later. KaTeX webfonts load lazily on first math render.
+ */
+@import "katex/dist/katex.min.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Crowi Theme
+ * Original colors from packages/api/resource/css/_theme.scss:
+ * - Primary: #43676b (teal green)
+ * - Header Background: #263a3c (dark teal)
+ * - Aside Background: #f8f9fa (light gray)
+ * - Font: 'Open Sans', 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif
+ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), var(--font-noto-sans-jp);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Crowi-specific color tokens */
+  --color-crowi-header: var(--crowi-header);
+  --color-crowi-header-foreground: var(--crowi-header-foreground);
+  --color-crowi-bookmark: var(--crowi-bookmark);
+  --color-crowi-success: var(--crowi-success);
+  --color-crowi-warning: var(--crowi-warning);
+  --color-crowi-danger: var(--crowi-danger);
+
+  --shadow-popover: 0 4px 6px rgba(0, 0, 0, 0.1), 0 8px 20px rgba(0, 0, 0, 0.2);
+  --shadow-header: 0 1px 10px rgba(0, 0, 0, 0.12);
+}
+
+:root {
+  --radius: 0.375rem;
+
+  /* Crowi brand colors */
+  /* Primary: #43676b - teal green */
+  --primary: oklch(0.465 0.04 192);
+  --primary-foreground: oklch(0.985 0 0);
+
+  /* Header: #263a3c - dark teal */
+  --crowi-header: oklch(0.295 0.025 192);
+  --crowi-header-foreground: oklch(0.985 0 0);
+
+  /* Background & surface */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.2 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0 0);
+
+  /* Secondary: lighter teal */
+  --secondary: oklch(0.95 0.01 192);
+  --secondary-foreground: oklch(0.295 0.025 192);
+
+  /* Muted */
+  --muted: oklch(0.97 0.005 192);
+  --muted-foreground: oklch(0.45 0 0);
+
+  /* Accent */
+  --accent: oklch(0.92 0.015 192);
+  --accent-foreground: oklch(0.295 0.025 192);
+
+  /* Destructive: #b94a48 */
+  --destructive: oklch(0.52 0.18 25);
+
+  /* Border & Input */
+  --border: oklch(0.88 0.01 192);
+  --input: oklch(0.92 0.005 192);
+  --ring: oklch(0.465 0.04 192);
+
+  /* Sidebar: #f8f9fa */
+  --sidebar: oklch(0.98 0.002 192);
+  --sidebar-foreground: oklch(0.25 0 0);
+  --sidebar-primary: oklch(0.465 0.04 192);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.94 0.01 192);
+  --sidebar-accent-foreground: oklch(0.25 0 0);
+  --sidebar-border: oklch(0.88 0.01 192);
+  --sidebar-ring: oklch(0.465 0.04 192);
+
+  /* Crowi-specific tokens */
+  --crowi-bookmark: oklch(0.75 0.15 85); /* #e6b422 gold */
+  --crowi-success: oklch(0.6 0.15 145);
+  --crowi-warning: oklch(0.75 0.15 70); /* #e47800 orange */
+  --crowi-danger: oklch(0.52 0.18 25); /* #b94a48 red */
+
+  /* Chart colors with Crowi teal palette */
+  --chart-1: oklch(0.465 0.04 192);
+  --chart-2: oklch(0.55 0.08 170);
+  --chart-3: oklch(0.6 0.1 150);
+  --chart-4: oklch(0.7 0.12 130);
+  --chart-5: oklch(0.75 0.15 85);
+}
+
+.dark {
+  /* Primary stays same hue but lighter for dark mode */
+  --primary: oklch(0.65 0.06 192);
+  --primary-foreground: oklch(0.15 0 0);
+
+  /* Header background */
+  --crowi-header: oklch(0.22 0.02 192);
+  --crowi-header-foreground: oklch(0.95 0 0);
+
+  /* Dark background & surface */
+  --background: oklch(0.15 0.01 192);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.2 0.015 192);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.2 0.015 192);
+  --popover-foreground: oklch(0.95 0 0);
+
+  /* Secondary */
+  --secondary: oklch(0.25 0.02 192);
+  --secondary-foreground: oklch(0.9 0 0);
+
+  /* Muted */
+  --muted: oklch(0.25 0.015 192);
+  --muted-foreground: oklch(0.65 0 0);
+
+  /* Accent */
+  --accent: oklch(0.3 0.025 192);
+  --accent-foreground: oklch(0.95 0 0);
+
+  /* Destructive */
+  --destructive: oklch(0.6 0.2 25);
+
+  /* Border & Input */
+  --border: oklch(0.3 0.02 192);
+  --input: oklch(0.28 0.015 192);
+  --ring: oklch(0.55 0.05 192);
+
+  /* Sidebar */
+  --sidebar: oklch(0.18 0.015 192);
+  --sidebar-foreground: oklch(0.92 0 0);
+  --sidebar-primary: oklch(0.6 0.05 192);
+  --sidebar-primary-foreground: oklch(0.15 0 0);
+  --sidebar-accent: oklch(0.28 0.02 192);
+  --sidebar-accent-foreground: oklch(0.92 0 0);
+  --sidebar-border: oklch(0.3 0.02 192);
+  --sidebar-ring: oklch(0.55 0.05 192);
+
+  /* Crowi-specific tokens (adjusted for dark mode) */
+  --crowi-bookmark: oklch(0.8 0.14 85);
+  --crowi-success: oklch(0.65 0.15 145);
+  --crowi-warning: oklch(0.8 0.14 70);
+  --crowi-danger: oklch(0.65 0.18 25);
+
+  /* Chart colors */
+  --chart-1: oklch(0.6 0.06 192);
+  --chart-2: oklch(0.65 0.1 170);
+  --chart-3: oklch(0.7 0.12 150);
+  --chart-4: oklch(0.75 0.14 130);
+  --chart-5: oklch(0.8 0.14 85);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-geist-sans), var(--font-noto-sans-jp), 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+  }
+  a,
+  button {
+    cursor: pointer;
+  }
+}
+
+/*
+ * Animated multi-gradient background used by /installer, /login, /register.
+ * Ports the legacy `.crowi.single.nologin` style from the SCSS theme:
+ * three stacked linear-gradients shifted in hue / saturation / lightness
+ * around `--crowi-header`, panned across a 200% canvas over 20s.
+ */
+@keyframes crowi-login-bg {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.bg-crowi-login {
+  background-color: #406369;
+  background-image:
+    linear-gradient(215deg, #84a3a5, #5285a8, #263a3c),
+    linear-gradient(135deg, #263a3c, #87a9d0, #4d6a6c),
+    linear-gradient(335deg, #c1d2d3, #263a3c, #4779b5);
+  background-size: 100% 100%;
+}
+
+@media (min-width: 768px) {
+  .bg-crowi-login {
+    background-size: 200% 200%;
+    animation: crowi-login-bg 20s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-crowi-login {
+    animation: none;
+  }
+}
+
+.crowi-top-border {
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(90deg, #263a3c 0%, #43b150 35%, #6294c5 70%, #84a3a5 100%) 1;
+}
+
+/*
+ * Markdown body section wrapping. Every heading + its following content
+ * is wrapped in a `<section data-section-id>` (see rehypeWrapSection in
+ * page-content.tsx) so the whole block can be highlighted when the
+ * heading is the URL fragment target. The heading itself keeps `id`,
+ * which is what anchor jumps + the TOC scroll-spy resolve.
+ */
+.crowi-prose section[data-section-id] {
+  /* Each section is its own scroll target reach, but scroll-mt is already
+   * on the heading inside; section is a layout container only. */
+}
+
+/* Spacing between consecutive sections — replaces the heading-mt
+ * gap that `first:mt-0` removes when the heading becomes the
+ * section's first child. */
+.crowi-prose > section:not(:first-child) {
+  margin-top: 2.5rem;
+}
+
+/* Section highlight when its heading is the URL fragment target.
+ * Toggled in JS (page-content.tsx) rather than via CSS `:target` so it
+ * survives the case where the URL fragment is set before ReactMarkdown
+ * has committed the heading to the DOM (e.g. opening `…#anchor` in a
+ * new tab). */
+.crowi-prose section.is-target {
+  background: rgba(240, 210, 100, 0.18);
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+  border-radius: 0.5rem;
+  transition: background 200ms;
+}
+
+/*
+ * Renderer plugin placeholders (RFC-0002 Phase 4)
+ *
+ * The server emits these shells around plugin-rendered embeds. The
+ * structural classes here apply a subtle skeleton background so
+ * page layout stays stable while real embed HTML lands. Class names
+ * are owned by `packages/api/src/renderer/cache/reservation.ts` —
+ * see the comment block at the top of that file for the naming
+ * convention.
+ */
+.crowi-embed-placeholder {
+  display: block;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0.07) 50%, rgba(0, 0, 0, 0.04) 100%);
+  background-size: 200% 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  animation: crowi-embed-placeholder-shimmer 1.6s linear infinite;
+}
+
+.crowi-embed-placeholder-fixed {
+  /* width / height come from inline style declared by the server. */
+}
+
+.crowi-embed-placeholder-aspect {
+  /* aspect-ratio is set via inline style. */
+}
+
+.crowi-embed-placeholder-card {
+  margin-block: 0.75rem;
+}
+
+.crowi-embed-placeholder-error {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(220, 100, 80, 0.08);
+  border: 1px solid rgba(220, 100, 80, 0.25);
+  border-radius: 0.5rem;
+  animation: none;
+}
+
+.crowi-embed-placeholder-error-label {
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+@keyframes crowi-embed-placeholder-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+/* Shiki-rendered fenced code blocks ship with their own
+ * `<pre class="shiki ...">` and inline `style="background-color: ..."`
+ * from the theme. They never reach the React `components.pre` wrapper
+ * (raw HTML path), so the Crowi codeblock styling has to be applied
+ * via CSS instead — using the *same* `bg-muted/60` token as the
+ * unhighlighted fallback `<pre>` (`components.pre`) so highlighted and
+ * plain codeblocks share one background. The `!` modifier promotes
+ * the bg utility to `!important` so the inline shiki theme bg loses. */
+.crowi-prose pre.shiki {
+  @apply bg-muted/60! border border-border/60 rounded-xl px-4 py-3 my-6 text-[0.875rem] leading-relaxed font-mono overflow-x-auto;
+}
+
+/* Some grammars (notably PHP via `meta.embedded.block.php`) include
+ * token-level background colours that the github-light theme renders
+ * as pink bands. Suppress span-level backgrounds — token text colours
+ * are preserved. Diff markers (`markup.inserted/deleted`) lose their
+ * tinted backgrounds too, acceptable until a diff-specific renderer
+ * lands. */
+.crowi-prose pre.shiki span {
+  background-color: transparent !important;
+}

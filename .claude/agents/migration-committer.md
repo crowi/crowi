@@ -135,8 +135,8 @@ Branch: main (main-direct mode)
 Commit: abc1234 — feat(api): ...
 
 Files:
-- apps/crowi-api/src/routes/ts-rest/page.ts
-- apps/crowi-api/src/routes/ts-rest/page.test.ts
+- packages/api/src/routes/ts-rest/page.ts
+- packages/api/src/routes/ts-rest/page.test.ts
 
 Pre-commit checks: PASS
 

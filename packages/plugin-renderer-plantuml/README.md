@@ -31,7 +31,7 @@ The plugin:
 
 Network or server errors are cached as `RenderError` (`network` /
 `timeout` / `not_found`) with the per-code TTL from
-`apps/crowi-api/src/renderer/cache/index.ts:RENDER_ERROR_TTL`, so a
+`packages/api/src/renderer/cache/index.ts:RENDER_ERROR_TTL`, so a
 brief PlantUML outage doesn't hammer the server.
 
 ## Install
@@ -39,8 +39,8 @@ brief PlantUML outage doesn't hammer the server.
 Bundled in the Crowi monorepo:
 
 ```bash
-# in your runner directory (the one with crowi.config.json)
-pnpm --filter @crowi/dev-runner add @crowi/plugin-renderer-plantuml
+# in the Crowi monorepo (dev path):
+pnpm --filter @crowi/api add -D @crowi/plugin-renderer-plantuml
 # or in a standalone runner:
 npm install @crowi/plugin-renderer-plantuml
 ```

@@ -24,7 +24,7 @@
 import type { SearchPageType, SearchQueryGrants, SearchQueryViewer } from '@crowi/plugin-api';
 import type { ParsedSearchQuery } from './parse-query';
 
-// Page grant constants — mirror `apps/crowi-api/src/models/page.ts`.
+// Page grant constants — mirror `packages/api/src/models/page.ts`.
 // Hard-coded here because the plugin must not import from @crowi/api
 // (that would invert the dependency direction and force a runner
 // rebuild on every plugin change).

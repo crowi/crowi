@@ -5,7 +5,7 @@ import crowiLegacyPlugin, { loadRemarkBreaks } from './index';
 
 /**
  * Minimal RendererRegistry capture stub. The real implementation lives
- * in `apps/crowi-api/src/renderer/registry.ts`; mirroring its shape here
+ * in `packages/api/src/renderer/registry.ts`; mirroring its shape here
  * lets us assert that `registerRenderer` queues `remark-breaks` on the
  * transform phase without coupling the plugin unit-test to the api
  * package's TypeScript graph.

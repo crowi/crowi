@@ -90,7 +90,7 @@ export function registerStorageCopy(program: Command): void {
     .action(async (opts: { from: string; to: string; dryRun: boolean }) => {
       // Load .env from the CWD (runner directory) so MONGO_URI /
       // CROWI_ENCRYPTION_KEY / etc. flow through to Crowi's constructor
-      // the same way `apps/crowi-api/src/app.ts` loads them at server
+      // the same way `packages/api/src/app.ts` loads them at server
       // boot. Silent if no .env file is present.
       dotenv.config();
 

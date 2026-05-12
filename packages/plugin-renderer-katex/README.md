@@ -29,7 +29,7 @@ generated HTML.
 
 KaTeX's HTML output references `class="katex"` rules that ship in
 `katex/dist/katex.min.css`. The web side imports the CSS at the top
-of `apps/crowi-web/src/app/globals.css`:
+of `packages/web/src/app/globals.css`:
 
 ```css
 @import 'katex/dist/katex.min.css';
@@ -56,7 +56,7 @@ add a per-plugin admin option if real demand arrives.
 Bundled in the Crowi monorepo:
 
 ```bash
-pnpm --filter @crowi/dev-runner add @crowi/plugin-renderer-katex
+pnpm --filter @crowi/api add -D @crowi/plugin-renderer-katex
 # or in a standalone runner:
 npm install @crowi/plugin-renderer-katex
 ```
@@ -67,7 +67,7 @@ The web side also needs `katex` (for the CSS asset):
 pnpm --filter @crowi/web add katex
 ```
 
-(For the bundled dev-runner this is already wired.)
+(In the Crowi monorepo dev path this is already wired in `packages/web`.)
 
 ## Configure
 

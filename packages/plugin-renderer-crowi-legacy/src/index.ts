@@ -10,7 +10,7 @@ import type { CrowiPlugin } from '@crowi/plugin-api';
  * `ERR_REQUIRE_ESM` on the jest path.
  *
  * Mirror the Phase 2 pattern from
- * `apps/crowi-api/src/renderer/pipeline.ts:createPipelineEsmDepsLoader` and
+ * `packages/api/src/renderer/pipeline.ts:createPipelineEsmDepsLoader` and
  * use `jiti` (which bundles its own ESM loader) to synchronously load the
  * package the first time `registerRenderer` runs. Caching is per-plugin-
  * activation; a fresh `Crowi` instance gets a fresh load.

@@ -33,12 +33,14 @@ This repository is a Turborepo + pnpm workspace.
 ```
 crowi/
 ├── apps/
-│   ├── crowi-api/         # Express 4 + ts-rest 3 API library (port 3300)
-│   ├── crowi-web/         # Next.js 16 frontend (port 3301)
-│   ├── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 3401)
-│   └── crowi-dev-runner/  # Local launcher; mirrors `crowi-admin init` runner repo
+│   └── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 3401)
+├── crowi.config.json      # Dev runner config: plugins + active driver names
+├── .env.sample            # Dev runtime env template (copy to .env)
 └── packages/
+    ├── api/                          # Express 4 + ts-rest 3 API library (port 3300)
     ├── api-contract/                  # Shared ts-rest contracts + Zod schemas
+    ├── web/                           # Next.js 16 frontend (port 3301)
+    ├── runner/                        # Config loader + plugin resolver (used by @crowi/api boot)
     ├── plugin-api/                    # Plugin SDK (CrowiPlugin / registries / context)
     ├── plugin-aws/                    # Shared AWS credentials base plugin
     ├── plugin-storage-local/          # Default-on local FS storage driver
@@ -51,11 +53,11 @@ crowi/
     └── admin-cli/                     # `crowi-admin` CLI (init / migrate / re-encrypt)
 ```
 
-The API package is plugin-agnostic at runtime — `PluginManager` resolves
-plugin npm names against the runner project's `node_modules/` via
-`createRequire(<projectDir>/package.json)`. Operators add a plugin by
-declaring it in their runner's `package.json` deps and listing it in
-`crowi.config.json:plugins`; the api never needs to be rebuilt.
+The API package is plugin-agnostic at runtime — `@crowi/runner`
+resolves plugin npm names against the runner project's `node_modules/`
+via `createRequire(<projectDir>/package.json)`. Operators add a plugin
+by declaring it in their runner's `package.json` deps and listing it
+in `crowi.config.json:plugins`; the api never needs to be rebuilt.
 
 ## Tech stack
 
@@ -84,8 +86,8 @@ pnpm install
 # 2. Start dependency services (MongoDB / Redis / Elasticsearch / PlantUML)
 docker compose up -d
 
-# 3. Set up env file for the API
-cp apps/crowi-api/.env.sample apps/crowi-api/.env
+# 3. Set up env file at the repo root (loaded by the api at boot via dotenv)
+cp .env.sample .env
 # Edit MONGO_URI / REDIS_URL / PASSWORD_SEED / CROWI_ENCRYPTION_KEY etc.
 
 # 4. Run everything (api on :3300, web on :3301, plugins compiled in watch mode)
@@ -95,15 +97,14 @@ pnpm dev
 Other targeted scripts:
 
 ```bash
-pnpm dev:api       # just the API (no Next.js)
-pnpm dev:runner    # API + plugins via the dev-runner only
+pnpm dev:api       # just the API + plugins (no Next.js)
 pnpm dev:web       # just the Next.js frontend
 pnpm dev:site      # crowi.wiki LP + docs (port 3401)
 ```
 
 ## Environment variables
 
-`apps/crowi-api/.env.sample` lists the full set. Highlights:
+`.env.sample` (at the repo root) lists the full set. Highlights:
 
 | Variable | Purpose |
 | --- | --- |
