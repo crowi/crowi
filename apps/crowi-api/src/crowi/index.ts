@@ -27,6 +27,7 @@ import { resetKeyProvider } from 'src/util/crypto';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { type Renderer, createRenderer } from 'src/renderer';
 import { registerRenderCacheInvalidation } from 'src/events/render-cache';
+import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runAwsConfigMigration } from 'src/util/aws-config-migration';
 import expressInit from './express-init';
 
@@ -238,6 +239,11 @@ class Crowi {
     // happen here (not in setupEvents) because the listener captures
     // the renderer.cache handle constructed one line above.
     registerRenderCacheInvalidation(this);
+    // RFC-0002 Phase 8: dispatch `@username` mention notifications on
+    // page save. Wired here (not in `setupEvents`) because the dispatcher
+    // reads `Revision.meta.mentions[]` produced by the renderer pipeline,
+    // so it must register after `setupRenderer` has run.
+    registerMentionDispatch(this);
     // Eagerly initialise heavy ESM-only deps (jiti + shiki +
     // remark-*). The first pipeline run otherwise pays ~200ms cold-
     // load latency; we move that cost to boot time. Fire-and-forget —
