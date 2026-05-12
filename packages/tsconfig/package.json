@@ -1,0 +1,9 @@
+{
+  "name": "@crowi/tsconfig",
+  "version": "0.1.0-dev",
+  "description": "Shared TypeScript configuration presets for Crowi monorepo",
+  "files": ["*.json"],
+  "publishConfig": {
+    "access": "public"
+  }
+}
