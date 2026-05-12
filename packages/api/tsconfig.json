@@ -1,31 +1,22 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "@crowi/tsconfig/app-node.json",
   "compilerOptions": {
-    "target": "es2021",
-    "module": "commonjs",
-    "lib": ["es2021"],
-    "moduleResolution": "node",
-    "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "jsx": "react",
-    "allowJs": true,
-    "checkJs": false,
     "outDir": "./dist",
-    "sourceMap": true,
-    "declaration": true,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
     "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
       "src/*": ["src/*"]
     },
     "composite": true,
-    "noEmit": false
+    "declaration": true,
+    "sourceMap": true,
+    "noEmit": false,
+    "allowJs": true,
+    "checkJs": false,
+    "jsx": "react",
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
   },
   "include": ["src"],
   "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*", "dist"]

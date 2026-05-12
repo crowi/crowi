@@ -96,6 +96,7 @@
     "@crowi/plugin-renderer-plantuml": "workspace:*",
     "@crowi/plugin-storage-aws-s3": "workspace:*",
     "@crowi/plugin-storage-local": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
     "@types/bcryptjs": "^3.0.0",
     "@types/classnames": "^2.2.9",
     "@types/connect-flash": "^0.0.40",
