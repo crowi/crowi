@@ -128,6 +128,25 @@ scope: medium
 - **medium**: 新契約 + API + UI / 複数 commit / 数百行
 - **large**: 新モデル or 新 schema or 外部サービス連携。**planner で task 分割を強く検討**
 
+### Multi-phase spec の扱い
+
+spec 中に `### Phase N: <title>` ヘッダが **2 本以上** あれば、その spec は **multi-phase**
+として扱う。1 spec = 1 task は変えないが、task.json に `phases[]` を持たせて phase 単位で
+plan→impl→simplify→review→commit のサイクルを回し、commit ごとに次の phase に進む。
+
+phase の `autoContinue` フラグはヘッダの末尾マーカーから自動判定する:
+
+- ヘッダに **「(即時 / 非衝突)」「(no conflict)」** などの marker → `autoContinue: true`
+- ヘッダに **「(要調整)」「(needs coordination)」「(blocked by …)」** などの marker → `autoContinue: false`
+- どちらでもない → `autoContinue: true` をデフォルト (== 通常はノンストップ)
+
+`autoContinue: false` な phase に到達したら **その phase の commit 直前** で停止し、ユーザーに
+「Phase N は要調整。続けるなら `/feature feature-xxx --phase=N` を起動」と報告する。
+`autoContinue: true` な phase は commit 後そのまま次の phase の plan に進む。
+
+phase 完了 = その phase に紐付くすべての commit が landed。spec の `## 受け入れ基準` を
+phase ごとに分けて書いてある場合、reviewer は **その phase の AC のみ** をチェックする。
+
 ### task ファイルスキーマ (`tasks/{id}.json`)
 
 ```json
@@ -182,6 +201,58 @@ scope: medium
 }
 ```
 
+#### Multi-phase 版の task スキーマ
+
+multi-phase spec の場合、`commitPlan` の代わりに `phases[]` を持つ:
+
+```json
+{
+  "id": "feature-monorepo-packages-restructure",
+  "name": "モノレポ packages の publish 構成大改修",
+  "status": "PLANNED",
+  "scope": "large",
+  "currentPhase": "phase-1",
+  "phases": [
+    {
+      "id": "phase-1",
+      "title": "workspace: プロトコル徹底",
+      "specSectionAnchor": "### Phase 1: workspace: プロトコル徹底 (即時 / 非衝突)",
+      "status": "PLANNED",
+      "autoContinue": true,
+      "commitPlan": [
+        {"type": "refactor", "scope": "deps", "title": "switch all internal deps to workspace:^", "files": ["..."]}
+      ],
+      "commitShas": []
+    },
+    {
+      "id": "phase-2",
+      "title": "peerDependencies 明文化",
+      "specSectionAnchor": "### Phase 2: peerDependencies 明文化 (即時 / 非衝突)",
+      "status": "PLANNED",
+      "autoContinue": true,
+      "commitPlan": [...],
+      "commitShas": []
+    },
+    {
+      "id": "phase-5",
+      "title": "apps/crowi-api → packages/api 移動",
+      "specSectionAnchor": "### Phase 5: apps/crowi-api → packages/api 移動 (要調整 / 並行 worktree と衝突可能性あり)",
+      "status": "PLANNED",
+      "autoContinue": false,
+      "commitPlan": [...],
+      "commitShas": []
+    }
+  ],
+  "context": { ... },
+  "history": [
+    {"phase": "planner", "at": "ISO8601", "summary": "9 phases 抽出。Phase 1-4 を autoContinue=true、5-9 を false で初期化"}
+  ]
+}
+```
+
+phase ごとの status:`PLANNED → IN_PROGRESS → REVIEW → (APPROVED → COMMITTED) | NEEDS_WORK`。
+全 phase が COMMITTED になったら task 全体の `status = COMMITTED`、`queue.currentTask = null`。
+
 ## 起動フロー (skill 内手順)
 
 `/feature {name}` が呼ばれたら以下を実行:
@@ -213,6 +284,8 @@ scope: medium
 
 ### 3. agent チェーン
 
+#### Single-phase (= 通常の small/medium spec)
+
 ```
 3.1. planner (起動した場合) が context を充填して REVIEW pending 状態に
 3.2. implementer: task.json を読んで実装、commitPlan を埋め、必須チェック後に REVIEW
@@ -220,7 +293,28 @@ scope: medium
 3.4. reviewer: APPROVED または NEEDS_WORK
 3.5. NEEDS_WORK なら implementer に戻す (最大 maxReviewAttempts 回)
 3.6. APPROVED → committer が commitPlan に従って複数 commit
+3.7. task.status = COMMITTED → step 4 (完了報告)
 ```
+
+#### Multi-phase (spec に `### Phase N:` が 2 本以上)
+
+```
+3.0. planner が spec から phases[] を抽出して task.json に書き込む (1 回だけ)
+3.1. task.json から最初の PLANNED な phase を pick → currentPhase に
+3.2. その phase に対して 3.1〜3.6 (single-phase と同じサイクル) を回す
+     commitPlan / acceptanceCriteria は phase ローカルのものを使う
+3.3. phase.status = COMMITTED に更新、currentPhase は次の PLANNED な phase に
+3.4. 次の phase の autoContinue を判定:
+     - true → 3.1 (loop)
+     - false → 停止 + 報告: 「Phase N (タイトル) は要調整。続けるなら
+       `/feature {name} --phase=N` を起動」
+     - 次 phase なし (全 phase COMMITTED) → task.status = COMMITTED、step 4
+```
+
+`--phase=N` で個別 phase を resume:
+- 既存 task.json を読み、phase-N を currentPhase にセット
+- 通常のサイクル (3.2) を回す
+- 完了したら 3.3〜3.4 (autoContinue 判定) を辿る
 
 #### 連続実行ルール (最重要)
 
@@ -240,7 +334,10 @@ spec phase でユーザー承認を取った後 (= skill 起動時の **唯一**
 | reviewer (APPROVED) | **committer を即起動** ("review APPROVED した、commit する" 等の予告で停止禁止) |
 | reviewer (NEEDS_WORK, attempts < max) | implementer に戻す |
 | reviewer (NEEDS_WORK, attempts == max) | 停止 + human escalation |
-| committer (SUCCESS) | step 4 (完了報告) |
+| committer (SUCCESS) **— single-phase** | step 4 (完了報告) |
+| committer (SUCCESS) **— multi-phase、次 phase あり、autoContinue=true** | 次 phase の planner / implementer を即起動 (停止禁止) |
+| committer (SUCCESS) **— multi-phase、次 phase あり、autoContinue=false** | 停止 + 報告 (gated phase) |
+| committer (SUCCESS) **— multi-phase、次 phase なし** | task.status = COMMITTED → step 4 |
 
 「`simplify` が "now invoke reviewer" と書いたら起動する」のようなマジック文字列ハンドシェイクは
 **禁止**。phase の status / 戻り値 (成功・失敗・NEEDS_WORK) だけを判断材料にする。
@@ -251,6 +348,8 @@ spec phase でユーザー承認を取った後 (= skill 起動時の **唯一**
 2. **必須チェックの失敗** (type-check / test / lint / format / pre-commit hook) → 停止して報告
 3. **commitPlan ⇄ diff の不整合** が committer 段階で解消できないとき → 停止して報告
 4. **agent からの明示的な escalate 要求** (例: spec 読解で曖昧、設計判断が必要、外部 secret 要求)
+5. **(multi-phase only)** 次 phase の `autoContinue: false` — gated phase 直前。
+   "Phase N は要調整、続けるなら `--phase=N` で起動" を報告して停止。
 
 #### 言い回しチェックリスト (turn を締める前に必ず確認)
 
@@ -276,11 +375,16 @@ PLANNED → IN_PROGRESS → REVIEW → (APPROVED → COMMITTED) | NEEDS_WORK →
 
 ```
 /feature {name}                # 全自動 (会話前提)
+/feature {name} --phase=N      # multi-phase spec の Phase N から resume (gated phase 通過用)
 /feature plan {name}           # planner だけ
 /feature implement {id}        # implementer だけ (NEEDS_WORK / IN_PROGRESS のとき)
 /feature review {id}           # reviewer だけ (REVIEW のとき)
 /feature commit {id}           # committer だけ (APPROVED のとき)
 ```
+
+`--phase=N` は task.json の `phases[]` から phase-N を pick して currentPhase にセットし、
+通常のサイクル (3.2) に入る。**autoContinue 判定は通常通り走る** ので、N から最後まで
+auto-continue が連続していれば一気に最後まで進む。
 
 migration skill と同じパターン。
 
