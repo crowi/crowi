@@ -6,6 +6,7 @@ import installerRoutes from './installer';
 import tokenAuthRoutes from './tokenAuth';
 import meRoutes from './me';
 import pageRoutes from './page';
+import pagePreviewRoutes from './page-preview';
 import userRoutes from './user';
 import commentRoutes from './comment';
 import bookmarkRoutes from './bookmark';
@@ -52,6 +53,7 @@ export default (crowi: Crowi, app: Express) => {
 
   const meRouter = meRoutes(crowi, app);
   const pageRouter = pageRoutes(crowi, app);
+  const pagePreviewRouter = pagePreviewRoutes(crowi, app);
   const userRouter = userRoutes(crowi, app);
   const commentRouter = commentRoutes(crowi, app);
   const bookmarkRouter = bookmarkRoutes(crowi, app);
@@ -64,6 +66,7 @@ export default (crowi: Crowi, app: Express) => {
   debug('Mounting authenticated routes (JWT required)');
   authenticatedRouter.use(meRouter);
   authenticatedRouter.use(pageRouter);
+  authenticatedRouter.use(pagePreviewRouter);
   authenticatedRouter.use(userRouter);
   authenticatedRouter.use(commentRouter);
   authenticatedRouter.use(bookmarkRouter);
