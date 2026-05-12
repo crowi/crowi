@@ -1,6 +1,6 @@
 # RFC-0002: Renderer Plugin Architecture
 
-- **Status**: Draft (round 3 — implementation feedback integrated)
+- **Status**: Draft (round 3.1 — `renderer:rebuild` status correction)
 - **Target**: Crowi 2.1 release
 - **Owner**: TBD
 - **Last updated**: 2026-05-12
@@ -49,10 +49,21 @@ implementation. Major changes from round 2:
 - **`AuthContext`** is interface-stable but `config()` throws until
   Phase 7; no-I/O plugins must not call it.
 - **Migration command framework** is now a separate future RFC
-  (RFC-0008). `renderer:rebuild` and `wikilink migrator` are listed
-  here as scope items, but their command infrastructure is deferred.
+  (RFC-0008). `wikilink-migrate` ships in v2.1 as a standalone
+  command. **`renderer:rebuild` is deferred** to RFC-0008's framework;
+  v2.1 ships with a **parse-on-read fallback** for revisions without
+  `renderedAst` (see "Renderer rebuild deferral" below).
 - **Implementation notes section** added (jiti, shiki, hast-util-raw
   caveats — see end of document).
+
+### Round 3.1 correction
+
+Round 3 listed `renderer:rebuild` as a v2.1 in-scope command (some
+even marked "Phase 5.1 (done)"). This was incorrect: the command is
+not implemented and v2.1 will ship without it. Pages with missing or
+stale `renderedAst` render via the parse-on-read fallback path until
+RFC-0008's framework lands and `renderer:rebuild` is implemented on
+top of it.
 
 ## Goals
 
@@ -87,9 +98,11 @@ implementation. Major changes from round 2:
 - Hot-reload / install-without-restart (same constraint as RFC-0001).
 - Per-user renderer config. Renderer plugins are configured per-instance
   by operators, not per-user.
-- **Generic migration command framework**. Individual migration commands
-  (`renderer:rebuild`, `wikilink migrator`) ship in v2.1, but the
-  framework that registers and orchestrates them is deferred to RFC-0008.
+- **Generic migration command framework**. `wikilink-migrate` ships
+  in v2.1 as a standalone command. `renderer:rebuild` is deferred to
+  RFC-0008 (parse-on-read fallback covers v2.1). The framework that
+  registers and orchestrates such commands generically is deferred to
+  RFC-0008.
 
 ## Overview
 
@@ -184,12 +197,45 @@ Revision {
 ### Trade-off
 
 A renderer security fix or bug fix does NOT automatically improve past
-revisions' display. Operators must run `renderer:rebuild` to apply
-fixes to historical content. This is a deliberate choice — surprise
-visual changes to historical content are worse than the operational
-cost of a rebuild command.
+revisions' display. Operators must run `renderer:rebuild` (post-RFC-0008)
+to apply fixes to historical content. This is a deliberate choice —
+surprise visual changes to historical content are worse than the
+operational cost of a rebuild command.
 
-### `renderer:rebuild`
+Until `renderer:rebuild` is available, the parse-on-read fallback
+(see below) serves stale revisions correctly but at a per-request
+CPU cost.
+
+### Parse-on-read fallback
+
+For revisions where `renderedAst` is missing (v1.x revisions
+post-upgrade) or where `rendererVersion` mismatches the current
+pipeline version (rare; happens after a renderer upgrade until a
+hypothetical rebuild), the view-time pipeline falls back to parsing
+the revision body at request time:
+
+```
+view request → load Revision
+            → if renderedAst present AND rendererVersion matches:
+                 use renderedAst
+            → else:
+                 parse Revision.body through current pipeline
+                 (mode='read'; result NOT persisted)
+                 use the resulting AST
+            → mdast → hast → JSX → respond
+```
+
+The fallback is functionally equivalent to a cached render but pays
+parse+transform+render CPU on every read. For Crowi's typical load
+(low read RPS per page), this is acceptable as a transitional state.
+
+When RFC-0008's framework lands and `renderer:rebuild` is implemented
+on top of it, operators can populate `renderedAst` in bulk and
+eliminate the per-read CPU cost.
+
+### `renderer:rebuild` (deferred to RFC-0008)
+
+The intended interface, for context:
 
 ```bash
 crowi-admin renderer rebuild --dry-run
@@ -203,14 +249,10 @@ updates `renderedAst` and `rendererVersion`. Idempotent; safe to
 re-run. Processes in batches with bounded concurrency to avoid
 overwhelming embed plugins' rate limits.
 
-This command also handles the v1.x → v2.1 upgrade case: legacy
-revisions have no `renderedAst` field and must be populated before
-their content can display via the v2.1 view pipeline.
-
-The command itself ships in v2.1. The registration framework that
-makes it discoverable alongside other migrations (`wikilink migrator`,
-future v2.1 → v2.2 migrations, etc.) is **deferred to RFC-0008**.
-Until then, each command is implemented and exposed individually.
+Implementation is **deferred to RFC-0008**, which provides the
+generic migration command framework that this command will be
+registered against. v2.1 ships without this command; the parse-on-read
+fallback covers the gap.
 
 ## The `registerRenderer` extension
 
@@ -986,15 +1028,19 @@ Detection rule (to avoid false positives with HTML self-closing tags):
 - No whitespace until `>`
 - The "tag name" doesn't match a known HTML element
 
-The command framework that registers and orchestrates this (and
-`renderer:rebuild`, and future migrations) is **deferred to RFC-0008**.
+The command framework that registers and orchestrates this (and the
+future `renderer:rebuild`) is **deferred to RFC-0008**.
 
-### Renderer rebuild
+### Renderer rebuild (deferred)
 
 After v1.x → v2.1 upgrade, existing revisions have no `renderedAst`.
-Run `crowi-admin renderer rebuild` to populate it. Until rebuild
-completes, pages fall back to a runtime parse-on-read path (slower
-but functional). Once rebuilt, views serve from `renderedAst`.
+The intended remedy is `crowi-admin renderer rebuild` to populate the
+field in bulk. This command is **deferred to RFC-0008**.
+
+Until then, the **parse-on-read fallback** (described above in
+"Parse-on-read fallback") handles revisions without `renderedAst`
+correctly, at a per-request CPU cost. v2.1 ships in this state; the
+runtime fallback covers the gap until RFC-0008 lands.
 
 ### Markdown Fixer
 
@@ -1049,7 +1095,9 @@ Both can be enabled simultaneously.
 11. **Code block renderer return union** → `EmbedFragment | RenderResult`.
 12. **Cache cleanup on uninstall** → Unconditional, not gated by `--purge`.
 13. **Migration command framework** → Deferred to RFC-0008. v2.1 ships
-    individual commands.
+    `wikilink-migrate` as a standalone command. `renderer:rebuild` is
+    deferred to RFC-0008; the parse-on-read fallback covers the gap
+    in v2.1.
 
 ## Open questions
 
@@ -1094,6 +1142,7 @@ In scope:
 - Reservation API + cache contract (MongoDB `PluginRenderCache`)
 - `AuthContext` interface (stub in Phase 6, full impl in Phase 7)
 - `Revision.renderedAst` + `Revision.metadata` persistence
+- **Parse-on-read fallback** for revisions missing or stale `renderedAst`
 - Bundled core renderers (syntax highlight, GFM, anchors, wikilinks, mentions, emoji, autolinks)
 - `@crowi/plugin-renderer-katex` (Phase 6, landed)
 - `@crowi/plugin-renderer-mermaid` (Phase 6.1)
@@ -1101,12 +1150,13 @@ In scope:
 - `@crowi/plugin-renderer-github-embed` (Phase 7)
 - `@crowi/plugin-renderer-crowi-legacy` (Phase 6, landed)
 - `crowi-admin wikilink-migrate` command
-- `crowi-admin renderer rebuild` command
 - Page-save transaction contract
 - Mention extraction (Phase 6); mention notifier dispatch (Phase 8)
 
 Out of scope (deferred to later RFCs):
 
+- `crowi-admin renderer rebuild` command — deferred to **RFC-0008**.
+  Parse-on-read fallback covers the v2.1 release.
 - `@crowi/plugin-renderer-slack-embed`
 - `@crowi/plugin-renderer-d2`, `excalidraw`
 - Per-user OAuth token forwarding to renderers
@@ -1204,25 +1254,31 @@ fire-and-forget warmup so the first user-triggered render is fast.
    mentions, codeBlockLanguages). Mention extraction lands here; the
    dispatcher itself is Phase 8.
 3. **Phase 3 (done)**: SSR HTML generation with shiki, mdast → hast
-   → JSX pipeline, `Revision.renderedAst` persistence.
+   → JSX pipeline, `Revision.renderedAst` persistence, parse-on-read
+   fallback for revisions without `renderedAst`.
 4. **Phase 4 (done)**: Cache contract (MongoDB), reservation API,
    stale-while-revalidate, in-flight de-dup, error caching.
    `addEmbedTag` / `addUrlInlineExpander` / `addCodeBlockRenderer`
    registry plumbing.
 5. **Phase 5 (done)**: crowi-legacy plugin + wikilink migrator.
-6. **Phase 5.1 (done)**: `renderer:rebuild` batch command for
-   populating missing `renderedAst`.
-7. **Phase 6 (done)**: PlantUML, emoji, KaTeX plugins.
-8. **Phase 6.1**: Mermaid plugin (server-side SVG SSR, heavier
+6. **Phase 6 (done)**: PlantUML, emoji, KaTeX plugins.
+7. **Phase 6.1**: Mermaid plugin (server-side SVG SSR, heavier
    dependency). Split from Phase 6 because of dependency weight.
    DOMPurify upgrade for PlantUML SVG sanitization.
-9. **Phase 7**: `AuthContext` full implementation. GitHub Embed
+8. **Phase 7**: `AuthContext` full implementation. GitHub Embed
    plugin (cache + auth + reservation end-to-end). Admin UI
    token-scope guidance.
-10. **Phase 8**: Mention notifier dispatch — wire `Revision.metadata.mentions[]`
-    extraction to RFC-0001's `registerNotifier` via internal
-    dispatcher. Coordinate with RFC-0001's notifier RFC reopening if
-    needed.
+9. **Phase 8**: Mention notifier dispatch — wire `Revision.metadata.mentions[]`
+   extraction to RFC-0001's `registerNotifier` via internal
+   dispatcher. Coordinate with RFC-0001's notifier RFC reopening if
+   needed.
+
+### Deferred to RFC-0008
+
+- `crowi-admin renderer rebuild` command — depends on the migration
+  command framework defined in RFC-0008. v2.1 ships with the
+  parse-on-read fallback as the operational path; bulk pre-population
+  of `renderedAst` arrives once RFC-0008 lands.
 
 ### Currently out of release scope (per Phase plan)
 
