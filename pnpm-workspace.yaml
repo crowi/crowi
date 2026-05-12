@@ -1,3 +1,22 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Default catalog (pnpm 9+). Single source of truth for shared dev tools
+# and cross-cutting external peers. Per-package runtime deps (next / react /
+# mongoose / express / @aws-sdk/* etc.) stay out of the catalog — they are
+# intentionally allowed to drift per package.
+#
+# Note: apps/crowi-web and apps/crowi-site keep `@types/node: ^20` locally
+# (NOT catalog-ized) because Next.js Vercel runtime alignment with Node 22
+# typings has not been validated yet. They will be folded into the catalog
+# once verified.
+catalog:
+  typescript: ^5.8.3
+  tsup: ^8.3.5
+  "@types/node": ^22.15.30
+  jest: ^29.7.0
+  "@types/jest": ^29.5.14
+  ts-jest: ^29.3.4
+  "@ts-rest/core": ^3.52.1
+  zod: ^3.23.8

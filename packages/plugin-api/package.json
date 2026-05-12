@@ -18,14 +18,14 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@ts-rest/core": "^3.51.0",
-    "zod": "^3.23.8"
+    "@ts-rest/core": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@ts-rest/core": "^3.51.0",
-    "@types/node": "^22.10.2",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
-    "zod": "^3.23.8"
+    "@ts-rest/core": "catalog:",
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
   }
 }

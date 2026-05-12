@@ -23,6 +23,6 @@
     "nodemon": "^1.19.4",
     "ts-node": "^10.9.0",
     "tsconfig-paths": "^3.9.0",
-    "typescript": "^5.8.3"
+    "typescript": "catalog:"
   }
 }

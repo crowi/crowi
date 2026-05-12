@@ -27,14 +27,14 @@
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
-    "@types/jest": "^29.5.14",
+    "@types/jest": "catalog:",
     "@types/mdast": "^4.0.4",
-    "@types/node": "^22.10.2",
-    "jest": "^29.7.0",
+    "@types/node": "catalog:",
+    "jest": "catalog:",
     "remark-parse": "^11.0.0",
-    "ts-jest": "^29.3.4",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
     "unified": "^11.0.5"
   }
 }
