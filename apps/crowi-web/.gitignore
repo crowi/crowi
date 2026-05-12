@@ -40,5 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# paraglide compiled output (generated from messages/ — predev / prebuild script regenerates)
-/paraglide
+# paraglide compiled output (generated from messages/ — predev / prebuild script regenerates).
+# `**/paraglide` (not just `/paraglide`) so a stray output dir from a typo'd
+# `--outdir` flag (e.g. `--outdir ./src/paraglide`) also stays out of git.
+**/paraglide

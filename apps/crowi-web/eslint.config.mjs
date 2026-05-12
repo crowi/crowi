@@ -15,8 +15,10 @@ const eslintConfig = defineConfig([
     // Paraglide JS generated output. Each emitted file starts with
     // `/* eslint-disable */`, but our config raises every rule it would
     // disable to "off" by default, leaving ~320 "Unused eslint-disable
-    // directive" warnings that are pure noise.
-    "paraglide/**",
+    // directive" warnings that are pure noise. `**/paraglide/**` so the
+    // ignore catches stray outputs (e.g. `src/paraglide/` from a typo'd
+    // `--outdir` flag) too.
+    "**/paraglide/**",
   ]),
 ]);
 
