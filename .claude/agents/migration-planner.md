@@ -27,20 +27,20 @@ Crowi 2.0 移行プロジェクトの **プランナー**。
    ```bash
    # 例: pages.create の場合
    grep -rn "createPage\|CreatePageRequest" packages/api-contract/src/
-   grep -rn "createPage" apps/crowi-api/src/routes/ts-rest/
+   grep -rn "createPage" packages/api/src/routes/ts-rest/
    ```
 
 2. **旧実装の場所と挙動の特定**
-   - `apps/crowi-api/src/controllers/{feature}.ts`
-   - `apps/crowi-api/src/routes/api/{feature}.ts` または `routes/{admin,login,me}.ts`
-   - `apps/crowi-api/src/routes/index.ts` 内のミドルウェア構成 (`AccessTokenParser`, `LoginRequired`, `csrf`)
-   - `apps/crowi-api/views/{feature}/*.html` (Swig)
-   - `apps/crowi-api/src/models/{model}.ts` (Mongoose)
+   - `packages/api/src/controllers/{feature}.ts`
+   - `packages/api/src/routes/api/{feature}.ts` または `routes/{admin,login,me}.ts`
+   - `packages/api/src/routes/index.ts` 内のミドルウェア構成 (`AccessTokenParser`, `LoginRequired`, `csrf`)
+   - `packages/api/views/{feature}/*.html` (Swig)
+   - `packages/api/src/models/{model}.ts` (Mongoose)
 
 3. **新側の置き場所の決定**
    - 契約: `packages/api-contract/src/contracts/{feature}.ts`
    - スキーマ: `packages/api-contract/src/schemas/{feature}.ts`
-   - API: `apps/crowi-api/src/routes/ts-rest/{feature}.ts`
+   - API: `packages/api/src/routes/ts-rest/{feature}.ts`
    - UI: `apps/crowi-web/src/app/(auth or public)/...`
 
 4. **task ファイルの作成**
@@ -62,13 +62,13 @@ Crowi 2.0 移行プロジェクトの **プランナー**。
 
 ```
 # 旧実装
-apps/crowi-api/src/controllers/  # Express controllers
-apps/crowi-api/src/routes/       # Express ルート (api/, admin.ts, login.ts, me.ts)
-apps/crowi-api/views/            # Swig テンプレート
-apps/crowi-api/src/models/       # Mongoose
+packages/api/src/controllers/  # Express controllers
+packages/api/src/routes/       # Express ルート (api/, admin.ts, login.ts, me.ts)
+packages/api/views/            # Swig テンプレート
+packages/api/src/models/       # Mongoose
 
 # 新実装
-apps/crowi-api/src/routes/ts-rest/   # ts-rest 実装
+packages/api/src/routes/ts-rest/   # ts-rest 実装
 apps/crowi-web/src/app/              # Next.js App Router
 packages/api-contract/src/           # ts-rest 契約 + Zod スキーマ
 ```
@@ -86,18 +86,18 @@ packages/api-contract/src/           # ts-rest 契約 + Zod スキーマ
   "dependencies": ["他タスクID"],
   "context": {
     "oldImpl": [
-      "apps/crowi-api/src/controllers/page.ts:554-583 (api.create)",
-      "apps/crowi-api/src/routes/api/page.ts:10"
+      "packages/api/src/controllers/page.ts:554-583 (api.create)",
+      "packages/api/src/routes/api/page.ts:10"
     ],
     "newImpl": [
-      "apps/crowi-api/src/routes/ts-rest/page.ts (createPage stub)"
+      "packages/api/src/routes/ts-rest/page.ts (createPage stub)"
     ],
     "contracts": [
       "packages/api-contract/src/contracts/page.ts:60 (createPage)",
       "packages/api-contract/src/schemas/page.ts:127 (CreatePageRequestSchema)"
     ],
-    "models": ["apps/crowi-api/src/models/page.ts"],
-    "views": ["apps/crowi-api/views/page/list.html (旧 Swig、参考まで)"],
+    "models": ["packages/api/src/models/page.ts"],
+    "views": ["packages/api/views/page/list.html (旧 Swig、参考まで)"],
     "relatedPRs": ["#894 (page list API)", "#896 (single page UI)"],
     "architecturalNotes": "authenticatedRouter に jwtAuth 適用済、CSRF 不要。Page.createPage モデル関数に委譲する設計"
   },

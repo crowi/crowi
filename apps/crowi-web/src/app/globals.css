@@ -13,7 +13,7 @@
 
 /*
  * Crowi Theme
- * Original colors from apps/crowi-api/resource/css/_theme.scss:
+ * Original colors from packages/api/resource/css/_theme.scss:
  * - Primary: #43676b (teal green)
  * - Header Background: #263a3c (dark teal)
  * - Aside Background: #f8f9fa (light gray)
@@ -290,7 +290,7 @@
  * The server emits these shells around plugin-rendered embeds. The
  * structural classes here apply a subtle skeleton background so
  * page layout stays stable while real embed HTML lands. Class names
- * are owned by `apps/crowi-api/src/renderer/cache/reservation.ts` —
+ * are owned by `packages/api/src/renderer/cache/reservation.ts` —
  * see the comment block at the top of that file for the naming
  * convention.
  */

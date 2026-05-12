@@ -61,7 +61,7 @@ export default (crowi: Crowi) => {
   );
 
   attachmentSchema.virtual('fileUrl').get(function (this: AttachmentDocument) {
-    // Streamed via the ts-rest router at `apps/crowi-api/src/routes/ts-rest/attachment.ts`.
+    // Streamed via the ts-rest router at `packages/api/src/routes/ts-rest/attachment.ts`.
     // The legacy `/files/:id` route now 302-redirects here for back-compat
     // with body URLs persisted before the migration.
     return `/api/v2/attachments/${this._id}`;

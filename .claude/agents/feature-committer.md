@@ -62,7 +62,7 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
   "type": "feat",            // feat / fix / refactor / test / docs / chore
   "scope": "api",            // api / web / api-contract / todo / *
   "title": "implement attachment thumbnail generation",
-  "files": ["apps/crowi-api/src/util/thumbnail.ts", "..."]
+  "files": ["packages/api/src/util/thumbnail.ts", "..."]
 }
 ```
 

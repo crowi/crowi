@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Numbered pager shape for admin list views. Mirrors the legacy
- * `createPager` helper (apps/crowi-api/src/controllers/admin.ts:22-93)
+ * `createPager` helper (packages/api/src/controllers/admin.ts:22-93)
  * so the wire format is forward-compatible across the migration.
  *
  * Distinct from `PagerSchema` (schemas/page.ts), which is the

@@ -5,7 +5,7 @@ description: |
   spec → planner → implementer → simplify → reviewer → committer まで自動で進める。
   キーワード: feature, 新機能, 開発, build, 設計, spec
 globs:
-  - "apps/crowi-api/src/routes/ts-rest/**"
+  - "packages/api/src/routes/ts-rest/**"
   - "apps/crowi-web/src/app/**"
   - "packages/api-contract/src/**"
 ---
@@ -158,14 +158,14 @@ phase ごとに分けて書いてある場合、reviewer は **その phase の 
   "context": {
     "specPath": ".feature-state/specs/feature-attachment-thumbnail.md",
     "reuseTargets": [
-      "apps/crowi-api/src/util/fileUploader.ts (driver 抽象を再利用)",
+      "packages/api/src/util/fileUploader.ts (driver 抽象を再利用)",
       "apps/crowi-web/src/components/page-view/AttachmentList.tsx (一覧 UI に組み込み)"
     ],
     "newFiles": [
-      "apps/crowi-api/src/util/thumbnail.ts (sharp ラッパー)",
+      "packages/api/src/util/thumbnail.ts (sharp ラッパー)",
       "packages/api-contract/src/contracts/attachment-thumbnail.ts (新契約)"
     ],
-    "models": ["apps/crowi-api/src/models/attachment.ts (thumbnail フィールド追加)"],
+    "models": ["packages/api/src/models/attachment.ts (thumbnail フィールド追加)"],
     "newDeps": ["sharp (画像処理)"],
     "architecturalNotes": "Storage driver 経由で生成・保存。同期処理 (アップロード時にブロック)。"
   },
@@ -180,13 +180,13 @@ phase ごとに分けて書いてある場合、reviewer は **その phase の 
       "type": "feat",
       "scope": "api",
       "title": "implement attachment thumbnail generation",
-      "files": ["apps/crowi-api/src/util/thumbnail.ts", "..."]
+      "files": ["packages/api/src/util/thumbnail.ts", "..."]
     },
     {
       "type": "test",
       "scope": "api",
       "title": "cover thumbnail generation edge cases",
-      "files": ["apps/crowi-api/src/util/thumbnail.test.ts"]
+      "files": ["packages/api/src/util/thumbnail.test.ts"]
     },
     {
       "type": "docs",

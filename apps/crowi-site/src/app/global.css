@@ -3,7 +3,7 @@
 
 /*
  * Crowi brand overrides on top of the default Fumadocs (neutral) theme.
- * Source colors from apps/crowi-api/resource/css/_theme.scss:
+ * Source colors from packages/api/resource/css/_theme.scss:
  * - Primary: #43676b (teal green)  → oklch(0.465 0.04 192)
  * - Header:  #263a3c (dark teal)
  *

@@ -31,7 +31,7 @@ The plugin:
 
 Network or server errors are cached as `RenderError` (`network` /
 `timeout` / `not_found`) with the per-code TTL from
-`apps/crowi-api/src/renderer/cache/index.ts:RENDER_ERROR_TTL`, so a
+`packages/api/src/renderer/cache/index.ts:RENDER_ERROR_TTL`, so a
 brief PlantUML outage doesn't hammer the server.
 
 ## Install

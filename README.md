@@ -33,11 +33,11 @@ This repository is a Turborepo + pnpm workspace.
 ```
 crowi/
 ├── apps/
-│   ├── crowi-api/         # Express 4 + ts-rest 3 API library (port 3300)
 │   ├── crowi-web/         # Next.js 16 frontend (port 3301)
 │   ├── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 3401)
 │   └── crowi-dev-runner/  # Local launcher; mirrors `crowi-admin init` runner repo
 └── packages/
+    ├── api/                          # Express 4 + ts-rest 3 API library (port 3300)
     ├── api-contract/                  # Shared ts-rest contracts + Zod schemas
     ├── plugin-api/                    # Plugin SDK (CrowiPlugin / registries / context)
     ├── plugin-aws/                    # Shared AWS credentials base plugin
@@ -85,7 +85,7 @@ pnpm install
 docker compose up -d
 
 # 3. Set up env file for the API
-cp apps/crowi-api/.env.sample apps/crowi-api/.env
+cp packages/api/.env.sample packages/api/.env
 # Edit MONGO_URI / REDIS_URL / PASSWORD_SEED / CROWI_ENCRYPTION_KEY etc.
 
 # 4. Run everything (api on :3300, web on :3301, plugins compiled in watch mode)
@@ -103,7 +103,7 @@ pnpm dev:site      # crowi.wiki LP + docs (port 3401)
 
 ## Environment variables
 
-`apps/crowi-api/.env.sample` lists the full set. Highlights:
+`packages/api/.env.sample` lists the full set. Highlights:
 
 | Variable | Purpose |
 | --- | --- |

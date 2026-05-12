@@ -10,7 +10,7 @@ const debug = Debug('crowi:routes:ts-rest:admin:security');
 
 /**
  * Default values for the security:* config keys, mirroring the legacy
- * `getArrayForInstalling` defaults in `apps/crowi-api/src/models/config.ts`.
+ * `getArrayForInstalling` defaults in `packages/api/src/models/config.ts`.
  *
  * - basicName / basicSecret are not set on a fresh install -> empty string
  * - registrationMode defaults to 'Open'

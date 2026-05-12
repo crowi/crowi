@@ -5,7 +5,7 @@ import emojiPlugin, { loadRemarkEmoji } from './index';
 
 /**
  * Minimal RendererRegistry capture stub — mirrors the shape used by
- * `apps/crowi-api/src/renderer/registry.ts`. Lets us assert
+ * `packages/api/src/renderer/registry.ts`. Lets us assert
  * `registerRenderer` queues exactly one unified plugin on the transform
  * phase without coupling the plugin unit-test to the api package.
  */

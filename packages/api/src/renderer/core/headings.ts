@@ -11,7 +11,7 @@ import type { PipelineEsmDeps, PipelineMetadata } from '../pipeline';
  *
  * The factory takes the ESM deps because `github-slugger` /
  * `mdast-util-to-string` are ESM-only and cannot be statically
- * imported from `apps/crowi-api` (CJS). It returns a unified plugin
+ * imported from `packages/api` (CJS). It returns a unified plugin
  * that accepts `metadata` as its option.
  */
 export type UnifiedTransformPlugin = (metadata: PipelineMetadata) => (tree: Root) => void;

@@ -3,13 +3,13 @@ import type { AdminPager } from '@crowi/api-contract';
 /**
  * Maximum number of numbered page buttons rendered around the current page.
  * Mirrors the legacy `MAX_PAGE_LIST = 5` in the admin controller (legacy
- * `apps/crowi-api/src/controllers/admin.ts:16`).
+ * `packages/api/src/controllers/admin.ts:16`).
  */
 export const MAX_PAGE_LIST = 5;
 
 /**
  * Build a pager bundle compatible with the legacy `createPager` helper
- * (apps/crowi-api/src/controllers/admin.ts:22-93). The wire format is kept
+ * (packages/api/src/controllers/admin.ts:22-93). The wire format is kept
  * identical so the new admin UI can consume the same numbered pager + dots
  * without translation, and the helper is shared across every admin list
  * view that needs paging (users, groups, attachments, ...).

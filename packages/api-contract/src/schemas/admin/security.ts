@@ -10,7 +10,7 @@ import { z } from 'zod';
  * boundary. UIs can present 'Restricted' to users while sending 'Resricted'
  * over the wire.
  *
- * See: apps/crowi-api/src/models/config.ts (SECURITY_REGISTRATION_MODE_RESTRICTED)
+ * See: packages/api/src/models/config.ts (SECURITY_REGISTRATION_MODE_RESTRICTED)
  */
 export const RegistrationModeSchema = z.enum(['Open', 'Resricted', 'Closed']);
 export type RegistrationMode = z.infer<typeof RegistrationModeSchema>;

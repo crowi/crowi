@@ -5,10 +5,10 @@
   "watch": [
     "src/",
     "locales/",
-    "../../packages/plugin-api/dist/",
-    "../../packages/plugin-aws/dist/",
-    "../../packages/plugin-storage-local/dist/",
-    "../../packages/plugin-storage-aws-s3/dist/"
+    "../plugin-api/dist/",
+    "../plugin-aws/dist/",
+    "../plugin-storage-local/dist/",
+    "../plugin-storage-aws-s3/dist/"
   ],
   "ignore": [
     "*.tsx",

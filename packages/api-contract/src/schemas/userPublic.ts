@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Mirror of the User model's status constants (`apps/crowi-api/src/models/user.ts`):
+ * Mirror of the User model's status constants (`packages/api/src/models/user.ts`):
  *   1 REGISTERED, 2 ACTIVE, 3 SUSPENDED, 4 DELETED, 5 INVITED.
  *
  * Lives here (not in `./user`) to avoid a circular import with bookmark.ts.

@@ -1,11 +1,11 @@
 {
   "execMap": {
-    "ts": "ts-node -P ../crowi-api/tsconfig.json --files -r tsconfig-paths/register"
+    "ts": "ts-node -P ../../packages/api/tsconfig.json --files -r tsconfig-paths/register"
   },
   "watch": [
     "crowi.config.json",
-    "../crowi-api/src/",
-    "../crowi-api/locales/",
+    "../../packages/api/src/",
+    "../../packages/api/locales/",
     "../../packages/api-contract/dist/",
     "../../packages/plugin-api/dist/",
     "../../packages/plugin-aws/dist/",

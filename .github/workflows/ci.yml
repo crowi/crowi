@@ -44,7 +44,7 @@ jobs:
           key: mongodb-binaries-${{ runner.os }}-8.0
 
       - name: Pre-download MongoDB
-        working-directory: apps/crowi-api
+        working-directory: packages/api
         run: node -e "require('mongodb-memory-server').MongoMemoryServer.create().then(s => s.stop())"
         env:
           MONGOMS_VERSION: 8.0.4

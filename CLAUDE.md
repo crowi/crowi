@@ -20,28 +20,11 @@ security settings landed). See `TODO.md` for the up-to-date phase status.
 ```
 crowi/
 ├── apps/
-│   ├── crowi-api/                  # Express + ts-rest API library (port 3300 in dev)
-│   │   ├── src/
-│   │   │   ├── controllers/        # Legacy Swig-era handlers (still mounted; deprecated)
-│   │   │   ├── routes/
-│   │   │   │   ├── api/            # Legacy /_api/* endpoints
-│   │   │   │   ├── ts-rest/        # ★ New ts-rest handlers (mounted at /api/v2)
-│   │   │   │   ├── login.ts        # Legacy auth form routes
-│   │   │   │   └── admin.ts        # Legacy admin GET routes
-│   │   │   ├── models/             # Mongoose schemas
-│   │   │   ├── middlewares/        # jwtAuth / jwtAdminRequired / loginRequired / etc.
-│   │   │   ├── service/            # Business logic (search, notifications, config)
-│   │   │   ├── events/             # pageEvent / notificationEvent listeners
-│   │   │   ├── util/               # crypto, jwt, ts-rest helpers, link detector
-│   │   │   ├── plugin/             # PluginManager + registries + config-file loader
-│   │   │   ├── types/              # Express Request augmentation
-│   │   │   └── crowi/index.ts      # Crowi class (boot, setup, teardown)
-│   │   └── .env.sample
 │   ├── crowi-dev-runner/           # ★ Local launcher: mirrors a `crowi-admin init` runner repo
 │   │   ├── package.json            # deps: @crowi/api + @crowi/plugin-* (decides which plugins are available)
 │   │   ├── crowi.config.json       # which plugins to load + active driver names
 │   │   ├── .env / .env.sample      # runtime env (CWD-resolved)
-│   │   └── nodemon.json            # watches @crowi/api src + plugin dists, runs ../crowi-api/src/app.ts
+│   │   └── nodemon.json            # watches @crowi/api src + plugin dists, runs ../../packages/api/src/app.ts
 │   └── crowi-web/                  # Next.js 16 frontend (port 3301)
 │       └── src/
 │           ├── app/
@@ -51,6 +34,23 @@ crowi/
 │           ├── components/         # Page, page-view, page-list, admin, ui (shadcn)
 │           └── lib/                # React Query hooks, api-client, auth context
 └── packages/
+    ├── api/                        # Express + ts-rest API library (port 3300 in dev)
+    │   ├── src/
+    │   │   ├── controllers/        # Legacy Swig-era handlers (still mounted; deprecated)
+    │   │   ├── routes/
+    │   │   │   ├── api/            # Legacy /_api/* endpoints
+    │   │   │   ├── ts-rest/        # ★ New ts-rest handlers (mounted at /api/v2)
+    │   │   │   ├── login.ts        # Legacy auth form routes
+    │   │   │   └── admin.ts        # Legacy admin GET routes
+    │   │   ├── models/             # Mongoose schemas
+    │   │   ├── middlewares/        # jwtAuth / jwtAdminRequired / loginRequired / etc.
+    │   │   ├── service/            # Business logic (search, notifications, config)
+    │   │   ├── events/             # pageEvent / notificationEvent listeners
+    │   │   ├── util/               # crypto, jwt, ts-rest helpers, link detector
+    │   │   ├── plugin/             # PluginManager + registries + config-file loader
+    │   │   ├── types/              # Express Request augmentation
+    │   │   └── crowi/index.ts      # Crowi class (boot, setup, teardown)
+    │   └── .env.sample
     ├── api-contract/               # Shared ts-rest contracts + Zod schemas
     │   └── src/
     │       ├── contracts/          # ts-rest c.router definitions
@@ -128,17 +128,17 @@ manual-only when bypassing hooks.
 
 ## Architecture Overview
 
-### API server (`apps/crowi-api`)
+### API server (`packages/api`)
 - **Boot**: `Crowi.init()` runs `setupEncryption` → `setupDatabase` → `setupModels` → `setupRedisClient` → `setupSessionConfig` → `setupConfig` → `migrateConfig` → `setupSearcher` → `setupMailer` → `setupSlack` → `buildServer`.
 - **Routing**:
   - Public ts-rest routes (no auth)
   - Authenticated ts-rest routes under `jwtAuth(crowi)` (most page / user / comment / etc. endpoints)
   - Admin ts-rest routes under `jwtAdminRequired(crowi)` (= JWT + `user.admin === true`)
   - Legacy Express routes still mounted at `/_api/*`, `/login`, `/register`, etc. for back-compat
-- **Auth**: JWT (access + refresh tokens). `req.user` is augmented to `UserDocument` via `apps/crowi-api/src/types/express.ts`.
+- **Auth**: JWT (access + refresh tokens). `req.user` is augmented to `UserDocument` via `packages/api/src/types/express.ts`.
 - **Models** (Mongoose):
   - Page (with grant), Revision, User, Comment, Bookmark, Like (on Page), Watcher, Notification, Activity, Config, Backlink, Share, Attachment.
-- **Sensitive Config encryption**: `apps/crowi-api/src/util/crypto.ts` provides AES-256-GCM `encrypt` / `decrypt` / `isEncrypted`. Sensitive keys (OAuth secrets, AWS keys, SMTP password, Slack token) are listed in `models/config-sensitive.ts` and auto-encrypted by `Config.updateByParams` / decrypted by `Config.loadAllConfig` when `CROWI_ENCRYPTION_KEY` is set. Legacy plaintext rows pass through; admin can re-encrypt them via `/admin/crypto/reencrypt`.
+- **Sensitive Config encryption**: `packages/api/src/util/crypto.ts` provides AES-256-GCM `encrypt` / `decrypt` / `isEncrypted`. Sensitive keys (OAuth secrets, AWS keys, SMTP password, Slack token) are listed in `models/config-sensitive.ts` and auto-encrypted by `Config.updateByParams` / decrypted by `Config.loadAllConfig` when `CROWI_ENCRYPTION_KEY` is set. Legacy plaintext rows pass through; admin can re-encrypt them via `/admin/crypto/reencrypt`.
 
 ### Web frontend (`apps/crowi-web`)
 - **Routing**: App Router (`src/app/...`) with three Route Groups:
@@ -157,7 +157,7 @@ manual-only when bypassing hooks.
 
 ## Key Environment Variables
 
-See `apps/crowi-api/.env.sample`. Required / commonly-set:
+See `packages/api/.env.sample`. Required / commonly-set:
 - `MONGO_URI` — MongoDB connection
 - `REDIS_URL` — session / socket.io adapter
 - `PASSWORD_SEED` — legacy password hashing seed (still used for fallback verification)
