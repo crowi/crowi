@@ -1,34 +1,9 @@
 {
+  "extends": "@crowi/tsconfig/app-web.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@/.source/*": [
-        "./.source/*"
-      ]
+      "@/*": ["./src/*"],
+      "@/.source/*": ["./.source/*"]
     }
   },
   "include": [
@@ -39,9 +14,5 @@
     ".next/dev/types/**/*.ts",
     "source.config.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "out",
-    ".next"
-  ]
+  "exclude": ["node_modules", "out", ".next"]
 }

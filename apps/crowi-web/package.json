@@ -42,6 +42,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crowi/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4",
     "@types/hast": "^3.0.4",
     "@types/node": "^20",
