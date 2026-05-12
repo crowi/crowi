@@ -1,9 +1,17 @@
 name: Release
 
+# Manual-trigger-only while v2 is in active 0.x-dev development.
+# Switch to `push: branches: [main]` when the first real publish
+# (2.0.0-alpha1 or similar) is ready — at that point also:
+#   1. Set NPM_TOKEN secret (Automation Token or OIDC trusted publisher)
+#   2. Enable "Allow GitHub Actions to create and approve PRs" in repo settings
+#   3. Bump versions out of -dev via a `pnpm changeset version` Version PR
+#   4. Configure npm org @crowi provenance if desired
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
