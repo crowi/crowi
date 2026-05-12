@@ -1,70 +1,20 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
-import { toHast } from 'mdast-util-to-hast';
-import { raw } from 'hast-util-raw';
-import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import type { Nodes as HastNodes } from 'hast';
 import { Check, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 
 interface PageContentProps {
   page: PageWithRevision;
 }
 
-// Inline hast subset for the section-wrap pass we still run on the
-// client (URL-fragment highlight is a pure UI concern; see
-// architecturalNotes / history). Same shape as before — a small
-// element walker without bringing in @types/hast.
-type HastLike = {
-  type?: string;
-  tagName?: string;
-  properties?: Record<string, unknown>;
-  children?: HastLike[];
-  value?: string;
-};
-
-// Wrap each heading + its following sibling content in `<section
-// data-section-id="…">`. The heading keeps its `id` so anchor jumps
-// land on the heading; the section exists so we can highlight the
-// whole block when its heading is the URL fragment target.
-//
-// RFC-0002 Phase 3 implementer note: the server-side renderer pipeline
-// produces mdast, not hast; mdast has no `section` node. Three options
-// were on the table — emit `<section>` start/end as adjacent `html`
-// nodes, persist hast instead of mdast, or keep this small wrap on
-// the web side. We picked the third: it keeps the persisted shape
-// simple, the wrap is a UI concern (URL hash highlight) that doesn't
-// need to round-trip through the database, and it's a 25-line walk
-// that costs essentially nothing on render.
-const HEADING_RE = /^h[1-6]$/;
-function wrapSections(tree: HastLike): void {
-  if (!tree.children) return;
-  const out: HastLike[] = [];
-  let current: HastLike | null = null;
-
-  for (const child of tree.children) {
-    const isHeading = child.type === 'element' && typeof child.tagName === 'string' && HEADING_RE.test(child.tagName);
-    if (isHeading) {
-      const id = (child.properties?.id as string | undefined) ?? undefined;
-      current = {
-        type: 'element',
-        tagName: 'section',
-        properties: id ? { 'data-section-id': id } : {},
-        children: [child],
-      };
-      out.push(current);
-    } else if (current) {
-      current.children!.push(child);
-    } else {
-      out.push(child);
-    }
-  }
-
-  tree.children = out;
-}
+// `section` wrap + `<section>` highlight live in render-mdast.ts +
+// `TargetedSection` below. The show page passes `sectionWrap: true`
+// because the URL-hash highlight needs a wrappable element above each
+// heading. The editor preview keeps the wrap off — it has no URL hash
+// to react to and a flatter tree is closer to what the user typed.
 
 // Context delivers the URL fragment target (decoded, no leading `#`)
 // to the section component so it can render `className="is-target"`
@@ -354,53 +304,24 @@ export function PageContent({ page }: PageContentProps) {
 
   const targetHashContextValue = useMemo<TargetHashContextValue>(() => ({ hash: targetHash, clear: clearTarget }), [targetHash, clearTarget]);
 
-  // Build the rendered React tree from the server-side AST. mdast →
-  // hast → jsx is the same path react-markdown ran internally; doing
-  // it directly drops the duplicate parse + plugin chain on the client.
-  // `allowDangerousHtml: true` is required so shiki-highlighted code
-  // blocks (persisted as `html` nodes carrying `<pre class="shiki">…`)
-  // and any future embed plugins flow through to the React tree as
-  // `dangerouslySetInnerHTML` instead of being escaped.
+  // Build the rendered React tree from the server-side AST. The
+  // mdast → hast → raw → jsxRuntime pipeline now lives in the shared
+  // `renderMdastToReactNode` helper so the editor preview pane and
+  // this show path stay byte-identical for the same input.
   //
   // Memoized on `revisionId`, not `renderedAst`: react-query refetches
   // (window focus, polling) hand back fresh-identity-but-same-content
-  // AST objects, and we don't want to redo `toHast` + `wrapSections` +
-  // `toJsxRuntime` on each one. A new revision means a new `_id`.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // AST objects, and we don't want to redo the conversion on each one.
+  // A new revision means a new `_id`.
   const renderedNode = useMemo(() => {
-    if (!renderedAst) return null;
-    const hast = toHast(renderedAst as Parameters<typeof toHast>[0], { allowDangerousHtml: true });
-    if (!hast) return null;
-    // Section wrap (URL-hash highlight) runs BEFORE `raw()` so its
-    // walker only sees the shallow mdast-derived top-level tree —
-    // raw expansion of shiki output would otherwise inflate the
-    // walked node count by the size of every highlighted block.
-    // `<pre>` arrives here as a `raw` hast node; wrapSections groups
-    // it into the surrounding `<section>` either way.
-    wrapSections(hast as HastLike);
-    // `mdast-util-to-hast` with `allowDangerousHtml: true` converts
-    // `html` mdast nodes into `raw` hast nodes (a marker, not an
-    // element). `hast-util-to-jsx-runtime` ignores `raw` nodes, so
-    // shiki-rendered `<pre class="shiki ...">` html nodes would
-    // disappear entirely. `hast-util-raw` parses the raw HTML string
-    // into real hast elements that the JSX runtime can render.
-    const parsed = raw(hast as HastNodes);
-    return toJsxRuntime(parsed, {
-      Fragment,
-      jsx,
-      jsxs,
+    return renderMdastToReactNode(renderedAst, {
+      sectionWrap: true,
       // The library's component map is typed against its bundled
       // hast types; our component prop signatures are React-typed,
       // so we cast at the boundary.
-      components: components as unknown as Parameters<typeof toJsxRuntime>[1]['components'],
-      // `passNode: false` — otherwise every component receives a
-      // `node` prop which React stringifies onto the DOM as
-      // `node="[object Object]"`. `data-*` attributes are still
-      // forwarded normally via the rest props bag, so
-      // `TargetedSection` can keep reading `data-section-id` without
-      // the hast node escape hatch.
-      passNode: false,
+      components: components as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revisionId]);
 
   // Initial scroll. The browser's native anchor jump fires before
