@@ -6,9 +6,11 @@ import { AlertCircle, Loader2, Save, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
+import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
+import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
 import { m } from '@paraglide/messages.js';
@@ -35,7 +37,7 @@ export function EditPageClient() {
 function InvalidParamsView() {
   const router = useRouter();
   return (
-    <Card>
+    <Card className="max-w-4xl mx-auto">
       <CardHeader>
         <CardTitle>{m['edit.invalid_params_title']()}</CardTitle>
         <CardDescription>{m['edit.invalid_params_description']()}</CardDescription>
@@ -69,36 +71,36 @@ interface EditorShellProps {
 }
 
 function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, isSaving, feedback, pageId, onAttachError }: EditorShellProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<MarkdownEditorHandle>(null);
+  // Narrow-viewport tab state. We control `Tabs` so the inactive
+  // preview pane can skip its debounced fetch instead of running it
+  // in the background where the user can't see it. Wide viewports
+  // ignore this and always render both panes side-by-side.
+  const [narrowTab, setNarrowTab] = useState<'editor' | 'preview'>('editor');
 
   /**
-   * Insert a markdown snippet at the current cursor position. We mutate
-   * the body string and call `onChangeBody` so the parent state stays
-   * the source of truth — the textarea is controlled.
+   * Hand a markdown snippet to the editor's `insertAtCursor` handle —
+   * the imperative API mirrors what `attachment-insert-button` used
+   * with the old `<textarea>` (cursor-position insert, then focus
+   * restoration). State stays in the parent via the CodeMirror
+   * `updateListener` → `onChangeBody` bridge, so we don't have to
+   * thread the resulting body string back ourselves.
    */
   const insertAtCursor = (snippet: string): void => {
-    const el = textareaRef.current;
-    if (!el) {
-      // Fallback: append to end if for some reason the ref is unavailable.
+    const handle = editorRef.current;
+    if (!handle) {
+      // Defensive fallback: if the editor hasn't mounted yet (should
+      // not happen because the button lives inside the same shell),
+      // append to the end through the parent setter so the snippet
+      // isn't dropped.
       onChangeBody(body + snippet);
       return;
     }
-    const start = el.selectionStart ?? body.length;
-    const end = el.selectionEnd ?? body.length;
-    const next = body.slice(0, start) + snippet + body.slice(end);
-    onChangeBody(next);
-    // Restore cursor position to just after the inserted snippet on the
-    // next paint. Without this the cursor would jump to the end because
-    // React re-renders the textarea.
-    requestAnimationFrame(() => {
-      const cursor = start + snippet.length;
-      el.focus();
-      el.setSelectionRange(cursor, cursor);
-    });
+    handle.insertAtCursor(snippet);
   };
 
   return (
-    <Card>
+    <Card className="max-w-[1600px] mx-auto">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription className="truncate">{subtitle}</CardDescription>
@@ -112,15 +114,33 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
           </Alert>
         )}
 
-        <Textarea
-          ref={textareaRef}
-          value={body}
-          onChange={(event) => onChangeBody(event.target.value)}
-          disabled={isSaving}
-          placeholder={m['edit.placeholder']()}
-          className="font-mono min-h-[60vh]"
-          aria-label={m['edit.aria_body']()}
-        />
+        {/* Wide (md+): 2 columns side-by-side; narrow: Tabs with both
+            panels mounted (Radix `forceMount`) so switching tabs
+            doesn't unmount the CodeMirror view + lose the buffer.
+            `active` is forwarded to the narrow preview so its
+            debounced fetch only fires when the user is looking at it. */}
+        <div className="hidden md:grid md:grid-cols-2 md:gap-4">
+          <EditorPane ref={editorRef} value={body} onChange={onChangeBody} readonly={isSaving} ariaLabel={m['edit.aria_body']()} />
+          <PreviewPane source={body} />
+        </div>
+        <div className="md:hidden">
+          <Tabs value={narrowTab} onValueChange={(v) => setNarrowTab(v as 'editor' | 'preview')}>
+            <TabsList className="w-full">
+              <TabsTrigger value="editor" className="flex-1">
+                {m['edit.tab_editor']()}
+              </TabsTrigger>
+              <TabsTrigger value="preview" className="flex-1">
+                {m['edit.tab_preview']()}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="editor" forceMount className="data-[state=inactive]:hidden">
+              <EditorPane ref={editorRef} value={body} onChange={onChangeBody} readonly={isSaving} ariaLabel={m['edit.aria_body']()} />
+            </TabsContent>
+            <TabsContent value="preview" forceMount className="data-[state=inactive]:hidden">
+              <PreviewPane source={body} active={narrowTab === 'preview'} />
+            </TabsContent>
+          </Tabs>
+        </div>
 
         <div className="flex items-center justify-between gap-2">
           <AttachmentInsertButton pageId={pageId} onInsert={insertAtCursor} onError={onAttachError} />
@@ -137,6 +157,34 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+interface EditorPaneProps {
+  value: string;
+  onChange: (next: string) => void;
+  readonly: boolean;
+  ariaLabel: string;
+}
+
+const EditorPane = function EditorPane({ value, onChange, readonly, ariaLabel, ref }: EditorPaneProps & { ref: React.Ref<MarkdownEditorHandle> }) {
+  return (
+    <MarkdownEditor
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      readonly={readonly}
+      aria-label={ariaLabel}
+      className="min-h-[60vh] rounded-md border border-input bg-background font-mono text-sm focus-within:ring-1 focus-within:ring-ring [&_.cm-editor]:min-h-[60vh] [&_.cm-editor]:outline-none [&_.cm-scroller]:p-3 [&_.cm-content]:min-h-[60vh] [&_.cm-focused]:outline-none"
+    />
+  );
+};
+
+function PreviewPane({ source, active = true }: { source: string; active?: boolean }) {
+  return (
+    <div className="min-h-[60vh] rounded-md border border-input bg-background p-4 overflow-auto">
+      <MarkdownPreview source={source} active={active} />
+    </div>
   );
 }
 
@@ -198,7 +246,7 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
 
   if (isError || !page) {
     return (
-      <Alert variant="destructive">
+      <Alert variant="destructive" className="max-w-4xl mx-auto">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>{m['common.error']()}</AlertTitle>
         <AlertDescription>
