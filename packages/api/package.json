@@ -1,9 +1,17 @@
 {
   "name": "@crowi/api",
   "version": "2.0.0-dev",
-  "main": "src/app.ts",
+  "main": "dist/app.js",
+  "types": "dist/app.d.ts",
   "bin": {
     "crowi-api": "./dist/app.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "description": "The simple & powerful Wiki - API Server",
   "tags": [
@@ -31,7 +39,8 @@
     "type-check": "tsc --noEmit",
     "type-check:watch": "npm run type-check -- --watch",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "crypto:gen-key": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\""
+    "crypto:gen-key": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
+    "prepublishOnly": "chmod +x dist/app.js"
   },
   "dependencies": {
     "@crowi/api-contract": "workspace:^",

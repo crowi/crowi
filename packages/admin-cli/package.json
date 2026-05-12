@@ -13,11 +13,19 @@
       "require": "./dist/cli.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "prepublishOnly": "chmod +x dist/bin.js"
   },
   "dependencies": {
     "@crowi/api": "workspace:^",
