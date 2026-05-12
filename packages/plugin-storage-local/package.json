@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/katex": "^0.16.7",
     "@types/mdast": "^4.0.4",

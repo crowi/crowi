@@ -29,6 +29,7 @@
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
     "@crowi/plugin-aws": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

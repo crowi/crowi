@@ -22,6 +22,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crowi/tsconfig": "workspace:*",
     "@ts-rest/core": "catalog:",
     "@types/node": "catalog:",
     "tsup": "catalog:",

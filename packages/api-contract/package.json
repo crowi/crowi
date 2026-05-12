@@ -24,6 +24,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crowi/tsconfig": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "catalog:",
     "js-yaml": "^4.1.0",

@@ -422,6 +422,9 @@ importers:
         specifier: ^3.4.0
         version: 3.4.0
     devDependencies:
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.1.18
@@ -534,6 +537,9 @@ importers:
         specifier: 'catalog:'
         version: 3.25.56
     devDependencies:
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.1.18
@@ -577,6 +583,9 @@ importers:
         specifier: ^16.5.0
         version: 16.5.0
     devDependencies:
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/jest':
         specifier: 'catalog:'
         version: 29.5.14
@@ -608,6 +617,9 @@ importers:
         specifier: 'catalog:'
         version: 3.25.56
     devDependencies:
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -626,6 +638,9 @@ importers:
 
   packages/plugin-api:
     devDependencies:
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@ts-rest/core':
         specifier: 'catalog:'
         version: 3.52.1(@types/node@22.15.30)(zod@3.25.56)
@@ -647,6 +662,9 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.4)(typescript@5.8.3)
@@ -669,6 +687,9 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/jest':
         specifier: 'catalog:'
         version: 29.5.14
@@ -709,6 +730,9 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/jest':
         specifier: 'catalog:'
         version: 29.5.14
@@ -752,6 +776,9 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/jest':
         specifier: 'catalog:'
         version: 29.5.14
@@ -792,6 +819,9 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/jest':
         specifier: 'catalog:'
         version: 29.5.14
@@ -823,6 +853,9 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/jest':
         specifier: 'catalog:'
         version: 29.5.14
@@ -860,6 +893,9 @@ importers:
       '@crowi/plugin-aws':
         specifier: workspace:*
         version: link:../plugin-aws
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/node':
         specifier: 'catalog:'
         version: 22.15.30
@@ -878,6 +914,9 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/node':
         specifier: 'catalog:'
         version: 22.15.30
@@ -890,6 +929,8 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 3.25.56
+
+  packages/tsconfig: {}
 
 packages:
 

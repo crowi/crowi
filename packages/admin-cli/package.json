@@ -25,6 +25,7 @@
     "dotenv": "^16.5.0"
   },
   "devDependencies": {
+    "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
     "jest": "catalog:",
