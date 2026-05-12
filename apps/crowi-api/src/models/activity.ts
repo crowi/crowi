@@ -23,6 +23,7 @@ export interface ActivityModel extends Model<ActivityDocument> {
   removeByPageCommentDelete(comment: any): Promise<{ deletedCount: number }>;
   createByPageLike(page: any, user: any): Promise<ActivityDocument>;
   removeByPageUnlike(page: any, user: any): Promise<{ deletedCount: number }>;
+  createByPageMention(page: any, mentionedUser: any, author: any): Promise<ActivityDocument>;
   removeByPage(page: any): Promise<{ deletedCount: number }>;
   findByUser(user: any): Promise<ActivityDocument[]>;
   getActionUsersFromActivities(activities: ActivityDocument[]): any[];
@@ -156,6 +157,30 @@ export default (crowi: Crowi) => {
   };
 
   /**
+   * RFC-0002 Phase 8: record a `@username` mention on a page save.
+   *
+   * Unlike comment / like, MENTION is dispatched per mentioned-user from
+   * `events/mention-dispatch.ts` — the `Activity.post('save')` watcher
+   * fan-out path is intentionally skipped (see hook below) because a
+   * mention has a single intended recipient.
+   *
+   * @param {Page} page page document being mentioned in
+   * @param {User} mentionedUser user resolved from the `@username` token
+   * @param {User} author user who authored the revision
+   * @return {Promise<ActivityDocument>}
+   */
+  activitySchema.statics.createByPageMention = function (page, mentionedUser, author) {
+    const parameters = {
+      user: author._id,
+      targetModel: ActivityDefine.MODEL_PAGE,
+      target: page._id,
+      action: ActivityDefine.ACTION_MENTION,
+    };
+
+    return this.createByParameters(parameters);
+  };
+
+  /**
    * @param {Page} page
    * @return {Promise}
    */
@@ -206,8 +231,19 @@ export default (crowi: Crowi) => {
 
   /**
    * saved hook
+   *
+   * For COMMENT / LIKE we fan-out a notification to every page watcher
+   * via `getNotificationTargetUsers()` (the legacy behaviour). For
+   * MENTION the dispatcher in `events/mention-dispatch.ts` calls
+   * `Notification.upsertByActivity` directly for the single mentioned
+   * user, so we MUST skip the fan-out here — otherwise watchers would
+   * receive spurious MENTION notifications they were not the target of.
    */
   activitySchema.post('save', (savedActivity: ActivityDocument) => {
+    if (savedActivity.action === ActivityDefine.ACTION_MENTION) {
+      return;
+    }
+
     const Notification = crowi.model('Notification');
 
     savedActivity
