@@ -5,6 +5,7 @@ import { installerContract } from './installer';
 import { tokenAuthContract } from './tokenAuth';
 import { meContract } from './me';
 import { pageContract } from './page';
+import { pagePreviewContract } from './page-preview';
 import { userContract } from './user';
 import { commentContract } from './comment';
 import { bookmarkContract } from './bookmark';
@@ -25,6 +26,7 @@ export const apiContract = c.router({
   tokenAuth: tokenAuthContract,
   me: meContract,
   page: pageContract,
+  pagePreview: pagePreviewContract,
   user: userContract,
   comment: commentContract,
   bookmark: bookmarkContract,
