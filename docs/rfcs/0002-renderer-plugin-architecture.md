@@ -1,10 +1,11 @@
 # RFC-0002: Renderer Plugin Architecture
 
-- **Status**: Draft (round 2 — review feedback integrated)
+- **Status**: Draft (round 3 — implementation feedback integrated)
 - **Target**: Crowi 2.1 release
 - **Owner**: TBD
-- **Last updated**: 2026-05-10
+- **Last updated**: 2026-05-12
 - **Depends on**: RFC-0001 (Plugin Architecture)
+- **Implements**: Phase 1–6 landed in `rfc002-phase2/impl` branch; Phase 7+ in progress
 
 ## Summary
 
@@ -26,6 +27,33 @@ Three architectural commitments distinguish this design from a naive
    grammar. New surface syntax requires explicit RFC approval and
    is restricted to a small set of well-known patterns.
 
+## Round 3 changes
+
+Round 3 incorporates concrete decisions made during Phase 1–6
+implementation. Major changes from round 2:
+
+- **`RenderContext.mode`** expanded from `'edit' | 'view'` to
+  `'save' | 'read' | 'view' | 'edit'`.
+- **Render artifact persistence** moved from `Page.renderedHtml`
+  (HTML string on Page) to **`Revision.renderedAst`** (mdast JSON on
+  Revision). Rationale and trade-offs documented below.
+- **`EmbedRenderer.reservation`** is now optional (was required), to
+  accommodate no-I/O plugins like emoji.
+- **`addCodeBlockRenderer` return type** widened to
+  `EmbedFragment | RenderResult` union.
+- **`addNodeRenderer` contract** clarified: `void | Promise<void>`
+  with in-place AST mutation.
+- **Cache cleanup on plugin uninstall** clarified: cache is always
+  cleared on uninstall regardless of `--purge` flag (cache is derived
+  data, not user data).
+- **`AuthContext`** is interface-stable but `config()` throws until
+  Phase 7; no-I/O plugins must not call it.
+- **Migration command framework** is now a separate future RFC
+  (RFC-0008). `renderer:rebuild` and `wikilink migrator` are listed
+  here as scope items, but their command infrastructure is deferred.
+- **Implementation notes section** added (jiti, shiki, hast-util-raw
+  caveats — see end of document).
+
 ## Goals
 
 - **Renderer extensibility** for math, diagrams, syntax highlighting,
@@ -39,14 +67,16 @@ Three architectural commitments distinguish this design from a naive
   isolated from new installs.
 - **Markdown source remains the source of truth**. AST is derived; HTML
   is derived; both are caches over the canonical Markdown.
+- **Historical fidelity for revisions**. Past revisions render with the
+  renderer state at the time of save (preserved via `renderedAst`
+  persistence), unless explicitly rebuilt with `renderer:rebuild`.
 - **Stable plugin API across the v2.x line**. Renderer plugins authored
   against `@crowi/plugin-api@2.x` keep working through every v2 minor.
 
 ## Non-goals (this RFC)
 
 - WYSIWYG editor extensibility. The editor uses a single core engine
-  (CodeMirror 6 + Markdown decorations, per RFC-0003) that is not
-  pluggable.
+  (CodeMirror 6, per RFC-0003) that is not pluggable.
 - Editor-side preview of async embeds. Editing always shows placeholders
   for async content; full rendering only happens on save and on view.
 - Per-user OAuth token forwarding to renderer plugins. v2.1 uses a
@@ -57,15 +87,18 @@ Three architectural commitments distinguish this design from a naive
 - Hot-reload / install-without-restart (same constraint as RFC-0001).
 - Per-user renderer config. Renderer plugins are configured per-instance
   by operators, not per-user.
+- **Generic migration command framework**. Individual migration commands
+  (`renderer:rebuild`, `wikilink migrator`) ship in v2.1, but the
+  framework that registers and orchestrates them is deferred to RFC-0008.
 
 ## Overview
 
 ```
-┌──────────────── Markdown source (Yjs Y.Text) ───────┐
-│   # Title                                           │
-│   Some text with @[card](https://github.com/...)    │
-│   ```mermaid ... ```                                │
-└──────────┬──────────────────────────────────────────┘
+┌──────────────── Markdown source (Yjs Y.Text or revision.body) ─┐
+│   # Title                                                      │
+│   Some text with @[card](https://github.com/...)               │
+│   ```mermaid ... ```                                           │
+└──────────┬─────────────────────────────────────────────────────┘
            │
            │  parse phase  (remark + plugin remark plugins)
            ▼
@@ -83,28 +116,101 @@ Three architectural commitments distinguish this design from a naive
 │   wikilink / mention / heading-with-id / ...       │
 └──────────┬─────────────────────────────────────────┘
            │
-           │  render phase  (server-side, produces HTML)
+           │  render phase  (server-side)
            │  - core node renderers
            │  - plugin node renderers
            │  - embed renderers (with cache lookup)
            │  - reservation API for async embeds
            ▼
-┌─────────────────── HTML + metadata ────────────────┐
-│   stored in Page.renderedHtml + Page.metadata      │
-│   embed cache stored in PluginRenderCache          │
+┌─────────────────── persisted artifacts ────────────┐
+│   Revision.renderedAst (mdast JSON, per-revision)  │
+│   Revision.metadata (toc, links, mentions, ...)    │
+│   PluginRenderCache (per-page embed cache)         │
 └──────────┬─────────────────────────────────────────┘
            │
-           │  hydrate phase  (client-side, optional)
-           │  - syntax highlight is already done (no hydrate)
-           │  - mermaid is already SVG (no hydrate)
-           │  - GitHub card "refresh" button (hydrate yes)
+           │  view phase  (Web tier)
+           │  - mdast → hast → JSX runtime
+           │  - hast-util-raw to handle plugin-emitted raw HTML
+           │  - Tailwind class injection
            ▼
 ┌──────────────── Rendered page in browser ──────────┐
 ```
 
-The four phases — **parse**, **transform**, **render**, **hydrate** —
-are the only extension points. Plugins declare which phases they
-participate in.
+The four pipeline phases — **parse**, **transform**, **render**,
+**hydrate** — are the extension points. Plugins declare which phases
+they participate in.
+
+The view phase is handled by the Web tier and is not a plugin extension
+point.
+
+## Render artifact persistence: `Revision.renderedAst`
+
+Render output is persisted as a **mdast JSON tree** on each `Revision`
+document, NOT as HTML on the `Page` document.
+
+```ts
+Revision {
+  _id, pageId, body, // existing fields
+  renderedAst: object | null,   // mdast JSON, post-transform phase
+  renderedAt: Date | null,
+  rendererVersion: string,      // semver of the renderer pipeline that produced this
+  metadata: RevisionMetadata,   // toc, wikiLinks, mentions, codeBlockLanguages
+}
+```
+
+### Why mdast JSON instead of HTML
+
+- **Web tier flexibility**: the Web layer converts mdast → hast → JSX
+  with Tailwind class injection at render time. Storing HTML would
+  freeze the style choices at save time.
+- **Plugin output compatibility**: plugin-emitted raw HTML fragments
+  (shiki, embeds) are stored as `html` nodes in the AST and rendered
+  via `hast-util-raw` at view time. Storing pre-finalised HTML would
+  require re-parsing it.
+- **Forward compatibility**: future view-side features (search
+  highlighting, comment anchoring, AI annotations) can manipulate the
+  AST rather than parsing HTML.
+
+### Why per-revision
+
+- **Historical fidelity**: revision N renders the way it looked when
+  saved at revision N's renderer version. If we upgrade the renderer
+  later (e.g. fix a Markdown edge case, add a plugin), past revisions
+  do NOT silently change appearance.
+- **Stale detection**: `rendererVersion` lets us identify revisions
+  whose AST was produced by an older pipeline. `renderer:rebuild`
+  uses this to find rebuild targets.
+
+### Trade-off
+
+A renderer security fix or bug fix does NOT automatically improve past
+revisions' display. Operators must run `renderer:rebuild` to apply
+fixes to historical content. This is a deliberate choice — surprise
+visual changes to historical content are worse than the operational
+cost of a rebuild command.
+
+### `renderer:rebuild`
+
+```bash
+crowi-admin renderer rebuild --dry-run
+crowi-admin renderer rebuild
+crowi-admin renderer rebuild --only-stale          # rendererVersion mismatch only
+crowi-admin renderer rebuild --pages=<glob>        # subset
+```
+
+Iterates revisions, re-runs the parse/transform/render pipeline,
+updates `renderedAst` and `rendererVersion`. Idempotent; safe to
+re-run. Processes in batches with bounded concurrency to avoid
+overwhelming embed plugins' rate limits.
+
+This command also handles the v1.x → v2.1 upgrade case: legacy
+revisions have no `renderedAst` field and must be populated before
+their content can display via the v2.1 view pipeline.
+
+The command itself ships in v2.1. The registration framework that
+makes it discoverable alongside other migrations (`wikilink migrator`,
+future v2.1 → v2.2 migrations, etc.) is **deferred to RFC-0008**.
+Until then, each command is implemented and exposed individually.
 
 ## The `registerRenderer` extension
 
@@ -137,9 +243,10 @@ export interface RendererRegistry {
   ): void;
 
   /**
-   * Render a specific MDAST node type to HTML.
-   * If multiple plugins register for the same node type, the last
-   * registration wins (with a boot-time warning).
+   * Render a specific MDAST node type. Mutation is in-place; the
+   * renderer mutates the node (or replaces it) and returns
+   * void | Promise<void>. If multiple plugins register for the same
+   * node type, the last registration wins with a boot-time warning.
    */
   addNodeRenderer<T extends MdastNodeType>(
     nodeType: T,
@@ -149,6 +256,12 @@ export interface RendererRegistry {
   /**
    * Render a fenced code block with a specific language tag.
    * e.g. ```mermaid, ```plantuml, ```math
+   *
+   * Return type is a union:
+   * - EmbedFragment: simple synchronous transformation, not cached
+   *   independently of the revision's renderedAst.
+   * - RenderResult: full cache-aware result, used when the code block
+   *   does I/O (e.g. PlantUML server fetch).
    */
   addCodeBlockRenderer(
     lang: string,
@@ -171,7 +284,16 @@ export interface RendererRegistry {
    */
   addUrlInlineExpander(rule: UrlInlineExpansionRule): void;
 }
+
+export type CodeBlockRendererReturn = EmbedFragment | RenderResult;
 ```
+
+`EmbedFragment` is for simple, deterministic transformations
+(KaTeX-render-once, emoji-substitution) where the output is a function
+of the input alone and benefits from being inlined into the
+revision's `renderedAst`. `RenderResult` is for I/O-bound operations
+that need the per-page cache, reservation, and stale-while-revalidate
+machinery.
 
 ## URL handling policy
 
@@ -212,11 +334,10 @@ export type InlineExpansion =
   | { kind: 'unchanged' };  // fall through to plain link
 ```
 
-### Reservation API
+## Reservation API (optional)
 
-Async-data renderers (anything that fetches over the network) MUST
-declare a layout reservation, and the core uses it during the render
-phase to emit a stable-sized placeholder.
+Async-data renderers that fetch over the network SHOULD declare a
+layout reservation. Plugins without I/O (emoji, KaTeX) MAY omit it.
 
 ```ts
 export interface EmbedRenderer {
@@ -231,11 +352,14 @@ export interface EmbedRenderer {
   cacheVersion: number;
 
   /**
-   * Layout reservation. The placeholder rendered during editing,
-   * and the server-rendered output if cache is empty, both honour
-   * this reservation.
+   * Layout reservation. OPTIONAL.
+   * Required for I/O-bound renderers (anything calling out to a
+   * network or subprocess); without it, layout shift is possible.
+   * For deterministic no-I/O renderers (emoji, basic KaTeX), the
+   * field MAY be omitted — these render synchronously to their
+   * natural size.
    */
-  reservation:
+  reservation?:
     | { kind: 'fixed'; widthPx?: number; heightPx: number }
     | { kind: 'aspect'; aspectRatio: number /* w/h */ }
     | { kind: 'card'; variant: 'small' | 'medium' | 'large' };
@@ -282,19 +406,31 @@ export type RenderResult =
           | 'network' | 'timeout' | 'unknown';
       message: string;
       retryAfterSec?: number;
-      /** Custom placeholder. Core provides a generic one if omitted. */
       placeholderHtml?: string;
     };
 
 export interface RenderContext {
   /** Per-page cache. Scoped to (pluginName, pageId, cacheKey). */
   cache: CacheStorage;
-  /** Whether this render is for editing (placeholders only) or viewing. */
-  mode: 'edit' | 'view';
+
+  /**
+   * Render trigger.
+   * - 'save': running inside the page-save transaction; produce
+   *   authoritative output for persistence in renderedAst.
+   * - 'read': serving a viewer; cache lookup expected.
+   * - 'view': one-shot interactive render (e.g. user clicked an
+   *   edit-mode placeholder to force a real render).
+   * - 'edit': running inside the live editor; placeholder-only,
+   *   no I/O permitted.
+   */
+  mode: 'save' | 'read' | 'view' | 'edit';
+
   /** The currently-rendering page; same models as RFC-0001's PluginContext. */
   page: PageRef;
+
   /** Authenticated context for outbound calls. See "Authentication context". */
   auth: AuthContext;
+
   /** Structured logger scoped to the plugin. */
   log: { info: (...) => void; warn: (...) => void; error: (...) => void };
 }
@@ -304,21 +440,18 @@ The core handles cache eviction, stale-while-revalidate, and edit-mode
 placeholder rendering. Plugins only implement `render` (or
 `renderBatch`).
 
-### Edit mode vs view mode
+### Mode semantics
 
-The core invokes the renderer differently depending on mode:
+| Mode | Caller | Plugin behaviour |
+|---|---|---|
+| `'save'` | Page-save transaction (RFC-0003) | Produce authoritative output. Always invoke `render`; cache the result for subsequent `'read'` calls. |
+| `'read'` | Web tier serving a viewer | Read from cache; if stale, return cached + spawn background refresh; if missing, invoke `render`. |
+| `'view'` | One-shot force-render (e.g. clicked placeholder in editor) | Same as `'read'` but bypass stale-while-revalidate and re-fetch unconditionally. |
+| `'edit'` | Inside the live editor pipeline | **Plugin MUST return immediately with a placeholder derived from `reservation`. No I/O. No cache writes.** The editor shows placeholders so embeds don't thrash external APIs as the user types. |
 
-- **`mode: 'edit'`** — The render call returns immediately with a
-  placeholder of the declared `reservation` size. No `render` callback
-  is invoked. The placeholder is interactive: clicking it triggers
-  a one-shot `mode: 'view'` render for that specific embed.
-- **`mode: 'view'`** — Cache is consulted first. On hit, cached HTML
-  is returned immediately and (if past `cacheTtlSec`) a background
-  refresh kicks off. On miss, `render` (or `renderBatch`) is awaited;
-  result is cached.
-
-This split is what eliminates layout shift during real-time editing
-and on page view.
+The `'edit'` mode is the contract that prevents real-time editing
+from triggering renders. RFC-0003 defines the editor-side invocation;
+plugin authors only need to know: in `'edit'` mode, no I/O.
 
 ## Authentication context
 
@@ -341,10 +474,20 @@ export interface AuthContext {
    * Plugin-scoped config (decrypted). Same shape as
    * PluginContext.config() from RFC-0001 — re-exposed here for
    * convenience inside RenderContext.
+   *
+   * IMPLEMENTATION NOTE: in Phase 6, the implementation is a stub
+   * that throws on call. No-I/O plugins (emoji, KaTeX, mermaid,
+   * etc.) must not invoke this. Full implementation lands in
+   * Phase 7 alongside GitHub Embed plugin.
    */
   config: <S extends z.ZodTypeAny>() => z.infer<S>;
 }
 ```
+
+Plugins that need credentials MUST declare `requiresAuth: true` on
+their `EmbedRenderer` / `UrlInlineExpansionRule`. The core blocks
+registration if `requiresAuth` is true and `AuthContext` is not yet
+implemented (or the plugin's config is missing).
 
 ### Implications operators must accept
 
@@ -453,22 +596,45 @@ AST-to-AST mutations. Used for:
   paragraph, run registered `UrlInlineExpansionRule`s in order; first
   match wins. If none match, leave URL as a plain autolink.
 - **Mention extraction**: `@username` → `<a class="mention">` node, AND
-  add to `Page.metadata.mentions[]` for the notifier hook. Implemented
-  in core, NOT as a plugin (mention is a fundamental Wiki concept,
-  per RFC-0001's reasoning for keeping local-password auth in core).
+  add to `Revision.metadata.mentions[]` for internal notification
+  dispatch (see "Mention notification" below). Implemented in core,
+  NOT as a plugin.
 - **Heading anchor IDs**: every `heading` node gets an `id` attribute
   via `github-slugger`. Duplicates get `-1`, `-2` suffixes.
 
-Transform plugins receive the parsed MDAST and return a new MDAST.
+Transform plugins receive the parsed MDAST and mutate it in place.
+
+### Mention notification
+
+Mention is fundamental Wiki functionality and lives in core, not as a
+plugin. The notification flow:
+
+1. Transform phase extracts mentions into `Revision.metadata.mentions[]`.
+2. After the save transaction completes, a core dispatcher reads
+   `Revision.metadata.mentions[]` and invokes the notifier registry
+   (RFC-0001's `registerNotifier`) for each mentioned user.
+
+The dispatcher is an internal mechanism, not a publicly extensible
+hook. RFC-0001's `registerHooks` remains reserved for v2.0 internal
+use and is not stable for community plugins.
+
+**Implementation status (Phase 6)**: mention extraction is implemented
+and persisted to `Revision.metadata.mentions[]`. The dispatcher is
+deferred to Phase 8.
 
 ## Phase: render
 
-MDAST → HTML. Core renderers handle the standard CommonMark + GFM node
-types. Plugins can override or extend via `addNodeRenderer`.
+MDAST → AST artifacts. Core renderers handle the standard CommonMark +
+GFM node types. Plugins can override or extend via `addNodeRenderer`.
 
 Renderer plugins for code blocks (`addCodeBlockRenderer`), embed tags
 (`addEmbedTag`), and inline URL expansion (`addUrlInlineExpander`) are
 the most common; raw `addNodeRenderer` is reserved for advanced cases.
+
+The render phase's output is the **finalised mdast** stored in
+`Revision.renderedAst`. Plugin-emitted HTML fragments are stored as
+`html` nodes within the AST; the Web tier handles them via
+`hast-util-raw` during view-phase rendering.
 
 ## Cache contract
 
@@ -507,18 +673,20 @@ be introduced if measurements show it's needed.
 
 ```ts
 export interface CacheKey {
-  pluginName: string;       // e.g. "@crowi/plugin-renderer-github-embed"
-  pluginCacheVersion: number; // EmbedRenderer.cacheVersion at time of write
-  pageId: string;           // page-scoped: page deletion → cleanup
-  embedKey: string;         // sha256 of input (default) or plugin-supplied
+  pluginName: string;
+  pluginCacheVersion: number;
+  pageId: string;
+  embedKey: string;
 }
 ```
+
+The 4-tuple is the compound unique index on `PluginRenderCache`.
 
 **Why page-scoped?** Naively keying only by `(plugin, input)` shares
 cache entries across pages. Pros: memory savings if the same URL is
 embedded in many pages. Cons: cleanup on page deletion requires a
-reverse-index lookup ("does any other page still reference this?").
-Page-scoped keys mean page deletion → straightforward `deleteMany({pageId})`.
+reverse-index lookup. Page-scoped keys mean page deletion →
+straightforward `deleteMany({pageId})`.
 
 The downside (duplicate cache entries when the same URL appears in
 many pages) is acceptable: realistic worst case ~100 duplicates,
@@ -529,11 +697,16 @@ many pages) is acceptable: realistic worst case ~100 duplicates,
 ```ts
 export interface CacheEntry {
   html: string;
+  htmlBytes: number;       // denormalised for fast quota queries
   fetchedAt: Date;
-  expiresAt: Date;          // TTL index field
-  result: RenderResult;     // includes error code if failed (kind: 'error')
+  expiresAt: Date;
+  result: RenderResult;
 }
 ```
+
+The `htmlBytes` field is denormalised so per-page quota checks can
+use `$sum: '$htmlBytes'` rather than the much more expensive
+`$strLenBytes` aggregation over `html`.
 
 Failed fetches ARE cached, with a shorter `expiresAt`, so a flapping
 upstream doesn't get hammered every render. Error placeholder HTML is
@@ -563,8 +736,9 @@ PluginRenderCache: {
   pluginName: string,
   pluginCacheVersion: number,
   pageId: ObjectId,
-  embedKey: string,         // sha256 hex
+  embedKey: string,
   html: string,
+  htmlBytes: number,
   fetchedAt: Date,
   expiresAt: Date,          // ← TTL index drives auto-eviction
   result: RenderResult,
@@ -588,20 +762,18 @@ misbehaving plugins.
 
 ### Stale-while-revalidate
 
-When a view-mode render hits a cache entry past `cacheTtlSec` but
+When a `'read'` mode render hits a cache entry past `cacheTtlSec` but
 within `staleAfterSec`:
 
 1. Return the cached HTML immediately.
-2. Spawn a background task to re-render with `mode: 'view'` and
+2. Spawn a background task to re-render with `mode: 'read'` and
    write the new result.
 3. Next viewer gets fresh HTML.
 
 When past `staleAfterSec`:
 
-1. Return cached HTML with a `data-stale="true"` attribute (CSS can
-   show a small indicator).
-2. Block on re-render for the next request — better to wait than
-   to keep serving truly stale data.
+1. Return cached HTML with a `data-stale="true"` attribute.
+2. Block on re-render for the next request.
 
 When cache miss:
 
@@ -609,16 +781,36 @@ When cache miss:
 2. Cache the output.
 3. Return.
 
+### In-flight de-duplication
+
+Concurrent reads of the same cache key (e.g. many viewers hitting a
+page at once after a deploy) MUST NOT trigger N parallel calls to the
+plugin's `render`. The core maintains an in-flight map:
+
+```ts
+inFlightRender: Map<CacheKey-as-string, Promise<RenderResult>>
+```
+
+The first request invokes `render` and stores the in-flight promise;
+subsequent requests await the same promise. This prevents thundering
+herd against external APIs.
+
 ### Cache invalidation triggers
 
 | Trigger | Effect |
 |---|---|
 | Page save | All cache entries for `pageId` are re-rendered (synchronously, in the save transaction) |
-| Page delete | `invalidatePage(pageId)` |
-| Plugin uninstall (RFC-0001's `--purge` flag) | `invalidatePlugin(pluginName)` |
+| Page delete (via `pageEvent.emit('delete')`) | `invalidatePage(pageId)` |
+| Page update (via `pageEvent.emit('update')`) | `invalidatePage(pageId)` |
+| Plugin uninstall (regardless of `--purge`) | `invalidatePlugin(pluginName)` |
 | Plugin upgrade with `cacheVersion` bump | Entries with old `pluginCacheVersion` ignored on read; TTL eventually evicts them |
 | Admin "Clear render cache" button | `invalidateAll()` |
 | TTL expiry | Background eviction by MongoDB TTL index |
+
+**Note on plugin uninstall**: cache is derived data (not user data),
+so it is always cleared on uninstall. The `--purge` flag from RFC-0001
+governs only user-facing data (plugin config rows). Render cache
+cleanup is unconditional.
 
 ### Error handling
 
@@ -627,9 +819,9 @@ default core behaviour:
 
 | Code | Default cache TTL | Default behaviour |
 |---|---|---|
-| `auth` | 60s (avoid hammering during misconfiguration) | Surface in admin UI as "Plugin authentication failed" |
-| `rate_limit` | `retryAfterSec` if provided, else 5 min | Pause all renders for that plugin until retry-after |
-| `not_found` | 1 hour (resource unlikely to come back soon) | Show "resource not found" placeholder |
+| `auth` | 60s | Surface in admin UI as "Plugin authentication failed" |
+| `rate_limit` | `retryAfterSec` if provided, else 5 min | Pause renders for that plugin until retry-after |
+| `not_found` | 1 hour | Show "resource not found" placeholder |
 | `network` / `timeout` | 5 min | Show "temporarily unavailable" placeholder |
 | `unknown` | 5 min | Log full error, show generic placeholder |
 
@@ -644,25 +836,25 @@ decision deferred to implementation, same as RFC-0001's question 2 for
 
 | Renderer | Type | Notes |
 |---|---|---|
-| Syntax highlight | code-block | Shiki, server-side, no hydrate |
+| Syntax highlight | code-block | Shiki, server-side. Bundled language set restricted to 24 languages — see Implementation Notes. |
 | GFM tables | unified plugin | `remark-gfm` |
 | Task lists | unified plugin | `remark-gfm` |
-| Heading anchors | transform | `github-slugger`, also extracts to `Page.metadata.toc` |
+| Heading anchors | transform | `github-slugger`, also extracts to `Revision.metadata.toc` |
 | Wikilinks | transform | `[[Page]]` resolution |
-| Mentions | transform | `@user` extraction, hooks notifier |
+| Mentions | transform | `@user` extraction (notifier dispatch in Phase 8) |
 | Emoji | transform | `:smile:` → 😀 via `node-emoji` |
 | Bare URL → autolink | transform | CommonMark autolink, no embed |
 
 ### Optional plugins (separate npm packages)
 
-| Plugin | Provides | Auth required? |
-|---|---|---|
-| `@crowi/plugin-renderer-katex` | `$inline$` and `$$block$$` math via KaTeX (server-side) | No |
-| `@crowi/plugin-renderer-mermaid` | ` ```mermaid ` server-side rendered to SVG | No |
-| `@crowi/plugin-renderer-plantuml` | ` ```plantuml ` rendered via PlantUML server (configurable URL) | Optional (PlantUML server) |
-| `@crowi/plugin-renderer-github-embed` | `@[github-pr](url)`, `@[github-issue](url)`, plus inline URL expansion for `github.com/*` URLs | GitHub PAT (owner-provided) |
-| `@crowi/plugin-renderer-slack-embed` | `@[slack](url)` thread expansion | Slack token (owner-provided) |
-| `@crowi/plugin-renderer-crowi-legacy` | Bundled but default-off. Re-enables Crowi v1 rendering quirks (Markdown Fixer, line break handling). Migration users turn on via admin UI | No |
+| Plugin | Provides | Auth required? | Phase |
+|---|---|---|---|
+| `@crowi/plugin-renderer-katex` | `$inline$` and `$$block$$` math via KaTeX (server-side) | No | Landed (Phase 6) |
+| `@crowi/plugin-renderer-mermaid` | ` ```mermaid ` server-side rendered to SVG | No | Phase 6.1 |
+| `@crowi/plugin-renderer-plantuml` | ` ```plantuml ` rendered via PlantUML server (configurable URL) | Optional (PlantUML server) | Landed (Phase 6) |
+| `@crowi/plugin-renderer-github-embed` | `@[github-pr](url)`, `@[github-issue](url)`, plus inline URL expansion for `github.com/*` URLs | GitHub PAT (owner-provided) | Phase 7 |
+| `@crowi/plugin-renderer-slack-embed` | `@[slack](url)` thread expansion | Slack token (owner-provided) | Deferred |
+| `@crowi/plugin-renderer-crowi-legacy` | Bundled but default-off. Re-enables Crowi v1 rendering quirks (Markdown Fixer, line break handling). Migration users turn on via admin UI | No | Landed (Phase 6) |
 
 ## Phase: hydrate
 
@@ -674,7 +866,7 @@ GitHub PR card).
 
 ```ts
 export interface NodeRenderer<T> {
-  render(node: MdastNode<T>, ctx: RenderContext): Promise<RenderResult>;
+  render(node: MdastNode<T>, ctx: RenderContext): void | Promise<void>;
   /**
    * Optional. Selector + script reference for client-side hydration.
    * The script is loaded only on pages that contain this node type.
@@ -690,13 +882,13 @@ Hydrate scripts are loaded lazily, only on pages that actually contain
 the corresponding node type. The core injects `<script>` tags for
 matching hydrate entries during page response generation.
 
-## Page metadata extraction
+## Revision metadata extraction
 
-Renderer phases produce HTML, but they ALSO produce structured
-metadata as a side effect, persisted on the `Page` document:
+Render phases produce `renderedAst`, but they ALSO produce structured
+metadata as a side effect, persisted on the `Revision` document:
 
 ```ts
-interface PageMetadata {
+interface RevisionMetadata {
   /** Generated by the heading-anchor transform. Used for in-page TOC,
       backlink anchor targets, search facet. */
   toc: Array<{
@@ -709,16 +901,17 @@ interface PageMetadata {
   /** Generated by the wikilink transform. Used to compute backlinks
       (the "what links here" view) without re-parsing every page. */
   wikiLinks: Array<{
-    target: string;       // resolved page path
+    target: string;
     displayText?: string;
   }>;
 
-  /** Generated by the mention transform. Consumed by the notifier
-      registry from RFC-0001 to send notifications. */
+  /** Generated by the mention transform. Consumed by the internal
+      mention dispatcher (Phase 8) which forwards to RFC-0001's
+      notifier registry. */
   mentions: Array<{ username: string }>;
 
   /** Generated by code block parsing. Used for search filters and
-      analytics ("how many pages use Mermaid?"). */
+      analytics. */
   codeBlockLanguages: string[];
 
   /** Per-plugin metadata namespace, same shape as RFC-0001's
@@ -728,42 +921,64 @@ interface PageMetadata {
 ```
 
 This metadata is regenerated on every page save, in the same
-transaction as the page body update. Render-phase output (HTML) is
-ALSO regenerated and persisted at save time, so view-mode requests
-never have to re-render from scratch.
+transaction as the body update.
 
-### Edit-time vs save-time work
+### Save-time vs view-time pipeline
 
-The split between edit and save is critical:
+The split between save and view is critical:
 
 | Phase | Triggered by | What happens |
 |---|---|---|
 | Edit (Yjs sync) | Every keystroke (debounced inside CodeMirror) | Y.Text update propagates to peers. No render, no cache, no metadata extraction. |
-| Save | Debounced idle (~30s) or explicit save | Markdown → AST → render → HTML + metadata persisted. Cache for embeds populated/refreshed. `PageHtmlUpdated` event emitted to viewers. |
-| View | Reader opens page | Cached HTML served. Stale-while-revalidate may fire background refreshes. |
+| Save | Explicit save (RFC-0003) | Markdown → AST → render → `Revision.renderedAst` + `Revision.metadata` persisted. Cache for embeds populated/refreshed. All in one transaction. |
+| View | Reader opens page | `Revision.renderedAst` → hast → JSX runtime. Cached embed HTML inlined. Stale-while-revalidate may fire background refreshes. |
 
 This is what allows real-time collaborative editing without thrashing
 external APIs: editors only see placeholders, and renders only happen
-on save boundaries. See RFC-0003 for the editing side of this contract.
+on save boundaries. See RFC-0003 for the editing side.
+
+### Save transaction contract (for RFC-0003)
+
+Page save must run the renderer pipeline **synchronously, in the same
+transaction as the body update**. The contract:
+
+```
+beginTransaction:
+  1. Page.body = newMarkdown
+  2. Create Revision with body = newMarkdown
+  3. Run parse → transform → render pipeline
+  4. Revision.renderedAst = output
+  5. Revision.metadata = extracted metadata
+  6. Revision.rendererVersion = current pipeline semver
+  7. Update PluginRenderCache for embeds (mode='save')
+commitTransaction
+```
+
+If any step fails, the transaction rolls back; no partial state.
+
+RFC-0003 must wire its save flow to invoke this pipeline. The
+Hocuspocus `onStoreDocument` hook (or whichever save trigger) calls
+the core's `Revision.prepareRevision()` helper, which encapsulates
+this transaction.
 
 ## v1.x → v2.1 migration
 
 ### Internal link syntax
 
 Crowi v1 supported `</path/to/page>` as an internal link. This is
-NOT supported by `@crowi/plugin-renderer-crowi-legacy`. Instead,
-`crowi-admin migrate --only=wikilink` rewrites all occurrences in
-the page body:
+NOT supported by `@crowi/plugin-renderer-crowi-legacy`. Instead, a
+migration command rewrites all occurrences in the page body:
 
 ```
 </docs/api> → [[/docs/api]]
 ```
 
-Migration steps:
+Command:
 
-1. Run `crowi-admin migrate --dry-run --only=wikilink` to preview.
-2. Inspect output (which pages, how many occurrences).
-3. Run `crowi-admin migrate --only=wikilink` to apply.
+```bash
+crowi-admin wikilink-migrate --dry-run
+crowi-admin wikilink-migrate
+```
 
 Detection rule (to avoid false positives with HTML self-closing tags):
 - Starts with `</`
@@ -771,160 +986,246 @@ Detection rule (to avoid false positives with HTML self-closing tags):
 - No whitespace until `>`
 - The "tag name" doesn't match a known HTML element
 
+The command framework that registers and orchestrates this (and
+`renderer:rebuild`, and future migrations) is **deferred to RFC-0008**.
+
+### Renderer rebuild
+
+After v1.x → v2.1 upgrade, existing revisions have no `renderedAst`.
+Run `crowi-admin renderer rebuild` to populate it. Until rebuild
+completes, pages fall back to a runtime parse-on-read path (slower
+but functional). Once rebuilt, views serve from `renderedAst`.
+
 ### Markdown Fixer
 
 `@crowi/plugin-renderer-crowi-legacy` re-enables:
 
-- Crowi v1's specific line-break interpretation (single newlines
-  become `<br>`, GFM-incompatible).
+- Crowi v1's specific line-break interpretation.
 - Title extraction from the first H1.
 - Other quirks documented in `LEGACY.md` of that plugin.
 
 Default state:
-- **Migrated install** (v1.x → v2.x → v2.1): plugin is enabled.
+- **Migrated install**: plugin is enabled.
 - **Fresh install**: plugin is disabled.
 - Operators can toggle from admin UI.
 
 ### MathJax → KaTeX
 
 The MathJax-based math renderer in v1 had global-namespace pollution
-issues. v2.1 ships `@crowi/plugin-renderer-katex` (no global state,
-SSR-capable). Math syntax (`$...$`, `$$...$$`) is unchanged. No data
-migration required; existing math content renders identically.
+issues. v2.1 ships `@crowi/plugin-renderer-katex`. Math syntax
+unchanged. No data migration required.
 
 ### PlantUML / Mermaid coexistence
 
 v1 supported PlantUML via a configured PlantUML server. v2.1 splits
 this into two plugins so operators can pick:
 
-- `@crowi/plugin-renderer-plantuml`: requires PlantUML server URL,
-  same shape as v1.
+- `@crowi/plugin-renderer-plantuml`: requires PlantUML server URL.
 - `@crowi/plugin-renderer-mermaid`: zero-dependency, server-renders
   to SVG.
 
-Both can be enabled simultaneously; they handle different code-block
-languages.
+Both can be enabled simultaneously.
 
-## Resolved decisions (round 2 review)
+## Resolved decisions
 
 1. **URL handling** → Auto-link is core/always-on. Inline expansion
    is plugin-driven (no syntax change). Card embed requires explicit
-   `@[card](url)` or `@[<plugin-tag>](url)` syntax. No auto-card-on-
-   standalone-URL behaviour, by deliberate departure from
-   Slack/Discord/Zenn — surprise rendering is hostile in a Wiki context.
-2. **Mention as core, not plugin** → `@username` is a fundamental Wiki
-   concept (cross-cutting render + notify + autocomplete) and lives in
-   core, parallel to RFC-0001's decision to keep local-password auth
-   in core.
+   `@[card](url)` syntax.
+2. **Mention as core, not plugin** → `@username` is fundamental Wiki
+   concept. Lives in core.
 3. **Cache backend** → MongoDB `PluginRenderCache` collection.
-   Persistence and compound-query needs make Redis a poor fit despite
-   already being in the stack. Two-tier (Redis hot + Mongo cold) is
-   left as a future extension, behind the `CacheStorage` interface.
-4. **Cache key shape** → Page-scoped: `(pluginName, pluginCacheVersion,
-   pageId, embedKey)`. Cross-page sharing is rejected for the
-   simplicity gain on page-deletion cleanup.
-5. **Authentication context** → Owner-provided tokens for v2.1, with
-   explicit operator warnings about the Wiki-permission-as-security-
-   boundary implication. Per-user OAuth token forwarding is deferred
-   to a v2.2+ RFC.
-6. **Crowi v1 `</path>` syntax** → No legacy plugin support. Handled by
-   one-shot `crowi-admin migrate --only=wikilink` data rewrite to
-   `[[/path]]`.
+4. **Cache key shape** → 4-tuple page-scoped.
+5. **Authentication context** → Owner-provided tokens for v2.1,
+   per-user deferred.
+6. **Crowi v1 `</path>` syntax** → Migration command rewrites to
+   `[[/path]]`. Not preserved by legacy plugin.
 7. **Heading anchors** → Slug-based via `github-slugger`. Stability
-   across renames is not solved in v2.1; revisit if reports of broken
-   external anchor links accumulate.
+   across renames not solved.
+8. **Render artifact persistence** → `Revision.renderedAst` (mdast
+   JSON, per-revision). Trade-off: historical fidelity preserved at
+   cost of needing `renderer:rebuild` to apply fixes retroactively.
+9. **Render mode enum** → `'save' | 'read' | 'view' | 'edit'`.
+10. **Reservation optional** → Required only for I/O-bound plugins.
+11. **Code block renderer return union** → `EmbedFragment | RenderResult`.
+12. **Cache cleanup on uninstall** → Unconditional, not gated by `--purge`.
+13. **Migration command framework** → Deferred to RFC-0008. v2.1 ships
+    individual commands.
 
 ## Open questions
 
 1. **Mention permission model.** When `@user` mentions a user the
-   page-saver doesn't have permission to notify (e.g. a private user,
-   or cross-tenant), do we silently drop, render but don't notify,
-   or block the save? Likely "render but don't notify, log a
-   warning". Defer to a sub-section of the notifier RFC.
+   page-saver doesn't have permission to notify, do we silently drop,
+   render but don't notify, or block the save? Likely "render but
+   don't notify, log a warning". Defer to a sub-section of the
+   notifier RFC.
 
 2. **Heading anchor stability.** Slug-based IDs change when heading
    text changes, breaking external links. Options for a future RFC:
    - (a) Pure slug (current). Accept breakage; document it.
-   - (b) Slug + alias table: store `{old-slug: new-slug}` per page,
-     redirect old anchors. Adds complexity to the metadata pipeline.
+   - (b) Slug + alias table: store `{old-slug: new-slug}` per page.
    - (c) Stable UUIDs in heading metadata, slug as display.
-     Best UX, but requires Markdown source to carry the UUID.
-     Hostile to source-of-truth principle.
-   v2.1 ships (a). Revisit if pain reports accumulate.
+   v2.1 ships (a).
 
 3. **Bundled vs separate npm package for crowi-legacy.** Same
-   structural question as RFC-0001's question 2 (storage-local /
-   search-mongo): bundled in `@crowi/server`, or a separate npm
-   package that's just always installed by the runner? Lean
-   "separate package, default-installed" for consistency with
-   RFC-0001's eventual choice.
+   structural question as RFC-0001's question 2.
 
-4. **Autocomplete scope.** RFC-0003 will define autocomplete for
-   `@user` and `[[Page` triggers. Question: should renderer plugins
-   be able to contribute autocomplete sources (e.g.
-   `@crowi/plugin-renderer-github-embed` offering PR completion when
-   the user types `@[github-pr](`)? Lean no for v2.1 — fixed core
-   completions only — to avoid coupling RFC-0002 and RFC-0003.
+4. **Autocomplete scope.** RFC-0004 will define autocomplete for
+   `@user` and `[[Page` triggers. Should renderer plugins be able to
+   contribute autocomplete sources? Lean no for v2.1.
+
+5. **PlantUML SVG sanitization rigor.** Currently uses regex stripping
+   (script / on*= / javascript: / foreignObject). DOMPurify-based
+   sanitization is planned for Phase 6.1+. Open question: is
+   regex-level rigor sufficient for v2.1 release, or should DOMPurify
+   be a v2.1 blocker?
+
+6. **Admin reconfigure of code-block renderers.** Currently the
+   PlantUML server URL is closure-bound at registration time;
+   admin reconfigure requires re-invoking `addCodeBlockRenderer` with
+   last-wins + boot warning. Acceptable for v2.1 but worth revisiting
+   if admin reconfigure becomes common.
 
 ## v2.1 release scope
 
 In scope:
 
 - `registerRenderer` extension on `@crowi/plugin-api`
-- `RendererRegistry` interface and the four phases
+- `RendererRegistry` interface with parse / transform / render / hydrate phases
 - Reservation API + cache contract (MongoDB `PluginRenderCache`)
-- `AuthContext` for owner-provided credentials
-- Bundled core renderers (syntax highlight, GFM, anchors, wikilinks,
-  mentions, emoji, autolinks)
-- `@crowi/plugin-renderer-katex`
-- `@crowi/plugin-renderer-mermaid`
-- `@crowi/plugin-renderer-plantuml`
-- `@crowi/plugin-renderer-github-embed` (with admin-UI scope guidance)
-- `@crowi/plugin-renderer-crowi-legacy` (default-off for fresh, on for
-  migrated)
-- `crowi-admin migrate --only=wikilink` for `</...>` → `[[...]]`
-- `Page.metadata` schema additions: `toc`, `wikiLinks`, `mentions`,
-  `codeBlockLanguages`
-- Page-save pipeline integration (HTML + metadata + embed cache
-  regenerated together)
+- `AuthContext` interface (stub in Phase 6, full impl in Phase 7)
+- `Revision.renderedAst` + `Revision.metadata` persistence
+- Bundled core renderers (syntax highlight, GFM, anchors, wikilinks, mentions, emoji, autolinks)
+- `@crowi/plugin-renderer-katex` (Phase 6, landed)
+- `@crowi/plugin-renderer-mermaid` (Phase 6.1)
+- `@crowi/plugin-renderer-plantuml` (Phase 6, landed)
+- `@crowi/plugin-renderer-github-embed` (Phase 7)
+- `@crowi/plugin-renderer-crowi-legacy` (Phase 6, landed)
+- `crowi-admin wikilink-migrate` command
+- `crowi-admin renderer rebuild` command
+- Page-save transaction contract
+- Mention extraction (Phase 6); mention notifier dispatch (Phase 8)
 
 Out of scope (deferred to later RFCs):
 
-- `@crowi/plugin-renderer-slack-embed` (deferred until Slack plugin
-  is itself redesigned, see RFC-0001 open question 1)
-- `@crowi/plugin-renderer-d2`, `excalidraw` (community demand
-  hasn't emerged yet)
+- `@crowi/plugin-renderer-slack-embed`
+- `@crowi/plugin-renderer-d2`, `excalidraw`
 - Per-user OAuth token forwarding to renderers
 - Per-user renderer preferences
 - Editor-side preview of async embeds
 - Anchor stability via UUIDs or alias tables
 - Two-tier cache (Redis hot + Mongo cold)
 - Real-time co-editing concerns (see RFC-0003)
+- **Generic migration command framework (RFC-0008)**
 
-## Implementation plan (informational, not part of the contract)
+## Implementation notes
 
-1. Ship `registerRenderer` and `RendererRegistry` interfaces in
-   `@crowi/plugin-api`.
-2. Build the core render pipeline in `@crowi/server`: parse →
-   transform → render, with the cache contract and `CacheStorage`
-   abstraction (MongoDB implementation).
-3. Convert existing v1 syntax-highlight + GFM + emoji to use the
-   new pipeline. Validate output parity with v1 on the test corpus.
-4. Implement `Page.metadata` extraction; persist in the same
-   transaction as the body update.
-5. Build wikilink + mention transforms in core. Wire mentions into
-   the notifier hook (RFC-0001).
-6. Build inline URL expansion machinery in core (no-op without
-   plugins).
-7. Ship `@crowi/plugin-renderer-katex` + `@crowi/plugin-renderer-mermaid`
-   (no I/O, simplest plugins to validate the contract).
-8. Ship `@crowi/plugin-renderer-plantuml` (validates configurable
-   external server contract).
-9. Ship `@crowi/plugin-renderer-github-embed` (validates the cache +
-   reservation API + AuthContext end-to-end).
-10. Ship `@crowi/plugin-renderer-crowi-legacy`.
-11. Ship the `crowi-admin migrate --only=wikilink` migrator.
-12. Documentation: plugin author guide, migration notes for v1.x,
-    operator guidance on token scopes.
+These are recorded for posterity — they describe the current
+implementation rather than the contract. Future implementations are
+free to deviate, provided the contract above is honoured.
 
-Steps 7–10 can run in parallel after step 6 lands.
+### Dependency loading: jiti
+
+The renderer pipeline depends on several ESM-only packages: `unified`,
+`remark-*`, `shiki`, `remark-breaks`, `remark-emoji`, `remark-math`,
+etc. The Crowi server runs as CommonJS (Express + Jest), so these
+modules are loaded via [`jiti`](https://github.com/unjs/jiti) at
+runtime. Both the api server and individual plugins use jiti to load
+ESM dependencies synchronously where needed.
+
+### Shiki bundled language set
+
+Shiki ships with ~150 languages by default. Loading the full set via
+jiti triggers a `_html.default is not iterable` error in Jest, causing
+140+ tests to fail. The implementation restricts the bundled set to
+24 commonly-used languages (TypeScript, JavaScript, Python, Go, Rust,
+Ruby, Java, Kotlin, Swift, C/C++, C#, PHP, Shell, JSON, YAML, TOML,
+Markdown, HTML, CSS, SQL, Dockerfile, Nginx, Terraform, GraphQL).
+Adding a language requires a code change.
+
+### `hast-util-raw` requirement
+
+Plugins emit raw HTML (shiki's syntax-highlighted output, embed cards,
+KaTeX output) as `html` nodes inside the mdast tree. Without
+`hast-util-raw` in the view-time pipeline, `allowDangerousHtml: true`
+alone causes these nodes to be stripped silently. The Web tier MUST
+invoke `mdast-util-to-hast` → `hast-util-raw` → `hast-util-to-jsx-runtime`
+in that order.
+
+### `passNode: false` on `hast-util-to-jsx-runtime`
+
+The default `passNode: true` leaks `node="[object Object]"` attributes
+into the DOM via React. Setting `passNode: false` is required.
+
+### PlantUML SVG sanitization
+
+Phase 6 implementation uses regex stripping for `<script>`,
+`on*=` event handlers, `javascript:` URIs, and `<foreignObject>`.
+A DOMPurify-based replacement is planned for Phase 6.1+. The regex
+implementation is documented as a deliberate temporary measure.
+
+### Code block renderer return type
+
+`addCodeBlockRenderer` returns `EmbedFragment | RenderResult` (union):
+
+- `EmbedFragment`: simple synchronous result, inlined into the
+  revision's `renderedAst`. Used by KaTeX, emoji-style renderers.
+- `RenderResult`: cache-aware, supports error states. Used by
+  PlantUML (server fetch), future Mermaid (CPU-bound).
+
+The renderer chooses based on whether the operation does I/O or has
+failure modes worth caching.
+
+### Inline code styling
+
+Inline code (` `code` `) renders with `font-mono + text-foreground`
+only (no `bg-muted/70 pill` background). This is a deliberate UX
+choice for visual quietness, set per user feedback during Phase 4.
+
+### Shiki output Tailwind integration
+
+Shiki produces `<pre class="shiki ...">` with inline color styles.
+The Web tier applies `@apply bg-muted/60! border ...` via
+`.crowi-prose pre.shiki` to harmonise with the surrounding "normal
+codeblock" appearance. PHP's `meta.embedded.block.php` pink band is
+suppressed via `span { background-color: transparent !important; }`
+under `.crowi-prose pre.shiki`.
+
+### Shiki cold-load warmup
+
+The first shiki invocation is slow (loading themes + languages). The
+implementation calls a no-op highlight in `Crowi.init()` as a
+fire-and-forget warmup so the first user-triggered render is fast.
+
+## Implementation plan (informational, reflects Phase 1–6 status)
+
+1. **Phase 1 (done)**: `registerRenderer` + `RendererRegistry`
+   interfaces, parse/transform skeleton, stale revision detection.
+2. **Phase 2 (done)**: 4 bundled core transforms (toc, wikilinks,
+   mentions, codeBlockLanguages). Mention extraction lands here; the
+   dispatcher itself is Phase 8.
+3. **Phase 3 (done)**: SSR HTML generation with shiki, mdast → hast
+   → JSX pipeline, `Revision.renderedAst` persistence.
+4. **Phase 4 (done)**: Cache contract (MongoDB), reservation API,
+   stale-while-revalidate, in-flight de-dup, error caching.
+   `addEmbedTag` / `addUrlInlineExpander` / `addCodeBlockRenderer`
+   registry plumbing.
+5. **Phase 5 (done)**: crowi-legacy plugin + wikilink migrator.
+6. **Phase 5.1 (done)**: `renderer:rebuild` batch command for
+   populating missing `renderedAst`.
+7. **Phase 6 (done)**: PlantUML, emoji, KaTeX plugins.
+8. **Phase 6.1**: Mermaid plugin (server-side SVG SSR, heavier
+   dependency). Split from Phase 6 because of dependency weight.
+   DOMPurify upgrade for PlantUML SVG sanitization.
+9. **Phase 7**: `AuthContext` full implementation. GitHub Embed
+   plugin (cache + auth + reservation end-to-end). Admin UI
+   token-scope guidance.
+10. **Phase 8**: Mention notifier dispatch — wire `Revision.metadata.mentions[]`
+    extraction to RFC-0001's `registerNotifier` via internal
+    dispatcher. Coordinate with RFC-0001's notifier RFC reopening if
+    needed.
+
+### Currently out of release scope (per Phase plan)
+
+- Slack embed plugin
+- Per-user OAuth tokens
+- Migration command framework (→ RFC-0008)
