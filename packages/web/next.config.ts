@@ -1,8 +1,26 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
 
 const nextConfig: NextConfig = {
+  // Produce a self-contained `.next/standalone/` build that bundles only the
+  // files traced by Next's module dependency walker (server.js + minimal
+  // node_modules + workspace deps). The output is what the Docker runtime
+  // image copies — no `pnpm install` is needed at runtime. See
+  // `packages/web/Dockerfile`.
+  output: 'standalone',
+
+  // In a pnpm monorepo, Next's tracing defaults to the package root
+  // (`packages/web/`), which would miss workspace deps like
+  // `@crowi/api-contract`. Set the tracing root to the repo root so all
+  // workspace packages reachable from the web app are pulled into the
+  // standalone bundle. Without this, `node server.js` at runtime fails
+  // to resolve `@crowi/api-contract`.
+  // `import.meta.dirname` (Node 20.11+) keeps this working if Next ever
+  // switches to ESM config evaluation; bare `__dirname` would throw.
+  outputFileTracingRoot: path.join(import.meta.dirname, '../../'),
+
   // Disable automatic trailing slash redirects
   // Crowi treats paths with and without trailing slashes as different pages:
   // - With trailing slash: portal/directory page
