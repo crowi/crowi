@@ -1,6 +1,17 @@
-# Development dependencies only.
-# Run `docker compose up -d` to start MongoDB / Redis / Elasticsearch / PlantUML,
-# then run `pnpm dev` on the host to start @crowi/api and @crowi/web.
+# Development infrastructure + opt-in application services.
+#
+# Default (`docker compose up -d`) starts only the dev infra dependencies
+# (MongoDB / Redis / Elasticsearch / PlantUML). Run `pnpm dev` on the host
+# to start @crowi/api and @crowi/web against this infra.
+#
+# To bring up the full stack inside Docker (api + web + infra), use the
+# `app` profile:
+#
+#   docker compose --profile app up -d --build
+#
+# The `app` profile builds the api / web images from `packages/{api,web}/
+# Dockerfile`. The api service mounts repo-root `crowi.config.json` at
+# /app/crowi.config.json (operator-controlled, not baked into the image).
 services:
   mongodb:
     image: mongo:8
@@ -50,3 +61,56 @@ services:
     restart: unless-stopped
     ports:
       - 8080:8080
+
+  # ---------------------------------------------------------------------------
+  # Application services (opt-in via `--profile app`)
+  # ---------------------------------------------------------------------------
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    image: crowi-api:dev
+    container_name: crowi-api
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - redis
+    env_file:
+      - .env
+    environment:
+      # Container-network URIs override host-localhost values from .env.
+      NODE_ENV: production
+      PORT: 3000
+      MONGO_URI: mongodb://mongodb:27017/crowi
+      REDIS_URL: redis://redis:6379
+      ELASTICSEARCH_URI: http://elasticsearch:9200/crowi
+      CLIENT_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    volumes:
+      # Operator-controlled plugin config — mount, do not bake into the image.
+      - ./crowi.config.json:/app/crowi.config.json:ro
+
+  web:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+      args:
+        # Web container talks to the api container over the compose network.
+        NEXT_PUBLIC_API_URL: http://api:3000
+    image: crowi-web:dev
+    container_name: crowi-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_URL: http://api:3000
+    ports:
+      # Host 3001 -> container 3000. The dev `next dev` port (3301) stays
+      # reserved for the host workflow.
+      - "3001:3000"

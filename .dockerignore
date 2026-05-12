@@ -1,11 +1,71 @@
-data
-node_modules
+# pnpm monorepo build context exclusions.
+#
+# Goal: keep the build context small (faster `docker build`) and prevent
+# secrets / build outputs / dev-state from ending up in image layers.
+#
+# Keep `pnpm-lock.yaml` (required by `pnpm install --frozen-lockfile` in the
+# builder stage) and every `package.json` / `tsconfig.json` / `src/`.
+
+# --- VCS / IDE / agent state ------------------------------------------------
 .git
+.github
+.gitignore
+.gitattributes
+.vscode
+.idea
+.claude
+.feature-state
+.migration-state
+.reviews
 
-public/js/*
-public/css/*
-public/uploads/*
-dist
+# --- Dependencies / build outputs ------------------------------------------
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/.cache
+**/coverage
+**/.tsbuildinfo
+**/*.tsbuildinfo
 
-Dockerfile
+# --- Test artefacts ---------------------------------------------------------
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+**/__fixtures__
+**/__tests__
+
+# --- Local secrets (NEVER bake these in) -----------------------------------
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+!.env.sample
+
+# --- Runtime data dirs from `docker compose up` ----------------------------
+data
+tmp
+logs
+*.log
+
+# --- Backup / scratch files ------------------------------------------------
+*.backup
+package.json.backup
+pnpm-lock.yaml.backup
+.DS_Store
+
+# --- Docs / repo metadata (not needed in image) ----------------------------
+README.md
+CHANGES.md
+CLAUDE.md
+TODO.md
+LICENSE
+docs
+
+# --- Compose plumbing (kept available so the elasticsearch service can be
+#     built from the same context). Per Docker semantics, the Dockerfile
+#     referenced by `-f` is always available regardless of .dockerignore.
 .dockerignore
+docker-compose*.yml
