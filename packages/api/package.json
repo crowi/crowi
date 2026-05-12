@@ -94,6 +94,7 @@
     "process": "^0.11.10",
     "query-string": "^6.8.3",
     "redis": "^4.7.1",
+    "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
     "shiki": "^4.0.2",

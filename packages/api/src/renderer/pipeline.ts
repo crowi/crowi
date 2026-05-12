@@ -38,6 +38,14 @@ export interface PipelineEsmDeps {
   unified: () => UnifiedProcessor;
   remarkParse: unknown;
   remarkGfm: unknown;
+  /**
+   * GFM-compatible single-newline → `<br>` conversion. Crowi default;
+   * matches GitHub's rendering. Plugged in between the core 4 and the
+   * registry transforms so heading slugs (computed via `mdastToString`
+   * in the headings transform) are unaffected by injected `break`
+   * nodes — anchors stay byte-identical to the GFM-only build.
+   */
+  remarkBreaks: unknown;
   GithubSlugger: new () => { slug(text: string): string };
   mdastToString: (node: unknown) => string;
   /**
@@ -147,6 +155,11 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
     const unifiedMod = jiti('unified') as { unified: () => UnifiedProcessor };
     const remarkParseMod = jiti('remark-parse') as { default: unknown };
     const remarkGfmMod = jiti('remark-gfm') as { default: unknown };
+    // remark-breaks is ESM-only (`type: module`); like the rest of
+    // the pipeline deps, we read `.default` ourselves because the
+    // package doesn't carry the `__esModule` marker jiti needs for
+    // its `interopDefault` unwrap.
+    const remarkBreaksMod = jiti('remark-breaks') as { default: unknown };
     const sluggerMod = jiti('github-slugger') as { default: new () => { slug(text: string): string } };
     const mdastToStringMod = jiti('mdast-util-to-string') as { toString: (node: unknown) => string };
     // shiki is ESM-only too; its bundled core entry exposes
@@ -171,6 +184,7 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
       unified: unifiedMod.unified,
       remarkParse: remarkParseMod.default,
       remarkGfm: remarkGfmMod.default,
+      remarkBreaks: remarkBreaksMod.default,
       GithubSlugger: sluggerMod.default,
       mdastToString: mdastToStringMod.toString,
       shikiHighlighter,
@@ -226,7 +240,7 @@ export async function runPipeline(
   }
 
   const deps = await loadDeps();
-  const { unified, remarkParse, remarkGfm } = deps;
+  const { unified, remarkParse, remarkGfm, remarkBreaks } = deps;
 
   // Build the processor with parser + GFM tweaks first, then layer
   // the core 4 transform plugins (headings → wikilinks → mentions →
@@ -240,6 +254,12 @@ export async function runPipeline(
   for (const plugin of buildCorePlugins(deps)) {
     processor = processor.use(plugin as never, metadata);
   }
+
+  // GFM-compatible single-newline → `<br>` (Crowi default). Runs
+  // after the core 4 so heading slugs were computed against pristine
+  // heading text; runs before registry plugins so external transforms
+  // see the post-breaks tree.
+  processor = processor.use(remarkBreaks as never);
 
   for (const plugin of registry.getTransformPlugins()) {
     // External plugins can be either factory `(opts) => Transformer`

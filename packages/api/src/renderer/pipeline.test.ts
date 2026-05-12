@@ -282,6 +282,55 @@ describe('pipeline + core renderers', () => {
     });
   });
 
+  describe('single-newline → `<br>` (Crowi default via remark-breaks)', () => {
+    // The breaks transform was previously gated behind the
+    // `@crowi/plugin-renderer-crowi-legacy` plugin but is now baked
+    // into the core pipeline because GFM (GitHub / GitLab / Slack /
+    // everywhere) treats single newlines as hard breaks. These tests
+    // pin the default behaviour so future refactors don't silently
+    // regress to CommonMark soft-break semantics.
+    it('inserts a `break` node between two lines separated by a single newline', async () => {
+      const { tree } = await runCore('line1\nline2');
+      const paragraph = tree.children[0] as { type: string; children: Array<{ type: string }> };
+      expect(paragraph.type).toBe('paragraph');
+      expect(paragraph.children.find((c) => c.type === 'break')).toBeDefined();
+    });
+
+    it('does NOT collapse blank-line paragraph breaks into a `break` node', async () => {
+      // `\n\n` is the spec's paragraph delimiter — remark-breaks only
+      // touches single-newline soft breaks, so the two paragraphs
+      // remain separate and neither contains a break node.
+      const { tree } = await runCore('para1\n\npara2');
+      expect(tree.children).toHaveLength(2);
+      for (const child of tree.children) {
+        expect(child.type).toBe('paragraph');
+        const para = child as { children: Array<{ type: string }> };
+        expect(para.children.find((c) => c.type === 'break')).toBeUndefined();
+      }
+    });
+
+    it('leaves newlines inside fenced code blocks untouched', async () => {
+      // Fenced code is a `code` leaf node — remark-breaks walks
+      // paragraph children only, so the original `a\nb` body survives
+      // verbatim and shiki can still highlight it.
+      const md = ['```', 'a', 'b', '```'].join('\n');
+      const { tree } = await runCore(md);
+      expect(tree.children).toHaveLength(1);
+      expect(tree.children[0].type).toBe('code');
+    });
+
+    it('heading slugs are computed BEFORE breaks (anchor parity with GFM-only build)', async () => {
+      // The pipeline orders `core 4 → remark-breaks → registry`. If
+      // remark-breaks ever moved ahead of headings, `break` nodes
+      // injected into the heading children would change what
+      // `mdastToString` reports — and therefore the slug. This test
+      // pins the order via the anchor.
+      const { metadata } = await runCore('# Hello World\n\nbody');
+      expect(metadata.toc).toHaveLength(1);
+      expect(metadata.toc[0].anchorId).toBe('hello-world');
+    });
+  });
+
   describe('on-the-fly fallback (renderedAst recompute for legacy revisions)', () => {
     it('produces an equivalent AST when the same body is re-run', async () => {
       // The fallback path runs the pipeline against the body when no

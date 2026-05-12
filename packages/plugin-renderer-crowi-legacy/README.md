@@ -1,31 +1,63 @@
 # @crowi/plugin-renderer-crowi-legacy
 
-Crowi v1 compatibility renderer for Crowi 2.x. Re-enables the v1
-"Markdown Fixer" behaviour where a **single newline** in a page body
-renders as a hard line break (`<br>`) instead of a CommonMark
-soft-break.
+Crowi v1 互換挙動の集約プラグイン。
 
-Crowi 2.x defaults to CommonMark semantics (single newlines are
-whitespace, blank lines split paragraphs). Operators upgrading an
-existing Crowi 1.x install with pages that rely on the old behaviour
-can enable this plugin to preserve the visual layout of legacy
-content without rewriting any pages.
+このプラグインは、Crowi 1.x で受け入れられていた **CommonMark 準拠ではない
+v1 独自の Markdown 書き癖** を、Crowi 2.x でも従来どおりレンダリングできる
+ようにするためのものです。Crowi 1.x からデータを移行してきた場合のみ有効化
+してください。
 
-## Install
+> ※ 「シングル改行 → `<br>`」については当初このプラグインで提供していまし
+> たが、GitHub・GitLab・Slack 等の主要 Markdown サーフェスと同じ挙動 (= GFM
+> 互換) であり、CommonMark 純正の soft-break のほうがむしろ少数派であるため、
+> **Crowi 2.x のデフォルト挙動 (core pipeline)** に格上げされました。
+> 改行のためにこのプラグインを入れる必要はもうありません。
 
-The plugin is bundled in the Crowi monorepo. Operators add it to their
-runner project the same way they add any other plugin:
+## このプラグインが直す v1 挙動
+
+| 入力 | プラグイン無効 (素の CommonMark) | プラグイン有効 |
+|---|---|---|
+| `##hoge` | 段落 `##hoge` (見出しにならない) | 見出し depth 2 `hoge` |
+| `###bar` | 段落 `###bar` | 見出し depth 3 `bar` |
+| `#######nope` (7 個以上) | 段落のまま | 段落のまま (CommonMark 仕様尊重) |
+| `## hoge` | 見出し depth 2 `hoge` | 見出し depth 2 `hoge` (二重変換しない) |
+
+ATX 見出しの `#` の直後に空白を入れない、という非エンジニアに多かった v1 時代
+の書き癖を補正します。CommonMark / GFM 仕様では `#` のあとに必ず空白が必要
+なため、素のパーサだと段落扱いになり見出しスタイルがつきません。
+
+## このプラグインがやらないこと
+
+- **H1 → ページタイトル抽出** — v1 は本文の最初の H1 をページタイトルとし
+  て採用していました。Crowi 2.x はタイトルを `Page.path` で別管理しています。
+- **`@include` / `@toc` 等の独自トークン** — Crowi 2.x のプラグインモデルに
+  置き換えられています。該当ページは手動で書き直してください。
+- **`</path/to/page>` 山括弧内部リンク** — `crowi-admin migrate
+  --only=wikilink` で `[[...]]` 表記に一括変換できます (本プラグインの責務
+  ではない)。
+- **添付 URL (`/_uploads/...`) の書き換え** — Crowi 2.x の `LinkDetector` が
+  そのままハンドルするため不要。
+
+## 既知の制約
+
+- このプラグインによって書き換えられた `##hoge` 見出しは、**TOC (目次) には
+  表示されません**。また、**heading anchor (`#hoge` 形式の見出し ID)** も
+  付きません。理由: コアの見出し処理 (TOC + slug 計算) はプラグインより前に
+  走るため、後段でパラグラフ → 見出しに変換しても TOC ビルダはもう動いて
+  いないためです。
+- 長期的には、移行元の本文を `##hoge` → `## hoge` (空白入り) に書き直すこと
+  を推奨します。
+
+## インストール / 有効化
+
+ランナー (`crowi.config.json` を置いているディレクトリ) の `package.json`
+依存に追加し、`crowi.config.json` の `plugins` に列挙します:
 
 ```bash
-# in your runner directory (the one with crowi.config.json)
 npm install @crowi/plugin-renderer-crowi-legacy
-# or, in dev (Crowi monorepo):
+# or dev:
 pnpm --filter @crowi/api add -D @crowi/plugin-renderer-crowi-legacy
 ```
-
-## Configure
-
-### Enable in `crowi.config.json`
 
 ```jsonc
 {
@@ -35,65 +67,34 @@ pnpm --filter @crowi/api add -D @crowi/plugin-renderer-crowi-legacy
 }
 ```
 
-A server restart is required for plugin-list changes to take effect —
-Crowi reads `crowi.config.json` once at boot.
+サーバの再起動が必要です (`crowi.config.json` は起動時に読まれます)。
 
 ### Default on/off matrix
 
-| Install kind | Recommended | How to apply |
+| Install kind | Recommended | 適用方法 |
 |---|---|---|
-| **Fresh Crowi 2.x install** | OFF (omit from `plugins`) | Don't list the plugin. Single newlines render as soft-breaks, matching CommonMark. |
-| **Migrated Crowi 1.x → 2.x install** | ON (list in `plugins`) | List the plugin to keep v1's `<br>` behaviour for existing pages. |
+| **新規 Crowi 2.x install** | OFF (`plugins` から外す) | 通常通りの GFM レンダリングになる |
+| **Crowi 1.x からの移行 install** | ON (`plugins` に列挙) | v1 時代の書き癖を v2 でも崩さない |
 
-This plugin does not currently read environment variables — the only
-on/off knob is whether you list it in `crowi.config.json:plugins`.
+設定 (環境変数) は一切ありません。`plugins` に列挙するか否かのみが ON/OFF
+スイッチです。
 
-### Admin UI
+### 管理画面
 
-Once listed in `crowi.config.json`, the plugin appears in
-`/admin/plugins` with the label "Crowi v1 互換レンダラー". There are
-no per-plugin config fields to fill in — the plugin is either enabled
-(listed) or not (omitted).
+`/admin/plugins` には `Crowi v1 互換レンダラー` というラベルで表示されます。
+プラグインごとの個別設定項目はありません。
 
-## Re-rendering existing pages
+## 既存ページの再レンダリング
 
-When you enable this plugin against a Crowi instance that already has
-content, the **stored `Revision.renderedAst`** of old pages was
-computed without `remark-breaks` and therefore still emits soft-breaks
-on read. The plugin's effect kicks in only when a page is **re-saved**
-(creating a new revision) or **re-rendered** by an admin batch job.
-
-For Phase 5, the supported workflow is:
-
-1. Enable the plugin in `crowi.config.json` + restart the API.
-2. Operators / authors edit a page → save → the new revision's
-   `renderedAst` includes the `break` nodes.
-
-A future Phase 5.1 may ship `crowi-admin renderer:rebuild` to refresh
-every revision's `renderedAst` in bulk; that is **not** part of Phase 5.
-
-## What this plugin does NOT do
-
-This is intentionally a narrow compatibility shim. Out of scope:
-
-- **H1 → page title extraction** — v1 used the first H1 in a body as
-  the page title. v2 stores titles in a separate `Page.path` field and
-  does not infer titles from body content. Migration of existing H1
-  titles is handled per-page by operators.
-- **PHP-style include / Crowi-specific tokens** — v1 supported a few
-  custom syntaxes (`@include`, `@toc`, etc.) that have been replaced by
-  v2's plugin model. Operators with content depending on those should
-  edit the affected pages.
-- **`</path/to/page>` angle-bracket internal links** — v1 supported a
-  shorthand for internal page links. Use the `crowi-admin migrate --only=wikilink`
-  command (also part of Phase 5) to rewrite these to v2's
-  `[[/path/to/page]]` wikilink syntax.
-- **Attachment URL (`/_uploads/...`) migration** — v2's `LinkDetector`
-  already handles these URLs natively, so no migration is required.
+このプラグインを有効化すると、以後 **編集して保存し直したページ** の
+`Revision.renderedAst` にはプラグインの効果が反映されます。**既存の
+renderedAst (旧 revision)** はプラグイン無効時に生成済みなので、自動的に
+は書き換わりません。一括再レンダリングは将来の `crowi-admin
+renderer:rebuild` で対応予定です。
 
 ## See also
 
-- RFC-0002 §"Phase 5 — v1 compatibility migrator" for the migration
-  rationale and the wikilink-rewrite CLI.
-- [`remark-breaks`](https://github.com/remarkjs/remark-breaks) — the
-  upstream plugin this one wraps.
+- RFC-0002 — Crowi 2.0 renderer architecture と Phase 5 (v1 compat migrator)
+  の全体像。
+- core pipeline (`packages/api/src/renderer/pipeline.ts`) — 改行 → `<br>` を
+  含む Crowi 2.x デフォルト挙動はこちらに統合済み。

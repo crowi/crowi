@@ -1,7 +1,7 @@
 {
   "name": "@crowi/plugin-renderer-crowi-legacy",
   "version": "0.1.0-dev",
-  "description": "Crowi v1 compatibility renderer for Crowi 2.x. Re-enables v1's single-newline → <br> behaviour via remark-breaks. Intended for installs migrating from Crowi 1.x; fresh installs leave it disabled.",
+  "description": "Crowi v1 compatibility quirks aggregator for Crowi 2.x. Fixes actual v1 idiosyncrasies (e.g. `##hoge` heading-without-space) that are NOT standard markdown. The single-newline → <br> behaviour shipped here in earlier dev iterations is now a Crowi-wide default and lives in the core pipeline.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -28,10 +28,7 @@
   "peerDependencies": {
     "@crowi/plugin-api": "^0.1.0"
   },
-  "dependencies": {
-    "jiti": "^2.7.0",
-    "remark-breaks": "^4.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
@@ -39,10 +36,8 @@
     "@types/mdast": "^4.0.4",
     "@types/node": "catalog:",
     "jest": "catalog:",
-    "remark-parse": "^11.0.0",
     "ts-jest": "catalog:",
     "tsup": "catalog:",
-    "typescript": "catalog:",
-    "unified": "^11.0.5"
+    "typescript": "catalog:"
   }
 }
