@@ -26,7 +26,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 - [x] **UI 共通化** (`2c390a55`): `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出。9 ファイル / 13 サイトで重複削減
 - [x] **i18n 戦略確立 + 主要 surface 移行** (`3c0e7432` + `8a47e65d` + `b6aa27bc`): paraglide-js 採用、page-view / list / history / comments / user-page / edit / admin (`admin.common.*`)、me 配下を全 i18n 化。残: rename-dialog の `'編集が競合しました'` ハードコード、use-bookmark / use-watch / use-notifications / use-like / use-user-page の `'Authentication required'` を既存の `errors.auth_required` に集約 (small advisory)
-- [x] **`req.user` の Express type augmentation** (`8e8524ac`): `apps/crowi-api/src/types/express.ts` で global 拡張、35 サイトの cast を撲滅
+- [x] **`req.user` の Express type augmentation** (`8e8524ac`): `packages/api/src/types/express.ts` で global 拡張、35 サイトの cast を撲滅
 - [x] **`pageToResponse` / `toPageUser` / `toUserPublic` / `isPopulatedUser` の統一** (`6c43ef77` + `8b2fe70f`):
   - `toUserPublic` を util に統合 (`PopulatedUserPublic` 経由で fallback 対応)
   - `isPopulatedUser` を util に集約 (loose triplet 判定)
@@ -70,7 +70,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 ## Low Priority — フェーズ 4 (管理画面、重い)
 
 旧実装の管理画面 React は Phase 1 で削除済み。API endpoints だけ
-`apps/crowi-api/src/routes/api/admin.ts` に残っているので、ts-rest 化 + Next.js 管理
+`packages/api/src/routes/api/admin.ts` に残っているので、ts-rest 化 + Next.js 管理
 画面 (`apps/crowi-web/src/app/(admin)/`) を新設する。
 
 ### 基盤
@@ -109,10 +109,10 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] **バックリンク再構築** (`POST /admin/backlink/build`) — 全ページ走査して link 関係を再計算
 
 ### 旧実装の参照
-- API endpoints: `apps/crowi-api/src/routes/api/admin.ts`
-- Express ルート (legacy GET, SPA index 返し): `apps/crowi-api/src/routes/admin.ts`
-- Controller: `apps/crowi-api/src/controllers/admin.ts`
-- Form validators: `apps/crowi-api/src/form/admin/*`
+- API endpoints: `packages/api/src/routes/api/admin.ts`
+- Express ルート (legacy GET, SPA index 返し): `packages/api/src/routes/admin.ts`
+- Controller: `packages/api/src/controllers/admin.ts`
+- Form validators: `packages/api/src/form/admin/*`
 - 旧 Swig views は **既に削除済み** (Phase 1 で React/views クリア時に)
 
 ## Low Priority — フェーズ 5 (共有 / OAuth / 招待)
@@ -125,7 +125,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 - [ ] 旧 Express routes / controllers の除去 (ts-rest 移行完了後)
 - [ ] 旧 Swig views の削除
-- [ ] `apps/crowi-api/src/util/apiResponse.ts` (legacy) の整理
+- [ ] `packages/api/src/util/apiResponse.ts` (legacy) の整理
 - [ ] テスト整備 (web 側のテスト基盤、API の coverage 強化)
 - [ ] エディタ強化 (Markdown プレビュー / リッチエディタ / 自動保存 / 画像アップロード)
 
@@ -151,7 +151,8 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [x] **Phase 3 — pnpm catalog 導入** — `pnpm-workspace.yaml` に default `catalog:` を定義し、横断する dev tool / 外部 peer の 8 entry (`typescript ^5.8.3` / `tsup ^8.3.5` / `@types/node ^22.15.30` / `jest ^29.7.0` / `@types/jest ^29.5.14` / `ts-jest ^29.3.4` / `@ts-rest/core ^3.52.1` / `zod ^3.23.8`) を single source of truth に。15 package.json (apps 4 + packages 11) の該当 entries を `catalog:` 文字列に置換、ドリフトしていた typescript (`^5` / `^5.7.2` / `^5.8.3`) と @types/node (`^22.10.2` / `^22.15.30`) を統一。`@ts-rest/core` は api 経由 transitive な `@ts-rest/express ^3.52.1` に合わせて `^3.52.1` に揃え (元の `^3.51.0` から微増)。前提として `packageManager` を `pnpm@8.15.0` → `pnpm@9.15.9` にバンプ、`engines.pnpm: >=9.0.0`。lockfile は v6.0 → v9.0 に format 変換 (`catalogs.default` block が埋まり、参照は spec から resolve)。`apps/crowi-web` / `apps/crowi-site` の `@types/node: ^20` のみ catalog 化保留 — Next.js Vercel runtime と Node 22 typings の整合が未検証のため (後続 task で検討)。`pnpm pack` 検証を 3 plugin (renderer-emoji / storage-local / plugin-api) で実施、tarball 内で `catalog:` が実 version range (`^5.8.3` / `^3.52.1` / `^3.23.8` 等) に rewrite されることを確認。peerDependencies (zod / @ts-rest/core) でも catalog: が正しく展開される。**advisory 同梱**: `scripts/check-workspace-protocol.mjs` (zero-dep Node ESM、`@crowi/*` 参照について deps→`workspace:^` / devDeps→`workspace:*` / peerDeps→literal semver の規約違反を exit 1 で検知) を追加、`lefthook.yml pre-commit` jobs に `glob: '**/package.json'` で並列 hook 化、`pnpm check:workspace` script でも単発実行可。意図的に 1 package を破壊した dry-run で hook が exit 1 を返すことを実機確認。`sort-package-json` 導入は diff churn 回避のため別 task に持ち越し
 - [ ] **Phase 3 follow-ups (advisory、simplify レビュー由来)** — (a) catalog 化候補の積み残し: `unified ^11.0.5` / `remark-parse ^11.0.0` / `@types/mdast ^4.0.4` (4 packages の remark stack)、`nodemon` / `ts-node` / `tsconfig-paths` / `dotenv` (api + dev-runner / admin-cli の 2 site cluster)。drift していないため緊急度低だが、まとめてバンプ時に効く。(b) `@ts-rest/react-query ^3.51.0` を `^3.52.1` に揃え (`@ts-rest/core` catalog 値と整合)。(c) `apps/crowi-web` / `apps/crowi-site` の `@types/node ^20` を Next.js Vercel runtime と Node 22 typings の整合検証後に catalog 化。(d) `sort-package-json` 導入 (key 並び統一)。Phase 4 か Phase 9 のついでに片付けるのが現実的
 - [x] **Phase 4 — `@crowi/tsconfig` パッケージ化** — `packages/tsconfig/` に `base.json` (strict / esModuleInterop / forceConsistentCasingInFileNames / skipLibCheck / resolveJsonModule / isolatedModules) と `library.json` (target ES2020 / module ESNext / moduleResolution bundler / declaration+map+sourceMap) / `app-node.json` (target ES2022 / module commonjs / moduleResolution node16、phase-5 で消費予定) / `app-web.json` (target ES2022 / dom lib / module esnext / moduleResolution bundler / jsx react-jsx / noEmit / incremental / allowJs / plugins:[next]) を分離。11 library tsconfig (api-contract + admin-cli + plugin-{api,aws,renderer-{crowi-legacy,emoji,katex,plantuml},search-elasticsearch,storage-{aws-s3,local}}) を `extends "@crowi/tsconfig/library.json"` に置換、outDir/rootDir/types/include/exclude のみ consumer 側に残置。2 web tsconfig (crowi-web + crowi-site) を `extends "@crowi/tsconfig/app-web.json"` に置換、paths/include/exclude のみ残置。各 consumer の package.json devDeps に `@crowi/tsconfig: workspace:*` を alphabetical 順で追加 (13 consumer)。apps/crowi-web の target は ES2017 → ES2022 に bump (preset 統一、Next 16 は ES2022 が前提)。base.json 経由で `isolatedModules: true` が library 11 packages にも新規適用される (pre-diff は web 2 app のみ持っていた) — tsup ビルドは元々ファイル単位 isolated で動作しており、`const enum` / `export =` 等の禁止構文が library 側に存在しないため動作影響は無いが silent hardening として明記。apps/crowi-api は phase-5 で `app-node.json` 採用予定のため今回は据え置き。verification: type-check 26/26 / test 19/19 (api 593 tests) / lint 0 errors / format clean / check-workspace-protocol OK / `tsc --showConfig` で preset 値が consumer に正しく展開されることを plugin-renderer-emoji + apps/crowi-web で確認 / `pnpm pack` で 4 preset JSON + package.json が tarball に含まれることを確認
-- [ ] **Phase 5-9** — `apps/crowi-api` → `packages/api` 移動 / `apps/crowi-web` → `packages/web` 移動 / `@crowi/runner` 切り出し + dev-runner 廃止 / Dockerfile 整備 / changesets + CI publish workflow。spec は `.feature-state/specs/feature-monorepo-packages-restructure.md` 参照。plugin-api の major 昇格 (`0.1.0-dev` → `1.0.0`) は Phase 9 (changesets) と一緒に検討
+- [x] **Phase 5 — `apps/crowi-api` → `packages/api` 移動** — `git mv apps/crowi-api packages/api` で atomic に移動、`git log --follow` で履歴維持。path 参照を 38 ファイル追従 (root `tsconfig.json` `references[0].path`、`biome.json` ignore globs 5 件、`.github/workflows/ci.yml` working-directory、`apps/crowi-dev-runner/{nodemon.json,package.json}` scripts/watch path、`packages/api/nodemon.json` sibling plugin dist watch paths を `../../packages/X` → `../X` に 1 階層繰り上げ、`README.md` / `CLAUDE.md` のレイアウト ASCII art と env path 言及、`.claude/agents/*.md` 6 files + `.claude/skills/**/SKILL.md` 2 files、`packages/{api-contract,admin-cli,plugin-*}/src/*` のコメント参照 ~15 hits、apps/crowi-{web,site} CSS コメント 3 hits、`packages/api` 自己参照コメント 5 hits)。`packages/api/tsconfig.json` を `@crowi/tsconfig/app-node.json` extends に切替、preset が継承する target/lib/strict/skipLibCheck/esModuleInterop/forceConsistentCasingInFileNames/resolveJsonModule/isolatedModules を consumer から drop。`@crowi/tsconfig: workspace:*` を devDeps に alphabetical 順で追加。**preset 修正**: spec §e は app-node を `module: commonjs` + `moduleResolution: node16` と記述していたが TS 5.x で TS5110 (`moduleResolution: node16` は `module: node16|nodenext` を要求) で reject される無効な組み合わせ。`moduleResolution: node16` 採用 (node ESM mode) は ts-jest が `await import(...)` を真の ESM dynamic import として保持し `--experimental-vm-modules` 無しで test suite 全落ちさせるため不可。simplify レビューで「preset を `module: commonjs` + `moduleResolution: node` に揃え、consumer override から module/moduleResolution を drop」を採用 — preset が現実の唯一の consumer (packages/api) と一致し、preset の意義 (target/lib/module/moduleResolution を集約) が回復。将来 ts-jest が node16 ESM をサポートしたら `app-node-esm.json` を別 preset として追加検討。`tsc --showConfig` で target=es2022 / module=commonjs / moduleResolution=node10 / strict / isolatedModules / esModuleInterop / skipLibCheck / forceConsistentCasingInFileNames / resolveJsonModule の継承を確認。RFC アーカイブとして `TODO.md` 既存履歴と `docs/rfcs/0001-plugin-architecture.md` L546 の `apps/crowi-api` 参照は historical accuracy 保持で touched せず。verification: type-check 26/26 / test 19/19 (api 593 tests) / lint 0 errors / format clean / check-workspace-protocol 16 OK
+- [ ] **Phase 6-9** — `apps/crowi-web` → `packages/web` 移動 / `@crowi/runner` 切り出し + dev-runner 廃止 / Dockerfile 整備 / changesets + CI publish workflow。spec は `.feature-state/specs/feature-monorepo-packages-restructure.md` 参照。plugin-api の major 昇格 (`0.1.0-dev` → `1.0.0`) は Phase 9 (changesets) と一緒に検討
 - [ ] **Phase 9 advisory — devDeps mirror が tarball に prerelease pin として残る問題** (simplify レビュー由来) — `pnpm pack` は `devDependencies` を strip しないため、現状の mirror `@crowi/plugin-api: workspace:*` は published tarball で `0.1.0-dev` の pinned (caret なし) prerelease tag に展開される。consumer が `pnpm install --prod=false` 等で dev dep を解決すると registry に存在しない `0.1.0-dev` で ETARGET。Phase 9 で plugin-api を non-prerelease (`1.0.0`) に昇格すると同時に、(a) mirror を `workspace:^` に切替 (`^x.y.z` で range 化) or (b) `prepack` で mirror devDeps を削除、のどちらかを採用
 
 ### Installer 移行 (フェーズ 0)
