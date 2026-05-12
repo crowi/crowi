@@ -18,13 +18,16 @@
     "type-check": "tsc --noEmit",
     "test": "jest --passWithNoTests"
   },
+  "peerDependencies": {
+    "@crowi/plugin-api": "^0.1.0"
+  },
   "dependencies": {
-    "@crowi/plugin-api": "workspace:^",
     "jiti": "^2.7.0",
     "katex": "^0.16.11",
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@crowi/plugin-api": "workspace:*",
     "@types/jest": "^29.5.14",
     "@types/katex": "^0.16.7",
     "@types/mdast": "^4.0.4",

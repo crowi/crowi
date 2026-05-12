@@ -196,22 +196,22 @@ importers:
         version: 3.25.56
     devDependencies:
       '@crowi/plugin-renderer-crowi-legacy':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/plugin-renderer-crowi-legacy
       '@crowi/plugin-renderer-emoji':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/plugin-renderer-emoji
       '@crowi/plugin-renderer-katex':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/plugin-renderer-katex
       '@crowi/plugin-renderer-plantuml':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/plugin-renderer-plantuml
       '@crowi/plugin-storage-aws-s3':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/plugin-storage-aws-s3
       '@crowi/plugin-storage-local':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/plugin-storage-local
       '@types/bcryptjs':
         specifier: ^3.0.0
@@ -429,7 +429,7 @@ importers:
   apps/crowi-web:
     dependencies:
       '@crowi/api-contract':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../packages/api-contract
       '@inlang/paraglide-js':
         specifier: ^2.18.0
@@ -616,26 +616,22 @@ importers:
         version: 3.25.56
 
   packages/plugin-aws:
-    dependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:^
-        version: link:../plugin-api
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.56
     devDependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       tsup:
         specifier: ^8.3.5
         version: 8.5.0(jiti@2.7.0)(typescript@5.8.3)
       typescript:
         specifier: ^5.7.2
         version: 5.8.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.56
 
   packages/plugin-renderer-crowi-legacy:
     dependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:^
-        version: link:../plugin-api
       jiti:
         specifier: ^2.7.0
         version: 2.7.0
@@ -643,6 +639,9 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
     devDependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -673,9 +672,6 @@ importers:
 
   packages/plugin-renderer-emoji:
     dependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:^
-        version: link:../plugin-api
       jiti:
         specifier: ^2.7.0
         version: 2.7.0
@@ -683,6 +679,9 @@ importers:
         specifier: ^5.0.1
         version: 5.0.2
     devDependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -713,9 +712,6 @@ importers:
 
   packages/plugin-renderer-katex:
     dependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:^
-        version: link:../plugin-api
       jiti:
         specifier: ^2.7.0
         version: 2.7.0
@@ -726,6 +722,9 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
     devDependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -759,16 +758,13 @@ importers:
 
   packages/plugin-renderer-plantuml:
     dependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:^
-        version: link:../plugin-api
       plantuml-encoder:
         specifier: ^1.4.0
         version: 1.4.0
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.56
     devDependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -787,19 +783,19 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.8.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.56
 
   packages/plugin-search-elasticsearch:
     dependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:^
-        version: link:../plugin-api
       '@elastic/elasticsearch':
         specifier: ^9.4.0
         version: 9.4.0
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.56
     devDependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -818,6 +814,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.8.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.56
 
   packages/plugin-storage-aws-s3:
     dependencies:
@@ -827,16 +826,13 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.700.0
         version: 3.1045.0
+    devDependencies:
       '@crowi/plugin-api':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../plugin-api
       '@crowi/plugin-aws':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../plugin-aws
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.56
-    devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.15.30
@@ -846,16 +842,15 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.8.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.56
 
   packages/plugin-storage-local:
-    dependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:^
-        version: link:../plugin-api
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.56
     devDependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@types/node':
         specifier: ^22.10.2
         version: 22.15.30
@@ -865,6 +860,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.8.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.56
 
 packages:
 
