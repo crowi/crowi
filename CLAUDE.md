@@ -233,6 +233,50 @@ go to `TODO.md`.
 - End with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`
   on Claude-driven commits.
 
+### Changesets (release notes accumulation)
+
+Phase 9 で `@changesets/cli` を導入済み。v2 開発中も `pnpm changeset add`
+で各リリース対象の変更を `.changeset/*.md` として **蓄積していく** ことで、
+2.0.0-alpha1 / 安定版リリース時に過去変更のリリースノートが自動生成される。
+
+**Add のタイミング — 「ユーザー価値の単位」で 1 つ**:
+- ✅ 機能追加・バグ修正・破壊的変更 → 1 changeset
+- ✅ 同じ機能を分割した複数 commit でも、ユーザー視点で 1 つなら 1 changeset
+  (実装途中の小さな commit ごとに changeset は **作らない**)
+- ❌ 内部 refactor / コード整理 / lint fix / format / 内部 build infra
+  / test 追加だけ → changeset 不要 (ユーザーから見える変化なし)
+- ❌ docs(todo) / CLAUDE.md / `.claude/` 更新 → changeset 不要
+- ❌ `feature-monorepo-packages-restructure` の各 phase commit → 全体で 1
+  changeset (`.changeset/initial-release.md` で既に拾われている)
+
+判断基準: 「次の changelog に書いて意味があるか」。`feat:` / `fix:` で
+ユーザー behavior が変わるなら add、`refactor:` / `chore:` / `test:` /
+`docs:` だけなら add しない。
+
+**Bump レベルの選び方**:
+- `patch` — bug fix、内部最適化が露出するもの、依存 bump (semver-safe)
+- `minor` — 新機能、新エンドポイント、既存挙動を壊さない設定追加
+- `major` — 破壊的変更 (API 削除、エンドポイント仕様変更、required 設定追加)
+
+**対象 package の選び方**:
+- API 振る舞いを変えた → `@crowi/api`
+- Web UI を変えた → `@crowi/web` (private なので登録しても publish はされない
+  が、CHANGELOG.md は生成される)
+- ts-rest contract を変えた → `@crowi/api-contract` (linked group なので
+  api / web も同時 bump される)
+- Plugin SDK を拡張した → `@crowi/plugin-api` + 影響する個別 plugin
+- Plugin 1 つだけ更新 → その plugin のみ
+
+**コマンド**:
+```bash
+pnpm changeset add        # 対話的に package + bump level + 概要を選ぶ
+pnpm changeset status     # 蓄積された未公開 changeset 一覧
+```
+
+PR を main に merge する直前 (or PR の中) で 1 ファイル add する運用。
+初版 (`.changeset/initial-release.md`) は restructure 全体を覆う sentinel
+として `feature-monorepo-packages-restructure` 完了時に置いた、消さない。
+
 ### State directories
 - `.migration-state/` (repo root, gitignored except `.gitkeep`): per-task
   files for the `/migrate` workflow.
