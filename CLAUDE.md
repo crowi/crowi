@@ -19,55 +19,30 @@ security settings landed). See `TODO.md` for the up-to-date phase status.
 
 ```
 crowi/
-├── apps/
-│   └── crowi-site/                 # crowi.wiki LP + docs (Next.js + Fumadocs, port 3401)
-├── crowi.config.json               # ★ Dev runner config: plugins + active driver names (read by @crowi/runner at boot)
-├── .env / .env.sample              # ★ Dev runtime env (loaded by packages/api/src/app.ts at CWD)
+├── apps/crowi-site/          # crowi.wiki LP + docs (Next.js + Fumadocs, :3401)
+├── crowi.config.json         # dev runner config (plugins + active drivers)
+├── .env(.sample)             # dev runtime env (loaded at CWD by packages/api)
 └── packages/
-    ├── api/                        # Express + ts-rest API library (port 3300 in dev)
-    │   ├── src/
-    │   │   ├── controllers/        # Legacy Swig-era handlers (still mounted; deprecated)
-    │   │   ├── routes/
-    │   │   │   ├── api/            # Legacy /_api/* endpoints
-    │   │   │   ├── ts-rest/        # ★ New ts-rest handlers (mounted at /api/v2)
-    │   │   │   ├── login.ts        # Legacy auth form routes
-    │   │   │   └── admin.ts        # Legacy admin GET routes
-    │   │   ├── models/             # Mongoose schemas
-    │   │   ├── middlewares/        # jwtAuth / jwtAdminRequired / loginRequired / etc.
-    │   │   ├── service/            # Business logic (search, notifications, config)
-    │   │   ├── events/             # pageEvent / notificationEvent listeners
-    │   │   ├── util/               # crypto, jwt, ts-rest helpers, link detector
-    │   │   ├── plugin/             # PluginManager + registries + config-file loader
-    │   │   ├── types/              # Express Request augmentation
-    │   │   └── crowi/index.ts      # Crowi class (boot, setup, teardown)
-    │   └── (.env.sample is at the repo root, CWD-loaded)
-    ├── api-contract/               # Shared ts-rest contracts + Zod schemas
-    │   └── src/
-    │       ├── contracts/          # ts-rest c.router definitions
-    │       └── schemas/            # Zod schema definitions
-    ├── plugin-api/                 # @crowi/plugin-api — plugin SDK (CrowiPlugin / registries / context)
-    ├── plugin-aws/                 # @crowi/plugin-aws — shared AWS credentials base plugin
-    ├── plugin-storage-local/       # @crowi/plugin-storage-local — default-on local FS storage driver
-    ├── plugin-storage-aws-s3/      # @crowi/plugin-storage-aws-s3 — S3 storage driver
-    ├── runner/                     # @crowi/runner — config loader + plugin resolver (used by @crowi/api boot)
-    └── web/                        # Next.js 16 frontend (port 3301)
-        └── src/
-            ├── app/
-            │   ├── (public)/       # Login / register / installer
-            │   ├── (auth)/         # Logged-in pages (page-view, edit, trash, user, ...)
-            │   └── (admin)/        # Admin dashboard + sections (admin-only via layout)
-            ├── components/         # Page, page-view, page-list, admin, ui (shadcn)
-            └── lib/                # React Query hooks, api-client, auth context
+    ├── api/                  # Express + ts-rest API (:3300)
+    ├── api-contract/         # ts-rest contracts + Zod schemas
+    ├── web/                  # Next.js 16 App Router (:3301)
+    ├── runner/               # config loader + plugin resolver (used by api boot)
+    ├── tsconfig/             # shared library/app-node/app-web tsconfig presets
+    ├── admin-cli/            # `crowi-admin` CLI
+    └── plugin-{api,aws,storage-*,renderer-*,search-elasticsearch}/
 ```
 
-The api package is plugin-agnostic at runtime — `@crowi/runner` (via
-`PluginManager.bootstrap()`) resolves plugin npm names against the
-runner project's `node_modules/` via
-`createRequire(<projectDir>/package.json)`. Operators add a plugin by
-declaring it in their runner's `package.json` deps and listing it in
-`crowi.config.json:plugins`; the api never needs to be rebuilt. In
-the monorepo's dev path, `projectDir` defaults to the repo root and
-plugins resolve via pnpm's hoisted `node_modules/`.
+`ls packages/` and `tree -L 2 packages/api/src` give the rest. Highlights
+worth knowing without reading code:
+
+- `packages/api/src/routes/ts-rest/` — new endpoints; `routes/api/` + `controllers/` are legacy
+- `packages/api/src/crowi/index.ts` — boot sequence (encryption → DB → config → plugins → server)
+- Plugin resolution: `@crowi/runner` reads `crowi.config.json` + uses
+  `createRequire(<projectDir>/package.json)` to load plugin npm packages from
+  the runner's `node_modules/`. Operators add a plugin by declaring it in
+  their runner's deps + listing in `crowi.config.json:plugins`; the api never
+  needs to be rebuilt. Dev path: `projectDir` = repo root, plugins resolve
+  via pnpm's hoisted `node_modules/` (see `.npmrc`).
 
 ## Tech Stack
 
@@ -79,51 +54,19 @@ plugins resolve via pnpm's hoisted `node_modules/`.
 
 ## Development Commands
 
-### Setup and Run
-```bash
-# Install (root)
-pnpm install
+Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
+`turbo` automatically. Non-obvious points:
 
-# Start dependency services (MongoDB / Redis / Elasticsearch / PlantUML)
-docker compose up -d
-
-# Run both apps with auto-reload (api on :3300, web on :3301)
-pnpm dev
-
-# Run only the API + plugins (no Next.js)
-pnpm dev:api
-
-# Run only the Next.js frontend
-pnpm dev:web
-```
-
-### Tests / Type-check / Lint
-```bash
-pnpm test                                    # all apps
-pnpm --filter @crowi/api test                # api only
-pnpm --filter @crowi/api test -- --testPathPattern=foo
-
-pnpm type-check                              # all apps (api + web)
-pnpm --filter @crowi/api type-check
-pnpm --filter @crowi/web type-check
-
-pnpm lint                                    # all apps; errors=0 required
-pnpm --filter @crowi/api lint
-```
-
-### Build
-```bash
-pnpm build                                   # all
-pnpm --filter @crowi/api-contract build      # required after editing contracts/schemas
-```
-
-### Format
-```bash
-pnpm format                                  # write
-pnpm format:check                            # CI
-```
-Auto-applied on commit via lefthook pre-commit (Biome). `pnpm format` is
-manual-only when bypassing hooks.
+- **Dev**: `docker compose up -d` for infra (mongo/redis/es/plantuml) →
+  `pnpm dev` for api+web+plugins. `pnpm dev:api` / `pnpm dev:web` for one side.
+- **Targeted run**: `pnpm --filter @crowi/api <script>` to run a script in
+  one package only.
+- **Lint must be errors=0** (warnings tolerated). pre-push lefthook enforces.
+- **Format**: Biome auto-runs on staged files (lefthook pre-commit). `pnpm
+  format` only when bypassing hooks.
+- **api-contract**: edit contracts/schemas → `pnpm --filter @crowi/api-contract
+  build` to regenerate dts before api/web consumers pick them up (turbo `^build`
+  handles this in `dev` / `build` / `test`).
 
 ## Architecture Overview
 
@@ -295,11 +238,6 @@ User-invocable skills (see `.claude/skills/`):
 
 ## Crowi Theme
 
-```
---crowi-primary: #43676b      /* logo green */
---crowi-header:  #263a3c      /* dark header */
---crowi-sidebar: #f8f9fa      /* sidebar background */
-```
-
-Avatars use `--crowi-primary` as background with white text for the initials
-fallback (see `packages/web/src/components/user-avatar.tsx`).
+Tokens live in `packages/web/src/app/globals.css` (`--crowi-primary` /
+`--crowi-header` / `--crowi-sidebar` etc.). Avatars use `--crowi-primary` as
+initials-fallback background (`packages/web/src/components/user-avatar.tsx`).
