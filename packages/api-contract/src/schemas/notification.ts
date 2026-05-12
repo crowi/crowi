@@ -13,12 +13,14 @@ export const NotificationStatusEnum = {
 export type NotificationStatus = z.infer<typeof NotificationStatusSchema>;
 
 // Notification action enum - matches activityDefine.ts
-// Currently only COMMENT and LIKE are supported on the server side
-// (CREATE / MODIFY / DELETE are reserved but not yet wired up)
-export const NotificationActionSchema = z.enum(['COMMENT', 'LIKE']);
+// COMMENT / LIKE / MENTION are wired on the server side
+// (CREATE / MODIFY / DELETE are reserved but not yet emitted).
+// MENTION is dispatched by RFC-0002 Phase 8 mention-dispatch listener.
+export const NotificationActionSchema = z.enum(['COMMENT', 'LIKE', 'MENTION']);
 export const NotificationActionEnum = {
   COMMENT: 'COMMENT',
   LIKE: 'LIKE',
+  MENTION: 'MENTION',
 } as const;
 export type NotificationAction = z.infer<typeof NotificationActionSchema>;
 

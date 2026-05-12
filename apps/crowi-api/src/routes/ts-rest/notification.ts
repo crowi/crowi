@@ -131,7 +131,7 @@ const notificationToResponse = (doc: NotificationDocument): Notification => {
     user: userId,
     targetModel: obj.targetModel as 'Page',
     target,
-    action: obj.action as 'COMMENT' | 'LIKE',
+    action: obj.action as 'COMMENT' | 'LIKE' | 'MENTION',
     status: obj.status as 'UNREAD' | 'UNOPENED' | 'OPENED',
     actionUsers: buildActionUsers(obj),
     createdAt: toISOStringOrNull(obj.createdAt) ?? new Date(0).toISOString(),
