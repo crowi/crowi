@@ -1,7 +1,13 @@
 'use client';
 
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ListPluginsResponse, PluginConfigResponse, UpdatePluginConfigRequest, UpdatePluginConfigResponse } from '@crowi/api-contract';
+import type {
+  ClearRenderCacheResponse,
+  ListPluginsResponse,
+  PluginConfigResponse,
+  UpdatePluginConfigRequest,
+  UpdatePluginConfigResponse,
+} from '@crowi/api-contract';
 import { apiClient } from './api-client';
 import { unwrapResult } from './unwrap-result';
 
@@ -104,6 +110,46 @@ export function useUpdateAdminPluginConfig(name: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminPluginsKeys.config(name) });
       queryClient.invalidateQueries({ queryKey: adminPluginsKeys.list() });
+    },
+  });
+}
+
+/**
+ * Trigger the "Clear all render cache" admin endpoint (Phase 4).
+ * Returns the number of cleared rows so the UI can surface it.
+ */
+export function useClearRenderCacheAll() {
+  return useMutation<ClearRenderCacheResponse, Error, void>({
+    mutationFn: async () => {
+      const result = await apiClient.admin.plugins.clearRenderCacheAll({ body: {} });
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: { 401: 'Failed to clear cache', 403: 'Failed to clear cache' },
+        fallback: 'Failed to clear cache',
+      });
+    },
+  });
+}
+
+/**
+ * Trigger the "Clear cache for this plugin" admin endpoint (Phase 4).
+ * Returns 404 → throws when the plugin is not loaded; that should be
+ * rare from the UI since the button is rendered only for plugins
+ * present in the list.
+ */
+export function useClearRenderCachePlugin() {
+  return useMutation<ClearRenderCacheResponse, Error, { name: string }>({
+    mutationFn: async ({ name }) => {
+      const result = await apiClient.admin.plugins.clearRenderCachePlugin({ query: { name }, body: {} });
+      return unwrapResult(result, {
+        ok: (body) => body,
+        errors: {
+          401: 'Failed to clear cache',
+          403: 'Failed to clear cache',
+          404: 'Plugin not loaded',
+        },
+        fallback: 'Failed to clear cache',
+      });
     },
   });
 }

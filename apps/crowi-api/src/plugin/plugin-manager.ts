@@ -8,6 +8,7 @@ import type { ConfigChangeSource } from 'src/service/config';
 import { type CrowiConfigFile, loadCrowiConfigFile, resolvePluginList } from './config-file';
 import { createPluginContext } from './plugin-context';
 import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
+import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
 import { topoSortPlugins } from './topo-sort';
 
@@ -301,6 +302,38 @@ export class PluginManager {
     return candidate;
   }
 
+  /**
+   * Deactivate a loaded plugin. Phase 4 only touches the render
+   * cache: every cached entry contributed by the named plugin is
+   * removed (`invalidatePlugin(name)`). Phase 5+ will broaden this
+   * to (a) drop the plugin from the loaded set + driver registries,
+   * (b) emit a deactivation event for dependents, (c) wire the
+   * `--purge` CLI path.
+   *
+   * Returns true when at least the render-cache invalidation ran
+   * (false when the plugin wasn't loaded). Failures are logged but
+   * never propagated — operators trigger deactivate from the admin
+   * UI or CLI and a partial cleanup is still better than no cleanup.
+   */
+  async deactivate(name: string): Promise<boolean> {
+    const plugin = this.getLoadedPlugin(name);
+    if (!plugin) {
+      debug('deactivate: plugin %s not loaded; nothing to do', name);
+      return false;
+    }
+    try {
+      const renderer = this.crowi.renderer;
+      if (renderer) {
+        await renderer.cache.invalidatePlugin(name);
+        debug('deactivate %s: render-cache invalidated', name);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[crowi:plugin:${name}] deactivate failed during render-cache invalidation: ${message}`);
+    }
+    return true;
+  }
+
   private async activate(plugin: CrowiPlugin): Promise<void> {
     debug('activating %s@%s', plugin.name, plugin.version);
     const ctx = createPluginContext(plugin, this.crowi, this);
@@ -315,6 +348,15 @@ export class PluginManager {
     if (plugin.registerSearch) plugin.registerSearch(makeSearchScope(this.search, plugin.name), ctx);
     if (plugin.registerAuth) plugin.registerAuth(makeAuthScope(this.auth, plugin.name), ctx);
     if (plugin.registerNotifier) plugin.registerNotifier(makeNotifierScope(this.notifier, plugin.name), ctx);
+    if (plugin.registerRenderer) {
+      // Renderer is registered against `crowi.renderer.registry`; it
+      // already has the core 4 transforms in place when we get here
+      // (Crowi.init() runs setupRenderer before setupPlugins). External
+      // plugins append to the back — they cannot insert before core in
+      // v2.1 phase 2.
+      const renderer = this.crowi.getRenderer();
+      plugin.registerRenderer(makeRendererScope(renderer.registry, plugin.name, ctx.log), ctx);
+    }
 
     // registerHooks and registerRoutes are wired in a later step
     // (the EventBus and PluginRouterScope instances are not yet

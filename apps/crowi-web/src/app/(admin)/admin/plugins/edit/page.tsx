@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { ClearPluginRenderCacheButton } from '@/components/admin/plugin-clear-cache-button';
 import { PluginConfigForm } from '@/components/admin/plugin-config-form';
 import { PluginDepsBanner } from '@/components/admin/plugin-deps-banner';
 import { useAdminPluginConfig, useAdminPluginConfigs, useAdminPlugins } from '@/lib/use-admin-plugins';
@@ -48,9 +49,12 @@ function PluginEditContent() {
         <>
           <PluginDepsBanner requires={currentPlugin?.requires} installedPlugins={pluginList.plugins} depConfigs={depConfigs} />
           <Card>
-            <CardHeader>
-              <CardTitle className="font-mono">{data.name}</CardTitle>
-              <CardDescription>{m['admin.plugins.edit_description']()}</CardDescription>
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle className="font-mono">{data.name}</CardTitle>
+                <CardDescription>{m['admin.plugins.edit_description']()}</CardDescription>
+              </div>
+              <ClearPluginRenderCacheButton pluginName={data.name} />
             </CardHeader>
             <CardContent>
               {/* key= forces a fresh useState snapshot when the URL plugin changes. */}

@@ -1,8 +1,9 @@
 import { Types } from 'mongoose';
 import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
-import { extractToc } from '@crowi/api-contract';
+import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
-import type { RevisionMetaContent } from 'src/models/revision';
+import { metadataToRevisionMeta, type RevisionMetaContent } from 'src/models/revision';
+import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId } from './ts-rest-helpers';
 
 /**
@@ -20,6 +21,10 @@ export interface PopulatedRevision {
   author?: PopulatedUser | null;
   createdAt?: Date;
   meta?: RevisionMetaContent;
+  /** RFC-0002 Phase 3 — transformed mdast persisted verbatim. */
+  renderedAst?: unknown;
+  /** RFC-0002 round 3.1 — semver of the pipeline that produced `renderedAst`. */
+  rendererVersion?: string;
 }
 
 /**
@@ -69,6 +74,15 @@ export interface RevisionResponseOptions {
    * me) skip it: the TOC adds payload weight without being rendered.
    */
   withMeta?: boolean;
+  /**
+   * RFC-0002 Phase 3: emit `revision.renderedAst` (transformed mdast
+   * the web client renders directly). Off by default — list endpoints
+   * skip it because the AST is 5-10x the body size in JSON form.
+   * Only single-page detail (getPage) and single-revision detail
+   * (getRevision) opt in. Legacy revisions without a stored
+   * `renderedAst` are filled in by `computeRevisionRenderedAstAsync`.
+   */
+  withRenderedAst?: boolean;
 }
 
 export const toRevisionResponse = (revision: PopulatedRevision, options: RevisionResponseOptions = {}): Revision => ({
@@ -78,14 +92,90 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   format: revision.format || 'markdown',
   author: revision.author ? toPageUser(revision.author) : null,
   createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
-  meta: resolveRevisionMeta(revision.meta?.toc, revision.body, options.withMeta),
+  // Sync path: only emits stored meta + renderedAst. Detail endpoints
+  // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`
+  // afterwards to fold in the on-the-fly fallback for legacy revisions.
+  meta: resolveRevisionMeta(revision.meta, options.withMeta),
+  ...(options.withRenderedAst ? { renderedAst: revision.renderedAst, rendererVersion: revision.rendererVersion } : {}),
 });
 
-export const resolveRevisionMeta = (storedToc: RevisionMetaContent['toc'], body: string, emit: boolean | undefined): RevisionMetaShape | undefined => {
+export const resolveRevisionMeta = (stored: RevisionMetaContent | undefined, emit: boolean | undefined): RevisionMetaShape | undefined => {
   if (!emit) return undefined;
-  if (storedToc && storedToc.length > 0) return { toc: storedToc };
-  const toc = extractToc(body);
-  return toc.length > 0 ? { toc } : undefined;
+  if (!stored) return undefined;
+  const out = pickStoredMeta(stored);
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
+// Avoids leaking Mongoose internals (the document carries `$__` etc.)
+// into the response shape.
+function pickStoredMeta(stored: RevisionMetaContent): RevisionMetaShape {
+  const out: RevisionMetaShape = {};
+  if (stored.toc !== undefined) out.toc = stored.toc;
+  if (stored.wikiLinks !== undefined) out.wikiLinks = stored.wikiLinks;
+  if (stored.mentions !== undefined) out.mentions = stored.mentions;
+  if (stored.codeBlockLanguages !== undefined) out.codeBlockLanguages = stored.codeBlockLanguages;
+  return out;
+}
+
+/**
+ * Async fallback compute for revision render artifacts (meta +
+ * renderedAst). Detail endpoints (getPage, getRevision) call this AFTER
+ * `pageToResponse` so the projection path stays sync; meta + AST get
+ * attached to the populated revision response in one go.
+ *
+ * Why one call instead of two: legacy revisions (Phase 1: only `toc`
+ * stored / Phase 2: meta but no `renderedAst`) would otherwise trigger
+ * back-to-back `runMetadata` + `runRender` invocations, each running a
+ * full parse+transform+shiki pipeline on the same body. `runRender`
+ * already produces both, so fold the calls into one and pull the
+ * needed pieces out.
+ *
+ * Stored values stay authoritative on merge: Phase 1's `toc` (the
+ * anchor ids the heading stamper aligns against) wins over recomputed
+ * ones, and a stored `renderedAst` is returned verbatim without
+ * re-rendering.
+ */
+export const computeRevisionRenderArtifactsAsync = async (
+  crowi: Crowi,
+  storedMeta: RevisionMetaContent | undefined,
+  storedAst: unknown,
+  body: string,
+  storedRendererVersion?: string,
+): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown }> => {
+  const fromStored = storedMeta ? pickStoredMeta(storedMeta) : {};
+  // Phase 2-written revisions persist all 4 meta fields (even empty
+  // arrays); the presence of these 3 is the marker that no fallback
+  // is needed for meta.
+  const metaIsComplete = fromStored.wikiLinks !== undefined && fromStored.mentions !== undefined && fromStored.codeBlockLanguages !== undefined;
+  const astIsStored = storedAst !== undefined;
+  // RFC-0002 round 3.1: a stored `rendererVersion` that does NOT match
+  // the running pipeline marks the AST as stale. A missing
+  // `rendererVersion` (revisions saved before this field landed) is
+  // treated as "trust the stored AST" — re-rendering every pre-existing
+  // revision on every read would be unaffordable, and the user-facing
+  // workaround (re-save the page) is already documented. Once
+  // `renderer:rebuild` lands (RFC-0008), operators can backfill.
+  const astIsFresh = astIsStored && (storedRendererVersion === undefined || storedRendererVersion === RENDERER_PIPELINE_VERSION);
+
+  if (metaIsComplete && astIsFresh) {
+    return {
+      meta: Object.keys(fromStored).length > 0 ? fromStored : undefined,
+      renderedAst: storedAst,
+    };
+  }
+  if (!body) {
+    return {
+      meta: metaIsComplete && Object.keys(fromStored).length > 0 ? fromStored : undefined,
+      renderedAst: astIsFresh ? storedAst : undefined,
+    };
+  }
+
+  const { metadata, renderedAst } = await crowi.getRenderer().runRender(body, { mode: 'read' });
+  const mergedMeta: RevisionMetaShape = { ...pickStoredMeta(metadataToRevisionMeta(metadata)), ...fromStored };
+  return {
+    meta: Object.keys(mergedMeta).length > 0 ? mergedMeta : undefined,
+    renderedAst: astIsFresh ? storedAst : renderedAst,
+  };
 };
 
 export type PageToResponseOptions = RevisionResponseOptions;
@@ -110,7 +200,10 @@ export const pageToResponse = (page: PageDocument | PageLike, options: PageToRes
   return {
     _id: toStringId(pageObj._id),
     path: pageObj.path,
-    revision: pageObj.revision && isPopulatedRevision(pageObj.revision) ? toRevisionResponse(pageObj.revision, { withMeta: options.withMeta }) : undefined,
+    revision:
+      pageObj.revision && isPopulatedRevision(pageObj.revision)
+        ? toRevisionResponse(pageObj.revision, { withMeta: options.withMeta, withRenderedAst: options.withRenderedAst })
+        : undefined,
     redirectTo: pageObj.redirectTo || null,
     status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated') || undefined,
     grant: pageObj.grant,

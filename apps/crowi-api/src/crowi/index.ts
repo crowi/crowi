@@ -25,6 +25,9 @@ import mailer from 'src/util/mailer';
 import slack from 'src/util/slack';
 import { resetKeyProvider } from 'src/util/crypto';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
+import { type Renderer, createRenderer } from 'src/renderer';
+import { registerRenderCacheInvalidation } from 'src/events/render-cache';
+import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runAwsConfigMigration } from 'src/util/aws-config-migration';
 import expressInit from './express-init';
 
@@ -108,6 +111,14 @@ class Crowi {
 
   pluginRegistries: PluginRegistries | null = null;
 
+  /**
+   * Markdown renderer pipeline + registry. Available after
+   * `setupRenderer` runs in `init()` (between `setupModels` and
+   * `setupPlugins` — so PluginManager can layer external plugins on
+   * top of the core registrations).
+   */
+  renderer: Renderer | null = null;
+
   initialized = false;
 
   constructor(rootdir: string, env: typeof process.env) {
@@ -148,6 +159,12 @@ class Crowi {
     // here can leak plaintext secrets, so let it bubble out instead of
     // continuing boot.
     await runAwsConfigMigration(this);
+    // Renderer must boot BEFORE plugins so PluginManager.activate()
+    // can hand plugins a registry that already has the core 4
+    // transforms (TOC / wikilinks / mentions / codeBlockLanguages)
+    // registered. External plugins append; they cannot insert before
+    // core in v2.1 phase 2.
+    this.setupRenderer();
     // Plugins must boot AFTER config/models are ready (so PluginContext
     // can read config and access models) but BEFORE the legacy
     // mailer / slack initialisers — those are migrating to
@@ -181,6 +198,7 @@ class Crowi {
     await this.setupDatabase();
     await this.setupModels();
     await this.setupConfig();
+    this.setupRenderer();
     await this.setupPlugins();
     this.initialized = true;
   }
@@ -203,6 +221,38 @@ class Crowi {
       await this.mongoose.disconnect();
       this.mongoose = null;
     }
+  }
+
+  setupRenderer() {
+    this.renderer = createRenderer(this);
+    // Register cache invalidation listeners on pageEvent. Needs to
+    // happen here (not in setupEvents) because the listener captures
+    // the renderer.cache handle constructed one line above.
+    registerRenderCacheInvalidation(this);
+    // RFC-0002 Phase 8: dispatch `@username` mention notifications on
+    // page save. Wired here (not in `setupEvents`) because the dispatcher
+    // reads `Revision.meta.mentions[]` produced by the renderer pipeline,
+    // so it must register after `setupRenderer` has run.
+    registerMentionDispatch(this);
+    // Eagerly initialise heavy ESM-only deps (jiti + shiki +
+    // remark-*). The first pipeline run otherwise pays ~200ms cold-
+    // load latency; we move that cost to boot time. Fire-and-forget —
+    // a warmup failure is logged inside `Renderer.warmup` and does
+    // not block boot.
+    if (this.renderer) {
+      void this.renderer.warmup();
+    }
+  }
+
+  /**
+   * Markdown renderer (parse → transform pipeline + extension registry).
+   * Throws if accessed before `setupRenderer` ran.
+   */
+  getRenderer(): Renderer {
+    if (!this.renderer) {
+      throw new Error('Renderer has not been booted yet — call init() first.');
+    }
+    return this.renderer;
   }
 
   async setupPlugins() {

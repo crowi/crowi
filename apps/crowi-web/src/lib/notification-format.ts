@@ -14,12 +14,30 @@ export function buildNotificationMessage(notification: Notification): string {
   const { actionUsers, target, action } = notification;
   const firstUser = actionUsers[0];
   const user = firstUser ? firstUser.name || firstUser.username : m['notifications.unknown_user']();
-  const actionLabel = action === 'COMMENT' ? m['notifications.action_comment']() : m['notifications.action_like']();
+  const actionLabel = resolveActionLabel(action);
 
   if (actionUsers.length > 1) {
     return m['notifications.message_multi_users']({ user, others: actionUsers.length - 1, path: target.path, action: actionLabel });
   }
   return m['notifications.message_one_user']({ user, path: target.path, action: actionLabel });
+}
+
+function resolveActionLabel(action: Notification['action']): string {
+  switch (action) {
+    case 'COMMENT':
+      return m['notifications.action_comment']();
+    case 'LIKE':
+      return m['notifications.action_like']();
+    case 'MENTION':
+      return m['notifications.action_mention']();
+    default: {
+      // Exhaustiveness check — if a new NotificationAction is added to
+      // the contract but this switch isn't updated, TS will fail to
+      // narrow `_unreachable` to `never` and flag the missing case.
+      const _unreachable: never = action;
+      return _unreachable;
+    }
+  }
 }
 
 /**

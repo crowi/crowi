@@ -48,10 +48,32 @@ export const TocEntrySchema = z.object({
 });
 export type TocEntryResponse = z.infer<typeof TocEntrySchema>;
 
-// Revision-bound metadata derived from the body. Future RFC-0002
-// fields (wikiLinks, mentions, codeBlockLanguages, plugins) land here.
+// `[[Page]]` / `[[/path]]` / `[[Page|Display]]` / `[[Page#section]]`
+// references extracted from the body. RFC-0002 Phase 2.
+export const WikiLinkSchema = z.object({
+  /** Verbatim source between the `[[` `]]` (no surrounding brackets). */
+  raw: z.string(),
+  /** Normalised target (left of the `|`, fragment trimmed for resolution). */
+  target: z.string(),
+  /** Optional pipe-aliased display text (right of the `|`). */
+  displayText: z.string().optional(),
+});
+export type WikiLinkResponse = z.infer<typeof WikiLinkSchema>;
+
+// `@username` references extracted from the body. Username is
+// pre-validated to `[A-Za-z0-9_-]{1,64}` by the extractor.
+export const MentionSchema = z.object({
+  username: z.string(),
+});
+export type MentionResponse = z.infer<typeof MentionSchema>;
+
+// Revision-bound metadata derived from the body. RFC-0002 Phase 2
+// adds wikiLinks / mentions / codeBlockLanguages alongside `toc`.
 export const RevisionMetaSchemaShape = z.object({
   toc: z.array(TocEntrySchema).optional(),
+  wikiLinks: z.array(WikiLinkSchema).optional(),
+  mentions: z.array(MentionSchema).optional(),
+  codeBlockLanguages: z.array(z.string()).optional(),
 });
 export type RevisionMetaShape = z.infer<typeof RevisionMetaSchemaShape>;
 
@@ -64,6 +86,18 @@ export const RevisionSchema = z.object({
   author: PageUserSchema.nullable().optional(),
   createdAt: z.string(),
   meta: RevisionMetaSchemaShape.optional(),
+  // RFC-0002 Phase 3: transformed mdast (parse + core plugins +
+  // shiki) for the web client to render without re-parsing the body.
+  // Typed as opaque `unknown` because mdast is too deep / external-
+  // spec to maintain a strict Zod schema for. Only single-page detail
+  // (`getPage`) and single-revision detail (`getRevision`) emit it;
+  // list endpoints skip it for payload weight.
+  renderedAst: z.unknown().optional(),
+  // RFC-0002 round 3.1: semver of the renderer pipeline that produced
+  // `renderedAst`. The read path uses this to detect stale entries
+  // (rebuilt by `renderer:rebuild` once RFC-0008 lands). Absent on
+  // revisions saved before this field was introduced.
+  rendererVersion: z.string().optional(),
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 

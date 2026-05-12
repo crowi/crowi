@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { registerMigrateWikilink } from './commands/migrate-wikilink';
 import { registerSearchRebuild } from './commands/search-rebuild';
 import { registerStorageCopy } from './commands/storage-copy';
 
@@ -20,6 +21,7 @@ export function createProgram(): Command {
 
   registerStorageCopy(program);
   registerSearchRebuild(program);
+  registerMigrateWikilink(program);
 
   return program;
 }

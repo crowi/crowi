@@ -2,6 +2,7 @@ import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, Query, model } from 'mongoose';
 import Debug from 'debug';
 import { subDays } from 'date-fns';
+import type { NotificationPayload } from '@crowi/plugin-api';
 import ActivityDefine from 'src/util/activityDefine';
 import { ActivityDocument } from './activity';
 import { UserDocument } from './user';
@@ -130,6 +131,11 @@ export default (crowi: Crowi) => {
 
     if (notification) {
       notificationEvent.emit('update', notification.user);
+      // RFC-0002 Phase 8: forward to registered notifier plugins (Slack /
+      // Webhook / ...). Fire-and-forget per-driver: a single misbehaving
+      // driver must not block the upsert or other drivers. The plugin
+      // manager may not be initialised in some test paths, so we guard.
+      forwardToNotifierPlugins(crowi, notification, activity);
     }
 
     return notification;
@@ -200,3 +206,35 @@ export default (crowi: Crowi) => {
 
   return Notification;
 };
+
+/**
+ * RFC-0002 Phase 8: forward an upserted notification to every active
+ * notifier plugin (Slack / Webhook / ...). Driver `send()` is called
+ * with a normalised `NotificationPayload`; each call is wrapped so a
+ * single failing driver does not break the others.
+ *
+ * The plugin manager is bootstrapped during `Crowi.init()` and may be
+ * absent on early-test code paths — we silently no-op then. Reading
+ * `crowi.getPlugins()` would throw in that state; the optional access
+ * pattern below keeps both the test and production paths simple.
+ */
+function forwardToNotifierPlugins(crowi: Crowi, notification: NotificationDocument, activity: ActivityDocument): void {
+  const registries = (crowi as Crowi & { pluginRegistries?: { active: { notifiers: { send(p: NotificationPayload): Promise<void> }[] } } }).pluginRegistries;
+  const notifiers = registries?.active?.notifiers ?? [];
+  if (notifiers.length === 0) return;
+
+  const payload: NotificationPayload = {
+    title: `[${activity.action}] page=${String(notification.target)}`,
+    body: `user=${String(notification.user)} activity=${String(activity._id)}`,
+    event: `notification:${activity.action}`,
+  };
+
+  for (const driver of notifiers) {
+    Promise.resolve()
+      .then(() => driver.send(payload))
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[crowi:notification] notifier driver send failed: ${message}`);
+      });
+  }
+}

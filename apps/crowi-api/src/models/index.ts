@@ -7,6 +7,7 @@ import Comment from './comment';
 import Config from './config';
 import Notification from './notification';
 import Page from './page';
+import PluginRenderCache from './plugin-render-cache';
 import Revision from './revision';
 import Share from './share';
 import ShareAccess from './shareAccess';
@@ -31,4 +32,5 @@ export default {
   Notification,
   Watcher,
   Config,
+  PluginRenderCache,
 };

@@ -5,7 +5,7 @@ import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
 import { PageDocument } from 'src/models/page';
 import { invalidPageIdResponse, isValidObjectId, loadGrantedPage, pageNotFoundResponse, toUserPublic } from 'src/util/ts-rest-helpers';
-import { pageToResponse } from 'src/util/page-response';
+import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:page');
@@ -111,7 +111,23 @@ export default (crowi: Crowi, _app: Express) => {
           // TODO: Consider if we should follow the redirect automatically
         }
 
-        const pageResponse = pageToResponse(page, { withMeta: true });
+        const pageResponse = pageToResponse(page, { withMeta: true, withRenderedAst: true });
+
+        // On-the-fly fallback for legacy revisions: one pipeline run
+        // produces both meta + renderedAst, so use the combined helper
+        // to avoid running parse+transform+shiki twice. Stored values
+        // win on merge (anchor ids match page-content's stamper).
+        if (pageResponse.revision && isPopulatedRevision(page.revision)) {
+          const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(
+            crowi,
+            page.revision.meta,
+            page.revision.renderedAst,
+            page.revision.body,
+            page.revision.rendererVersion,
+          );
+          pageResponse.revision.meta = meta;
+          pageResponse.revision.renderedAst = renderedAst;
+        }
 
         // Fire-and-forget recently-viewed touch. Hiccups on the Redis
         // side mustn't break the page read.

@@ -139,3 +139,16 @@ export const PluginConfigValidationErrorSchema = z.object({
   }),
 });
 export type PluginConfigValidationError = z.infer<typeof PluginConfigValidationErrorSchema>;
+
+/**
+ * Response shape for the Phase 4 "clear render cache" endpoints. The
+ * count is best-effort (mongo `deleteMany.deletedCount`) — admin UI
+ * surfaces it for confidence but the toast is success/fail-only.
+ */
+export const ClearRenderCacheResponseSchema = z.object({
+  ok: z.literal(true),
+  clearedAt: z.string(),
+  /** Number of cache rows removed. */
+  removedCount: z.number().int().min(0),
+});
+export type ClearRenderCacheResponse = z.infer<typeof ClearRenderCacheResponseSchema>;

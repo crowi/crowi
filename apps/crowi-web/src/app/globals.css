@@ -1,5 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/*
+ * KaTeX styles for server-side rendered math (`$inline$` / `$$display$$`).
+ * Required by `@crowi/plugin-renderer-katex`. Even when the plugin is
+ * disabled, importing the stylesheet is cheap (~30KB minified) and
+ * avoids a flash-of-unstyled-math when an operator turns the plugin on
+ * later. KaTeX webfonts load lazily on first math render.
+ */
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -274,4 +282,84 @@
   padding-inline: 1rem;
   border-radius: 0.5rem;
   transition: background 200ms;
+}
+
+/*
+ * Renderer plugin placeholders (RFC-0002 Phase 4)
+ *
+ * The server emits these shells around plugin-rendered embeds. The
+ * structural classes here apply a subtle skeleton background so
+ * page layout stays stable while real embed HTML lands. Class names
+ * are owned by `apps/crowi-api/src/renderer/cache/reservation.ts` —
+ * see the comment block at the top of that file for the naming
+ * convention.
+ */
+.crowi-embed-placeholder {
+  display: block;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0.07) 50%, rgba(0, 0, 0, 0.04) 100%);
+  background-size: 200% 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  animation: crowi-embed-placeholder-shimmer 1.6s linear infinite;
+}
+
+.crowi-embed-placeholder-fixed {
+  /* width / height come from inline style declared by the server. */
+}
+
+.crowi-embed-placeholder-aspect {
+  /* aspect-ratio is set via inline style. */
+}
+
+.crowi-embed-placeholder-card {
+  margin-block: 0.75rem;
+}
+
+.crowi-embed-placeholder-error {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(220, 100, 80, 0.08);
+  border: 1px solid rgba(220, 100, 80, 0.25);
+  border-radius: 0.5rem;
+  animation: none;
+}
+
+.crowi-embed-placeholder-error-label {
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+@keyframes crowi-embed-placeholder-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+/* Shiki-rendered fenced code blocks ship with their own
+ * `<pre class="shiki ...">` and inline `style="background-color: ..."`
+ * from the theme. They never reach the React `components.pre` wrapper
+ * (raw HTML path), so the Crowi codeblock styling has to be applied
+ * via CSS instead — using the *same* `bg-muted/60` token as the
+ * unhighlighted fallback `<pre>` (`components.pre`) so highlighted and
+ * plain codeblocks share one background. The `!` modifier promotes
+ * the bg utility to `!important` so the inline shiki theme bg loses. */
+.crowi-prose pre.shiki {
+  @apply bg-muted/60! border border-border/60 rounded-xl px-4 py-3 my-6 text-[0.875rem] leading-relaxed font-mono overflow-x-auto;
+}
+
+/* Some grammars (notably PHP via `meta.embedded.block.php`) include
+ * token-level background colours that the github-light theme renders
+ * as pink bands. Suppress span-level backgrounds — token text colours
+ * are preserved. Diff markers (`markup.inserted/deleted`) lose their
+ * tinted backgrounds too, acceptable until a diff-specific renderer
+ * lands. */
+.crowi-prose pre.shiki span {
+  background-color: transparent !important;
 }
