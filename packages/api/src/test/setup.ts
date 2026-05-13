@@ -1,6 +1,39 @@
 import Crowi from 'src/crowi';
 import { Express } from 'express';
 
+// Silence boot-time noise that fires once per test file and drowns
+// the actual ✓ / ✕ output in the jest report:
+//
+//   `[ts-rest] Initialized <METHOD> <path>` — emitted by
+//   `@ts-rest/express` for every contract route (Crowi has ~150+).
+//   `[crowi] Loaded N plugin(s): ...`         — PluginManager boot log
+//   `[crowi] CROWI_ENCRYPTION_KEY is not set` — setupEncryption legacy
+//                                               fallback (the test env
+//                                               injects a dummy key,
+//                                               but tests that delete
+//                                               the env still trip it)
+//   `[crowi] Migrated N legacy ...`           — one-shot config migrator
+//
+// We patch console.log + console.warn once at module load so every
+// test file inherits the filter without per-test setup. Production
+// boot still emits everything.
+{
+  const QUIET_PREFIXES = ['[ts-rest] Initialized ', '[crowi] '];
+  const isQuiet = (args: unknown[]) => typeof args[0] === 'string' && QUIET_PREFIXES.some((prefix) => (args[0] as string).startsWith(prefix));
+
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    if (isQuiet(args)) return;
+    originalLog(...args);
+  };
+
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    if (isQuiet(args)) return;
+    originalWarn(...args);
+  };
+}
+
 export let crowi: Crowi;
 export let app: Express;
 

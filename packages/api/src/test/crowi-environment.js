@@ -38,6 +38,23 @@ class CrowiEnvironment extends NodeEnvironment {
   async setup() {
     await super.setup();
 
+    // Provide a stable encryption key for the test environment so
+    // (a) the boot path's "legacy mode" warning doesn't spam test
+    // output, and (b) sensitive Config round-trips exercise the
+    // real encrypt/decrypt code path rather than the plaintext
+    // fallback. Tests that specifically need the unconfigured state
+    // (e.g. `crypto.test.ts`) save `originalKey`, mutate, and
+    // restore — so providing a default here is safe.
+    //
+    // Mutate `this.global.process.env`, NOT the host's `process.env`:
+    // jest-environment-node hands the test vm context a `process` that
+    // doesn't share its `env` proxy with the worker host, so an
+    // assignment to host `process.env` here is invisible to the test
+    // code that boots `Crowi` from within the vm.
+    if (!this.global.process.env.CROWI_ENCRYPTION_KEY) {
+      this.global.process.env.CROWI_ENCRYPTION_KEY = Buffer.alloc(32, 0xab).toString('base64');
+    }
+
     const workerId = process.env.JEST_WORKER_ID || '1';
     const suffix = randomBytes(4).toString('hex');
     const dbName = `crowi_test_${workerId}_${suffix}`;
