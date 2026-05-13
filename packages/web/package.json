@@ -35,7 +35,7 @@
     "katex": "^0.16.11",
     "lucide-react": "^0.562.0",
     "mdast-util-to-hast": "^13.2.1",
-    "next": "16.1.1",
+    "next": "16.2.6",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-diff-viewer-continued": "^4.2.2",
