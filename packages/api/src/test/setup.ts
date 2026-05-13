@@ -14,11 +14,18 @@ export const MONGO_URI = global.MONGO_URI as string;
 export const MONGO_DB_NAME = global.MONGO_DB_NAME as string;
 
 beforeAll(async () => {
+  // Spread process.env FIRST and then layer the test-harness values on
+  // top. The original order (`{ ...test, ...process.env }`) silently
+  // let an externally-set `MONGO_URI` (e.g. the CI's `mongodb://
+  // localhost:27017` from the docker `mongo` service) override the
+  // crowi-environment.js per-file db, which collapses every parallel
+  // jest worker onto a single shared database and recycles Config
+  // documents from previous runs across test files.
   crowi = new Crowi(ROOT_DIR, {
+    ...process.env,
     PORT: '13001',
     MONGO_URI: MONGO_URI,
     BASE_URL: 'http://localhost:13001',
-    ...process.env,
   });
   await crowi.init();
   app = crowi.getApp();

@@ -1,29 +1,100 @@
 require('regenerator-runtime/runtime');
 const NodeEnvironment = require('jest-environment-node').default || require('jest-environment-node');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 const path = require('path');
+const { randomBytes } = require('node:crypto');
+
 const ROOT_DIR = path.join(__dirname, '../..');
 const MODEL_DIR = path.join(__dirname, '../models');
 
+/**
+ * jest environment for the @crowi/api server-side test project.
+ *
+ * Resolution order for the test MongoDB:
+ *
+ *   1. `process.env.MONGO_URI` is set → connect to that MongoDB
+ *      (CI uses `services: mongo` on the GitHub Actions runner; local
+ *      developers can point this at the `docker compose up -d` mongo).
+ *      Each test file gets its own database under that server so jest
+ *      can run `--maxWorkers=N` in parallel without collisions, and
+ *      teardown drops the per-file db so the shared server stays
+ *      clean across runs.
+ *
+ *   2. Otherwise → `mongodb-memory-server` is started in-process.
+ *      This is the "no infrastructure" fallback for local
+ *      `pnpm test` invocations on machines without the docker stack
+ *      running. Each environment instance gets its own memory-server
+ *      so there's no inter-file state.
+ *
+ * Why per-test-file dbs instead of one shared db plus collection
+ * clears: jest constructs a fresh `CrowiEnvironment` per test file
+ * and `crowi.init()` registers mongoose models against the global
+ * connection. Sharing a db across files lets one file's leftover
+ * documents leak into the next file's `Model.find()` expectations.
+ * Worker-scoped dbs aren't enough either — a single worker runs
+ * many files serially. Random hex suffix per environment instance
+ * is the cheapest way to guarantee isolation.
+ */
 class CrowiEnvironment extends NodeEnvironment {
-  constructor(config) {
-    super(config);
-  }
-
   async setup() {
     await super.setup();
-    this.mongodb = await MongoMemoryServer.create({ binary: { version: '6.0.16' } });
-    this.global.MONGO_URI = this.mongodb.getUri();
-    const dbName = this.mongodb.getUri().split('/').pop().split('?')[0];
-    this.global.MONGO_DB_NAME = dbName || 'test';
 
+    const workerId = process.env.JEST_WORKER_ID || '1';
+    const suffix = randomBytes(4).toString('hex');
+    const dbName = `crowi_test_${workerId}_${suffix}`;
+
+    const externalUri = process.env.MONGO_URI;
+    if (externalUri && externalUri.trim()) {
+      // Strip any trailing path / db / query on the supplied URI and
+      // splice in our per-file db name. `mongodb://localhost:27017/foo?bar`
+      // becomes `mongodb://localhost:27017/crowi_test_<id>?bar`.
+      const url = new URL(externalUri);
+      url.pathname = `/${dbName}`;
+      this.mongoUri = url.toString();
+      this.dbName = dbName;
+      this.usingMemoryServer = false;
+    } else {
+      // memory-server fallback. Pin to 8.0.4 so the binary matches the
+      // `mongo:8.0.4` docker image used in CI's `services` block — keeps
+      // wire-protocol + index behaviour byte-identical between the two
+      // execution paths so we don't get "passes locally, fails in CI"
+      // mismatches from minor MongoDB version drift.
+      const { MongoMemoryServer } = require('mongodb-memory-server');
+      this.memory = await MongoMemoryServer.create({ binary: { version: '8.0.4' } });
+      const url = new URL(this.memory.getUri());
+      url.pathname = `/${dbName}`;
+      this.mongoUri = url.toString();
+      this.dbName = dbName;
+      this.usingMemoryServer = true;
+    }
+
+    this.global.MONGO_URI = this.mongoUri;
+    this.global.MONGO_DB_NAME = this.dbName;
     this.global.ROOT_DIR = ROOT_DIR;
     this.global.MODEL_DIR = MODEL_DIR;
   }
 
   async teardown() {
+    // Drop the per-file db on a shared (docker / CI) server so the
+    // mongo instance doesn't accumulate stale dbs across runs. Use
+    // mongoose since the api package already depends on it — avoids
+    // adding a direct `mongodb` driver dependency just for cleanup.
+    // Best-effort: if setup() bailed before connection, just skip.
+    if (this.mongoUri) {
+      try {
+        const mongoose = require('mongoose');
+        const conn = await mongoose.createConnection(this.mongoUri).asPromise();
+        await conn.dropDatabase();
+        await conn.close();
+      } catch (_err) {
+        // Cleanup failure is non-fatal; memory-server stop below
+        // handles ephemeral storage, and a stale db on the shared
+        // server only costs disk until the next run drops it.
+      }
+    }
+    if (this.usingMemoryServer && this.memory) {
+      await this.memory.stop();
+    }
     await super.teardown();
-    await this.mongodb.stop();
   }
 }
 
