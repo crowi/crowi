@@ -82,4 +82,23 @@ describe('Routes /api/v2/pages/preview (ts-rest previewPage)', () => {
       expect(node.position).toBeUndefined();
     }
   });
+
+  it('injects `data-source-line` on every top-level node for editor → preview scroll sync', async () => {
+    // The body has three top-level blocks: heading (line 1), paragraph
+    // (line 3), code fence (starts line 5). Editor scroll sync reads
+    // these `data-source-line` attrs off the rendered preview DOM —
+    // they have to ride the serialised mdast across the wire.
+    const body = '# H1\n\nparagraph\n\n```\ncode\n```\n';
+    const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+
+    expect(res.status).toBe(200);
+    const ast = res.body.renderedAst as {
+      children: Array<{ type: string; data?: { hProperties?: { 'data-source-line'?: number } } }>;
+    };
+    expect(ast.children.length).toBeGreaterThanOrEqual(3);
+    const lines = ast.children.map((c) => c.data?.hProperties?.['data-source-line']);
+    expect(lines[0]).toBe(1); // heading
+    expect(lines[1]).toBe(3); // paragraph
+    expect(lines[2]).toBe(5); // code fence opens at line 5
+  });
 });

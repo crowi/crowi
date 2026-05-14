@@ -3,6 +3,8 @@ import { apiContract } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { internalServerErrorResponse } from 'src/util/ts-rest-helpers';
+import { serializeMdast } from 'src/renderer';
+import type { Root, RootContent } from 'mdast';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:page-preview');
@@ -44,10 +46,15 @@ export default (crowi: Crowi, _app: Express) => {
         // a preview that may belong to no persisted page yet.
         // `getRenderer()` throws if setup hasn't run; the catch maps
         // it to 500 alongside any pipeline failure.
-        const { renderedAst } = await crowi.getRenderer().runRender(requestBody.body, { mode: 'view' });
+        //
+        // We call `run()` (not `runRender()`) so we can grab the raw
+        // mdast tree and inject source-line anchors before serialising —
+        // see `injectSourceLineAnchors` below.
+        const { tree } = await crowi.getRenderer().run(requestBody.body, { mode: 'view' });
+        injectSourceLineAnchors(tree);
         return {
           status: 200 as const,
-          body: { renderedAst },
+          body: { renderedAst: serializeMdast(tree) },
         };
       } catch (err) {
         debug('preview pipeline failed:', (err as Error).message);
@@ -60,3 +67,36 @@ export default (crowi: Crowi, _app: Express) => {
 
   return router;
 };
+
+/**
+ * Attach `data-source-line="<1-based-line>"` to every top-level mdast
+ * child via `data.hProperties`. `mdast-util-to-hast` flows this onto
+ * the produced hast node's `properties`, and `hast-util-to-jsx-runtime`
+ * surfaces it as a real DOM attribute — giving the editor preview a
+ * way to bidirectionally scroll-sync with the CodeMirror viewport.
+ *
+ * Why only top-level: the scroll sync anchors on block boundaries
+ * (paragraph / heading / list / code / quote / table / hr). Inline
+ * children inside a paragraph share the parent's source line for
+ * sync purposes, so tagging deeper nodes would just cost bytes.
+ *
+ * `position` is stripped by `serializeMdast`, but `data.hProperties`
+ * is preserved (it's where renderer plugins also store their hast-
+ * level annotations).
+ */
+// mdast's `Data` is intentionally empty (open to augmentation); the
+// `hProperties` field is a `mdast-util-to-hast` convention that the
+// project's renderer plugins also use. Carry the augmentation as a
+// local alias so the cast below reads as intent, not noise.
+type MdastNodeWithHProps = RootContent & { data?: { hProperties?: Record<string, unknown> } };
+
+function injectSourceLineAnchors(tree: Root): void {
+  for (const child of tree.children) {
+    const line = child.position?.start?.line;
+    if (typeof line !== 'number') continue;
+    const node = child as MdastNodeWithHProps;
+    const data = node.data ?? (node.data = {});
+    const hProperties = data.hProperties ?? (data.hProperties = {});
+    hProperties['data-source-line'] = line;
+  }
+}
