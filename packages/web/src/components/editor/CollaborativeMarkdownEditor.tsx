@@ -133,6 +133,35 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     });
   }, [awareness, userId, userName, userUsername, isAuthLoading, setLocalAwareness]);
 
+  // Local-typing indicator: stamp `awareness.typingAt = Date.now()` on
+  // every local Y.Text mutation so remote peers can render a "typing"
+  // overlay over our avatar. Throttled to one publish per 750 ms to
+  // keep the awareness channel quiet during sustained typing; the
+  // viewer-side 3 s freshness window in `CollabPresenceAvatars`
+  // bridges the gap between publishes. Cleanup clears the field on
+  // unmount so a stale "still typing" doesn't outlive the session.
+  useEffect(() => {
+    if (!yText || !awareness) return;
+    const THROTTLE_MS = 750;
+    let lastPublish = 0;
+    const observer = (_event: Y.YTextEvent, transaction: Y.Transaction): void => {
+      // `transaction.local === false` means this mutation came from a
+      // remote peer's update — we don't want to mark ourselves as
+      // typing on every inbound delta or the entire cluster would
+      // light up in unison.
+      if (!transaction.local) return;
+      const now = Date.now();
+      if (now - lastPublish < THROTTLE_MS) return;
+      lastPublish = now;
+      awareness.setLocalStateField('typingAt', now);
+    };
+    yText.observe(observer);
+    return () => {
+      yText.unobserve(observer);
+      awareness.setLocalStateField('typingAt', null);
+    };
+  }, [yText, awareness]);
+
   return { yText, yUndoManager, awareness, status, readonly, subscribeStateless, sendStateless };
 }
 
