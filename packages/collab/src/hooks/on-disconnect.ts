@@ -1,7 +1,6 @@
 import type { onDisconnectPayload } from '@hocuspocus/server';
 import Debug from 'debug';
-import type { CollabContext } from '../types';
-import { type EditorCapCounter, noopEditorCapCounter } from '../editor-cap';
+import { type CollabContext, type EditorCapCounter, noopEditorCapCounter } from '../types';
 
 const debug = Debug('crowi:collab:disconnect');
 

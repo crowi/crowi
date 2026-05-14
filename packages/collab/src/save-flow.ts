@@ -3,7 +3,7 @@ import Debug from 'debug';
 import { Types } from 'mongoose';
 import type { CollabModels } from './models';
 import type { ContributorsTracker } from './contributors';
-import type { CollabPageEventPublisher } from './page-event-pubsub';
+import type { CollabPageEventPublisher } from './types';
 import { CONTENT_FIELD } from './yjs-doc';
 
 const debug = Debug('crowi:collab:save');

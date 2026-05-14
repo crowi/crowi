@@ -1,19 +1,16 @@
 {
   "name": "@crowi/collab",
   "version": "0.1.0-dev",
-  "description": "Hocuspocus host process for Crowi 2.0 realtime collaborative editing (RFC-0003). Runs out-of-band from @crowi/api on a dedicated WebSocket port and reuses the api package's Mongoose models via workspace dep.",
+  "description": "Hocuspocus hooks + save flow library for Crowi 2.0 realtime collaborative editing (RFC-0003). Embedded in the @crowi/api process via attachCollabServer — no longer ships a standalone CLI.",
   "private": true,
   "main": "dist/index.js",
-  "bin": {
-    "crowi-collab": "dist/index.js"
-  },
+  "types": "dist/index.d.ts",
   "files": [
     "dist",
     "README.md"
   ],
   "scripts": {
-    "start": "NODE_ENV=production node dist/index.js",
-    "dev": "concurrently --kill-others-on-fail --names build,run -c blue,green \"tsup --watch --no-clean\" \"cd ../.. && nodemon --watch packages/collab/dist --delay 0.5 packages/collab/dist/index.js\"",
+    "dev": "tsup --watch --no-clean",
     "build": "tsup",
     "lint": "eslint src/ --ext .ts",
     "test": "jest --passWithNoTests",
@@ -21,13 +18,10 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@crowi/api": "workspace:^",
     "@crowi/api-contract": "workspace:^",
     "@hocuspocus/server": "^4.0.0",
     "debug": "~4.1.1",
-    "dotenv": "^16.5.0",
     "mongoose": "^6.13.8",
-    "redis": "^4.7.1",
     "uuid": "^11.1.0",
     "y-protocols": "^1.0.6",
     "yjs": "^13.6.8"
@@ -39,11 +33,9 @@
     "@types/node": "catalog:",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
-    "concurrently": "^5.0.0",
     "eslint": "^8.57.1",
     "jest": "catalog:",
     "mongodb-memory-server": "^10.1.4",
-    "nodemon": "^1.19.4",
     "ts-jest": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:"

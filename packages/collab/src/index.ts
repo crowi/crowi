@@ -1,132 +1,57 @@
-#!/usr/bin/env node
-import dotenv from 'dotenv';
-import Debug from 'debug';
-import { loadCollabEnv } from './env';
-import { connectMongo, disconnectMongo } from './db';
-import { registerModels } from './models';
-import { createCollabServer } from './server';
-import { getWsTokenUtil } from './ws-token';
-import { createCollabPageEventPublisher } from './page-event-pubsub';
-import { createCollabEditorCapCounter, parseCapEnv } from './editor-cap';
-
-const debug = Debug('crowi:collab:boot');
-
 /**
- * Entry point for the standalone Hocuspocus host.
+ * `@crowi/collab` — Hocuspocus hooks + save flow for Crowi 2.0
+ * realtime collaborative editing (RFC-0003).
  *
- * Boot order:
- *   1. `dotenv.config()` so MONGO_URI / WS_TOKEN_SECRET / COLLAB_PORT
- *      flow through the same way @crowi/api reads them at server boot.
- *   2. `connectMongo()` opens the shared Mongoose connection.
- *   3. `registerModels()` invokes the api package's model factories
- *      against the now-connected mongoose so collab's hooks share the
- *      exact same schema definitions, **and** builds the renderer in
- *      the same call so `Revision.prepareRevision` works from the save
- *      flow. Plugin transforms aren't loaded (see models.ts).
- *   4. `getWsTokenUtil()` resolves `WS_TOKEN_SECRET` once (matching
- *      the api process's lifecycle).
- *   5. `createCollabServer(...).listen()` starts the WebSocket server.
- *   6. SIGINT / SIGTERM trigger graceful shutdown — destroy Hocuspocus
- *      (flushes pending stores) then disconnect Mongoose.
+ * After RFC-0003 Phase 9 (same-process attach), this package is a
+ * pure **library**: it ships the Hocuspocus hook factories, the
+ * save flow, the in-memory contributors tracker, the compactor, and
+ * the shared TypeScript surfaces. The host api process (`@crowi/api`)
+ * builds a `Hocuspocus` engine via `createCollabServer`, wires it to
+ * the existing Express http.Server with the `ws` library's
+ * `noServer` mode, and supplies a single set of Mongoose models +
+ * the wsToken util + the Redis-backed editor cap counter.
+ *
+ * Earlier phases shipped a standalone CLI (`bin: crowi-collab`) that
+ * spawned a dedicated WebSocket process; the CLI is gone — see
+ * `packages/api/src/collab/attach.ts` for the integration point.
  */
-export async function startCollabServer(): Promise<void> {
-  dotenv.config();
 
-  const env = loadCollabEnv();
-  debug('starting collab process: port=%d address=%s', env.port, env.address);
+export { createCollabServer, type CreateCollabServerOptions } from './server';
+export {
+  createSaveFlow,
+  CollabSaveError,
+  type SaveFlow,
+  type CreateSaveFlowOptions,
+  type CollabSaveErrorCode,
+  type ExecuteSaveInput,
+  type ExecuteSaveResult,
+} from './save-flow';
+export { createCompactor, type Compactor, type CompactPageDeps, type CompactPageResult } from './compaction';
+export { createContributorsTracker, type ContributorsTracker } from './contributors';
+export { CONTENT_FIELD } from './yjs-doc';
+export { payloadToUint8Array } from './yjs-payload';
 
-  await connectMongo(env.mongoUri);
+// Hook factories — exported so the host can compose alternate
+// pipelines (Phase 9 attach uses `createCollabServer`, but tests and
+// future variants may want to wire hooks individually).
+export { createOnAuthenticate, type OnAuthenticateDeps } from './hooks/on-authenticate';
+export { createOnLoadDocument, type OnLoadDocumentDeps, type ForceReloadReason } from './hooks/on-load-document';
+export { createOnStoreDocument, type OnStoreDocumentDeps } from './hooks/on-store-document';
+export { createOnChange, type OnChangeDeps } from './hooks/on-change';
+export { createOnStateless, type OnStatelessDeps } from './hooks/on-stateless';
+export { createOnAwarenessUpdate, type OnAwarenessUpdateDeps } from './hooks/on-awareness-update';
+export { createOnDisconnect, type OnDisconnectDeps } from './hooks/on-disconnect';
 
-  const { models, renderer } = registerModels();
-  // Warmup the renderer in the background. Shiki / unified ESM loading
-  // can take 100-500ms on first use; firing this here means the first
-  // save isn't slowed by lazy init. Errors are warn-only so a warmup
-  // failure can't keep the collab server from accepting connections.
-  void renderer.warmup?.().catch((err) => debug('renderer.warmup failed (non-fatal):', err));
-
-  const wsTokenUtil = getWsTokenUtil();
-
-  // Phase 5 cross-process pageEvent publisher (api side runs the
-  // subscriber). No-op publisher when REDIS_URL is unset — collab
-  // still boots; api just won't observe collab-initiated saves on a
-  // remote instance.
-  const pageEventPublisher = await createCollabPageEventPublisher({
-    redisUrl: process.env.REDIS_TLS_URL ?? process.env.REDIS_URL ?? null,
-    redisRejectUnauthorized: process.env.REDIS_REJECT_UNAUTHORIZED !== '0',
-  });
-
-  // Phase 6 — Redis-backed editor cap counter (defence-in-depth on
-  // top of the wsToken's pre-issued readonly bit). Same fail-open
-  // posture as the pub/sub publisher: missing REDIS_URL or connect
-  // failure → no-op counter so connections still flow.
-  const editorCapCounter = await createCollabEditorCapCounter({
-    redisUrl: process.env.REDIS_TLS_URL ?? process.env.REDIS_URL ?? null,
-    redisRejectUnauthorized: process.env.REDIS_REJECT_UNAUTHORIZED !== '0',
-    maxEditorsPerPage: parseCapEnv(process.env.COLLAB_MAX_EDITORS_PER_PAGE),
-  });
-
-  const server = createCollabServer({
-    models,
-    wsTokenUtil,
-    port: env.port,
-    address: env.address,
-    quiet: env.quiet,
-    pageEventPublisher,
-    editorCapCounter,
-  });
-
-  await server.listen();
-  console.log(`[crowi:collab] listening on ws://${env.address}:${env.port}/collab/<pageId>?token=<wsToken>`);
-
-  let shuttingDown = false;
-  const shutdown = async (signal: string): Promise<void> => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    console.log(`[crowi:collab] ${signal} received — shutting down`);
-    try {
-      await server.destroy();
-    } catch (err) {
-      console.error('[crowi:collab] error during server.destroy():', err);
-    }
-    try {
-      // Disconnect the editor cap counter FIRST. SADD / SREM are
-      // short request/response pairs — no in-flight flushing to
-      // worry about — so this is the lowest-cost teardown step.
-      await editorCapCounter.disconnect();
-    } catch (err) {
-      console.error('[crowi:collab] error during editorCapCounter.disconnect():', err);
-    }
-    try {
-      // Disconnect the page-event publisher BEFORE mongoose so any
-      // in-flight publish that was queued at shutdown gets a chance
-      // to flush. Failures are warned (not thrown) inside the helper.
-      await pageEventPublisher.disconnect();
-    } catch (err) {
-      console.error('[crowi:collab] error during pageEventPublisher.disconnect():', err);
-    }
-    try {
-      await disconnectMongo();
-    } catch (err) {
-      console.error('[crowi:collab] error during mongoose disconnect:', err);
-    }
-    process.exit(0);
-  };
-
-  process.on('SIGINT', () => {
-    void shutdown('SIGINT');
-  });
-  process.on('SIGTERM', () => {
-    void shutdown('SIGTERM');
-  });
-}
-
-// `require.main === module` is the canonical CJS check for "invoked
-// from CLI vs imported as a library". tsup builds CJS, so this works
-// for the bin entry. Tests import the module and never reach this
-// branch.
-if (require.main === module) {
-  startCollabServer().catch((err: unknown) => {
-    console.error('[crowi:collab] fatal:', err);
-    process.exit(1);
-  });
-}
+// Shared types — model bag, renderer interface, hook context, and
+// the auxiliary surfaces (ws token verify, editor cap counter, page
+// event publisher).
+export type { CollabModels, CollabRenderer } from './models';
+export {
+  type CollabContext,
+  type CollabWsTokenUtil,
+  type EditorCapCounter,
+  type CollabPageEventPublisher,
+  type PageEventName,
+  noopEditorCapCounter,
+  noopPageEventPublisher,
+} from './types';

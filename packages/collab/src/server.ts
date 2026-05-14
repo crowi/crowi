@@ -1,8 +1,14 @@
-import { Server } from '@hocuspocus/server';
+import { Hocuspocus } from '@hocuspocus/server';
 import Debug from 'debug';
 import type { CollabModels } from './models';
-import type { CollabContext } from './types';
-import type { CollabWsTokenUtil } from './ws-token';
+import {
+  type CollabContext,
+  type CollabWsTokenUtil,
+  type EditorCapCounter,
+  noopEditorCapCounter,
+  type CollabPageEventPublisher,
+  noopPageEventPublisher,
+} from './types';
 import { createOnAuthenticate, type OnAuthenticateDeps } from './hooks/on-authenticate';
 import { createOnLoadDocument } from './hooks/on-load-document';
 import { createOnStoreDocument } from './hooks/on-store-document';
@@ -13,37 +19,13 @@ import { createOnDisconnect } from './hooks/on-disconnect';
 import { createCompactor } from './compaction';
 import { createContributorsTracker, type ContributorsTracker } from './contributors';
 import { createSaveFlow, type SaveFlow } from './save-flow';
-import { type CollabPageEventPublisher } from './page-event-pubsub';
 import { markEditing } from './presence';
-import { type EditorCapCounter, noopEditorCapCounter } from './editor-cap';
 
 const debug = Debug('crowi:collab:server');
-
-/**
- * No-op publisher used as the default when `createCollabServer` is
- * constructed without one (tests that don't care about pub/sub). The
- * production boot path passes the real publisher in via
- * `startCollabServer`.
- */
-const noopPageEventPublisher: CollabPageEventPublisher = {
-  instanceId: 'noop',
-  async publish() {
-    /* drop */
-  },
-  async disconnect() {
-    /* nothing */
-  },
-};
 
 export interface CreateCollabServerOptions {
   models: CollabModels;
   wsTokenUtil: CollabWsTokenUtil;
-  /** Port for the Hocuspocus HTTP/WebSocket server. Tests pass `0` for ephemeral. */
-  port: number;
-  /** Bind address. Defaults to `0.0.0.0`. */
-  address?: string;
-  /** Silence Hocuspocus's start screen — true in production / tests. */
-  quiet?: boolean;
   /**
    * Hocuspocus `debounce` (ms). Tests pass a small value so
    * `onStoreDocument` fires before `disconnect`+await completes;
@@ -53,49 +35,48 @@ export interface CreateCollabServerOptions {
   /** Hocuspocus `maxDebounce` (ms). Tests pass a small value. */
   maxDebounce?: number;
   /**
-   * Override the cap check (Phase 6 swaps the Redis-backed
-   * implementation in via this seam). Defaults to the stub from the
-   * api dist.
+   * Override the cap check (Phase 6 Redis-backed peek). Defaults to a
+   * permissive `readonly: false` so tests / single-instance dev
+   * deployments work without Redis.
    */
   checkEditorCap?: OnAuthenticateDeps['checkEditorCap'];
   /**
-   * Phase 5: Redis publisher for `crowi:pageEvent:*`. Defaults to a
-   * no-op publisher so tests / single-instance deployments work
-   * without Redis. `startCollabServer` injects the real publisher.
+   * Cross-process page-event publisher. After RFC-0003 Phase 9
+   * (in-process attach) the host api process wires an in-process
+   * adapter that re-emits onto `crowi.event('Page')`. Tests pass a
+   * mock; defaults to a no-op so unit tests on the hooks themselves
+   * don't need to think about fan-out.
    */
   pageEventPublisher?: CollabPageEventPublisher;
   /**
-   * Phase 5: pre-built contributors tracker. Tests pass their own so
-   * they can pre-seed awareness ids; production code lets the server
-   * build a fresh tracker per instance.
+   * Pre-built contributors tracker. Tests pass their own so they can
+   * pre-seed awareness ids; production code lets the server build a
+   * fresh tracker per instance.
    */
   contributorsTracker?: ContributorsTracker;
   /**
-   * Phase 5: pre-built save flow. Tests inject a mock; production lets
-   * the server build one from `models` + tracker + publisher.
+   * Pre-built save flow. Tests inject a mock; production lets the
+   * server build one from `models` + tracker + publisher.
    */
   saveFlow?: SaveFlow;
   /**
-   * Phase 6: Redis-backed editor cap counter. Acquires a slot on
+   * Phase 6 — Redis-backed editor cap counter. Acquires a slot on
    * `onAuthenticate` (write-side cap defence-in-depth) and releases
    * on `onDisconnect`. Defaults to a no-op counter so tests and
-   * single-instance dev deployments work without Redis; production
-   * boot path (`startCollabServer`) injects the real counter built
-   * via `createCollabEditorCapCounter`.
+   * single-instance dev deployments work without Redis; the api boot
+   * (`attachCollabServer`) injects the real counter built via
+   * `createEditorCapCounter`.
    */
   editorCapCounter?: EditorCapCounter;
 }
 
 /**
- * Build a Hocuspocus `Server` wired to Crowi's models. Listen is
- * separate (`server.listen()`) so callers can inspect the address
- * before / after binding — especially useful in tests that need to
- * discover the random port.
- *
- * Server-level `stopOnSignals: false` because the parent
- * `startCollabServer` (in `index.ts`) registers its own graceful
- * shutdown that also disconnects Mongoose. Letting Hocuspocus call
- * `process.exit(0)` would skip the mongoose teardown.
+ * Build a Hocuspocus engine instance wired to Crowi's models. Unlike
+ * the upstream `Server` class (which owns its own HTTP server),
+ * `Hocuspocus` is a pure engine with no listen / port concerns — the
+ * host api process attaches it to the existing Express http.Server
+ * via the `ws` lib's `noServer` mode (see `@crowi/api`'s
+ * `attachCollabServer`).
  *
  * Phase 4 wires the `onChange` firehose + a single shared `compactor`
  * across both `onChange` (count trigger) and `onStoreDocument` (time
@@ -104,8 +85,8 @@ export interface CreateCollabServerOptions {
  * a count-trigger compaction racing a store-trigger checkpoint for
  * the same page.
  */
-export function createCollabServer(opts: CreateCollabServerOptions): Server<CollabContext> {
-  const { models, wsTokenUtil, port, address, quiet, debounce, maxDebounce, checkEditorCap } = opts;
+export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<CollabContext> {
+  const { models, wsTokenUtil, debounce, maxDebounce, checkEditorCap } = opts;
   const pageEventPublisher = opts.pageEventPublisher ?? noopPageEventPublisher;
   const contributorsTracker = opts.contributorsTracker ?? createContributorsTracker();
   const editorCapCounter = opts.editorCapCounter ?? noopEditorCapCounter;
@@ -158,11 +139,8 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
   const onStateless = createOnStateless({ saveFlow });
   const onAwarenessUpdate = createOnAwarenessUpdate({ contributorsTracker });
 
-  const server = new Server<CollabContext>({
+  const hocuspocus = new Hocuspocus<CollabContext>({
     name: 'crowi-collab',
-    port,
-    address: address ?? '0.0.0.0',
-    quiet: quiet ?? false,
     debounce: debounce ?? 2000,
     maxDebounce: maxDebounce ?? 10000,
     // Pin Hocuspocus's v4 default explicitly so a future upgrade
@@ -170,9 +148,6 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
     // we want every idle Y.Doc released as soon as its last client
     // disconnects — otherwise active-page count drives memory.
     unloadImmediately: true,
-    // Crowi's parent index.ts owns SIGINT/SIGTERM so it can disconnect
-    // mongoose before `process.exit(0)`.
-    stopOnSignals: false,
     async onAuthenticate(payload) {
       return onAuthenticate(payload);
     },
@@ -196,6 +171,6 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
     },
   });
 
-  debug('collab server constructed (port=%d, debounce=%d/%d)', port, debounce ?? 2000, maxDebounce ?? 10000);
-  return server;
+  debug('collab Hocuspocus engine constructed (debounce=%d/%d)', debounce ?? 2000, maxDebounce ?? 10000);
+  return hocuspocus;
 }

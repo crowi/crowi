@@ -1,10 +1,14 @@
 import type { onAuthenticatePayload } from '@hocuspocus/server';
 import Debug from 'debug';
 import type { CollabModels } from '../models';
-import type { CollabContext } from '../types';
-import type { CollabWsTokenUtil } from '../ws-token';
-import { checkEditorCap as defaultCheckEditorCap } from '../collab-cap';
-import { type EditorCapCounter, noopEditorCapCounter } from '../editor-cap';
+import { type CollabContext, type CollabWsTokenUtil, type EditorCapCounter, noopEditorCapCounter } from '../types';
+
+/**
+ * Default no-op cap peek. The api process injects a Redis-backed peek
+ * via `attachCollabServer`'s deps; tests that don't care about cap
+ * leave the default — `readonly: false` so connections flow.
+ */
+const defaultCheckEditorCap = async (_pageId: string): Promise<{ readonly: boolean }> => ({ readonly: false });
 
 const debug = Debug('crowi:collab:auth');
 
