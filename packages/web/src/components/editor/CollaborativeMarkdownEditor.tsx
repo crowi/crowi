@@ -5,7 +5,10 @@ import type { Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { yCollab } from 'y-codemirror.next';
 import type * as Y from 'yjs';
-import type { CollabAwareness } from '@/lib/use-collab-document';
+import { CollabForceReloadMessageSchema } from '@crowi/api-contract';
+import { userColor } from '@/lib/collab-user-color';
+import type { CollabAwareness, StatelessListener } from '@/lib/use-collab-document';
+import { useAuth } from '@/lib/use-auth';
 import { useYjsToken } from '@/lib/use-yjs-token';
 import { useCollabDocument, type CollabStatus } from '@/lib/use-collab-document';
 import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
@@ -20,6 +23,12 @@ import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
  * wrapper will mount the inner editor in readonly mode until they
  * populate. This avoids spinning a placeholder UI while the wsToken
  * round-trip is in flight (usually < 100 ms on a warm session).
+ *
+ * Phase 8 additions:
+ *   - `subscribeStateless` is the multi-consumer fan-out for inbound
+ *     stateless messages (save acks + force-reload)
+ *   - `sendStateless` is a thin guarded wrapper that no-ops on
+ *     readonly / un-connected sessions
  */
 export interface CollabSession {
   yText: Y.Text | null;
@@ -27,6 +36,8 @@ export interface CollabSession {
   awareness: CollabAwareness | null;
   status: CollabStatus;
   readonly: boolean;
+  subscribeStateless: (listener: StatelessListener) => () => void;
+  sendStateless: (payload: string) => boolean;
 }
 
 interface CollaborativeMarkdownEditorCommonProps {
@@ -53,6 +64,15 @@ interface CollaborativeMarkdownEditorCommonProps {
    * + surfaces a banner.
    */
   onReadonlyChange?: (readonly: boolean) => void;
+  /**
+   * RFC-0003 Phase 8 — fires when the server announces a force-reload
+   * (`crowi:force-reload` stateless message). The caller is expected
+   * to mount a `CollabForceReloadDialog` and pass `reason` through.
+   * Skipping this prop means the page silently ignores the broadcast,
+   * which is the correct degradation for the bare editor preview /
+   * test harness use case where no dialog is wired up.
+   */
+  onForceReload?: (reason?: string) => void;
 }
 
 /**
@@ -69,17 +89,50 @@ export type CollaborativeMarkdownEditorProps = CollaborativeMarkdownEditorCommon
  * the HocuspocusProvider lifecycle in one place so a single page
  * editor with multiple mounted views (wide / narrow side-by-side
  * via `display: none` toggling) shares one connection.
+ *
+ * Phase 8: also publishes the authenticated user's awareness identity
+ * (name + color) so y-codemirror.next can paint remote carets. The
+ * identity republishes whenever `user` swaps — covers the
+ * sign-in-after-page-load edge case and the (rare) profile-name
+ * change during a live session.
  */
 export function useCollabSession(pageId: string | null | undefined): CollabSession {
   const tokenQuery = useYjsToken(pageId);
   const wsToken = tokenQuery.data?.wsToken ?? null;
   const tokenReadonly = tokenQuery.data?.readonly ?? false;
-  const { yText, yUndoManager, awareness, status, readonly } = useCollabDocument({
+  const { yText, yUndoManager, awareness, status, readonly, setLocalAwareness, subscribeStateless, sendStateless } = useCollabDocument({
     pageId,
     wsToken,
     initialReadonly: tokenReadonly,
   });
-  return { yText, yUndoManager, awareness, status, readonly };
+
+  const { user, isLoading: isAuthLoading } = useAuth();
+
+  // Publish the local user identity into awareness so peers can paint
+  // a named caret + selection. Deps are pinned to the primitive user
+  // fields we actually publish — react-query refetches return a fresh
+  // `user` object reference even when nothing changed, and broadcasting
+  // an identical identity to every peer would amplify the per-keystroke
+  // awareness traffic across the cluster.
+  const userId = user?.id;
+  const userName = user?.name;
+  const userUsername = user?.username;
+  useEffect(() => {
+    if (!awareness || isAuthLoading) return;
+    if (!userId) {
+      setLocalAwareness(null);
+      return;
+    }
+    const palette = userColor(userId);
+    setLocalAwareness({
+      id: userId,
+      name: userName?.trim() || (userUsername ?? userId),
+      color: palette.color,
+      colorLight: palette.colorLight,
+    });
+  }, [awareness, userId, userName, userUsername, isAuthLoading, setLocalAwareness]);
+
+  return { yText, yUndoManager, awareness, status, readonly, subscribeStateless, sendStateless };
 }
 
 /**
@@ -102,9 +155,14 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
  * doc, the EditorView's content is driven entirely by Y.Text. Setting
  * `value=''` once at mount avoids the parent's echo-guard sync effect
  * from racing against incoming Yjs updates.
+ *
+ * Phase 8 additions:
+ *   - listens for `crowi:force-reload` on the stateless channel and
+ *     forwards the reason to the optional `onForceReload` callback
+ *     (the caller mounts the actual dialog)
  */
 export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, CollaborativeMarkdownEditorProps>(function CollaborativeMarkdownEditor(props, ref) {
-  const { pageId, session, className, 'aria-label': ariaLabel, onYTextChange, onStatusChange, onReadonlyChange } = props;
+  const { pageId, session, className, 'aria-label': ariaLabel, onYTextChange, onStatusChange, onReadonlyChange, onForceReload } = props;
 
   // When the caller supplies a session, skip the internal hook
   // (otherwise we'd open a second WebSocket). React's rules require
@@ -113,7 +171,7 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // its own `useQuery` via the `enabled` flag.
   const ownedSession = useCollabSession(session ? null : pageId);
   const active = session ?? ownedSession;
-  const { yText, yUndoManager, awareness, status, readonly } = active;
+  const { yText, yUndoManager, awareness, status, readonly, subscribeStateless } = active;
 
   // Build the CodeMirror extension list. `yCollab` is the bridge
   // that wires Y.Text ↔ EditorView (doc + selection); the explicit
@@ -169,6 +227,27 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   useEffect(() => {
     onReadonlyChange?.(readonly);
   }, [readonly, onReadonlyChange]);
+
+  // Phase 8 — listen for `crowi:force-reload` on the stateless
+  // channel. Subscribe is a no-op when no callback was supplied so
+  // the bare-test mounts (and the create flow's read-only preview)
+  // don't waste a listener slot.
+  useEffect(() => {
+    if (!onForceReload) return;
+    const unsubscribe = subscribeStateless((payload: string) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(payload);
+      } catch {
+        return;
+      }
+      const match = CollabForceReloadMessageSchema.safeParse(parsed);
+      if (match.success) {
+        onForceReload(match.data.reason);
+      }
+    });
+    return unsubscribe;
+  }, [subscribeStateless, onForceReload]);
 
   // While Y.Text hasn't arrived yet we force readonly to avoid the
   // user typing into the empty mounted doc — those edits would

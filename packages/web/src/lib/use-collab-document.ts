@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HocuspocusProvider, WebSocketStatus } from '@hocuspocus/provider';
 import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
@@ -22,6 +22,21 @@ export type CollabAwareness = Awareness;
  */
 export type CollabStatus = 'connecting' | 'connected' | 'disconnected' | 'auth-failed';
 
+/**
+ * Awareness `user` field shape published to remote peers. y-codemirror.next
+ * renders the caret using `color` and the selection background using
+ * `colorLight`; the optional `id` lets the same-paragraph indicator map
+ * states back to the application's user model. Mirrors the format the
+ * upstream `y-codemirror.next` demo uses (see
+ * `y-codemirror.next/dist/src/y-remote-selections.js`).
+ */
+export interface CollabUserField {
+  id?: string;
+  name: string;
+  color: string;
+  colorLight?: string;
+}
+
 interface UseCollabDocumentOptions {
   pageId: string | null | undefined;
   wsToken: string | null | undefined;
@@ -35,13 +50,49 @@ interface UseCollabDocumentOptions {
   initialReadonly?: boolean;
 }
 
+/**
+ * Subscriber callback for the stateless multi-consumer fan-out. The
+ * payload is the raw string Hocuspocus delivers — listeners run zod
+ * `safeParse` against the per-message schemas (`CollabSaveOkSchema`,
+ * `CollabSaveErrorSchema`, `CollabForceReloadMessageSchema`) to claim
+ * the payload, and silently drop messages they don't recognise so
+ * unrelated consumers can co-exist on the same channel.
+ */
+export type StatelessListener = (payload: string) => void;
+
 interface UseCollabDocumentResult {
   ydoc: Y.Doc | null;
   yText: Y.Text | null;
   yUndoManager: Y.UndoManager | null;
   awareness: CollabAwareness | null;
+  provider: HocuspocusProvider | null;
   status: CollabStatus;
   readonly: boolean;
+  /**
+   * Publish the local user identity to remote peers via
+   * `awareness.setLocalStateField('user', ...)`. No-op until the
+   * provider has been constructed; callers should fire this in a
+   * `useEffect` keyed by `[awareness, user]` and pass `null` to clear.
+   */
+  setLocalAwareness: (user: CollabUserField | null) => void;
+  /**
+   * Subscribe to inbound stateless messages. The hook owns one
+   * `onStateless` callback on the provider config; this fan-out lets
+   * the Save flow and the force-reload dialog listen independently
+   * without stomping on each other.
+   *
+   * Returns an unsubscribe function — mirror the standard pub-sub
+   * shape so callers can drop the listener into `useEffect`'s cleanup
+   * slot.
+   */
+  subscribeStateless: (listener: StatelessListener) => () => void;
+  /**
+   * Send a custom message to the server over Hocuspocus's stateless
+   * channel. Used by `useCollabSave` to fire `crowi:save`. No-op
+   * (returns `false`) when the provider isn't ready or the session is
+   * readonly; callers should treat that as `'NOT_READY'` / `'READONLY'`.
+   */
+  sendStateless: (payload: string) => boolean;
 }
 
 /**
@@ -63,6 +114,14 @@ interface UseCollabDocumentResult {
  * Resilient to React Strict Mode double-invoke: the effect cleanup
  * tears down the provider before remount, so we never end up with two
  * live WebSockets pointing at the same document.
+ *
+ * Phase 8 additions:
+ *   - `provider` is surfaced on the return so callers can fire
+ *     `sendStateless()` for custom messages like `crowi:save`
+ *   - `setLocalAwareness` is the typed entry point for publishing the
+ *     authenticated user's name + color to remote peers
+ *   - `subscribeStateless` fans the provider's single `onStateless`
+ *     hook out to multiple listeners (Save flow + force-reload dialog)
  */
 export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabDocumentResult {
   const { pageId, wsToken, initialReadonly = false } = options;
@@ -78,9 +137,16 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
     yText: Y.Text;
     yUndoManager: Y.UndoManager;
     awareness: CollabAwareness;
+    provider: HocuspocusProvider;
   }
   const [session, setSession] = useState<SessionHandles | null>(null);
   const [status, setStatus] = useState<CollabStatus>('connecting');
+
+  // Stateless listener fan-out. `Set` instead of `Array` so unsubscribe
+  // is O(1) and identical listeners can't double-register. The ref
+  // outlives provider rebuilds (token refresh swaps providers but keeps
+  // listeners), so callers don't need to re-subscribe on every cycle.
+  const statelessListenersRef = useRef<Set<StatelessListener>>(new Set());
 
   useEffect(() => {
     if (!pageId || !wsToken) return;
@@ -110,6 +176,20 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
         // provider with it.
         setStatus('auth-failed');
       },
+      onStateless: ({ payload }) => {
+        // Fan-out to subscribers. We iterate over a snapshot (`[...set]`)
+        // so a listener that unsubscribes itself during dispatch doesn't
+        // mutate the live set under iteration.
+        for (const listener of [...statelessListenersRef.current]) {
+          try {
+            listener(payload);
+          } catch (err) {
+            // Don't let one bad listener kill the others. Use console
+            // here — no logger plumbing in this layer — and keep going.
+            console.error('[collab] stateless listener threw', err);
+          }
+        }
+      },
     });
 
     // `provider.awareness` is typed `Awareness | null` because the user
@@ -118,13 +198,10 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
     const awareness = provider.awareness as CollabAwareness;
 
     // The session publish is the React-side notification that the
-    // external Hocuspocus resource has been constructed. The lint rule
-    // (`react-hooks/set-state-in-effect`) cannot tell this apart from
-    // a derived-state mis-use; suppress with the explicit justification
-    // that ownership of the Y.Doc + provider lifetime is exactly this
-    // effect (see cleanup below).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSession({ ydoc: doc, yText: doc.getText('content'), yUndoManager: undoManager, awareness });
+    // external Hocuspocus resource has been constructed. Ownership of
+    // the Y.Doc + provider lifetime is exactly this effect — see
+    // cleanup below.
+    setSession({ ydoc: doc, yText: doc.getText('content'), yUndoManager: undoManager, awareness, provider });
 
     return () => {
       // Destroy order matters: undo manager holds a reference to the
@@ -143,12 +220,44 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
   // time) OR the auth-failed terminal state.
   const readonly = initialReadonly || status === 'auth-failed';
 
+  const setLocalAwareness = useCallback(
+    (user: CollabUserField | null) => {
+      const awareness = session?.awareness;
+      if (!awareness) return;
+      // `null` clears the field so a logged-out / unmounting consumer
+      // can stop appearing in remote peers' awareness view.
+      awareness.setLocalStateField('user', user);
+    },
+    [session],
+  );
+
+  const subscribeStateless = useCallback((listener: StatelessListener) => {
+    statelessListenersRef.current.add(listener);
+    return () => {
+      statelessListenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const sendStateless = useCallback(
+    (payload: string) => {
+      const provider = session?.provider;
+      if (!provider || readonly) return false;
+      provider.sendStateless(payload);
+      return true;
+    },
+    [session, readonly],
+  );
+
   return {
     ydoc: session?.ydoc ?? null,
     yText: session?.yText ?? null,
     yUndoManager: session?.yUndoManager ?? null,
     awareness: session?.awareness ?? null,
+    provider: session?.provider ?? null,
     status,
     readonly,
+    setLocalAwareness,
+    subscribeStateless,
+    sendStateless,
   };
 }

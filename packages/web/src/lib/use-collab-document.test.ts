@@ -32,9 +32,16 @@ const { FakeProvider, providerInstances } = vi.hoisted(() => {
       // The hook always supplies a document; we just rely on that
       // here to avoid importing yjs inside the hoisted factory block.
       this.document = config.document as Y.Doc;
-      this.awareness = { setLocalState: vi.fn(), getStates: () => new Map(), on: vi.fn(), off: vi.fn() };
+      this.awareness = {
+        setLocalState: vi.fn(),
+        setLocalStateField: vi.fn(),
+        getStates: () => new Map(),
+        on: vi.fn(),
+        off: vi.fn(),
+      };
       instances.push({ destroy: this.destroy, document: this.document, awareness: this.awareness, config });
     }
+    sendStateless = vi.fn();
   }
   return { FakeProvider, providerInstances: instances };
 });

@@ -33,9 +33,16 @@ const { getYjsToken, FakeProvider, providerInstances } = vi.hoisted(() => {
       // reference here so observer-driven tests see updates the hook
       // applies through that Y.Doc.
       this.document = config.document as Y.Doc;
-      this.awareness = { setLocalState: vi.fn(), getStates: () => new Map(), on: vi.fn(), off: vi.fn() };
+      this.awareness = {
+        setLocalState: vi.fn(),
+        setLocalStateField: vi.fn(),
+        getStates: () => new Map(),
+        on: vi.fn(),
+        off: vi.fn(),
+      };
       instances.push({ destroy: this.destroy, document: this.document, awareness: this.awareness, config });
     }
+    sendStateless = vi.fn();
   }
   return { getYjsToken: vi.fn(), FakeProvider, providerInstances: instances };
 });
@@ -46,6 +53,28 @@ vi.mock('@/lib/api-client', () => ({
       getYjsToken,
     },
   },
+}));
+
+// Phase 8: useCollabSession now reads `useAuth()` to publish the
+// local user identity into awareness. Mock it out so the test
+// doesn't reach into `localStorage` / fetch for `/auth/me`. The
+// minimal shape mirrors `useAuth`'s return type — we only consume
+// `user` + `isLoading` in the editor wrapper.
+vi.mock('@/lib/use-auth', () => ({
+  useAuth: () => ({
+    user: {
+      id: 'test-user-id',
+      username: 'tester',
+      email: 'tester@example.com',
+      name: 'Tester',
+      status: 2,
+      createdAt: new Date().toISOString(),
+    },
+    isLoading: false,
+    isAuthenticated: true,
+    logout: vi.fn(),
+    refetch: vi.fn(),
+  }),
 }));
 
 vi.mock('@hocuspocus/provider', () => ({
@@ -160,8 +189,11 @@ describe('CollaborativeMarkdownEditor', () => {
       yText: null,
       yUndoManager: null,
       awareness: null,
+      provider: null,
       status: 'connecting' as const,
       readonly: false,
+      subscribeStateless: () => () => undefined,
+      sendStateless: () => false,
     };
     render(createElement(CollaborativeMarkdownEditor, { session }), { wrapper: makeWrapper() });
 
