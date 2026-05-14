@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Save, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,13 +11,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
+import { CollaborativeMarkdownEditor, useCollabSession, type CollabSession } from '@/components/editor/CollaborativeMarkdownEditor';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
 import { useScrollSync } from '@/lib/use-scroll-sync';
+import type { CollabStatus } from '@/lib/use-collab-document';
 import { m } from '@paraglide/messages.js';
 
 type Feedback = { kind: 'conflict' | 'error'; message: string };
+
+/**
+ * Fixed sonner toast id used by the collab status notifications.
+ * Reusing the same id means a fresh `toast.*` call replaces the
+ * previous offline/reconnected/auth-failed toast in place instead of
+ * stacking new ones every time the connection cycles.
+ */
+const COLLAB_STATUS_TOAST_ID = 'collab-status';
 
 type EditMode = { kind: 'update'; pageId: string } | { kind: 'create'; path: string } | { kind: 'invalid' };
 
@@ -90,9 +101,79 @@ interface EditorShellProps {
   pageId: string | null;
   /** Called by the attach button to surface upload errors as Feedback. */
   onAttachError: (message: string) => void;
+  /**
+   * RFC-0003 Phase 7 — when supplied, both editor panes mount the
+   * realtime `CollaborativeMarkdownEditor` (Yjs / Hocuspocus) instead
+   * of the bare `MarkdownEditor`. `body` then becomes a passive mirror
+   * the parent updates via `onChangeBody` on `onYTextChange`; the
+   * `value` / `onChange` path through CodeMirror is bypassed because
+   * yCollab owns the doc directly. Pass `null` for the create flow
+   * (no page id yet → no token → no realtime).
+   */
+  realtimePageId?: string | null;
+  /**
+   * Notified when the collab readonly state flips (token says cap
+   * reached, or auth fails). Caller surfaces the banner + disables
+   * save.
+   */
+  onReadonlyChange?: (readonly: boolean) => void;
+  /**
+   * `true` when the realtime layer flagged the session as read-only.
+   * Drives the save-button disable + the read-only banner.
+   */
+  readonly?: boolean;
 }
 
-function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, isSaving, feedback, pageId, onAttachError }: EditorShellProps) {
+function EditorShell({
+  title,
+  subtitle,
+  body,
+  onChangeBody,
+  onSave,
+  onCancel,
+  isSaving,
+  feedback,
+  pageId,
+  onAttachError,
+  realtimePageId,
+  onReadonlyChange,
+  readonly = false,
+}: EditorShellProps) {
+  // RFC-0003 Phase 7: a single Hocuspocus connection (= one Y.Doc +
+  // one provider) is shared by the wide + narrow editor panes. Both
+  // panes stay mounted in the DOM at all times (CSS `display: none`
+  // toggle); without sharing the session each pane would open its
+  // own WebSocket. `useCollabSession(null)` is the no-op branch for
+  // the create flow where `realtimePageId` is null.
+  const session = useCollabSession(realtimePageId);
+  // Collab status toasts: first 'disconnected' surfaces a persistent
+  // error toast; first 'connected' after a drop confirms recovery;
+  // 'auth-failed' is terminal and recommends a reload.
+  const prevStatusRef = useRef<CollabStatus>('connecting');
+  useEffect(() => {
+    if (!realtimePageId) return;
+    const prev = prevStatusRef.current;
+    const next = session.status;
+    if (next === prev) return;
+    prevStatusRef.current = next;
+    if (next === 'disconnected') {
+      toast.error(m['edit.connection_offline'](), {
+        id: COLLAB_STATUS_TOAST_ID,
+        duration: Infinity,
+      });
+    } else if (next === 'connected' && prev === 'disconnected') {
+      toast.success(m['edit.connection_reconnected'](), {
+        id: COLLAB_STATUS_TOAST_ID,
+        duration: 3000,
+      });
+    } else if (next === 'auth-failed') {
+      toast.error(m['edit.connection_auth_failed'](), {
+        id: COLLAB_STATUS_TOAST_ID,
+        duration: Infinity,
+      });
+    }
+  }, [realtimePageId, session.status]);
+
   // Two editor refs because wide (md+ grid) and narrow (Tabs) each mount
   // their own `MarkdownEditor` — both panels live in the DOM at all
   // times (`md:` only toggles `display`), so sharing one ref would let
@@ -179,7 +260,16 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
             `grid-item h-full → .cm-editor h-full → .cm-scroller 100%`
             collapses to 0, killing CodeMirror's internal scroll. */}
         <div className="hidden h-full min-h-0 md:grid md:grid-cols-2 md:grid-rows-1 md:gap-4">
-          <EditorPane ref={wideEditorRef} value={body} onChange={onChangeBody} readonly={isSaving} ariaLabel={m['edit.aria_body']()} />
+          <EditorPane
+            ref={wideEditorRef}
+            value={body}
+            onChange={onChangeBody}
+            readonly={isSaving || readonly}
+            ariaLabel={m['edit.aria_body']()}
+            realtimePageId={realtimePageId ?? null}
+            session={realtimePageId ? session : null}
+            onReadonlyChange={onReadonlyChange}
+          />
           <PreviewPane source={body} scrollRef={widePreviewScrollRef} active={isWide} />
         </div>
         <Tabs value={narrowTab} onValueChange={(v) => setNarrowTab(v as 'editor' | 'preview')} className="flex h-full min-h-0 flex-col md:hidden">
@@ -192,13 +282,28 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
             </TabsTrigger>
           </TabsList>
           <TabsContent value="editor" forceMount className="mt-2 min-h-0 flex-1 data-[state=inactive]:hidden">
-            <EditorPane ref={narrowEditorRef} value={body} onChange={onChangeBody} readonly={isSaving} ariaLabel={m['edit.aria_body']()} />
+            <EditorPane
+              ref={narrowEditorRef}
+              value={body}
+              onChange={onChangeBody}
+              readonly={isSaving || readonly}
+              ariaLabel={m['edit.aria_body']()}
+              realtimePageId={realtimePageId ?? null}
+              session={realtimePageId ? session : null}
+              onReadonlyChange={onReadonlyChange}
+            />
           </TabsContent>
           <TabsContent value="preview" forceMount className="mt-2 min-h-0 flex-1 data-[state=inactive]:hidden">
             <PreviewPane source={body} active={!isWide && narrowTab === 'preview'} />
           </TabsContent>
         </Tabs>
       </main>
+
+      {readonly && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border-t border-amber-200 dark:border-amber-900 px-4 py-2 text-sm text-amber-900 dark:text-amber-200 md:px-6">
+          {m['edit.readonly_banner']()}
+        </div>
+      )}
 
       <footer className="bg-background z-10 flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3 md:px-6">
         <AttachmentInsertButton pageId={pageId} onInsert={insertAtCursor} onError={onAttachError} />
@@ -207,7 +312,7 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
             <X className="mr-1 h-4 w-4" />
             {m['edit.cancel']()}
           </Button>
-          <Button variant="default" onClick={onSave} disabled={isSaving} type="button">
+          <Button variant="default" onClick={onSave} disabled={isSaving || readonly} type="button">
             {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
             {m['edit.save']()}
           </Button>
@@ -222,9 +327,56 @@ interface EditorPaneProps {
   onChange: (next: string) => void;
   readonly: boolean;
   ariaLabel: string;
+  /**
+   * RFC-0003 Phase 7 — when set, this pane mounts the realtime collab
+   * editor (`CollaborativeMarkdownEditor`) keyed by the page id and
+   * sources `value` from Y.Text via the wrapper's `onYTextChange`
+   * callback. The pane forwards that string to the parent via
+   * `onChange` so the preview + attachment-insert flows continue to
+   * see a plain `body` string. Pass `null` for the create flow.
+   */
+  realtimePageId: string | null;
+  /**
+   * Pre-built collab session shared across the wide + narrow panes so
+   * a single Hocuspocus WebSocket feeds both editor mounts. When
+   * `realtimePageId` is `null` this is also `null`.
+   */
+  session: CollabSession | null;
+  /** Forwarded to the realtime wrapper; ignored in non-realtime mode. */
+  onReadonlyChange?: (readonly: boolean) => void;
 }
 
-const EditorPane = function EditorPane({ value, onChange, readonly, ariaLabel, ref }: EditorPaneProps & { ref: React.Ref<MarkdownEditorHandle> }) {
+const EditorPane = function EditorPane({
+  value,
+  onChange,
+  readonly,
+  ariaLabel,
+  realtimePageId,
+  session,
+  onReadonlyChange,
+  ref,
+}: EditorPaneProps & { ref: React.Ref<MarkdownEditorHandle> }) {
+  // Same className for both branches so layout + scroll behaviour
+  // stay byte-identical. The collab wrapper forwards it to the inner
+  // `MarkdownEditor`'s `<div>` wrapper.
+  const editorClassName =
+    'border-input bg-background focus-within:ring-ring h-full min-h-0 overflow-hidden rounded-md border font-mono text-sm focus-within:ring-1 [&_.cm-editor]:h-full [&_.cm-editor]:outline-none [&_.cm-focused]:outline-none [&_.cm-scroller]:scroll-auto [&_.cm-scroller]:p-3';
+
+  if (realtimePageId && session) {
+    return (
+      <CollaborativeMarkdownEditor
+        ref={ref}
+        session={session}
+        aria-label={ariaLabel}
+        className={editorClassName}
+        // yText → body mirror so the preview + attachment markdown
+        // insertion paths keep working without a Y.Text dependency.
+        onYTextChange={onChange}
+        onReadonlyChange={onReadonlyChange}
+      />
+    );
+  }
+
   return (
     <MarkdownEditor
       ref={ref}
@@ -236,7 +388,7 @@ const EditorPane = function EditorPane({ value, onChange, readonly, ariaLabel, r
       // — required for scroll sync, otherwise programmatic scrolls
       // animate over several frames and re-emit `scroll` events past
       // the rAF lock window in `useScrollSync`, causing ping-pong sync.
-      className="border-input bg-background focus-within:ring-ring h-full min-h-0 overflow-hidden rounded-md border font-mono text-sm focus-within:ring-1 [&_.cm-editor]:h-full [&_.cm-editor]:outline-none [&_.cm-focused]:outline-none [&_.cm-scroller]:scroll-auto [&_.cm-scroller]:p-3"
+      className={editorClassName}
     />
   );
 };
@@ -273,11 +425,22 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   const router = useRouter();
   const { page, isLoading, isError, error } = usePage({ page_id: pageId });
 
+  // RFC-0003 Phase 7: in realtime mode the canonical body lives in
+  // Y.Text. We still keep a React-side `body` string for the preview
+  // pane + the attachment-insert markdown + the (transitional) HTTP
+  // save path. The string is rehydrated by `CollaborativeMarkdownEditor`'s
+  // `onYTextChange` once the Yjs session loads, but we seed it with
+  // the last-saved revision body so the preview isn't blank while the
+  // wsToken round-trip is in flight (~100 ms warm).
   const [body, setBody] = useState<string | null>(null);
   const [revisionId, setRevisionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [readonly, setReadonly] = useState<boolean>(false);
 
   const updateMutation = useUpdatePage();
+  const handleReadonlyChange = useCallback((next: boolean) => {
+    setReadonly(next);
+  }, []);
 
   // Re-init when the loaded page's revision changes (e.g., user navigates between edits).
   // Following the React docs pattern for "Adjusting some state when a prop changes",
@@ -356,6 +519,9 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
       feedback={feedback}
       pageId={page._id}
       onAttachError={(message) => setFeedback({ kind: 'error', message })}
+      realtimePageId={page._id}
+      onReadonlyChange={handleReadonlyChange}
+      readonly={readonly}
     />
   );
 }
