@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Save, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -13,6 +13,7 @@ import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/M
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
+import { useScrollSync } from '@/lib/use-scroll-sync';
 import { m } from '@paraglide/messages.js';
 
 type Feedback = { kind: 'conflict' | 'error'; message: string };
@@ -23,6 +24,25 @@ function resolveMode(pageId: string | null, path: string | null): EditMode {
   if (pageId) return { kind: 'update', pageId };
   if (path) return { kind: 'create', path };
   return { kind: 'invalid' };
+}
+
+// `useSyncExternalStore` adapters for the `md`-breakpoint media query.
+// File-scope so React can refer to stable function identities across
+// renders (the hook re-subscribes if `subscribe` changes identity).
+// Mirrors Tailwind's `md` token (768px) — see `tailwind.config`.
+const WIDE_QUERY = '(min-width: 768px)';
+function subscribeWideQuery(callback: () => void): () => void {
+  const mql = window.matchMedia(WIDE_QUERY);
+  mql.addEventListener('change', callback);
+  return () => mql.removeEventListener('change', callback);
+}
+function getWideQuerySnapshot(): boolean {
+  return window.matchMedia(WIDE_QUERY).matches;
+}
+function getWideQueryServerSnapshot(): boolean {
+  // SSR default: render the narrow layout. The client effect promotes
+  // to wide on hydration if the viewport is large.
+  return false;
 }
 
 export function EditPageClient() {
@@ -37,17 +57,19 @@ export function EditPageClient() {
 function InvalidParamsView() {
   const router = useRouter();
   return (
-    <Card className="max-w-4xl mx-auto">
-      <CardHeader>
-        <CardTitle>{m['edit.invalid_params_title']()}</CardTitle>
-        <CardDescription>{m['edit.invalid_params_description']()}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button variant="outline" onClick={() => router.back()}>
-          {m['common.go_back']()}
-        </Button>
-      </CardContent>
-    </Card>
+    <div className="flex flex-1 items-center justify-center p-4">
+      <Card className="w-full max-w-4xl">
+        <CardHeader>
+          <CardTitle>{m['edit.invalid_params_title']()}</CardTitle>
+          <CardDescription>{m['edit.invalid_params_description']()}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" onClick={() => router.back()}>
+            {m['common.go_back']()}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -71,12 +93,30 @@ interface EditorShellProps {
 }
 
 function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, isSaving, feedback, pageId, onAttachError }: EditorShellProps) {
-  const editorRef = useRef<MarkdownEditorHandle>(null);
+  // Two editor refs because wide (md+ grid) and narrow (Tabs) each mount
+  // their own `MarkdownEditor` — both panels live in the DOM at all
+  // times (`md:` only toggles `display`), so sharing one ref would let
+  // the later-mounting instance silently overwrite the earlier one,
+  // and the "active" ref would always point at the `display: none`
+  // pane (no scroll, no overflow → scroll-sync silently dies).
+  const wideEditorRef = useRef<MarkdownEditorHandle>(null);
+  const narrowEditorRef = useRef<MarkdownEditorHandle>(null);
+  // Wide-only preview scroll ref. The narrow Tabs view only ever shows
+  // one pane at a time, so cross-pane sync there would be invisible.
+  const widePreviewScrollRef = useRef<HTMLDivElement>(null);
   // Narrow-viewport tab state. We control `Tabs` so the inactive
   // preview pane can skip its debounced fetch instead of running it
   // in the background where the user can't see it. Wide viewports
   // ignore this and always render both panes side-by-side.
   const [narrowTab, setNarrowTab] = useState<'editor' | 'preview'>('editor');
+  // Track whether the wide layout is active so scroll sync only binds
+  // when both panes are on screen. `useSyncExternalStore` keeps SSR
+  // safe (server snapshot returns the narrow default) and avoids the
+  // "setState in effect" cascading-render lint warning. Mirrors the
+  // pattern `page-content.tsx` uses to subscribe to the URL hash.
+  const isWide = useSyncExternalStore(subscribeWideQuery, getWideQuerySnapshot, getWideQueryServerSnapshot);
+
+  useScrollSync({ editorRef: wideEditorRef, previewRef: widePreviewScrollRef, enabled: isWide });
 
   /**
    * Hand a markdown snippet to the editor's `insertAtCursor` handle —
@@ -87,7 +127,11 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
    * thread the resulting body string back ourselves.
    */
   const insertAtCursor = (snippet: string): void => {
-    const handle = editorRef.current;
+    // Route to whichever editor is currently visible. Both panels are
+    // mounted (forceMount + `md:` toggle), but only one has user
+    // focus + a visible caret — operating the hidden one would drop
+    // the snippet into a `display: none` subtree.
+    const handle = (isWide ? wideEditorRef : narrowEditorRef).current;
     if (!handle) {
       // Defensive fallback: if the editor hasn't mounted yet (should
       // not happen because the button lives inside the same shell),
@@ -99,64 +143,77 @@ function EditorShell({ title, subtitle, body, onChangeBody, onSave, onCancel, is
     handle.insertAtCursor(snippet);
   };
 
+  // Full-viewport flex layout: title-bar at top, attach/save bar at
+  // bottom, editor + preview filling the gap. Parent `EditLayout`
+  // sets `h-[calc(100dvh-3.5rem)] overflow-hidden`, so this column
+  // claims that height and each pane owns its own scroll. The
+  // header/footer don't need `position: sticky` because the parent
+  // doesn't scroll — flex order + `shrink-0` keeps them pinned.
   return (
-    <Card className="max-w-[1600px] mx-auto">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription className="truncate">{subtitle}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      <header className="bg-background z-10 shrink-0 border-b px-4 py-3 md:px-6">
+        <h2 className="text-lg font-semibold leading-tight">{title}</h2>
+        <p className="text-muted-foreground truncate text-sm">{subtitle}</p>
         {feedback && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="mt-3">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>{feedback.kind === 'conflict' ? m['edit.feedback_conflict_title']() : m['edit.feedback_error_title']()}</AlertTitle>
             <AlertDescription>{feedback.message}</AlertDescription>
           </Alert>
         )}
+      </header>
 
-        {/* Wide (md+): 2 columns side-by-side; narrow: Tabs with both
-            panels mounted (Radix `forceMount`) so switching tabs
-            doesn't unmount the CodeMirror view + lose the buffer.
-            `active` is forwarded to the narrow preview so its
-            debounced fetch only fires when the user is looking at it. */}
-        <div className="hidden md:grid md:grid-cols-2 md:gap-4">
-          <EditorPane ref={editorRef} value={body} onChange={onChangeBody} readonly={isSaving} ariaLabel={m['edit.aria_body']()} />
-          <PreviewPane source={body} />
+      {/* Wide (md+): 2 columns side-by-side; narrow: Tabs with both
+          panels mounted (Radix `forceMount`) so switching tabs
+          doesn't unmount the CodeMirror view + lose the buffer.
+          `active` is forwarded to the narrow preview so its
+          debounced fetch only fires when the user is looking at it. */}
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 md:px-6">
+        {/* Both branches are always in the DOM (only `md:` toggles
+            display), so the wide PreviewPane is `active={isWide}` —
+            otherwise on a narrow viewport it would fire its 250ms
+            debounced fetch every keystroke alongside the narrow one.
+            `grid-rows-1` (= `grid-template-rows: minmax(0, 1fr)`) is
+            REQUIRED for `h-full` to propagate to grid items: without
+            it the row defaults to `auto` (content-fit) and the chain
+            `grid-item h-full → .cm-editor h-full → .cm-scroller 100%`
+            collapses to 0, killing CodeMirror's internal scroll. */}
+        <div className="hidden h-full min-h-0 md:grid md:grid-cols-2 md:grid-rows-1 md:gap-4">
+          <EditorPane ref={wideEditorRef} value={body} onChange={onChangeBody} readonly={isSaving} ariaLabel={m['edit.aria_body']()} />
+          <PreviewPane source={body} scrollRef={widePreviewScrollRef} active={isWide} />
         </div>
-        <div className="md:hidden">
-          <Tabs value={narrowTab} onValueChange={(v) => setNarrowTab(v as 'editor' | 'preview')}>
-            <TabsList className="w-full">
-              <TabsTrigger value="editor" className="flex-1">
-                {m['edit.tab_editor']()}
-              </TabsTrigger>
-              <TabsTrigger value="preview" className="flex-1">
-                {m['edit.tab_preview']()}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="editor" forceMount className="data-[state=inactive]:hidden">
-              <EditorPane ref={editorRef} value={body} onChange={onChangeBody} readonly={isSaving} ariaLabel={m['edit.aria_body']()} />
-            </TabsContent>
-            <TabsContent value="preview" forceMount className="data-[state=inactive]:hidden">
-              <PreviewPane source={body} active={narrowTab === 'preview'} />
-            </TabsContent>
-          </Tabs>
-        </div>
+        <Tabs value={narrowTab} onValueChange={(v) => setNarrowTab(v as 'editor' | 'preview')} className="flex h-full min-h-0 flex-col md:hidden">
+          <TabsList className="w-full shrink-0">
+            <TabsTrigger value="editor" className="flex-1">
+              {m['edit.tab_editor']()}
+            </TabsTrigger>
+            <TabsTrigger value="preview" className="flex-1">
+              {m['edit.tab_preview']()}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="editor" forceMount className="mt-2 min-h-0 flex-1 data-[state=inactive]:hidden">
+            <EditorPane ref={narrowEditorRef} value={body} onChange={onChangeBody} readonly={isSaving} ariaLabel={m['edit.aria_body']()} />
+          </TabsContent>
+          <TabsContent value="preview" forceMount className="mt-2 min-h-0 flex-1 data-[state=inactive]:hidden">
+            <PreviewPane source={body} active={!isWide && narrowTab === 'preview'} />
+          </TabsContent>
+        </Tabs>
+      </main>
 
-        <div className="flex items-center justify-between gap-2">
-          <AttachmentInsertButton pageId={pageId} onInsert={insertAtCursor} onError={onAttachError} />
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onCancel} disabled={isSaving} type="button">
-              <X className="h-4 w-4 mr-1" />
-              {m['edit.cancel']()}
-            </Button>
-            <Button variant="default" onClick={onSave} disabled={isSaving} type="button">
-              {isSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-              {m['edit.save']()}
-            </Button>
-          </div>
+      <footer className="bg-background z-10 flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3 md:px-6">
+        <AttachmentInsertButton pageId={pageId} onInsert={insertAtCursor} onError={onAttachError} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={onCancel} disabled={isSaving} type="button">
+            <X className="mr-1 h-4 w-4" />
+            {m['edit.cancel']()}
+          </Button>
+          <Button variant="default" onClick={onSave} disabled={isSaving} type="button">
+            {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+            {m['edit.save']()}
+          </Button>
         </div>
-      </CardContent>
-    </Card>
+      </footer>
+    </div>
   );
 }
 
@@ -175,14 +232,34 @@ const EditorPane = function EditorPane({ value, onChange, readonly, ariaLabel, r
       onChange={onChange}
       readonly={readonly}
       aria-label={ariaLabel}
-      className="min-h-[60vh] rounded-md border border-input bg-background font-mono text-sm focus-within:ring-1 focus-within:ring-ring [&_.cm-editor]:min-h-[60vh] [&_.cm-editor]:outline-none [&_.cm-scroller]:p-3 [&_.cm-content]:min-h-[60vh] [&_.cm-focused]:outline-none"
+      // `[&_.cm-scroller]:scroll-auto` overrides `<html class="scroll-smooth">`
+      // — required for scroll sync, otherwise programmatic scrolls
+      // animate over several frames and re-emit `scroll` events past
+      // the rAF lock window in `useScrollSync`, causing ping-pong sync.
+      className="border-input bg-background focus-within:ring-ring h-full min-h-0 overflow-hidden rounded-md border font-mono text-sm focus-within:ring-1 [&_.cm-editor]:h-full [&_.cm-editor]:outline-none [&_.cm-focused]:outline-none [&_.cm-scroller]:scroll-auto [&_.cm-scroller]:p-3"
     />
   );
 };
 
-function PreviewPane({ source, active = true }: { source: string; active?: boolean }) {
+function PreviewPane({
+  source,
+  active = true,
+  scrollRef,
+}: {
+  source: string;
+  active?: boolean;
+  /**
+   * Forwarded to the scroll container so `useScrollSync` can attach
+   * a `scroll` listener and walk `[data-source-line]` markers
+   * inside it. Only the wide-layout instance supplies a ref; the
+   * narrow Tabs instance leaves it unset.
+   */
+  scrollRef?: React.Ref<HTMLDivElement>;
+}) {
   return (
-    <div className="min-h-[60vh] rounded-md border border-input bg-background p-4 overflow-auto">
+    // `scroll-auto` overrides the global `<html class="scroll-smooth">`
+    // for the same reason as the editor side — see the EditorPane note.
+    <div ref={scrollRef} className="border-input bg-background h-full min-h-0 scroll-auto overflow-auto rounded-md border p-4">
       <MarkdownPreview source={source} active={active} />
     </div>
   );
@@ -241,23 +318,29 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   };
 
   if (isLoading) {
-    return <LoadingSpinner message={m['edit.loading_page']()} />;
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <LoadingSpinner message={m['edit.loading_page']()} />
+      </div>
+    );
   }
 
   if (isError || !page) {
     return (
-      <Alert variant="destructive" className="max-w-4xl mx-auto">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>{m['common.error']()}</AlertTitle>
-        <AlertDescription>
-          {m['edit.failed_to_load_body']({ message: error?.message ?? '' })}
-          <div className="mt-3">
-            <Button variant="outline" size="sm" onClick={() => router.back()}>
-              {m['common.go_back']()}
-            </Button>
-          </div>
-        </AlertDescription>
-      </Alert>
+      <div className="flex flex-1 items-center justify-center p-4">
+        <Alert variant="destructive" className="w-full max-w-4xl">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>{m['common.error']()}</AlertTitle>
+          <AlertDescription>
+            {m['edit.failed_to_load_body']({ message: error?.message ?? '' })}
+            <div className="mt-3">
+              <Button variant="outline" size="sm" onClick={() => router.back()}>
+                {m['common.go_back']()}
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
