@@ -2,23 +2,197 @@
 @import 'fumadocs-ui/style.css';
 
 /*
- * Crowi brand overrides on top of the default Fumadocs (neutral) theme.
- * Source colors from packages/api/resource/css/_theme.scss:
- * - Primary: #43676b (teal green)  → oklch(0.465 0.04 192)
- * - Header:  #263a3c (dark teal)
+ * Crowi crowi.wiki — "Editorial Ember" theme.
  *
- * Fumadocs uses `--color-fd-*` tokens; we override the ones that
- * touch brand identity and leave everything else (sidebar / muted
- * / borders) on the neutral baseline.
+ * Concept: a smoldering relaunch announcement. The legacy teal acts
+ * as structural framing; a warm rose ember (echoing the neon
+ * "Reignite" mark) is the accent. Light and dark are designed as
+ * two cuts of the same magazine — light is warm cream, dark is
+ * deep teal-black.
+ *
+ * Color tokens are exposed as --cw-* variables so the page markup
+ * can stay theme-agnostic with `var(--cw-…)` inside Tailwind
+ * arbitrary values.
  */
+
 @theme {
-  --color-fd-primary: oklch(0.465 0.04 192);
-  --color-fd-primary-foreground: oklch(0.985 0 0);
-  --color-fd-ring: oklch(0.465 0.04 192);
+  /* ---- Brand-locked tokens (independent of mode) ---- */
+  --color-crowi-teal: oklch(0.46 0.04 192);          /* legacy #43676b */
+  --color-crowi-teal-deep: oklch(0.28 0.025 197);    /* legacy #263a3c */
+  --color-crowi-ember: oklch(0.74 0.165 18);
+  --color-crowi-ember-soft: oklch(0.86 0.075 30);
+
+  /* Fumadocs primary follows the ember accent. */
+  --color-fd-primary: var(--color-crowi-ember);
+  --color-fd-primary-foreground: oklch(0.18 0.02 197);
+  --color-fd-ring: var(--color-crowi-ember);
+
+  /* ---- Font stacks (system only) ---- */
+  --font-body: 'Helvetica Neue', 'Hiragino Kaku Gothic ProN', 'Yu Gothic Medium', 'Meiryo', sans-serif;
+  --font-mono: 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+}
+
+/* ---- Light theme (default) ---------------------------------------- */
+:root {
+  --cw-bg:           oklch(0.985 0.008 80);          /* warm paper */
+  --cw-bg-strip:    oklch(0.96 0.012 80 / 0.75);     /* slim header/footer band */
+  --cw-surface:     oklch(0.96 0.014 80);            /* subtle panels */
+  --cw-surface-hover: oklch(0.94 0.018 30 / 0.5);
+  --cw-fg:           oklch(0.22 0.02 197);
+  --cw-fg-soft:     oklch(0.34 0.018 197);
+  --cw-muted:       oklch(0.48 0.012 200);
+  --cw-line:        oklch(0.46 0.04 192 / 0.22);
+  --cw-line-strong: oklch(0.46 0.04 192 / 0.38);
+  --cw-teal:        oklch(0.46 0.04 192);
+  --cw-ember:       oklch(0.62 0.18 22);             /* slightly darker for AA on paper */
+  --cw-ember-soft:  oklch(0.55 0.16 30);
+  --cw-on-ember:    oklch(0.99 0.012 80);
+  --cw-ember-line:  oklch(0.62 0.18 22 / 0.55);
+  --cw-grain-mix:   multiply;
+  --cw-grain-opacity: 0.10;
+}
+
+/* ---- Dark theme --------------------------------------------------- */
+.dark {
+  --cw-bg:           #0a1316;
+  --cw-bg-strip:    oklch(0.18 0.018 197 / 0.5);
+  --cw-surface:     oklch(0.18 0.018 197 / 0.4);
+  --cw-surface-hover: oklch(0.22 0.02 197 / 0.55);
+  --cw-fg:           oklch(0.96 0.012 80);
+  --cw-fg-soft:     oklch(0.86 0.012 80);
+  --cw-muted:       oklch(0.66 0.012 200);
+  --cw-line:        oklch(0.46 0.04 192 / 0.25);
+  --cw-line-strong: oklch(0.46 0.04 192 / 0.5);
+  --cw-teal:        oklch(0.55 0.05 192);
+  --cw-ember:       oklch(0.74 0.165 18);
+  --cw-ember-soft:  oklch(0.86 0.075 30);
+  --cw-on-ember:    oklch(0.18 0.02 197);
+  --cw-ember-line:  oklch(0.74 0.165 18 / 0.5);
+  --cw-grain-mix:   overlay;
+  --cw-grain-opacity: 0.18;
 }
 
 @layer base {
+  html,
   body {
-    font-family: 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+    background: var(--cw-bg);
   }
+  body {
+    font-family: var(--font-body);
+    color: var(--cw-fg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: oklch(0.74 0.165 18 / 0.35);
+    color: var(--cw-fg);
+  }
+}
+
+@layer utilities {
+  /* Small uppercased monospace label used for status / chapter marks. */
+  .font-mono-label {
+    font-family: var(--font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+
+  /* Hairline rule that matches the editorial divider style. */
+  .rule-hair {
+    background: linear-gradient(to right, transparent, var(--cw-line-strong), transparent);
+    height: 1px;
+  }
+
+  /* Fine film-grain overlay. */
+  .grain::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mix-blend-mode: var(--cw-grain-mix);
+    opacity: var(--cw-grain-opacity);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 0.88 0 0 0 0 0.84 0 0 0 0.35 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  /* Ember radial glows — gentler in light mode, dramatic in dark. */
+  .ember-glow {
+    background:
+      radial-gradient(60% 50% at 78% 28%, oklch(0.74 0.165 18 / 0.18), transparent 60%),
+      radial-gradient(45% 40% at 12% 12%, oklch(0.74 0.165 18 / 0.10), transparent 70%),
+      radial-gradient(70% 60% at 50% 110%, oklch(0.46 0.04 192 / 0.12), transparent 70%);
+    animation: ember-breathe 9s ease-in-out infinite;
+  }
+  .dark .ember-glow {
+    background:
+      radial-gradient(60% 50% at 78% 28%, oklch(0.74 0.165 18 / 0.32), transparent 60%),
+      radial-gradient(45% 40% at 12% 12%, oklch(0.74 0.165 18 / 0.16), transparent 70%),
+      radial-gradient(70% 60% at 50% 110%, oklch(0.4 0.05 195 / 0.55), transparent 70%);
+  }
+
+  @keyframes ember-breathe {
+    0%, 100% { opacity: 0.85; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.04); }
+  }
+
+  /* Slow horizontal marquee for the tagline ribbon. */
+  .marquee-track {
+    animation: marquee 38s linear infinite;
+  }
+  @keyframes marquee {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(-50%, 0, 0); }
+  }
+
+  /* Staggered reveal used for hero copy on first paint. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    animation: reveal 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  .reveal-1 { animation-delay: 0.05s; }
+  .reveal-2 { animation-delay: 0.18s; }
+  .reveal-3 { animation-delay: 0.32s; }
+  .reveal-4 { animation-delay: 0.48s; }
+  .reveal-5 { animation-delay: 0.62s; }
+  @keyframes reveal {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Subtle pulsing dot for the "live" status indicator. */
+  .pulse-dot {
+    position: relative;
+  }
+  .pulse-dot::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.4;
+    animation: pulse 2.2s ease-out infinite;
+  }
+  @keyframes pulse {
+    0%   { transform: scale(0.6); opacity: 0.55; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+
+  /* Halo behind the Reignite glyph — softer on light bg. */
+  .reignite-halo {
+    background:
+      radial-gradient(50% 50% at 50% 50%, oklch(0.74 0.165 18 / 0.25), transparent 65%);
+    filter: blur(30px);
+  }
+  .dark .reignite-halo {
+    background:
+      radial-gradient(50% 50% at 50% 50%, oklch(0.74 0.165 18 / 0.55), transparent 65%);
+  }
+}
+
+/* Pull the Fumadocs nav into the same palette in both modes. */
+#nd-nav {
+  border-color: var(--cw-line) !important;
+  backdrop-filter: blur(8px);
+  background: var(--cw-bg-strip) !important;
 }
