@@ -18,9 +18,9 @@ import events from 'src/events';
 import middlewares from 'src/middlewares';
 import controllers from 'src/controllers';
 import routes from '../routes';
+import { attachCollabServer, type AttachedCollab } from 'src/collab/attach';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
-import { createPageEventPubSub, type PageEventPubSub } from '../service/page-event-pubsub';
 import { hasSlackConfig } from '../models/config';
 import mailer from 'src/util/mailer';
 import slack from 'src/util/slack';
@@ -121,13 +121,13 @@ class Crowi {
   renderer: Renderer | null = null;
 
   /**
-   * Cross-process pageEvent fan-out (RFC-0003 Phase 5). Built after
-   * `setupRenderer` so the api-side listeners (render-cache /
-   * mention-dispatch) are already registered when remote `update`
-   * events start arriving. `null` outside of `init()` (CLI mode boots
-   * via `initForCli` and skips the pub/sub).
+   * Hocuspocus engine attach handle (RFC-0003 Phase 9 same-process).
+   * Built lazily in `start()` after the http.Server is listening so
+   * the `'upgrade'` event can be wired before any client connects.
+   * `null` outside of the running server (= `init()` finished but
+   * `start()` hasn't run yet, or after `shutdown()`).
    */
-  pageEventPubSub: PageEventPubSub | null = null;
+  collabAttachment: AttachedCollab | null = null;
 
   initialized = false;
 
@@ -175,16 +175,11 @@ class Crowi {
     // registered. External plugins append; they cannot insert before
     // core in v2.1 phase 2.
     this.setupRenderer();
-    // RFC-0003 Phase 5 — start the cross-process pageEvent subscriber
-    // **after** `setupRenderer` (renders' invalidation listener +
-    // mention-dispatch are wired in setupRenderer) so a remote
-    // `update` message that arrives during boot still reaches them.
-    // Plugins (next step) are not currently registering page listeners
-    // (verified: grep `crowi.event('Page')` in packages/plugin-* = 0
-    // hits at Phase 5 plan time), so booting pub/sub before
-    // `setupPlugins` is safe. Move below `setupPlugins` if a future
-    // plugin starts subscribing.
-    await this.setupPageEventPubSub();
+    // RFC-0003 Phase 9 (same-process attach): the cross-process
+    // pageEvent subscriber that used to fan collab saves into the
+    // api event loop is gone — the embedded Hocuspocus engine (see
+    // `src/collab/attach.ts`) calls `crowi.event('Page').emit(...)`
+    // directly after a save flow completes.
     // Plugins must boot AFTER config/models are ready (so PluginContext
     // can read config and access models) but BEFORE the legacy
     // mailer / slack initialisers — those are migrating to
@@ -241,30 +236,6 @@ class Crowi {
       await this.mongoose.disconnect();
       this.mongoose = null;
     }
-  }
-
-  /**
-   * RFC-0003 Phase 5 — build the cross-process pageEvent subscriber
-   * and (when REDIS_URL is set) subscribe to `crowi:pageEvent:*`. A
-   * single hop: the @crowi/collab process publishes after a checkpoint
-   * save → this subscriber re-emits on the local `pageEvent('Page')`
-   * EventEmitter → api listeners (render-cache / mention-dispatch /
-   * search index) react as if the save had happened in-process.
-   *
-   * No-op + warn when Redis isn't configured (= single-instance dev
-   * environment); explicit reset on each `init()` so long-lived test
-   * processes (Crowi.reload) get a fresh subscriber.
-   */
-  async setupPageEventPubSub() {
-    if (this.pageEventPubSub) {
-      try {
-        await this.pageEventPubSub.shutdown();
-      } catch {
-        // best-effort — boot path shouldn't be blocked by stale handle
-      }
-    }
-    this.pageEventPubSub = createPageEventPubSub(this);
-    await this.pageEventPubSub.setup();
   }
 
   setupRenderer() {
@@ -567,26 +538,41 @@ class Crowi {
     return this.tokens;
   }
 
-  start = () => {
+  start = async (): Promise<any> => {
     if (this.app === null) {
       throw new Error('Must call init() before start().');
     }
 
-    const server = http.createServer(this.app).listen(this.port, () => {
-      console.log('[' + this.node_env + '] Express server listening on port ' + this.port);
-    });
-    /*
-    const io = socketIO(server, { transports: ['websocket'] })
-    if (this.redisOpts) {
-      io.adapter(socketIORedis(this.redisOpts))
-      debug('Using socket.io-redis')
-    }
-    io.sockets.on('connection', (socket) => {
-      debug('Websocket CONNECTED, socket.id:', socket.id)
-    })
+    const server = http.createServer(this.app);
 
-    this.io = io
-    */
+    // RFC-0003 Phase 9 — attach Hocuspocus to the existing http.Server
+    // **before** `listen()` so the `'upgrade'` event handler is wired
+    // when the first WebSocket client races the listen callback. The
+    // attach is async because it builds the editor-cap counter
+    // (Redis SCARD round-trip when configured); we await it here so
+    // the boot sequence stays serial and `start()` resolves only
+    // when the api is fully ready to accept WebSocket upgrades.
+    this.collabAttachment = await attachCollabServer(server, this);
+
+    // Promisify `server.listen` so `start()` resolves only after the
+    // socket is actually bound. Callers (the bin entry, smoke tests)
+    // can then `await crowi.start()` and assume the api accepts
+    // connections — without this the previous async chain returned
+    // before listen() finished its background bind.
+    await new Promise<void>((resolveListen, rejectListen) => {
+      const onError = (err: Error) => {
+        server.off('listening', onListening);
+        rejectListen(err);
+      };
+      const onListening = () => {
+        server.off('error', onError);
+        console.log('[' + this.node_env + '] Express server listening on port ' + this.port);
+        resolveListen();
+      };
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen(this.port);
+    });
 
     return this.app;
   };
