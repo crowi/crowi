@@ -7,6 +7,7 @@ import { registerModels } from './models';
 import { createCollabServer } from './server';
 import { getWsTokenUtil } from './ws-token';
 import { createCollabPageEventPublisher } from './page-event-pubsub';
+import { createCollabEditorCapCounter, parseCapEnv } from './editor-cap';
 
 const debug = Debug('crowi:collab:boot');
 
@@ -54,6 +55,16 @@ export async function startCollabServer(): Promise<void> {
     redisRejectUnauthorized: process.env.REDIS_REJECT_UNAUTHORIZED !== '0',
   });
 
+  // Phase 6 — Redis-backed editor cap counter (defence-in-depth on
+  // top of the wsToken's pre-issued readonly bit). Same fail-open
+  // posture as the pub/sub publisher: missing REDIS_URL or connect
+  // failure → no-op counter so connections still flow.
+  const editorCapCounter = await createCollabEditorCapCounter({
+    redisUrl: process.env.REDIS_TLS_URL ?? process.env.REDIS_URL ?? null,
+    redisRejectUnauthorized: process.env.REDIS_REJECT_UNAUTHORIZED !== '0',
+    maxEditorsPerPage: parseCapEnv(process.env.COLLAB_MAX_EDITORS_PER_PAGE),
+  });
+
   const server = createCollabServer({
     models,
     wsTokenUtil,
@@ -61,6 +72,7 @@ export async function startCollabServer(): Promise<void> {
     address: env.address,
     quiet: env.quiet,
     pageEventPublisher,
+    editorCapCounter,
   });
 
   await server.listen();
@@ -75,6 +87,14 @@ export async function startCollabServer(): Promise<void> {
       await server.destroy();
     } catch (err) {
       console.error('[crowi:collab] error during server.destroy():', err);
+    }
+    try {
+      // Disconnect the editor cap counter FIRST. SADD / SREM are
+      // short request/response pairs — no in-flight flushing to
+      // worry about — so this is the lowest-cost teardown step.
+      await editorCapCounter.disconnect();
+    } catch (err) {
+      console.error('[crowi:collab] error during editorCapCounter.disconnect():', err);
     }
     try {
       // Disconnect the page-event publisher BEFORE mongoose so any

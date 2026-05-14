@@ -1,7 +1,7 @@
 import Debug from 'debug';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient, type RedisClientType } from 'redis';
-import { resolveApiDistFile } from './api-dist';
+import { buildCollabRedisOpts } from './redis-opts';
 
 const debug = Debug('crowi:collab:page-event-pubsub');
 
@@ -58,13 +58,9 @@ export interface CreateCollabPageEventPublisherOptions {
   redisRejectUnauthorized?: boolean;
 }
 
-// `buildRedisOpts` lives in `@crowi/api/dist/util/redis-opts.js` so
-// api and collab negotiate the same TLS / port / password semantics
-// against the same Redis instance. Pulled via the established
-// `api-dist.ts` resolver (used by ws-token / collab-cap / models).
-interface ApiRedisOptsModule {
-  buildRedisOpts(redisUrl: string | null, rejectUnauthorized: boolean): Record<string, unknown> | null;
-}
+// `buildCollabRedisOpts` proxies to `@crowi/api/dist/util/redis-opts.js`
+// so api and collab negotiate the same TLS / port / password semantics
+// — see `./redis-opts.ts` for the api-dist resolution + cache.
 
 const makeNoopPublisher = (instanceId: string): CollabPageEventPublisher => ({
   instanceId,
@@ -99,10 +95,7 @@ export async function createCollabPageEventPublisher(opts: CreateCollabPageEvent
     return makeNoopPublisher(instanceId);
   }
 
-  const rejectUnauthorized = opts.redisRejectUnauthorized ?? true;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const apiRedisOpts = require(resolveApiDistFile('util/redis-opts.js')) as ApiRedisOptsModule;
-  const redisOpts = apiRedisOpts.buildRedisOpts(opts.redisUrl, rejectUnauthorized);
+  const redisOpts = buildCollabRedisOpts(opts.redisUrl, opts.redisRejectUnauthorized ?? true);
 
   let client: RedisClientType;
   try {

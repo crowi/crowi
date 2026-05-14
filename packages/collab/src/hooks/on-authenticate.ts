@@ -4,6 +4,7 @@ import type { CollabModels } from '../models';
 import type { CollabContext } from '../types';
 import type { CollabWsTokenUtil } from '../ws-token';
 import { checkEditorCap as defaultCheckEditorCap } from '../collab-cap';
+import { type EditorCapCounter, noopEditorCapCounter } from '../editor-cap';
 
 const debug = Debug('crowi:collab:auth');
 
@@ -11,12 +12,21 @@ export interface OnAuthenticateDeps {
   wsTokenUtil: CollabWsTokenUtil;
   models: Pick<CollabModels, 'Page'>;
   /**
-   * Defaults to the in-process stub (`always { readonly: false }`).
-   * The Phase 6 Redis implementation can replace this for the
-   * defence-in-depth re-check that happens **after** the wsToken's
-   * readonly bit is honoured.
+   * Defaults to the api-side cap check (currently `peek`-based via
+   * Redis; falls back to readonly:false when Redis is unconfigured).
+   * Phase 6 introduces `editorCapCounter` for the *write-side*
+   * defence-in-depth — `checkEditorCap` is kept here so the contract
+   * with `routes/ts-rest/page-collab.ts` (api-side) stays symmetric.
    */
   checkEditorCap?: typeof defaultCheckEditorCap;
+  /**
+   * Phase 6 — Redis-backed cap counter used to actually SADD an entry
+   * on the websocket handshake (post-token-verify, post-page-exists).
+   * Defaults to a no-op counter so tests that don't care about cap
+   * keep working without a Redis fixture; production injects the real
+   * counter via `startCollabServer`.
+   */
+  editorCapCounter?: EditorCapCounter;
 }
 
 /**
@@ -37,13 +47,18 @@ export interface OnAuthenticateDeps {
  *   4. Page exists — confirms the pageId isn't pointing at a deleted /
  *      never-existed document. We **do not** re-run the full
  *      `loadGrantedPage` permission re-check here: the wsToken is 5
- *      minutes long and was already gated by the api process. Phase 6
- *      reliability will harden this further if operators want belt-
- *      and-braces.
- *   5. cap stub — Phase 2's `checkEditorCap` is the stub that always
- *      returns `{ readonly: false }`; Phase 6's Redis implementation
- *      slots in here. The result `OR`s with the token's readonly bit
- *      so a cap-driven readonly never gets weakened.
+ *      minutes long and was already gated by the api process.
+ *   5. cap peek — the api-side `checkEditorCap` (Phase 6 promoted to
+ *      a Redis `SCARD` read). The result `OR`s with the token's
+ *      readonly bit so a cap-driven readonly never gets weakened.
+ *   6. **Phase 6 acquire** — the *write*-side cap defence. When the
+ *      token plus peek say "editable", we SADD `<userId>:<socketId>`
+ *      into the Redis set and re-check the post-SADD count. A race
+ *      (two clients passing peek simultaneously when only one slot
+ *      remained) is resolved here: the loser observes acquired:false
+ *      and is promoted to readonly. Readonly contexts skip the
+ *      acquire entirely so they don't take a slot away from a real
+ *      editor.
  *
  * Failure: throw with a generic message so the client sees
  * 'permission-denied' but never the precise reason (avoids token /
@@ -51,9 +66,10 @@ export interface OnAuthenticateDeps {
  */
 export function createOnAuthenticate(deps: OnAuthenticateDeps) {
   const checkCap = deps.checkEditorCap ?? defaultCheckEditorCap;
+  const editorCapCounter = deps.editorCapCounter ?? noopEditorCapCounter;
 
   return async (data: onAuthenticatePayload): Promise<CollabContext> => {
-    const { documentName, token, requestParameters } = data;
+    const { documentName, token, requestParameters, socketId } = data;
     // Hocuspocus passes the connection token (`HocuspocusProvider({
     // token })`) into `data.token` directly, but some older providers
     // surface it as a query parameter — fall back so the AC's
@@ -83,7 +99,21 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
     }
 
     const cap = await checkCap(claims.pageId);
-    const readonly = Boolean(claims.readonly) || Boolean(cap.readonly);
+    let readonly = Boolean(claims.readonly) || Boolean(cap.readonly);
+
+    // Phase 6 — only attempt the write-side cap acquire when we still
+    // think this connection is editable. Readonly connections (token
+    // bit set, or peek already said cap-reached) must NOT take a slot
+    // — they live-subscribe but never write.
+    if (!readonly) {
+      const result = await editorCapCounter.tryAcquire(claims.pageId, claims.userId, socketId);
+      if (!result.acquired) {
+        debug('cap-exceeded on acquire (count=%d cap=%d) — promoting to readonly', result.count, result.cap);
+        readonly = true;
+      } else {
+        debug('cap acquired page=%s user=%s socket=%s count=%d', claims.pageId, claims.userId, socketId, result.count);
+      }
+    }
 
     debug('accept: user=%s page=%s readonly=%s', claims.userId, claims.pageId, readonly);
 

@@ -9,11 +9,13 @@ import { createOnStoreDocument } from './hooks/on-store-document';
 import { createOnChange } from './hooks/on-change';
 import { createOnStateless } from './hooks/on-stateless';
 import { createOnAwarenessUpdate } from './hooks/on-awareness-update';
+import { createOnDisconnect } from './hooks/on-disconnect';
 import { createCompactor } from './compaction';
 import { createContributorsTracker, type ContributorsTracker } from './contributors';
 import { createSaveFlow, type SaveFlow } from './save-flow';
 import { type CollabPageEventPublisher } from './page-event-pubsub';
 import { markEditing } from './presence';
+import { type EditorCapCounter, noopEditorCapCounter } from './editor-cap';
 
 const debug = Debug('crowi:collab:server');
 
@@ -73,6 +75,15 @@ export interface CreateCollabServerOptions {
    * the server build one from `models` + tracker + publisher.
    */
   saveFlow?: SaveFlow;
+  /**
+   * Phase 6: Redis-backed editor cap counter. Acquires a slot on
+   * `onAuthenticate` (write-side cap defence-in-depth) and releases
+   * on `onDisconnect`. Defaults to a no-op counter so tests and
+   * single-instance dev deployments work without Redis; production
+   * boot path (`startCollabServer`) injects the real counter built
+   * via `createCollabEditorCapCounter`.
+   */
+  editorCapCounter?: EditorCapCounter;
 }
 
 /**
@@ -97,6 +108,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
   const { models, wsTokenUtil, port, address, quiet, debounce, maxDebounce, checkEditorCap } = opts;
   const pageEventPublisher = opts.pageEventPublisher ?? noopPageEventPublisher;
   const contributorsTracker = opts.contributorsTracker ?? createContributorsTracker();
+  const editorCapCounter = opts.editorCapCounter ?? noopEditorCapCounter;
   const saveFlow =
     opts.saveFlow ??
     createSaveFlow({
@@ -113,7 +125,9 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
     wsTokenUtil,
     models: { Page: models.Page },
     checkEditorCap,
+    editorCapCounter,
   });
+  const onDisconnect = createOnDisconnect({ editorCapCounter });
   /**
    * Wrap `onAuthenticate` so we can fire-and-forget the presence
    * stub once authentication succeeds. `markEditing` is a no-op stub
@@ -176,6 +190,9 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
     },
     async onAwarenessUpdate(payload) {
       await onAwarenessUpdate(payload);
+    },
+    async onDisconnect(payload) {
+      await onDisconnect(payload);
     },
   });
 
