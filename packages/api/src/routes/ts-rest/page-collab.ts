@@ -54,7 +54,7 @@ export default (crowi: Crowi, _app: Express) => {
       if ('error' in loaded) return loaded.error;
 
       try {
-        const { readonly } = await checkEditorCap(pageId);
+        const { readonly } = await checkEditorCap(crowi, pageId);
         const { token, expiresAt } = wsTokenUtil.signWsToken({
           userId: user._id.toString(),
           pageId,

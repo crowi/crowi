@@ -70,28 +70,28 @@ describe('createEditorCapCounter', () => {
 
   describe('no Redis configured (fail-open)', () => {
     test('peek always returns count=0 and the configured cap', async () => {
-      const counter = await createEditorCapCounter({ redisOpts: null, maxEditorsPerPage: 7 });
+      const counter = await createEditorCapCounter({ redisClient: null, maxEditorsPerPage: 7 });
       await expect(counter.peek('any-page')).resolves.toEqual({ count: 0, cap: 7 });
     });
 
     test('tryAcquire always succeeds (cap effectively disabled)', async () => {
-      const counter = await createEditorCapCounter({ redisOpts: null });
+      const counter = await createEditorCapCounter({ redisClient: null });
       const result = await counter.tryAcquire('p1', 'u1', 's1');
       expect(result.acquired).toBe(true);
     });
 
     test('release is a silent no-op', async () => {
-      const counter = await createEditorCapCounter({ redisOpts: null });
+      const counter = await createEditorCapCounter({ redisClient: null });
       await expect(counter.release('p1', 'u1', 's1')).resolves.toBeUndefined();
     });
 
     test('disconnect is a silent no-op even when no client was ever opened', async () => {
-      const counter = await createEditorCapCounter({ redisOpts: null });
+      const counter = await createEditorCapCounter({ redisClient: null });
       await expect(counter.disconnect()).resolves.toBeUndefined();
     });
 
     test('maxEditorsPerPage defaults to 20 when not provided', async () => {
-      const counter = await createEditorCapCounter({ redisOpts: null });
+      const counter = await createEditorCapCounter({ redisClient: null });
       expect(counter.maxEditorsPerPage).toBe(20);
     });
   });

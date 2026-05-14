@@ -1,5 +1,4 @@
 import Debug from 'debug';
-import { createClient, type RedisClientType } from 'redis';
 
 const debug = Debug('crowi:util:editor-cap-counter');
 
@@ -7,9 +6,9 @@ const debug = Debug('crowi:util:editor-cap-counter');
  * RFC-0003 Phase 6 — Redis-backed editor cap counter.
  *
  * Tracks the set of currently-connected editors per page so the
- * api process (wsToken issuance) and the collab process (Hocuspocus
- * `onAuthenticate` defence-in-depth) agree on a single cluster-wide
- * count.
+ * wsToken issuance path (api HTTP handler) and the WebSocket
+ * `onAuthenticate` hook (in-process Hocuspocus engine; see
+ * `src/collab/attach.ts`) agree on a single cluster-wide count.
  *
  * Wire-level design:
  *
@@ -42,14 +41,18 @@ const debug = Debug('crowi:util:editor-cap-counter');
  *
  * Fail-open posture:
  *
- *   - No `redisOpts` (REDIS_URL unset) → return a no-op counter:
- *     `peek` is always 0, `tryAcquire` is always `{acquired: true}`,
- *     `release` is a no-op. This lets a single-instance deployment
- *     run without Redis (cap simply disabled — the underlying spec
- *     intent is a soft limit, not a fail-closed gate).
- *   - Connect failure on boot → warn + degrade to the same no-op
- *     counter. The collab side gates its real counter behind the
- *     same fallback so a Redis outage never blocks new editors.
+ *   - `redisClient` null/undefined (= REDIS_URL unset) → return a
+ *     no-op counter: `peek` is always 0, `tryAcquire` is always
+ *     `{acquired: true}`, `release` is a no-op. The cap is a soft
+ *     limit by design.
+ *
+ * Phase 9 (same-process attach) signature change: the previous
+ * `redisOpts` argument is replaced with a pre-built `redisClient`
+ * (typed structurally as `MinimalRedisClient`). The api boot opens
+ * exactly one Redis client per process (`crowi.redis`); embedded
+ * collab now shares it instead of opening a second connection — see
+ * `.feature-state/specs/feature-collab-embed-into-api.md` §"Redis
+ * client 共有".
  */
 
 const KEY_PREFIX = 'crowi:collab:editors:';
@@ -64,8 +67,7 @@ const entryFor = (userId: string, socketId: string): string => `${userId}:${sock
  * Parse `COLLAB_MAX_EDITORS_PER_PAGE` (or any equivalent env string)
  * defensively. Empty / non-numeric / non-positive values fall back to
  * `DEFAULT_MAX_EDITORS` so callers never have to remember the
- * "isFinite && > 0" dance. Exported for `collab-cap.ts` /
- * `collab/server.ts` to share the same parsing rule.
+ * "isFinite && > 0" dance.
  */
 export function parseCapEnv(value: string | undefined): number {
   const n = parseInt(value ?? '', 10);
@@ -103,28 +105,31 @@ export interface EditorCapCounter {
    */
   release(pageId: string, userId: string, socketId: string): Promise<void>;
   /**
-   * Disconnect the Redis client. Idempotent — safe to call from a
-   * SIGTERM handler that also disconnects other Redis clients.
+   * Disconnect handler. Embedded collab shares `crowi.redis` so the
+   * disconnect call is a no-op (api owns the client lifecycle). The
+   * method stays on the interface so a future Phase 9 multi-instance
+   * extension that owns its own client can implement teardown
+   * symmetrically.
    */
   disconnect(): Promise<void>;
 }
 
 export interface CreateEditorCapCounterOptions {
   /**
-   * Node-redis v4 client options (`socket`/`password` shape). Build
-   * from `REDIS_URL` via `buildRedisOpts` so api + collab agree on
-   * TLS / port / password semantics. Pass `null` to force a no-op
-   * counter (REDIS_URL not configured).
+   * Pre-built node-redis v4 client (typed structurally as
+   * `MinimalRedisClient`). Pass `crowi.redis` from the api boot.
+   * `null` / `undefined` → return a no-op counter (Redis not
+   * configured; cap disabled).
    */
-  redisOpts?: Record<string, unknown> | null;
+  redisClient?: MinimalRedisClient | null;
   /** Override the default 20-editor cap. */
   maxEditorsPerPage?: number;
   /**
    * Test seam — inject a pre-built `RedisClientType`-shaped object.
-   * The util's unit tests use this to avoid spinning up real Redis
-   * (mirroring the `service/page-event-pubsub.test.ts` posture of
-   * verifying behaviour against the public surface rather than the
-   * client lifecycle, which is covered by `service/config.ts`).
+   * Kept distinct from `redisClient` so unit tests can drive a fake
+   * without the api passing a real client (the production wiring
+   * always uses `redisClient`; tests that mock the fake go through
+   * this seam).
    */
   __clientForTest?: MinimalRedisClient;
 }
@@ -161,10 +166,10 @@ const makeNoopCounter = (maxEditorsPerPage: number): EditorCapCounter => ({
 });
 
 /**
- * Build an editor-cap counter against Redis. Returns a no-op counter
- * when `redisOpts` is null/undefined or when the initial `connect()`
- * fails — the API surface is identical so callers don't have to
- * branch.
+ * Build an editor-cap counter against a shared Redis client.
+ *
+ * Returns a no-op counter when `redisClient` is null/undefined — the
+ * API surface is identical so callers don't have to branch.
  */
 export async function createEditorCapCounter(opts: CreateEditorCapCounterOptions = {}): Promise<EditorCapCounter> {
   const maxEditorsPerPage = opts.maxEditorsPerPage ?? DEFAULT_MAX_EDITORS;
@@ -173,31 +178,13 @@ export async function createEditorCapCounter(opts: CreateEditorCapCounterOptions
     return wrapClient(opts.__clientForTest, maxEditorsPerPage);
   }
 
-  if (!opts.redisOpts) {
-    debug('REDIS_URL not configured — editor cap counter disabled (fail-open)');
-    return makeNoopCounter(maxEditorsPerPage);
-  }
-
-  let client: RedisClientType;
-  try {
-    client = createClient(opts.redisOpts);
-    await client.connect();
-  } catch (err) {
-    console.warn('[crowi:editor-cap-counter] Redis connect failed — editor cap disabled (fail-open).', (err as Error).message);
+  if (!opts.redisClient) {
+    debug('redis client not provided — editor cap counter disabled (fail-open)');
     return makeNoopCounter(maxEditorsPerPage);
   }
 
   debug('editor cap counter ready (max=%d, key prefix=%s)', maxEditorsPerPage, KEY_PREFIX);
-
-  // Surface but never crash on background client errors. `connect`
-  // succeeded so the client is in a usable state; emitter errors that
-  // arrive after boot (transient TLS / partition) should warn and let
-  // the next op rediscover.
-  client.on('error', (err: Error) => {
-    console.warn('[crowi:editor-cap-counter] redis client error:', err.message);
-  });
-
-  return wrapClient(client, maxEditorsPerPage);
+  return wrapClient(opts.redisClient, maxEditorsPerPage);
 }
 
 function wrapClient(client: MinimalRedisClient, maxEditorsPerPage: number): EditorCapCounter {
@@ -250,13 +237,12 @@ function wrapClient(client: MinimalRedisClient, maxEditorsPerPage: number): Edit
       }
     },
     async disconnect() {
-      try {
-        if (client.isOpen) {
-          await client.disconnect();
-        }
-      } catch (err) {
-        debug('disconnect error: %s', (err as Error).message);
-      }
+      // Shared client lifecycle is owned by Crowi (api boot). The
+      // counter doesn't `disconnect()` the underlying client here —
+      // doing so would tear down session storage / config pub-sub /
+      // page-event pubsub too. Phase 9 multi-instance extensions
+      // that *do* own a private client can override this.
+      debug('disconnect() noop — shared client lifetime owned by Crowi');
     },
   };
 }
