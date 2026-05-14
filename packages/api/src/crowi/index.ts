@@ -3,8 +3,8 @@ import path, { sep } from 'path';
 import mongoose from 'mongoose';
 import Tokens from 'csrf';
 import { createClient } from 'redis';
-import url from 'url';
 import http from 'http';
+import { buildRedisOpts } from 'src/util/redis-opts';
 // import socketIO from 'socket.io'
 // import socketIORedis from 'socket.io-redis'
 import RedisStore from 'connect-redis';
@@ -20,6 +20,7 @@ import controllers from 'src/controllers';
 import routes from '../routes';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
+import { createPageEventPubSub, type PageEventPubSub } from '../service/page-event-pubsub';
 import { hasSlackConfig } from '../models/config';
 import mailer from 'src/util/mailer';
 import slack from 'src/util/slack';
@@ -119,6 +120,15 @@ class Crowi {
    */
   renderer: Renderer | null = null;
 
+  /**
+   * Cross-process pageEvent fan-out (RFC-0003 Phase 5). Built after
+   * `setupRenderer` so the api-side listeners (render-cache /
+   * mention-dispatch) are already registered when remote `update`
+   * events start arriving. `null` outside of `init()` (CLI mode boots
+   * via `initForCli` and skips the pub/sub).
+   */
+  pageEventPubSub: PageEventPubSub | null = null;
+
   initialized = false;
 
   constructor(rootdir: string, env: typeof process.env) {
@@ -165,6 +175,16 @@ class Crowi {
     // registered. External plugins append; they cannot insert before
     // core in v2.1 phase 2.
     this.setupRenderer();
+    // RFC-0003 Phase 5 — start the cross-process pageEvent subscriber
+    // **after** `setupRenderer` (renders' invalidation listener +
+    // mention-dispatch are wired in setupRenderer) so a remote
+    // `update` message that arrives during boot still reaches them.
+    // Plugins (next step) are not currently registering page listeners
+    // (verified: grep `crowi.event('Page')` in packages/plugin-* = 0
+    // hits at Phase 5 plan time), so booting pub/sub before
+    // `setupPlugins` is safe. Move below `setupPlugins` if a future
+    // plugin starts subscribing.
+    await this.setupPageEventPubSub();
     // Plugins must boot AFTER config/models are ready (so PluginContext
     // can read config and access models) but BEFORE the legacy
     // mailer / slack initialisers — those are migrating to
@@ -221,6 +241,30 @@ class Crowi {
       await this.mongoose.disconnect();
       this.mongoose = null;
     }
+  }
+
+  /**
+   * RFC-0003 Phase 5 — build the cross-process pageEvent subscriber
+   * and (when REDIS_URL is set) subscribe to `crowi:pageEvent:*`. A
+   * single hop: the @crowi/collab process publishes after a checkpoint
+   * save → this subscriber re-emits on the local `pageEvent('Page')`
+   * EventEmitter → api listeners (render-cache / mention-dispatch /
+   * search index) react as if the save had happened in-process.
+   *
+   * No-op + warn when Redis isn't configured (= single-instance dev
+   * environment); explicit reset on each `init()` so long-lived test
+   * processes (Crowi.reload) get a fresh subscriber.
+   */
+  async setupPageEventPubSub() {
+    if (this.pageEventPubSub) {
+      try {
+        await this.pageEventPubSub.shutdown();
+      } catch {
+        // best-effort — boot path shouldn't be blocked by stale handle
+      }
+    }
+    this.pageEventPubSub = createPageEventPubSub(this);
+    await this.pageEventPubSub.setup();
   }
 
   setupRenderer() {
@@ -318,29 +362,10 @@ class Crowi {
   }
 
   buildRedisOpts(redisUrl: string | null, redisRejectUnauthorized: boolean) {
-    if (redisUrl) {
-      const { hostname: host, port, auth, protocol } = url.parse(redisUrl);
-      const password = auth ? { password: auth.split(':')[1] } : {};
-
-      // Convert port to number for Redis v4 compatibility
-      const portNumber = port ? parseInt(port, 10) : 6379;
-
-      const tls: object | null = protocol === 'rediss:' ? { requestCert: true, rejectUnauthorized: redisRejectUnauthorized } : null;
-
-      // Redis v4 uses socket object for connection configuration
-      const socketConfig = {
-        host,
-        port: portNumber,
-        ...(tls && { tls }),
-      };
-
-      return {
-        socket: socketConfig,
-        ...password,
-      };
-    }
-
-    return null;
+    // Thin wrapper kept for back-compat with existing `crowi.buildRedisOpts`
+    // callers; the actual translation lives in `util/redis-opts.ts` so
+    // the collab process can pull the same helper through `api-dist.ts`.
+    return buildRedisOpts(redisUrl, redisRejectUnauthorized);
   }
 
   // getter/setter of model instance
