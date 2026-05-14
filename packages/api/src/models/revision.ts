@@ -93,6 +93,29 @@ export interface RevisionDocument extends Document {
   message?: string;
 }
 
+/**
+ * Options accepted by `Revision.prepareRevision`. RFC-0003 Phase 5
+ * additively expands the v1.x `{ format }`-only shape with the
+ * collaborative-save fields (`savedBy` / `contributors` / `message` /
+ * `type` / `parentRevisionId`). All existing callers (`Page.createPage`
+ * / `Page.updatePage`) pass either nothing or `{ format }` and remain
+ * unchanged — the new fields are written to the Revision only when
+ * the collab save flow explicitly provides them, so v1.x revisions
+ * keep their `undefined` semantics on disk.
+ *
+ * `parentRevisionId: null` is accepted (and persisted as `null`) for
+ * an explicit "no parent" snapshot — useful for the first checkpoint
+ * after a force-rebuild.
+ */
+export interface PrepareRevisionOptions {
+  format?: string;
+  savedBy?: Types.ObjectId;
+  contributors?: Types.ObjectId[];
+  message?: string;
+  type?: RevisionType;
+  parentRevisionId?: Types.ObjectId | null;
+}
+
 export interface RevisionModel extends Model<RevisionDocument> {
   findLatestRevision(path: string, cb: (err: Error, data: RevisionDocument | null) => void): void;
   findRevision(id: Types.ObjectId): Promise<RevisionDocument | null>;
@@ -100,7 +123,7 @@ export interface RevisionModel extends Model<RevisionDocument> {
   findRevisionIdList(path): Promise<RevisionDocument[]>;
   findRevisionList(path, options): Promise<RevisionDocument[]>;
   updateRevisionListByPath(path, updateData): Promise<RevisionDocument>;
-  prepareRevision(pageData: PageDocument, body, user, options?): Promise<RevisionDocument>;
+  prepareRevision(pageData: PageDocument, body: string, user: { _id: Types.ObjectId }, options?: PrepareRevisionOptions): Promise<RevisionDocument>;
   removeRevisionsByPath(path): Promise<{ deletedCount: number }>;
   updatePath(pathName): void;
   findAuthorsByPage(page): Promise<RevisionDocument['author'][]>;
@@ -254,10 +277,8 @@ export default (crowi: Crowi) => {
   };
 
   revisionSchema.statics.prepareRevision = async function (pageData, body, user, options) {
-    if (!options) {
-      options = {};
-    }
-    const format = options.format || 'markdown';
+    const opts = options ?? {};
+    const format = opts.format || 'markdown';
 
     if (!user._id) {
       throw new Error('Error: user should have _id');
@@ -281,6 +302,30 @@ export default (crowi: Crowi) => {
     newRevision.meta = metadataToRevisionMeta(metadata);
     newRevision.renderedAst = renderedAst;
     newRevision.rendererVersion = RENDERER_PIPELINE_VERSION;
+
+    // RFC-0003 Phase 5 collab-save options. Only assign when the caller
+    // explicitly passed a value so v1.x callers (Page.createPage /
+    // Page.updatePage with options `undefined` or `{ format }`) keep
+    // writing `undefined` to disk — the read path distinguishes
+    // "predates RFC-0003" from "explicit empty" on `contributors`.
+    if (opts.savedBy !== undefined) {
+      newRevision.savedBy = opts.savedBy;
+    }
+    if (opts.contributors !== undefined) {
+      newRevision.contributors = opts.contributors;
+    }
+    if (opts.message !== undefined) {
+      newRevision.message = opts.message;
+    }
+    if (opts.type !== undefined) {
+      newRevision.type = opts.type;
+    }
+    if (opts.parentRevisionId !== undefined) {
+      // `null` is a load-bearing value here (= "first snapshot, no
+      // parent") so we forward it verbatim rather than collapsing to
+      // undefined.
+      newRevision.parentRevisionId = opts.parentRevisionId;
+    }
 
     return newRevision;
   };
