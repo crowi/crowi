@@ -11,11 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
+import type * as Y from 'yjs';
 import { CollaborativeMarkdownEditor, useCollabSession, type CollabSession } from '@/components/editor/CollaborativeMarkdownEditor';
 import { CollabForceReloadDialog } from '@/components/editor/CollabForceReloadDialog';
 import { CollabPresenceAvatars } from '@/components/editor/CollabPresenceAvatars';
 import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarning';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
+import { UnsavedChangesDialog } from '@/components/editor/UnsavedChangesDialog';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
 import { useScrollSync } from '@/lib/use-scroll-sync';
@@ -176,6 +178,90 @@ function EditorShell({
   const handleForceReload = useCallback((reason?: string) => {
     setForceReload({ open: true, reason });
   }, []);
+
+  // Unsaved-changes tracking. Two flavours:
+  //   - realtime save (Y.Text local mutations since last `crowi:save` ok)
+  //   - HTTP save     (caller-side body string non-empty / divergent)
+  // The dirty signal drives both the browser `beforeunload` guard and
+  // the in-app cancel-button dialog. We reset realtime-dirty on every
+  // successful save; HTTP dirty is recomputed from props each render.
+  const [realtimeDirty, setRealtimeDirty] = useState(false);
+  useEffect(() => {
+    if (!useRealtimeSave) return;
+    const yText = session.yText;
+    if (!yText) return;
+    const observer = (_event: Y.YTextEvent, transaction: Y.Transaction): void => {
+      if (!transaction.local) return;
+      setRealtimeDirty(true);
+    };
+    yText.observe(observer);
+    return () => {
+      yText.unobserve(observer);
+    };
+  }, [useRealtimeSave, session.yText]);
+  const isDirty = useRealtimeSave ? realtimeDirty : body.length > 0;
+
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+
+  // Browser-level guard for tab close / refresh / external-link
+  // navigation. Modern browsers ignore the custom message but still
+  // show their default "Leave site?" prompt as long as we call
+  // `preventDefault()` / set `returnValue`. Skip the listener when
+  // there's nothing to protect so we don't add a no-op handler to
+  // every keystroke-induced render.
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent): void => {
+      e.preventDefault();
+      // Set a non-empty string for older browsers that still surface
+      // it; modern Chrome/Safari/Firefox replace it with their own
+      // generic prompt regardless of the value.
+      e.returnValue = m['edit.unsaved_beforeunload']();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  // Wraps the parent's `onCancel` with a dirty check. The dialog
+  // arms a "save → exit", "discard → exit", or "stay" branch; only
+  // the bottom two routes actually run `onCancel`.
+  const handleCancelClick = useCallback(() => {
+    if (isDirty) {
+      setUnsavedDialogOpen(true);
+      return;
+    }
+    onCancel();
+  }, [isDirty, onCancel]);
+
+  const handleDialogSave = useCallback(() => {
+    if (useRealtimeSave) {
+      collabSave
+        .save()
+        .then(() => {
+          setRealtimeDirty(false);
+          setUnsavedDialogOpen(false);
+          toast.success(m['collab.save_success']());
+          onCancel();
+        })
+        .catch((err: { message?: string }) => {
+          toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
+          setUnsavedDialogOpen(false);
+        });
+      return;
+    }
+    // HTTP mode: the parent's `onSave` performs the mutation + handles
+    // its own navigation (redirect to the new/updated page). Closing the
+    // dialog optimistically is fine — if the mutation surfaces an error
+    // via the `feedback` prop, the user is back on the editor with the
+    // dirty body intact and can retry.
+    onSave();
+    setUnsavedDialogOpen(false);
+  }, [useRealtimeSave, collabSave, onCancel, onSave]);
+
+  const handleDialogDiscard = useCallback(() => {
+    setUnsavedDialogOpen(false);
+    onCancel();
+  }, [onCancel]);
   // Collab status toasts: first 'disconnected' surfaces a persistent
   // error toast; first 'connected' after a drop confirms recovery;
   // 'auth-failed' is terminal and recommends a reload.
@@ -354,7 +440,7 @@ function EditorShell({
           {realtimePageId && <CollabSameBlockWarning awareness={session.awareness} yText={session.yText} localClientId={session.awareness?.clientID ?? null} />}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={isSaving || collabSave.isSaving} type="button">
+          <Button variant="outline" onClick={handleCancelClick} disabled={isSaving || collabSave.isSaving} type="button">
             <X className="mr-1 h-4 w-4" />
             {m['edit.cancel']()}
           </Button>
@@ -365,6 +451,7 @@ function EditorShell({
                 collabSave
                   .save()
                   .then(() => {
+                    setRealtimeDirty(false);
                     toast.success(m['collab.save_success']());
                   })
                   .catch((err: { message?: string }) => {
@@ -385,6 +472,14 @@ function EditorShell({
           )}
         </div>
       </footer>
+
+      <UnsavedChangesDialog
+        open={unsavedDialogOpen}
+        onOpenChange={setUnsavedDialogOpen}
+        onSave={handleDialogSave}
+        onDiscard={handleDialogDiscard}
+        isSaving={isSaving || collabSave.isSaving}
+      />
 
       {/* Phase 8 — force-reload AlertDialog. Driven by the stateless
           listener we attached above; the dialog is `open` only after
