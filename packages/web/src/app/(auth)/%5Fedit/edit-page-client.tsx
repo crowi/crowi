@@ -13,6 +13,7 @@ import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
 import { CollaborativeMarkdownEditor, useCollabSession, type CollabSession } from '@/components/editor/CollaborativeMarkdownEditor';
 import { CollabForceReloadDialog } from '@/components/editor/CollabForceReloadDialog';
+import { CollabPresenceAvatars } from '@/components/editor/CollabPresenceAvatars';
 import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarning';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { usePage } from '@/lib/use-page';
@@ -262,8 +263,13 @@ function EditorShell({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
       <header className="bg-background z-10 shrink-0 border-b px-4 py-3 md:px-6">
-        <h2 className="text-lg font-semibold leading-tight">{title}</h2>
-        <p className="text-muted-foreground truncate text-sm">{subtitle}</p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold leading-tight">{title}</h2>
+            <p className="text-muted-foreground truncate text-sm">{subtitle}</p>
+          </div>
+          {realtimePageId && <CollabPresenceAvatars awareness={session.awareness} localClientId={session.awareness?.clientID ?? null} className="shrink-0" />}
+        </div>
         {feedback && (
           <Alert variant="destructive" className="mt-3">
             <AlertCircle className="h-4 w-4" />

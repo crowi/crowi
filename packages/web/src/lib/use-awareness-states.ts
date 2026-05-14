@@ -15,6 +15,14 @@ export interface AwarenessState {
   user?: CollabUserField;
   /** Y.RelativePosition JSON; opaque to callers without a Y.Doc reference. */
   cursor?: { anchor: unknown; head: unknown };
+  /**
+   * Wall-clock timestamp (ms) of the peer's most recent Y.Text mutation.
+   * Used by `CollabPresenceAvatars` to render the typing-dots overlay
+   * for ~3 s after each keystroke. Absent on peers that have only
+   * moved their caret (no doc edit yet) or that predate the typing
+   * indicator wiring.
+   */
+  typingAt?: number;
   [key: string]: unknown;
 }
 

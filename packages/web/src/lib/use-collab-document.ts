@@ -32,6 +32,8 @@ export type CollabStatus = 'connecting' | 'connected' | 'disconnected' | 'auth-f
  */
 export interface CollabUserField {
   id?: string;
+  /** Stable account identifier; seeds `UserAvatar`'s boring-avatar variant. */
+  username?: string;
   name: string;
   color: string;
   colorLight?: string;

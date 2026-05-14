@@ -126,6 +126,7 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     const palette = userColor(userId);
     setLocalAwareness({
       id: userId,
+      username: userUsername,
       name: userName?.trim() || (userUsername ?? userId),
       color: palette.color,
       colorLight: palette.colorLight,
