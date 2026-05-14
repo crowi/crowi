@@ -8,7 +8,13 @@ import { buildExtensions } from './build-extensions';
 
 export interface MarkdownEditorProps {
   value: string;
-  onChange: (next: string) => void;
+  /**
+   * Document-change listener. Optional so RFC-0003 Phase 7's collab
+   * wrapper can mount the editor with Y.Text-driven dispatch and skip
+   * the update-listener that would otherwise fire on every yCollab
+   * dispatch.
+   */
+  onChange?: (next: string) => void;
   readonly?: boolean;
   /**
    * Phase 7 (RFC-0003) hook for `yCollab(yText, awareness)`. Caller-
@@ -21,6 +27,15 @@ export interface MarkdownEditorProps {
   className?: string;
   /** Optional aria-label for the editor surface. */
   'aria-label'?: string;
+  /**
+   * RFC-0003 Phase 7: suppress CodeMirror's `history()` + `historyKeymap`.
+   * Set to `true` when the caller supplies a `yCollab(yText, awareness,
+   * { undoManager })` extension so undo/redo operate at the Yjs delta
+   * layer (= self-only) instead of stacking against the raw doc string.
+   * Default `false` preserves single-user behaviour for non-collab
+   * callers.
+   */
+  disableHistory?: boolean;
 }
 
 export interface MarkdownEditorHandle {
@@ -71,7 +86,7 @@ export interface MarkdownEditorHandle {
  * re-fire for our own dispatches and produce a render loop.
  */
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(props, ref) {
-  const { value, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel } = props;
+  const { value, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -82,6 +97,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   const onChangeRef = useRef(onChange);
   const extraExtensionsRef = useRef<Extension[] | undefined>(extraExtensions);
   const readonlyRef = useRef<boolean>(readonly ?? false);
+  const disableHistoryRef = useRef<boolean>(disableHistory ?? false);
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
@@ -91,18 +107,26 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   useEffect(() => {
     readonlyRef.current = readonly ?? false;
   }, [readonly]);
+  useEffect(() => {
+    disableHistoryRef.current = disableHistory ?? false;
+  }, [disableHistory]);
 
   // Mount the EditorView once. Initial doc comes from `value` at mount
   // time; subsequent external updates flow through the sync effect below.
   useEffect(() => {
     const parent = containerRef.current;
     if (!parent) return;
+    // Wire the update listener only when the mount-time caller supplied
+    // an `onChange`. The collab wrapper omits it so yCollab's own
+    // dispatches don't fan out through a no-op listener.
+    const onChangeAtMount = onChangeRef.current;
     const state = EditorState.create({
       doc: value,
       extensions: buildExtensions({
         readonly: readonlyRef.current,
         extraExtensions: extraExtensionsRef.current,
-        onChange: (next) => onChangeRef.current?.(next),
+        disableHistory: disableHistoryRef.current,
+        onChange: onChangeAtMount ? (next) => onChangeRef.current?.(next) : undefined,
       }),
     });
     const view = new EditorView({ state, parent });

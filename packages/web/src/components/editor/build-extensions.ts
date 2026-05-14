@@ -20,6 +20,17 @@ export interface BuildExtensionsProps {
    * with the result of this builder once per session.
    */
   onChange?: (next: string) => void;
+  /**
+   * RFC-0003 Phase 7 — suppress CodeMirror's `history()` extension +
+   * `historyKeymap`. When `yCollab` is supplied via `extraExtensions`,
+   * its `Y.UndoManager` replaces the editor's local history stack so
+   * undo / redo operate on Yjs deltas (= self-only, remote-edit aware)
+   * instead of the raw doc string. Two histories living in parallel
+   * would otherwise let Cmd/Ctrl-Z rewind through remote edits and
+   * desync the Y.Text from the EditorView's doc. Default `false` keeps
+   * the editor-foundation behaviour untouched for non-collab callers.
+   */
+  disableHistory?: boolean;
 }
 
 /**
@@ -49,12 +60,16 @@ export interface BuildExtensionsProps {
  *    precedence ties (CodeMirror layers later extensions on top).
  */
 export function buildExtensions(props: BuildExtensionsProps): Extension[] {
-  const { readonly = false, extraExtensions, onChange } = props;
+  const { readonly = false, extraExtensions, onChange, disableHistory = false } = props;
   return [
     markdown(),
     syntaxHighlighting(defaultHighlightStyle),
-    history(),
-    keymap.of([...defaultKeymap, ...historyKeymap]),
+    // RFC-0003 Phase 7: skip the built-in undo stack + its keymap when
+    // a Yjs `UndoManager` is taking over via `extraExtensions`. The
+    // `defaultKeymap` is kept (it carries cursor / selection / line
+    // editing bindings that are doc-shape agnostic and harmless).
+    disableHistory ? [] : history(),
+    keymap.of([...defaultKeymap, ...(disableHistory ? [] : historyKeymap)]),
     readonly ? EditorState.readOnly.of(true) : [],
     onChange
       ? EditorView.updateListener.of((update) => {
