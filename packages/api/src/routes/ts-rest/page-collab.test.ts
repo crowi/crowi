@@ -10,6 +10,8 @@ import request from 'supertest';
 import { app, crowi, Fixture } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
 import { createWsTokenUtil } from 'src/util/ws-token';
+import { _setEditorCapCounterForTesting } from 'src/util/collab-cap';
+import type { EditorCapCounter } from 'src/util/editor-cap-counter';
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -42,10 +44,38 @@ describe('Routes /api/v2/pages/:id/yjs-token (ts-rest getYjsToken)', () => {
   });
 
   afterEach(async () => {
+    // Phase 6: any test that injected a fake cap counter via
+    // `_setEditorCapCounterForTesting` must clear it so the next
+    // test sees the default (lazy Redis-backed) counter — and the
+    // happy-path tests in particular default to no Redis ⇒ no-op
+    // counter ⇒ readonly:false.
+    _setEditorCapCounterForTesting(null);
     const Page = crowi.model('Page');
     const Revision = crowi.model('Revision');
     const filter = { path: { $regex: `^${PATH_PREFIX}` } };
     await Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter)]);
+  });
+
+  /**
+   * Build a fake editor-cap counter that simulates a cap-reached
+   * page. Injected via `_setEditorCapCounterForTesting` for the
+   * cap test below; the route handler reads through the cached
+   * promise so the inject lands before the request is dispatched.
+   */
+  const makeCappedCounter = (count: number, cap: number): EditorCapCounter => ({
+    maxEditorsPerPage: cap,
+    async peek() {
+      return { count, cap };
+    },
+    async tryAcquire() {
+      return { acquired: count < cap, count, cap };
+    },
+    async release() {
+      /* nothing */
+    },
+    async disconnect() {
+      /* nothing */
+    },
   });
 
   /**
@@ -137,6 +167,28 @@ describe('Routes /api/v2/pages/:id/yjs-token (ts-rest getYjsToken)', () => {
     expect(typeof decoded.iat).toBe('number');
     expect(typeof decoded.exp).toBe('number');
     expect(decoded.exp - decoded.iat).toBe(300);
+  });
+
+  it('returns 200 with readonly:true once the editor cap is reached (Phase 6 cap-driven readonly path)', async () => {
+    // Inject a counter that reports 20-of-20 editors so `checkEditorCap`
+    // flips to readonly:true. The wsToken still issues — readonly
+    // clients live-subscribe but can't write.
+    _setEditorCapCounterForTesting(makeCappedCounter(20, 20));
+    const pageId = await createPage('cap-reached');
+
+    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+
+    expect(res.status).toBe(200);
+    expect(res.body.pageId).toBe(pageId);
+    expect(res.body.readonly).toBe(true);
+    expect(typeof res.body.wsToken).toBe('string');
+    expect(res.body.wsToken.length).toBeGreaterThan(0);
+
+    // The JWT payload must also carry readonly:true so the collab
+    // process re-enforces it on `onAuthenticate` (defence-in-depth).
+    const [, payloadB64] = (res.body.wsToken as string).split('.');
+    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    expect(decoded.readonly).toBe(true);
   });
 
   it('signs and verifies a wsToken within a single ws-token util instance (sign↔verify round trip)', async () => {
