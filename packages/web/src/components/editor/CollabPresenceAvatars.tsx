@@ -108,7 +108,7 @@ function CollabPresenceAvatar({ user, typing }: CollabPresenceAvatarProps) {
   // a missing-name branch is unreachable; we still treat the seed
   // defensively for older awareness payloads in flight.
   const seed = user.username ?? user.id ?? user.name;
-  const userForAvatar = { username: seed, name: user.name };
+  const userForAvatar = { username: seed, name: user.name, image: user.image ?? undefined };
 
   return (
     <div className="relative inline-flex" title={user.name} aria-label={typing ? `${user.name} (typing)` : user.name}>

@@ -35,6 +35,8 @@ export interface CollabUserField {
   /** Stable account identifier; seeds `UserAvatar`'s boring-avatar variant. */
   username?: string;
   name: string;
+  /** Optional profile image URL — surfaced by `UserAvatar` when present. */
+  image?: string | null;
   color: string;
   colorLight?: string;
 }

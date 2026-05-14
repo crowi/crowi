@@ -117,6 +117,7 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
   const userId = user?.id;
   const userName = user?.name;
   const userUsername = user?.username;
+  const userImage = user?.image;
   useEffect(() => {
     if (!awareness || isAuthLoading) return;
     if (!userId) {
@@ -128,10 +129,11 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
       id: userId,
       username: userUsername,
       name: userName?.trim() || (userUsername ?? userId),
+      image: userImage ?? null,
       color: palette.color,
       colorLight: palette.colorLight,
     });
-  }, [awareness, userId, userName, userUsername, isAuthLoading, setLocalAwareness]);
+  }, [awareness, userId, userName, userUsername, userImage, isAuthLoading, setLocalAwareness]);
 
   // Local-typing indicator: stamp `awareness.typingAt = Date.now()` on
   // every local Y.Text mutation so remote peers can render a "typing"
