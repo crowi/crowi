@@ -7,9 +7,9 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
 import path from 'node:path';
 import mongoose from 'mongoose';
 import * as Y from 'yjs';
-import { startInMemoryMongo, type SmokeMongo } from './setup';
-import { registerModels, type CollabModels } from '../models';
-import { getWsTokenUtil, _resetWsTokenUtilCacheForTesting, type CollabWsTokenUtil } from '../ws-token';
+import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
+import type { CollabModels } from '../models';
+import type { CollabWsTokenUtil } from '../types';
 import { createOnAuthenticate } from '../hooks/on-authenticate';
 import { createOnLoadDocument } from '../hooks/on-load-document';
 import { createOnStoreDocument } from '../hooks/on-store-document';
@@ -44,6 +44,7 @@ const apiPkgPath = require.resolve('@crowi/api/package.json', { paths: [process.
 const apiWsToken = require(path.join(path.dirname(apiPkgPath), 'dist', 'util', 'ws-token.js')) as {
   createWsTokenUtil(): {
     signWsToken(claims: { userId: string; pageId: string; readonly: boolean }): { token: string; expiresAt: Date };
+    verifyWsToken: CollabWsTokenUtil['verifyWsToken'];
   };
 };
 
@@ -54,10 +55,11 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
 
   beforeAll(async () => {
     memMongo = await startInMemoryMongo();
-    const reg = registerModels();
+    const reg = registerTestModels();
     models = reg.models;
-    _resetWsTokenUtilCacheForTesting();
-    wsTokenUtil = getWsTokenUtil();
+    // Same util instance signs + verifies — matches the in-process
+    // contract the production attach helper relies on.
+    wsTokenUtil = apiWsToken.createWsTokenUtil();
   });
 
   afterAll(async () => {
@@ -114,8 +116,10 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     const pageId = page._id.toString();
 
     // 2. Mint a wsToken from the api side and verify the collab side
-    //    accepts it. This exercises the *cross-process* contract:
-    //    same secret, same issuer, same TTL.
+    //    accepts it. After Phase 9 same-process attach, the sign +
+    //    verify halves are the *same* util — but we still call the
+    //    api factory here to assert the contract (same secret, same
+    //    issuer, same TTL) the multi-instance Phase 9 path will need.
     const apiUtil = apiWsToken.createWsTokenUtil();
     const { token } = apiUtil.signWsToken({ userId: userId.toString(), pageId, readonly: false });
 

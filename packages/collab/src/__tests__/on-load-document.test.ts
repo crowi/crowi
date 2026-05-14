@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 import mongoose from 'mongoose';
-import { startInMemoryMongo, type SmokeMongo } from './setup';
-import { registerModels, type CollabModels } from '../models';
+import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
+import type { CollabModels } from '../models';
 import { createOnLoadDocument } from '../hooks/on-load-document';
 import { CONTENT_FIELD } from '../yjs-doc';
 
@@ -55,7 +55,7 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
 
   beforeAll(async () => {
     memMongo = await startInMemoryMongo();
-    const reg = registerModels();
+    const reg = registerTestModels();
     models = reg.models;
   });
 

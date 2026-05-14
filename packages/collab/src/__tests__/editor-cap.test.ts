@@ -5,12 +5,11 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
 
 import path from 'node:path';
 import mongoose from 'mongoose';
-import { startInMemoryMongo, type SmokeMongo } from './setup';
-import { registerModels, type CollabModels } from '../models';
-import { getWsTokenUtil, _resetWsTokenUtilCacheForTesting, type CollabWsTokenUtil } from '../ws-token';
+import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
+import type { CollabModels } from '../models';
+import type { CollabWsTokenUtil, EditorCapCounter } from '../types';
 import { createOnAuthenticate } from '../hooks/on-authenticate';
 import { createOnDisconnect } from '../hooks/on-disconnect';
-import type { EditorCapCounter } from '../editor-cap';
 
 /**
  * Phase 6 editor cap defence (collab side). Drives the hooks directly
@@ -28,6 +27,7 @@ const apiPkgPath = require.resolve('@crowi/api/package.json', { paths: [process.
 const apiWsToken = require(path.join(path.dirname(apiPkgPath), 'dist', 'util', 'ws-token.js')) as {
   createWsTokenUtil(): {
     signWsToken(claims: { userId: string; pageId: string; readonly: boolean }): { token: string; expiresAt: Date };
+    verifyWsToken: CollabWsTokenUtil['verifyWsToken'];
   };
 };
 
@@ -105,10 +105,9 @@ describe('@crowi/collab Phase 6 editor cap defence', () => {
 
   beforeAll(async () => {
     memMongo = await startInMemoryMongo();
-    const reg = registerModels();
+    const reg = registerTestModels();
     models = reg.models;
-    _resetWsTokenUtilCacheForTesting();
-    wsTokenUtil = getWsTokenUtil();
+    wsTokenUtil = apiWsToken.createWsTokenUtil();
   });
 
   afterAll(async () => {

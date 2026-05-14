@@ -6,9 +6,9 @@
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import * as Y from 'yjs';
-import { startInMemoryMongo, type SmokeMongo } from './setup';
+import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
 import { encodeYjsDelta, makeFixtures, type CollabFixtures } from './fixtures';
-import { registerModels, type CollabModels } from '../models';
+import type { CollabModels } from '../models';
 import { createCompactor } from '../compaction';
 import { createOnChange } from '../hooks/on-change';
 import { createOnStoreDocument } from '../hooks/on-store-document';
@@ -33,7 +33,7 @@ describe('@crowi/collab Phase 4 compaction', () => {
 
   beforeAll(async () => {
     memMongo = await startInMemoryMongo();
-    const reg = registerModels();
+    const reg = registerTestModels();
     models = reg.models;
     fixtures = makeFixtures(models);
   });

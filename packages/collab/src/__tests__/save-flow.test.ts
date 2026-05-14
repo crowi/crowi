@@ -1,19 +1,19 @@
 import * as Y from 'yjs';
 import { Types } from 'mongoose';
-import { registerModels, type CollabModels } from '../models';
+import type { CollabModels } from '../models';
 import { createContributorsTracker } from '../contributors';
 import { createSaveFlow, CollabSaveError } from '../save-flow';
-import { startInMemoryMongo, type SmokeMongo } from './setup';
+import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
 import { makeFixtures, type CollabFixtures } from './fixtures';
 import { CONTENT_FIELD } from '../yjs-doc';
-import type { CollabPageEventPublisher } from '../page-event-pubsub';
+import type { CollabPageEventPublisher } from '../types';
 
 /**
  * Phase 5 save-flow tests. We drive `executeSave` end-to-end against
  * an in-memory MongoDB:
  *   - Page + Revision + PageYjsUpdate are real models from the api
  *     dist + a fully wired renderer (core 5 transforms only; plugin
- *     transforms aren't loaded — see models.ts:registerModels).
+ *     transforms aren't loaded — see __tests__/setup.ts:registerTestModels).
  *   - The publisher is mocked so we can assert what was emitted.
  *   - The contributors tracker is the real implementation.
  */
@@ -25,13 +25,9 @@ interface MockPublisher extends CollabPageEventPublisher {
 const makeMockPublisher = (): MockPublisher => {
   const calls: MockPublisher['calls'] = [];
   return {
-    instanceId: 'test-instance',
     calls,
     async publish(eventName, payload) {
       calls.push({ eventName, payload: { ...payload } });
-    },
-    async disconnect() {
-      /* nothing */
     },
   };
 };
@@ -56,7 +52,7 @@ describe('createSaveFlow.executeSave', () => {
 
   beforeAll(async () => {
     memMongo = await startInMemoryMongo();
-    const reg = registerModels();
+    const reg = registerTestModels();
     models = reg.models;
     fixtures = makeFixtures(models);
   });
