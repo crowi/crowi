@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "start": "NODE_ENV=production node dist/index.js",
-    "dev": "concurrently --kill-others-on-fail --names build,run -c blue,green \"tsup --watch --no-clean\" \"nodemon --watch dist --delay 0.5 dist/index.js\"",
+    "dev": "concurrently --kill-others-on-fail --names build,run -c blue,green \"tsup --watch --no-clean\" \"cd ../.. && nodemon --watch packages/collab/dist --delay 0.5 packages/collab/dist/index.js\"",
     "build": "tsup",
     "lint": "eslint src/ --ext .ts",
     "test": "jest --passWithNoTests",
