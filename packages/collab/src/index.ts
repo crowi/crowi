@@ -6,6 +6,7 @@ import { connectMongo, disconnectMongo } from './db';
 import { registerModels } from './models';
 import { createCollabServer } from './server';
 import { getWsTokenUtil } from './ws-token';
+import { createCollabPageEventPublisher } from './page-event-pubsub';
 
 const debug = Debug('crowi:collab:boot');
 
@@ -18,7 +19,9 @@ const debug = Debug('crowi:collab:boot');
  *   2. `connectMongo()` opens the shared Mongoose connection.
  *   3. `registerModels()` invokes the api package's model factories
  *      against the now-connected mongoose so collab's hooks share the
- *      exact same schema definitions.
+ *      exact same schema definitions, **and** builds the renderer in
+ *      the same call so `Revision.prepareRevision` works from the save
+ *      flow. Plugin transforms aren't loaded (see models.ts).
  *   4. `getWsTokenUtil()` resolves `WS_TOKEN_SECRET` once (matching
  *      the api process's lifecycle).
  *   5. `createCollabServer(...).listen()` starts the WebSocket server.
@@ -33,8 +36,23 @@ export async function startCollabServer(): Promise<void> {
 
   await connectMongo(env.mongoUri);
 
-  const models = registerModels();
+  const { models, renderer } = registerModels();
+  // Warmup the renderer in the background. Shiki / unified ESM loading
+  // can take 100-500ms on first use; firing this here means the first
+  // save isn't slowed by lazy init. Errors are warn-only so a warmup
+  // failure can't keep the collab server from accepting connections.
+  void renderer.warmup?.().catch((err) => debug('renderer.warmup failed (non-fatal):', err));
+
   const wsTokenUtil = getWsTokenUtil();
+
+  // Phase 5 cross-process pageEvent publisher (api side runs the
+  // subscriber). No-op publisher when REDIS_URL is unset — collab
+  // still boots; api just won't observe collab-initiated saves on a
+  // remote instance.
+  const pageEventPublisher = await createCollabPageEventPublisher({
+    redisUrl: process.env.REDIS_TLS_URL ?? process.env.REDIS_URL ?? null,
+    redisRejectUnauthorized: process.env.REDIS_REJECT_UNAUTHORIZED !== '0',
+  });
 
   const server = createCollabServer({
     models,
@@ -42,6 +60,7 @@ export async function startCollabServer(): Promise<void> {
     port: env.port,
     address: env.address,
     quiet: env.quiet,
+    pageEventPublisher,
   });
 
   await server.listen();
@@ -56,6 +75,14 @@ export async function startCollabServer(): Promise<void> {
       await server.destroy();
     } catch (err) {
       console.error('[crowi:collab] error during server.destroy():', err);
+    }
+    try {
+      // Disconnect the page-event publisher BEFORE mongoose so any
+      // in-flight publish that was queued at shutdown gets a chance
+      // to flush. Failures are warned (not thrown) inside the helper.
+      await pageEventPublisher.disconnect();
+    } catch (err) {
+      console.error('[crowi:collab] error during pageEventPublisher.disconnect():', err);
     }
     try {
       await disconnectMongo();

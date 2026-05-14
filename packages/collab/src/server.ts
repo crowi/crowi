@@ -7,9 +7,31 @@ import { createOnAuthenticate, type OnAuthenticateDeps } from './hooks/on-authen
 import { createOnLoadDocument } from './hooks/on-load-document';
 import { createOnStoreDocument } from './hooks/on-store-document';
 import { createOnChange } from './hooks/on-change';
+import { createOnStateless } from './hooks/on-stateless';
+import { createOnAwarenessUpdate } from './hooks/on-awareness-update';
 import { createCompactor } from './compaction';
+import { createContributorsTracker, type ContributorsTracker } from './contributors';
+import { createSaveFlow, type SaveFlow } from './save-flow';
+import { type CollabPageEventPublisher } from './page-event-pubsub';
+import { markEditing } from './presence';
 
 const debug = Debug('crowi:collab:server');
+
+/**
+ * No-op publisher used as the default when `createCollabServer` is
+ * constructed without one (tests that don't care about pub/sub). The
+ * production boot path passes the real publisher in via
+ * `startCollabServer`.
+ */
+const noopPageEventPublisher: CollabPageEventPublisher = {
+  instanceId: 'noop',
+  async publish() {
+    /* drop */
+  },
+  async disconnect() {
+    /* nothing */
+  },
+};
 
 export interface CreateCollabServerOptions {
   models: CollabModels;
@@ -34,6 +56,23 @@ export interface CreateCollabServerOptions {
    * api dist.
    */
   checkEditorCap?: OnAuthenticateDeps['checkEditorCap'];
+  /**
+   * Phase 5: Redis publisher for `crowi:pageEvent:*`. Defaults to a
+   * no-op publisher so tests / single-instance deployments work
+   * without Redis. `startCollabServer` injects the real publisher.
+   */
+  pageEventPublisher?: CollabPageEventPublisher;
+  /**
+   * Phase 5: pre-built contributors tracker. Tests pass their own so
+   * they can pre-seed awareness ids; production code lets the server
+   * build a fresh tracker per instance.
+   */
+  contributorsTracker?: ContributorsTracker;
+  /**
+   * Phase 5: pre-built save flow. Tests inject a mock; production lets
+   * the server build one from `models` + tracker + publisher.
+   */
+  saveFlow?: SaveFlow;
 }
 
 /**
@@ -56,16 +95,41 @@ export interface CreateCollabServerOptions {
  */
 export function createCollabServer(opts: CreateCollabServerOptions): Server<CollabContext> {
   const { models, wsTokenUtil, port, address, quiet, debounce, maxDebounce, checkEditorCap } = opts;
+  const pageEventPublisher = opts.pageEventPublisher ?? noopPageEventPublisher;
+  const contributorsTracker = opts.contributorsTracker ?? createContributorsTracker();
+  const saveFlow =
+    opts.saveFlow ??
+    createSaveFlow({
+      models,
+      contributorsTracker,
+      pageEventPublisher,
+    });
 
   const compactor = createCompactor({
     models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
   });
 
-  const onAuthenticate = createOnAuthenticate({
+  const baseOnAuthenticate = createOnAuthenticate({
     wsTokenUtil,
     models: { Page: models.Page },
     checkEditorCap,
   });
+  /**
+   * Wrap `onAuthenticate` so we can fire-and-forget the presence
+   * stub once authentication succeeds. `markEditing` is a no-op stub
+   * in Phase 5 (real implementation lands with RFC-0005); calling it
+   * here pins the swap point so RFC-0005 lands without changing
+   * collab. Errors are swallowed because presence is purely
+   * advisory — a failure must never block a connection.
+   */
+  const onAuthenticate = async (payload: Parameters<typeof baseOnAuthenticate>[0]): Promise<CollabContext> => {
+    const ctx = await baseOnAuthenticate(payload);
+    void markEditing(ctx.pageId, ctx.userId).catch((err: unknown) => {
+      console.warn('[crowi:collab] presence.markEditing failed (non-blocking):', (err as Error).message);
+    });
+    return ctx;
+  };
+
   const onLoadDocument = createOnLoadDocument({
     models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
   });
@@ -77,6 +141,8 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
     models: { PageYjsUpdate: models.PageYjsUpdate },
     compactor,
   });
+  const onStateless = createOnStateless({ saveFlow });
+  const onAwarenessUpdate = createOnAwarenessUpdate({ contributorsTracker });
 
   const server = new Server<CollabContext>({
     name: 'crowi-collab',
@@ -104,6 +170,12 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
     },
     async onStoreDocument(payload) {
       await onStoreDocument(payload);
+    },
+    async onStateless(payload) {
+      await onStateless(payload);
+    },
+    async onAwarenessUpdate(payload) {
+      await onAwarenessUpdate(payload);
     },
   });
 
