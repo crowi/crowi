@@ -1,4 +1,4 @@
-import type { onLoadDocumentPayload } from '@hocuspocus/server';
+import type { Hocuspocus, onLoadDocumentPayload } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import Debug from 'debug';
 import type { CollabModels } from '../models';
@@ -11,6 +11,25 @@ const debug = Debug('crowi:collab:load');
 export interface OnLoadDocumentDeps {
   models: Pick<CollabModels, 'Page' | 'Revision' | 'PageYjsUpdate'>;
 }
+
+/**
+ * Wire-format reason codes for `crowi:force-reload`. Kept as string
+ * literals (not an enum) since there are only two values today; client
+ * (Phase 8) reads `kind` only and treats `reason` as debug telemetry.
+ *
+ *   - `'page-body-replaced'`   — `Page.yjsState` was set to null by
+ *                                an external writer (admin tool /
+ *                                legacy `/_api`). The Y.Doc has been
+ *                                rebuilt from the latest revision
+ *                                body. Active editors must reload to
+ *                                see the new canonical state.
+ *   - `'yjs-state-corruption'` — `Y.applyUpdate(yjsState)` threw.
+ *                                Same fallback (revision body seed)
+ *                                but rooted in a different cause —
+ *                                operators care about the distinction
+ *                                in logs.
+ */
+export type ForceReloadReason = 'page-body-replaced' | 'yjs-state-corruption';
 
 /**
  * Build the Hocuspocus `onLoadDocument` hook.
@@ -26,7 +45,9 @@ export interface OnLoadDocumentDeps {
  *      load the latest revision (`page.currentRevision ?? page.revision`,
  *      v1.x rows only have `revision`) and seed the Y.Text with its
  *      `body`. Empty body → empty Y.Doc (Y.Text.insert on '' is a
- *      no-op).
+ *      no-op). RFC-0003 §Phase 6 — broadcast `crowi:force-reload` so
+ *      any *currently active* editor on this document reloads. See
+ *      the helper docstring for the timing caveat.
  *
  *   3. **Phase 4 addition**: regardless of which path served the base
  *      state, replay every residual `PageYjsUpdate` (ordered by
@@ -90,8 +111,61 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     debug('replayed %d (poisoned %d) residual updates for page %s', applied, poisoned.length, pageId);
   }
 
+  /**
+   * Broadcast `crowi:force-reload` to all currently-connected clients
+   * on `documentName`. Phase 6 wire — Phase 8 client subscribes to the
+   * stateless channel.
+   *
+   * Timing caveat (see RFC-0003 §Phase 6 plan):
+   *
+   *   - `onLoadDocument` fires only when Hocuspocus *materialises* a
+   *     Document — typically the first connection. With
+   *     `unloadImmediately: true` (server.ts default) a document is
+   *     destroyed the moment its last client disconnects, so
+   *     `instance.documents.get(documentName)` is `undefined` at the
+   *     point this hook runs for a previously-idle page.
+   *   - In that "no active editors" case `documents.get` is undefined
+   *     and we skip the broadcast — the broadcast is a no-op anyway
+   *     when no clients are connected.
+   *   - When `documents.get` is defined (rare: Hocuspocus re-loaded a
+   *     document under `unloadImmediately: false` or a future
+   *     explicit invalidator API), the broadcast reaches the active
+   *     connections. Keeping the call here means a future toggle of
+   *     `unloadImmediately` lights the path up automatically.
+   *
+   * The full "external edit reload" UX for currently-connected
+   * editors needs an explicit invalidator API (Redis pub/sub or HTTP
+   * POST from admin tools to collab) — tracked as a Phase 6
+   * openQuestion and deferred to a later phase.
+   */
+  function broadcastForceReload(instance: Hocuspocus | undefined, documentName: string, reason: ForceReloadReason): void {
+    // `instance` is always populated at runtime by Hocuspocus, but the
+    // Phase 3 smoke test (and similar synthetic drivers) constructs
+    // payloads without it. Treat undefined as "no audience" rather
+    // than throwing — the same semantic the active-doc lookup uses
+    // for an empty Map.
+    if (!instance) {
+      debug('skip force-reload broadcast: no instance handle (reason=%s)', reason);
+      return;
+    }
+    try {
+      const doc = instance.documents.get(documentName);
+      if (!doc) {
+        debug('skip force-reload broadcast: no active document for %s (reason=%s)', documentName, reason);
+        return;
+      }
+      doc.broadcastStateless(JSON.stringify({ kind: 'crowi:force-reload', reason }));
+      debug('broadcast crowi:force-reload (reason=%s) for document %s', reason, documentName);
+    } catch (err) {
+      // Broadcast failures must never break the load path. Worst case:
+      // existing editors miss the reload signal and keep editing the
+      // pre-replace state until they reconnect.
+      console.warn(`[crowi:collab] onLoadDocument: broadcastStateless failed for ${documentName}:`, (err as Error).message);
+    }
+  }
+
   return async (data: onLoadDocumentPayload<CollabContext>): Promise<void> => {
-    const { documentName, document } = data;
+    const { documentName, document, instance } = data;
 
     const page = await Page.findById(documentName).select('_id revision currentRevision yjsState').exec();
     if (!page) {
@@ -105,17 +179,27 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     // Path A — restore from the most recent checkpoint.
     const yjsState = page.yjsState as Buffer | null | undefined;
     let baseRestored = false;
+    let forceReloadReason: ForceReloadReason | null = null;
     if (yjsState && yjsState.length > 0) {
       try {
         Y.applyUpdate(document, new Uint8Array(yjsState));
         debug('restored page %s from yjsState (%d bytes)', documentName, yjsState.length);
         baseRestored = true;
       } catch (err) {
-        // Phase 6 will broadcast `crowi:force-reload` here; Phase 3
-        // logs and falls through to the body-seed fallback so a
-        // corrupt yjsState doesn't lock out edits.
+        // Phase 6 — broadcast reason 'yjs-state-corruption' below
+        // after the fresh build seed runs.
         console.warn(`[crowi:collab] yjsState for page ${String(documentName)} failed Y.applyUpdate; falling back to body seed.`, (err as Error).message);
+        forceReloadReason = 'yjs-state-corruption';
       }
+    } else {
+      // yjsState is null or empty — could be (a) brand-new page that
+      // never had a checkpoint (no broadcast needed; no editor was
+      // looking at the pre-state state), or (b) an external writer
+      // nuked it. We can't distinguish the two from inside the hook,
+      // so we broadcast unconditionally with `page-body-replaced`.
+      // The cost of a false positive is a single page reload at most;
+      // the cost of a false negative is a stale editor.
+      forceReloadReason = 'page-body-replaced';
     }
 
     // Path B — fresh build from the latest revision's body.
@@ -128,6 +212,15 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
           debug('seeded page %s from revision %s (%d chars)', documentName, revisionId, revision.body.length);
         }
       }
+    }
+
+    // Phase 6 — fire the broadcast *after* the fresh build seed so any
+    // active client that survives the reload signal (race: it's mid-
+    // reconnect) would at least pick up the rebuilt state from a
+    // fresh syncProtocol. Skipped when path A succeeded (= no
+    // fallback was needed).
+    if (forceReloadReason !== null) {
+      broadcastForceReload(instance, String(documentName), forceReloadReason);
     }
 
     // Phase 4 — always replay residual append rows on top of whatever
