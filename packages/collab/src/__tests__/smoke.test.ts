@@ -13,6 +13,7 @@ import { getWsTokenUtil, _resetWsTokenUtilCacheForTesting, type CollabWsTokenUti
 import { createOnAuthenticate } from '../hooks/on-authenticate';
 import { createOnLoadDocument } from '../hooks/on-load-document';
 import { createOnStoreDocument } from '../hooks/on-store-document';
+import { createCompactor } from '../compaction';
 import { CONTENT_FIELD } from '../yjs-doc';
 
 /**
@@ -129,8 +130,10 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     expect(authPayload.connectionConfig.readOnly).toBe(false);
 
     // 3. onLoadDocument seeds a fresh Y.Doc from the revision body.
+    //    Phase 4: PageYjsUpdate replay runs after the seed but is a
+    //    no-op here because no append rows exist yet.
     const onLoadDocument = createOnLoadDocument({
-      models: { Page: models.Page, Revision: models.Revision },
+      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
     });
     const loadedDoc = new Y.Doc();
     await onLoadDocument({
@@ -145,10 +148,18 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     // 4. Simulate a user edit, then drive onStoreDocument with the
     //    mutated doc. The hook should persist a non-empty
     //    `Page.yjsState` plus `yjsCheckpointAt`.
+    //
+    //    Phase 4: onStoreDocument delegates to the shared compactor,
+    //    which also clears any pending `PageYjsUpdate` rows that
+    //    existed at snapshot time. We construct it here with the
+    //    same shape `createCollabServer` uses in production.
     loadedDoc.getText(CONTENT_FIELD).insert(0, 'hello collab ');
     expect(loadedDoc.getText(CONTENT_FIELD).toString()).toBe('hello collab seed body\n');
 
-    const onStoreDocument = createOnStoreDocument({ models: { Page: models.Page } });
+    const compactor = createCompactor({
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+    });
+    const onStoreDocument = createOnStoreDocument({ models: { Page: models.Page }, compactor });
     await onStoreDocument({
       documentName: pageId,
       document: loadedDoc,
@@ -163,6 +174,12 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     expect(persisted?.yjsState).toBeInstanceOf(Buffer);
     expect((persisted?.yjsState as Buffer).length).toBeGreaterThan(0);
     expect(persisted?.yjsCheckpointAt).toBeInstanceOf(Date);
+
+    // Phase 4 acceptance — after the compactor-driven store, no
+    // residual PageYjsUpdate rows should remain for this page.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const PageYjsUpdate = models.PageYjsUpdate as any;
+    expect(await PageYjsUpdate.countDocuments({ pageId }).exec()).toBe(0);
 
     // 5. Round-trip — restore the checkpoint into a new Y.Doc via the
     //    same onLoadDocument and verify the content survives a
@@ -230,7 +247,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
       yjsState: Buffer.from([0xff, 0xff, 0xff, 0xff]),
     });
 
-    const onLoadDocument = createOnLoadDocument({ models: { Page: models.Page, Revision: models.Revision } });
+    const onLoadDocument = createOnLoadDocument({ models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate } });
     const doc = new Y.Doc();
     await onLoadDocument({
       documentName: page._id.toString(),
@@ -253,7 +270,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
       status: 'published',
     });
 
-    const onLoadDocument = createOnLoadDocument({ models: { Page: models.Page, Revision: models.Revision } });
+    const onLoadDocument = createOnLoadDocument({ models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate } });
     const doc = new Y.Doc();
     await onLoadDocument({
       documentName: page._id.toString(),
@@ -286,7 +303,10 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     // to null, so compare end-to-end that the readonly path leaves
     // both untouched.
     const before = await Page.findById(pageId).select('yjsState yjsCheckpointAt').exec();
-    const onStoreDocument = createOnStoreDocument({ models: { Page: models.Page } });
+    const compactor = createCompactor({
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+    });
+    const onStoreDocument = createOnStoreDocument({ models: { Page: models.Page }, compactor });
     const doc = new Y.Doc();
     doc.getText(CONTENT_FIELD).insert(0, 'attempted readonly edit');
     await onStoreDocument({
