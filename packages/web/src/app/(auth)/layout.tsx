@@ -18,6 +18,7 @@ import { SiteBrand } from '@/components/site-brand';
 import { LocaleSync } from '@/components/locale-sync';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
+import { Toaster } from '@/components/ui/sonner';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -99,6 +100,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
+
+      {/* RFC-0003 Phase 7 — single toaster instance for collab connection
+          status notifications (offline / reconnected / auth-failed).
+          Mounted at the (auth) shell level so a child-page rerender
+          inside /_edit doesn't unmount the toast container and drop
+          in-flight notifications. */}
+      <Toaster />
     </div>
   );
 }
