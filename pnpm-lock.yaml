@@ -510,6 +510,12 @@ importers:
       mongoose:
         specifier: ^6.13.8
         version: 6.13.8
+      redis:
+        specifier: ^4.7.1
+        version: 4.7.1
+      uuid:
+        specifier: ^11.1.0
+        version: 11.1.0
       y-protocols:
         specifier: ^1.0.6
         version: 1.0.7(yjs@13.6.30)

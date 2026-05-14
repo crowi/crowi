@@ -54,7 +54,8 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
 
   beforeAll(async () => {
     memMongo = await startInMemoryMongo();
-    models = registerModels();
+    const reg = registerModels();
+    models = reg.models;
     _resetWsTokenUtilCacheForTesting();
     wsTokenUtil = getWsTokenUtil();
   });

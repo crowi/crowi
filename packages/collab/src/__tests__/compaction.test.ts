@@ -33,7 +33,8 @@ describe('@crowi/collab Phase 4 compaction', () => {
 
   beforeAll(async () => {
     memMongo = await startInMemoryMongo();
-    models = registerModels();
+    const reg = registerModels();
+    models = reg.models;
     fixtures = makeFixtures(models);
   });
 

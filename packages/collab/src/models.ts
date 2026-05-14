@@ -5,6 +5,20 @@ import { resolveApiDistFile } from './api-dist';
 const debug = Debug('crowi:collab:models');
 
 /**
+ * Renderer surface the collab process needs to call
+ * `Revision.prepareRevision`. Strucutrally compatible with
+ * `@crowi/api`'s `Renderer` interface — kept loose here so we don't
+ * have to import the full type and force a build-time edge into the
+ * collab package.
+ */
+export interface CollabRenderer {
+  runRender(body: string, options?: { mode?: string; pageId?: string }): Promise<{ metadata: unknown; renderedAst: unknown }>;
+  // Used by the api side; not required from collab but kept on the
+  // type so the dist re-export stays one-to-one.
+  warmup?: () => Promise<void>;
+}
+
+/**
  * The collab process re-uses @crowi/api's Mongoose model factories so
  * schemas (and any future statics / instance methods) cannot drift
  * between the two processes. Resolving via `require.resolve` mirrors
@@ -40,7 +54,16 @@ const debug = Debug('crowi:collab:models');
 interface ApiCrowiStub {
   event(name: string): NoopPageEvent;
   model(name: string): unknown;
-  getRenderer(): never;
+  getRenderer(): CollabRenderer;
+  /**
+   * Phase 5: a slot for an externally-built renderer instance. We
+   * defer construction until **after** all models are registered (the
+   * api side's `createRenderer` calls `crowi.model('PluginRenderCache')`
+   * eagerly), then write into this field so the same stub can be
+   * passed back to model factories that internally call
+   * `crowi.getRenderer()` from instance / static methods.
+   */
+  _setRenderer(renderer: CollabRenderer): void;
 }
 
 /**
@@ -87,6 +110,7 @@ const makeNoopPageEvent = (): NoopPageEvent => {
  * happens, or consider Option B (extract models into `@crowi/models`).
  */
 const makeCrowiStub = (): ApiCrowiStub => {
+  let renderer: CollabRenderer | null = null;
   return {
     event: () => makeNoopPageEvent(),
     model: (name) => {
@@ -98,14 +122,26 @@ const makeCrowiStub = (): ApiCrowiStub => {
       return mongoose.model(name);
     },
     getRenderer: () => {
-      throw new Error('[crowi:collab] crowi.getRenderer() is not available in the collab process; renderer-bound code paths must run in @crowi/api.');
+      if (!renderer) {
+        // Phase 5: indicates `registerRenderer` was never wired before
+        // a save tried to call `prepareRevision`. Surfaces as a save
+        // error to the client (caught by save-flow.ts) rather than
+        // crashing the process.
+        throw new Error('[crowi:collab] renderer not initialised — call registerRenderer() after registerModels().');
+      }
+      return renderer;
+    },
+    _setRenderer(r) {
+      renderer = r;
     },
   };
 };
 
 /**
  * The subset of Mongoose models the collab hooks reach for. Exposed as
- * a typed bag so call sites don't string-lookup at hot path.
+ * a typed bag so call sites don't string-lookup at hot path. `User` +
+ * `PluginRenderCache` are wired because `Revision.prepareRevision` and
+ * `createRenderer` look them up at runtime / construction time.
  */
 export interface CollabModels {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,6 +150,10 @@ export interface CollabModels {
   Revision: Model<any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   PageYjsUpdate: Model<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  User: Model<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  PluginRenderCache: Model<any>;
 }
 
 interface ApiModelFactoryModule {
@@ -125,45 +165,84 @@ interface ApiPaths {
   pageJs: string;
   revisionJs: string;
   pageYjsUpdateJs: string;
+  userJs: string;
+  pluginRenderCacheJs: string;
 }
 
 const resolveApiModelPaths = (): ApiPaths => ({
   pageJs: resolveApiDistFile('models/page.js'),
   revisionJs: resolveApiDistFile('models/revision.js'),
   pageYjsUpdateJs: resolveApiDistFile('models/page-yjs-update.js'),
+  userJs: resolveApiDistFile('models/user.js'),
+  pluginRenderCacheJs: resolveApiDistFile('models/plugin-render-cache.js'),
 });
 
+interface ApiRendererModule {
+  createRenderer(crowi: unknown): CollabRenderer;
+}
+
 /**
- * Resolve @crowi/api model factories, invoke them with the minimal
- * crowi stub, and return the resulting Mongoose models. Throws when
- * @crowi/api can't be located so the bootstrap fails fast with a
+ * Result of `registerModels`. Renderer is constructed inline so the
+ * Crowi stub is wired before it leaves this module; callers never see
+ * the stub. Plugin transforms are **not** loaded (the collab process
+ * never runs `PluginManager.bootstrap()`) — the bundled core 5
+ * transforms still execute, which keeps `Revision.meta` in sync with
+ * the api side. RFC-0002's stale-version fallback re-renders missing
+ * plugin output on the api read path; see Phase 5 architecturalNote
+ * "collab 側 renderer".
+ */
+export interface RegisterModelsResult {
+  models: CollabModels;
+  renderer: CollabRenderer;
+}
+
+/**
+ * Resolve @crowi/api model factories + the renderer, wire them
+ * against an internal Crowi stub, and return the result. Throws when
+ * @crowi/api can't be located so bootstrap fails fast with a
  * descriptive error instead of an opaque `mongoose.model is not a
  * function` later on.
  *
- * Must be called **after** `connectMongo()` — Mongoose's
- * `model()` call inside the factories binds the schema to the active
- * connection.
+ * Must be called **after** `connectMongo()` — Mongoose's `model()`
+ * call inside the factories binds the schema to the active connection.
  */
-export function registerModels(): CollabModels {
+export function registerModels(): RegisterModelsResult {
   const paths = resolveApiModelPaths();
   debug('resolving @crowi/api models from %s', paths.pageJs);
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  /* eslint-disable @typescript-eslint/no-var-requires */
   const pageMod = require(paths.pageJs) as ApiModelFactoryModule;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const revisionMod = require(paths.revisionJs) as ApiModelFactoryModule;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pageYjsUpdateMod = require(paths.pageYjsUpdateJs) as ApiModelFactoryModule;
+  const userMod = require(paths.userJs) as ApiModelFactoryModule;
+  const pluginRenderCacheMod = require(paths.pluginRenderCacheJs) as ApiModelFactoryModule;
+  const rendererMod = require(resolveApiDistFile('renderer/index.js')) as ApiRendererModule;
+  /* eslint-enable @typescript-eslint/no-var-requires */
 
   // Order matters: Page's factory registers schema.statics that reach
-  // for `crowi.model('Revision')` via the stub above. Mongoose only
-  // throws on that lookup when the static is invoked (not at definition
-  // time) but we still register Revision first as a defensive measure.
+  // for `crowi.model('Revision')` via the stub. Mongoose only throws on
+  // that lookup when the static is invoked (not at definition time) but
+  // we still register Revision first as a defensive measure. User /
+  // PluginRenderCache are independent and follow.
   const stub = makeCrowiStub();
   const Revision = revisionMod.default(stub);
   const Page = pageMod.default(stub);
   const PageYjsUpdate = pageYjsUpdateMod.default(stub);
+  const User = userMod.default(stub);
+  const PluginRenderCache = pluginRenderCacheMod.default(stub);
 
-  debug('models registered: Page, Revision, PageYjsUpdate');
-  return { Page, Revision, PageYjsUpdate };
+  // Build the renderer against the same stub the model statics close
+  // over — `createRenderer(stub)` reaches for `crowi.model('PluginRenderCache')`
+  // through the stub, which resolves via the Mongoose registry we just
+  // populated. Plugging it back into the stub before returning means
+  // `crowi.getRenderer()` (called from `Revision.prepareRevision`)
+  // can never observe a `null` slot.
+  const renderer = rendererMod.createRenderer(stub as unknown as never);
+  stub._setRenderer(renderer);
+
+  debug('models + renderer registered (core transforms only; plugins not loaded)');
+  return {
+    models: { Page, Revision, PageYjsUpdate, User, PluginRenderCache },
+    renderer,
+  };
 }
