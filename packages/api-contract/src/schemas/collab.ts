@@ -105,6 +105,18 @@ export const CollabSaveMessageSchema = z.object({
 export type CollabSaveMessage = z.infer<typeof CollabSaveMessageSchema>;
 
 /**
+ * Server → client success message after a checkpoint Revision lands.
+ * Phase 5 emits this via Hocuspocus's stateless channel; Phase 8 will
+ * surface `revisionId` in the Save button's success toast so users can
+ * link straight to the new revision.
+ */
+export const CollabSaveOkSchema = z.object({
+  kind: z.literal('crowi:save-ok'),
+  revisionId: z.string(),
+});
+export type CollabSaveOk = z.infer<typeof CollabSaveOkSchema>;
+
+/**
  * Server → client error message emitted when a Hocuspocus-side save
  * fails. The Phase 8 Save UI surfaces `message` in a toast. `code`
  * lets the client branch on retry vs surface-and-stop (e.g.
