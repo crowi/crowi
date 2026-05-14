@@ -6,6 +6,7 @@ import { tokenAuthContract } from './tokenAuth';
 import { meContract } from './me';
 import { pageContract } from './page';
 import { pagePreviewContract } from './page-preview';
+import { pageCollabContract } from './page-collab';
 import { userContract } from './user';
 import { commentContract } from './comment';
 import { bookmarkContract } from './bookmark';
@@ -27,6 +28,7 @@ export const apiContract = c.router({
   me: meContract,
   page: pageContract,
   pagePreview: pagePreviewContract,
+  pageCollab: pageCollabContract,
   user: userContract,
   comment: commentContract,
   bookmark: bookmarkContract,
