@@ -31,6 +31,31 @@ export interface MarkdownEditorHandle {
    * at internals.
    */
   insertAtCursor(snippet: string): number;
+  /**
+   * The scrollable DOM element CodeMirror owns (`view.scrollDOM`).
+   * Exposed so the scroll-sync hook can attach a `scroll` listener
+   * without depending on internal CodeMirror APIs at the callsite.
+   * Returns `null` when the view hasn't mounted yet.
+   */
+  getScrollDOM(): HTMLElement | null;
+  /**
+   * The 1-based source line anchored at the top of the editor's
+   * visible viewport, plus the fractional offset (`0..1`) inside that
+   * line's vertical block. Combining the two gives a continuous
+   * "fractional line" (`line + ratio`) so scroll-sync stays smooth
+   * across long blocks (code fences, multi-line lists) instead of
+   * snapping each time the top-line integer changes.
+   *
+   * Returns `null` if the view hasn't mounted.
+   */
+  getTopProgress(): { line: number; ratio: number } | null;
+  /**
+   * Scroll the editor so `line` (1-based) sits at the top of the
+   * viewport, offset by `ratio` (`0..1`) of that line block's height.
+   * Pairs with `getTopProgress()` for symmetric preview→editor sync.
+   * No-op if `line` is out of document bounds or values are non-finite.
+   */
+  scrollToLineProgress(line: number, ratio: number): void;
 }
 
 /**
@@ -122,6 +147,55 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         });
         view.focus();
         return cursorAfter;
+      },
+      getScrollDOM() {
+        return viewRef.current?.scrollDOM ?? null;
+      },
+      getTopProgress() {
+        const view = viewRef.current;
+        if (!view) return null;
+        const editorRect = view.scrollDOM.getBoundingClientRect();
+        const probeY = editorRect.top + 1;
+        // `posAtCoords` is reliable here — we probe the visible
+        // top of the editor, which is always inside the rendered
+        // viewport that CodeMirror lays out.
+        const pos = view.posAtCoords({ x: editorRect.left + view.defaultCharacterWidth, y: probeY });
+        if (pos == null) return null;
+        const block = view.lineBlockAt(pos);
+        // `documentTop + block.top` gives the block's screen-coord y
+        // regardless of whether CM has currently rendered the block
+        // (`coordsAtPos` returns `null` for off-viewport positions,
+        // which silently corrupts the `ratio` math when fallback
+        // kicks in). Mixing one CM value (`documentTop`, screen
+        // coord of the document's top) with one document coord
+        // (`block.top`) is the project-blessed pattern.
+        const blockScreenTop = view.documentTop + block.top;
+        const ratio = block.height > 0 ? (probeY - blockScreenTop) / block.height : 0;
+        return {
+          line: view.state.doc.lineAt(block.from).number,
+          ratio: Math.max(0, Math.min(1, ratio)),
+        };
+      },
+      scrollToLineProgress(line, ratio) {
+        const view = viewRef.current;
+        if (!view) return;
+        if (!Number.isFinite(line) || !Number.isFinite(ratio)) return;
+        const total = view.state.doc.lines;
+        const clampedLine = Math.max(1, Math.min(line, total));
+        const clampedRatio = Math.max(0, Math.min(1, ratio));
+        const pos = view.state.doc.line(clampedLine).from;
+        const block = view.lineBlockAt(pos);
+        const editorTop = view.scrollDOM.getBoundingClientRect().top;
+        // Same `documentTop + block.top` trick as `getTopProgress` —
+        // critical when the target line is currently far from the
+        // viewport (preview→editor for a big jump). `coordsAtPos`
+        // would return `null` there and the fallback to `editorTop`
+        // produced a positive `delta` that scrolled the wrong way.
+        const blockScreenTop = view.documentTop + block.top;
+        // Relative scroll: shift the scroller by (where the block is
+        // now relative to the editor top) + (the in-block offset).
+        const delta = blockScreenTop - editorTop + block.height * clampedRatio;
+        view.scrollDOM.scrollTop += delta;
       },
     }),
     [],
