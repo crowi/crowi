@@ -6,6 +6,8 @@ import type { CollabWsTokenUtil } from './ws-token';
 import { createOnAuthenticate, type OnAuthenticateDeps } from './hooks/on-authenticate';
 import { createOnLoadDocument } from './hooks/on-load-document';
 import { createOnStoreDocument } from './hooks/on-store-document';
+import { createOnChange } from './hooks/on-change';
+import { createCompactor } from './compaction';
 
 const debug = Debug('crowi:collab:server');
 
@@ -44,17 +46,37 @@ export interface CreateCollabServerOptions {
  * `startCollabServer` (in `index.ts`) registers its own graceful
  * shutdown that also disconnects Mongoose. Letting Hocuspocus call
  * `process.exit(0)` would skip the mongoose teardown.
+ *
+ * Phase 4 wires the `onChange` firehose + a single shared `compactor`
+ * across both `onChange` (count trigger) and `onStoreDocument` (time
+ * trigger + debounce-driven checkpoint). Sharing the compactor is
+ * load-bearing: its in-memory `inflight` Set is what de-duplicates
+ * a count-trigger compaction racing a store-trigger checkpoint for
+ * the same page.
  */
 export function createCollabServer(opts: CreateCollabServerOptions): Server<CollabContext> {
   const { models, wsTokenUtil, port, address, quiet, debounce, maxDebounce, checkEditorCap } = opts;
+
+  const compactor = createCompactor({
+    models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+  });
 
   const onAuthenticate = createOnAuthenticate({
     wsTokenUtil,
     models: { Page: models.Page },
     checkEditorCap,
   });
-  const onLoadDocument = createOnLoadDocument({ models: { Page: models.Page, Revision: models.Revision } });
-  const onStoreDocument = createOnStoreDocument({ models: { Page: models.Page } });
+  const onLoadDocument = createOnLoadDocument({
+    models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+  });
+  const onStoreDocument = createOnStoreDocument({
+    models: { Page: models.Page },
+    compactor,
+  });
+  const onChange = createOnChange({
+    models: { PageYjsUpdate: models.PageYjsUpdate },
+    compactor,
+  });
 
   const server = new Server<CollabContext>({
     name: 'crowi-collab',
@@ -76,6 +98,9 @@ export function createCollabServer(opts: CreateCollabServerOptions): Server<Coll
     },
     async onLoadDocument(payload) {
       await onLoadDocument(payload);
+    },
+    async onChange(payload) {
+      await onChange(payload);
     },
     async onStoreDocument(payload) {
       await onStoreDocument(payload);
