@@ -12,10 +12,13 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
 import { CollaborativeMarkdownEditor, useCollabSession, type CollabSession } from '@/components/editor/CollaborativeMarkdownEditor';
+import { CollabForceReloadDialog } from '@/components/editor/CollabForceReloadDialog';
+import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarning';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
 import { useScrollSync } from '@/lib/use-scroll-sync';
+import { useCollabSave } from '@/lib/use-collab-save';
 import type { CollabStatus } from '@/lib/use-collab-document';
 import { m } from '@paraglide/messages.js';
 
@@ -122,6 +125,18 @@ interface EditorShellProps {
    * Drives the save-button disable + the read-only banner.
    */
   readonly?: boolean;
+  /**
+   * RFC-0003 Phase 8 — when `true`, the EditorShell uses the realtime
+   * Save flow (`crowi:save` over Hocuspocus stateless) instead of the
+   * HTTP `onSave` mutation. The `onSave` prop is then ignored.
+   *
+   * We intentionally surface this as a boolean (not a function) so the
+   * shell can also drive the `same-paragraph` warning + force-reload
+   * dialog from the same `session` it already manages internally —
+   * keeping the realtime UX state co-located is cleaner than threading
+   * 4 more props through the parent.
+   */
+  useRealtimeSave?: boolean;
 }
 
 function EditorShell({
@@ -138,6 +153,7 @@ function EditorShell({
   realtimePageId,
   onReadonlyChange,
   readonly = false,
+  useRealtimeSave = false,
 }: EditorShellProps) {
   // RFC-0003 Phase 7: a single Hocuspocus connection (= one Y.Doc +
   // one provider) is shared by the wide + narrow editor panes. Both
@@ -146,6 +162,19 @@ function EditorShell({
   // own WebSocket. `useCollabSession(null)` is the no-op branch for
   // the create flow where `realtimePageId` is null.
   const session = useCollabSession(realtimePageId);
+  // Phase 8 Save flow: when realtime save is enabled the spinner +
+  // disabled state of the Save button is driven by `useCollabSave`'s
+  // in-flight state instead of the HTTP mutation's `isPending`.
+  const collabSave = useCollabSave(useRealtimeSave ? session : null);
+  // Phase 8 force-reload dialog: open + reason are driven by the
+  // `onForceReload` callback we hand to CollaborativeMarkdownEditor.
+  // We keep the state here in the shell (rather than the parent
+  // editors) because the dialog needs the same lifetime as the
+  // session — the moment the user reloads, both vanish together.
+  const [forceReload, setForceReload] = useState<{ open: boolean; reason?: string }>({ open: false });
+  const handleForceReload = useCallback((reason?: string) => {
+    setForceReload({ open: true, reason });
+  }, []);
   // Collab status toasts: first 'disconnected' surfaces a persistent
   // error toast; first 'connected' after a drop confirms recovery;
   // 'auth-failed' is terminal and recommends a reload.
@@ -269,6 +298,10 @@ function EditorShell({
             realtimePageId={realtimePageId ?? null}
             session={realtimePageId ? session : null}
             onReadonlyChange={onReadonlyChange}
+            // Subscribe on the wide pane only — both panes share the
+            // same `session`'s stateless fan-out, so attaching twice
+            // would fire the handler twice for one broadcast.
+            onForceReload={handleForceReload}
           />
           <PreviewPane source={body} scrollRef={widePreviewScrollRef} active={isWide} />
         </div>
@@ -306,18 +339,53 @@ function EditorShell({
       )}
 
       <footer className="bg-background z-10 flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3 md:px-6">
-        <AttachmentInsertButton pageId={pageId} onInsert={insertAtCursor} onError={onAttachError} />
+        <div className="flex items-center gap-3">
+          <AttachmentInsertButton pageId={pageId} onInsert={insertAtCursor} onError={onAttachError} />
+          {/* Phase 8 — subtle same-paragraph indicator next to the
+              attach button so it shares the footer's secondary-action
+              column. Renders null when no peer overlap, so the layout
+              collapses cleanly in the common case. */}
+          {realtimePageId && <CollabSameBlockWarning awareness={session.awareness} yText={session.yText} localClientId={session.awareness?.clientID ?? null} />}
+        </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={isSaving} type="button">
+          <Button variant="outline" onClick={onCancel} disabled={isSaving || collabSave.isSaving} type="button">
             <X className="mr-1 h-4 w-4" />
             {m['edit.cancel']()}
           </Button>
-          <Button variant="default" onClick={onSave} disabled={isSaving || readonly} type="button">
-            {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
-            {m['edit.save']()}
-          </Button>
+          {useRealtimeSave ? (
+            <Button
+              variant="default"
+              onClick={() => {
+                collabSave
+                  .save()
+                  .then(() => {
+                    toast.success(m['collab.save_success']());
+                  })
+                  .catch((err: { message?: string }) => {
+                    toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
+                  });
+              }}
+              disabled={collabSave.isSaving || readonly || session.status !== 'connected'}
+              type="button"
+            >
+              {collabSave.isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+              {m['edit.save']()}
+            </Button>
+          ) : (
+            <Button variant="default" onClick={onSave} disabled={isSaving || readonly} type="button">
+              {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+              {m['edit.save']()}
+            </Button>
+          )}
         </div>
       </footer>
+
+      {/* Phase 8 — force-reload AlertDialog. Driven by the stateless
+          listener we attached above; the dialog is `open` only after
+          the server has broadcast `crowi:force-reload`, and the user
+          must explicitly click "Reload" — we don't auto-reload to
+          give them a chance to copy any local unsaved text out. */}
+      <CollabForceReloadDialog open={forceReload.open} reason={forceReload.reason} />
     </div>
   );
 }
@@ -344,6 +412,14 @@ interface EditorPaneProps {
   session: CollabSession | null;
   /** Forwarded to the realtime wrapper; ignored in non-realtime mode. */
   onReadonlyChange?: (readonly: boolean) => void;
+  /**
+   * Forwarded to the realtime wrapper so the shell can listen for
+   * `crowi:force-reload` on the stateless channel. Only the wide pane
+   * subscribes — both panes share the same Hocuspocus listener fan-
+   * out via `subscribeStateless`, so attaching twice would fire the
+   * handler twice for one server-side broadcast.
+   */
+  onForceReload?: (reason?: string) => void;
 }
 
 const EditorPane = function EditorPane({
@@ -354,6 +430,7 @@ const EditorPane = function EditorPane({
   realtimePageId,
   session,
   onReadonlyChange,
+  onForceReload,
   ref,
 }: EditorPaneProps & { ref: React.Ref<MarkdownEditorHandle> }) {
   // Same className for both branches so layout + scroll behaviour
@@ -373,6 +450,7 @@ const EditorPane = function EditorPane({
         // insertion paths keep working without a Y.Text dependency.
         onYTextChange={onChange}
         onReadonlyChange={onReadonlyChange}
+        onForceReload={onForceReload}
       />
     );
   }
@@ -513,6 +591,8 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
       subtitle={page.path}
       body={body ?? ''}
       onChangeBody={setBody}
+      // HTTP save path kept as a fallback signature; the realtime
+      // shell ignores `onSave` when `useRealtimeSave` is true.
       onSave={handleSave}
       onCancel={handleCancel}
       isSaving={updateMutation.isPending}
@@ -522,6 +602,9 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
       realtimePageId={page._id}
       onReadonlyChange={handleReadonlyChange}
       readonly={readonly}
+      // Phase 8: in-flight edits land via `crowi:save` over Hocuspocus
+      // — the HTTP path stays around for the create flow only.
+      useRealtimeSave={true}
     />
   );
 }
