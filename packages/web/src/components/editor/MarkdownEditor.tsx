@@ -1,8 +1,7 @@
 'use client';
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import type { Extension } from '@codemirror/state';
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { buildExtensions } from './build-extensions';
 
@@ -95,21 +94,34 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   // where the inline `onChange` closure changes identity, blowing away
   // selection / undo history.
   const onChangeRef = useRef(onChange);
-  const extraExtensionsRef = useRef<Extension[] | undefined>(extraExtensions);
   const readonlyRef = useRef<boolean>(readonly ?? false);
   const disableHistoryRef = useRef<boolean>(disableHistory ?? false);
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
   useEffect(() => {
-    extraExtensionsRef.current = extraExtensions;
-  }, [extraExtensions]);
-  useEffect(() => {
     readonlyRef.current = readonly ?? false;
   }, [readonly]);
   useEffect(() => {
     disableHistoryRef.current = disableHistory ?? false;
   }, [disableHistory]);
+
+  // Reconfigurable slots:
+  //
+  //   - `extra` lets the collab wrapper inject `yCollab(yText, awareness)`
+  //     after the Hocuspocus handshake (~100 ms after mount). The
+  //     editor stays mounted but the extension list hot-swaps.
+  //   - `readonly` toggles the doc's writability without rebuilding the
+  //     view. The same wrapper flips this off once Y.Text has been
+  //     hydrated from the server (= editor goes from "pending readonly"
+  //     to "live writable").
+  //
+  // Without compartments either slot would be frozen at mount-time and
+  // the realtime flow couldn't transition the editor into a writable
+  // state once the doc arrived.
+  const extraCompartmentRef = useRef<Compartment>(new Compartment());
+  const readonlyCompartmentRef = useRef<Compartment>(new Compartment());
+  const readonlyExtension = (on: boolean): Extension => (on ? EditorState.readOnly.of(true) : []);
 
   // Mount the EditorView once. Initial doc comes from `value` at mount
   // time; subsequent external updates flow through the sync effect below.
@@ -122,12 +134,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const onChangeAtMount = onChangeRef.current;
     const state = EditorState.create({
       doc: value,
-      extensions: buildExtensions({
-        readonly: readonlyRef.current,
-        extraExtensions: extraExtensionsRef.current,
-        disableHistory: disableHistoryRef.current,
-        onChange: onChangeAtMount ? (next) => onChangeRef.current?.(next) : undefined,
-      }),
+      extensions: [
+        buildExtensions({
+          // `readonly` is intentionally omitted here — the compartment
+          // below owns its lifecycle.
+          disableHistory: disableHistoryRef.current,
+          onChange: onChangeAtMount ? (next) => onChangeRef.current?.(next) : undefined,
+        }),
+        readonlyCompartmentRef.current.of(readonlyExtension(readonlyRef.current)),
+        extraCompartmentRef.current.of(extraExtensions ?? []),
+      ],
     });
     const view = new EditorView({ state, parent });
     viewRef.current = view;
@@ -136,9 +152,31 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       viewRef.current = null;
     };
     // Intentionally empty deps: see comment above about teardown cost.
-    // `value` is synced via the next effect.
+    // `value` / `readonly` / `extraExtensions` flow through the dedicated
+    // sync effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Hot-swap the caller-supplied extensions whenever the parent updates
+  // them. `Compartment.reconfigure` rebuilds only that slice of the
+  // extension tree — no view rebuild, no selection / history loss.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: extraCompartmentRef.current.reconfigure(extraExtensions ?? []),
+    });
+  }, [extraExtensions]);
+
+  // Reconfigure the readonly slot when the caller flips the prop. Same
+  // shape as the extra-extensions hot-swap above.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: readonlyCompartmentRef.current.reconfigure(readonlyExtension(readonly ?? false)),
+    });
+  }, [readonly]);
 
   // Sync `value` prop → editor doc when they diverge. Echo guard:
   // skip the dispatch when the buffers already match, otherwise the
