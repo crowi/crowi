@@ -48,14 +48,35 @@ const revisionToFullResponse = (revision: RevisionDocument, options: { withMeta?
 
 /**
  * Convert to the lightweight RevisionMetaSchema shape (no body, no format).
+ *
+ * Phase 8 (RFC-0003) addition: when the underlying Revision has the
+ * collab-flow `savedBy` / `contributors` populated (i.e. it was
+ * created by a `crowi:save` checkpoint), surface both in the meta
+ * response so the page-history view can render
+ *   "Saved by Alice (with Bob, Carol)"
+ *
+ * v1.x revisions (and any Revision predating RFC-0003) are left with
+ * `savedBy: undefined` / `contributors: undefined` so the consumer
+ * falls back to the existing `author`-only display — no schema break.
  */
 const revisionToMetaResponse = (revision: RevisionDocument) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const obj = revision.toObject() as any;
+  const obj = revision.toObject() as {
+    author?: unknown;
+    savedBy?: unknown;
+    contributors?: unknown[];
+  };
+  const savedBy = isPopulatedUser(obj.savedBy) ? toPageUser(obj.savedBy) : undefined;
+  const contributors = Array.isArray(obj.contributors) ? obj.contributors.filter(isPopulatedUser).map(toPageUser) : undefined;
   return {
     _id: revision._id.toString(),
     path: revision.path,
     author: isPopulatedUser(obj.author) ? toPageUser(obj.author) : null,
+    savedBy,
+    // Omit the field entirely (not `[]`) when undefined so v1.x
+    // responses match the pre-RFC-0003 shape byte-for-byte; the
+    // optional `.contributors` on `RevisionMetaSchema` covers both
+    // shapes.
+    ...(contributors !== undefined ? { contributors } : {}),
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
   };
 };
@@ -93,12 +114,21 @@ export default (crowi: Crowi, _app: Express) => {
         // findRevisionIdList returns _id, author, createdAt only and sorts desc.
         // We populate author for response shaping; path is filled from the page
         // because findRevisionIdList omits it (it's redundant for a single page).
+        //
+        // Phase 8 (RFC-0003): also pull savedBy + contributors so the
+        // history view can render checkpoint authors + the awareness-
+        // confirmed peer list. Populating in one round-trip (chained
+        // `.populate()` calls collapse to a single `$lookup`) keeps the
+        // list endpoint at O(1) DB queries irrespective of contributor
+        // count.
         const allRevisions = await Revision.find({ path: page.path })
-          .select('_id path author createdAt')
+          .select('_id path author savedBy contributors createdAt')
           .sort({ createdAt: -1 })
           .skip(offset)
           .limit(limit + 1) // fetch +1 to know if there's a next page
           .populate('author')
+          .populate('savedBy')
+          .populate('contributors')
           .exec();
 
         const hasNext = allRevisions.length > limit;
