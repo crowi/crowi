@@ -6,6 +6,34 @@ import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 /**
+ * Resolve the WebSocket endpoint the HocuspocusProvider should
+ * connect to. RFC-0003 Phase 9 (same-process attach):
+ *
+ *   1. `NEXT_PUBLIC_COLLAB_URL` env wins when set — operators that
+ *      front the api behind a distinct WebSocket host (e.g.
+ *      `wss://collab.example.com`) configure it explicitly.
+ *   2. Otherwise derive `ws[s]://<window.location.host>` — same
+ *      host the browser already loaded the page from. In production
+ *      this assumes the reverse proxy forwards `/collab/*` to the
+ *      api process; in dev (web :3301 / api :3300) Next.js's
+ *      `rewrites()` config in `next.config.ts` redirects `/collab/*`
+ *      to the api so the location-derived URL still resolves
+ *      correctly.
+ *   3. SSR fallback (`typeof window === 'undefined'`) — never
+ *      actually reached because the effect that calls this is
+ *      gated behind `useEffect` (client-only), but a defensive
+ *      string keeps TypeScript happy and avoids a `URL` parse
+ *      throw if this ever ran during build-time evaluation.
+ */
+function resolveCollabUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_COLLAB_URL;
+  if (fromEnv && fromEnv.length > 0) return fromEnv;
+  if (typeof window === 'undefined') return 'ws://localhost:3300';
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${wsProtocol}//${window.location.host}`;
+}
+
+/**
  * Re-export of `y-protocols/awareness#Awareness` so that downstream
  * components don't need to depend on `y-protocols` directly. Hocuspocus
  * owns the actual awareness instance via `provider.awareness`; we just
@@ -155,7 +183,7 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
   useEffect(() => {
     if (!pageId || !wsToken) return;
 
-    const url = process.env.NEXT_PUBLIC_COLLAB_URL ?? 'ws://localhost:3302';
+    const url = resolveCollabUrl();
     const doc = new Y.Doc();
     const undoManager = new Y.UndoManager(doc.getText('content'));
 
