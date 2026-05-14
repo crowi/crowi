@@ -33,6 +33,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
   - `pageNotFoundResponse` / `invalidPageIdResponse` を util の const に
   - `pageToResponse` の date 系を fallback (createdAt/updatedAt が undefined でも schema を満たす) に
 - [x] **`loadGrantedPage` を util に格上げ** (`0f988d3e`): `PageModelLike` 経由で page / bookmark / comment / notification / revision から呼べるように昇格
+- [ ] **RFC-0003 Phase 5 — `Page.revision` / `Page.currentRevision` の atomic update helper** (Phase 1 simplify advisory): Phase 1 で `currentRevision` を追加したが、既存の `revision` フィールドも温存して **共存** 状態にある。 Phase 5 の save flow で両フィールドを同時に更新する必要があり、 既存 `Page.updateOne({_id}, {revision: revisionId})` のような直接代入経路 (`models/page.ts:578` ほか) はすべて両更新する helper (`updatePageRevisionPointer(page, revisionId)` 等) に集約する。 単純な代入だと一方だけ更新されて drift する silent bug が出やすい
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 
