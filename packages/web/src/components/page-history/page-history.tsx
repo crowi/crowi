@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { GitCompare, History as HistoryIcon, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { UserAvatar } from '@/components/user-avatar';
 import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { usePageRevisions } from '@/lib/use-page-revisions';
 import { RevisionDiff } from './revision-diff';
 import { m } from '@paraglide/messages.js';
+import { getLocale } from '@paraglide/runtime.js';
 
 interface PageHistoryProps {
   pageId: string;
@@ -26,6 +27,14 @@ interface PageHistoryProps {
  */
 export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
   const { revisions, isLoading, isError, error, refetch } = usePageRevisions(pageId);
+
+  // Locale-aware joiner for the contributors list ("Alice, Bob, and
+  // Carol" in en, 「Alice、Bob、Carol」 in ja). Memoised against the
+  // current locale so we don't allocate a fresh formatter per render.
+  const listFormatter = useMemo(() => {
+    const locale = getLocale() === 'ja' ? 'ja-JP' : 'en-US';
+    return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
+  }, []);
 
   // 一覧上の選択状態 (まだ Compare を押していない)
   const [pendingFrom, setPendingFrom] = useState<string | null>(null);
@@ -140,7 +149,26 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                 </thead>
                 <tbody>
                   {revisions.map((rev) => {
-                    const author = rev.author ?? null;
+                    // When the revision was made via the collab
+                    // `crowi:save` flow, `savedBy` holds the user who
+                    // triggered the checkpoint and `contributors`
+                    // lists the peers who had a live cursor on the
+                    // page since the previous Save. Pre-RFC-0003
+                    // revisions have neither, so we fall back to
+                    // `author` (which v1.x already populated for
+                    // every revision).
+                    const savedBy = rev.savedBy ?? rev.author ?? null;
+                    const allContributors = rev.contributors ?? [];
+                    // Defensive de-dup: the server already filters
+                    // savedBy out of contributors before persisting,
+                    // but legacy data + future Hocuspocus changes
+                    // could re-introduce the duplicate — strip it
+                    // here so the UI never repeats "Saved by Alice
+                    // (with Alice, Bob)". `Intl.ListFormat` then
+                    // handles locale separators (English ", and";
+                    // Japanese 「、」).
+                    const contributors = savedBy ? allContributors.filter((c) => c._id !== savedBy._id) : allContributors;
+                    const contributorNames = listFormatter.format(contributors.map((c) => c.name));
                     const isFrom = pendingFrom === rev._id;
                     const isTo = pendingTo === rev._id;
                     return (
@@ -168,13 +196,13 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                           />
                         </td>
                         <td className="px-3 py-2">
-                          {author ? (
+                          {savedBy ? (
                             <div className="flex items-center gap-2">
-                              <Avatar className="h-6 w-6">
-                                <AvatarImage src={author.image || undefined} alt={author.name} />
-                                <AvatarFallback className="bg-primary/10 text-primary text-xs">{author.name.charAt(0).toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              <span className="truncate">{author.name}</span>
+                              <UserAvatar user={savedBy} size="sm" />
+                              <span className="truncate">{savedBy.name}</span>
+                              {contributors.length > 0 && (
+                                <span className="text-muted-foreground ml-1 text-xs">{m['collab.history_with_others']({ names: contributorNames })}</span>
+                              )}
                             </div>
                           ) : (
                             <span className="text-muted-foreground">{m['page_history.unknown_author']()}</span>
