@@ -241,8 +241,14 @@ describe('@crowi/collab Phase 4 compaction', () => {
     expect(compactSpy).toHaveBeenCalledWith(pageId);
 
     // And we wait for the actual compaction to flush before asserting
-    // pending count, since compactPage runs async.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // pending count, since compactPage runs async. Poll instead of a
+    // fixed wait — under heavy parallel jest load the 50ms-fixed wait
+    // sometimes raced the in-memory mongodb DELETE; up to ~500ms is
+    // still well below any reasonable per-test budget.
+    for (let i = 0; i < 25; i += 1) {
+      if ((await countPending(pageId)) === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
     expect(await countPending(pageId)).toBe(0);
   });
 
