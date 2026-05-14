@@ -21,9 +21,10 @@
   "license": "MIT",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "dev": "turbo run dev --concurrency=20 --filter @crowi/api --filter @crowi/web --filter @crowi/api-contract --filter @crowi/runner --filter \"@crowi/plugin-*\"",
+    "dev": "turbo run dev --concurrency=20 --filter @crowi/api --filter @crowi/web --filter @crowi/collab --filter @crowi/api-contract --filter @crowi/runner --filter \"@crowi/plugin-*\"",
     "dev:api": "turbo run dev --concurrency=20 --filter @crowi/api --filter @crowi/api-contract --filter @crowi/runner --filter \"@crowi/plugin-*\"",
     "dev:web": "turbo run dev --filter @crowi/web",
+    "dev:collab": "turbo run dev --concurrency=20 --filter @crowi/collab --filter @crowi/api-contract",
     "dev:site": "turbo run dev --filter @crowi/site",
     "build": "turbo run build",
     "test": "turbo run test",
