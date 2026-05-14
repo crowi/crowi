@@ -1,20 +1,46 @@
 {
   "tagline": "The Markdown Wiki",
   "subtitle": "Empower the team with sharing your knowledge",
+  "statusStrip": {
+    "label": "Status",
+    "value": "Active development on main",
+    "version": "v2 · alpha track",
+    "codename": "Codename: Reignite"
+  },
   "hero": {
     "badge": "Coming Soon",
     "reigniteAlt": "Crowi Reignite",
+    "eyebrow": "Open source · since 2014",
+    "headlineLead": "The Markdown",
+    "headlineWiki": "Wiki",
+    "headlineDash": "—",
+    "headlineReignited": "Reignited",
     "intro": "Crowi v2 is back in active development under the codename ",
     "introHighlight": "Reignite",
     "introTail": ".",
     "ctaArticle": "Read the announcement",
     "ctaGithub": "View on GitHub"
   },
+  "ticker": [
+    "Reignited 2026",
+    "Markdown-first",
+    "Type-safe API",
+    "Next.js 16 App Router",
+    "Node.js 24.x",
+    "Pluggable",
+    "MIT-licensed",
+    "v1 data compatible"
+  ],
   "about": {
+    "chapter": "Ch. 01",
+    "kicker": "About",
     "title": "About Crowi",
-    "description": "Crowi is an open-source Markdown-based wiki application. Originally released in 2014, it's built so teams can share what they know."
+    "description": "Crowi is an open-source Markdown-based wiki application. Originally released in 2014, it's built so teams can share what they know.",
+    "lede": "Write in Markdown, connect with links, retrieve through search — a wiki built for the long haul."
   },
   "reignite": {
+    "chapter": "Ch. 02",
+    "kicker": "What Reignite brings",
     "title": "What Reignite brings",
     "items": [
       {
@@ -23,7 +49,7 @@
       },
       {
         "title": "API-first",
-        "description": "Server and view fully separated. A type-safe ts-rest contract makes Crowi programmable from anywhere."
+        "description": "Server and view fully separated. A type-safe API contract makes Crowi programmable from anywhere."
       },
       {
         "title": "Compatible with v1 data",
@@ -31,18 +57,50 @@
       },
       {
         "title": "Modern runtime",
-        "description": "Node.js 22.x, MongoDB, Redis, optional Elasticsearch — plus pluggable storage, search, and auth."
+        "description": "Node.js 24.x, MongoDB, Redis, optional Elasticsearch — plus pluggable storage, search, and auth."
       }
     ]
   },
   "status": {
+    "chapter": "Ch. 03",
+    "kicker": "Where we are",
     "title": "Where we are",
-    "description": "Active development on main. Core features (page CRUD / list / history / comments / notifications / bookmarks / likes / trash / backlinks / user pages) have all migrated to the new stack. Admin section and search are next.",
+    "description": "Active development on main. Core features have all migrated to the new stack. Admin section and search are next.",
+    "completedLabel": "Migrated",
+    "completed": [
+      "Page CRUD",
+      "List / portal",
+      "Revisions",
+      "Comments / notifications",
+      "Bookmarks / likes",
+      "Trash / backlinks",
+      "User pages",
+      "Watch / seen-by"
+    ],
+    "upcomingLabel": "In progress",
+    "upcoming": [
+      "Admin",
+      "Search (Elasticsearch)",
+      "Page share",
+      "Editor refresh"
+    ],
     "ctaGithub": "Browse the code",
     "ctaIssues": "Open issues"
   },
+  "runtime": {
+    "label": "Stack",
+    "items": [
+      { "k": "Runtime", "v": "Node.js 24.x" },
+      { "k": "Web", "v": "Next.js 16" },
+      { "k": "API", "v": "v1 compatible" },
+      { "k": "DB", "v": "MongoDB" },
+      { "k": "Search", "v": "Elasticsearch (opt.)" },
+      { "k": "License", "v": "MIT" }
+    ]
+  },
   "footer": {
     "copyright": "Crowi is open source software released under the MIT License.",
+    "tagline": "Empower the team with sharing your knowledge.",
     "links": {
       "github": "GitHub",
       "issues": "Issues",

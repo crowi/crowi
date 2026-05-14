@@ -14,7 +14,7 @@ export default async function LangLayout({ params, children }: { params: Promise
 
   return (
     <html lang={lang} suppressHydrationWarning>
-      <body className="flex min-h-screen flex-col">
+      <body className="flex min-h-screen flex-col bg-[var(--cw-bg)] text-[var(--cw-fg)]">
         <RootProvider i18n={i18nUI.provider(lang)}>{children}</RootProvider>
       </body>
     </html>

@@ -1,4 +1,4 @@
-import { ArrowRightIcon, ExternalLinkIcon, GitForkIcon } from 'lucide-react';
+import { ArrowUpRightIcon, CheckIcon, CircleDashedIcon, GithubIcon } from 'lucide-react';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { getDictionary } from '@/lib/dictionaries';
@@ -13,119 +13,282 @@ export default async function MarketingHome({ params }: { params: Promise<{ lang
   if (!isLocale(lang)) notFound();
   const dict = await getDictionary(lang);
 
+  const tickerLoop = [...dict.ticker, ...dict.ticker];
+
   return (
-    <main className="flex flex-1 flex-col">
-      <section className="relative overflow-hidden border-b">
+    <main className="relative flex flex-1 flex-col overflow-hidden bg-[var(--cw-bg)] text-[var(--cw-fg)]">
+      {/* ─── Status strip ─────────────────────────────────────────────────── */}
+      <div className="relative z-10 border-b border-[var(--cw-line)] bg-[var(--cw-bg-strip)] backdrop-blur-sm">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-2 text-[var(--cw-fg-soft)]">
+          <div className="font-mono-label flex items-center gap-3">
+            <span className="pulse-dot inline-block size-1.5 rounded-full text-[var(--cw-ember)]" aria-hidden />
+            <span className="text-[var(--cw-fg)]">{dict.statusStrip.label}</span>
+            <span aria-hidden className="text-[var(--cw-teal)]">
+              /
+            </span>
+            <span>{dict.statusStrip.value}</span>
+          </div>
+          <div className="font-mono-label hidden items-center gap-4 md:flex">
+            <span>{dict.statusStrip.version}</span>
+            <span aria-hidden className="text-[var(--cw-teal)]">
+              /
+            </span>
+            <span className="text-[var(--cw-ember-soft)]">{dict.statusStrip.codename}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Hero ─────────────────────────────────────────────────────────── */}
+      <section className="grain relative overflow-hidden">
+        <div className="ember-glow pointer-events-none absolute inset-0 -z-10" aria-hidden />
+        {/* Faint editorial baseline grid lines */}
         <div
-          className="pointer-events-none absolute inset-0 -z-10 opacity-60"
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.06]"
           style={{
-            background:
-              'radial-gradient(ellipse at top, rgba(255, 110, 140, 0.18), transparent 60%), radial-gradient(ellipse at bottom, rgba(67, 103, 107, 0.10), transparent 70%)',
+            backgroundImage: 'linear-gradient(to right, var(--cw-fg) 1px, transparent 1px)',
+            backgroundSize: '12.5% 100%',
           }}
         />
-        <div className="container mx-auto flex max-w-5xl flex-col items-center px-6 py-20 text-center md:py-28">
-          <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium uppercase tracking-wider text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
-            {dict.hero.badge}
-          </span>
-          <div className="mt-8 w-full max-w-2xl">
-            <Image src="/crowi-reignite.webp" alt={dict.hero.reigniteAlt} width={1920} height={1080} priority className="h-auto w-full" />
-          </div>
-          <h1 className="mt-10 text-balance text-3xl font-bold tracking-tight md:text-5xl">
-            <span className="text-fd-primary">Crowi</span>
-            <span className="mx-3 text-fd-muted-foreground">—</span>
-            <span>{dict.tagline}</span>
-          </h1>
-          <p className="mt-5 max-w-2xl text-balance text-lg leading-relaxed text-fd-muted-foreground md:text-xl">{dict.subtitle}</p>
-          <p className="mt-6 max-w-2xl text-balance text-base text-fd-muted-foreground">
-            {dict.hero.intro}
-            <span className="font-semibold text-rose-500">{dict.hero.introHighlight}</span>
-            {dict.hero.introTail}
-          </p>
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-            <a
-              href={ZENN_ARTICLE_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-fd-primary px-6 font-medium text-fd-primary-foreground shadow-sm transition hover:opacity-90"
-            >
-              {dict.hero.ctaArticle}
-              <ArrowRightIcon className="size-4" />
-            </a>
-            <a
-              href={GITHUB_REPO_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md border bg-fd-background px-6 font-medium shadow-sm transition hover:bg-fd-accent"
-            >
-              <GitForkIcon className="size-4" />
-              {dict.hero.ctaGithub}
-            </a>
-          </div>
-        </div>
-      </section>
 
-      <section className="border-b">
-        <div className="container mx-auto max-w-3xl px-6 py-16 text-center md:py-20">
-          <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">{dict.about.title}</h2>
-          <p className="mt-4 leading-relaxed text-fd-muted-foreground">{dict.about.description}</p>
-        </div>
-      </section>
-
-      <section className="border-b">
-        <div className="container mx-auto max-w-5xl px-6 py-20 md:py-24">
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">{dict.reignite.title}</h2>
-          <div className="mt-12 grid gap-6 md:grid-cols-2">
-            {dict.reignite.items.map((item) => (
-              <div key={item.title} className="rounded-lg border bg-fd-card p-6 shadow-sm">
-                <h3 className="text-lg font-semibold">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-fd-muted-foreground">{item.description}</p>
+        <div className="mx-auto max-w-7xl px-6 pb-20 pt-16 md:pb-28 md:pt-24">
+          <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-10">
+            {/* Left column — copy */}
+            <div className="lg:col-span-7">
+              <div className="reveal reveal-1 font-mono-label flex items-center gap-3 text-[var(--cw-ember-soft)]">
+                <span aria-hidden className="inline-block h-px w-8 bg-[var(--cw-ember-soft)]" />
+                {dict.hero.eyebrow}
               </div>
+
+              <h1 className="mt-7 max-w-[12ch] text-balance text-[clamp(2.75rem,7.5vw,6.25rem)] font-medium leading-[0.95] tracking-[-0.025em]">
+                <span className="reveal reveal-2 block">{dict.hero.headlineLead}</span>
+                <span className="reveal reveal-3 block">
+                  {dict.hero.headlineWiki}
+                  <span aria-hidden className="mx-3 text-[var(--cw-teal)]">
+                    {dict.hero.headlineDash}
+                  </span>
+                </span>
+                <span className="reveal reveal-4 block font-semibold text-[var(--cw-ember-soft)]">{dict.hero.headlineReignited}</span>
+              </h1>
+
+              <p className="reveal reveal-5 mt-8 max-w-xl text-pretty text-base leading-relaxed text-[var(--cw-fg-soft)] md:text-lg">
+                {dict.hero.intro}
+                <span className="font-semibold text-[var(--cw-ember-soft)]">{dict.hero.introHighlight}</span>
+                {dict.hero.introTail}
+              </p>
+
+              <div className="reveal reveal-5 mt-10 flex flex-wrap items-center gap-3">
+                <a
+                  href={ZENN_ARTICLE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group inline-flex h-12 items-center gap-3 rounded-none bg-[var(--cw-ember)] px-6 text-sm font-medium text-[var(--cw-on-ember)] shadow-[0_0_0_1px_var(--cw-ember),0_18px_40px_-18px_oklch(0.74_0.165_18_/_0.7)] transition hover:opacity-90"
+                >
+                  <span>{dict.hero.ctaArticle}</span>
+                  <ArrowUpRightIcon className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                </a>
+                <a
+                  href={GITHUB_REPO_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group inline-flex h-12 items-center gap-3 rounded-none border border-[var(--cw-line-strong)] bg-transparent px-6 text-sm font-medium text-[var(--cw-fg)] transition hover:border-[var(--cw-ember-soft)] hover:text-[var(--cw-ember-soft)]"
+                >
+                  <GithubIcon className="size-4" />
+                  <span>{dict.hero.ctaGithub}</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Right column — Reignite mark + stack */}
+            <aside className="lg:col-span-5">
+              <div className="relative">
+                <div className="reignite-halo absolute inset-0 -z-10" aria-hidden />
+                <Image src="/crowi-reignite.webp" alt={dict.hero.reigniteAlt} width={1920} height={1080} priority className="reveal reveal-2 h-auto w-full" />
+              </div>
+
+              {/* Stack table */}
+              <div className="reveal reveal-5 mt-8 border-t border-[var(--cw-line-strong)]">
+                <div className="font-mono-label flex items-center justify-between py-3 text-[var(--cw-muted)]">
+                  <span>{dict.runtime.label}</span>
+                  <span aria-hidden>↓</span>
+                </div>
+                <dl className="grid grid-cols-1 border-t border-[var(--cw-line)]">
+                  {dict.runtime.items.map((row) => (
+                    <div key={row.k} className="flex items-baseline justify-between gap-4 border-b border-[var(--cw-line)] py-2.5 text-sm last:border-b-0">
+                      <dt className="font-mono-label text-[var(--cw-muted)]">{row.k}</dt>
+                      <dd className="text-sm font-medium text-[var(--cw-fg)]">{row.v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Ticker / tagline marquee ─────────────────────────────────────── */}
+      <section aria-hidden className="relative overflow-hidden border-y border-[var(--cw-line)] bg-[var(--cw-bg-strip)] py-5">
+        <div className="marquee-track flex w-max items-center gap-12 whitespace-nowrap">
+          {tickerLoop.map((word, i) => (
+            <span key={`${word}-${i}`} className="flex items-center gap-12 text-xl font-medium tracking-tight text-[var(--cw-fg)] md:text-2xl">
+              {word}
+              <span aria-hidden className="text-[var(--cw-ember)]">
+                ✦
+              </span>
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* ─── Ch. 01 — About ───────────────────────────────────────────────── */}
+      <section className="relative">
+        <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
+          <header className="max-w-3xl">
+            <div className="font-mono-label flex items-center gap-3 text-[var(--cw-ember-soft)]">
+              <span>{dict.about.chapter}</span>
+              <span aria-hidden className="inline-block h-px w-10 bg-[var(--cw-line-strong)]" />
+              <span className="text-[var(--cw-muted)]">{dict.about.kicker}</span>
+            </div>
+            <h2 className="mt-5 text-balance text-3xl font-medium leading-[1.15] tracking-tight md:text-4xl">{dict.about.title}</h2>
+          </header>
+          <div className="mt-12 grid grid-cols-1 gap-10 lg:grid-cols-12">
+            <p className="text-pretty text-2xl font-medium leading-snug tracking-tight text-[var(--cw-fg)] lg:col-span-7 md:text-3xl">{dict.about.lede}</p>
+            <p className="text-base leading-relaxed text-[var(--cw-fg-soft)] lg:col-span-5">{dict.about.description}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Ch. 02 — Reignite items ──────────────────────────────────────── */}
+      <section className="relative border-t border-[var(--cw-line)]">
+        <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
+          <header className="mb-12 grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-end">
+            <div className="lg:col-span-7">
+              <div className="font-mono-label flex items-center gap-3 text-[var(--cw-ember-soft)]">
+                <span>{dict.reignite.chapter}</span>
+                <span aria-hidden className="inline-block h-px w-10 bg-[var(--cw-line-strong)]" />
+                <span className="text-[var(--cw-muted)]">{dict.reignite.kicker}</span>
+              </div>
+              <h2 className="mt-6 text-balance text-4xl font-medium tracking-tight md:text-5xl">{dict.reignite.title}</h2>
+            </div>
+          </header>
+
+          <ol className="border-t border-[var(--cw-line)]">
+            {dict.reignite.items.map((item, idx) => (
+              <li
+                key={item.title}
+                className="group grid grid-cols-1 items-baseline gap-4 border-b border-[var(--cw-line)] py-8 transition hover:bg-[var(--cw-surface-hover)] lg:grid-cols-12 lg:gap-8 lg:py-10"
+              >
+                <span className="font-mono-label text-[var(--cw-ember-soft)] lg:col-span-1">{String(idx + 1).padStart(2, '0')}</span>
+                <h3 className="text-2xl font-medium leading-tight tracking-tight text-[var(--cw-fg)] lg:col-span-5 lg:text-3xl">{item.title}</h3>
+                <p className="text-base leading-relaxed text-[var(--cw-fg-soft)] lg:col-span-6">{item.description}</p>
+              </li>
             ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* ─── Ch. 03 — Migration status ────────────────────────────────────── */}
+      <section className="relative border-t border-[var(--cw-line)]">
+        <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
+          <header className="max-w-3xl">
+            <div className="font-mono-label flex items-center gap-3 text-[var(--cw-ember-soft)]">
+              <span>{dict.status.chapter}</span>
+              <span aria-hidden className="inline-block h-px w-10 bg-[var(--cw-line-strong)]" />
+              <span className="text-[var(--cw-muted)]">{dict.status.kicker}</span>
+            </div>
+            <h2 className="mt-5 text-balance text-3xl font-medium leading-[1.15] tracking-tight md:text-4xl">{dict.status.title}</h2>
+            <p className="mt-5 max-w-2xl text-base leading-relaxed text-[var(--cw-fg-soft)]">{dict.status.description}</p>
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              <a
+                href={GITHUB_REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="group inline-flex h-10 items-center gap-2 border border-[var(--cw-line-strong)] bg-transparent px-4 text-xs font-medium tracking-wide text-[var(--cw-fg)] transition hover:border-[var(--cw-ember-soft)] hover:text-[var(--cw-ember-soft)]"
+              >
+                <GithubIcon className="size-3.5" />
+                <span>{dict.status.ctaGithub}</span>
+              </a>
+              <a
+                href={GITHUB_ISSUES_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="group inline-flex h-10 items-center gap-2 border border-[var(--cw-line-strong)] bg-transparent px-4 text-xs font-medium tracking-wide text-[var(--cw-fg)] transition hover:border-[var(--cw-ember-soft)] hover:text-[var(--cw-ember-soft)]"
+              >
+                <span>{dict.status.ctaIssues}</span>
+                <ArrowUpRightIcon className="size-3.5" />
+              </a>
+            </div>
+          </header>
+
+          <div className="mt-14 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:max-w-3xl">
+            {/* Done */}
+            <div>
+              <div className="font-mono-label flex items-center gap-2 text-[var(--cw-ember)]">
+                <CheckIcon className="size-3.5" />
+                <span>{dict.status.completedLabel}</span>
+              </div>
+              <ul className="mt-5 space-y-3 border-l border-[var(--cw-ember-line)] pl-5">
+                {dict.status.completed.map((c) => (
+                  <li key={c} className="flex items-baseline gap-3 text-sm text-[var(--cw-fg)]">
+                    <span aria-hidden className="text-[var(--cw-ember)]">
+                      ✓
+                    </span>
+                    <span>{c}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {/* In progress */}
+            <div>
+              <div className="font-mono-label flex items-center gap-2 text-[var(--cw-muted)]">
+                <CircleDashedIcon className="size-3.5" />
+                <span>{dict.status.upcomingLabel}</span>
+              </div>
+              <ul className="mt-5 space-y-3 border-l border-dashed border-[var(--cw-line-strong)] pl-5">
+                {dict.status.upcoming.map((u) => (
+                  <li key={u} className="flex items-baseline gap-3 text-sm text-[var(--cw-fg-soft)]">
+                    <span aria-hidden className="text-[var(--cw-muted)]">
+                      ○
+                    </span>
+                    <span>{u}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>
 
-      <section>
-        <div className="container mx-auto max-w-3xl px-6 py-20 text-center md:py-24">
-          <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">{dict.status.title}</h2>
-          <p className="mt-4 leading-relaxed text-fd-muted-foreground">{dict.status.description}</p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href={GITHUB_REPO_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-fd-background px-5 text-sm font-medium shadow-sm transition hover:bg-fd-accent"
-            >
-              <GitForkIcon className="size-4" />
-              {dict.status.ctaGithub}
-            </a>
-            <a
-              href={GITHUB_ISSUES_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-fd-background px-5 text-sm font-medium shadow-sm transition hover:bg-fd-accent"
-            >
-              <ExternalLinkIcon className="size-4" />
-              {dict.status.ctaIssues}
-            </a>
+      {/* ─── Footer ───────────────────────────────────────────────────────── */}
+      <footer className="relative mt-auto border-t border-[var(--cw-line)] bg-[var(--cw-bg-strip)]">
+        <div className="mx-auto max-w-7xl px-6 py-14">
+          <div className="grid grid-cols-1 items-end gap-10 md:grid-cols-12">
+            <div className="md:col-span-7">
+              <p className="text-2xl font-medium leading-tight tracking-tight text-[var(--cw-fg)] md:text-3xl">{dict.footer.tagline}</p>
+            </div>
+            <nav className="font-mono-label flex flex-wrap items-center gap-5 text-[var(--cw-fg-soft)] md:col-span-5 md:justify-end">
+              <a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer" className="transition hover:text-[var(--cw-ember-soft)]">
+                {dict.footer.links.github}
+              </a>
+              <span aria-hidden className="text-[var(--cw-teal)]">
+                ·
+              </span>
+              <a href={GITHUB_ISSUES_URL} target="_blank" rel="noreferrer" className="transition hover:text-[var(--cw-ember-soft)]">
+                {dict.footer.links.issues}
+              </a>
+              <span aria-hidden className="text-[var(--cw-teal)]">
+                ·
+              </span>
+              <a href={ZENN_ARTICLE_URL} target="_blank" rel="noreferrer" className="transition hover:text-[var(--cw-ember-soft)]">
+                {dict.footer.links.article}
+              </a>
+            </nav>
           </div>
-        </div>
-      </section>
-
-      <footer className="border-t bg-fd-secondary/30">
-        <div className="container mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-10 text-sm text-fd-muted-foreground md:flex-row">
-          <p>{dict.footer.copyright}</p>
-          <nav className="flex gap-6">
-            <a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer" className="hover:text-fd-foreground">
-              {dict.footer.links.github}
-            </a>
-            <a href={GITHUB_ISSUES_URL} target="_blank" rel="noreferrer" className="hover:text-fd-foreground">
-              {dict.footer.links.issues}
-            </a>
-            <a href={ZENN_ARTICLE_URL} target="_blank" rel="noreferrer" className="hover:text-fd-foreground">
-              {dict.footer.links.article}
-            </a>
-          </nav>
+          <div className="rule-hair my-8" />
+          <div className="font-mono-label flex flex-col-reverse items-start justify-between gap-3 text-[var(--cw-muted)] md:flex-row md:items-center">
+            <p>{dict.footer.copyright}</p>
+            <p className="text-[var(--cw-fg-soft)]">{dict.statusStrip.codename}</p>
+          </div>
         </div>
       </footer>
     </main>
