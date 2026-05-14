@@ -24,6 +24,7 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.42.1",
     "@crowi/api-contract": "workspace:^",
+    "@hocuspocus/provider": "^4.0.0",
     "@inlang/paraglide-js": "^2.18.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -47,7 +48,11 @@
     "react": "19.2.3",
     "react-diff-viewer-continued": "^4.2.2",
     "react-dom": "19.2.3",
+    "sonner": "^2.0.0",
     "tailwind-merge": "^3.4.0",
+    "y-codemirror.next": "^0.3.5",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.8",
     "zod": "catalog:"
   },
   "devDependencies": {
