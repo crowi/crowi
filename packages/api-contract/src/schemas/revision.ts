@@ -1,11 +1,30 @@
 import { z } from 'zod';
 import { PagerSchema, PageUserSchema, RevisionSchema } from './page';
 
-// Revision meta schema - lightweight (no body) for list endpoints
+/**
+ * Revision meta schema - lightweight (no body) for list endpoints.
+ *
+ * Phase 8 (RFC-0003) added `savedBy` and `contributors`:
+ *   - `savedBy` is the user who pressed the Save button (i.e. fired
+ *     the `crowi:save` stateless message). In the legacy / v1.x
+ *     single-author flow this is the same as `author`; in the
+ *     collaborative flow it can differ from any single contributor.
+ *   - `contributors` is the set of awareness-confirmed peers who had
+ *     a live cursor on the page between the previous Save and this
+ *     one. The list excludes `savedBy` itself (the save initiator is
+ *     already surfaced separately) and is `undefined` for pre-RFC-0003
+ *     revisions to keep wire-format back-compat.
+ *
+ * Both fields are optional + nullable so v1.x revisions can be served
+ * without churn — clients that consume the new fields fall back to
+ * `author` when `savedBy` is missing.
+ */
 export const RevisionMetaSchema = z.object({
   _id: z.string(),
   path: z.string(),
   author: PageUserSchema.nullable().optional(),
+  savedBy: PageUserSchema.nullable().optional(),
+  contributors: z.array(PageUserSchema).optional(),
   createdAt: z.string(),
 });
 export type RevisionMeta = z.infer<typeof RevisionMetaSchema>;
