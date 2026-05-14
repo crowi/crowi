@@ -1,0 +1,11 @@
+{
+  "extends": "@crowi/tsconfig/app-node.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "types": ["jest", "node"],
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
