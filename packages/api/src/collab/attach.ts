@@ -7,9 +7,11 @@ import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
 // doesn't break Jest at test-collect time. Only TS types are imported
 // statically here (type imports are erased at runtime).
 import type { CollabModels, CollabPageEventPublisher, EditorCapCounter, CollabWsTokenUtil } from '@crowi/collab';
+import type { Extension } from '@hocuspocus/server';
 import type Crowi from 'src/crowi';
 import { getEditorCapCounter } from 'src/util/collab-cap';
 import { createWsTokenUtil } from 'src/util/ws-token';
+import { buildCollabRedisExtension } from './extension-redis';
 
 const debug = Debug('crowi:collab:attach');
 
@@ -142,6 +144,22 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     return { readonly: count >= cap };
   };
 
+  // Phase 9 — when this api process has a Redis client wired
+  // (`REDIS_URL` set), attach `@hocuspocus/extension-redis` so cross-
+  // instance Y.Doc updates + awareness fan out via Redis pub/sub.
+  // When `crowi.redis === null` (single-instance dev) the extensions
+  // array stays empty and Hocuspocus runs in standalone mode — same
+  // shape as Phase 8.5 landed.
+  //
+  // The extension creates its own ioredis clients (pub + sub) via the
+  // `createClient` callback we provide; api's existing node-redis v4
+  // client is not shared (the two libraries have incompatible APIs).
+  const extensions: Extension[] = [];
+  const redisExtension = buildCollabRedisExtension(crowi);
+  if (redisExtension !== null) {
+    extensions.push(redisExtension);
+  }
+
   // Lazy `require()` so Jest never tries to parse `crossws`'s ESM
   // bundle during test collection (the api boot graph reaches this
   // file via `src/crowi/index.ts` even when tests don't actually
@@ -158,6 +176,7 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     checkEditorCap,
     editorCapCounter,
     pageEventPublisher,
+    extensions,
   });
 
   // `noServer: true` — the upgrade handshake is owned by the api
@@ -304,6 +323,18 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
       //    this is a documented no-op, but we still await it so a
       //    future per-counter client doesn't silently regress this
       //    ordering.
+      //
+      // Note (Phase 9): registered Hocuspocus extensions
+      // (`@hocuspocus/extension-redis`) define `onDestroy` lifecycle
+      // hooks, but the pure `Hocuspocus` engine we use here doesn't
+      // expose a `destroy()` method — only the wrapping `Server`
+      // class (= the crossws adapter we replaced with our own ws
+      // attach) calls extension `onDestroy`. The extension's pub +
+      // sub ioredis clients therefore live until process exit,
+      // which the OS reaps along with everything else. Test
+      // harnesses that call `shutdown()` and keep the process alive
+      // are the only ones that observe the leak; jest exits its
+      // worker after the suite anyway, so this is acceptable.
       try {
         await editorCapCounter.disconnect();
       } catch (err) {

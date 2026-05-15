@@ -47,6 +47,7 @@
     "@crowi/collab": "workspace:^",
     "@crowi/plugin-api": "workspace:^",
     "@crowi/runner": "workspace:^",
+    "@hocuspocus/extension-redis": "^4.0.0",
     "@hocuspocus/server": "^4.0.0",
     "@slack/client": "^5.0.2",
     "@ts-rest/express": "^3.52.1",

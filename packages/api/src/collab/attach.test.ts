@@ -21,6 +21,11 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
  */
 let lastFakeHocuspocus: FakeHocuspocus | null = null;
 let lastCreateCalls: number = 0;
+// Capture the args `createCollabServer` was last invoked with so the
+// Phase 9 extensions wiring can be asserted (the test runs with
+// `crowi.redis === null`, so we expect an empty `extensions` array).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let lastCreateOpts: any = null;
 
 interface FakeHocuspocus {
   handleConnection: jest.Mock;
@@ -29,8 +34,10 @@ interface FakeHocuspocus {
 }
 
 jest.mock('@crowi/collab', () => ({
-  createCollabServer: jest.fn(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createCollabServer: jest.fn((opts: any) => {
     lastCreateCalls += 1;
+    lastCreateOpts = opts;
     const fake: FakeHocuspocus = {
       handleConnection: jest.fn(() => ({
         handleMessage: jest.fn(),
@@ -152,6 +159,18 @@ describe('attachCollabServer (RFC-0003 Phase 9 same-process attach)', () => {
     // the api's perspective).
     expect(lastCreateCalls).toBeGreaterThanOrEqual(1);
     expect(lastFakeHocuspocus).not.toBeNull();
+  });
+
+  it('passes an empty extensions array to createCollabServer when crowi.redis is null', () => {
+    // Phase 9 contract: with no Redis wired (test fixture sets
+    // `crowi.redis = null`), the Redis extension MUST NOT be
+    // constructed. The collab engine still runs — just in single-
+    // instance mode — and Hocuspocus's own `extensions: []` default
+    // applies inside.
+    expect(crowi.redis).toBeNull();
+    expect(lastCreateOpts).not.toBeNull();
+    expect(Array.isArray(lastCreateOpts.extensions)).toBe(true);
+    expect(lastCreateOpts.extensions).toHaveLength(0);
   });
 
   it('routes /collab/<pageId> upgrades into the Hocuspocus engine', async () => {
