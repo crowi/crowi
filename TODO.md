@@ -34,6 +34,20 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
   - `pageToResponse` の date 系を fallback (createdAt/updatedAt が undefined でも schema を満たす) に
 - [x] **`loadGrantedPage` を util に格上げ** (`0f988d3e`): `PageModelLike` 経由で page / bookmark / comment / notification / revision から呼べるように昇格
 - [x] **RFC-0003 Phase 5 — `Page.revision` / `Page.currentRevision` の atomic update helper** (`2d7ccb89` `feat(api): extend Revision.prepareRevision with collaborative-save options`): Phase 1 で `currentRevision` を追加して以来の advisory。 Phase 5 の save flow 実装で `Revision.prepareRevision` 経由の両フィールド同時更新パスに集約され、 直接代入経路の drift リスクは解消済み。 (RFC-0003 Phase 5 で landed、 Phase 10 で TODO 整理)
+- [ ] **RFC-0003 merge simplify advisory (`b56c4061` 直後の 3-agent レビュー由来)**:
+  - **Reuse**: `packages/api/src/collab/extension-redis.ts` の `parseRedisUrlForIoredis` (L119-140) と `packages/api/src/util/redis-opts.ts` の `buildRedisOpts` (L19-33) が同じ URL parse を別実装。共通の `parsed = {host, port, username, password, tls}` を `redis-opts.ts` に抽出して両 wrapper が project する形に
+  - **Reuse**: `packages/api/src/routes/ts-rest/revision.ts` の `revisionToFullResponse` / `revisionToMetaResponse` (L31-82) が `packages/api/src/util/page-response.ts` の `toRevisionResponse` (L88-100) を再実装。`savedBy` / `contributors` を `toRevisionResponse` の options に拡張して 1 箇所に統合
+  - **Quality**: `packages/collab/src/hooks/*.ts` 8 箇所で `deps.models.X as any` cast + eslint-disable。`packages/collab/src/models.ts` の `CollabModels` を `Model<any>` から narrow type (CollabPageModel / CollabRevisionModel 等) に絞って `as any` を撲滅
+  - **Quality**: `computeRevisionRenderArtifactsAsync(crowi, storedMeta, storedAst, body, storedRendererVersion?, pageId?)` の 6 positional args → options object 化 (caller 数箇所)
+  - **Quality**: `Revision.prepareRevision` (`models/revision.ts` L321-338) の 5 連続 `if (opts.X !== undefined) newRevision.X = opts.X` → `Object.assign` or `pick` で簡潔化
+  - **Quality**: 大量の "RFC-0003 Phase N — ..." コメント (use-collab-document.ts / use-collab-save.ts / CollaborativeMarkdownEditor.tsx / MarkdownEditor.tsx / edit-page-client.tsx / page-collab.ts / page-preview.ts) は Phase tag だけ剥がす (WHY 部分は残す)
+  - **Efficiency (HIGH, batch)**: `packages/collab/src/hooks/on-change.ts` の per-Yjs-update `PageYjsUpdate.create` を 50ms tick の `insertMany` バッファに置換 (5 peers typing で N→1 round-trips)
+  - **Efficiency (MEDIUM, rAF)**: `packages/web/src/lib/use-awareness-states.ts` の `setStates(new Map(...))` を rAF coalesce か shallow-diff (20 peers × ~3evt/s = 60 re-render/s を抑制)
+  - **Efficiency (MEDIUM, concurrency)**: `packages/collab/src/save-flow.ts` の step 6 (`Page.updateOne` collab pointer) + step 7 (`PageYjsUpdate.deleteMany`) を `Promise.allSettled` で並列化、save-ack を -1 RTT
+  - **Efficiency (MEDIUM, concurrency)**: `packages/collab/src/hooks/on-load-document.ts` の `Page.findById` と `replayResidualUpdates` の `PageYjsUpdate.find` を `Promise.all` で並列化
+  - **Efficiency (MEDIUM, cache)**: `packages/web/src/lib/use-scroll-sync.ts` の `snapshotMarkers` per-scroll-event 2x 呼びを per-burst キャッシュ (mutate observer / `renderedAst` change で invalidate)
+  - **Efficiency (MEDIUM, cache)**: `packages/api/src/routes/ts-rest/page-preview.ts` のレンダリング結果に hash(body) ベースの小 LRU (~50 entries) を被せ、タイピングバースト中の重複 render を吸収
+  - **Efficiency (LOW)**: `packages/api/src/util/editor-cap-counter.ts:218` の `sAdd` + `expire` 直列 → ioredis pipeline 化 (WebSocket handshake は rare event なので影響低)
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 

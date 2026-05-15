@@ -75,18 +75,27 @@ const resolveWsTokenSecret = (): string => {
 /**
  * Build a sign / verify pair bound to a single resolved secret. Crowi
  * boots once per process, so the closure-captured secret is stable for
- * the lifetime of the process; both the HTTP handler (Phase 2) and the
- * Hocuspocus `onAuthenticate` hook (Phase 3) use the same factory so
- * sign / verify can never drift apart in a single process.
+ * the lifetime of the process; both the HTTP handler and the Hocuspocus
+ * `onAuthenticate` hook use the same factory so sign / verify can never
+ * drift apart in a single process.
+ *
+ * When `WS_TOKEN_SECRET` is unset, `resolveWsTokenSecret` generates a
+ * fresh random secret per invocation. Two `createWsTokenUtil()` calls in
+ * the same process would otherwise close over *different* random
+ * secrets, which silently breaks HTTP-sign / Hocuspocus-verify in dev.
+ * Memoise the factory result so every caller in the process shares one
+ * closure (= one secret) regardless of when they call.
  *
  * The secret is read directly from `process.env.WS_TOKEN_SECRET` (not
- * via `crowi.getConfig()`) on purpose — the Hocuspocus process (Phase 3)
- * runs out-of-band and reads the same env, so env is the single source
- * of truth for cross-process secret distribution. This intentionally
- * diverges from `createJwtUtil(crowi)`, which reads from config to
- * allow admin-UI rotation.
+ * via `crowi.getConfig()`) on purpose — out-of-band Hocuspocus
+ * deployments read the same env, so env is the single source of truth
+ * for cross-process secret distribution. This intentionally diverges
+ * from `createJwtUtil(crowi)`, which reads from config to allow
+ * admin-UI rotation.
  */
-export function createWsTokenUtil() {
+let cachedUtil: ReturnType<typeof buildWsTokenUtil> | null = null;
+
+function buildWsTokenUtil() {
   const secret = resolveWsTokenSecret();
 
   /**
@@ -138,4 +147,11 @@ export function createWsTokenUtil() {
     ttlSeconds: WS_TOKEN_TTL_SECONDS,
     issuer: WS_TOKEN_ISSUER,
   };
+}
+
+export function createWsTokenUtil() {
+  if (cachedUtil === null) {
+    cachedUtil = buildWsTokenUtil();
+  }
+  return cachedUtil;
 }
