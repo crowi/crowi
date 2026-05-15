@@ -375,4 +375,85 @@ describe('Page', () => {
       });
     });
   });
+
+  // RFC-0004 Phase 2: draft page status + draft visibility filtering.
+  describe('Draft pages (RFC-0004)', () => {
+    let author;
+    let other;
+
+    beforeAll(async () => {
+      author = createdUsers[0];
+      other = createdUsers[1];
+    });
+
+    beforeEach(async () => {
+      await Page.deleteMany({});
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({});
+    });
+
+    describe('.isDraft', () => {
+      test('returns true only for a draft page', async () => {
+        const [draft, published] = await Fixture.generate('Page', [
+          { path: '/drafts/a', grant: Page.GRANT_PUBLIC, creator: author, status: 'draft' },
+          { path: '/drafts/b', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+        ]);
+        expect(draft.isDraft()).toBe(true);
+        expect(draft.isPublished()).toBe(false);
+        expect(published.isDraft()).toBe(false);
+        expect(published.isPublished()).toBe(true);
+      });
+    });
+
+    describe('findListByStartWith', () => {
+      beforeEach(async () => {
+        await Fixture.generate('Page', [
+          { path: '/team/published', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+          { path: '/team/author-draft', grant: Page.GRANT_PUBLIC, creator: author, status: 'draft' },
+          { path: '/team/other-draft', grant: Page.GRANT_PUBLIC, creator: other, status: 'draft' },
+        ]);
+      });
+
+      test("excludes another user's draft from the listing", async () => {
+        const pages = await Page.findListByStartWith('/team', other, {});
+        const paths = pages.map((p) => p.path);
+        expect(paths).toContain('/team/published');
+        expect(paths).toContain('/team/other-draft'); // viewer's own draft
+        expect(paths).not.toContain('/team/author-draft'); // someone else's draft
+      });
+
+      test("includes the viewer's own draft in the listing", async () => {
+        const pages = await Page.findListByStartWith('/team', author, {});
+        const paths = pages.map((p) => p.path);
+        expect(paths).toContain('/team/published');
+        expect(paths).toContain('/team/author-draft');
+        expect(paths).not.toContain('/team/other-draft');
+      });
+    });
+
+    describe('findListByCreator', () => {
+      beforeEach(async () => {
+        await Fixture.generate('Page', [
+          { path: '/by/published', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+          { path: '/by/draft', grant: Page.GRANT_PUBLIC, creator: author, status: 'draft' },
+        ]);
+      });
+
+      test('includes own drafts when the creator views their own pages', async () => {
+        const pages = await Page.findListByCreator(author, {}, author);
+        const paths = pages.map((p) => p.path);
+        expect(paths).toContain('/by/published');
+        expect(paths).toContain('/by/draft');
+      });
+
+      test("excludes drafts when another user views the creator's pages", async () => {
+        const pages = await Page.findListByCreator(author, {}, other);
+        const paths = pages.map((p) => p.path);
+        expect(paths).toContain('/by/published');
+        expect(paths).not.toContain('/by/draft');
+      });
+    });
+  });
 });

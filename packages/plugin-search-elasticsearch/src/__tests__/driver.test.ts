@@ -1,5 +1,22 @@
-import { createElasticsearchDriver, docToEsSource, parseUri } from '../driver';
+import { createElasticsearchDriver, docToEsSource, parseUri, shouldIndex } from '../driver';
+import type { PageStreamDoc } from '../driver';
 import type { SearchableDoc } from '@crowi/plugin-api';
+
+describe('shouldIndex', () => {
+  const base: PageStreamDoc = { _id: 'p1', path: '/foo', redirectTo: null, status: 'published', grant: 1 };
+
+  it('indexes a published page', () => {
+    expect(shouldIndex(base)).toBe(true);
+  });
+
+  it('excludes redirects, deleted pages and drafts', () => {
+    expect(shouldIndex({ ...base, redirectTo: '/bar' })).toBe(false);
+    expect(shouldIndex({ ...base, status: 'deleted' })).toBe(false);
+    // Drafts have no per-viewer filter on the search route, so the rebuild
+    // path must drop them just like the incremental indexing path does.
+    expect(shouldIndex({ ...base, status: 'draft' })).toBe(false);
+  });
+});
 
 describe('parseUri', () => {
   it('parses host + index name', () => {
