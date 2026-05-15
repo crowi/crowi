@@ -71,6 +71,22 @@ const MIME_TO_EXT: Record<string, string> = {
 };
 
 /**
+ * Strip Markdown bracket characters from a filename before it is spliced
+ * into a placeholder / reference token.
+ *
+ * `findPlaceholderRange` locates a placeholder by walking back from the
+ * `](#u=<id>)` tail to the nearest `[`, assuming the placeholder text
+ * itself contains no brackets. A user-supplied drag-and-drop filename
+ * can legitimately contain `[` / `]` (`paste`'s auto-generated names
+ * never do), which would break that scan and the resulting
+ * `[name](url)` link syntax. `[` / `]` are replaced with `(` / `)` so
+ * the displayed name stays readable while the bracket grammar is safe.
+ */
+export function sanitizeFilename(filename: string): string {
+  return filename.replace(/\[/g, '(').replace(/\]/g, ')');
+}
+
+/**
  * The in-progress placeholder text, e.g.
  * `![Uploading pasted-1.png (37%)…](#u=abc-1)`. Non-image files use the
  * `[…]` (link) form rather than `![…]` (image) so the rendered Markdown
@@ -233,18 +249,25 @@ const UPLOAD_BASE_URL = `${API_BASE_URL}/api/v2`;
  * placeholder at `pos`, stream progress into it, and swap in the final
  * success / failure token. Shared verbatim by paste (Phase 6) and
  * drag-and-drop (Phase 7) — the only per-feature difference is `intent`.
+ *
+ * The `filename` is sanitised before it ever enters the document
+ * ({@link sanitizeFilename}): a drag-and-drop file can carry `[` / `]`
+ * in its name, which would corrupt the placeholder bracket grammar
+ * `findPlaceholderRange` relies on. The original `File` is still sent to
+ * the server verbatim — only the displayed token text is sanitised.
  */
 export async function runUpload(view: EditorView, file: File, filename: string, pos: number, pageId: string, intent: UploadIntent): Promise<void> {
   const isImage = file.type.startsWith('image/');
   const uploadId = newUploadId();
+  const displayName = sanitizeFilename(filename);
 
-  insertPlaceholder(view, pos, buildPlaceholderText(uploadId, filename, 0, isImage));
-  const onProgress = makeProgressUpdater(view, uploadId, filename, isImage);
+  insertPlaceholder(view, pos, buildPlaceholderText(uploadId, displayName, 0, isImage));
+  const onProgress = makeProgressUpdater(view, uploadId, displayName, isImage);
 
   try {
     const outcome = await uploadAttachment(file, filename, pageId, intent, onProgress);
-    replacePlaceholder(view, uploadId, buildSuccessText(filename, outcome.url, isImage));
+    replacePlaceholder(view, uploadId, buildSuccessText(displayName, outcome.url, isImage));
   } catch {
-    replacePlaceholder(view, uploadId, buildFailureText(filename, isImage));
+    replacePlaceholder(view, uploadId, buildFailureText(displayName, isImage));
   }
 }
