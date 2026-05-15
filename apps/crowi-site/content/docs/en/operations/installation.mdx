@@ -1,0 +1,154 @@
+---
+title: Installation
+description: Installing Crowi with Docker or manually
+---
+
+This page covers how to set up Crowi 2.0 (codename Reignite) in your own
+environment.
+
+> **Caution**: Crowi v2 is currently in alpha development. There is no
+> stable release yet. **Do not run it in production.** It is intended for
+> evaluation, development, and migration testing. If you are considering
+> migrating from v1.x, also see [Upgrading from v1](./upgrading-from-v1).
+
+## Requirements
+
+Crowi 2.0 is a Turborepo + pnpm monorepo containing three applications:
+the API, the web frontend, and the documentation site. To run it locally
+you need the following.
+
+| Software | Version | Purpose |
+| -------- | ------- | ------- |
+| Node.js | 22.x | Runtime for the API / web |
+| pnpm | 9.x or later | Package manager (`packageManager` is `pnpm@9.15.9`) |
+| MongoDB | 7+ (the dev image is `mongo:8`) | Persists wiki data |
+| Redis | 7+ | Sessions and realtime-collab pub/sub |
+| Elasticsearch | Optional | Full-text search backend (plugin-driven) |
+| Docker / Docker Compose | Optional | Used to run local infrastructure |
+
+The Node.js version is pinned to `22.x` by the `engines` field in the
+root `package.json`. If you use a version manager such as `nvm`, switch
+to Node.js 22 before working.
+
+> **Tip**: You do not need to install MongoDB / Redis / Elasticsearch on
+> the host directly. The `docker compose up -d` step below brings up all
+> of the development infrastructure at once.
+
+## Quick start (Docker infrastructure + dev servers on the host)
+
+The simplest setup is to **run the middleware in Docker and run the API
+and web with `pnpm dev` on the host**. This is recommended when you are
+developing while editing code.
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/crowi/crowi.git
+cd crowi
+
+# 2. Install dependencies
+pnpm install
+
+# 3. Start the development infrastructure (MongoDB / Redis / Elasticsearch / PlantUML)
+docker compose up -d
+
+# 4. Prepare the environment file
+cp .env.sample .env
+# Edit MONGO_URI / REDIS_URL / CROWI_ENCRYPTION_KEY etc. as needed
+
+# 5. Start everything (API :4301 / web :4302 / plugins in watch mode)
+pnpm dev
+```
+
+Once it is running, open `http://localhost:4302` in a browser to see the
+installer screen. Create the first administrator account to start using
+the wiki.
+
+### Ports
+
+The default ports for each app started by `pnpm dev` are as follows.
+
+| App | Port | Description |
+| --- | ---- | ----------- |
+| `@crowi/api` | `4301` | Express + ts-rest API server |
+| `@crowi/web` | `4302` | Next.js 16 frontend |
+| `@crowi/crowi-site` | `4303` | crowi.wiki LP + docs (optional) |
+
+The documentation site is not needed for development. Start it separately
+with `pnpm dev:site` only when you need it.
+
+### What the development infrastructure contains
+
+`docker compose up -d` (with no profile) starts **only the dependency
+middleware**, not the application itself.
+
+| Service | Image | Host port |
+| ------- | ----- | --------- |
+| `mongodb` | `mongo:8` | `27017` |
+| `redis` | `redis:7` | `6379` |
+| `elasticsearch` | Custom image (9.4.0 + `analysis-kuromoji`) | `9200` |
+| `plantuml` | `plantuml/plantuml-server` | `8080` |
+
+The Elasticsearch image is a custom build that bundles the Japanese
+morphological analysis plugin `analysis-kuromoji`. See
+[Search setup](./search-setup) for details.
+
+### Running parts individually
+
+If you want to run only the API or only the web, the following scripts
+are available.
+
+```bash
+pnpm dev:api    # API + plugins only (no Next.js)
+pnpm dev:web    # Next.js frontend only
+pnpm dev:site   # crowi.wiki LP + docs (:4303)
+```
+
+## Running the full stack in Docker
+
+If you want to run everything — including the API and web — as Docker
+containers, specify the `app` profile.
+
+```bash
+docker compose --profile app up -d --build
+```
+
+Behaviour in this case:
+
+- The `api` / `web` service images are built from
+  `packages/{api,web}/Dockerfile`.
+- The `api` service mounts the repo-root `crowi.config.json` at
+  `/app/crowi.config.json`. The plugin configuration is not baked into
+  the image; it is operator-controlled via this file.
+- Inside the containers, container-network URIs (such as
+  `mongodb://mongodb:27017/crowi`) override the `localhost` values from
+  `.env`.
+- Host ports match `pnpm dev`: the API maps to `4301` and the web to
+  `4302` (internally both listen on `3000`).
+
+The `api` service reads `.env` as an `env_file`, so put secrets such as
+`CROWI_ENCRYPTION_KEY` and `WS_TOKEN_SECRET` in `.env`. See
+[Configuration](./configuration) for details.
+
+## Build, test, and type-check
+
+The scripts commonly used during development are as follows. Run all of
+them from the repository root.
+
+```bash
+pnpm build        # Build all packages
+pnpm test         # Test all packages (the API uses Jest)
+pnpm type-check   # Type-check the API + web + site
+pnpm lint         # Lint (errors=0 is required)
+```
+
+`pnpm install` installs the lefthook Git hooks, which run Biome
+formatting on commit and `pnpm lint` on push automatically.
+
+## Next steps
+
+- [Configuration](./configuration) — environment variables and `crowi.config.json`
+- [Encrypting sensitive config](./encryption) — setting up `CROWI_ENCRYPTION_KEY`
+- [Storage drivers](./storage) — switching between local / S3
+- [Mail / SMTP setup](./mail) — configuring outgoing mail
+- [Managing plugins](../plugins/managing) — adding and enabling plugins
+- [Upgrading from v1](./upgrading-from-v1) — migrating from an existing Crowi

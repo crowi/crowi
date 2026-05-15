@@ -1,0 +1,77 @@
+---
+title: RFC index
+description: Index of Crowi 2.0 design proposals (RFCs)
+---
+
+Major design decisions for Crowi 2.0 are documented as **RFCs (Request
+for Comments)** under `docs/rfcs/` in the repository. This page lists
+and summarises the RFCs that currently exist.
+
+> **Caution**: The `Status` of every RFC is Draft. Crowi v2 is under
+> active alpha development, and RFC content may be revised as
+> implementation progresses. The "round" label on each RFC indicates how
+> many revisions that document has been through.
+
+## RFC list
+
+| Number | Title | Target | Status |
+| ------ | ----- | ------ | ------ |
+| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | Plugin Architecture | Crowi 2.0 | Draft (round 2) |
+| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | Renderer Plugin Architecture | Crowi 2.1 | Draft (round 3.1), Phase 1–6 landed |
+| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | Real-time Collaborative Editing | Crowi 2.1 | Draft (round 2) |
+| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | Editor UX Enhancement | Crowi 2.2 | Draft (round 2) |
+
+## RFC-0001: Plugin Architecture
+
+A proposal to pull four mutually independent concerns — file storage,
+external search, auth providers, and notification sinks — out of the
+core and turn them into independently distributable plugins. The core
+keeps "batteries-included" defaults that work without a single plugin
+installed. Operators add plugins via a CLI and configure them from the
+admin UI. This is the foundation of the Crowi 2.0 plugin model.
+
+→ For a user-facing explanation, see [Plugin architecture](../plugins/overview).
+
+## RFC-0002: Renderer Plugin Architecture
+
+A proposal to add a fifth concern — "rendering" — to the RFC-0001 plugin
+model. Markdown parsing, AST transformation, embed handling, and HTML
+rendering become plugin extension points. Three design commitments
+characterise it: SSR-first, no external API calls while editing, and no
+new syntax (mostly). Phase 1–6 are implemented, with Phase 7 onward in
+progress.
+
+→ For a user-facing explanation, see [Renderer plugins](../plugins/renderers).
+
+## RFC-0003: Real-time Collaborative Editing
+
+A proposal to add real-time collaborative editing to Crowi 2.1. It uses
+Yjs as the synchronisation engine and Hocuspocus as the WebSocket
+backend. Multiple users can edit the same page simultaneously, and
+changes converge deterministically via CRDT semantics. The canonical
+Markdown source is written out to a `Revision` document on explicit
+save.
+
+→ For a user-facing explanation, see [Real-time editing](../guide/realtime-editing);
+for operators, see [Operating real-time collaboration](../operations/realtime-collab).
+
+## RFC-0004: Editor UX Enhancement
+
+A proposal to add four editor productivity features on top of the
+minimal CodeMirror 6 editor from RFC-0003: autocomplete for `@user`
+mentions and `[[Page` wikilinks, paste handling for URLs / images,
+drag-and-drop upload, and a management view for draft pages. It targets
+Crowi 2.2 (after v2.1 stabilisation).
+
+## How to read the RFCs
+
+The RFC documents live under `docs/rfcs/` in the repository, and the
+links in the table above open them directly on GitHub. Each RFC opens
+with a metadata block stating the status, target release, and dependent
+RFCs, followed by Summary / Goals / Non-goals / detailed design.
+
+## Related pages
+
+- The overall architecture → [Architecture](./architecture)
+- How plugins work → [Plugin architecture](../plugins/overview)
+- Getting involved in development → [Contributing](./contributing)

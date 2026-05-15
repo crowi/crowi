@@ -1,0 +1,154 @@
+---
+title: Managing plugins
+description: Installing, enabling, and configuring plugins from the admin UI
+---
+
+This page explains how to add plugins to Crowi 2.0 and configure them
+from the admin screen. We recommend reading
+[Plugin architecture](./overview) first for how plugins work overall.
+
+## A plugin is enabled in two stages
+
+Crowi plugins are enabled in two stages: "loading" and "configuring".
+
+1. **Loading** — declare which plugins to load in `crowi.config.json`.
+   This is an operator configuration change, not a code change.
+2. **Configuring** — enter each plugin's config values (S3 bucket name,
+   OAuth client ID, etc.) from the admin screen at `/admin/plugins`.
+   Config values are stored in the MongoDB Config collection under the
+   `plugin:<name>:*` namespace.
+
+`crowi.config.json` only records "which plugins to load" and "which
+driver to use". The **config values themselves**, such as bucket names
+and secrets, are not written in this file.
+
+## Installation steps
+
+### 1. Add to the runner project's dependencies
+
+Plugins are ordinary npm packages. Add the plugin to the `package.json`
+dependencies of the runner project (the project that boots the api).
+
+```bash
+pnpm add @crowi/plugin-storage-aws-s3
+```
+
+In the development repository, first-party plugins already exist inside
+the workspace, so they resolve through pnpm's hoisted `node_modules/`
+and need no extra install.
+
+### 2. List it in crowi.config.json
+
+Add the plugin's npm package name to the `plugins` array in
+`crowi.config.json` at the repo root.
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-emoji",
+    "@crowi/plugin-renderer-katex"
+  ],
+  "storage": {
+    "driver": "s3"
+  },
+  "search": {
+    "driver": "elasticsearch"
+  }
+}
+```
+
+For plugins that select a "driver" — such as storage and search —
+specify the driver name to use via `storage.driver` / `search.driver`.
+If omitted, the default batteries-included plugins provide `local` /
+`mongo`.
+
+> **Tip**: If a plugin you list in `crowi.config.json` needs another
+> plugin via `requires`, the transitive dependency is loaded
+> automatically. For example `@crowi/plugin-storage-aws-s3` requires
+> `@crowi/plugin-aws`, so the latter loads even without listing it
+> explicitly.
+
+### 3. Restart the api
+
+Plugins are loaded exactly once at boot. After changing
+`crowi.config.json`, restart the api. Adding or removing a plugin does
+not require rebuilding the api image.
+
+In Docker setups, `crowi.config.json` is mounted into the container
+rather than baked into the image (the api service in
+`docker-compose.yml` mounts `./crowi.config.json:/app/crowi.config.json:ro`).
+
+## Configuring from the admin screen
+
+Once the api boots, loaded plugins are listed on the admin screen at
+`/admin/plugins`. Each row shows the npm name, version, and registered
+extension points, and clicking it navigates to the config form at
+`/admin/plugins/edit?name=<name>`.
+
+### Schema-driven config form
+
+The config form is **auto-generated** by the runtime walking the
+plugin's declared `configSchema` (a Zod schema). The plugin does not
+need to ship a React component.
+
+Each plugin also adds its own entry to the admin sidebar. The placement
+is decided by the plugin's `adminPlacement`, and the section (storage /
+mail / notification / auth …) is derived automatically from the kind of
+`register*` hooks. Config-only base plugins with no `register*` hooks
+(such as `@crowi/plugin-aws`) declare `section: 'shared'` to appear in
+the sidebar at all.
+
+### The `@sensitive` marker
+
+When a `configSchema` field's description starts with `@sensitive`, that
+field is treated as **sensitive**.
+
+```ts
+z.string().describe('@sensitive AWS secret access key')
+```
+
+Sensitive fields are auto-encrypted on write and decrypted on read
+using the same `KeyProvider` as the core sensitive Config. The admin UI
+renders them with a secret input (`<SecretField>`: saved badge / clear
+pending / undo). For `CROWI_ENCRYPTION_KEY`, the prerequisite for
+encryption, see [Config encryption](../operations/encryption).
+
+### The `@action` marker
+
+When a field's description starts with `@action`, an action button is
+rendered next to that field.
+
+```ts
+z.string().describe('@action "Test connection" POST /test')
+```
+
+The format is `@action "<label>" <method> <path>`. Pressing the button
+calls the endpoint the plugin provides via `registerRoutes` (a path
+relative to `/api/v2/plugins/<name>/...`). Operations like "Test
+connection" or "Authorise with Google" can be offered without the
+plugin writing a dedicated UI.
+
+## Clearing the render cache
+
+Renderer plugins (such as PlantUML) cache their rendering results in the
+MongoDB `PluginRenderCache`. The `/admin/plugins` screen has a button to
+clear all render cache at once. Use it after a plugin's output shape
+changes, for example.
+
+## Removing a plugin
+
+To remove a plugin, drop its name from the `plugins` array in
+`crowi.config.json` and restart the api. Config rows
+(`plugin:<name>:*`) are **kept by default**, in case the operator
+reinstalls later. To discard config rows too, perform an explicit purge
+on removal.
+
+## Related pages
+
+- How plugins work → [Plugin architecture](./overview)
+- The list of renderer plugins → [Renderer plugins](./renderers)
+- Choosing storage → [Storage](../operations/storage)
+- Configuring the search backend → [Search setup](../operations/search-setup)

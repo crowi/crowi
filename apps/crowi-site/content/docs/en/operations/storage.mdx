@@ -1,0 +1,173 @@
+---
+title: Storage drivers
+description: Configuring local / S3 file storage
+---
+
+Attachments uploaded to Crowi are stored through a **storage driver**. In
+Crowi 2.0, you select which driver to use in `crowi.config.json`, and the
+driver implementation itself is provided by the corresponding plugin.
+
+> **Note**: The `FILE_UPLOAD` environment variable from Crowi v1 has been
+> removed. Storage selection is done with the combination of the
+> `storage.driver` field in `crowi.config.json` and the matching
+> `@crowi/plugin-storage-*` package.
+
+## Available drivers
+
+| Driver name | Provided by | Storage target |
+| ----------- | ----------- | -------------- |
+| `local` | `@crowi/plugin-storage-local` (always enabled by default) | The server's local filesystem |
+| `s3` | `@crowi/plugin-storage-aws-s3` | Amazon S3 (including S3-compatible storage) |
+
+`@crowi/plugin-storage-local` is always loaded as an **implicit default
+plugin**. If you write nothing in `crowi.config.json`, the `local` driver
+is used.
+
+## Local storage (local)
+
+Local storage saves uploaded files on the server's filesystem. No
+configuration is needed for the minimal setup — it is enabled by either
+omitting `crowi.config.json` or writing the following.
+
+```json
+{
+  "storage": {
+    "driver": "local"
+  }
+}
+```
+
+The default storage directory is `data/uploads` (a path relative to the
+directory containing `crowi.config.json`).
+
+> **Tip**: When running in containers, mount the storage directory on a
+> persistent volume. Local files are lost when a container is recreated.
+> Using S3 removes that concern.
+
+## S3 storage (s3)
+
+To store files on Amazon S3 (or S3-compatible storage), use the
+`@crowi/plugin-storage-aws-s3` plugin.
+
+### 1. Enable the plugin
+
+Add the S3 storage plugin to `plugins` in `crowi.config.json` and set
+`storage.driver` to `s3`.
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3"
+  ],
+  "storage": {
+    "driver": "s3"
+  }
+}
+```
+
+`@crowi/plugin-storage-aws-s3` depends on `@crowi/plugin-aws`, the shared
+AWS credentials base, so the dependency plugin is loaded automatically.
+For details on plugin resolution, see [Managing plugins](../plugins/managing).
+
+### 2. Configure the bucket and credentials
+
+The S3 bucket name and AWS credentials are configured from the admin UI.
+
+- **Bucket name** — configuration of `@crowi/plugin-storage-aws-s3`
+  itself. Open the "AWS S3" settings from the plugin settings
+  (`/admin/plugins`) in the admin UI and enter it.
+- **Region / access key / secret key** — configuration of
+  `@crowi/plugin-aws`. Enter it from the plugin settings the same way.
+
+The access key ID and secret access key are registered as sensitive, so
+they are automatically encrypted at rest when `CROWI_ENCRYPTION_KEY` is
+set. See [Encrypting sensitive config](./encryption) for details.
+
+> **Tip**: When using an EC2 / ECS instance role or IRSA, leave the
+> access keys blank — the AWS SDK's default credential resolution
+> (environment variables and instance metadata) is then used.
+
+### 3. Immediate application of settings
+
+When you save the plugin settings from the admin UI, the S3 driver
+applies the new bucket / credentials **without a server restart** via
+`reconfigure`.
+
+## Checking the current storage status
+
+Opening the storage screen in the admin UI (`/admin/storage`) shows the
+list of registered drivers and which driver is currently active.
+Internally it calls `GET /api/v2/admin/storage`, which returns the
+following for each driver.
+
+- `driverName` — the driver name (`local` / `s3`, etc.)
+- `pluginName` — the name of the plugin that registered the driver
+- `isActive` — whether it is the driver selected in `crowi.config.json`
+
+## Switching drivers and migrating files
+
+When you switch drivers (e.g. `local` → `s3`), **new uploads are stored
+on the new driver** as soon as you rewrite `crowi.config.json`. However,
+**existing files are not moved automatically**. Files left on the old
+driver are copied to the new driver with the `crowi-admin` CLI.
+
+### crowi-admin storage copy
+
+`crowi-admin` is an operator CLI intended to be run inside the server
+(ssh / kubectl exec). The `storage copy` subcommand copies every object
+from one driver to another.
+
+```bash
+# Copy all files from local to s3
+crowi-admin storage copy --from local --to s3
+
+# First check the target keys only (no copying)
+crowi-admin storage copy --from local --to s3 --dry-run
+```
+
+Key points:
+
+- **Both the source and destination drivers must be loaded** by some
+  plugin. This is unrelated to the "active driver" pointed to by
+  `storage.driver` in `crowi.config.json`, so you can copy data from
+  `local` to `s3` before making `s3` active.
+- With `--dry-run`, it only enumerates the candidate keys and performs
+  no actual writes. Use it to check the count in advance.
+- Attachment rows are processed sequentially via a MongoDB cursor, so
+  memory usage stays constant even with a very large number of files.
+- A per-key error does not stop the iteration; it is added to the
+  `failed` count. Re-running is safe (the local / S3 drivers overwrite
+  by key).
+
+The exit codes are as follows.
+
+| Exit code | Meaning |
+| --------- | ------- |
+| `0` | Everything copied successfully (or dry-run completed) |
+| `1` | Fatal error (init failed, or an exception before work started) |
+| `2` | Partial failure (the copy ran but one or more keys failed — retry recommended) |
+
+### Recommended migration steps
+
+A safe procedure for migrating from `local` to `s3`:
+
+1. Add `@crowi/plugin-storage-aws-s3` to `crowi.config.json:plugins` and
+   configure the S3 bucket / credentials in the admin UI (keep
+   `storage.driver` as `local` for now).
+2. Run `crowi-admin storage copy --from local --to s3 --dry-run` to
+   check the target count.
+3. Run `crowi-admin storage copy --from local --to s3` to copy for real.
+   If any `failed` appears, re-run it.
+4. Change `storage.driver` in `crowi.config.json` to `s3` and restart
+   the API.
+5. Verify that new uploads and downloads work through S3.
+
+> **Tip**: If you stage the data on S3 first in step 1, S3 is usable
+> with zero downtime the moment you switch the driver.
+
+## Next steps
+
+- [Configuration](./configuration) — overview of `crowi.config.json`
+- [Encrypting sensitive config](./encryption) — encrypting S3 credentials
+- [Managing plugins](../plugins/managing) — adding and enabling plugins
+- [Backup](./backup) — backing up data

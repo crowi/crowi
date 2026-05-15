@@ -1,0 +1,158 @@
+---
+title: 検索バックエンドのセットアップ
+description: Crowi の全文検索バックエンド (Elasticsearch) のセットアップとインデックス構築
+---
+
+Crowi の全文検索は **検索ドライバ** という差し替え可能な仕組みで提供
+されます。標準で出荷される検索ドライバは Elasticsearch で、
+`@crowi/plugin-search-elasticsearch` プラグインとして実装されています。
+
+利用者向けの検索の使い方は [検索](../guide/search) を参照してください。
+このページは運用者向けに、Elasticsearch のセットアップとインデックス
+構築の手順を説明します。
+
+> **Note**: Crowi 2.0 (Reignite) は alpha 開発中で、Elasticsearch バック
+> エンドは更新作業 (ES のバージョン更新と検索ドライバのプラグイン化) の
+> 途中にあります。本ページの手順は現行の dev 環境に基づいていますが、
+> 詳細は今後変わる可能性があります。最新状況は `TODO.md` を参照して
+> ください。
+
+## アーキテクチャ概要
+
+- 検索ドライバはプラグイン経由で `SearchRegistry` に登録されます。
+- どのドライバを使うかは `crowi.config.json` の `search.driver` で指定
+  します。
+- Elasticsearch ドライバの接続情報は、Mongo の Config 名前空間
+  `plugin:@crowi/plugin-search-elasticsearch:*` に保存されます。
+  レガシーの `ELASTICSEARCH_URI` / `BONSAI_URL` 環境変数は、プラグインの
+  初回インストール時 (`onInstall`) にこの名前空間へ自動移行されます。
+
+## プラグインの有効化
+
+`crowi.config.json` の `plugins` 配列にプラグイン名を加え、`search.driver`
+を `elasticsearch` に設定します。
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-search-elasticsearch"
+  ],
+  "search": {
+    "driver": "elasticsearch"
+  }
+}
+```
+
+設定後に api を再起動すると、プラグインがロードされ検索ドライバが
+登録されます。プラグインの導入手順全般は
+[プラグインの管理](../plugins/managing) を参照してください。
+
+## Elasticsearch を起動する
+
+開発環境では `docker-compose.yml` に Elasticsearch サービスが含まれて
+います。
+
+```bash
+docker compose up -d
+```
+
+dev 用の Elasticsearch イメージ (`elasticsearch.Dockerfile`) は、素の
+Elasticsearch に `analysis-kuromoji` プラグインをプリインストールした
+カスタムイメージです。これにより、後述の `kuromoji` アナライザーが
+追加設定なしで使えます。
+
+> **Caution**: dev イメージには日本語形態素解析の `analysis-sudachi`
+> プラグインは **含まれていません**。`sudachi` アナライザーを使う場合は、
+> 自前で `analysis-sudachi` プラグインと辞書を組み込んだ派生イメージを
+> ビルドする必要があります。
+
+本番環境では、マネージドの Elasticsearch (Elastic Cloud、Bonsai など) か、
+自前で運用する Elasticsearch クラスタを用意してください。
+
+## 接続情報を設定する
+
+接続情報は管理画面のプラグイン設定画面 (`/admin/plugins/edit?name=@crowi/plugin-search-elasticsearch`)、
+もしくは環境変数からの初回移行で設定します。
+
+| 設定キー | 説明 |
+| -------- | ---- |
+| `url` | Elasticsearch のエンドポイント。`https://[user:pass@]host[:port][/indexName]` 形式。URL にパスワードを含められるため、機密値として暗号化されます。空文字のときはドライバは登録されますが無効化されます。 |
+| `indexName` | ベースとなるインデックス名 (デフォルト `crowi`)。URL のパスで指定しない場合に使われます。 |
+| `requestTimeout` | リクエストタイムアウト (ミリ秒、デフォルト `5000`)。 |
+| `analyzer` | マッピングの種類。`default` / `kuromoji` / `sudachi` から選択。 |
+
+環境変数から設定する場合は、リポジトリルートの `.env` に以下を記述します。
+
+```bash
+ELASTICSEARCH_URI=http://localhost:9200/crowi
+```
+
+この値はプラグインの初回インストール時に、プラグイン設定名前空間の
+`url` キーへ自動移行されます。移行後はプラグイン設定が唯一の真実の源と
+なり、管理画面から変更できます。
+
+## アナライザーの選択
+
+`analyzer` 設定で、全文検索のトークナイズ方式を選びます。
+
+| アナライザー | クラスタ要件 |
+| ------------ | ------------ |
+| `default` | 追加の ES プラグイン不要。 |
+| `kuromoji` | `analysis-kuromoji` プラグインが必要。dev イメージにはプリインストール済み。 |
+| `sudachi` | サードパーティの `analysis-sudachi` プラグイン + 辞書が必要。dev イメージには含まれないため、派生イメージのビルドが必須。 |
+
+日本語コンテンツが主体の Wiki では `kuromoji` が無難な選択です。
+プラグイン未導入のクラスタで `kuromoji` / `sudachi` を選ぶと、後述の
+インデックス再構築 (`rebuild()`) が失敗します。
+
+## インデックスの構築
+
+検索インデックスの全件再構築は、Web の管理画面からではなく
+`crowi-admin` CLI で行います。長時間かかる処理を管理リクエストに
+紐付けないための設計です。
+
+```bash
+crowi-admin search rebuild
+```
+
+このコマンドは:
+
+1. `.env` を読み込み、`MONGO_URI` などを Crowi のブート時と同じ経路で
+   解決します。
+2. アクティブな検索ドライバを解決し、その `rebuild()` を呼び出します。
+3. Elasticsearch ドライバの場合、タイムスタンプ付きの新しいインデックスを
+   作成し、全ページを bulk indexing したうえで `<indexName>-current`
+   エイリアスを新インデックスへ切り替えます。古いインデックスは削除
+   されます。
+
+`crowi-admin` は MongoDB に直接接続する運用者向け CLI です。`@crowi/api`
+がインストールされたディレクトリ (通常は runner パッケージ) から実行
+してください。
+
+> **Tip**: エイリアス方式により、再構築中もダウンタイムなく既存
+> インデックスへの検索が継続できます。新インデックスの構築完了後に
+> 一括でエイリアスが切り替わります。
+
+ドライバが永続インデックスを持たない場合 (`rebuild()` を実装しない場合)、
+管理画面の Search セクションには再構築のヒントは表示されません。
+
+## 検索ドライバの状態確認
+
+管理画面の Search セクション (`/admin/search`) は read-only で、現在
+アクティブな検索ドライバとインストール済みドライバの一覧を表示します。
+ドライバの切り替えは `crowi.config.json` の `search.driver` 変更 +
+api 再起動で行います。管理画面全般については [管理画面](./admin) を
+参照してください。
+
+## トラブルシューティング
+
+- **`url` が空でドライバが無効**: 接続情報が未設定です。プラグイン設定
+  または `ELASTICSEARCH_URI` を設定してください。`url` が空のときは
+  `query()` がエラーを投げ、`index()` は no-op になります。
+- **`rebuild` が失敗する**: `kuromoji` / `sudachi` を選んでいるのに対応
+  する ES プラグインがクラスタに入っていない可能性があります。`crowi-admin
+  search rebuild` はエラー時に ES クラスタのレスポンス本文を出力するので、
+  その内容を確認してください。
+- **検索結果が古い / 出てこない**: ページ更新時の差分インデックスは
+  反映されますが、過去データやマッピング変更を取り込むには
+  `crowi-admin search rebuild` での全件再構築が必要です。

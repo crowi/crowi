@@ -1,0 +1,146 @@
+---
+title: Configuration
+description: Configuring Crowi with environment variables and crowi.config.json
+---
+
+Crowi 2.0 configuration is split into three layers.
+
+1. **Environment variables** (`.env` / process environment) — values
+   needed at boot, such as connection targets and encryption keys.
+2. **`crowi.config.json`** — which plugins to load and which drivers to
+   enable.
+3. **Admin UI settings** — detailed values such as the app title, OAuth,
+   mail, and storage. Stored in the MongoDB `Config` collection.
+
+This page covers 1 and 2. For the settings in 3, see [Admin](./admin).
+
+## Environment variables
+
+At boot, the API loads `.env` from the current directory (the repository
+root) using `dotenv`. Copy `.env.sample` and edit it.
+
+```bash
+cp .env.sample .env
+```
+
+### Key environment variables
+
+| Variable | Required | Purpose |
+| -------- | -------- | ------- |
+| `MONGO_URI` | Yes | MongoDB connection string (e.g. `mongodb://localhost/crowi`) |
+| `PORT` | No (default `4301`) | The port the API server listens on |
+| `NODE_ENV` | No | `development` / `production` |
+| `REDIS_URL` | Conditional | Sessions, the Socket.IO adapter, realtime-collab pub/sub, and the editor-cap counter. Optional for single-instance, **required for multi-instance deployments**. Use `rediss://` for TLS |
+| `PASSWORD_SEED` | Yes | Legacy password hashing seed (still used for fallback verification) |
+| `CLIENT_URL` | Required in production | CORS allowlist origin. Localhost origins are allowed automatically in development |
+| `CROWI_ENCRYPTION_KEY` | Recommended | Base64-encoded 32-byte master key used to encrypt sensitive Config with AES-256-GCM. Falls back to plaintext when unset. See [Encrypting sensitive config](./encryption) |
+| `ELASTICSEARCH_URI` | Optional | Full-text search backend. Pair it with `@crowi/plugin-search-elasticsearch` |
+| `SECRET_TOKEN` | No | Session-related secret |
+
+### Realtime collaboration variables
+
+These variables are used by realtime collaborative editing (RFC-0003).
+See [Operating realtime collaborative editing](./realtime-collab) for
+details.
+
+| Variable | Required | Purpose |
+| -------- | -------- | ------- |
+| `WS_TOKEN_SECRET` | Required for multi-instance | HMAC signing key for the short-lived JWT (wsToken) used to authenticate WebSocket connections. Must be the **same value** on every replica in a multi-instance deployment. When unset, a random secret is generated per process and a warning is logged |
+| `COLLAB_MAX_EDITORS_PER_PAGE` | No (default `20`) | Per-page simultaneous-editor cap. Clients above the cap connect read-only |
+| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials. When unset, it is derived from `window.location`. Set it only when you front `/collab/*` on a host distinct from the API |
+| `NEXT_PUBLIC_API_URL` | Required for the web | The base URL of the API as seen by the browser |
+
+> **Tip**: Both `WS_TOKEN_SECRET` and `CROWI_ENCRYPTION_KEY` can be
+> generated with `openssl rand -base64 32`. `CROWI_ENCRYPTION_KEY` can
+> also be generated with `pnpm --filter @crowi/api crypto:gen-key`.
+
+### Environment variables in Docker
+
+When running the full stack with `docker compose --profile app`, the
+`api` service reads `.env` as an `env_file`. However, the
+container-network URIs (`MONGO_URI` / `REDIS_URL` / `ELASTICSEARCH_URI` /
+`CLIENT_URL`) are overridden by the `environment` entries in
+`docker-compose.yml`. Secrets such as `CROWI_ENCRYPTION_KEY` and
+`WS_TOKEN_SECRET` are passed through as long as they are present in
+`.env`.
+
+## crowi.config.json
+
+`crowi.config.json` is a JSON file placed at the repository root (= the
+root of the runner project in production). It declares **which plugins to
+load and which drivers to enable**. Per-plugin configuration values
+(S3 bucket name, OAuth client ID, etc.) are not written here — they are
+stored in the MongoDB `Config` collection.
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-emoji",
+    "@crowi/plugin-renderer-katex"
+  ],
+  "storage": {
+    "driver": "s3"
+  },
+  "search": {
+    "driver": "elasticsearch"
+  }
+}
+```
+
+### Fields
+
+| Key | Type | Default | Description |
+| --- | ---- | ------- | ----------- |
+| `plugins` | `string[]` | `[]` | npm package names of plugins to load at boot. Loaded in addition to the implicit defaults (`@crowi/plugin-storage-local`) |
+| `storage.driver` | `string` | `"local"` | The storage driver name the file uploader uses. See [Storage drivers](./storage) |
+| `search.driver` | `string` | `"mongo"` | The driver name the search service uses. See [Search setup](./search-setup) |
+
+If the file is missing or fields are omitted, the defaults above apply.
+Content that does not match the schema causes the server to fail at boot
+with an explicit error.
+
+### How plugins are resolved
+
+The names listed in `plugins` are resolved from the runner project's
+`node_modules/`. To add a plugin, declare it as a dependency in the
+runner's `package.json` and add its name to `crowi.config.json:plugins`.
+The API package itself does not need to be rebuilt.
+
+`@crowi/plugin-storage-local` is always loaded as an **implicit default
+plugin**, so local storage is available even without listing it in
+`plugins`.
+
+For detailed steps on adding and enabling plugins, see
+[Managing plugins](../plugins/managing); for the kinds of plugins, see
+[Plugins overview](../plugins/overview).
+
+### Driver names and plugins
+
+The driver names you can set for `storage.driver` / `search.driver` are
+those registered by the loaded plugins. The common mappings are as
+follows.
+
+| Setting | Driver name | Provided by |
+| ------- | ----------- | ----------- |
+| `storage.driver` | `local` | `@crowi/plugin-storage-local` (default) |
+| `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
+| `search.driver` | `mongo` | Core built-in (default) |
+| `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
+
+Renderer plugins (`@crowi/plugin-renderer-emoji` / `-katex` /
+`-plantuml` / `-crowi-legacy`) are enabled simply by adding them to
+`plugins`; they need no driver selection like `storage` / `search`.
+
+> **Tip**: Even if you switch a driver name in `crowi.config.json`, a
+> warning is logged at boot if the corresponding plugin is not in
+> `plugins`. Always switch drivers together with adding the plugin.
+
+## Next steps
+
+- [Encrypting sensitive config](./encryption) — details on `CROWI_ENCRYPTION_KEY`
+- [Storage drivers](./storage) — how to switch `storage.driver`
+- [Search setup](./search-setup) — configuring Elasticsearch
+- [Managing plugins](../plugins/managing) — adding and enabling plugins

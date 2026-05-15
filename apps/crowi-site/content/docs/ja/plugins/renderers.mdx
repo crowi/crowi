@@ -1,0 +1,95 @@
+---
+title: レンダラプラグイン
+description: emoji / KaTeX / PlantUML など Markdown 描画を拡張するプラグイン
+---
+
+レンダラプラグインは、Crowi のサーバサイド Markdown パイプラインに
+パース・変換・描画の振る舞いを追加するプラグインです。設計の詳細は
+[RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md)
+(レンダラプラグインアーキテクチャ) を参照してください。
+
+このページはレンダラプラグインの **概要と一覧** を扱います。利用者として
+書ける記法そのものについては [Markdown 記法](../guide/markdown) を、
+プラグインの導入手順は [プラグインの導入と設定](./managing) を参照して
+ください。
+
+## レンダラパイプラインの考え方
+
+Crowi のレンダラには 3 つの設計上の約束があります。
+
+- **SSR ファースト**: すべてのレンダラプラグインはサーバ側で HTML を
+  生成しなければなりません。プラグインコンテンツのクライアントサイド
+  レンダリングはレイアウトシフトを起こすため禁止です。
+- **編集中は外部 API を叩かない**: 外部データを取得するプラグインは、
+  編集中はプレースホルダで領域を確保し、ページ保存時など明示的な
+  タイミングでのみ取得します。
+- **新しい記法を基本的に増やさない**: プラグインは振る舞いを拡張する
+  もので、文法を拡張するものではありません。
+
+レンダラのコアパイプライン (TOC / wikilink / メンション / コードブロック)
+は、プラグインより **先に** 登録されます。レンダラプラグインはこの上に
+追記する形で動作します。
+
+## ファーストパーティのレンダラプラグイン
+
+Crowi のリポジトリには、次の 4 つのレンダラプラグインが同梱されています。
+
+| プラグイン | 役割 | 外部依存 | 状態 |
+| ---------- | ---- | -------- | ---- |
+| `@crowi/plugin-renderer-emoji` | `:smile:` などのショートコードを Unicode 絵文字へ変換 | なし | 実装済み (Phase 6) |
+| `@crowi/plugin-renderer-katex` | `$inline$` / `$$display$$` の LaTeX 数式を KaTeX でサーバ側 HTML 化 | なし | 実装済み (Phase 6) |
+| `@crowi/plugin-renderer-plantuml` | ` ```plantuml ` ブロックを PlantUML サーバで描画して SVG/PNG を埋め込む | PlantUML サーバ | 実装済み (Phase 6) |
+| `@crowi/plugin-renderer-crowi-legacy` | Crowi v1 由来の記法のクセ (例: `##hoge` の空白なし見出し) を再現 | なし | 実装済み (Phase 6)・既定オフ |
+
+> **Tip**: GitHub の PR / Issue をカード表示する `@crowi/plugin-renderer-github-embed`
+> や Mermaid 図の `@crowi/plugin-renderer-mermaid` は RFC-0002 で計画されて
+> いますが、それぞれ Phase 7 / Phase 6.1 として進行中であり、まだ出荷されて
+> いません。
+
+### emoji
+
+`@crowi/plugin-renderer-emoji` は `:smile:` などのショートコードを
+`remark-emoji` で Unicode 絵文字に置き換えます。I/O もキャッシュも
+ありません。コードブロックとインラインコードは意図的にスキップされ、
+未知のショートコード (`:not-emoji:`) はそのまま素通しされます。
+スクリーンリーダー向けに `<span role="img" aria-label="smile">` で
+ラップする `accessible` モードが既定で有効です。
+
+### KaTeX
+
+`@crowi/plugin-renderer-katex` は `remark-math` で `$inline$` と
+`$$display$$` の LaTeX 数式をパースし、`katex.renderToString` で HTML に
+変換します。標準的な KaTeX コマンドに対応します。マクロや `\newcommand`
+によるカスタマイズは今後の対応予定です。
+
+### PlantUML
+
+`@crowi/plugin-renderer-plantuml` は ` ```plantuml ` のフェンス付き
+コードブロックを、運用者が設定した PlantUML サーバへ送信して描画します。
+図のソースは deflate + base64 でエンコードされ、サーバから返ってきた
+SVG (サニタイズ済み) または PNG が埋め込まれます。
+
+このプラグインは外部サーバを必要とします。Crowi の `docker-compose.yml`
+には PlantUML サーバ (`:8080`) が同梱されているため、開発環境では
+そのまま使えます。サーバ URL は管理画面の設定 (`serverUrl`) で変更でき、
+出力フォーマット (`svg` / `png`) も選択できます。レンダリング結果は
+1 時間 TTL でキャッシュされ、ネットワーク障害などの失敗は 5 分間
+エラーとしてキャッシュされます。
+
+### crowi-legacy
+
+`@crowi/plugin-renderer-crowi-legacy` は、Crowi v1 由来の標準 Markdown
+ではない記法のクセ (例: ハッシュの直後に空白がない `##hoge` を見出しと
+みなす) を再現する互換プラグインです。同梱されていますが **既定では
+オフ** で、v1 からの移行ユーザーが管理画面で有効化します。
+
+なお、v1 にあった「単一改行を `<br>` にする」挙動は、以前の開発段階では
+このプラグインに入っていましたが、現在は Crowi 全体の既定の挙動として
+コアパイプラインに移動しています。
+
+## 関連ページ
+
+- 利用者向けの Markdown 記法 → [Markdown 記法](../guide/markdown)
+- プラグインの導入と設定 → [プラグインの導入と設定](./managing)
+- プラグインの仕組み → [プラグインアーキテクチャ](./overview)
+- 独自レンダラの作り方 → [プラグイン開発](./developing)

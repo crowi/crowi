@@ -1,0 +1,138 @@
+---
+title: 機密設定の暗号化
+description: CROWI_ENCRYPTION_KEY による機密設定の暗号化
+---
+
+Crowi は OAuth シークレットや AWS のクレデンシャル、SMTP パスワード、
+Slack トークンといった **機密性の高い設定値を、保存時に暗号化** できます。
+暗号化を有効にするには、マスターキー `CROWI_ENCRYPTION_KEY` を設定します。
+
+> **重要**: `CROWI_ENCRYPTION_KEY` は任意ですが、**本番運用では設定を
+> 強く推奨** します。未設定でもアプリは動作しますが、機密値が MongoDB に
+> 平文のまま保存されます (後述の legacy モード)。
+
+## 暗号化の対象
+
+暗号化されるのは MongoDB の `Config` コレクションのうち、機密扱いとして
+登録されたキーだけです。Crowi にあらかじめ組み込まれている対象は次の
+とおりです。
+
+| 名前空間:キー | 内容 |
+| ------------- | ---- |
+| `crowi:google:clientSecret` | Google OAuth のクライアントシークレット |
+| `crowi:github:clientSecret` | GitHub OAuth のクライアントシークレット |
+| `crowi:upload:aws:accessKeyId` / `secretAccessKey` | アップロード用 AWS クレデンシャル |
+| `crowi:mail:aws:accessKeyId` / `secretAccessKey` | メール (SES) 用 AWS クレデンシャル |
+| `crowi:mail:smtpPassword` | SMTP パスワード |
+| `notification:slack:clientSecret` / `token` | Slack 連携のシークレット / トークン |
+| `crowi:plugin:@crowi/plugin-aws:accessKeyId` / `secretAccessKey` | AWS プラグインのクレデンシャル |
+
+これに加えて、プラグインが `@sensitive` マーカーを付けた設定フィールドも
+起動時に自動で機密リストへ登録され、同じ暗号化経路をたどります
+(`crowi:plugin:<プラグイン名>:<フィールド>`)。
+
+> **Note**: ユーザーのパスワード (`User.password`) は別途 bcrypt で
+> ハッシュ化されており、ここでの暗号化対象には含まれません。API トークンや
+> 共有ページのシークレットワードも、等価検索が必要なため別の仕組みです。
+
+## マスターキーの生成
+
+`CROWI_ENCRYPTION_KEY` は **base64 エンコードされた 32 バイト** の値で
+なければなりません (デコード後ちょうど 32 バイト = AES-256 の鍵長)。
+次のいずれかで生成します。
+
+```bash
+# 方法 1: openssl
+openssl rand -base64 32
+
+# 方法 2: Crowi 同梱のスクリプト
+pnpm --filter @crowi/api crypto:gen-key
+```
+
+生成した値を `.env` に設定します。
+
+```bash
+CROWI_ENCRYPTION_KEY="生成された base64 文字列"
+```
+
+設定後に API を再起動すると、機密値の暗号化が有効になります。
+
+## 暗号化の仕組み
+
+暗号化処理は `packages/api/src/util/crypto.ts` に実装されています。
+
+- **アルゴリズム**: AES-256-GCM (認証付き暗号)
+- **保存フォーマット**: `enc:v1:<base64(iv)>:<base64(authTag)>:<base64(ciphertext)>`
+- IV は呼び出しごとに新しく生成されるため、**同じ平文でも毎回異なる
+  暗号文** になります (非決定的)。このため暗号化された値での等価検索は
+  できませんが、機密設定は常に `(名前空間, キー)` で読み込まれるため
+  問題ありません。
+- 機密キーは `Config.updateByParams` (= 設定保存) 時に自動で暗号化され、
+  `Config.loadAllConfig` (= 設定読み込み) 時に自動で復号されます。
+
+暗号文には `enc:v1:` というプレフィックスが付くため、暗号化済みかどうかは
+プレフィックスの有無で判別できます。
+
+## legacy モード (キー未設定時)
+
+`CROWI_ENCRYPTION_KEY` が設定されていない、またはデコード後 32 バイトに
+ならない場合、Crowi は **legacy モード** で動作します。
+
+- 機密値は **平文のまま** MongoDB に保存されます。
+- 起動時に警告ログが出力されます。
+- 暗号化は「ベストエフォート」として扱われるため、鍵が無くてもアプリが
+  クラッシュすることはありません。
+
+また、暗号化を有効にした後でも、まだ暗号化されていない (= `enc:v1:`
+プレフィックスのない) 平文の行はそのまま読み込めます。`decrypt` は
+プレフィックスのない値を素通しするため、legacy データと暗号化データが
+混在していても動作します。
+
+## 既存の平文データを再暗号化する
+
+暗号化を後から有効にした場合、それ以前に保存された機密値は平文のまま
+残っています。これらをまとめて暗号化し直すには、管理画面の暗号化
+設定画面 (`/admin/crypto`) を使います。
+
+### 状態の確認
+
+`/admin/crypto` を開くと、暗号化の現在の状態が表示されます。内部的には
+`GET /api/v2/admin/crypto/status` が呼ばれ、次の情報が返ります。
+
+- `encryptionConfigured` — サーバに有効なマスターキーがあるか
+- `encryptedCount` — すでに暗号化済みの機密値の数
+- `unencryptedCount` — まだ平文のままの機密値の数
+- `entries` — 各機密キーごとの存在有無 / 暗号化状態
+
+### 再暗号化の実行
+
+画面から再暗号化を実行すると、`POST /api/v2/admin/crypto/reencrypt` が
+呼ばれます。
+
+- マスターキーが未設定の場合は `503` (`ENCRYPTION_NOT_CONFIGURED`) で
+  失敗します。先に `CROWI_ENCRYPTION_KEY` を設定してください。
+- すでに暗号化済みの行はスキップされます (再実行は安全です)。
+- 平文の行だけが `enc:v1:` 形式に書き換えられます。
+- 結果として `rewritten` (書き換えた数) / `alreadyEncrypted` (既に
+  暗号化済み) / `missing` (値が存在しない) が返ります。
+
+> **Tip**: 再暗号化は何度実行しても安全 (冪等) です。新しい OAuth 設定を
+> 平文で投入してしまったときなど、必要に応じていつでも実行できます。
+
+## 鍵のローテーションについて
+
+現状の Crowi 2.0 alpha では、`CROWI_ENCRYPTION_KEY` は単一の固定鍵を
+前提としています。鍵を別の値に変更すると、それ以前に暗号化された値は
+復号できなくなります (GCM の認証タグ検証に失敗します)。鍵を変更する
+必要がある場合は、変更前に該当の機密設定を管理画面から再入力できるよう
+準備しておいてください。
+
+KMS ベースの鍵プロバイダ (AWS / GCP) は将来対応予定で、`crypto.ts` の
+`KeyProvider` インターフェースとして拡張ポイントが用意されています。
+
+## 次のステップ
+
+- [設定](./configuration) — 環境変数全般
+- [ストレージドライバ](./storage) — S3 クレデンシャルの設定
+- [メール / SMTP 設定](./mail) — SMTP パスワードの設定
+- [管理画面](./admin) — 管理画面の全体像

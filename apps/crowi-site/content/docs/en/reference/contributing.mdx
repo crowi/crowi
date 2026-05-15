@@ -1,0 +1,124 @@
+---
+title: Contributing
+description: A guide to the development flow and conventions for contributing to Crowi 2.0
+---
+
+This page collects the development flow and conventions for making
+changes to the Crowi 2.0 codebase. Set up your development environment
+via [Getting started](../getting-started) first.
+
+> **Caution**: Crowi v2 is under active alpha development. The
+> conventions described here may change as development progresses.
+
+## Development commands
+
+Scripts are defined in the repo root and per-package `package.json`.
+`pnpm <script>` automatically filters packages via Turborepo.
+
+| Command | Purpose |
+| ------- | ------- |
+| `pnpm dev` | Start api + web + plugins concurrently |
+| `pnpm dev:api` / `pnpm dev:web` | Start just one side |
+| `pnpm test` | Tests for all packages (api uses Jest + supertest + mongodb-memory-server) |
+| `pnpm type-check` | Type-check (api + web + site) |
+| `pnpm lint` | Lint. **errors=0 is required** (warnings tolerated) |
+| `pnpm format` | Formatting via Biome |
+| `pnpm build` | Build all packages |
+
+To run just one package, filter with
+`pnpm --filter @crowi/api <script>`.
+
+> **Tip**: After editing the ts-rest contracts
+> (`packages/api-contract`), regenerate the dts with
+> `pnpm --filter @crowi/api-contract build`. The turbo pipeline runs
+> `^build` automatically for `dev` / `build` / `test`, but standalone
+> scripts may need it manually.
+
+## Lint and Format
+
+Crowi uses **Biome** as the formatter and **ESLint** as the linter.
+
+- Lint runs via `pnpm lint` and **zero errors** are required. Warnings
+  are tolerated, but errors are blocked by the pre-push hook.
+- Formatting is handled by Biome. The pre-commit hook runs it
+  automatically on staged files, so manual runs are usually
+  unnecessary. Use `pnpm format` only when bypassing the hooks.
+- If you spot an existing `any`, do not sweep unrelated code to fix it.
+  Keep the diff scoped to what you are touching. Avoid adding new `any`.
+
+## lefthook hooks
+
+Git hooks are managed by `lefthook` and set up automatically during
+`pnpm install`.
+
+| Hook | Action |
+| ---- | ------ |
+| pre-commit | Applies Biome formatting to staged files |
+| pre-push | Runs `pnpm lint` (errors=0 required) |
+
+## Commit messages
+
+Commit messages follow the **Conventional Commits** format.
+
+```
+feat(api): add page export endpoint
+fix(web): correct notification bell badge count
+refactor(merge): deduplicate ws token signer
+chore(config): bump dev ports
+docs(todo): update phase status
+```
+
+- Use types like `feat` / `fix` / `refactor` / `chore` / `docs`, and
+  scopes like `api` / `web` / `api-contract`.
+- When the intent of a change is not obvious, add a multi-paragraph body
+  explaining why you made it.
+
+## Changesets
+
+Release-note accumulation uses `@changesets/cli`. During v2 development,
+run `pnpm changeset add` to accumulate each change as `.changeset/*.md`,
+so release notes are generated automatically at a future release.
+
+- Create one changeset per "unit of user value" — feature additions, bug
+  fixes, and breaking changes.
+- Changes that are only internal refactors, code cleanup, lint fixes,
+  formatting, or test additions — or documentation-only changes — do not
+  need a changeset. The test is "is it meaningful in the next
+  changelog?".
+- For the bump level, choose `patch` for a bug fix, `minor` for a new
+  feature, and `major` for a breaking change.
+
+```bash
+pnpm changeset add        # interactively pick package + bump level + summary
+pnpm changeset status     # list accumulated, unpublished changesets
+```
+
+## TypeScript guidelines
+
+- Do not add new `any`. When touching code that has `any`, replace it
+  incrementally with a proper type where appropriate.
+- Do not sweep unrelated code in a single change — keep the diff
+  focused.
+- Prefer `Pick<>` / `Omit<>` over re-typing fields.
+- For Mongoose document types, import `XxxDocument` from `models/xxx.ts`.
+
+## Changes involving migration
+
+The migration to Crowi 2.0 proceeds feature by feature: a legacy Express
+controller + Swig view is re-implemented as a ts-rest endpoint + Next.js
+page.
+
+- In a migration commit, do not touch unrelated legacy code.
+- Maintain wire-format / behaviour parity with the legacy endpoint where
+  practical, so ongoing deployments can switch incrementally.
+- New code goes under `routes/ts-rest/`, `(auth)/` / `(admin)/`,
+  `lib/`, and `components/`. Legacy code stays in `controllers/`,
+  `routes/api/`, etc.
+
+The current phase status is recorded in the repository's `TODO.md`.
+
+## Related pages
+
+- Setting up the development environment → [Getting started](../getting-started)
+- The overall architecture → [Architecture](./architecture)
+- The list of design proposals → [RFC index](./rfcs)

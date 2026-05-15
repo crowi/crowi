@@ -1,0 +1,147 @@
+---
+title: アーキテクチャ
+description: Crowi 2.0 のモノレポ構成と API + Web の全体像
+---
+
+このページは、Crowi 2.0 (コードネーム *Reignite*) のコードベース全体の
+構造を俯瞰します。Crowi は現在、Express + Swig + jQuery のレガシー
+モノリスから、Express + ts-rest API と Next.js 16 フロントエンドへの
+リビルドの途上にあります。
+
+## モノレポ構成
+
+リポジトリは Turborepo + pnpm workspaces のモノレポです。
+
+```
+crowi/
+├── apps/
+│   └── crowi-site/          # crowi.wiki LP + ドキュメント (Next.js + Fumadocs, :4303)
+├── crowi.config.json        # dev runner 設定 (plugins + 有効ドライバ)
+├── .env.sample              # dev ランタイム env テンプレート
+└── packages/
+    ├── api/                 # Express 4 + ts-rest 3 API (:4301)
+    ├── api-contract/        # ts-rest 契約 + Zod スキーマ
+    ├── web/                 # Next.js 16 App Router フロントエンド (:4302)
+    ├── collab/              # リアルタイム共同編集 (Hocuspocus) ライブラリ
+    ├── runner/              # 設定ローダ + プラグインリゾルバ
+    ├── plugin-api/          # プラグイン SDK (CrowiPlugin / レジストリ / context)
+    ├── plugin-aws/          # AWS 系プラグインの共通資格情報ベース
+    ├── plugin-storage-local/         # ローカル FS ストレージドライバ (既定)
+    ├── plugin-storage-aws-s3/        # S3 ストレージドライバ
+    ├── plugin-search-elasticsearch/  # Elasticsearch 検索ドライバ
+    ├── plugin-renderer-{emoji,katex,plantuml,crowi-legacy}/
+    ├── admin-cli/           # `crowi-admin` CLI
+    └── tsconfig/            # 共有 tsconfig プリセット
+```
+
+3 つの大きな構成要素 — **API** (`packages/api`)、**Web**
+(`packages/web`)、**ts-rest 契約** (`packages/api-contract`) — を中心に、
+プラグインと runner が周囲を固めています。
+
+## 技術スタック
+
+| レイヤ | 技術 |
+| ------ | ---- |
+| API | Express 4 + ts-rest 3 + Mongoose + JWT 認証 |
+| Web | Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS v4 + shadcn/ui + @tanstack/react-query |
+| Site | Next.js 16 (静的エクスポート) + Fumadocs UI + i18n (ja / en) |
+| 共通 | TypeScript 5.x strict、pnpm workspaces、Turborepo |
+| Lint / Format | Biome (format) + ESLint (lint)、lefthook フック |
+| テスト | Jest + supertest + mongodb-memory-server (API) |
+
+## API サーバ (`packages/api`)
+
+### 起動シーケンス
+
+`Crowi.init()` が、おおむね次の順序でサブシステムを初期化します。
+
+1. `setupEncryption` — 機密 Config 用の暗号鍵プロバイダを準備
+2. `setupDatabase` — MongoDB へ接続
+3. `setupModels` — Mongoose モデルを登録
+4. `setupRedisClient` — Redis クライアントを接続
+5. `setupSessionConfig` — セッション設定
+6. `setupConfig` — Config コレクションを読み込み
+7. `migrateConfig` — 設定の移行
+8. `runAwsConfigMigration` — v1 の AWS 設定を移行 (プラグインより前)
+9. `setupRenderer` — レンダラのコアパイプライン (TOC / wikilink / メンション / コードブロック) を登録
+10. `setupPlugins` — `@crowi/runner` が解決したプラグインを起動
+11. `setupMailer` / `setupSlack` — メール / Slack
+12. `setupDNSCache` / `setupLRU`
+13. `buildServer` — Express サーバを構築
+
+レンダラは **プラグインより先に** 起動します。これにより、プラグインへ
+渡すレジストリにはコアの登録が済んだ状態になり、レンダラプラグインは
+その上に追記できます。
+
+### ルーティング
+
+API は次の 4 系統のルートを持ちます。
+
+- 公開 ts-rest ルート (認証なし)
+- 認証済み ts-rest ルート (`jwtAuth(crowi)` 配下、大半のページ / ユーザー / コメント系)
+- 管理 ts-rest ルート (`jwtAdminRequired(crowi)` 配下 = JWT + `user.admin === true`)
+- レガシー Express ルート (`/_api/*`、`/login` などを後方互換のためマウント)
+
+新しいエンドポイントは `routes/ts-rest/` 配下に、レガシーは
+`controllers/` / `routes/api/` 配下にあります。
+
+### 認証とモデル
+
+認証は JWT (アクセストークン + リフレッシュトークン) です。Mongoose
+モデルには Page (grant 付き) / Revision / User / Comment / Bookmark /
+Like / Watcher / Notification / Activity / Config / Backlink / Share /
+Attachment などがあります。
+
+機密設定 (OAuth シークレット、AWS キー、SMTP パスワード、Slack トークン)
+は AES-256-GCM で暗号化されます。詳細は
+[設定の暗号化](../operations/encryption) を参照してください。
+
+### リアルタイム共同編集
+
+Hocuspocus は別プロセスではなく、`@crowi/collab` ライブラリとして api
+プロセス内に attach されます。api の `http.Server` を `ws noServer`
+モードで使い、`/collab/*` のアップグレードを処理します。詳細は
+[リアルタイム共同編集の運用](../operations/realtime-collab) を参照。
+
+## Web フロントエンド (`packages/web`)
+
+Next.js 16 App Router を採用し、`src/app/` 配下を 3 つの Route Group に
+分けています。
+
+| Route Group | 内容 | ゲート |
+| ----------- | ---- | ------ |
+| `(public)/` | ログイン / 登録 / インストーラ | なし |
+| `(auth)/` | 通常のページ機能 | `useAuth` によるリダイレクト |
+| `(admin)/` | 管理画面 | `user.admin === true` |
+
+データ取得は `@tanstack/react-query` を全面的に使います。`apiClient`
+(ts-rest クライアント) は共有契約から生成され、フックは `src/lib/use-*.ts`
+に置かれます。共有 UI は `components/ui/` (shadcn) と、`LoadingSpinner` /
+`ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` などの横断的
+プリミティブで構成されます。
+
+## ts-rest 契約 (`packages/api-contract`)
+
+すべての API 契約と Zod スキーマがここに集約され、tsup で CJS + ESM +
+`.d.ts` がビルドされます。`/api/v2` 配下にマウントされ、`page`・`user`・
+`bookmark`・`notification`・`admin`・`adminCrypto` などのトップレベル
+名前空間がそれぞれ `c.router(...)` として `apiContract` にまとめられます。
+
+契約を 1 箇所で定義することで、API 実装と Web のクライアント呼び出しが
+同じ型に対して整合します。契約を編集したら
+`pnpm --filter @crowi/api-contract build` で dts を再生成してください。
+
+## 移行戦略
+
+Crowi 2.0 への移行は機能単位で進められます。レガシーの Express
+コントローラ + Swig ビューを、ts-rest エンドポイント + Next.js ページとして
+再実装し、新パスが検証できるまでレガシールートはそのまま残します。
+古いルートは別フェーズでまとめて削除されます。現状のフェーズ状況は
+リポジトリの `TODO.md` に記載されています。
+
+## 関連ページ
+
+- 設計提案の一覧 → [RFC インデックス](./rfcs)
+- 開発に参加する → [コントリビュート](./contributing)
+- プラグインの仕組み → [プラグインアーキテクチャ](../plugins/overview)
+- リアルタイム共同編集の運用 → [リアルタイム共同編集の運用](../operations/realtime-collab)

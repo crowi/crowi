@@ -1,0 +1,140 @@
+---
+title: Pages
+description: Page URL hierarchy, creating, editing, moving and deleting pages
+---
+
+Every piece of content in Crowi is a "page". A page has a body written in
+Markdown, and its **URL path is its hierarchy**. There is no explicit
+folder tree — the `/`-separated path alone expresses the parent-child
+relationship between pages.
+
+## The URL is the hierarchy
+
+Crowi pages have no notion of a directory. Instead, the `/` characters in a
+page's `path` are treated as hierarchy separators.
+
+| Path | Meaning |
+| ---- | ------- |
+| `/` | The top page (root portal) |
+| `/dev` | The "dev" page |
+| `/dev/setup` | The "setup" page under "dev" |
+| `/dev/setup/macos` | A page further down |
+
+An intermediate path such as `/dev` does not need to exist as a page. Even
+if you only create `/dev/setup/macos`, it shows up as a child page in the
+page list under `/dev`.
+
+### Portal pages
+
+A path ending with `/` (for example `/dev/`) is a special page called a
+**portal page**.
+
+- A portal page is displayed together with the list of pages under that
+  path. Use it as a landing page at the top of a "directory".
+- A portal page's grant is always forced to **Public**. Because it exposes
+  the list of child pages, it cannot be made restricted.
+
+> **Tip**: Preparing one portal page such as `/team-a/` per team or project
+> gives new members a starting point from which to follow related pages.
+
+## Creating a page
+
+You create a new page either by visiting a URL that does not exist, or by
+specifying a path from the editor. You may also save a page with an empty
+body.
+
+Page names (paths) have several reserved and forbidden rules. The following
+paths cannot be created:
+
+- Paths starting with `/_` (reserved system paths such as `/_edit`,
+  `/_search`, `/_history`, `/_notifications`)
+- Paths starting with reserved words such as `/admin`, `/login`, `/logout`,
+  `/register`, `/me`, `/trash`, `/installer`, `/files`, `/comments`
+- Paths containing `^` `$` `*` `+` `?` `#`
+- Paths ending with `.md` or ending with `/edit`
+- Paths containing `//` (consecutive slashes)
+- Paths starting with `http://` or `https://`
+- Reserved paths under a user page, such as `/user/<username>/bookmarks`
+
+These constraints exist to avoid collisions with internal routes and files.
+You are unlikely to hit them with normal documentation paths.
+
+## Editing a page
+
+Page editing happens in the editor at `/_edit?page_id=<pageId>`. Since
+Crowi 2.1 this editor supports **realtime collaborative editing**, so
+multiple users can edit the same page at once. See
+[Realtime collaborative editing](./realtime-editing) for details.
+
+When you save, the body at that moment is persisted as a new `Revision`
+(history entry). The page itself always points at the latest revision, and
+past revisions can be followed from [Revisions and rollback](./revisions).
+
+## Moving a page (rename)
+
+Changing a page's URL is called a "rename". When you rename a page, the
+paths of all revisions tied to that page are rewritten along with it.
+
+Keep the following in mind when renaming:
+
+- If the destination path collides with an existing page, and that existing
+  page is a redirect-only page, it is automatically removed and overwritten.
+  If any other page exists there, the rename is rejected.
+- Choosing to **create a redirect page** leaves a page at the old URL whose
+  only job is to forward to the new URL. This is useful when you want to
+  avoid breaking external links to the old path. However, no redirect page
+  is created when the destination is a portal page (ending with `/`).
+
+> **Tip**: When you want to move a whole parent path at once (for example
+> everything under `/old-team/` to `/new-team/`), you can rename the entire
+> subtree in one operation. Collision checks for each page run up front, and
+> if even one collides the whole operation is aborted.
+
+## Deleting a page
+
+Deletion in Crowi has two stages.
+
+1. **Soft delete (move to trash)**: changes the page status to "deleted" and
+   moves the path under `/trash/`. A redirect page is left at the original
+   path. Soft-deleted pages can be restored from [Trash](./trash).
+2. **Permanent delete**: physically removes the page body, revisions,
+   comments, attachments, bookmarks, and activities. **This cannot be
+   undone.**
+
+Note that a user page itself in the form `/user/<username>` cannot be
+deleted (it is a special page tied to the user).
+
+## Page grant
+
+Each page has a grant (visibility scope). Crowi 2.x offers the following
+three options.
+
+| Grant | Internal value | Description |
+| ----- | -------------- | ----------- |
+| Public | `1` | All signed-in users can view and edit. The default. |
+| Anyone with the link | `2` | Restricted. Only explicitly granted users can access it. |
+| Just me | `4` | Only the creator can access it. |
+
+> **Note**: The codebase still contains a definition for the
+> `Specified users only` grant (internal value `3`), but it is not enabled
+> as an option in the current UI. The actual choices are Public, Anyone with
+> the link, and Just me.
+
+Grants behave as follows.
+
+- For pages whose grant is not Public, a grant check runs for viewing,
+  editing, commenting, and history access alike.
+- If a user without access rights directly specifies a page ID, the page is
+  treated as "not found" to hide its very existence (a design that does not
+  leak whether the user has permission).
+- A portal page (ending with `/`) is always Public.
+
+The grant can be changed while editing a page. Switching from Public to a
+restricted grant registers the acting user as a granted user.
+
+## Related pages
+
+- [Markdown syntax](./markdown) — syntax usable in page bodies
+- [Realtime collaborative editing](./realtime-editing) — how concurrent editing works
+- [Revisions and rollback](./revisions) — viewing and restoring revisions
+- [Trash](./trash) — restoring soft-deleted pages

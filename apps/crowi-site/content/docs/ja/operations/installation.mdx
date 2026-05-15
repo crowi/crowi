@@ -1,0 +1,152 @@
+---
+title: インストール
+description: Docker / 手動での Crowi のインストール手順
+---
+
+このページでは、Crowi 2.0 (codename Reignite) を自分の環境で動かすための
+セットアップ手順を説明します。
+
+> **注意**: Crowi v2 は現在 alpha 開発中です。安定版リリースはまだありません。
+> **本番環境では使用しないでください。** 評価・開発・移行検証の用途を想定して
+> います。v1.x からの移行を検討している場合は [v1 からのアップグレード](./upgrading-from-v1)
+> もあわせて参照してください。
+
+## 動作環境
+
+Crowi 2.0 は Turborepo + pnpm のモノレポ構成で、API・Web フロントエンド・
+ドキュメントサイトの 3 つのアプリケーションを含みます。ローカルで動かすには
+以下が必要です。
+
+| ソフトウェア | バージョン | 用途 |
+| ------------ | ---------- | ---- |
+| Node.js | 22.x | API / Web の実行ランタイム |
+| pnpm | 9.x 以上 | パッケージマネージャ (`packageManager` は `pnpm@9.15.9`) |
+| MongoDB | 7 以降 (開発用イメージは `mongo:8`) | Wiki データの永続化 |
+| Redis | 7 以降 | セッション・リアルタイム共同編集の pub/sub |
+| Elasticsearch | 任意 | 全文検索バックエンド (プラグイン駆動) |
+| Docker / Docker Compose | 任意 | ローカルインフラの起動に利用 |
+
+Node.js のバージョンはルート `package.json` の `engines` で `22.x` に固定
+されています。`nvm` などのバージョンマネージャを使っている場合は、Node.js
+22 系を有効にしてから作業してください。
+
+> **Tip**: MongoDB / Redis / Elasticsearch をホストに直接インストールする
+> 必要はありません。後述の `docker compose up -d` で開発用インフラがまとめて
+> 立ち上がります。
+
+## クイックスタート (Docker インフラ + ホストで開発サーバ)
+
+最も手軽な構成は、**ミドルウェアだけ Docker で起動し、API と Web は
+`pnpm dev` でホスト側で動かす** 方法です。コードを編集しながら開発する
+場合はこれを推奨します。
+
+```bash
+# 1. リポジトリを取得
+git clone https://github.com/crowi/crowi.git
+cd crowi
+
+# 2. 依存関係をインストール
+pnpm install
+
+# 3. 開発用インフラ (MongoDB / Redis / Elasticsearch / PlantUML) を起動
+docker compose up -d
+
+# 4. 環境変数ファイルを用意
+cp .env.sample .env
+# MONGO_URI / REDIS_URL / CROWI_ENCRYPTION_KEY などを必要に応じて編集
+
+# 5. すべて起動 (API :4301 / Web :4302 / プラグインの watch ビルド)
+pnpm dev
+```
+
+起動後、ブラウザで `http://localhost:4302` を開くとインストーラ画面が
+表示されます。最初の管理者アカウントを作成すると Wiki が使えるように
+なります。
+
+### ポート構成
+
+`pnpm dev` で立ち上がる各アプリのデフォルトポートは次のとおりです。
+
+| アプリ | ポート | 内容 |
+| ------ | ------ | ---- |
+| `@crowi/api` | `4301` | Express + ts-rest API サーバ |
+| `@crowi/web` | `4302` | Next.js 16 フロントエンド |
+| `@crowi/crowi-site` | `4303` | crowi.wiki LP + ドキュメント (任意) |
+
+ドキュメントサイトは開発時には不要です。必要なときだけ `pnpm dev:site`
+で個別に起動してください。
+
+### 開発用インフラの中身
+
+`docker compose up -d` (プロファイル指定なし) で起動するのは、アプリ本体
+ではなく **依存ミドルウェアのみ** です。
+
+| サービス | イメージ | ホスト側ポート |
+| -------- | -------- | -------------- |
+| `mongodb` | `mongo:8` | `27017` |
+| `redis` | `redis:7` | `6379` |
+| `elasticsearch` | カスタムイメージ (9.4.0 + `analysis-kuromoji`) | `9200` |
+| `plantuml` | `plantuml/plantuml-server` | `8080` |
+
+Elasticsearch イメージは日本語形態素解析プラグイン `analysis-kuromoji` を
+あらかじめ同梱したカスタムビルドです。詳細は [検索のセットアップ](./search-setup)
+を参照してください。
+
+### 個別に起動する
+
+API と Web を片方ずつ動かしたい場合は次のスクリプトが使えます。
+
+```bash
+pnpm dev:api    # API + プラグインのみ (Next.js は起動しない)
+pnpm dev:web    # Next.js フロントエンドのみ
+pnpm dev:site   # crowi.wiki の LP + ドキュメント (:4303)
+```
+
+## 全スタックを Docker で起動する
+
+API と Web も含めてすべて Docker コンテナで動かしたい場合は、`app`
+プロファイルを指定します。
+
+```bash
+docker compose --profile app up -d --build
+```
+
+この場合の挙動:
+
+- `api` / `web` サービスのイメージが `packages/{api,web}/Dockerfile` から
+  ビルドされます。
+- `api` サービスはリポジトリルートの `crowi.config.json` を
+  `/app/crowi.config.json` にマウントします。プラグイン構成は
+  イメージに焼き込まず、運用者がファイルで制御します。
+- コンテナ内ではホスト名ベースの URI (`mongodb://mongodb:27017/crowi`
+  など) が `.env` の `localhost` 値を上書きします。
+- ホスト側ポートは `pnpm dev` と揃えてあり、API が `4301`、Web が `4302`
+  にマッピングされます (コンテナ内部はいずれも `3000`)。
+
+`api` サービスは `.env` ファイルを `env_file` として読み込むため、
+`CROWI_ENCRYPTION_KEY` や `WS_TOKEN_SECRET` などの機密値は `.env` に
+記述しておきます。詳しくは [設定](./configuration) を参照してください。
+
+## ビルド・テスト・型チェック
+
+開発中によく使うスクリプトは次のとおりです。すべてリポジトリルートで
+実行します。
+
+```bash
+pnpm build        # 全パッケージをビルド
+pnpm test         # 全パッケージのテスト (API は Jest)
+pnpm type-check   # API + Web + Site の型チェック
+pnpm lint         # Lint (errors=0 が必須)
+```
+
+`pnpm install` 時に lefthook の Git フックがインストールされ、コミット時に
+Biome のフォーマット、プッシュ時に `pnpm lint` が自動で走ります。
+
+## 次のステップ
+
+- [設定](./configuration) — 環境変数と `crowi.config.json` の全体像
+- [機密設定の暗号化](./encryption) — `CROWI_ENCRYPTION_KEY` のセットアップ
+- [ストレージドライバ](./storage) — ローカル / S3 の切り替え
+- [メール / SMTP 設定](./mail) — メール送信の設定
+- [プラグインの管理](../plugins/managing) — プラグインの追加・有効化
+- [v1 からのアップグレード](./upgrading-from-v1) — 既存 Crowi からの移行
