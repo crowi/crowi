@@ -17,29 +17,36 @@ Crowi の旧 Express + Swig + jQuery を、新 ts-rest API + Next.js に段階�
 ## 実態のアーキテクチャ
 
 ```
-crowi/
+crowi/                            # Turborepo + pnpm workspace
+├── apps/crowi-site/              # crowi.wiki LP + docs (移行対象外)
+├── crowi.config.json             # dev runner config (plugins + active drivers)
+├── .env(.sample)                 # dev runtime env (repo root で読まれる)
 └── packages/
-    ├── api/                    # Express + ts-rest, port 3000
+    ├── api/                      # Express + ts-rest API (port 4301)
     │   ├── src/
-    │   │   ├── controllers/    # 旧実装(Swig render)
+    │   │   ├── controllers/      # 旧実装 (Swig render)
     │   │   ├── routes/
-    │   │   │   ├── api/        # 旧 /_api/* (HTTP RPC)
-    │   │   │   ├── admin.ts    # 旧管理画面
-    │   │   │   ├── login.ts    # 旧ログインフォーム
-    │   │   │   ├── me.ts       # 旧マイページ
-    │   │   │   └── ts-rest/    # ★ 新実装はここ
-    │   │   ├── models/         # Mongoose
+    │   │   │   ├── api/          # 旧 /_api/* (HTTP RPC)
+    │   │   │   ├── admin.ts      # 旧管理画面
+    │   │   │   ├── login.ts      # 旧ログインフォーム
+    │   │   │   ├── me.ts         # 旧マイページ
+    │   │   │   └── ts-rest/      # ★ 新実装はここ
+    │   │   ├── models/           # Mongoose
     │   │   └── middlewares/
-    │   └── views/              # ★ 旧 Swig テンプレート(置き換え対象)
-    ├── web/                    # Next.js 16, port 4302
+    │   └── views/                # ★ 旧 Swig テンプレート (置き換え対象)
+    ├── api-contract/             # ts-rest + Zod 契約 (src/{contracts,schemas})
+    ├── web/                      # Next.js 16 App Router (port 4302)
     │   └── src/app/
-    │       ├── (public)/       # ログイン前
-    │       └── (auth)/         # ログイン後 (jwtAuth)
-    └── api-contract/           # ts-rest + Zod 契約
-        └── src/{contracts,schemas}/
+    │       ├── (public)/         # ログイン前
+    │       ├── (auth)/           # ログイン後 (jwtAuth)
+    │       └── (admin)/          # 管理画面 (jwtAdminRequired)
+    ├── runner/                   # config loader + plugin resolver (api boot で使用)
+    ├── collab/                   # Hocuspocus 協調編集ホスト (RFC-0003)
+    ├── admin-cli/                # `crowi-admin` CLI
+    └── plugin-*/                 # storage / renderer / search プラグイン
 ```
 
-旧実装と新実装は同じ packages/api リポジトリに同居している。lib/ ディレクトリは存在しない。
+旧実装と新実装は同じ `packages/api` パッケージ内に同居している。lib/ ディレクトリは存在しない。
 
 ## 技術スタック
 
@@ -102,7 +109,7 @@ planner ──→ implementer ──→ simplify ──→ reviewer ─┬→ co
 各 phase の責務:
 
 - **planner**: 旧実装の場所特定、既存の ts-rest 契約の有無を必ず確認、task ファイル作成
-- **implementer**: 実装 + テスト、最後に必須チェック (type-check / test / format) を全部走らせる
+- **implementer**: 実装 + テスト、最後に必須チェック (type-check / test / lint / format) を全部走らせる
 - **simplify**: `simplify` skill を呼び、reuse / quality / efficiency を整える
 - **reviewer**: 契約整合・旧実装互換・テスト網羅・セキュリティを確認
 - **committer**: ローカルコミット (デフォルト main-direct モードでブランチ作らず main へ)
