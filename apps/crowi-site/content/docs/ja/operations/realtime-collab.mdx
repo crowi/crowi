@@ -1,0 +1,272 @@
+---
+title: リアルタイム共同編集の運用
+description: Crowi 2.1 のリアルタイム共同編集 (RFC-0003) を本番環境にデプロイするためのオペレーターガイド
+---
+
+Crowi 2.1 のリアルタイム共同編集機能は、Hocuspocus を `@crowi/api`
+プロセス内にライブラリとして同居 attach する構成で出荷されています。
+別プロセスや別ポートを起動する必要はなく、既存の api コンテナを動かせば
+そのままリアルタイム共同編集が有効になります。
+
+設計の詳細は [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md)
+を、利用者向けの使い方は [リアルタイム共同編集](../realtime-editing) を
+参照してください。
+
+## 概要
+
+- Hocuspocus は `packages/api/src/collab/attach.ts` 経由で api プロセスの
+  `http.Server` に `ws noServer` モードで attach されます。
+- WebSocket エンドポイントは `wss://<crowi-host>/collab/:pageId?token=…` で、
+  api と同じホスト・ポートを使います。リバースプロキシで別プロセスに
+  振り分ける必要はありません。
+- マルチインスタンス構成では `@hocuspocus/extension-redis` が
+  `REDIS_URL` 設定時に自動 attach され、Yjs アップデートを Redis pub/sub
+  で全レプリカへ伝搬します。スティッキーセッションは不要です。
+- ページ単位の同時編集者上限 (デフォルト 20) は Redis カウンタで管理され、
+  クラスタ全体で正しくカウントされます。
+
+## シングルインスタンスデプロイ
+
+最小構成は api + web + MongoDB の 3 サービスです。
+
+```yaml
+# docker-compose.yml (抜粋)
+services:
+  api:
+    image: ghcr.io/crowi/api:2.1
+    environment:
+      MONGO_URI: mongodb://mongo:27017/crowi
+      WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}
+      CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
+      # REDIS_URL は任意 (セッション/Socket.IO 共用)
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+  web:
+    image: ghcr.io/crowi/web:2.1
+    environment:
+      NEXT_PUBLIC_API_URL: https://crowi.example.com
+    ports:
+      - "3001:3000"
+  mongo:
+    image: mongo:7
+```
+
+このとき:
+
+- `REDIS_URL` は省略可ですが、セッション保存と Socket.IO アダプタの
+  共用先として通常は設定済みのはずです。
+- 共同編集自体は Redis なしでも動作します (extension-redis は attach
+  されず、編集者上限 counter は fail-open になります)。
+- ブラウザは `NEXT_PUBLIC_API_URL` から `/collab/` への WebSocket URL を
+  自動導出するため、`NEXT_PUBLIC_COLLAB_URL` の指定は不要です。
+
+## マルチインスタンスデプロイ
+
+api を複数レプリカで運用する場合の追加要件:
+
+1. **`REDIS_URL` を全レプリカで同じ Redis に向ける** — extension-redis が
+   自動 attach され、レプリカ間で Yjs アップデートが pub/sub されます。
+2. **`WS_TOKEN_SECRET` を全レプリカで同一値に揃える** — wsToken は任意の
+   レプリカで発行されて任意のレプリカで検証されるため、値がずれると
+   接続が確立できません (詳細は [関連環境変数](#関連環境変数) 参照)。
+3. **スティッキーセッション不要** — クライアントは任意の api レプリカに
+   接続できます。Yjs 更新は Redis pub/sub 経由で他レプリカへ即座に
+   伝搬します。
+4. **`Page.yjsState` が真実の源** — レプリカ全体の再起動時も MongoDB に
+   永続化された yjsState から復元されます。Redis はライブのルーティング
+   専用です。
+
+```yaml
+# 2 instance 例
+services:
+  api:
+    image: ghcr.io/crowi/api:2.1
+    deploy:
+      replicas: 2
+    environment:
+      MONGO_URI: mongodb://mongo:27017/crowi
+      REDIS_URL: redis://redis:6379           # マルチ構成では必須
+      WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}     # 全レプリカで揃える
+      CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
+```
+
+## リバースプロキシ設定
+
+WebSocket の `Upgrade` ヘッダを api までフォワードする必要があります。
+
+### nginx
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream crowi_api {
+    server api1:3000;
+    server api2:3000;
+    # マルチインスタンスでもスティッキー指定不要
+}
+
+server {
+    listen 443 ssl http2;
+    server_name crowi.example.com;
+
+    # /api/v2/* と /collab/* を同じ upstream へ
+    location /api/v2/ {
+        proxy_pass http://crowi_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /collab/ {
+        proxy_pass http://crowi_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;   # 接続は長時間 keep-alive
+        proxy_send_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://crowi_web:3000;
+    }
+}
+```
+
+### Traefik
+
+```yaml
+# docker-compose.yml の api service に
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.crowi-api.rule=Host(`crowi.example.com`) && (PathPrefix(`/api/v2`) || PathPrefix(`/collab`))"
+  - "traefik.http.services.crowi-api.loadbalancer.server.port=3000"
+  # スティッキーセッション無効 (デフォルト)
+```
+
+ポイント:
+
+- `/api/v2/pages/:id/yjs-token` (HTTP) と `/collab/:pageId` (WebSocket) を
+  同じ api アップストリームに向ける必要があります。
+- WebSocket 接続のアイドルタイムアウトは長め (1 時間程度) に設定して
+  ください。長時間の閲覧/編集セッションが prematurely 切断されると
+  ユーザー体験が悪化します。
+- スティッキーセッションは**不要**です。
+
+## 関連環境変数
+
+| 変数名 | 必須 | 用途 |
+| ------ | ---- | ---- |
+| `WS_TOKEN_SECRET` | はい (マルチで揃える) | wsToken (短命 JWT) の HMAC 署名鍵。マルチインスタンス構成では全レプリカで**同じ値**を指定する必要があります。未設定時はプロセス起動ごとにランダム生成され、警告ログが出ます (シングル開発環境のみ許容)。 |
+| `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | ページごとの同時編集者上限。21 人目以降は read-only でリアルタイム表示は受けられますが編集できません。 |
+| `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが WebSocket 接続する URL。未指定時は `window.location.host` + `NEXT_PUBLIC_API_URL` から `/collab/` を derive します。リバースプロキシで `/collab/*` を api 同居ホストに向けているなら設定不要。 |
+| `REDIS_URL` | マルチでは必須 | セッション/Socket.IO アダプタ + 共同編集の pub/sub + 編集者上限 counter。未設定時の挙動は次節参照。 |
+| `CROWI_ENCRYPTION_KEY` | 推奨 | 機密 Config (OAuth secret 等) を AES-256-GCM で暗号化。共同編集には直接影響しませんが、`pnpm --filter @crowi/api crypto:gen-key` で生成して全レプリカで揃えてください。 |
+
+## Redis 接続数の見積もり
+
+`@hocuspocus/extension-redis` は **pub + sub の 2 接続** を api インスタンス
+ごとに張ります。既存のセッション/Socket.IO 用接続と合算して Redis 側の
+`maxclients` を見積もる必要があります。
+
+例: 10 api レプリカ + 1 web レプリカの構成
+
+- 共同編集 extension-redis: 10 × 2 = 20 接続 (pub + sub の専用 ioredis client)
+- セッション/Socket.IO: 10 × 1 = 10 接続 (node-redis client)
+- 編集者上限 counter: セッション/Socket.IO と同じ node-redis client に相乗り (追加接続 0)
+- web 側からの直接 Redis 接続: なし (api 経由)
+
+合計約 30 接続が常時消費されます。デフォルトの `maxclients=10000` 内で
+十分まかなえますが、Redis Cluster や ElastiCache の低リソースインスタンス
+(`cache.t3.micro` / `cache.t4g.micro` 等) では余裕を持って割り当ててください。
+
+## 2 インスタンス smoke テスト手順
+
+実機での multi-instance 検証は `docker compose --scale` で簡単に組めます:
+
+```bash
+# 1. 既存の compose 構成にスケール指示を加えて起動
+docker compose --profile app up -d --build --scale api=2
+
+# 2. 2 つの api コンテナが立っていることを確認
+docker compose ps api
+# crowi-api-1   Up   3000/tcp
+# crowi-api-2   Up   3000/tcp
+
+# 3. 各 api コンテナのログをそれぞれ tail
+docker compose logs -f api
+# extension-redis (identifier=…) の attach ログを 2 行確認
+```
+
+検証手順:
+
+1. 2 つのブラウザウィンドウ (Chrome 通常 + シークレット、または異なる
+   ブラウザ) で別ユーザーとしてログイン。
+2. 同じページの `/_edit?page_id=<pageId>` を 2 ウィンドウで開く。
+3. 一方で文字を入力 → もう一方にリアルタイムで反映されることを確認。
+4. nginx などのロードバランサーが**手前にある場合は、各ウィンドウが
+   別レプリカに振り分けられていること**を確認 (api 側ログの `onConnect`
+   出力で `instance=` 識別子が異なれば OK)。
+5. 一方の api コンテナを `docker compose stop api-1` で停止 → 残った
+   レプリカに自動再接続し、編集が継続できることを確認。
+
+## 障害時の挙動 (Failure modes)
+
+- **Redis 障害 (`REDIS_URL` 設定済み、接続不可)**: extension-redis の
+  ioredis 再接続ループが動き続けます。新規 Yjs 更新はローカルの
+  Hocuspocus engine 内では伝搬しますが、他レプリカへの pub/sub は
+  途切れます。編集者上限 counter は **fail-open** (上限チェックを
+  通す) に倒れます。Redis 復旧後は自動で pub/sub が再開します。
+- **`WS_TOKEN_SECRET` 不一致**: あるレプリカが発行した wsToken を別の
+  レプリカが検証できず、`onAuthenticate` で reject されます。クライアントは
+  WebSocket connect 後すぐに切断され、エディタが "接続できませんでした"
+  状態のままになります。対処: 全レプリカで同じ secret を再設定して
+  ローリング再起動。
+- **WebSocket Upgrade 失敗**: リバースプロキシで `Upgrade` ヘッダが
+  落とされていると `/collab/` 接続が 400/426 で失敗します。`nginx` 設定で
+  `proxy_set_header Upgrade $http_upgrade` を確認してください。
+- **`Page.yjsState` 破損 / 外部編集**: `onLoadDocument` で yjsState が
+  欠落または `Y.applyUpdate` が失敗した場合、Crowi は revision の
+  Markdown 本文から Y.Doc を再構築し、接続中の全クライアントへ
+  force-reload 通知を送ります。クライアント側は警告ダイアログを出して
+  ページを reload します。
+- **`renderedAst` 不整合 (RFC-0002 連動)**: 共同編集の保存は
+  `Revision.prepareRevision` を呼び出して renderedAst を自動再生成
+  します。何らかの理由で `Page.body` と最新 `Revision.body` がずれた
+  場合は、`crowi-admin renderer:rebuild` (RFC-0002) で再ビルドして
+  ください。
+- **api プロセスダウン**: 接続中の全クライアントが reconnect ループに
+  入ります。ヘルスチェックで他レプリカへフェイルオーバーする構成なら
+  クライアントは自動的に他レプリカへ繋ぎ直し、Y.Doc は MongoDB の
+  yjsState から復元されます。
+
+## キャパシティチューニング
+
+- `COLLAB_MAX_EDITORS_PER_PAGE` で同時編集者上限を変更できます。20 は
+  経験則的な目安で、awareness の cursor 描画コストが大きくなる前の
+  上限です。これを大きく上げる場合は、editor 側の同時 awareness 配信に
+  対する描画負荷も検証してください。
+- Y.Doc の差分は `debounce: 2000` ms で `onChange` に流れます。これは
+  Hocuspocus のデフォルトを継承していて、変更が小さいうちは無駄な
+  `PageYjsUpdate` 書き込みを抑えます。
+- `PageYjsUpdate` は TTL 1 時間で自動 expire し、ベースラインの
+  `Page.yjsState` への compaction も定期的に走ります。1 ページに対して
+  延々と編集が続いても DB は線形には肥大化しません。
+
+## Save の SLO
+
+- 保存処理は通常 100-500ms で完了します。
+- サーバ側には 5 秒のタイムアウトがあり、5 秒を超えると 408 相当の
+  エラーをクライアントへ返します。
+- ただし**タイムアウトしても実際には保存が成功している可能性**が
+  あります (DB は書き込み済みで応答が遅延しただけのケース)。
+  クライアント側は自動リトライしません。ページを reload して最新
+  revision を確認するのが正しい対処です。
+- 5 秒タイムアウトはあくまで extreme slow への安全網であり、通常の
+  ネットワーク条件では十分余裕があります。タイムアウトが恒常的に
+  発生する場合は MongoDB のレイテンシ / renderer 処理時間 / 接続
+  プールサイズを疑ってください。
