@@ -217,6 +217,31 @@ describe('Page', () => {
     });
   });
 
+  describe('RFC-0003 collab fields', () => {
+    test('new pages default currentRevision / yjsState / yjsCheckpointAt to null', async () => {
+      // Phase 1 only adds the schema fields; the Phase 5 save flow
+      // writes them. Until then a freshly-created page must surface
+      // them as `null` so callers can branch on "no live state yet".
+      const page = await Page.findOne({ path: '/grant/public' });
+      expect(page.currentRevision).toBeNull();
+      expect(page.yjsState).toBeNull();
+      expect(page.yjsCheckpointAt).toBeNull();
+    });
+
+    test('round-trips a Buffer yjsState write through Mongo', async () => {
+      const page = await Page.findOne({ path: '/grant/public' });
+      const snapshot = Buffer.from([0xaa, 0xbb, 0xcc]);
+      page.yjsState = snapshot;
+      page.yjsCheckpointAt = new Date('2026-05-14T00:00:00Z');
+      await page.save();
+
+      const reloaded = await Page.findById(page._id);
+      const asBuffer = Buffer.isBuffer(reloaded.yjsState) ? reloaded.yjsState : Buffer.from((reloaded.yjsState as any).buffer);
+      expect(asBuffer.equals(snapshot)).toBe(true);
+      expect(reloaded.yjsCheckpointAt?.toISOString()).toBe('2026-05-14T00:00:00.000Z');
+    });
+  });
+
   describe('Normalize path', () => {
     describe('Normalize', () => {
       test('should start with slash', () => {

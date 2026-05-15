@@ -1,0 +1,43 @@
+{
+  "name": "@crowi/collab",
+  "version": "0.1.0-dev",
+  "description": "Hocuspocus hooks + save flow library for Crowi 2.0 realtime collaborative editing (RFC-0003). Embedded in the @crowi/api process via attachCollabServer — no longer ships a standalone CLI.",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "tsup --watch --no-clean",
+    "build": "tsup",
+    "lint": "eslint src/ --ext .ts",
+    "test": "jest --passWithNoTests",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@crowi/api-contract": "workspace:^",
+    "@hocuspocus/server": "^4.0.0",
+    "debug": "~4.1.1",
+    "mongoose": "^6.13.8",
+    "uuid": "^11.1.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.8"
+  },
+  "devDependencies": {
+    "@crowi/tsconfig": "workspace:*",
+    "@types/debug": "^4.1.5",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.1",
+    "jest": "catalog:",
+    "mongodb-memory-server": "^10.1.4",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}

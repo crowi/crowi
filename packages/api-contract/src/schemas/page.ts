@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RevisionTypeSchema } from './collab';
 import { UserPublicSchema } from './userPublic';
 
 // Page grant enum - matches Page model constants
@@ -98,6 +99,16 @@ export const RevisionSchema = z.object({
   // (rebuilt by `renderer:rebuild` once RFC-0008 lands). Absent on
   // revisions saved before this field was introduced.
   rendererVersion: z.string().optional(),
+  // RFC-0003 collaborative-save fields. All optional; v1.x revisions
+  // emit none of them. See `packages/api/src/models/revision.ts` for
+  // semantics. The list-page endpoint currently does not surface
+  // these — they only appear on the Phase 5+ checkpoint Revisions
+  // produced by Hocuspocus and on the single-revision detail route.
+  parentRevisionId: z.string().nullable().optional(),
+  type: RevisionTypeSchema.optional(),
+  savedBy: z.union([z.string(), PageUserSchema]).nullable().optional(),
+  contributors: z.array(z.union([z.string(), PageUserSchema])).optional(),
+  message: z.string().optional(),
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 
@@ -120,6 +131,15 @@ export const PageSchema = z.object({
   extended: PageExtendedSchema,
   createdAt: z.string(),
   updatedAt: z.string().optional(),
+  // RFC-0003 collaborative-edit fields. All optional; `null` is the
+  // "no live state yet" value. Existing read endpoints (list /
+  // detail) do not currently emit these — the contract is widened
+  // here so Phase 5+ endpoints can return them without a contract
+  // bump. `yjsState` is intentionally omitted from the contract:
+  // the binary blob lives only inside Hocuspocus and never crosses
+  // the HTTP API.
+  currentRevision: z.string().nullable().optional(),
+  yjsCheckpointAt: z.string().nullable().optional(),
   // dynamic fields
   latestRevision: z.string().optional(),
   likerCount: z.number().optional(),

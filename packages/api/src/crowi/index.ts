@@ -3,8 +3,8 @@ import path, { sep } from 'path';
 import mongoose from 'mongoose';
 import Tokens from 'csrf';
 import { createClient } from 'redis';
-import url from 'url';
 import http from 'http';
+import { buildRedisOpts } from 'src/util/redis-opts';
 // import socketIO from 'socket.io'
 // import socketIORedis from 'socket.io-redis'
 import RedisStore from 'connect-redis';
@@ -18,6 +18,7 @@ import events from 'src/events';
 import middlewares from 'src/middlewares';
 import controllers from 'src/controllers';
 import routes from '../routes';
+import { attachCollabServer, type AttachedCollab } from 'src/collab/attach';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
 import { hasSlackConfig } from '../models/config';
@@ -119,6 +120,15 @@ class Crowi {
    */
   renderer: Renderer | null = null;
 
+  /**
+   * Hocuspocus engine attach handle (RFC-0003 Phase 9 same-process).
+   * Built lazily in `start()` after the http.Server is listening so
+   * the `'upgrade'` event can be wired before any client connects.
+   * `null` outside of the running server (= `init()` finished but
+   * `start()` hasn't run yet, or after `shutdown()`).
+   */
+  collabAttachment: AttachedCollab | null = null;
+
   initialized = false;
 
   constructor(rootdir: string, env: typeof process.env) {
@@ -165,6 +175,11 @@ class Crowi {
     // registered. External plugins append; they cannot insert before
     // core in v2.1 phase 2.
     this.setupRenderer();
+    // RFC-0003 Phase 9 (same-process attach): the cross-process
+    // pageEvent subscriber that used to fan collab saves into the
+    // api event loop is gone — the embedded Hocuspocus engine (see
+    // `src/collab/attach.ts`) calls `crowi.event('Page').emit(...)`
+    // directly after a save flow completes.
     // Plugins must boot AFTER config/models are ready (so PluginContext
     // can read config and access models) but BEFORE the legacy
     // mailer / slack initialisers — those are migrating to
@@ -318,29 +333,10 @@ class Crowi {
   }
 
   buildRedisOpts(redisUrl: string | null, redisRejectUnauthorized: boolean) {
-    if (redisUrl) {
-      const { hostname: host, port, auth, protocol } = url.parse(redisUrl);
-      const password = auth ? { password: auth.split(':')[1] } : {};
-
-      // Convert port to number for Redis v4 compatibility
-      const portNumber = port ? parseInt(port, 10) : 6379;
-
-      const tls: object | null = protocol === 'rediss:' ? { requestCert: true, rejectUnauthorized: redisRejectUnauthorized } : null;
-
-      // Redis v4 uses socket object for connection configuration
-      const socketConfig = {
-        host,
-        port: portNumber,
-        ...(tls && { tls }),
-      };
-
-      return {
-        socket: socketConfig,
-        ...password,
-      };
-    }
-
-    return null;
+    // Thin wrapper kept for back-compat with existing `crowi.buildRedisOpts`
+    // callers; the actual translation lives in `util/redis-opts.ts` so
+    // the collab process can pull the same helper through `api-dist.ts`.
+    return buildRedisOpts(redisUrl, redisRejectUnauthorized);
   }
 
   // getter/setter of model instance
@@ -542,26 +538,41 @@ class Crowi {
     return this.tokens;
   }
 
-  start = () => {
+  start = async (): Promise<any> => {
     if (this.app === null) {
       throw new Error('Must call init() before start().');
     }
 
-    const server = http.createServer(this.app).listen(this.port, () => {
-      console.log('[' + this.node_env + '] Express server listening on port ' + this.port);
-    });
-    /*
-    const io = socketIO(server, { transports: ['websocket'] })
-    if (this.redisOpts) {
-      io.adapter(socketIORedis(this.redisOpts))
-      debug('Using socket.io-redis')
-    }
-    io.sockets.on('connection', (socket) => {
-      debug('Websocket CONNECTED, socket.id:', socket.id)
-    })
+    const server = http.createServer(this.app);
 
-    this.io = io
-    */
+    // RFC-0003 Phase 9 — attach Hocuspocus to the existing http.Server
+    // **before** `listen()` so the `'upgrade'` event handler is wired
+    // when the first WebSocket client races the listen callback. The
+    // attach is async because it builds the editor-cap counter
+    // (Redis SCARD round-trip when configured); we await it here so
+    // the boot sequence stays serial and `start()` resolves only
+    // when the api is fully ready to accept WebSocket upgrades.
+    this.collabAttachment = await attachCollabServer(server, this);
+
+    // Promisify `server.listen` so `start()` resolves only after the
+    // socket is actually bound. Callers (the bin entry, smoke tests)
+    // can then `await crowi.start()` and assume the api accepts
+    // connections — without this the previous async chain returned
+    // before listen() finished its background bind.
+    await new Promise<void>((resolveListen, rejectListen) => {
+      const onError = (err: Error) => {
+        server.off('listening', onListening);
+        rejectListen(err);
+      };
+      const onListening = () => {
+        server.off('error', onError);
+        console.log('[' + this.node_env + '] Express server listening on port ' + this.port);
+        resolveListen();
+      };
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen(this.port);
+    });
 
     return this.app;
   };

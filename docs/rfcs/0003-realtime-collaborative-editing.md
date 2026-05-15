@@ -182,13 +182,25 @@ the open-source core is sufficient.
 
 ### Deployment
 
-Hocuspocus runs as a separate Node.js process alongside the existing
-Crowi HTTP server, sharing the same MongoDB and Redis. In small
-deployments they may run in the same container; in larger deployments
-they are split for independent scaling.
+> **Implementation note (Phase 8.5 + 9, v2.1 final):** The initial design
+> ran Hocuspocus as a separate Node.js process behind a reverse proxy.
+> The shipped v2.1 implementation **attaches Hocuspocus as a library to
+> the api process** via `@crowi/collab` (`packages/api/src/collab/attach.ts`),
+> reusing the api's `http.Server` in `ws noServer` mode. Single-instance
+> and multi-instance deployments are documented in
+> `apps/crowi-site/content/docs/{ja,en}/operations/realtime-collab.mdx`.
+> The wire format and `/collab/` WebSocket endpoint are unchanged.
 
-WebSocket endpoint: `wss://<crowi-host>/collab/`. The HTTP server
-reverse-proxies `/collab/*` to Hocuspocus.
+Hocuspocus runs **in the api process** as a library, sharing the api's
+HTTP server, MongoDB connection and (optionally) Redis client. No
+separate process or reverse-proxy hop is required. The api binary is
+the only collab runtime; horizontal scaling is achieved by spinning
+up multiple api replicas (Phase 9 wires `@hocuspocus/extension-redis`
+for cross-instance pub/sub automatically when `REDIS_URL` is set).
+
+WebSocket endpoint: `wss://<crowi-host>/collab/`. The api's HTTP
+server forwards `upgrade` requests for `/collab/*` directly to
+the embedded Hocuspocus engine.
 
 ## Persistence strategy
 
@@ -744,27 +756,37 @@ Remote cursors render via `y-codemirror.next`'s built-in support:
 
 ## Multi-server coordination
 
-For deployments running multiple Hocuspocus instances behind a load
-balancer:
+For deployments running multiple api instances behind a load balancer:
 
 - Hocuspocus's Redis extension provides pub/sub: when instance A
   receives a Yjs update, it broadcasts to instance B via Redis, which
   forwards to its connected clients.
 - Sticky sessions are NOT required (any client can connect to any
-  Hocuspocus instance).
+  api instance).
 - `Page.yjsState` persistence is the source of truth across restarts;
   Redis is for live cross-instance routing only.
 - The 20-user cap is enforced via a Redis-stored counter per pageId,
   incremented on connect and decremented on disconnect.
 
 Single-server deployments work identically but don't need the Redis
-pub/sub layer; the Redis counter for the user cap still applies.
+pub/sub layer; the Redis counter for the user cap still applies
+(it falls open when `REDIS_URL` is unset).
+
+> **Implementation note (Phase 8.5 + 9, v2.1 final):**
+> `@hocuspocus/extension-redis` is attached **by the api process** in
+> `packages/api/src/collab/attach.ts` when `crowi.redis !== null`
+> (i.e. `REDIS_URL` is set). No code changes are required at deploy
+> time; operators only need to point every api replica at the same
+> Redis instance. Sticky sessions remain unnecessary as originally
+> designed. See `apps/crowi-site/content/docs/{ja,en}/operations/realtime-collab.mdx`
+> for the deployment recipe and `WS_TOKEN_SECRET` clustering rule.
 
 ## v2.1 release scope
 
 In scope:
 
-- Hocuspocus integration as a separate Node.js process.
+- Hocuspocus integration as a library attached to the api process
+  (`@crowi/collab`, Phase 8.5).
 - `Page` schema additions: `currentRevision`, `yjsState`,
   `yjsCheckpointAt`.
 - `PageYjsUpdate` collection with TTL (1 hour).
@@ -840,7 +862,9 @@ Out of scope (deferred):
 12. **User limit** → 20 simultaneous editors per page (configurable).
     21st+ user gets read-only mode.
 13. **Multi-server coordination** → Redis pub/sub via Hocuspocus's
-    Redis extension. No sticky sessions needed.
+    Redis extension. No sticky sessions needed. *(Phase 9
+    implementation: `@hocuspocus/extension-redis` is attached by the
+    api process when `REDIS_URL` is set.)*
 14. **`PageYjsUpdate` TTL** → 1 hour (round 1's 1 day was over-conservative).
 15. **`bodyAtSave` in incremental revisions** → not needed;
     `Revision.body` is always present.
@@ -889,8 +913,10 @@ Out of scope (deferred):
    with TTL index. Extend `Revision` with `parentRevisionId`, `type`,
    `contributors`, `yjsUpdate`, `message`. (Other Revision fields
    per RFC-0002's migration.)
-2. **Hocuspocus deployment**: containerise as separate process; wire
-   into reverse proxy at `/collab/`.
+2. **Hocuspocus deployment**: attach Hocuspocus as a library to the
+   api process via `@crowi/collab` (Phase 8.5). The api's `http.Server`
+   handles `/collab/*` WebSocket upgrades directly; no reverse-proxy
+   hop or separate process is required.
 3. **wsToken endpoint**: implement `GET /api/v2/pages/:id/yjs-token`
    with JWT signing.
 4. **Hocuspocus hooks**: `onAuthenticate`, `onConnect`, `onLoadDocument`,
@@ -917,8 +943,10 @@ Out of scope (deferred):
 15. **End-to-end test**: two-browser test of common scenarios
     (simultaneous edits, disconnect/reconnect, save, force-reload,
     renderer pipeline integration).
-16. **Multi-server smoke test**: spin up two Hocuspocus instances
-    against the same Redis + Mongo, verify cross-instance sync.
+16. **Multi-server smoke test**: spin up two api instances against the
+    same Redis + Mongo, verify cross-instance sync. (Phase 9 implements
+    cross-instance routing via `@hocuspocus/extension-redis`,
+    auto-attached when `REDIS_URL` is set.)
 17. **Documentation**: operator deployment guide (Hocuspocus process,
     Redis config); user guide for save/revision semantics.
 

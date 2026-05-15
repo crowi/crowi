@@ -33,6 +33,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
   - `pageNotFoundResponse` / `invalidPageIdResponse` を util の const に
   - `pageToResponse` の date 系を fallback (createdAt/updatedAt が undefined でも schema を満たす) に
 - [x] **`loadGrantedPage` を util に格上げ** (`0f988d3e`): `PageModelLike` 経由で page / bookmark / comment / notification / revision から呼べるように昇格
+- [x] **RFC-0003 Phase 5 — `Page.revision` / `Page.currentRevision` の atomic update helper** (`2d7ccb89` `feat(api): extend Revision.prepareRevision with collaborative-save options`): Phase 1 で `currentRevision` を追加して以来の advisory。 Phase 5 の save flow 実装で `Revision.prepareRevision` 経由の両フィールド同時更新パスに集約され、 直接代入経路の drift リスクは解消済み。 (RFC-0003 Phase 5 で landed、 Phase 10 で TODO 整理)
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 
@@ -127,7 +128,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] 旧 Swig views の削除
 - [ ] `packages/api/src/util/apiResponse.ts` (legacy) の整理
 - [ ] テスト整備 (web 側のテスト基盤、API の coverage 強化)
-- [ ] エディタ強化 (Markdown プレビュー / リッチエディタ / 自動保存 / 画像アップロード)
+- [x] **エディタ基盤 (CodeMirror 化 + 2 column preview)** — `/_edit` の `<textarea>` を CodeMirror 6 生 `EditorView` ラッパに置き換え、2 column live preview (狭幅は Tabs 切替、両カラム mount-keep) を再導入。`MarkdownEditor` は controlled (`value` / `onChange` / `readonly` / `extraExtensions`) + `forwardRef` + `useImperativeHandle` で `insertAtCursor` / `focus` を公開。プレビューは新規 `POST /api/v2/pages/preview` を 250ms debounce で叩いて mdast を取得し、show page と共通の `renderMdastToReactNode` ヘルパで描画 (single source of truth)。layout は親 `(auth)/layout.tsx` の `max-w-4xl` を CSS escape (`mx-[calc(50%-50vw)] w-screen`) で打ち消す局所対処 — show 系を触らない。`extraExtensions` 口は RFC-0003 Phase 7 で `yCollab` を流し込むための土台。残り: 自動保存 / 画像 D&D upload (RFC-0004) / toolbar (RFC-0006) / slash commands (RFC-0007)
 
 ## Recently Completed (このセッション)
 
@@ -161,6 +162,19 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [ ] **Phase 9 follow-ups (advisory、simplify レビュー由来)** — (a) `packages/api/src/renderer/__fixtures__/echo-embed.ts` が `dist/renderer/__fixtures__/echo-embed.{js,d.ts}` として @crowi/api tarball に含まれる問題。tsconfig.json `exclude` に `**/__fixtures__/**` を追加すると ESLint の `parserOptions.project` が parse 失敗するため、(i) ESLint 側に `ignorePatterns` を追加するか、(ii) fixture を `src/renderer/__fixtures__/` から `test/fixtures/` に移動するのが clean。3KB レベルの cosmetic だが publish hygiene のため別 PR で対応。(b) `@crowi/admin-cli` の `main: dist/cli.js` と他 tsup 系 (dist/index.js) の慣例不整合 — tsup config 確認 + 統一の余地、`module` field 追加検討。(c) `release.yml` で `pnpm test / type-check / lint` を build 前に走らせる gate を追加するか検討 (現状 CI に gating 任せ、main-direct push をぬける window 有り)。(d) turbo remote cache (`TURBO_TOKEN` + `TURBO_TEAM`) を release workflow に設定して cold build を短縮 (releases 頻度が高くなったら有効)
 - [ ] **`.claude/agents/feature-*.md` を multi-phase 対応に更新** (packages-restructure simplify レビュー由来、preexisting gap) — `.claude/skills/crowi-feature/SKILL.md` は L131〜L254 + L296〜L313 で multi-phase spec (`phases[]` / `currentPhase` / per-phase `commitPlan`) を定義しているが、`.claude/agents/feature-{planner,implementer,reviewer,committer}.md` は `task.commitPlan` のみ参照していて multi-phase 文脈を知らない。skill が phase ローカルの commitPlan を agent に渡す前提で動くため実害は出ないが、agent docs が SKILL.md と同期していない。各 agent doc に「multi-phase の場合は `task.phases[currentPhase].commitPlan` / `task.phases[currentPhase].acceptanceCriteria` を読む」旨を加筆
 - [ ] **Dev/prod parity test** (Phase 7 振り返り由来) — Phase 7 で apps/crowi-dev-runner を廃止し repo root が dev runner 相当の役割を担う構造に変更したが、real user runner (`crowi-admin init` で生成される独立 repo) と dev shape (this repo の root + `.npmrc` `public-hoist-pattern[]=@crowi/plugin-*`) では plugin resolution の経路が異なる (dev は hoist 経由、user runner は isolated install)。現状はどちらも動作するが、「dev で通って user 環境で落ちる」クラスの regression を防ぐため、user runner 形状を simulate する e2e test を追加する: 一時 dir に minimal package.json (deps: @crowi/api + plugin-* 数個) + crowi.config.json を書き、isolated install (`pnpm install`、hoist なし) → `resolvePlugins(tmpDir)` が plugins を correct に resolve することを検証。`packages/runner/test/` または専用 `e2e/user-runner-shape.test.ts` などに配置。changeset publish workflow に組み込めばさらに安心。トリガ事案がなければ priority low、`crowi-admin init` 実装と同時に整備するのが現実的
+
+### Realtime collaborative editing (RFC-0003) v2.1 alpha
+- [x] **Phase 1 — Schema migrations** (`486956e2` + `35ac92c8`) — `Page` に `currentRevision` / `yjsState` / `yjsCheckpointAt` を追加、`Revision` に `parentRevisionId` / `type` (`snapshot`|`incremental`) / `savedBy` / `contributors` / `yjsUpdate` / `message` を追加、`PageYjsUpdate` 新規 collection を 1h TTL index 付きで導入。 schema は完全 additive で既存 revision 経路を破壊しない
+- [x] **Phase 2 — wsToken endpoint + JWT auth utility** — `GET /api/v2/pages/:id/yjs-token` を ts-rest contract に追加、 ページ存在チェック + 編集権限チェック + 短命 JWT 発行 + readonly bit を実装。 `WS_TOKEN_SECRET` は env から (未設定時は per-process ランダム + warn)。 同期キー署名なので multi-instance では必ず cluster で揃える必要があり Phase 10 docs で明記
+- [x] **Phase 3 — `@crowi/collab` library 初版** (`32b4c03e` 以降 ~10 commit) — Hocuspocus host を新規 package として scaffold、 onAuthenticate (wsToken 検証 + pageId match + ページ存在チェック)、 onLoadDocument (`Page.yjsState` 復元、 fallback で revision body から Y.Doc seed)、 onStoreDocument (Y.encodeStateAsUpdate で `Page.yjsState` 更新) を実装。 Phase 3 時点では standalone process 想定 (Phase 8.5 で library 化)
+- [x] **Phase 4 — `PageYjsUpdate` append + compaction** (`bef6840e` + `ac0cb59d` + `6da93189` + `f9eb8fef`) — onChange hook で Yjs update を append、 件数/時間トリガで compaction + inflight mutex で多重実行防止、 部分破損行は clean up、 crash recovery は load 時に residual updates を replay
+- [x] **Phase 5 — Save flow + RFC-0002 統合** (`2d7ccb89` + `11b7c7b9` + `5e742613`) — `Revision.prepareRevision` に collaborative-save options (parentRevisionId / type / savedBy / contributors / yjsUpdate) を追加、 `crowi:save` stateless message を hocuspocus 上で実装し prepareRevision 経由で idempotent 2-step persist (Revision 作成 → Page.currentRevision / Page.revision 同時更新)。 contributors は awareness updates から in-memory tracker に集約 (Phase 1 advisory `Page.revision`/`currentRevision` atomic helper はこの save 経路に集約されて消化)
+- [x] **Phase 6 — 20-user cap + force-reload** (`5ebbc8cb` + `6c7c730d` + `85a34a01`) — Redis counter (`editor-cap-counter.ts`) で onAuthenticate 時に + onDisconnect で decrement、 `COLLAB_MAX_EDITORS_PER_PAGE` env で上限変更可、 上限超過は readonly bit on で接続維持 (live update 受信のみ)。 `yjsState=null` / `Y.applyUpdate` 失敗時は connected clients に force-reload broadcast (stateless message)
+- [x] **Phase 7 — Editor 統合 (yCollab via extraExtensions)** (`94e9654d` + `35467e35` + `bd558ee2` + `6b59821b` + `3780341a`) — `CollaborativeMarkdownEditor` を新設、 editor-foundation で landed の `extraExtensions` 口に `yCollab(yText, awareness, {undoManager: yUndoManager})` を流し込み、 `disableHistory: true` で CodeMirror 内蔵 undo を抑止して yUndoManager 経由 self-undo に切替。 `useYjsToken` + `useCollabDocument` hook で HocuspocusProvider lifecycle を React 側で管理
+- [x] **Phase 8 — Awareness UI + Save UI** (`fa38a63f` + `c79af876` + `a2cebb33` + `13df02a3` + `02db4a62` + `3abeb971` + `c9fb5ecd` + `9550bd53` + `2b513fd5` + `2c72475f` + `0ace6dab` + `6d0a01e1`) — remote cursors / 同段落 warning / remote peer avatar group をエディタヘッダに、 sonner toast で online/offline/reconnect/save 完了を通知、 force-reload dialog、 revision list view で `Alice (with Bob, Carol)` 形式の contributors 表示、 leave 時の unsaved-changes 警告。 FNV-1a hash で same-paragraph 検出 / collab-user-color util で deterministic peer color
+- [x] **Phase 8.5 — `@crowi/collab` を library 化して api に同居 attach** (`feature-collab-embed-into-api` task、 `724728fe` + `d9f73563` + `5e85f131` + `aaacd6b9` + `dfd65d30` + `3530a558` + `f6d9fc72` + `4c3b55a3` + `659d0794` + `c8dc6088` + `fcca2582` + `574c265b` + `415bf6d3` + `f822a314`) — standalone process design を library entry に書き直し、 `packages/api/src/collab/attach.ts` で Hocuspocus を Express http.Server に `ws noServer` mode で attach、 cross-process pageEvent pubsub を撤廃 (= in-process fan-out)、 web は `window.location` から collab URL を derive (`NEXT_PUBLIC_COLLAB_URL` を optional に降格)、 dev script の `dev:collab` 廃止、 Y.Text → body mirror を throttle して typing latency を抑制
+- [x] **Phase 9 — Multi-server coordination via `@hocuspocus/extension-redis`** (`6495c4be` + `69f37e0d` + `d0ba2e9e`) — `crowi.redis !== null` の場合のみ api 側で extension-redis を attach、 sticky session 不要のまま multi-instance deploy が成立。 `createCollabServer` に extensions option を追加して attach 側から DI 可能に、 `REDIS_URL` を multi-instance では required と env doc に明記
+- [x] **Phase 10 — Documentation & release notes** (本 phase) — RFC body を Phase 8.5 + 9 反映に in-place 改訂 (history 保持、 設計判断は touch なし)、 operator deployment guide (`apps/crowi-site/content/docs/{ja,en}/operations/realtime-collab.mdx`) と user guide (`apps/crowi-site/content/docs/{ja,en}/realtime-editing.mdx`) を Fumadocs に新設 (ja+en pair)、 CLAUDE.md に collab 同居 attach + new env を追記、 `.changeset/rfc-0003-realtime-collab.md` で `@crowi/api` + `@crowi/web` + `@crowi/api-contract` を minor bump
 
 ### Installer 移行 (フェーズ 0)
 - [x] **未インストール時の自動 redirect** (`/migrate migrate-installer-process` → `ed1c598d`) — `useInstallerStatus()` + `<InstallerGate>` を root layout に mount、`/installer` ⇄ それ以外を双方向制御
@@ -279,6 +293,14 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - 旧 controller / 旧 Swig は段階的に削除予定 (新側が安定してから)
 
 ## Operator runbooks
+
+### Realtime collab deployment (RFC-0003)
+
+- Hocuspocus は `@crowi/api` プロセス内に同居 attach される (`packages/api/src/collab/attach.ts` 経由)。 別プロセスや別ポート起動は不要、 `pnpm dev` だけで dev 環境が立ち上がる
+- `WS_TOKEN_SECRET` は wsToken の HMAC 署名鍵。 multi-instance 構成では **全 api レプリカで同一値** に揃える必要がある (異なるとレプリカ A が発行した token をレプリカ B が検証できず接続不可)。 シングル開発環境では未設定でもランダム自動生成 + warn で動く
+- multi-instance では `REDIS_URL` が必須 (`@hocuspocus/extension-redis` が auto-attach され Yjs アップデートを pub/sub 伝搬する)。 sticky session は不要
+- `COLLAB_MAX_EDITORS_PER_PAGE` env で同時編集者上限を変更可 (default 20)。 21 人目以降は read-only 表示
+- 詳細手順 (リバースプロキシ設定 / 2-instance smoke / Redis 接続数見積もり / failure modes / save SLO) は `apps/crowi-site/content/docs/{ja,en}/operations/realtime-collab.mdx` および crowi.wiki の公開版を参照
 
 ### Storage driver の切替 / ファイル移行
 

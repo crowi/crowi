@@ -1,0 +1,279 @@
+---
+title: Operating realtime collaborative editing
+description: Operator guide for deploying Crowi 2.1's realtime collaborative editing (RFC-0003)
+---
+
+Crowi 2.1's realtime collaborative editing ships with Hocuspocus attached
+as a library inside the `@crowi/api` process. There is no separate
+collab process or extra port to manage; running the existing api
+container is enough to enable realtime editing.
+
+See [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md)
+for the design rationale, and [Realtime collaborative editing](../realtime-editing)
+for the end-user guide.
+
+## Overview
+
+- Hocuspocus is attached to the api process's `http.Server` in
+  `ws noServer` mode via `packages/api/src/collab/attach.ts`.
+- The WebSocket endpoint is `wss://<crowi-host>/collab/:pageId?token=…`,
+  served by the same host and port as the api. No reverse-proxy split
+  to a separate process is required.
+- For multi-instance deployments, `@hocuspocus/extension-redis` is
+  attached automatically when `REDIS_URL` is set. Yjs updates are
+  fanned out across replicas via Redis pub/sub, and sticky sessions
+  are **not** required.
+- The 20-editor per-page cap (default) is enforced via a Redis counter
+  shared across instances.
+
+## Single-instance deployment
+
+The minimal stack is api + web + MongoDB.
+
+```yaml
+# docker-compose.yml (excerpt)
+services:
+  api:
+    image: ghcr.io/crowi/api:2.1
+    environment:
+      MONGO_URI: mongodb://mongo:27017/crowi
+      WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}
+      CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
+      # REDIS_URL is optional in single-instance mode (also used for
+      # session / Socket.IO adapter)
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+  web:
+    image: ghcr.io/crowi/web:2.1
+    environment:
+      NEXT_PUBLIC_API_URL: https://crowi.example.com
+    ports:
+      - "3001:3000"
+  mongo:
+    image: mongo:7
+```
+
+Notes:
+
+- `REDIS_URL` may be omitted, but it is usually already configured
+  because session storage and the Socket.IO adapter share it.
+- Collab itself works without Redis (extension-redis simply will not
+  be attached, and the editor cap counter falls open).
+- The browser derives the `/collab/` WebSocket URL from
+  `NEXT_PUBLIC_API_URL`, so `NEXT_PUBLIC_COLLAB_URL` is not required.
+
+## Multi-instance deployment
+
+Additional requirements when running multiple api replicas:
+
+1. **Point every replica at the same Redis via `REDIS_URL`** —
+   extension-redis attaches automatically and fans Yjs updates out
+   across replicas.
+2. **Set the same `WS_TOKEN_SECRET` on every replica** — a wsToken
+   minted on one replica may be verified on another, so a mismatch
+   leaves clients unable to connect (see [Environment
+   variables](#environment-variables)).
+3. **No sticky sessions** — clients can connect to any api replica.
+   Yjs updates are routed via Redis pub/sub.
+4. **`Page.yjsState` is the source of truth** — even a full cluster
+   restart recovers from persisted state. Redis is for live routing
+   only.
+
+```yaml
+# 2-replica example
+services:
+  api:
+    image: ghcr.io/crowi/api:2.1
+    deploy:
+      replicas: 2
+    environment:
+      MONGO_URI: mongodb://mongo:27017/crowi
+      REDIS_URL: redis://redis:6379           # required in multi-instance
+      WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}     # identical across replicas
+      CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
+```
+
+## Reverse proxy configuration
+
+The `Upgrade` header must be forwarded all the way to the api.
+
+### nginx
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream crowi_api {
+    server api1:3000;
+    server api2:3000;
+    # No sticky directive needed even in multi-instance setups.
+}
+
+server {
+    listen 443 ssl http2;
+    server_name crowi.example.com;
+
+    # Send both /api/v2/* and /collab/* to the same upstream.
+    location /api/v2/ {
+        proxy_pass http://crowi_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /collab/ {
+        proxy_pass http://crowi_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;   # Keep long-lived sockets alive.
+        proxy_send_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://crowi_web:3000;
+    }
+}
+```
+
+### Traefik
+
+```yaml
+# Labels on the api service in docker-compose.yml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.crowi-api.rule=Host(`crowi.example.com`) && (PathPrefix(`/api/v2`) || PathPrefix(`/collab`))"
+  - "traefik.http.services.crowi-api.loadbalancer.server.port=3000"
+  # Sticky sessions are disabled by default — leave them off.
+```
+
+Key points:
+
+- `/api/v2/pages/:id/yjs-token` (HTTP) and `/collab/:pageId` (WebSocket)
+  must both reach the api upstream.
+- Set a generous idle timeout on the WebSocket location (around an
+  hour). Editor sessions are long-lived, and premature disconnects
+  hurt UX.
+- Sticky sessions are **not** required.
+
+## Environment variables
+
+| Variable | Required | Purpose |
+| -------- | -------- | ------- |
+| `WS_TOKEN_SECRET` | Yes (cluster-wide identical) | HMAC signing key for the short-lived wsToken (JWT). **Must be identical** across all api replicas in multi-instance mode. If unset, a random secret is generated per process and a warning is logged — acceptable only for single-instance development. |
+| `COLLAB_MAX_EDITORS_PER_PAGE` | No (default `20`) | Per-page simultaneous-editor cap. The 21st editor and beyond receive read-only realtime updates but cannot type. |
+| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials. When unset, it is derived from `window.location.host` and `NEXT_PUBLIC_API_URL`. Leave this unset if `/collab/*` is reverse-proxied to the same host as the api. |
+| `REDIS_URL` | Yes in multi-instance | Session store / Socket.IO adapter / collab pub/sub / editor-cap counter. See the next section for behaviour when unset. |
+| `CROWI_ENCRYPTION_KEY` | Recommended | AES-256-GCM key for sensitive Config (OAuth secrets etc.). Not directly used by collab, but should be generated with `pnpm --filter @crowi/api crypto:gen-key` and shared across replicas. |
+
+## Redis connection budget
+
+`@hocuspocus/extension-redis` opens **two connections (pub + sub) per
+api instance**. Add this to existing session / Socket.IO connections
+when sizing your Redis `maxclients`.
+
+Example: 10 api replicas + 1 web replica
+
+- Collab extension-redis: 10 × 2 = 20 connections (dedicated ioredis pub + sub clients)
+- Session / Socket.IO: 10 × 1 = 10 connections (node-redis client)
+- Editor-cap counter: shares the session / Socket.IO node-redis client (no extra connections)
+- Direct connections from web: none (proxied via the api)
+
+Total around 30 persistent connections. Comfortably fits within the
+default `maxclients=10000`, but plan accordingly for very small Redis
+tiers (ElastiCache `cache.t4g.micro` / `cache.t3.micro`, Redis Cluster
+shards, etc.).
+
+## Two-instance smoke test
+
+Stand up a multi-instance environment via `docker compose --scale`:
+
+```bash
+# 1. Start the existing compose stack with api scaled to 2 replicas
+docker compose --profile app up -d --build --scale api=2
+
+# 2. Verify both api containers are up
+docker compose ps api
+# crowi-api-1   Up   3000/tcp
+# crowi-api-2   Up   3000/tcp
+
+# 3. Tail logs to see extension-redis attach on both replicas
+docker compose logs -f api
+# Expect 2 lines like:
+#   crowi:collab:extension-redis attaching extension-redis (identifier=…)
+```
+
+Verification:
+
+1. Open two browser windows (regular Chrome + Incognito, or two
+   different browsers) and sign in as different users.
+2. Navigate both windows to `/_edit?page_id=<pageId>` for the same page.
+3. Type in one window — the change should appear in the other in
+   real time.
+4. If a load balancer is in front, confirm that each browser is
+   routed to a different replica (compare the `instance=` identifier
+   in the api's `onConnect` log).
+5. Stop one container (`docker compose stop api-1`); the surviving
+   replica should accept the reconnecting clients and editing should
+   resume.
+
+## Failure modes
+
+- **Redis outage (`REDIS_URL` set but unreachable):** ioredis keeps
+  retrying. New Yjs updates still propagate within each api instance
+  via the embedded Hocuspocus engine, but cross-instance pub/sub is
+  paused. The editor-cap counter falls **open** (admits the editor).
+  Pub/sub resumes automatically when Redis comes back.
+- **`WS_TOKEN_SECRET` mismatch:** wsTokens minted on one replica
+  cannot be verified on another and `onAuthenticate` rejects the
+  connection. The client sees an immediate disconnect and the editor
+  stays in "could not connect" state. Fix by re-setting the same
+  secret on every replica and performing a rolling restart.
+- **WebSocket upgrade failure:** if the reverse proxy strips the
+  `Upgrade` header, `/collab/` returns 400 or 426. Verify
+  `proxy_set_header Upgrade $http_upgrade` in nginx (or the
+  equivalent in your proxy of choice).
+- **`Page.yjsState` corruption / external edit:** in `onLoadDocument`,
+  if the persisted yjsState is missing or `Y.applyUpdate` throws,
+  Crowi rebuilds the Y.Doc from the latest revision's Markdown body
+  and broadcasts a force-reload notice to connected clients. Each
+  client displays a warning dialog and reloads the page.
+- **`renderedAst` drift (RFC-0002 coupling):** collab saves go through
+  `Revision.prepareRevision`, which regenerates `renderedAst`. If
+  `Page.body` and the latest `Revision.body` ever drift, rebuild via
+  `crowi-admin renderer:rebuild` (RFC-0002).
+- **api process down:** all connected clients enter a reconnect loop.
+  If your health check fails over to other replicas, clients dial
+  the next available api and the Y.Doc is restored from
+  `Page.yjsState` in MongoDB.
+
+## Capacity tuning
+
+- `COLLAB_MAX_EDITORS_PER_PAGE` controls the per-page editor cap. The
+  default 20 reflects rendering cost for awareness cursors. Raising
+  it significantly should be paired with browser-side testing under
+  many concurrent awareness payloads.
+- Y.Doc changes are flushed to `onChange` with `debounce: 2000` ms
+  (inherited from Hocuspocus defaults). Small bursts of edits do not
+  generate one `PageYjsUpdate` write per keystroke.
+- `PageYjsUpdate` rows expire after 1 hour (TTL index), and a
+  periodic compaction merges them into `Page.yjsState`. Long editing
+  sessions therefore do not blow up MongoDB storage linearly.
+
+## Save SLO
+
+- A typical collab save completes in 100-500ms.
+- The server enforces a 5-second timeout. Past that, the client
+  receives an error response (HTTP 408 equivalent).
+- A timeout **does not necessarily mean the save failed**: the DB
+  write may have succeeded with only the response delayed. Clients
+  do **not** retry automatically. The correct recovery is to reload
+  the page and inspect the latest revision.
+- The 5-second cap is a safety net against extreme slowness; under
+  normal network conditions it has plenty of headroom. If you see
+  recurring timeouts, investigate MongoDB latency, renderer pipeline
+  cost, and connection pool sizing.

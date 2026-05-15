@@ -67,6 +67,12 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **api-contract**: edit contracts/schemas → `pnpm --filter @crowi/api-contract
   build` to regenerate dts before api/web consumers pick them up (turbo `^build`
   handles this in `dev` / `build` / `test`).
+- **Realtime collab dev**: `pnpm dev` is enough — `@crowi/collab` is attached
+  as a library inside the api process (RFC-0003 §"Implementation notes"), so
+  there is no separate collab process / port to manage. To smoke-test collab
+  locally, open `http://localhost:3301/_edit?page_id=<pageId>` in two browser
+  windows (Chrome regular + Incognito, signed in as different users) and
+  verify that typing in one window appears in the other.
 
 ## Architecture Overview
 
@@ -81,6 +87,7 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **Models** (Mongoose):
   - Page (with grant), Revision, User, Comment, Bookmark, Like (on Page), Watcher, Notification, Activity, Config, Backlink, Share, Attachment.
 - **Sensitive Config encryption**: `packages/api/src/util/crypto.ts` provides AES-256-GCM `encrypt` / `decrypt` / `isEncrypted`. Sensitive keys (OAuth secrets, AWS keys, SMTP password, Slack token) are listed in `models/config-sensitive.ts` and auto-encrypted by `Config.updateByParams` / decrypted by `Config.loadAllConfig` when `CROWI_ENCRYPTION_KEY` is set. Legacy plaintext rows pass through; admin can re-encrypt them via `/admin/crypto/reencrypt`.
+- **Realtime collab (RFC-0003)**: Hocuspocus is attached to the api process as a library via `packages/api/src/collab/attach.ts`, using the api's `http.Server` in `ws noServer` mode for `/collab/*` upgrades. When `crowi.redis !== null` (i.e. `REDIS_URL` is set), `@hocuspocus/extension-redis` is auto-attached so multi-instance deployments work without sticky sessions. See `docs/rfcs/0003-realtime-collaborative-editing.md` for the design and `apps/crowi-site/content/docs/{ja,en}/operations/realtime-collab.mdx` for operator instructions.
 
 ### Web frontend (`packages/web`)
 - **Routing**: App Router (`src/app/...`) with three Route Groups:
@@ -101,7 +108,9 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 
 See `.env.sample` at the repo root. Required / commonly-set:
 - `MONGO_URI` — MongoDB connection
-- `REDIS_URL` — session / socket.io adapter
+- `REDIS_URL` — session / socket.io adapter + realtime-collab pub/sub
+  (`@hocuspocus/extension-redis`) + per-page editor cap counter. **Required
+  for multi-instance api deployments**; optional in single-instance dev.
 - `PASSWORD_SEED` — legacy password hashing seed (still used for fallback verification)
 - `CLIENT_URL` — used for CORS in production (defaults allow localhost in dev)
 - `CROWI_ENCRYPTION_KEY` — base64-encoded 32-byte AES-256 key for sensitive Config
@@ -109,6 +118,18 @@ See `.env.sample` at the repo root. Required / commonly-set:
   `pnpm --filter @crowi/api crypto:gen-key`. Optional but strongly recommended;
   when missing, sensitive values are stored as plaintext (legacy mode) and a
   warning is logged on boot.
+- `WS_TOKEN_SECRET` — HMAC signing key for the short-lived wsToken (JWT) used
+  to authenticate Hocuspocus WebSocket upgrades. **Must be identical across all
+  api replicas** in multi-instance deployments — a token minted on replica A
+  may be verified on replica B, and a mismatch leaves clients unable to
+  connect. If unset, a random secret is generated per process and a warning is
+  logged (acceptable only for single-instance development).
+- `COLLAB_MAX_EDITORS_PER_PAGE` — per-page simultaneous-editor cap (default
+  `20`). The 21st editor and beyond receive read-only realtime updates.
+- `NEXT_PUBLIC_COLLAB_URL` — optional. The WebSocket URL the browser dials.
+  When unset, the web app derives it from `window.location.host` and
+  `NEXT_PUBLIC_API_URL`, so leave it blank if `/collab/*` is reverse-proxied
+  to the same host as the api.
 - `ELASTICSEARCH_URI` — optional, search backend
 
 Storage backend selection moved from a `FILE_UPLOAD` env to the

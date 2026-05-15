@@ -1,6 +1,6 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
-import type { MentionResponse, RevisionMetaShape, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
+import type { MentionResponse, RevisionMetaShape, RevisionType, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { PageDocument } from './page';
 // import Debug from 'debug'
@@ -12,6 +12,13 @@ export type RevisionMention = MentionResponse;
 // the revision document. Distinct from api-contract's `RevisionMeta`,
 // which is a lightweight list-entry shape (id/path/author/createdAt).
 export type RevisionMetaContent = RevisionMetaShape;
+
+// Re-export the wire-format-anchored `RevisionType` union so callers
+// that already import from this model file don't need to know about
+// `api-contract`. The single source of truth is the Zod schema in
+// `packages/api-contract/src/schemas/collab.ts` — Mongoose and the
+// HTTP contract both narrow against the same literal set.
+export type { RevisionType };
 
 export interface RevisionDocument extends Document {
   _id: Types.ObjectId;
@@ -40,6 +47,73 @@ export interface RevisionDocument extends Document {
    * mismatches transparently.
    */
   rendererVersion?: string;
+  /**
+   * RFC-0003: parent revision pointer (self-ref). Lets the
+   * incremental save flow chain deltas back to the most recent
+   * snapshot. `null` (or undefined) for the very first revision and
+   * for v1.x revisions written before this field existed.
+   */
+  parentRevisionId?: Types.ObjectId | null;
+  /**
+   * RFC-0003: snapshot vs incremental discriminator. Treat
+   * `undefined` as `'snapshot'` for v1.x backward compat — old
+   * revisions always carry the full body.
+   */
+  type?: RevisionType;
+  /**
+   * RFC-0003: Yjs update payload between this revision's parent and
+   * itself. Only populated when `type === 'incremental'`. Stored as a
+   * raw Buffer so the BSON driver round-trips a typed binary blob.
+   *
+   * Subject to MongoDB's 16 MB BSON document cap. The 9-incremental-
+   * per-snapshot cadence (Phase 5) keeps individual deltas small in
+   * practice; Phase 1 ships without a runtime size guard.
+   */
+  yjsUpdate?: Buffer;
+  /**
+   * RFC-0003: the user who triggered the save (clicked the Save
+   * button). Distinct from `contributors` — collaborative edits can
+   * have many contributors but exactly one `savedBy`. Falls back to
+   * `author` when unset, for v1.x backward compat.
+   */
+  savedBy?: Types.ObjectId | null;
+  /**
+   * RFC-0003: all users seen via awareness on the page since the last
+   * save. Phase 5 will write this from the in-memory awareness log at
+   * save time. Empty array (or undefined) for v1.x revisions and for
+   * single-user saves.
+   */
+  contributors?: Types.ObjectId[];
+  /**
+   * RFC-0003: optional user-supplied checkpoint message. The Phase 8
+   * Save UI doesn't expose an input field yet (see spec open
+   * question 1) — the field is reserved so we can light it up later
+   * without a migration.
+   */
+  message?: string;
+}
+
+/**
+ * Options accepted by `Revision.prepareRevision`. RFC-0003 Phase 5
+ * additively expands the v1.x `{ format }`-only shape with the
+ * collaborative-save fields (`savedBy` / `contributors` / `message` /
+ * `type` / `parentRevisionId`). All existing callers (`Page.createPage`
+ * / `Page.updatePage`) pass either nothing or `{ format }` and remain
+ * unchanged — the new fields are written to the Revision only when
+ * the collab save flow explicitly provides them, so v1.x revisions
+ * keep their `undefined` semantics on disk.
+ *
+ * `parentRevisionId: null` is accepted (and persisted as `null`) for
+ * an explicit "no parent" snapshot — useful for the first checkpoint
+ * after a force-rebuild.
+ */
+export interface PrepareRevisionOptions {
+  format?: string;
+  savedBy?: Types.ObjectId;
+  contributors?: Types.ObjectId[];
+  message?: string;
+  type?: RevisionType;
+  parentRevisionId?: Types.ObjectId | null;
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
@@ -49,7 +123,7 @@ export interface RevisionModel extends Model<RevisionDocument> {
   findRevisionIdList(path): Promise<RevisionDocument[]>;
   findRevisionList(path, options): Promise<RevisionDocument[]>;
   updateRevisionListByPath(path, updateData): Promise<RevisionDocument>;
-  prepareRevision(pageData: PageDocument, body, user, options?): Promise<RevisionDocument>;
+  prepareRevision(pageData: PageDocument, body: string, user: { _id: Types.ObjectId }, options?: PrepareRevisionOptions): Promise<RevisionDocument>;
   removeRevisionsByPath(path): Promise<{ deletedCount: number }>;
   updatePath(pathName): void;
   findAuthorsByPage(page): Promise<RevisionDocument['author'][]>;
@@ -133,6 +207,38 @@ export default (crowi: Crowi) => {
       type: String,
       default: undefined,
     },
+    // RFC-0003 collaborative-save fields. All optional + `default:
+    // undefined` so v1.x revisions read cleanly and the read path can
+    // detect "not set" vs "explicitly empty" (the difference matters
+    // for `contributors` — undefined means the revision predates
+    // RFC-0003, [] means "single-user save, no other contributors").
+    parentRevisionId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Revision',
+      default: undefined,
+    },
+    type: {
+      type: String,
+      enum: ['snapshot', 'incremental'],
+      default: undefined,
+    },
+    yjsUpdate: {
+      type: Buffer,
+      default: undefined,
+    },
+    savedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: undefined,
+    },
+    contributors: {
+      type: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+      default: undefined,
+    },
+    message: {
+      type: String,
+      default: undefined,
+    },
   });
 
   revisionSchema.statics.findLatestRevision = function (path, cb) {
@@ -171,10 +277,8 @@ export default (crowi: Crowi) => {
   };
 
   revisionSchema.statics.prepareRevision = async function (pageData, body, user, options) {
-    if (!options) {
-      options = {};
-    }
-    const format = options.format || 'markdown';
+    const opts = options ?? {};
+    const format = opts.format || 'markdown';
 
     if (!user._id) {
       throw new Error('Error: user should have _id');
@@ -208,6 +312,30 @@ export default (crowi: Crowi) => {
     newRevision.meta = metadataToRevisionMeta(metadata);
     newRevision.renderedAst = renderedAst;
     newRevision.rendererVersion = RENDERER_PIPELINE_VERSION;
+
+    // RFC-0003 Phase 5 collab-save options. Only assign when the caller
+    // explicitly passed a value so v1.x callers (Page.createPage /
+    // Page.updatePage with options `undefined` or `{ format }`) keep
+    // writing `undefined` to disk — the read path distinguishes
+    // "predates RFC-0003" from "explicit empty" on `contributors`.
+    if (opts.savedBy !== undefined) {
+      newRevision.savedBy = opts.savedBy;
+    }
+    if (opts.contributors !== undefined) {
+      newRevision.contributors = opts.contributors;
+    }
+    if (opts.message !== undefined) {
+      newRevision.message = opts.message;
+    }
+    if (opts.type !== undefined) {
+      newRevision.type = opts.type;
+    }
+    if (opts.parentRevisionId !== undefined) {
+      // `null` is a load-bearing value here (= "first snapshot, no
+      // parent") so we forward it verbatim rather than collapsing to
+      // undefined.
+      newRevision.parentRevisionId = opts.parentRevisionId;
+    }
 
     return newRevision;
   };

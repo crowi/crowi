@@ -36,6 +36,33 @@ export interface PageDocument extends Document {
   extended: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * RFC-0003: pointer to the most recent `Revision` produced by the
+   * collaborative save flow. Semantically identical to the legacy
+   * `revision` field; introduced as a separate name to make the new
+   * code path explicit. Phase 5 will populate it alongside `revision`
+   * inside the save transaction; older pages and pages saved before
+   * Phase 5 lands return `null` here and read code should fall back to
+   * `revision`. The duplication is intentional during the v2.1
+   * transition — see `openQuestions[0]` in the Phase 1 task file.
+   */
+  currentRevision?: Types.ObjectId | null;
+  /**
+   * RFC-0003: binary snapshot of the page's Y.Doc (output of
+   * `Y.encodeStateAsUpdate`). Phase 3 reads this in `onLoadDocument`
+   * to restore the doc; Phase 4's compaction writes it. `null` means
+   * "no live Yjs state yet — build a fresh doc from the latest
+   * revision's body". External writers that bypass Yjs MUST also
+   * set this to `null` so connected clients are force-reloaded
+   * (Phase 6).
+   *
+   * Subject to MongoDB's 16 MB BSON document cap. Phase 4's
+   * compaction step keeps the snapshot bounded; Phase 1 ships
+   * without a runtime size guard.
+   */
+  yjsState?: Buffer | null;
+  /** RFC-0003: timestamp of the most recent `yjsState` checkpoint. */
+  yjsCheckpointAt?: Date | null;
 
   // dynamic fields
   latestRevision?: Types.ObjectId;
@@ -185,6 +212,18 @@ export default (crowi: Crowi) => {
       },
       createdAt: { type: Date, default: Date.now },
       updatedAt: Date,
+      // RFC-0003: pointer to the latest collaborative-save `Revision`.
+      // Co-exists with `revision` during the v2.1 transition; the
+      // legacy field stays the source of truth until Phase 5 lands
+      // the dual-write inside the save transaction.
+      currentRevision: { type: Schema.Types.ObjectId, ref: 'Revision', default: null },
+      // RFC-0003: binary Y.Doc snapshot. Hocuspocus checkpoints into
+      // this field (Phase 4); `onLoadDocument` (Phase 3) reads it.
+      // `null` means "no live Yjs state — rebuild from `body`".
+      yjsState: { type: Buffer, default: null },
+      // RFC-0003: timestamp anchor for the most recent `yjsState`
+      // checkpoint. Driven by the compaction loop (Phase 4).
+      yjsCheckpointAt: { type: Date, default: null },
     },
     {
       toJSON: { getters: true },

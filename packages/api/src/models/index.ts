@@ -7,6 +7,7 @@ import Comment from './comment';
 import Config from './config';
 import Notification from './notification';
 import Page from './page';
+import PageYjsUpdate from './page-yjs-update';
 import PluginRenderCache from './plugin-render-cache';
 import Revision from './revision';
 import Share from './share';
@@ -33,4 +34,5 @@ export default {
   Watcher,
   Config,
   PluginRenderCache,
+  PageYjsUpdate,
 };

@@ -130,6 +130,74 @@ describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
       expect(second.body.revisions).toHaveLength(1);
       expect(second.body.pager).toEqual({ prev: 0, next: null, offset: 2 });
     });
+
+    // Phase 8 (RFC-0003) — list endpoint surfaces the collab-flow
+    // `savedBy` + `contributors` fields when they are populated on a
+    // Revision document. Pre-RFC-0003 revisions (which is everything
+    // the existing tests above produce via the legacy createPage path
+    // that doesn't set savedBy) still respond with the field omitted
+    // so v1.x clients keep working untouched.
+    it('omits savedBy/contributors for revisions without collab metadata (v1.x fallback)', async () => {
+      const { pageId } = await createTestPage(`${PATH_PREFIX}v1x`, '# legacy');
+
+      const res = await request(app).get(`/api/v2/pages/${pageId}/revisions`).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.revisions).toHaveLength(1);
+      // The author should still be populated for back-compat.
+      expect(res.body.revisions[0].author).toBeDefined();
+      expect(res.body.revisions[0].author.username).toBe('revisionTester');
+      // Pre-RFC-0003 revision → both fields missing.
+      expect(res.body.revisions[0].savedBy).toBeUndefined();
+      expect(res.body.revisions[0].contributors).toBeUndefined();
+    });
+
+    it('surfaces savedBy + contributors when present on the Revision document', async () => {
+      // Build a revision directly via the model so we can attach
+      // savedBy + contributors without standing up the full Hocuspocus
+      // pipeline. The schema requires _id refs; we use the two
+      // pre-existing test users.
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const User = crowi.model('User');
+
+      const savedByUser = await User.findOne({ username: 'revisionTester' });
+      const peerUser = await User.findOne({ username: 'revisionOther' });
+      expect(savedByUser).not.toBeNull();
+      expect(peerUser).not.toBeNull();
+
+      const { pageId } = await createTestPage(`${PATH_PREFIX}collab-checkpoint`, '# v1');
+      const page = await Page.findById(pageId);
+      expect(page).not.toBeNull();
+
+      // Append a collab-style checkpoint revision with both fields set.
+      await Revision.create({
+        path: page.path,
+        body: '# v2 collab',
+        format: 'markdown',
+        author: savedByUser._id,
+        savedBy: savedByUser._id,
+        contributors: [peerUser._id],
+      });
+
+      const res = await request(app).get(`/api/v2/pages/${pageId}/revisions`).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.revisions.length).toBeGreaterThanOrEqual(2);
+
+      const collabRev = res.body.revisions[0];
+      expect(collabRev.savedBy).toBeDefined();
+      expect(collabRev.savedBy.username).toBe('revisionTester');
+      expect(Array.isArray(collabRev.contributors)).toBe(true);
+      expect(collabRev.contributors).toHaveLength(1);
+      expect(collabRev.contributors[0].username).toBe('revisionOther');
+
+      // The older legacy revision (created via createTestPage) remains
+      // untouched in the same response.
+      const legacyRev = res.body.revisions[1];
+      expect(legacyRev.savedBy).toBeUndefined();
+      expect(legacyRev.contributors).toBeUndefined();
+    });
   });
 
   describe('GET /api/v2/pages/revisions/:id', () => {
