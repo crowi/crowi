@@ -3,6 +3,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
+import { autocompleteExtension } from './autocomplete-extension';
 
 export interface BuildExtensionsProps {
   readonly?: boolean;
@@ -31,6 +32,13 @@ export interface BuildExtensionsProps {
    * the editor-foundation behaviour untouched for non-collab callers.
    */
   disableHistory?: boolean;
+  /**
+   * RFC-0004 Phase 5 — enable the `@username` / `[[page]]` autocomplete
+   * extension. Default `true` so every editor surface gets completion;
+   * tests / bare mounts that don't want network-backed sources can
+   * pass `false`.
+   */
+  autocomplete?: boolean;
 }
 
 /**
@@ -56,14 +64,18 @@ export interface BuildExtensionsProps {
  *  - `EditorView.updateListener.of(...)` to bridge document changes
  *    back to React state. We skip the dispatch when no `onChange` is
  *    supplied so build-extensions stays cheap to call from tests.
+ *  - `autocompleteExtension()` after the markdown language so its
+ *    completion source can read the markdown syntax tree (suppression
+ *    contexts), before `extraExtensions` so a caller can still layer.
  *  - `extraExtensions` last so caller-supplied extensions win on
  *    precedence ties (CodeMirror layers later extensions on top).
  */
 export function buildExtensions(props: BuildExtensionsProps): Extension[] {
-  const { readonly = false, extraExtensions, onChange, disableHistory = false } = props;
+  const { readonly = false, extraExtensions, onChange, disableHistory = false, autocomplete = true } = props;
   return [
     markdown(),
     syntaxHighlighting(defaultHighlightStyle),
+    autocomplete ? autocompleteExtension() : [],
     // RFC-0003 Phase 7: skip the built-in undo stack + its keymap when
     // a Yjs `UndoManager` is taking over via `extraExtensions`. The
     // `defaultKeymap` is kept (it carries cursor / selection / line
