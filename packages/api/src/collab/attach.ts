@@ -14,13 +14,16 @@ import { createWsTokenUtil } from 'src/util/ws-token';
 const debug = Debug('crowi:collab:attach');
 
 /**
- * Path prefix the Hocuspocus engine answers on. The wsToken handler
- * mints tokens for `/collab/<pageId>?token=<wsToken>`, the browser
- * provider connects to the same URL. Anything else on the http
- * `upgrade` event is ignored so future WebSocket handlers (socket.io
- * etc.) can coexist on the same listener.
+ * Path namespace the Hocuspocus engine answers on. HocuspocusProvider
+ * uses `url` verbatim as the WebSocket endpoint and sends the document
+ * name (= pageId) through the protocol after the handshake, so the
+ * path the browser hits is `/collab` (no document segment). The
+ * upgrade filter accepts both `/collab` and `/collab/...` so future
+ * variants that *do* include the document in the path keep working,
+ * and so sibling WebSocket handlers (socket.io etc.) can coexist on
+ * the same listener.
  */
-const COLLAB_PATH_PREFIX = '/collab/';
+const COLLAB_PATH = '/collab';
 
 /**
  * Default Hocuspocus debounce window (ms) — matches the upstream v4
@@ -219,7 +222,11 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     const rawUrl = request.url ?? '';
     const queryIdx = rawUrl.indexOf('?');
     const pathname = queryIdx < 0 ? rawUrl : rawUrl.slice(0, queryIdx);
-    if (!pathname.startsWith(COLLAB_PATH_PREFIX)) {
+    // Accept the bare path (`/collab`, what HocuspocusProvider hits
+    // today) and the namespaced path (`/collab/anything`) — leaves
+    // room for a future variant that includes the document name in
+    // the URL without forcing a server-side migration.
+    if (pathname !== COLLAB_PATH && !pathname.startsWith(`${COLLAB_PATH}/`)) {
       // Not ours — let other handlers attempt the upgrade.
       return;
     }
@@ -229,7 +236,7 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
   };
 
   httpServer.on('upgrade', upgradeHandler);
-  debug('collab attached to http.Server (path prefix=%s)', COLLAB_PATH_PREFIX);
+  debug('collab attached to http.Server (path=%s)', COLLAB_PATH);
 
   let didShutdown = false;
   return {

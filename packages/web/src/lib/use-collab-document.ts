@@ -7,30 +7,38 @@ import * as Y from 'yjs';
 
 /**
  * Resolve the WebSocket endpoint the HocuspocusProvider should
- * connect to. RFC-0003 Phase 9 (same-process attach):
+ * connect to. RFC-0003 Phase 8.5 (same-process attach):
  *
  *   1. `NEXT_PUBLIC_COLLAB_URL` env wins when set — operators that
- *      front the api behind a distinct WebSocket host (e.g.
- *      `wss://collab.example.com`) configure it explicitly.
- *   2. Otherwise derive `ws[s]://<window.location.host>` — same
- *      host the browser already loaded the page from. In production
- *      this assumes the reverse proxy forwards `/collab/*` to the
- *      api process; in dev (web :3301 / api :3300) Next.js's
- *      `rewrites()` config in `next.config.ts` redirects `/collab/*`
- *      to the api so the location-derived URL still resolves
- *      correctly.
- *   3. SSR fallback (`typeof window === 'undefined'`) — never
- *      actually reached because the effect that calls this is
- *      gated behind `useEffect` (client-only), but a defensive
- *      string keeps TypeScript happy and avoids a `URL` parse
- *      throw if this ever ran during build-time evaluation.
+ *      front collab on a distinct host (e.g. `wss://collab.example.com`)
+ *      configure it explicitly.
+ *   2. Otherwise derive from `NEXT_PUBLIC_API_URL` — same host the
+ *      HTTP client (`api-client.ts`) uses. The api process is the
+ *      one that runs the embedded Hocuspocus engine, so collab WS
+ *      and HTTP requests target the same origin. `http(s)://` →
+ *      `ws(s)://` rewrite picks the right protocol automatically.
+ *
+ * **Why not `window.location.host`?** Next.js's `rewrites()` config
+ * is HTTP-only — it does NOT proxy WebSocket `upgrade` events. So in
+ * the dev split (web :3301 / api :3300) a location-derived URL would
+ * hit the Next.js dev server, which has no handler for the upgrade
+ * and silently drops the connection. Routing through the same env
+ * the HTTP client uses keeps dev and prod consistent.
+ *
+ * Fallback `'http://localhost:3300'` mirrors `api-client.ts` /
+ * `next.config.ts`, so an unset `NEXT_PUBLIC_API_URL` resolves to
+ * the dev api port out of the box.
  */
 function resolveCollabUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_COLLAB_URL;
   if (fromEnv && fromEnv.length > 0) return fromEnv;
-  if (typeof window === 'undefined') return 'ws://localhost:3300';
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${wsProtocol}//${window.location.host}`;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
+  // `^http` matches both `http` and `https`; the prepend yields
+  // `ws://` / `wss://` accordingly. The `/collab` suffix lines the
+  // base URL up so HocuspocusProvider's `${url}/${name}` join
+  // produces `ws[s]://<host>/collab/<pageId>` — matching the path
+  // filter in `packages/api/src/collab/attach.ts`.
+  return `${apiUrl.replace(/^http/, 'ws')}/collab`;
 }
 
 /**

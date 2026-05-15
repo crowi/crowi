@@ -27,22 +27,23 @@ const nextConfig: NextConfig = {
   // - Without trailing slash: page itself
   skipTrailingSlashRedirect: true,
 
-  // Proxy `/api/v2/*` and `/collab/*` to the Crowi API server. In dev
-  // the API runs on a different port (3300) than the web app (3301), so
-  // relative URLs in markdown / `<img src>` would otherwise fail with
-  // cross-origin 404. In production the operator typically runs both
-  // behind a single domain — `NEXT_PUBLIC_API_URL` then points at the
-  // same origin and the rewrite is a no-op pass-through.
+  // Proxy `/api/v2/*` to the Crowi API server. In dev the API runs on
+  // a different port (3300) than the web app (3301), so relative URLs
+  // in markdown / `<img src>` would otherwise fail with cross-origin
+  // 404. In production the operator typically runs both behind a
+  // single domain — `NEXT_PUBLIC_API_URL` then points at the same
+  // origin and the rewrite is a no-op pass-through.
   //
-  // `/collab/:pageId` is the WebSocket endpoint the embedded Hocuspocus
-  // engine answers on (RFC-0003 Phase 9). Next.js forwards the
-  // `upgrade` header through the rewrite so dev hot-reload works with
-  // the location-derived `ws://<window.location.host>/collab/<pageId>`
-  // default — no `NEXT_PUBLIC_COLLAB_URL` env required.
+  // Collab WebSocket (`/collab/:pageId`) is intentionally NOT
+  // proxied here: Next.js `rewrites()` is HTTP-only and does not
+  // forward `upgrade` events. The client instead derives the WS URL
+  // from `NEXT_PUBLIC_API_URL` in `use-collab-document.ts`, hitting
+  // the api process directly (= same origin in prod, port 3300 in
+  // dev). Cross-origin WS in dev is fine — browsers don't enforce
+  // same-origin for WebSocket and Hocuspocus doesn't gate on Origin.
   async rewrites() {
     return [
       { source: '/api/v2/:path*', destination: `${API_URL}/api/v2/:path*` },
-      { source: '/collab/:path*', destination: `${API_URL}/collab/:path*` },
       // Legacy attachment redirects (Crowi 1.x URLs embedded in old
       // page bodies) — Express side responds with a 302 to /api/v2/...,
       // which the browser will resolve through the rewrite above.
