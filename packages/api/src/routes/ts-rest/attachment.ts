@@ -1,5 +1,5 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract, type Attachment as AttachmentSchema } from '@crowi/api-contract';
+import { apiContract, type Attachment as AttachmentSchema, type UploadAttachmentErrorCode } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Request, Response, Router } from 'express';
 import multer from 'multer';
@@ -8,6 +8,7 @@ import { Readable } from 'node:stream';
 import { Types } from 'mongoose';
 import Debug from 'debug';
 import FileUploader from 'src/util/fileUploader';
+import { createRateLimiter } from 'src/util/rate-limit';
 import { UserDocument } from 'src/models/user';
 import { AttachmentDocument } from 'src/models/attachment';
 import { PageDocument } from 'src/models/page';
@@ -23,6 +24,21 @@ import {
 } from 'src/util/ts-rest-helpers';
 
 const debug = Debug('crowi:routes:ts-rest:attachment');
+
+/**
+ * RFC-0004 Phase 6 — limits for `POST /api/v2/attachments/upload`.
+ *
+ * The size cap is the RFC's image-paste ceiling (10 MB). The allow-list
+ * is the RFC §"Image paste limits" MIME set; drag-and-drop (Phase 7)
+ * will widen this with documents / archives, but Phase 6 only ships the
+ * paste path so the allow-list stays image-only here.
+ */
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const UPLOAD_ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']);
+
+/** Per-user budget for the editor upload endpoint — RFC §"Attachment upload endpoint". */
+const UPLOAD_RATE_LIMIT = 20;
+const UPLOAD_RATE_WINDOW_MS = 60_000;
 
 /**
  * Mime types we allow over the public `by-key` route. The route is intended
@@ -61,6 +77,18 @@ const errorBody = (
     | 'REMOVE_FAILED',
   message: string,
 ) => ({ error: { code, message } });
+
+/**
+ * Lowercase RFC-0004 error envelope for `POST /attachments/upload`. Kept
+ * separate from `errorBody` because the upload endpoint's error codes
+ * are lowercase + RFC-pinned (the editor maps each to a specific toast),
+ * distinct from the uppercase codes of the list / add / delete routes.
+ */
+const uploadErrorBody = (error: UploadAttachmentErrorCode, message: string, details?: Record<string, unknown>) => ({
+  error,
+  message,
+  ...(details ? { details } : {}),
+});
 
 const invalidPageIdResponse = {
   status: 400 as const,
@@ -125,6 +153,20 @@ export default (crowi: Crowi, _app: Express) => {
   const fileUploader = FileUploader(crowi);
 
   const upload = multer({ dest: crowi.tmpDir });
+
+  // RFC-0004 Phase 6 — the editor-upload endpoint enforces a 10 MB cap
+  // at multer level so an over-size body is rejected during the parse
+  // rather than after a full disk write. Shared across `paste` / `dnd`.
+  const editorUpload = multer({ dest: crowi.tmpDir, limits: { fileSize: UPLOAD_MAX_BYTES } });
+
+  // One shared upload limiter per process. `crowi.redis` is `null` in
+  // single-instance dev, which selects the in-memory fallback.
+  const uploadLimiter = createRateLimiter({
+    name: 'attachment-upload',
+    limit: UPLOAD_RATE_LIMIT,
+    windowMs: UPLOAD_RATE_WINDOW_MS,
+    redisClient: crowi.redis ?? null,
+  });
 
   // ---------------------------------------------------------------------------
   // Raw Express endpoints (registered BEFORE createExpressEndpoints so they
@@ -381,6 +423,159 @@ export default (crowi: Crowi, _app: Express) => {
               status: 500 as const,
               body: errorBody('UPLOAD_FAILED', 'Failed to save attachment'),
             });
+          }
+        });
+      });
+    },
+
+    /**
+     * POST /api/v2/attachments/upload  (multipart/form-data)
+     *
+     * RFC-0004 Phase 6 — direct upload for the editor's paste / D&D
+     * handlers. Differs from `addAttachment` in three ways:
+     *   1. Rate-limited to 20 uploads/min/user (429 + `Retry-After`).
+     *   2. Enforces the editor size (10 MB) + MIME allow-list, returning
+     *      the RFC's lowercase `{ error, message, details? }` envelope.
+     *   3. Returns the lean `{ url, filename, mimeType, sizeBytes }`
+     *      shape the editor splices straight into the Markdown source.
+     *
+     * `pageId` / `intent` are multipart text fields parsed by multer
+     * (not validated by ts-rest — see the contract comment), so they
+     * are validated in-handler after the parse completes. Upload
+     * progress is observed entirely client-side via
+     * `XMLHttpRequest.upload.onprogress`; the server receives the
+     * multipart body with no special streaming protocol.
+     */
+    uploadAttachment: async ({ req, res }) => {
+      const user = req.user as UserDocument;
+
+      // 1. Rate limit before touching the (potentially large) body.
+      const rate = await uploadLimiter.hit(user._id.toString());
+      if (!rate.allowed) {
+        res.setHeader('Retry-After', String(rate.retryAfterSeconds));
+        return {
+          status: 429 as const,
+          body: uploadErrorBody('rate_limited', `Upload limit reached. Try again in ${rate.retryAfterSeconds} seconds.`, {
+            retryAfterSeconds: rate.retryAfterSeconds,
+          }),
+        };
+      }
+
+      // Multer runs inside the handler (same pattern as `addAttachment`)
+      // so the ts-rest response can await the async multipart parse.
+      return new Promise((resolve) => {
+        editorUpload.single('file')(req as Request, res as Response, async (multerErr: Error | unknown) => {
+          const tmpFile = (req as Request).file || null;
+          const cleanupTmp = () => {
+            if (!tmpFile) return;
+            fs.unlink(tmpFile.path, (unlinkErr) => {
+              if (unlinkErr) debug('failed to unlink tmp file', unlinkErr);
+            });
+          };
+
+          if (multerErr) {
+            cleanupTmp();
+            // multer raises `LIMIT_FILE_SIZE` when the body exceeds the
+            // configured cap — surface it as the RFC's `too_large` (413).
+            const code = (multerErr as { code?: string }).code;
+            if (code === 'LIMIT_FILE_SIZE') {
+              return resolve({
+                status: 413 as const,
+                body: uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes: UPLOAD_MAX_BYTES }),
+              });
+            }
+            debug('editor upload multer error', multerErr);
+            return resolve({
+              status: 400 as const,
+              body: uploadErrorBody('disallowed_type', 'File upload error.'),
+            });
+          }
+
+          // --- Validate the multipart text fields (multer has parsed them) ---
+          const body = (req as Request).body as { pageId?: unknown; intent?: unknown };
+          const pageId = typeof body.pageId === 'string' ? body.pageId : '';
+          const intent = body.intent === 'paste' || body.intent === 'dnd' ? body.intent : null;
+
+          if (!tmpFile) {
+            cleanupTmp();
+            return resolve({
+              status: 400 as const,
+              body: uploadErrorBody('disallowed_type', 'No file provided.'),
+            });
+          }
+          if (!isValidObjectId(pageId)) {
+            cleanupTmp();
+            return resolve({
+              status: 400 as const,
+              body: uploadErrorBody('no_permission', 'A valid pageId is required.'),
+            });
+          }
+          if (!intent) {
+            cleanupTmp();
+            return resolve({
+              status: 400 as const,
+              body: uploadErrorBody('disallowed_type', "The intent field must be 'paste' or 'dnd'."),
+            });
+          }
+
+          // --- MIME allow-list ---
+          const fileType = tmpFile.mimetype;
+          if (!UPLOAD_ALLOWED_MIME.has(fileType)) {
+            cleanupTmp();
+            return resolve({
+              status: 415 as const,
+              body: uploadErrorBody('disallowed_type', `Files of type ${fileType} cannot be uploaded.`, { mimeType: fileType }),
+            });
+          }
+
+          // --- Permission: a caller who can view the page can attach to
+          // it (same posture as `addAttachment`). Grant failure → 403. ---
+          const grant = await loadGrantedPage(Page, pageId, user);
+          if ('error' in grant) {
+            cleanupTmp();
+            return resolve({
+              status: 403 as const,
+              body: uploadErrorBody('no_permission', 'You do not have permission to attach files to this page.'),
+            });
+          }
+          const pageData: PageDocument = grant.page;
+
+          const originalName = tmpFile.originalname;
+          const fileName = tmpFile.filename + tmpFile.originalname;
+          const fileSize = tmpFile.size;
+
+          try {
+            const filePath = Attachment.createAttachmentFilePath(pageData._id, fileName, fileType);
+            const tmpFileStream = fs.createReadStream(tmpFile.path, { flags: 'r', autoClose: true });
+
+            await fileUploader.uploadFile(filePath, fileType, tmpFileStream, {});
+
+            const created = (await Attachment.create({
+              page: pageData._id,
+              creator: user._id,
+              filePath,
+              originalName,
+              fileName,
+              fileFormat: fileType,
+              fileSize,
+            })) as AttachmentDocument;
+
+            cleanupTmp();
+            debug('editor upload ok', { intent, pageId, attachmentId: created._id.toString() });
+
+            return resolve({
+              status: 200 as const,
+              body: {
+                url: created.fileUrl,
+                filename: originalName,
+                mimeType: fileType,
+                sizeBytes: fileSize,
+              },
+            });
+          } catch (err) {
+            debug('editor upload error', err);
+            cleanupTmp();
+            return resolve(internalServerErrorResponse);
           }
         });
       });
