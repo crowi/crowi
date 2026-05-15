@@ -14,6 +14,7 @@ import bookmarkRoutes from './bookmark';
 import revisionRoutes from './revision';
 import notificationRoutes from './notification';
 import backlinkRoutes from './backlink';
+import draftRoutes from './draft';
 import attachmentRoutes from './attachment';
 import searchRoutes from './search';
 import adminCryptoRoutes from './adminCrypto';
@@ -62,11 +63,15 @@ export default (crowi: Crowi, app: Express) => {
   const revisionRouter = revisionRoutes(crowi, app);
   const notificationRouter = notificationRoutes(crowi, app);
   const backlinkRouter = backlinkRoutes(crowi, app);
+  const draftRouter = draftRoutes(crowi, app);
   const attachmentRouter = attachmentRoutes(crowi, app);
   const searchRouter = searchRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
   authenticatedRouter.use(meRouter);
+  // Draft routes mount before pageRouter so the exact `/pages/drafts`
+  // paths are matched ahead of any future broad `/pages/*` pattern.
+  authenticatedRouter.use(draftRouter);
   authenticatedRouter.use(pageRouter);
   authenticatedRouter.use(pagePreviewRouter);
   authenticatedRouter.use(pageCollabRouter);
