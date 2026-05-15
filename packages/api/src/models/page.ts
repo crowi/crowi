@@ -48,6 +48,13 @@ export function visiblePageStatusOr(viewerId: Types.ObjectId | string, creatorId
   }
   return or;
 }
+/** Builds the `Crowi:Page:NotFound` error that callers map onto a 404. */
+function pageNotFoundError(): Error {
+  const error = new Error('Page not found');
+  error.name = 'Crowi:Page:NotFound';
+  return error;
+}
+
 export const TYPE_PORTAL = 'portal';
 export const TYPE_USER = 'user';
 export const TYPE_PUBLIC = 'public';
@@ -264,6 +271,11 @@ export default (crowi: Crowi) => {
       toObject: { getters: true },
     },
   );
+
+  // RFC-0004: backs `GET /api/v2/pages/drafts` — `find({ creator, status })`
+  // sorted by `createdAt` desc. Without it the listing scans a single-field
+  // index then sorts in memory.
+  pageSchema.index({ creator: 1, status: 1, createdAt: -1 });
 
   pageEvent.on('create', pageEvent.onCreate);
   pageEvent.on('update', pageEvent.onUpdate);
@@ -645,6 +657,13 @@ export default (crowi: Crowi) => {
   pageSchema.statics.findPageByIdAndGrantedUser = async function (id, userData) {
     const pageData = await Page.findPageById(id);
 
+    // RFC-0004: a draft page is visible only to its author. Collapse a
+    // non-author's by-id access into a not-found error (not a grant
+    // error) so draft existence is never leaked.
+    if (pageData.isDraft() && (!userData || !pageData.isCreator(userData))) {
+      throw pageNotFoundError();
+    }
+
     if (userData && !pageData.isGrantedFor(userData)) {
       throw new Error('Page is not granted for the user'); // PAGE_GRANT_ERROR, null);
     }
@@ -661,9 +680,15 @@ export default (crowi: Crowi) => {
         return null;
       }
 
-      const pageNotFoundError = new Error('Page Not Found');
-      pageNotFoundError.name = 'Crowi:Page:NotFound';
-      throw pageNotFoundError;
+      throw pageNotFoundError();
+    }
+
+    // RFC-0004: a draft page is visible only to its author. By-path
+    // access by anyone else collapses into the same not-found error a
+    // missing page raises, so a draft's existence at a path is never
+    // leaked to non-authors.
+    if (pageData.isDraft() && (!userData || !pageData.isCreator(userData))) {
+      throw pageNotFoundError();
     }
 
     if (!pageData.isGrantedFor(userData)) {
