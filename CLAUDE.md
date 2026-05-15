@@ -19,13 +19,13 @@ security settings landed). See `TODO.md` for the up-to-date phase status.
 
 ```
 crowi/
-├── apps/crowi-site/          # crowi.wiki LP + docs (Next.js + Fumadocs, :3401)
+├── apps/crowi-site/          # crowi.wiki LP + docs (Next.js + Fumadocs, :4303)
 ├── crowi.config.json         # dev runner config (plugins + active drivers)
 ├── .env(.sample)             # dev runtime env (loaded at CWD by packages/api)
 └── packages/
-    ├── api/                  # Express + ts-rest API (:3300)
+    ├── api/                  # Express + ts-rest API (:4301)
     ├── api-contract/         # ts-rest contracts + Zod schemas
-    ├── web/                  # Next.js 16 App Router (:3301)
+    ├── web/                  # Next.js 16 App Router (:4302)
     ├── runner/               # config loader + plugin resolver (used by api boot)
     ├── tsconfig/             # shared library/app-node/app-web tsconfig presets
     ├── admin-cli/            # `crowi-admin` CLI
@@ -70,7 +70,7 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **Realtime collab dev**: `pnpm dev` is enough — `@crowi/collab` is attached
   as a library inside the api process (RFC-0003 §"Implementation notes"), so
   there is no separate collab process / port to manage. To smoke-test collab
-  locally, open `http://localhost:3301/_edit?page_id=<pageId>` in two browser
+  locally, open `http://localhost:4302/_edit?page_id=<pageId>` in two browser
   windows (Chrome regular + Incognito, signed in as different users) and
   verify that typing in one window appears in the other.
 

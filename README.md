@@ -33,13 +33,13 @@ This repository is a Turborepo + pnpm workspace.
 ```
 crowi/
 ├── apps/
-│   └── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 3401)
+│   └── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 4303)
 ├── crowi.config.json      # Dev runner config: plugins + active driver names
 ├── .env.sample            # Dev runtime env template (copy to .env)
 └── packages/
-    ├── api/                          # Express 4 + ts-rest 3 API library (port 3300)
+    ├── api/                          # Express 4 + ts-rest 3 API library (port 4301)
     ├── api-contract/                  # Shared ts-rest contracts + Zod schemas
-    ├── web/                           # Next.js 16 frontend (port 3301)
+    ├── web/                           # Next.js 16 frontend (port 4302)
     ├── runner/                        # Config loader + plugin resolver (used by @crowi/api boot)
     ├── plugin-api/                    # Plugin SDK (CrowiPlugin / registries / context)
     ├── plugin-aws/                    # Shared AWS credentials base plugin
@@ -90,7 +90,7 @@ docker compose up -d
 cp .env.sample .env
 # Edit MONGO_URI / REDIS_URL / PASSWORD_SEED / CROWI_ENCRYPTION_KEY etc.
 
-# 4. Run everything (api on :3300, web on :3301, plugins compiled in watch mode)
+# 4. Run everything (api on :4301, web on :4302, plugins compiled in watch mode)
 pnpm dev
 ```
 
@@ -99,7 +99,7 @@ Other targeted scripts:
 ```bash
 pnpm dev:api       # just the API + plugins (no Next.js)
 pnpm dev:web       # just the Next.js frontend
-pnpm dev:site      # crowi.wiki LP + docs (port 3401)
+pnpm dev:site      # crowi.wiki LP + docs (port 4303)
 ```
 
 ## Environment variables
@@ -114,7 +114,7 @@ pnpm dev:site      # crowi.wiki LP + docs (port 3401)
 | `CLIENT_URL` | CORS allowlist origin in production (defaults allow localhost in dev) |
 | `CROWI_ENCRYPTION_KEY` | Base64-encoded 32-byte AES-256 key for sensitive Config encryption. Generate via `openssl rand -base64 32` or `pnpm --filter @crowi/api crypto:gen-key`. Strongly recommended to set; missing key falls back to plaintext (legacy behaviour) with a startup warning. |
 | `ELASTICSEARCH_URI` | Optional search backend (paired with `@crowi/plugin-search-elasticsearch`) |
-| `PORT` | API server port (default `3300`) |
+| `PORT` | API server port (default `4301`) |
 | `NODE_ENV` | `production` or `development` |
 
 Storage backend selection is driven by the runner's `crowi.config.json`

@@ -37,7 +37,7 @@ apps/crowi-site/
 ## 開発
 
 ```bash
-pnpm --filter @crowi/site dev      # http://localhost:3401
+pnpm --filter @crowi/site dev      # http://localhost:4303
 pnpm --filter @crowi/site build    # → out/
 pnpm --filter @crowi/site preview  # build + ローカル静的サーバ
 ```

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
 
 const nextConfig: NextConfig = {
   // Produce a self-contained `.next/standalone/` build that bundles only the
@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
 
   // Proxy `/api/v2/*` to the Crowi API server. In dev the API runs on
-  // a different port (3300) than the web app (3301), so relative URLs
+  // a different port (4301) than the web app (4302), so relative URLs
   // in markdown / `<img src>` would otherwise fail with cross-origin
   // 404. In production the operator typically runs both behind a
   // single domain — `NEXT_PUBLIC_API_URL` then points at the same
@@ -38,7 +38,7 @@ const nextConfig: NextConfig = {
   // proxied here: Next.js `rewrites()` is HTTP-only and does not
   // forward `upgrade` events. The client instead derives the WS URL
   // from `NEXT_PUBLIC_API_URL` in `use-collab-document.ts`, hitting
-  // the api process directly (= same origin in prod, port 3300 in
+  // the api process directly (= same origin in prod, port 4301 in
   // dev). Cross-origin WS in dev is fine — browsers don't enforce
   // same-origin for WebSocket and Hocuspocus doesn't gate on Origin.
   async rewrites() {

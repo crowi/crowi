@@ -20,19 +20,19 @@ import * as Y from 'yjs';
  *
  * **Why not `window.location.host`?** Next.js's `rewrites()` config
  * is HTTP-only — it does NOT proxy WebSocket `upgrade` events. So in
- * the dev split (web :3301 / api :3300) a location-derived URL would
+ * the dev split (web :4302 / api :4301) a location-derived URL would
  * hit the Next.js dev server, which has no handler for the upgrade
  * and silently drops the connection. Routing through the same env
  * the HTTP client uses keeps dev and prod consistent.
  *
- * Fallback `'http://localhost:3300'` mirrors `api-client.ts` /
+ * Fallback `'http://localhost:4301'` mirrors `api-client.ts` /
  * `next.config.ts`, so an unset `NEXT_PUBLIC_API_URL` resolves to
  * the dev api port out of the box.
  */
 function resolveCollabUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_COLLAB_URL;
   if (fromEnv && fromEnv.length > 0) return fromEnv;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
   // `^http` matches both `http` and `https`; the prepend yields
   // `ws://` / `wss://` accordingly. The `/collab` suffix lines the
   // base URL up so HocuspocusProvider's `${url}/${name}` join

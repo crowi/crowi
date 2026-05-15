@@ -4,9 +4,9 @@
   "private": true,
   "description": "crowi.wiki — Landing page and documentation site",
   "scripts": {
-    "dev": "next dev --turbopack --port 3401",
+    "dev": "next dev --turbopack --port 4303",
     "build": "next build",
-    "start": "next start --port 3401",
+    "start": "next start --port 4303",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
     "postinstall": "fumadocs-mdx",

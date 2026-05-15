@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useContext, createContext } f
 import { useRouter } from 'next/navigation';
 import { clearTokens } from './auth-token';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
 
 // ネットワークエラーかどうかを判定
 function isNetworkError(error: unknown): boolean {

@@ -31,7 +31,7 @@ crowi/
     │   │   ├── models/         # Mongoose
     │   │   └── middlewares/
     │   └── views/              # ★ 旧 Swig テンプレート(置き換え対象)
-    ├── web/                    # Next.js 16, port 3301
+    ├── web/                    # Next.js 16, port 4302
     │   └── src/app/
     │       ├── (public)/       # ログイン前
     │       └── (auth)/         # ログイン後 (jwtAuth)

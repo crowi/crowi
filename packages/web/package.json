@@ -5,9 +5,9 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 3301",
+    "dev": "next dev --turbopack --port 4302",
     "build": "next build",
-    "start": "next start --port 3301",
+    "start": "next start --port 4302",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
     "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./paraglide",

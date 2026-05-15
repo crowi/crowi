@@ -45,7 +45,7 @@ export function useAddAttachment(pageId: string | undefined) {
       formData.append('file', file);
 
       const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3300';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
 
       const response = await fetch(`${baseUrl}/api/v2/pages/${encodeURIComponent(pageId)}/attachments`, {
         method: 'POST',
