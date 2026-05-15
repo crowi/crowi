@@ -35,6 +35,13 @@ export interface MarkdownEditorProps {
    * callers.
    */
   disableHistory?: boolean;
+  /**
+   * RFC-0004 Phase 6: enable the paste handler (URL smart-link + image
+   * upload). Requires the owning `pageId` so an image paste can upload
+   * to the page. Read once at mount (paste behaviour is page-scoped and
+   * does not change for the editor's lifetime); omit for bare mounts.
+   */
+  paste?: { pageId: string };
 }
 
 export interface MarkdownEditorHandle {
@@ -85,7 +92,7 @@ export interface MarkdownEditorHandle {
  * re-fire for our own dispatches and produce a render loop.
  */
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(props, ref) {
-  const { value, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory } = props;
+  const { value, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory, paste } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -96,6 +103,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   const onChangeRef = useRef(onChange);
   const readonlyRef = useRef<boolean>(readonly ?? false);
   const disableHistoryRef = useRef<boolean>(disableHistory ?? false);
+  // Paste config is read once at mount; `pageId` does not change for an
+  // editor session, so it never needs a sync effect.
+  const pasteRef = useRef<{ pageId: string } | undefined>(paste);
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
@@ -140,6 +150,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           // below owns its lifecycle.
           disableHistory: disableHistoryRef.current,
           onChange: onChangeAtMount ? (next) => onChangeRef.current?.(next) : undefined,
+          paste: pasteRef.current,
         }),
         readonlyCompartmentRef.current.of(readonlyExtension(readonlyRef.current)),
         extraCompartmentRef.current.of(extraExtensions ?? []),

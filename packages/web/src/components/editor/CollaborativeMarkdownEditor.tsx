@@ -73,6 +73,16 @@ interface CollaborativeMarkdownEditorCommonProps {
    * test harness use case where no dialog is wired up.
    */
   onForceReload?: (reason?: string) => void;
+  /**
+   * RFC-0004 Phase 6 — enables the editor's paste handler (URL
+   * smart-link + image-blob upload). Required because image paste
+   * uploads to `/api/v2/attachments/upload`, which is keyed by the
+   * owning page id. When the wrapper is driven by the `pageId` prop
+   * this is the same id; the `session`-driven variant must pass it
+   * explicitly. Omit to disable paste interception (bare preview /
+   * test mounts).
+   */
+  uploadPageId?: string;
 }
 
 /**
@@ -194,7 +204,14 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
  *     (the caller mounts the actual dialog)
  */
 export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, CollaborativeMarkdownEditorProps>(function CollaborativeMarkdownEditor(props, ref) {
-  const { pageId, session, className, 'aria-label': ariaLabel, onYTextChange, onStatusChange, onReadonlyChange, onForceReload } = props;
+  const { pageId, session, className, 'aria-label': ariaLabel, onYTextChange, onStatusChange, onReadonlyChange, onForceReload, uploadPageId } = props;
+
+  // Paste-upload page id: an explicit `uploadPageId` wins; otherwise
+  // fall back to the `pageId` prop when the wrapper owns the connection.
+  const pasteConfig = useMemo<{ pageId: string } | undefined>(() => {
+    const id = uploadPageId ?? pageId;
+    return id ? { pageId: id } : undefined;
+  }, [uploadPageId, pageId]);
 
   // When the caller supplies a session, skip the internal hook
   // (otherwise we'd open a second WebSocket). React's rules require
@@ -328,6 +345,7 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
       readonly={editorReadonly}
       disableHistory={Boolean(yText)}
       extraExtensions={extraExtensions}
+      paste={pasteConfig}
       className={className}
       aria-label={ariaLabel}
     />

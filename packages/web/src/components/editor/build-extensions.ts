@@ -4,6 +4,7 @@ import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { autocompleteExtension } from './autocomplete-extension';
+import { pasteHandler } from './paste-handler';
 
 export interface BuildExtensionsProps {
   readonly?: boolean;
@@ -39,6 +40,14 @@ export interface BuildExtensionsProps {
    * pass `false`.
    */
   autocomplete?: boolean;
+  /**
+   * RFC-0004 Phase 6 — enable the paste handler (URL smart-link +
+   * image-blob upload). Requires the owning `pageId` so an image paste
+   * can upload to the page. Omit (the default) for bare mounts / tests
+   * that have no page context — the editor then uses CodeMirror's
+   * default paste only.
+   */
+  paste?: { pageId: string };
 }
 
 /**
@@ -71,11 +80,16 @@ export interface BuildExtensionsProps {
  *    precedence ties (CodeMirror layers later extensions on top).
  */
 export function buildExtensions(props: BuildExtensionsProps): Extension[] {
-  const { readonly = false, extraExtensions, onChange, disableHistory = false, autocomplete = true } = props;
+  const { readonly = false, extraExtensions, onChange, disableHistory = false, autocomplete = true, paste } = props;
   return [
     markdown(),
     syntaxHighlighting(defaultHighlightStyle),
     autocomplete ? autocompleteExtension() : [],
+    // RFC-0004 Phase 6 — paste handler (URL smart-link + image upload).
+    // Placed before `extraExtensions` so a caller-supplied paste handler
+    // (none today) could still take precedence; a no-op `[]` when the
+    // caller passes no page context.
+    paste ? pasteHandler({ pageId: paste.pageId }) : [],
     // RFC-0003 Phase 7: skip the built-in undo stack + its keymap when
     // a Yjs `UndoManager` is taking over via `extraExtensions`. The
     // `defaultKeymap` is kept (it carries cursor / selection / line
