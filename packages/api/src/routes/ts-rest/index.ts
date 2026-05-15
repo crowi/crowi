@@ -15,6 +15,7 @@ import revisionRoutes from './revision';
 import notificationRoutes from './notification';
 import backlinkRoutes from './backlink';
 import draftRoutes from './draft';
+import autocompleteRoutes from './autocomplete';
 import attachmentRoutes from './attachment';
 import searchRoutes from './search';
 import adminCryptoRoutes from './adminCrypto';
@@ -64,14 +65,17 @@ export default (crowi: Crowi, app: Express) => {
   const notificationRouter = notificationRoutes(crowi, app);
   const backlinkRouter = backlinkRoutes(crowi, app);
   const draftRouter = draftRoutes(crowi, app);
+  const autocompleteRouter = autocompleteRoutes(crowi, app);
   const attachmentRouter = attachmentRoutes(crowi, app);
   const searchRouter = searchRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
   authenticatedRouter.use(meRouter);
-  // Draft routes mount before pageRouter so the exact `/pages/drafts`
-  // paths are matched ahead of any future broad `/pages/*` pattern.
+  // Draft + autocomplete routes mount before pageRouter so the exact
+  // `/pages/drafts` and `/pages/autocomplete` paths are matched ahead
+  // of any broad `/pages/*` pattern.
   authenticatedRouter.use(draftRouter);
+  authenticatedRouter.use(autocompleteRouter);
   authenticatedRouter.use(pageRouter);
   authenticatedRouter.use(pagePreviewRouter);
   authenticatedRouter.use(pageCollabRouter);

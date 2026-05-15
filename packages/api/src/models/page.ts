@@ -48,6 +48,21 @@ export function visiblePageStatusOr(viewerId: Types.ObjectId | string, creatorId
   }
   return or;
 }
+/**
+ * `$or` grant clause for "pages readable by a given user": public and
+ * legacy-null pages are always readable; restricted / specified / owner
+ * pages only when the user is in `grantedUsers`.
+ */
+export function visiblePageGrantOr(userId: Types.ObjectId | string): Array<Record<string, unknown>> {
+  return [
+    { grant: null },
+    { grant: GRANT_PUBLIC },
+    { grant: GRANT_RESTRICTED, grantedUsers: userId },
+    { grant: GRANT_SPECIFIED, grantedUsers: userId },
+    { grant: GRANT_OWNER, grantedUsers: userId },
+  ];
+}
+
 /** Builds the `Crowi:Page:NotFound` error that callers map onto a 404. */
 function pageNotFoundError(): Error {
   const error = new Error('Page not found');
@@ -882,13 +897,7 @@ export default (crowi: Crowi) => {
     // FIXME: might be heavy
     const query: any = {
       redirectTo: null,
-      $or: [
-        { grant: null },
-        { grant: GRANT_PUBLIC },
-        { grant: GRANT_RESTRICTED, grantedUsers: userData._id },
-        { grant: GRANT_SPECIFIED, grantedUsers: userData._id },
-        { grant: GRANT_OWNER, grantedUsers: userData._id },
-      ],
+      $or: visiblePageGrantOr(userData._id),
     };
     debug('findListByStartWith query:', JSON.stringify({ path, opt, pathCondition, userData: userData._id }));
     const q = Page.find(query)
