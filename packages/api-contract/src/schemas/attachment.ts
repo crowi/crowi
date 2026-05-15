@@ -112,3 +112,16 @@ export const UploadAttachmentErrorSchema = z.object({
   details: z.record(z.string(), z.unknown()).optional(),
 });
 export type UploadAttachmentError = z.infer<typeof UploadAttachmentErrorSchema>;
+
+/**
+ * MIME allow-lists for `POST /api/v2/attachments/upload`, shared by the
+ * api handler (authoritative enforcement) and the web editor's paste /
+ * drag-and-drop handlers (early client-side rejection). Kept here so the
+ * two sides cannot drift — see `docs/rfcs/0004-editor-ux-enhancement.md`
+ * §"Image paste limits" / §"D&D limits".
+ *
+ * `paste` accepts images only (a clipboard blob is always an image);
+ * `dnd` additionally accepts documents + archives.
+ */
+export const IMAGE_UPLOAD_MIME = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'] as const;
+export const DND_EXTRA_UPLOAD_MIME = ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/zip'] as const;

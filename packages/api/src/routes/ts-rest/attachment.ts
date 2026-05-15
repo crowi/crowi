@@ -1,5 +1,11 @@
 import { createExpressEndpoints, initServer } from '@ts-rest/express';
-import { apiContract, type Attachment as AttachmentSchema, type UploadAttachmentErrorCode } from '@crowi/api-contract';
+import {
+  apiContract,
+  type Attachment as AttachmentSchema,
+  type UploadAttachmentErrorCode,
+  IMAGE_UPLOAD_MIME,
+  DND_EXTRA_UPLOAD_MIME,
+} from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Request, Response, Router } from 'express';
 import multer from 'multer';
@@ -26,15 +32,32 @@ import {
 const debug = Debug('crowi:routes:ts-rest:attachment');
 
 /**
- * RFC-0004 Phase 6 — limits for `POST /api/v2/attachments/upload`.
+ * RFC-0004 Phase 6/7 — intent-aware limits for `POST /api/v2/attachments/upload`.
  *
- * The size cap is the RFC's image-paste ceiling (10 MB). The allow-list
- * is the RFC §"Image paste limits" MIME set; drag-and-drop (Phase 7)
- * will widen this with documents / archives, but Phase 6 only ships the
- * paste path so the allow-list stays image-only here.
+ * The endpoint serves two editor intents with different ceilings:
+ *   - `paste` (RFC §"Image paste limits"): 10 MB, images only — a
+ *     clipboard image blob is always an image.
+ *   - `dnd` (RFC §"D&D limits"): 50 MB, images + documents (`.pdf`,
+ *     `.txt`, `.md`, `.csv`) + archives (`.zip`).
+ *
+ * multer is configured with the larger (50 MB) cap so the multipart
+ * parse never aborts a legitimate D&D upload; the per-intent size cap
+ * is then enforced in-handler once `intent` has been parsed. The
+ * per-intent MIME allow-list is likewise applied after the parse.
  */
-const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
-const UPLOAD_ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']);
+const PASTE_MAX_BYTES = 10 * 1024 * 1024;
+const DND_MAX_BYTES = 50 * 1024 * 1024;
+/** multer-level hard cap — the larger of the two intents (D&D). */
+const UPLOAD_MULTER_MAX_BYTES = DND_MAX_BYTES;
+
+// MIME allow-lists shared with the web editor via `@crowi/api-contract`
+// so client-side rejection and this authoritative check cannot drift.
+const PASTE_ALLOWED_MIME = new Set<string>(IMAGE_UPLOAD_MIME);
+const DND_ALLOWED_MIME = new Set<string>([...IMAGE_UPLOAD_MIME, ...DND_EXTRA_UPLOAD_MIME]);
+
+/** Resolve the size cap + MIME allow-list for one upload intent. */
+const limitsForIntent = (intent: 'paste' | 'dnd'): { maxBytes: number; allowedMime: Set<string> } =>
+  intent === 'dnd' ? { maxBytes: DND_MAX_BYTES, allowedMime: DND_ALLOWED_MIME } : { maxBytes: PASTE_MAX_BYTES, allowedMime: PASTE_ALLOWED_MIME };
 
 /** Per-user budget for the editor upload endpoint — RFC §"Attachment upload endpoint". */
 const UPLOAD_RATE_LIMIT = 20;
@@ -154,10 +177,11 @@ export default (crowi: Crowi, _app: Express) => {
 
   const upload = multer({ dest: crowi.tmpDir });
 
-  // RFC-0004 Phase 6 — the editor-upload endpoint enforces a 10 MB cap
-  // at multer level so an over-size body is rejected during the parse
-  // rather than after a full disk write. Shared across `paste` / `dnd`.
-  const editorUpload = multer({ dest: crowi.tmpDir, limits: { fileSize: UPLOAD_MAX_BYTES } });
+  // RFC-0004 Phase 6/7 — the editor-upload endpoint caps multer at the
+  // larger D&D ceiling (50 MB) so a legitimate drag-and-drop upload is
+  // never aborted mid-parse. The per-intent cap (paste 10 MB / dnd
+  // 50 MB) is then enforced in-handler once `intent` has been parsed.
+  const editorUpload = multer({ dest: crowi.tmpDir, limits: { fileSize: UPLOAD_MULTER_MAX_BYTES } });
 
   // One shared upload limiter per process. `crowi.redis` is `null` in
   // single-instance dev, which selects the in-memory fallback.
@@ -476,12 +500,14 @@ export default (crowi: Crowi, _app: Express) => {
           if (multerErr) {
             cleanupTmp();
             // multer raises `LIMIT_FILE_SIZE` when the body exceeds the
-            // configured cap — surface it as the RFC's `too_large` (413).
+            // configured (50 MB / D&D) cap — surface it as the RFC's
+            // `too_large` (413). The per-intent paste cap (10 MB) is a
+            // smaller in-handler check below.
             const code = (multerErr as { code?: string }).code;
             if (code === 'LIMIT_FILE_SIZE') {
               return resolve({
                 status: 413 as const,
-                body: uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes: UPLOAD_MAX_BYTES }),
+                body: uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes: UPLOAD_MULTER_MAX_BYTES }),
               });
             }
             debug('editor upload multer error', multerErr);
@@ -494,7 +520,7 @@ export default (crowi: Crowi, _app: Express) => {
           // --- Validate the multipart text fields (multer has parsed them) ---
           const body = (req as Request).body as { pageId?: unknown; intent?: unknown };
           const pageId = typeof body.pageId === 'string' ? body.pageId : '';
-          const intent = body.intent === 'paste' || body.intent === 'dnd' ? body.intent : null;
+          const intent: 'paste' | 'dnd' | null = body.intent === 'paste' || body.intent === 'dnd' ? body.intent : null;
 
           if (!tmpFile) {
             cleanupTmp();
@@ -518,9 +544,21 @@ export default (crowi: Crowi, _app: Express) => {
             });
           }
 
-          // --- MIME allow-list ---
+          // --- Intent-aware size + MIME enforcement ---
+          // multer's 50 MB cap is the D&D ceiling; a `paste` upload
+          // (clipboard image) is held to the smaller 10 MB cap here.
+          const { maxBytes, allowedMime } = limitsForIntent(intent);
+
+          if (tmpFile.size > maxBytes) {
+            cleanupTmp();
+            return resolve({
+              status: 413 as const,
+              body: uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes }),
+            });
+          }
+
           const fileType = tmpFile.mimetype;
-          if (!UPLOAD_ALLOWED_MIME.has(fileType)) {
+          if (!allowedMime.has(fileType)) {
             cleanupTmp();
             return resolve({
               status: 415 as const,
