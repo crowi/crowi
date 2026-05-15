@@ -13,6 +13,7 @@ import { bookmarkContract } from './bookmark';
 import { revisionContract } from './revision';
 import { notificationContract } from './notification';
 import { backlinkContract } from './backlink';
+import { draftContract } from './draft';
 import { attachmentContract } from './attachment';
 import { adminCryptoContract } from './adminCrypto';
 import { adminContract } from './admin';
@@ -35,6 +36,7 @@ export const apiContract = c.router({
   revision: revisionContract,
   notification: notificationContract,
   backlink: backlinkContract,
+  draft: draftContract,
   attachment: attachmentContract,
   adminCrypto: adminCryptoContract,
   admin: adminContract,
