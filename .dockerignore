@@ -42,7 +42,7 @@ node_modules
 .env.*.local
 .env.development
 .env.test
-!.env.sample
+!.env.example
 
 # --- Runtime data dirs from `docker compose up` ----------------------------
 data

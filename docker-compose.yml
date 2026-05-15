@@ -88,7 +88,7 @@ services:
       CLIENT_URL: http://localhost:4302
     ports:
       # Host 4301 -> container 3000. 4301 is Crowi's canonical api port
-      # (matches `.env.sample` PORT and the `pnpm dev` api port).
+      # (matches `.env.example` PORT and the `pnpm dev` api port).
       - "4301:3000"
     volumes:
       # Operator-controlled plugin config — mount, do not bake into the image.

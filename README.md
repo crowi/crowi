@@ -35,7 +35,7 @@ crowi/
 ├── apps/
 │   └── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 4303)
 ├── crowi.config.json      # Dev runner config: plugins + active driver names
-├── .env.sample            # Dev runtime env template (copy to .env)
+├── .env.example           # Dev runtime env template (copy to .env)
 └── packages/
     ├── api/                          # Express 4 + ts-rest 3 API library (port 4301)
     ├── api-contract/                  # Shared ts-rest contracts + Zod schemas
@@ -87,7 +87,7 @@ pnpm install
 docker compose up -d
 
 # 3. Set up env file at the repo root (loaded by the api at boot via dotenv)
-cp .env.sample .env
+cp .env.example .env
 # Edit MONGO_URI / REDIS_URL / PASSWORD_SEED / CROWI_ENCRYPTION_KEY etc.
 
 # 4. Run everything (api on :4301, web on :4302, plugins compiled in watch mode)
@@ -104,7 +104,7 @@ pnpm dev:site      # crowi.wiki LP + docs (port 4303)
 
 ## Environment variables
 
-`.env.sample` (at the repo root) lists the full set. Highlights:
+`.env.example` (at the repo root) lists the full set. Highlights:
 
 | Variable | Purpose |
 | --- | --- |

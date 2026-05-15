@@ -106,7 +106,7 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 
 ## Key Environment Variables
 
-See `.env.sample` at the repo root. Required / commonly-set:
+See `.env.example` at the repo root. Required / commonly-set:
 - `MONGO_URI` — MongoDB connection
 - `REDIS_URL` — session / socket.io adapter + realtime-collab pub/sub
   (`@hocuspocus/extension-redis`) + per-page editor cap counter. **Required

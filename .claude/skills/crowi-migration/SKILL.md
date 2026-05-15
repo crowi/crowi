@@ -20,7 +20,7 @@ Crowi の旧 Express + Swig + jQuery を、新 ts-rest API + Next.js に段階�
 crowi/                            # Turborepo + pnpm workspace
 ├── apps/crowi-site/              # crowi.wiki LP + docs (移行対象外)
 ├── crowi.config.json             # dev runner config (plugins + active drivers)
-├── .env(.sample)                 # dev runtime env (repo root で読まれる)
+├── .env(.example)                # dev runtime env (repo root で読まれる)
 └── packages/
     ├── api/                      # Express + ts-rest API (port 4301)
     │   ├── src/
