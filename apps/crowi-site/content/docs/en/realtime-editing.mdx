@@ -1,0 +1,123 @@
+---
+title: Realtime collaborative editing
+description: How to use Crowi's realtime collaborative editing feature
+---
+
+Starting with Crowi 2.1, the page edit screen (`/_edit?page_id=<pageId>`)
+operates in realtime collaborative mode. Like Google Docs, you can see
+other people's cursors and selections, and edits propagate to other
+participants within a few hundred milliseconds.
+
+For deployment instructions, see [Operating realtime collaborative
+editing](./operations/realtime-collab).
+
+## Save is an explicit checkpoint
+
+Crowi uses an **explicit-save model**: pressing the "Save" button is
+what creates a new revision.
+
+- While you type, your text is shared live with other editors, but
+  it is *not yet committed as a revision*. It exists only as a
+  transient Yjs state on the server.
+- The moment you click **Save** (bottom-right), a checkpoint is taken
+  and the current body is persisted as a new `Revision`.
+- There is **no autosave**. Save explicitly when you reach a meaningful
+  checkpoint.
+- The `Ctrl + S` / `Cmd + S` keyboard shortcut is intentionally not
+  wired up in v2.1 — it would conflict with the browser's "Save page"
+  dialog.
+
+> **Tip:** treat each save as a milestone worth recording in the
+> history. The cleaner your save cadence, the easier it is to scan
+> the revision list later.
+
+## Contributors
+
+Every saved revision records two kinds of editor information:
+
+- **`savedBy`**: the user who clicked the Save button.
+- **`contributors`**: every user who was **present in the same edit
+  session** (visible via Yjs awareness) at the time of the save.
+
+"Present" means the page was open in their browser with awareness
+broadcasting — they do not have to have typed anything. This is how
+Crowi attributes joint editing sessions: anyone who joined the
+collaborative session is credited on the resulting revision.
+
+In the **revision history list**, savedBy and contributors are
+combined like this:
+
+```
+Alice (with Bob, Carol)  · 5 minutes ago
+```
+
+Read this as "Alice saved the revision, while Bob and Carol were
+in the editing session with her." When there are no other
+contributors (solo editing), only `Alice` is shown.
+
+## 20-editor cap per page
+
+Each page allows up to **20 simultaneous editors** by default.
+
+- A 21st editor opening the same page is placed into **read-only
+  mode**, and a banner appears explaining that the per-page limit
+  has been reached.
+- Read-only mode still receives **realtime updates**, so the 21st
+  user can watch the discussion in real time.
+- When someone within the cap leaves, reloading the page may admit
+  the waiting user (there is no explicit queue — slots are first-come).
+
+Administrators can adjust this limit via the
+`COLLAB_MAX_EDITORS_PER_PAGE` environment variable (see the operator
+guide).
+
+## Disconnecting and reconnecting
+
+What happens when your network drops:
+
+- An **"Offline"** toast appears at the top of the page.
+- Local edits in the editor are **preserved** while offline — Yjs
+  keeps accumulating deltas locally.
+- When the connection comes back, a **"Reconnected"** toast appears,
+  your buffered deltas are sent to the server, and you receive any
+  delta you missed from peers.
+- The Save button is disabled while offline (we cannot send the save
+  request). Click it after reconnecting.
+
+If you have been offline for a long time, the server-side Y.Doc may
+have diverged significantly. You may see noticeable churn for a few
+seconds while your delta is replayed and remote updates catch up.
+If the editor still looks wrong, reload the page.
+
+## Force-reload dialog
+
+If an administrator edits the body directly through a CLI tool (for
+example after a `crowi-admin renderer:rebuild` consistency recovery
+or a data-repair operation), a dialog appears: **"This page was
+modified externally. Please reload."**
+
+- Clicking OK reloads the page and pulls in the latest server-side
+  state.
+- This dialog only appears when the server's `Page.yjsState` was
+  reset or invalidated by an external action and your edit session
+  cannot continue. It does not appear during normal use.
+- Trying to keep editing after dismissing the dialog will most
+  likely fail to save. Reload the page.
+
+## Revision history view
+
+The page's **Revisions** tab lists every saved checkpoint in a
+table similar to this:
+
+| Editor | When | Note |
+| ------ | ---- | ---- |
+| Alice (with Bob, Carol) | 5 minutes ago | (empty) |
+| Alice | 1 hour ago | (empty) |
+| Bob (with Alice) | Yesterday 14:30 | (empty) |
+
+The `(with …)` segment is the contributor list. It gives a glance at
+who else participated in each editing session, even if they did not
+trigger the save themselves.
+
+Revision diff and rollback work the same way as in earlier Crowi
+versions.
