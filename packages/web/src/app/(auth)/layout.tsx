@@ -19,6 +19,7 @@ import { LocaleSync } from '@/components/locale-sync';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
 import { Toaster } from '@/components/ui/sonner';
+import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -105,8 +106,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           status notifications (offline / reconnected / auth-failed).
           Mounted at the (auth) shell level so a child-page rerender
           inside /_edit doesn't unmount the toast container and drop
-          in-flight notifications. */}
-      <Toaster />
+          in-flight notifications.
+
+          RFC-0004 Phase 1 — also the host for the shared `notify`
+          utility (lib/notify.ts). `visibleToasts` caps the stack at 5
+          so older toasts fade first when newer ones arrive. */}
+      <Toaster visibleToasts={MAX_VISIBLE_TOASTS} />
     </div>
   );
 }
