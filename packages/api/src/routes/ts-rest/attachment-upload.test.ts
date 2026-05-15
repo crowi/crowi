@@ -100,6 +100,86 @@ describe('Routes POST /api/v2/attachments/upload (ts-rest editor upload)', () =>
     expect(res.status).toBe(200);
   });
 
+  describe('intent-aware MIME / size limits (RFC-0004 Phase 7)', () => {
+    it('accepts a PDF document for the dnd intent', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-pdf`);
+      const res = await request(app)
+        .post('/api/v2/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'dnd')
+        .attach('file', Buffer.from('%PDF-1.4 minimal'), { filename: 'spec.pdf', contentType: 'application/pdf' });
+      expect(res.status).toBe(200);
+      expect(res.body.mimeType).toBe('application/pdf');
+    });
+
+    it('accepts a zip archive for the dnd intent', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-zip`);
+      const res = await request(app)
+        .post('/api/v2/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'dnd')
+        .attach('file', Buffer.from('PK archive'), { filename: 'bundle.zip', contentType: 'application/zip' });
+      expect(res.status).toBe(200);
+    });
+
+    it('rejects a PDF for the paste intent — paste is images only', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-pdf`);
+      const res = await request(app)
+        .post('/api/v2/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'paste')
+        .attach('file', Buffer.from('%PDF-1.4 minimal'), { filename: 'spec.pdf', contentType: 'application/pdf' });
+      expect(res.status).toBe(415);
+      expect(res.body.error).toBe('disallowed_type');
+      expect(res.body.details?.mimeType).toBe('application/pdf');
+    });
+
+    it('rejects a paste image above the 10 MB paste cap (under the 50 MB dnd cap)', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-big`);
+      // 10 MB + 1 byte: passes the 50 MB multer cap, fails the in-handler
+      // paste cap.
+      const overPaste = Buffer.alloc(10 * 1024 * 1024 + 1, 0);
+      const res = await request(app)
+        .post('/api/v2/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'paste')
+        .attach('file', overPaste, { filename: 'huge.png', contentType: 'image/png' });
+      expect(res.status).toBe(413);
+      expect(res.body.error).toBe('too_large');
+      expect(res.body.details?.maxBytes).toBe(10 * 1024 * 1024);
+    });
+
+    it('accepts the same 10 MB+ image for the dnd intent (within the 50 MB cap)', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-mid`);
+      const overPaste = Buffer.alloc(10 * 1024 * 1024 + 1, 0);
+      const res = await request(app)
+        .post('/api/v2/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'dnd')
+        .attach('file', overPaste, { filename: 'mid.png', contentType: 'image/png' });
+      expect(res.status).toBe(200);
+    });
+
+    it('rejects a dnd file above the 50 MB cap', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-toolarge`);
+      // 50 MB + 1 byte — multer rejects during the multipart parse.
+      const oversize = Buffer.alloc(50 * 1024 * 1024 + 1, 0);
+      const res = await request(app)
+        .post('/api/v2/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'dnd')
+        .attach('file', oversize, { filename: 'huge.zip', contentType: 'application/zip' });
+      expect(res.status).toBe(413);
+      expect(res.body.error).toBe('too_large');
+    });
+  });
+
   it('returns 400 when the pageId is missing or malformed', async () => {
     const res = await request(app)
       .post('/api/v2/attachments/upload')
