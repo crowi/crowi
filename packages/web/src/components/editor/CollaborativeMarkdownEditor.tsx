@@ -50,10 +50,10 @@ interface CollaborativeMarkdownEditorCommonProps {
    * uses this to keep an in-React `body` string mirror for the
    * preview pane / attachment markdown insertion.
    *
-   * Note: `yText.toString()` is O(n); for very large documents the
-   * MarkdownPreview's 250 ms debounce absorbs the cost downstream,
-   * but this is a candidate for throttling if profiling shows it
-   * dominating keystroke latency (openQuestion 15 in the task).
+   * `yText.toString()` is O(n) per call; the wrapper throttles
+   * invocations to ≤ 7/sec (leading + trailing edge) and the
+   * preview pane debounces by another 250 ms downstream, so even
+   * large docs stay within typing-latency budget.
    */
   onYTextChange?: (next: string) => void;
   /** Connection status forwarded so the caller can fire user-visible toasts. */
@@ -237,18 +237,50 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
     ];
   }, [yText, awareness, yUndoManager]);
 
-  // Mirror Y.Text → caller's `body` string. The observer fires on
-  // every local + remote update; downstream debounce (MarkdownPreview
-  // 250 ms) absorbs the work. We emit one initial snapshot in case
-  // `onLoadDocument` already populated Y.Text before this effect
-  // attached its observer.
+  // Mirror Y.Text → caller's `body` string. Throttled to ≤ 7 emits
+  // per second (leading-edge fire + trailing-edge guarantee) so the
+  // parent's `setBody` doesn't trigger a full editor-shell re-render
+  // on every keystroke. The preview pane's own 250 ms debounce
+  // absorbs the slack downstream, and at sustained typing the React
+  // tree updates stay smooth (the pre-throttle path was the dominant
+  // source of input lag on long docs).
   useEffect(() => {
     if (!yText) return;
-    const emit = () => onYTextChange?.(yText.toString());
-    emit();
+    const THROTTLE_MS = 150;
+    let lastEmit = 0;
+    let pendingId: ReturnType<typeof setTimeout> | null = null;
+    const fire = () => {
+      pendingId = null;
+      const now = Date.now();
+      // try/finally so a thrown `onYTextChange` (caller bug) still
+      // advances `lastEmit`; otherwise the throttle would silently
+      // drop the next 150 ms worth of observer events, masking the
+      // exception's downstream impact.
+      try {
+        onYTextChange?.(yText.toString());
+      } finally {
+        lastEmit = now;
+      }
+    };
+    const emit = () => {
+      const elapsed = Date.now() - lastEmit;
+      if (elapsed >= THROTTLE_MS) {
+        fire();
+        return;
+      }
+      // Already a trailing emit pending — keep it; it'll see the
+      // latest yText state when it actually fires.
+      if (pendingId !== null) return;
+      pendingId = setTimeout(fire, THROTTLE_MS - elapsed);
+    };
+    fire(); // initial publish (covers `onLoadDocument`-seeded content)
     yText.observe(emit);
     return () => {
       yText.unobserve(emit);
+      if (pendingId !== null) {
+        clearTimeout(pendingId);
+        pendingId = null;
+      }
     };
   }, [yText, onYTextChange]);
 
