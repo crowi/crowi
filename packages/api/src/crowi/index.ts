@@ -30,6 +30,7 @@ import { type Renderer, createRenderer } from 'src/renderer';
 import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runAwsConfigMigration } from 'src/util/aws-config-migration';
+import { runPageStatusMigration } from 'src/util/page-status-migration';
 import expressInit from './express-init';
 
 const pkg = require('../../package.json');
@@ -169,6 +170,12 @@ class Crowi {
     // here can leak plaintext secrets, so let it bubble out instead of
     // continuing boot.
     await runAwsConfigMigration(this);
+    // RFC-0004: backfill `status='published'` on legacy pages that
+    // predate the `Page.status` field. Idempotent — only matches rows
+    // where `status` is still null/missing. Runs after setupModels so
+    // the Page model is available; ordering vs the aws migration is
+    // irrelevant (disjoint collections).
+    await runPageStatusMigration(this);
     // Renderer must boot BEFORE plugins so PluginManager.activate()
     // can hand plugins a registry that already has the core 4
     // transforms (TOC / wikilinks / mentions / codeBlockLanguages)

@@ -14,7 +14,40 @@ export const STATUS_WIP = 'wip';
 export const STATUS_PUBLISHED = 'published';
 export const STATUS_DELETED = 'deleted';
 export const STATUS_DEPRECATED = 'deprecated';
-export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED] as const;
+/**
+ * RFC-0004: first-class draft state. A page created via `POST
+ * /api/v2/pages/drafts` (Phase 3) starts as `draft` and transitions to
+ * `published` exactly once when the author first saves. The transition
+ * is one-way — there is no path back to `draft`. Draft pages are
+ * visible only to their author: listing / search / backlink queries
+ * exclude other users' drafts (see `findListByStartWith` /
+ * `findListByCreator`), and collab WebSocket connections to a draft
+ * page are rejected for non-authors (see `routes/ts-rest/page-collab.ts`
+ * + `@crowi/collab` `onAuthenticate`).
+ */
+export const STATUS_DRAFT = 'draft';
+export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT] as const;
+
+/**
+ * `$or` status clause for "pages visible to a given viewer" (RFC-0004):
+ * published and legacy-null pages are always visible; a `draft` page is
+ * visible only to its creator.
+ *
+ * When the surrounding query is already pinned to a single `creator`,
+ * pass that as `creatorId` — the draft clause is then a bare
+ * `{ status: 'draft' }`, included only when `viewerId === creatorId`.
+ * When the query spans multiple creators, omit `creatorId` — the draft
+ * clause carries its own `creator: viewerId` constraint.
+ */
+export function visiblePageStatusOr(viewerId: Types.ObjectId | string, creatorId?: Types.ObjectId | string): Array<Record<string, unknown>> {
+  const or: Array<Record<string, unknown>> = [{ status: null }, { status: STATUS_PUBLISHED }];
+  if (creatorId === undefined) {
+    or.push({ status: STATUS_DRAFT, creator: viewerId });
+  } else if (String(viewerId) === String(creatorId)) {
+    or.push({ status: STATUS_DRAFT });
+  }
+  return or;
+}
 export const TYPE_PORTAL = 'portal';
 export const TYPE_USER = 'user';
 export const TYPE_PUBLIC = 'public';
@@ -72,6 +105,7 @@ export interface PageDocument extends Document {
   isPublished(): boolean;
   isDeleted(): boolean;
   isDeprecated(): boolean;
+  isDraft(): boolean;
   isPublic(): boolean;
   isPortal(): boolean;
   isCreator(user: any): boolean;
@@ -250,6 +284,10 @@ export default (crowi: Crowi) => {
 
   pageSchema.methods.isDeprecated = function () {
     return this.status === STATUS_DEPRECATED;
+  };
+
+  pageSchema.methods.isDraft = function () {
+    return this.status === STATUS_DRAFT;
   };
 
   pageSchema.methods.isPublic = function () {
@@ -750,7 +788,7 @@ export default (crowi: Crowi) => {
     const conditions: any = {
       creator: user._id,
       redirectTo: null,
-      $or: [{ status: null }, { status: STATUS_PUBLISHED }],
+      $or: visiblePageStatusOr(currentUser._id, user._id),
     };
 
     if (!user.equals(currentUser._id)) {
@@ -839,7 +877,7 @@ export default (crowi: Crowi) => {
 
     if (!includeDeletedPage) {
       q.and({
-        $or: [{ status: null }, { status: STATUS_PUBLISHED }],
+        $or: visiblePageStatusOr(userData._id),
       } as any);
     }
 
