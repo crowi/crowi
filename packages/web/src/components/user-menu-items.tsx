@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Bookmark, FileText, Settings, Shield, Trash2, User } from 'lucide-react';
+import { Bookmark, FilePen, FileText, Settings, Shield, Trash2, User } from 'lucide-react';
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { m } from '@paraglide/messages.js';
 
@@ -35,6 +35,12 @@ export function UserMenuItems({ username, isAdmin = false }: UserMenuItemsProps)
         <Link href={`/user/${username}/recent-create`}>
           <FileText className="h-4 w-4 mr-2" />
           {m['header.user_dropdown_created']()}
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link href="/me/creating-pages">
+          <FilePen className="h-4 w-4 mr-2" />
+          {m['header.user_dropdown_creating']()}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
