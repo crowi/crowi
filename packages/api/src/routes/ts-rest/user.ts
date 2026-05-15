@@ -3,7 +3,7 @@ import { apiContract, Page, Bookmark } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
-import { PageDocument } from 'src/models/page';
+import { PageDocument, visiblePageStatusOr } from 'src/models/page';
 import { BookmarkDocument } from 'src/models/bookmark';
 import { Types } from 'mongoose';
 import { PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
@@ -100,12 +100,11 @@ export default (crowi: Crowi, _app: Express) => {
           };
         }
 
-        // Get page count for the user
-        // Use the same conditions as findListByCreator
+        // Get page count for the user — same conditions as findListByCreator.
         const pageCountConditions: any = {
           creator: targetUser._id,
           redirectTo: null,
-          $or: [{ status: null }, { status: 'published' }],
+          $or: visiblePageStatusOr(currentUser._id, targetUser._id),
         };
         // If not viewing own page, only show public pages
         if (!currentUser._id.equals(targetUser._id)) {
@@ -303,11 +302,11 @@ export default (crowi: Crowi, _app: Express) => {
         const rawPages = await Page.findListByCreator(targetUser, { limit, offset }, currentUser);
         const pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
 
-        // Get total count for pagination
+        // Get total count for pagination — same conditions as findListByCreator.
         const pageCountConditions: any = {
           creator: targetUser._id,
           redirectTo: null,
-          $or: [{ status: null }, { status: 'published' }],
+          $or: visiblePageStatusOr(currentUser._id, targetUser._id),
         };
         // If not viewing own page, only show public pages
         if (!currentUser._id.equals(targetUser._id)) {

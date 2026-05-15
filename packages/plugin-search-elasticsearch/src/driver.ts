@@ -364,9 +364,13 @@ async function indexAllPages(ctx: PageRebuildContext): Promise<void> {
   ctx.log?.info('rebuild: indexed total=%d skipped=%d (allPageCount=%d)', total, skipped, allPageCount);
 }
 
-function shouldIndex(doc: PageStreamDoc): boolean {
+export function shouldIndex(doc: PageStreamDoc): boolean {
   if (doc.redirectTo !== null && doc.redirectTo !== undefined) return false;
   if (doc.status === 'deleted') return false;
+  // Drafts must never be indexed: the search route has no per-viewer
+  // draft-author filter, so an indexed draft would leak its path/existence
+  // to other users. Pages are (re)indexed on the update event at publish.
+  if (doc.status === 'draft') return false;
   return true;
 }
 
