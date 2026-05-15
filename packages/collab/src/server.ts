@@ -1,4 +1,4 @@
-import { Hocuspocus } from '@hocuspocus/server';
+import { Hocuspocus, type Extension } from '@hocuspocus/server';
 import Debug from 'debug';
 import type { CollabModels } from './models';
 import {
@@ -68,6 +68,16 @@ export interface CreateCollabServerOptions {
    * `createEditorCapCounter`.
    */
   editorCapCounter?: EditorCapCounter;
+  /**
+   * Phase 9 — Hocuspocus extensions injected as-is into the engine.
+   * The collab package does **not** import `@hocuspocus/extension-redis`
+   * itself (keeping its dep surface small and its test load light);
+   * the api-side `attachCollabServer` constructs the Redis extension
+   * when `crowi.redis` is available and passes it through here.
+   * Defaults to `[]` so single-instance dev deployments and unit
+   * tests run unchanged.
+   */
+  extensions?: Array<Extension>;
 }
 
 /**
@@ -148,6 +158,9 @@ export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<
     // we want every idle Y.Doc released as soon as its last client
     // disconnects — otherwise active-page count drives memory.
     unloadImmediately: true,
+    // Pass-through for host-injected extensions (e.g. the api side's
+    // `@hocuspocus/extension-redis` for cross-instance pub/sub).
+    extensions: opts.extensions ?? [],
     async onAuthenticate(payload) {
       return onAuthenticate(payload);
     },
