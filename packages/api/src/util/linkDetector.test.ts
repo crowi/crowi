@@ -38,12 +38,11 @@ describe('Url test', () => {
     );
   });
 
-  test('detects Markdown links whose href is a full CLIENT_URL', () => {
-    // A user copies a page URL from the address bar — that origin is
-    // `CLIENT_URL` (the web app), which can differ from the api's
-    // `getBaseUrl()`. linkDetector must still classify it as internal.
+  test('detects full-URL Markdown links to localhost in development (CLIENT_URL unset)', () => {
+    // The dev reality: web app + api on localhost, `CLIENT_URL` left
+    // unset. A page URL pasted from the address bar must still register.
     const prev = process.env.CLIENT_URL;
-    process.env.CLIENT_URL = 'http://localhost:4302';
+    process.env.CLIENT_URL = undefined;
     try {
       const linkDetector = LinkDetector(crowi);
       let text = '[by id](http://localhost:4302/6a06a5c87bfd4a3cbb851ab5) ';
@@ -54,8 +53,25 @@ describe('Url test', () => {
 
       expect(results.objectIds).toContain('6a06a5c87bfd4a3cbb851ab5');
       expect(results.paths).toContain('/crowi/rfc/0003-realtime');
-      // A different origin is still external — not a backlink.
+      // A non-loopback origin stays external — not a backlink.
       expect(results.paths).not.toContain('/6a06a5c87bfd4a3cbb851ab5');
+    } finally {
+      process.env.CLIENT_URL = prev;
+    }
+  });
+
+  test('detects full-URL Markdown links whose origin matches CLIENT_URL', () => {
+    const prev = process.env.CLIENT_URL;
+    process.env.CLIENT_URL = 'https://wiki.example.com';
+    try {
+      const linkDetector = LinkDetector(crowi);
+      let text = '[same host](https://wiki.example.com/crowi/rfc/0003-realtime) ';
+      text += '[other host](https://other.example.com/foo/bar)';
+
+      const results = linkDetector.search(text);
+
+      expect(results.paths).toContain('/crowi/rfc/0003-realtime');
+      expect(results.paths).not.toContain('/foo/bar');
     } finally {
       process.env.CLIENT_URL = prev;
     }

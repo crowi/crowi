@@ -30,16 +30,28 @@ export default (crowi: Crowi) => {
     return origins;
   };
 
+  /**
+   * Loopback-origin pattern (`http(s)://localhost|127.0.0.1|[::1]` on any
+   * port). In development the web app and the api both run on localhost
+   * and `CLIENT_URL` is frequently left unset; without this a page URL
+   * pasted from the dev address bar (`http://localhost:4302/…`) would
+   * not register as a backlink. Restricted to non-production so a
+   * production instance only trusts its configured origins.
+   */
+  const LOOPBACK_ORIGIN = 'https?://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::\\d+)?';
+
   linkDetector.getLinkRegexp = () => {
-    const origins = linkDetector.getAppOrigins();
-    // No configured app origin — match nothing, rather than building
-    // `RegExp('null(/…)?')` from a null base url (which would match the
-    // literal text "null" in page bodies).
-    if (origins.length === 0) {
+    const alternatives = linkDetector.getAppOrigins().map(escapeRegExp);
+    if (process.env.NODE_ENV !== 'production') {
+      alternatives.push(LOOPBACK_ORIGIN);
+    }
+    // No origin to match against — return a never-match regexp rather
+    // than building `RegExp('null(/…)?')` from a null base url (which
+    // would match the literal text "null" in page bodies).
+    if (alternatives.length === 0) {
       return /(?!)/g;
     }
-    const alternation = origins.map(escapeRegExp).join('|');
-    return new RegExp('(?:' + alternation + ')(/[^\\s"?)#]*)?', 'g');
+    return new RegExp('(?:' + alternatives.join('|') + ')(/[^\\s"?)#]*)?', 'g');
   };
 
   linkDetector.getObjectIdRegexp = () => new RegExp('/([0-9a-fA-F]{24})');
