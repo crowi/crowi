@@ -48,6 +48,16 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
   - **Efficiency (MEDIUM, cache)**: `packages/web/src/lib/use-scroll-sync.ts` の `snapshotMarkers` per-scroll-event 2x 呼びを per-burst キャッシュ (mutate observer / `renderedAst` change で invalidate)
   - **Efficiency (MEDIUM, cache)**: `packages/api/src/routes/ts-rest/page-preview.ts` のレンダリング結果に hash(body) ベースの小 LRU (~50 entries) を被せ、タイピングバースト中の重複 render を吸収
   - **Efficiency (LOW)**: `packages/api/src/util/editor-cap-counter.ts:218` の `sAdd` + `expire` 直列 → ioredis pipeline 化 (WebSocket handshake は rare event なので影響低)
+- [ ] **RFC-0004 merge simplify advisory (`9f08e8a9` 直後の 3-agent レビュー由来)**:
+  - **Efficiency (HIGH)**: `packages/api/src/routes/ts-rest/autocomplete.ts:108,163` の autocomplete クエリは unanchored な substring `RegExp` で、`username` / `name` / `email` / `path` の index を使えず毎キーストロークで COLLSCAN (`.limit(200)` は scan を bound しない)。単純な `^` anchor は substring マッチ仕様 (L104-107 で意図的と明記、`scoreCandidate` が prefix>substring>fuzzy でランク) を壊すので、text index / Atlas Search 等での対処を要設計判断
+  - **Efficiency (MEDIUM)**: `runPageStatusMigration` (`crowi/index.ts:178`) が毎 boot で `updateMany({status:null})` を実行。初回以降 0 件マッチだが `{status:null}` は index を活かしにくい。one-shot config flag で steady-state boot を skip
+  - **Efficiency (LOW)**: `packages/api/src/routes/ts-rest/draft.ts:74,85` の `resolveOccupied` が 409 path で `Page.findOne` + `User.findById` の 2 query。`.populate('creator')` で 1 化 (要 `Page.isCreator` の populated-doc 互換確認)
+  - **Quality (MEDIUM)**: upload-intent の literal union (`'paste' | 'dnd'`) が `routes/ts-rest/attachment.ts` の `limitsForIntent` / handler-local / `editor/upload-placeholder.ts` の `UploadIntent` と 3 箇所で独立宣言。`@crowi/api-contract` から `UploadIntent` を export して両側で共有
+  - **Quality (MEDIUM)**: `routes/ts-rest/attachment.ts` の upload handler に `cleanupTmp(); return resolve({...})` が ~7 箇所重複。`fail(status, code, msg, details?)` helper に集約
+  - **Quality (MEDIUM, borderline)**: `models/page.ts` の `visiblePageStatusOr` の optional `creatorId` が 1 関数を `=== undefined` で 2 挙動に分岐。`draftVisibleToSelf` / `draftVisibleAcrossCreators` の 2 関数に分割すると読みやすい
+  - **Quality (LOW)**: `rate-limit.ts` / `upload-placeholder.ts` / `autocomplete-extension.ts` / `drop-handler.ts` / `attachment.ts` / `page.ts` の冒頭に "RFC-0004 Phase N" の WHAT-narration block コメントが多い。WHY (fail-open posture / id-keyed placeholder 等) だけ残して phase tag を剥がす
+  - **Reuse (MEDIUM)**: legacy `models/user.ts:531` の `findUsersByPartOfEmail` が手書き email escape を残しており、新 `util/regex.ts` の `escapeRegExp` を使っていない (merge 範囲外の follow-up)
+  - **Reuse (LOW)**: `app/(auth)/_edit/edit-page-client.tsx` が `sonner` を直 import (`toast.success` / `toast.error` 約 6 箇所)。`lib/notify.ts` 経由に寄せるには `notify.success` level の追加が必要
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 
