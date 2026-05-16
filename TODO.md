@@ -190,6 +190,19 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 - [x] **Phase 9 — Multi-server coordination via `@hocuspocus/extension-redis`** (`6495c4be` + `69f37e0d` + `d0ba2e9e`) — `crowi.redis !== null` の場合のみ api 側で extension-redis を attach、 sticky session 不要のまま multi-instance deploy が成立。 `createCollabServer` に extensions option を追加して attach 側から DI 可能に、 `REDIS_URL` を multi-instance では required と env doc に明記
 - [x] **Phase 10 — Documentation & release notes** (本 phase) — RFC body を Phase 8.5 + 9 反映に in-place 改訂 (history 保持、 設計判断は touch なし)、 operator deployment guide (`apps/crowi-site/content/docs/{ja,en}/operations/realtime-collab.mdx`) と user guide (`apps/crowi-site/content/docs/{ja,en}/realtime-editing.mdx`) を Fumadocs に新設 (ja+en pair)、 CLAUDE.md に collab 同居 attach + new env を追記、 `.changeset/rfc-0003-realtime-collab.md` で `@crowi/api` + `@crowi/web` + `@crowi/api-contract` を minor bump
 
+### Editor UX enhancement (RFC-0004) v2.2
+
+🎉 **RFC-0004 完了** — autocomplete / paste / drag-and-drop upload / draft pages / toast utility を全 8 phase で出荷。`docs/rfcs/0004-editor-ux-enhancement.md` (round 2)。
+
+- [x] **Phase 1 — Toast 通知ユーティリティ** — `notify.info/warn/error` 共有ヘルパ、グローバル toast コンテナ、レベル別色 / duration、最大 5 件スタック、Escape dismiss、`prefers-reduced-motion` 対応
+- [x] **Phase 2 — Draft ページ状態とスキーマ** — `Page.status: 'draft' | 'published'` を additive 追加、既存ページを `'published'` にする migration、listing / search / backlinks を draft 除外に更新 (author 自身は除外しない)、RFC-0003 collab `onAuthenticate` に「draft は author のみ接続可」チェック追加
+- [x] **Phase 3 — Draft エンドポイントと同一パス競合** — `POST/GET/DELETE /api/v2/pages/drafts` を契約 + ルートで実装、同一パス競合は `409 { error: 'path_taken_by_draft', owner }`、`by-path` 取得は非 author に draft を 404
+- [x] **Phase 4 — Creating pages 管理ビュー** — `/me/creating-pages` web ルート + 一覧 UI (開始時刻 / Edit / Cancel)、「New page」→ `POST /drafts` → 編集画面遷移の導線、同一パス競合時の contact-the-owner メッセージ
+- [x] **Phase 5 — Autocomplete エンドポイントと CodeMirror 拡張** — `GET /api/v2/{users,pages}/autocomplete` (prefix>substring>fuzzy、権限フィルタ、60 req/min/user)、`@codemirror/autocomplete` でトリガ条件 / 100ms debounce / display·insert·view 3 分離 / LRU キャッシュ + Refresh / suppression contexts / モバイル抑制
+- [x] **Phase 6 — 添付アップロードエンドポイントと paste ハンドラ** — `POST /api/v2/attachments/upload` (multipart、進捗ストリーミング、サイズ/種別/レート制限 20/min)、paste ハンドラ (URL smart link 化、画像 blob 自動アップロード + `![Uploading…]()` プレースホルダ + Yjs in-place 進捗更新)
+- [x] **Phase 7 — ドラッグ&ドロップアップロードと read-only 抑制** — editor DOM の dragenter/dragover/drop ハンドラ、画像→`![](url)` / その他→`[](url)`、per-file 50MB / per-op 5 files / 種別 allow-list、複数ファイル直列処理、read-only モードでの D&D 無効化 + 権限 toast
+- [x] **Phase 8 — ドキュメント整備** (本 phase) — `ja/guide/attachments.mdx` の「D&D・自動挿入未実装」記述を修正し paste / D&D を文書化、`ja/guide/pages.mdx` に draft ページ + Creating pages ビュー、`ja/guide/markdown.mdx` に autocomplete、`ja/operations/storage.mdx` にアップロードのレート/サイズ/種別制限を追記、`.changeset/rfc-0004-editor-ux.md` で `@crowi/api` + `@crowi/web` + `@crowi/api-contract` を minor bump
+
 ### Installer 移行 (フェーズ 0)
 - [x] **未インストール時の自動 redirect** (`/migrate migrate-installer-process` → `ed1c598d`) — `useInstallerStatus()` + `<InstallerGate>` を root layout に mount、`/installer` ⇄ それ以外を双方向制御
 - [x] **`installer.createAdmin` を ts-rest 内に native 化** (`4ec708e8`) — legacy controller への delegation を廃止 (`req.form.isValid` undefined クラッシュ解消)。Zod schema に legacy regex (username `[\da-zA-Z\-_.]+`、password `[\x20-\x7F]{6,}`) 移植
