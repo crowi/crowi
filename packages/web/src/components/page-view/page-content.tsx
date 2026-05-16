@@ -5,6 +5,7 @@ import { Check, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
+import { MentionLink } from '@/components/page-view/mention-link';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -165,6 +166,11 @@ const components = {
     // up the primary colour with weight bump.
     const isBrokenWikiLink = className === 'wikilink-broken';
     const isMention = className === 'mention';
+    // A mention renders as avatar + `@username` with a name tooltip;
+    // `MentionLink` hydrates the user from the username in the href.
+    if (isMention && href?.startsWith('/user/')) {
+      return <MentionLink username={href.slice('/user/'.length)} />;
+    }
     const composedClassName = isBrokenWikiLink
       ? 'text-muted-foreground/80 decoration-dotted decoration-muted-foreground/40 underline underline-offset-[3px] cursor-help'
       : isMention
