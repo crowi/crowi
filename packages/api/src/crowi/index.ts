@@ -19,6 +19,7 @@ import middlewares from 'src/middlewares';
 import controllers from 'src/controllers';
 import routes from '../routes';
 import { attachCollabServer, type AttachedCollab } from 'src/collab/attach';
+import { attachPresenceServer, type AttachedPresence } from 'src/presence/attach';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
 import { hasSlackConfig } from '../models/config';
@@ -129,6 +130,14 @@ class Crowi {
    * `start()` hasn't run yet, or after `shutdown()`).
    */
   collabAttachment: AttachedCollab | null = null;
+
+  /**
+   * Presence WebSocket attach handle (RFC-0005). Built in `start()`
+   * alongside `collabAttachment`; wires the `/presence` ws noServer
+   * handler so page viewers get the live-presence row. `null` outside
+   * of the running server.
+   */
+  presenceAttachment: AttachedPresence | null = null;
 
   initialized = false;
 
@@ -560,6 +569,11 @@ class Crowi {
     // the boot sequence stays serial and `start()` resolves only
     // when the api is fully ready to accept WebSocket upgrades.
     this.collabAttachment = await attachCollabServer(server, this);
+
+    // RFC-0005 — attach the `/presence` WebSocket alongside `/collab`.
+    // Same `noServer` pattern; both upgrade handlers path-filter so
+    // they coexist on the one http.Server listener.
+    this.presenceAttachment = await attachPresenceServer(server, this);
 
     // Promisify `server.listen` so `start()` resolves only after the
     // socket is actually bound. Callers (the bin entry, smoke tests)

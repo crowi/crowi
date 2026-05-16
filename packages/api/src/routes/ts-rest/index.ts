@@ -8,6 +8,7 @@ import meRoutes from './me';
 import pageRoutes from './page';
 import pagePreviewRoutes from './page-preview';
 import pageCollabRoutes from './page-collab';
+import presenceRoutes from './presence';
 import userRoutes from './user';
 import commentRoutes from './comment';
 import bookmarkRoutes from './bookmark';
@@ -58,6 +59,7 @@ export default (crowi: Crowi, app: Express) => {
   const pageRouter = pageRoutes(crowi, app);
   const pagePreviewRouter = pagePreviewRoutes(crowi, app);
   const pageCollabRouter = pageCollabRoutes(crowi, app);
+  const presenceRouter = presenceRoutes(crowi, app);
   const userRouter = userRoutes(crowi, app);
   const commentRouter = commentRoutes(crowi, app);
   const bookmarkRouter = bookmarkRoutes(crowi, app);
@@ -79,6 +81,7 @@ export default (crowi: Crowi, app: Express) => {
   authenticatedRouter.use(pageRouter);
   authenticatedRouter.use(pagePreviewRouter);
   authenticatedRouter.use(pageCollabRouter);
+  authenticatedRouter.use(presenceRouter);
   authenticatedRouter.use(userRouter);
   authenticatedRouter.use(commentRouter);
   authenticatedRouter.use(bookmarkRouter);

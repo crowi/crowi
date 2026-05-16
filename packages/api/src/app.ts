@@ -40,6 +40,11 @@ const shutdown = async (signal: string): Promise<void> => {
   } catch (err) {
     console.error('[crowi] collabAttachment.shutdown failed:', err);
   }
+  try {
+    await crowi.presenceAttachment?.shutdown();
+  } catch (err) {
+    console.error('[crowi] presenceAttachment.shutdown failed:', err);
+  }
   process.exit(0);
 };
 process.on('SIGINT', () => {
