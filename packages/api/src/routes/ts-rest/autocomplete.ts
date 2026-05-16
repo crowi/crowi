@@ -7,6 +7,7 @@ import type { UserDocument } from 'src/models/user';
 import { visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
 import { scoreCandidate } from 'src/util/autocomplete-match';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { escapeRegExp } from 'src/util/regex';
 import { toISOStringOrNull } from 'src/util/ts-rest-helpers';
 import type { Response } from 'express';
 import Debug from 'debug';
@@ -16,13 +17,6 @@ const debug = Debug('crowi:routes:ts-rest:autocomplete');
 /** Per-user budget for the autocomplete endpoints — RFC §"Rate limit". */
 const RATE_LIMIT = 60;
 const RATE_WINDOW_MS = 60_000;
-
-/**
- * Escape a user-supplied string for safe use inside a `RegExp`. The
- * autocomplete query is attacker-controlled, so a raw `.` / `*` / `(`
- * would otherwise be interpreted as regex metacharacters.
- */
-const escapeRegExp = (input: string): string => input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Last `/`-separated segment of a wiki path — the page's "title". */
 const pathLeaf = (path: string): string => {

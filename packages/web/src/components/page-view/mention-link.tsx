@@ -1,17 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import BoringAvatar from 'boring-avatars';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { UserAvatar } from '@/components/user-avatar';
 import { useUserPage } from '@/lib/use-user-page';
 import { cn } from '@/lib/utils';
-
-/** Beam-avatar palette — kept in sync with `user-avatar.tsx`. */
-const BEAM_COLORS = ['#43676b', '#8eb39b', '#f0d264', '#e89a4d', '#d96d68'];
-
-/** Inline avatar size (px). Matches the `size-5` container below. */
-const AVATAR_PX = 20;
 
 const MENTION_CLASS = 'text-primary font-medium underline-offset-[3px] transition-colors';
 
@@ -41,22 +34,14 @@ export function MentionLink({ username }: { username: string }) {
     );
   }
 
-  const displayName = user.name || username;
-
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Link href={href} className={cn(MENTION_CLASS, 'inline-flex items-center gap-1 align-middle no-underline hover:underline')}>
-          <Avatar className="size-5 shrink-0">
-            {user.image ? <AvatarImage src={user.image} alt={displayName} /> : null}
-            <AvatarFallback className="bg-transparent p-0" aria-label={displayName}>
-              <BoringAvatar size={AVATAR_PX} name={username} variant="beam" colors={BEAM_COLORS} />
-            </AvatarFallback>
-          </Avatar>
-          @{username}
+          <UserAvatar user={user} size="xs" className="shrink-0" />@{username}
         </Link>
       </TooltipTrigger>
-      <TooltipContent>{displayName}</TooltipContent>
+      <TooltipContent>{user.name || username}</TooltipContent>
     </Tooltip>
   );
 }

@@ -1,11 +1,10 @@
 import Crowi from 'src/crowi';
 import { decodeSpace } from './path';
+import { escapeRegExp } from './regex';
 
 export default (crowi: Crowi) => {
   // const debug = Debug('crowi:lib:url')
   const linkDetector: any = {};
-
-  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   /**
    * Origins that count as "this Crowi instance" when classifying an
