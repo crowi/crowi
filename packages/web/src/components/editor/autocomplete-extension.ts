@@ -2,6 +2,7 @@ import { autocompletion, type Completion, type CompletionContext, type Completio
 import { syntaxTree } from '@codemirror/language';
 import type { Extension } from '@codemirror/state';
 import type { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 import { apiClient } from '@/lib/api-client';
 import { AutocompleteCache, type AutocompleteKind } from '@/lib/autocomplete-cache';
 import type { AutocompleteResult } from '@crowi/api-contract';
@@ -268,6 +269,60 @@ const completionSource: CompletionSource = async (context: CompletionContext): P
 };
 
 /**
+ * Restyles the `@codemirror/autocomplete` dropdown to match the Crowi /
+ * shadcn UI. Built on the shared design tokens (`--popover`, `--accent`,
+ * `--border`, …) so it tracks light / dark mode automatically.
+ */
+const autocompleteTheme = EditorView.theme({
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    backgroundColor: 'var(--popover)',
+    color: 'var(--popover-foreground)',
+    boxShadow: '0 4px 14px rgb(0 0 0 / 0.12)',
+    overflow: 'hidden',
+    // Result labels are display text (page titles, user names), not
+    // code — render them in the UI font, not the editor's monospace.
+    fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+  },
+  '.cm-tooltip-autocomplete > ul': {
+    fontFamily: 'inherit',
+    maxHeight: '18rem',
+    padding: '4px',
+  },
+  '.cm-tooltip-autocomplete > ul > li': {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '5px 8px',
+    borderRadius: 'calc(var(--radius) - 2px)',
+    lineHeight: '1.45',
+    color: 'var(--popover-foreground)',
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+    backgroundColor: 'var(--accent)',
+    color: 'var(--accent-foreground)',
+  },
+  '.cm-completionLabel': {
+    fontSize: '13px',
+  },
+  // "Refresh results" footer row — always the last option, separated
+  // from the result rows by a rule and rendered in muted text.
+  '.cm-tooltip-autocomplete > ul > li:last-child': {
+    marginTop: '4px',
+    paddingTop: '8px',
+    borderTop: '1px solid var(--border)',
+    borderRadius: '0',
+    color: 'var(--muted-foreground)',
+    fontSize: '12px',
+  },
+  // Win the specificity / order tie so a selected footer still highlights.
+  '.cm-tooltip-autocomplete > ul > li:last-child[aria-selected]': {
+    backgroundColor: 'var(--accent)',
+    color: 'var(--accent-foreground)',
+  },
+});
+
+/**
  * The autocomplete extension to thread through `extraExtensions`.
  *
  * `activateOnTyping` keeps the dropdown keyboard-driven (paste does not
@@ -276,15 +331,18 @@ const completionSource: CompletionSource = async (context: CompletionContext): P
  * is the RFC's debounce.
  */
 export function autocompleteExtension(): Extension {
-  return autocompletion({
-    override: [completionSource],
-    activateOnTyping: true,
-    activateOnTypingDelay: DEBOUNCE_MS,
-    closeOnBlur: true,
-    // Single-row footer aside, results are already capped at 10.
-    maxRenderedOptions: RESULT_LIMIT + 1,
-    icons: false,
-  });
+  return [
+    autocompletion({
+      override: [completionSource],
+      activateOnTyping: true,
+      activateOnTypingDelay: DEBOUNCE_MS,
+      closeOnBlur: true,
+      // Single-row footer aside, results are already capped at 10.
+      maxRenderedOptions: RESULT_LIMIT + 1,
+      icons: false,
+    }),
+    autocompleteTheme,
+  ];
 }
 
 /** Test-only: reset module-scoped cache + refresh marks between cases. */
