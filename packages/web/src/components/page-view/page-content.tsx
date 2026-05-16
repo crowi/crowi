@@ -150,6 +150,29 @@ function makeHeading(Tag: HeadingTag) {
   return Heading;
 }
 
+/**
+ * Resolve a link href to an internal app path, or `null` when it points
+ * elsewhere. A bare `/path` is internal as-is; an absolute `http(s)` URL
+ * is internal when its origin matches the running app's — covers links
+ * written as full URLs (e.g. copied from the address bar). Internal
+ * links route through the Next.js router instead of a full document
+ * load. Runs client-side only: the page body never appears in SSR
+ * output (the show page renders a loading spinner until the react-query
+ * fetch resolves), so `window.location.origin` is always available.
+ */
+function toInternalHref(href: string | undefined): string | null {
+  if (!href) return null;
+  if (href.startsWith('/') && !href.startsWith('//')) return href;
+  if (typeof window === 'undefined' || !/^https?:\/\//i.test(href)) return null;
+  try {
+    const url = new URL(href);
+    if (url.origin !== window.location.origin) return null;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return null;
+  }
+}
+
 const components = {
   section: TargetedSection,
   h1: makeHeading('h1'),
@@ -177,15 +200,16 @@ const components = {
       : isMention
         ? 'text-primary font-medium decoration-primary/40 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors'
         : 'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors';
-    // Internal app paths (wikilinks, page links) navigate through the
-    // Next.js router so the move is a client-side transition — no full
-    // document reload, no auth re-check, no layout loading flash.
-    // External links and in-page `#` anchors (incl. broken wikilinks,
-    // whose href is `#`) stay plain `<a>`.
-    const isInternal = !!href && href.startsWith('/') && !href.startsWith('//');
-    if (isInternal) {
+    // Internal links (bare `/path` wikilinks/page links, or full URLs
+    // pointing at this same app) navigate through the Next.js router —
+    // a client-side transition, no full document reload, no auth
+    // re-check, no layout loading flash. Genuinely external links and
+    // in-page `#` anchors (incl. broken wikilinks, whose href is `#`)
+    // stay plain `<a>`.
+    const internalHref = toInternalHref(href);
+    if (internalHref) {
       return (
-        <Link href={href} className={composedClassName} {...props}>
+        <Link href={internalHref} className={composedClassName} {...props}>
           {children}
         </Link>
       );
