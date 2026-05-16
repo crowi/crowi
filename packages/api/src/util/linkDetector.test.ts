@@ -38,6 +38,29 @@ describe('Url test', () => {
     );
   });
 
+  test('detects Markdown links whose href is a full CLIENT_URL', () => {
+    // A user copies a page URL from the address bar — that origin is
+    // `CLIENT_URL` (the web app), which can differ from the api's
+    // `getBaseUrl()`. linkDetector must still classify it as internal.
+    const prev = process.env.CLIENT_URL;
+    process.env.CLIENT_URL = 'http://localhost:4302';
+    try {
+      const linkDetector = LinkDetector(crowi);
+      let text = '[by id](http://localhost:4302/6a06a5c87bfd4a3cbb851ab5) ';
+      text += '[by path](http://localhost:4302/crowi/rfc/0003-realtime) ';
+      text += '[external](http://example.com/6a06a5c87bfd4a3cbb851ab5)';
+
+      const results = linkDetector.search(text);
+
+      expect(results.objectIds).toContain('6a06a5c87bfd4a3cbb851ab5');
+      expect(results.paths).toContain('/crowi/rfc/0003-realtime');
+      // A different origin is still external — not a backlink.
+      expect(results.paths).not.toContain('/6a06a5c87bfd4a3cbb851ab5');
+    } finally {
+      process.env.CLIENT_URL = prev;
+    }
+  });
+
   test('detects Markdown links with relative paths as backlinks', () => {
     const linkDetector = LinkDetector(crowi);
 

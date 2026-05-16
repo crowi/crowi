@@ -5,9 +5,41 @@ export default (crowi: Crowi) => {
   // const debug = Debug('crowi:lib:url')
   const linkDetector: any = {};
 
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  /**
+   * Origins that count as "this Crowi instance" when classifying an
+   * absolute-URL link as internal. Both are included because they can
+   * differ — `getBaseUrl()` is the api's `BASE_URL` / `app:url` config,
+   * while `CLIENT_URL` is the web app's public origin, and a user
+   * copies page URLs from the latter (e.g. `http://localhost:4302/...`).
+   * Trailing slashes are trimmed and duplicates dropped.
+   */
+  linkDetector.getAppOrigins = (): string[] => {
+    const raw = [crowi.getBaseUrl(), process.env.CLIENT_URL];
+    const origins: string[] = [];
+    const seen = new Set<string>();
+    for (const candidate of raw) {
+      if (!candidate || typeof candidate !== 'string') continue;
+      const normalized = candidate.replace(/\/+$/, '');
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+        origins.push(normalized);
+      }
+    }
+    return origins;
+  };
+
   linkDetector.getLinkRegexp = () => {
-    const appUrl = crowi.getBaseUrl();
-    return new RegExp(appUrl + '(/[^\\s"?)#]*)?', 'g');
+    const origins = linkDetector.getAppOrigins();
+    // No configured app origin — match nothing, rather than building
+    // `RegExp('null(/…)?')` from a null base url (which would match the
+    // literal text "null" in page bodies).
+    if (origins.length === 0) {
+      return /(?!)/g;
+    }
+    const alternation = origins.map(escapeRegExp).join('|');
+    return new RegExp('(?:' + alternation + ')(/[^\\s"?)#]*)?', 'g');
   };
 
   linkDetector.getObjectIdRegexp = () => new RegExp('/([0-9a-fA-F]{24})');
