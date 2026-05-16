@@ -4,6 +4,8 @@ import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { Types } from 'mongoose';
 import { invalidPageIdResponse, isValidObjectId, isPopulatedUser, toUserPublic, toISOStringOrNull, toStringId } from 'src/util/ts-rest-helpers';
+import { STATUS_DRAFT } from 'src/models/page';
+import type { UserDocument } from 'src/models/user';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest:backlink');
@@ -14,13 +16,26 @@ interface RawBacklink {
   // projection, so the field can be undefined here. The handler echoes the
   // request's page_id back into the response body instead.
   page?: Types.ObjectId | string;
-  fromPage: { _id: Types.ObjectId | string; path?: string } | Types.ObjectId | string | null;
+  // `findByPageId` populates `fromPage` without a field selection, so
+  // `status` / `creator` ride along — used below to drop other users'
+  // draft pages from the response (RFC-0004).
+  fromPage: { _id: Types.ObjectId | string; path?: string; status?: string; creator?: Types.ObjectId | string } | Types.ObjectId | string | null;
   fromRevision: { _id: Types.ObjectId | string; author?: unknown } | Types.ObjectId | string | null;
   updatedAt: Date;
 }
 
-const isPopulatedFromPage = (value: unknown): value is { _id: Types.ObjectId | string; path?: string } => {
+const isPopulatedFromPage = (value: unknown): value is { _id: Types.ObjectId | string; path?: string; status?: string; creator?: Types.ObjectId | string } => {
   return !!value && typeof value === 'object' && '_id' in value && 'path' in value;
+};
+
+/**
+ * RFC-0004: a draft `fromPage` is visible only to its author. Drop a
+ * backlink whose source page is another user's draft so a draft can
+ * never leak its existence / path through the backlink list.
+ */
+const isHiddenDraftFromPage = (fromPage: { status?: string; creator?: Types.ObjectId | string }, viewerId: string): boolean => {
+  if (fromPage.status !== STATUS_DRAFT) return false;
+  return fromPage.creator?.toString() !== viewerId;
 };
 
 const isPopulatedFromRevision = (value: unknown): value is { _id: Types.ObjectId | string; author?: unknown } => {
@@ -33,9 +48,10 @@ const isPopulatedFromRevision = (value: unknown): value is { _id: Types.ObjectId
 //
 // `pageId` is the request page_id; we echo it into the response because the
 // underlying find() projection does not include the `page` field.
-const toBacklinkResponse = (raw: RawBacklink, pageId: string): BacklinkResponse | null => {
+const toBacklinkResponse = (raw: RawBacklink, pageId: string, viewerId: string): BacklinkResponse | null => {
   const { fromPage, fromRevision } = raw;
   if (!isPopulatedFromPage(fromPage) || typeof fromPage.path !== 'string') return null;
+  if (isHiddenDraftFromPage(fromPage, viewerId)) return null;
   if (!isPopulatedFromRevision(fromRevision)) return null;
 
   return {
@@ -74,8 +90,9 @@ export default (crowi: Crowi, _app: Express) => {
      *   /_api/backlink.list behavior; see openQuestions in the task plan for
      *   the security trade-off.
      */
-    getBacklinks: async ({ query }) => {
+    getBacklinks: async ({ query, req }) => {
       const { page_id, limit, offset } = query;
+      const viewerId = (req.user as UserDocument)._id.toString();
 
       debug('getBacklinks called with:', { page_id, limit, offset });
 
@@ -90,10 +107,13 @@ export default (crowi: Crowi, _app: Express) => {
       const fetchLimit = limit + 1;
       const rawBacklinks = (await Backlink.findByPageId(pageObjectId, fetchLimit, offset)) as unknown as RawBacklink[];
 
-      const hasNext = rawBacklinks.length > limit;
-      const trimmed = hasNext ? rawBacklinks.slice(0, limit) : rawBacklinks;
+      // Resolve (map + drop hidden-draft / non-populated rows) before
+      // trimming, so a filtered-out row never eats into the requested
+      // page size — `hasNext` and the slice both run on visible rows.
+      const resolved = rawBacklinks.map((raw) => toBacklinkResponse(raw, page_id, viewerId)).filter((b): b is BacklinkResponse => b !== null);
 
-      const backlinks = trimmed.map((raw) => toBacklinkResponse(raw, page_id)).filter((b): b is BacklinkResponse => b !== null);
+      const hasNext = resolved.length > limit;
+      const backlinks = hasNext ? resolved.slice(0, limit) : resolved;
 
       return {
         status: 200 as const,

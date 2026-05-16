@@ -2,8 +2,9 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
-import { internalServerErrorResponse, loadGrantedPage } from 'src/util/ts-rest-helpers';
+import { internalServerErrorResponse, loadGrantedPage, pageNotFoundResponse } from 'src/util/ts-rest-helpers';
 import { checkEditorCap } from 'src/util/collab-cap';
+import { STATUS_DRAFT } from 'src/models/page';
 import { createWsTokenUtil } from 'src/util/ws-token';
 import type { UserDocument } from 'src/models/user';
 import Debug from 'debug';
@@ -52,6 +53,17 @@ export default (crowi: Crowi, _app: Express) => {
 
       const loaded = await loadGrantedPage(Page, pageId, user);
       if ('error' in loaded) return loaded.error;
+
+      // RFC-0004: a draft page is editable only by its author. The
+      // collab WebSocket carries the wsToken minted here, so refusing
+      // to sign a token for a non-author is the first of the two draft
+      // gates (the second is the Hocuspocus `onAuthenticate` hook).
+      // Collapse "draft owned by someone else" into the same 404 the
+      // grant check uses so draft existence is never leaked.
+      if (loaded.page.status === STATUS_DRAFT && !loaded.page.isCreator(user)) {
+        debug('getYjsToken rejected: draft page %s not owned by %s', pageId, user._id.toString());
+        return pageNotFoundResponse;
+      }
 
       try {
         const { readonly } = await checkEditorCap(crowi, pageId);

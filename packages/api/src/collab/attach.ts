@@ -115,7 +115,14 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
       try {
         const Page = crowi.model('Page');
         const User = crowi.model('User');
-        const [pageDoc, userDoc] = await Promise.all([Page.findById(payload.pageId).exec(), User.findById(payload.userId).exec()]);
+        // `revision` MUST be populated: `Page.updatePage` / `pushRevision`
+        // emit the event with `revision` as the full Revision document,
+        // and listeners rely on it — `events/page.ts` reads
+        // `revision.body` to build backlinks, `mention-dispatch` reads
+        // `revision.meta`. A bare ObjectId here makes those silently
+        // no-op (the backlink builder throws "no revision/body" and the
+        // error is swallowed at debug level).
+        const [pageDoc, userDoc] = await Promise.all([Page.findById(payload.pageId).populate('revision').exec(), User.findById(payload.userId).exec()]);
         if (!pageDoc) {
           debug('pageEventPublisher: page %s not found, skipping emit', payload.pageId);
           return;

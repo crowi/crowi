@@ -1,6 +1,6 @@
 import type { SearchableDoc } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
-import { STATUS_DELETED } from 'src/models/page';
+import { STATUS_DELETED, STATUS_DRAFT } from 'src/models/page';
 import Debug from 'debug';
 import { isPopulatedUser, toStringId } from './ts-rest-helpers';
 import { type PageLike, isPopulatedRevision } from './page-response';
@@ -13,6 +13,12 @@ const debug = Debug('crowi:util:page-search-index');
  * from the index instead — mirrors `shouldIndex()` in the ES driver's
  * rebuild path.
  *
+ * RFC-0004: `status='draft'` pages are likewise kept out of the index
+ * — a draft is visible only to its author, and search results have no
+ * per-viewer draft-author filter. When the author publishes (Phase 3),
+ * the resulting `update` event re-runs this helper with
+ * `status='published'` and the page is indexed normally.
+ *
  * Fire-and-forget at the call site: the helper logs and swallows
  * errors so a search-cluster outage never breaks page CRUD.
  */
@@ -23,7 +29,7 @@ export async function indexPageInSearch(crowi: Crowi, page: PageLike): Promise<v
   const id = toStringId(page._id);
 
   try {
-    if (page.redirectTo || page.status === STATUS_DELETED) {
+    if (page.redirectTo || page.status === STATUS_DELETED || page.status === STATUS_DRAFT) {
       await searcher.remove(id);
       return;
     }
@@ -36,7 +42,7 @@ export async function indexPageInSearch(crowi: Crowi, page: PageLike): Promise<v
       await searcher.remove(id);
       return;
     }
-    if (target.redirectTo || target.status === STATUS_DELETED) {
+    if (target.redirectTo || target.status === STATUS_DELETED || target.status === STATUS_DRAFT) {
       await searcher.remove(id);
       return;
     }

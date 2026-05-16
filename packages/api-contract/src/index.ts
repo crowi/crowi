@@ -13,6 +13,8 @@ export * from './schemas/comment';
 export * from './schemas/revision';
 export * from './schemas/notification';
 export * from './schemas/backlink';
+export * from './schemas/draft';
+export * from './schemas/autocomplete';
 export * from './schemas/collab';
 export * from './schemas/attachment';
 export * from './schemas/adminCrypto';

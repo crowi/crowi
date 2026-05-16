@@ -2,7 +2,7 @@ import { initClient } from '@ts-rest/core';
 import { apiContract } from '@crowi/api-contract';
 import { clearTokens, storeTokens } from './auth-token';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
 
 let isRefreshing = false;
 let refreshPromise: Promise<string | null> | null = null;

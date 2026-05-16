@@ -53,6 +53,9 @@ vi.mock('@/lib/api-client', () => ({
       getYjsToken,
     },
   },
+  // RFC-0004: the paste handler's upload-placeholder reads API_BASE_URL
+  // at module load — the editor now imports it transitively.
+  API_BASE_URL: 'http://localhost:4301',
 }));
 
 // Phase 8: useCollabSession now reads `useAuth()` to publish the

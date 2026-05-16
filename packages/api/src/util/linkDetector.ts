@@ -1,13 +1,56 @@
 import Crowi from 'src/crowi';
 import { decodeSpace } from './path';
+import { escapeRegExp } from './regex';
 
 export default (crowi: Crowi) => {
   // const debug = Debug('crowi:lib:url')
   const linkDetector: any = {};
 
+  /**
+   * Origins that count as "this Crowi instance" when classifying an
+   * absolute-URL link as internal. Both are included because they can
+   * differ — `getBaseUrl()` is the api's `BASE_URL` / `app:url` config,
+   * while `CLIENT_URL` is the web app's public origin, and a user
+   * copies page URLs from the latter (e.g. `http://localhost:4302/...`).
+   * Trailing slashes are trimmed and duplicates dropped.
+   */
+  linkDetector.getAppOrigins = (): string[] => {
+    const raw = [crowi.getBaseUrl(), process.env.CLIENT_URL];
+    const origins: string[] = [];
+    const seen = new Set<string>();
+    for (const candidate of raw) {
+      if (!candidate || typeof candidate !== 'string') continue;
+      const normalized = candidate.replace(/\/+$/, '');
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+        origins.push(normalized);
+      }
+    }
+    return origins;
+  };
+
+  /**
+   * Loopback-origin pattern (`http(s)://localhost|127.0.0.1|[::1]` on any
+   * port). In development the web app and the api both run on localhost
+   * and `CLIENT_URL` is frequently left unset; without this a page URL
+   * pasted from the dev address bar (`http://localhost:4302/…`) would
+   * not register as a backlink. Restricted to non-production so a
+   * production instance only trusts its configured origins.
+   */
+  const LOOPBACK_ORIGIN = 'https?://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::\\d+)?';
+
   linkDetector.getLinkRegexp = () => {
-    const appUrl = crowi.getBaseUrl();
-    return new RegExp(appUrl + '(/[^\\s"?)#]*)?', 'g');
+    const alternatives = linkDetector.getAppOrigins().map(escapeRegExp);
+    if (process.env.NODE_ENV !== 'production') {
+      alternatives.push(LOOPBACK_ORIGIN);
+    }
+    // No origin to match against — return a never-match regexp rather
+    // than building `RegExp('null(/…)?')` from a null base url (which
+    // would match the literal text "null" in page bodies).
+    if (alternatives.length === 0) {
+      return /(?!)/g;
+    }
+    return new RegExp('(?:' + alternatives.join('|') + ')(/[^\\s"?)#]*)?', 'g');
   };
 
   linkDetector.getObjectIdRegexp = () => new RegExp('/([0-9a-fA-F]{24})');

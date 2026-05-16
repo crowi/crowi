@@ -35,6 +35,21 @@ export interface MarkdownEditorProps {
    * callers.
    */
   disableHistory?: boolean;
+  /**
+   * RFC-0004 Phase 6: enable the paste handler (URL smart-link + image
+   * upload). Requires the owning `pageId` so an image paste can upload
+   * to the page. Read once at mount (paste behaviour is page-scoped and
+   * does not change for the editor's lifetime); omit for bare mounts.
+   */
+  paste?: { pageId: string };
+  /**
+   * RFC-0004 Phase 7: enable the drag-and-drop upload handler. Like
+   * `paste`, requires the owning `pageId` and is read once at mount.
+   * The handler is read-only-aware at drop time (it checks
+   * `EditorState.readOnly`), so it does not need to be reconfigured
+   * when the `readonly` prop flips. Omit for bare mounts.
+   */
+  dnd?: { pageId: string };
 }
 
 export interface MarkdownEditorHandle {
@@ -85,7 +100,7 @@ export interface MarkdownEditorHandle {
  * re-fire for our own dispatches and produce a render loop.
  */
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(props, ref) {
-  const { value, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory } = props;
+  const { value, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory, paste, dnd } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -96,6 +111,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   const onChangeRef = useRef(onChange);
   const readonlyRef = useRef<boolean>(readonly ?? false);
   const disableHistoryRef = useRef<boolean>(disableHistory ?? false);
+  // Paste / D&D config is read once at mount; `pageId` does not change
+  // for an editor session, so neither needs a sync effect.
+  const pasteRef = useRef<{ pageId: string } | undefined>(paste);
+  const dndRef = useRef<{ pageId: string } | undefined>(dnd);
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
@@ -140,6 +159,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           // below owns its lifecycle.
           disableHistory: disableHistoryRef.current,
           onChange: onChangeAtMount ? (next) => onChangeRef.current?.(next) : undefined,
+          paste: pasteRef.current,
+          dnd: dndRef.current,
         }),
         readonlyCompartmentRef.current.of(readonlyExtension(readonlyRef.current)),
         extraCompartmentRef.current.of(extraExtensions ?? []),

@@ -12,6 +12,35 @@ const defaultCheckEditorCap = async (_pageId: string): Promise<{ readonly: boole
 
 const debug = Debug('crowi:collab:auth');
 
+/**
+ * RFC-0004 `Page.status` value for a not-yet-published page. Declared
+ * locally — the collab library deliberately does not import from
+ * `@crowi/api`, so the string is duplicated here. It must stay byte-
+ * identical to `STATUS_DRAFT` in `@crowi/api`'s `models/page.ts`.
+ */
+const DRAFT_STATUS = 'draft';
+
+/**
+ * Minimal `findById(...).select(...).lean().exec()` chain shape — only
+ * the methods this hook touches. Keeps the cast narrow instead of
+ * reaching for `any` on the loosely-typed `CollabModels.Page`.
+ */
+interface DraftablePageQuery {
+  select(fields: string): {
+    lean(): { exec(): Promise<unknown> };
+  };
+}
+interface DraftablePageModel {
+  findById(id: string): DraftablePageQuery;
+}
+
+/** Projection returned by the draft-author lookup above. */
+interface DraftablePageRow {
+  _id: unknown;
+  status?: string;
+  creator?: unknown;
+}
+
 export interface OnAuthenticateDeps {
   wsTokenUtil: CollabWsTokenUtil;
   models: Pick<CollabModels, 'Page'>;
@@ -52,6 +81,12 @@ export interface OnAuthenticateDeps {
  *      never-existed document. We **do not** re-run the full
  *      `loadGrantedPage` permission re-check here: the wsToken is 5
  *      minutes long and was already gated by the api process.
+ *   4b. Draft author check (RFC-0004) — a `status: 'draft'` page is
+ *      editable only by its author, so reject any connection whose
+ *      `userId` doesn't match `Page.creator`. The api-side wsToken
+ *      route applies the same gate at sign time; re-checking here
+ *      closes the window where a token was minted before the page
+ *      became a draft, or replayed across users.
  *   5. cap peek — the api-side `checkEditorCap` (Phase 6 promoted to
  *      a Redis `SCARD` read). The result `OR`s with the token's
  *      readonly bit so a cap-driven readonly never gets weakened.
@@ -95,11 +130,21 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
       throw new Error('invalid token');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const page = await (deps.models.Page as any).findById(claims.pageId).select('_id').lean().exec();
+    // RFC-0004: also pull `status` + `creator` so a draft page can be
+    // gated to its author below. `lean()` returns a plain object, so
+    // `creator` is an ObjectId — compare via `String(...)`.
+    const page = (await (deps.models.Page as DraftablePageModel).findById(claims.pageId).select('_id status creator').lean().exec()) as DraftablePageRow | null;
     if (!page) {
       debug('reject: page %s not found', claims.pageId);
       throw new Error('invalid token');
+    }
+
+    // Draft author gate — `creator` may be absent on legacy rows; only
+    // a `draft` status triggers the check, and published / null status
+    // pages flow through untouched.
+    if (page.status === DRAFT_STATUS && String(page.creator ?? '') !== claims.userId) {
+      debug('reject: draft page %s not owned by user %s', claims.pageId, claims.userId);
+      throw new Error('permission denied');
     }
 
     const cap = await checkCap(claims.pageId);

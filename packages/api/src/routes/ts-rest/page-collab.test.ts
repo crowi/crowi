@@ -191,6 +191,38 @@ describe('Routes /api/v2/pages/:id/yjs-token (ts-rest getYjsToken)', () => {
     expect(decoded.readonly).toBe(true);
   });
 
+  // RFC-0004 Phase 2: a draft page may only mint a wsToken for its
+  // author. The collab WebSocket carries this token, so refusing to
+  // sign it for a non-author is the first of the two draft gates.
+  describe('draft page access (RFC-0004)', () => {
+    /** Create a page, then flip it to status='draft' directly. */
+    const createDraftPage = async (suffix: string) => {
+      const pageId = await createPage(suffix);
+      const Page = crowi.model('Page');
+      await Page.updateOne({ _id: pageId }, { $set: { status: 'draft' } });
+      return pageId;
+    };
+
+    it('issues a wsToken to the draft author', async () => {
+      const pageId = await createDraftPage('draft-owner');
+
+      const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.pageId).toBe(pageId);
+      expect(typeof res.body.wsToken).toBe('string');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for a non-author on a draft page (does not leak existence)', async () => {
+      const pageId = await createDraftPage('draft-foreign');
+
+      const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(otherAccessToken));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+  });
+
   it('signs and verifies a wsToken within a single ws-token util instance (sign↔verify round trip)', async () => {
     // This bypasses HTTP — it asserts the in-process invariant that
     // `verifyWsToken` accepts a token freshly produced by the same

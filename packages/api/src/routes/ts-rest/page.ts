@@ -3,7 +3,7 @@ import { apiContract, PageGrantEnum, UserPublic } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
 import { UserDocument } from 'src/models/user';
-import { PageDocument } from 'src/models/page';
+import { PageDocument, visiblePageStatusOr } from 'src/models/page';
 import { invalidPageIdResponse, isValidObjectId, loadGrantedPage, pageNotFoundResponse, toUserPublic } from 'src/util/ts-rest-helpers';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import Debug from 'debug';
@@ -249,7 +249,7 @@ export default (crowi: Crowi, _app: Express) => {
           debug('Finding all accessible pages', { path });
           const conditions: any = {
             redirectTo: null,
-            $or: [{ status: null }, { status: 'published' }],
+            $or: visiblePageStatusOr(user._id),
             grant: { $in: [1, 2] }, // PUBLIC or RESTRICTED
           };
 

@@ -14,7 +14,62 @@ export const STATUS_WIP = 'wip';
 export const STATUS_PUBLISHED = 'published';
 export const STATUS_DELETED = 'deleted';
 export const STATUS_DEPRECATED = 'deprecated';
-export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED] as const;
+/**
+ * RFC-0004: first-class draft state. A page created via `POST
+ * /api/v2/pages/drafts` (Phase 3) starts as `draft` and transitions to
+ * `published` exactly once when the author first saves. The transition
+ * is one-way — there is no path back to `draft`. Draft pages are
+ * visible only to their author: listing / search / backlink queries
+ * exclude other users' drafts (see `findListByStartWith` /
+ * `findListByCreator`), and collab WebSocket connections to a draft
+ * page are rejected for non-authors (see `routes/ts-rest/page-collab.ts`
+ * + `@crowi/collab` `onAuthenticate`).
+ */
+export const STATUS_DRAFT = 'draft';
+export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT] as const;
+
+/**
+ * `$or` status clause for "pages visible to a given viewer" (RFC-0004):
+ * published and legacy-null pages are always visible; a `draft` page is
+ * visible only to its creator.
+ *
+ * When the surrounding query is already pinned to a single `creator`,
+ * pass that as `creatorId` — the draft clause is then a bare
+ * `{ status: 'draft' }`, included only when `viewerId === creatorId`.
+ * When the query spans multiple creators, omit `creatorId` — the draft
+ * clause carries its own `creator: viewerId` constraint.
+ */
+export function visiblePageStatusOr(viewerId: Types.ObjectId | string, creatorId?: Types.ObjectId | string): Array<Record<string, unknown>> {
+  const or: Array<Record<string, unknown>> = [{ status: null }, { status: STATUS_PUBLISHED }];
+  if (creatorId === undefined) {
+    or.push({ status: STATUS_DRAFT, creator: viewerId });
+  } else if (String(viewerId) === String(creatorId)) {
+    or.push({ status: STATUS_DRAFT });
+  }
+  return or;
+}
+/**
+ * `$or` grant clause for "pages readable by a given user": public and
+ * legacy-null pages are always readable; restricted / specified / owner
+ * pages only when the user is in `grantedUsers`.
+ */
+export function visiblePageGrantOr(userId: Types.ObjectId | string): Array<Record<string, unknown>> {
+  return [
+    { grant: null },
+    { grant: GRANT_PUBLIC },
+    { grant: GRANT_RESTRICTED, grantedUsers: userId },
+    { grant: GRANT_SPECIFIED, grantedUsers: userId },
+    { grant: GRANT_OWNER, grantedUsers: userId },
+  ];
+}
+
+/** Builds the `Crowi:Page:NotFound` error that callers map onto a 404. */
+function pageNotFoundError(): Error {
+  const error = new Error('Page not found');
+  error.name = 'Crowi:Page:NotFound';
+  return error;
+}
+
 export const TYPE_PORTAL = 'portal';
 export const TYPE_USER = 'user';
 export const TYPE_PUBLIC = 'public';
@@ -72,6 +127,7 @@ export interface PageDocument extends Document {
   isPublished(): boolean;
   isDeleted(): boolean;
   isDeprecated(): boolean;
+  isDraft(): boolean;
   isPublic(): boolean;
   isPortal(): boolean;
   isCreator(user: any): boolean;
@@ -231,6 +287,11 @@ export default (crowi: Crowi) => {
     },
   );
 
+  // RFC-0004: backs `GET /api/v2/pages/drafts` — `find({ creator, status })`
+  // sorted by `createdAt` desc. Without it the listing scans a single-field
+  // index then sorts in memory.
+  pageSchema.index({ creator: 1, status: 1, createdAt: -1 });
+
   pageEvent.on('create', pageEvent.onCreate);
   pageEvent.on('update', pageEvent.onUpdate);
   pageEvent.on('delete', pageEvent.onDelete);
@@ -250,6 +311,10 @@ export default (crowi: Crowi) => {
 
   pageSchema.methods.isDeprecated = function () {
     return this.status === STATUS_DEPRECATED;
+  };
+
+  pageSchema.methods.isDraft = function () {
+    return this.status === STATUS_DRAFT;
   };
 
   pageSchema.methods.isPublic = function () {
@@ -607,6 +672,13 @@ export default (crowi: Crowi) => {
   pageSchema.statics.findPageByIdAndGrantedUser = async function (id, userData) {
     const pageData = await Page.findPageById(id);
 
+    // RFC-0004: a draft page is visible only to its author. Collapse a
+    // non-author's by-id access into a not-found error (not a grant
+    // error) so draft existence is never leaked.
+    if (pageData.isDraft() && (!userData || !pageData.isCreator(userData))) {
+      throw pageNotFoundError();
+    }
+
     if (userData && !pageData.isGrantedFor(userData)) {
       throw new Error('Page is not granted for the user'); // PAGE_GRANT_ERROR, null);
     }
@@ -623,9 +695,15 @@ export default (crowi: Crowi) => {
         return null;
       }
 
-      const pageNotFoundError = new Error('Page Not Found');
-      pageNotFoundError.name = 'Crowi:Page:NotFound';
-      throw pageNotFoundError;
+      throw pageNotFoundError();
+    }
+
+    // RFC-0004: a draft page is visible only to its author. By-path
+    // access by anyone else collapses into the same not-found error a
+    // missing page raises, so a draft's existence at a path is never
+    // leaked to non-authors.
+    if (pageData.isDraft() && (!userData || !pageData.isCreator(userData))) {
+      throw pageNotFoundError();
     }
 
     if (!pageData.isGrantedFor(userData)) {
@@ -750,7 +828,7 @@ export default (crowi: Crowi) => {
     const conditions: any = {
       creator: user._id,
       redirectTo: null,
-      $or: [{ status: null }, { status: STATUS_PUBLISHED }],
+      $or: visiblePageStatusOr(currentUser._id, user._id),
     };
 
     if (!user.equals(currentUser._id)) {
@@ -819,13 +897,7 @@ export default (crowi: Crowi) => {
     // FIXME: might be heavy
     const query: any = {
       redirectTo: null,
-      $or: [
-        { grant: null },
-        { grant: GRANT_PUBLIC },
-        { grant: GRANT_RESTRICTED, grantedUsers: userData._id },
-        { grant: GRANT_SPECIFIED, grantedUsers: userData._id },
-        { grant: GRANT_OWNER, grantedUsers: userData._id },
-      ],
+      $or: visiblePageGrantOr(userData._id),
     };
     debug('findListByStartWith query:', JSON.stringify({ path, opt, pathCondition, userData: userData._id }));
     const q = Page.find(query)
@@ -839,7 +911,7 @@ export default (crowi: Crowi) => {
 
     if (!includeDeletedPage) {
       q.and({
-        $or: [{ status: null }, { status: STATUS_PUBLISHED }],
+        $or: visiblePageStatusOr(userData._id),
       } as any);
     }
 

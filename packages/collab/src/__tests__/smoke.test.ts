@@ -231,6 +231,58 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     await expect(onAuthenticate(makeAuthPayload('', new mongoose.Types.ObjectId().toString()))).rejects.toThrow(/authentication required/);
   });
 
+  // RFC-0004 Phase 2: a draft page may be edited only by its author.
+  // The api-side wsToken route applies the same gate at sign time;
+  // this re-check closes the window where a token was minted before
+  // the page became a draft, or replayed across users.
+  describe('draft page access (RFC-0004)', () => {
+    /** Seed a page with the given status / creator and return its id. */
+    const seedPage = async (status: string, creator: mongoose.Types.ObjectId) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const page = await (models.Page as any).create({
+        path: `/__collab-draft-${status}-${Date.now()}-${Math.random()}`,
+        creator,
+        grant: 1, // GRANT_PUBLIC
+        status,
+      });
+      return page._id.toString();
+    };
+
+    it('accepts the draft author', async () => {
+      const authorId = new mongoose.Types.ObjectId();
+      const pageId = await seedPage('draft', authorId);
+      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: authorId.toString(), pageId, readonly: false });
+
+      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+      const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
+      expect(ctx.userId).toBe(authorId.toString());
+      expect(ctx.pageId).toBe(pageId);
+    });
+
+    it('rejects a non-author connecting to a draft page', async () => {
+      const authorId = new mongoose.Types.ObjectId();
+      const intruderId = new mongoose.Types.ObjectId();
+      const pageId = await seedPage('draft', authorId);
+      // Token is valid (correct signature / pageId) but minted for a
+      // different user — the draft author gate must still reject it.
+      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: intruderId.toString(), pageId, readonly: false });
+
+      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+      await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow(/permission denied/);
+    });
+
+    it('does not gate a published page on authorship', async () => {
+      const authorId = new mongoose.Types.ObjectId();
+      const otherId = new mongoose.Types.ObjectId();
+      const pageId = await seedPage('published', authorId);
+      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: otherId.toString(), pageId, readonly: false });
+
+      const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
+      const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
+      expect(ctx.userId).toBe(otherId.toString());
+    });
+  });
+
   it('onLoadDocument falls back to revision body when yjsState is corrupt', async () => {
     // Y.applyUpdate throws on an arbitrary byte sequence; the hook
     // must catch + warn + reseed from the revision body so a one-bad-

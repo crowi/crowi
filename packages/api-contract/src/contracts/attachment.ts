@@ -1,6 +1,13 @@
 import { initContract } from '@ts-rest/core';
 import { z } from 'zod';
-import { AddAttachmentResponseSchema, AttachmentErrorSchema, ListAttachmentsResponseSchema, RemoveAttachmentResponseSchema } from '../schemas/attachment';
+import {
+  AddAttachmentResponseSchema,
+  AttachmentErrorSchema,
+  ListAttachmentsResponseSchema,
+  RemoveAttachmentResponseSchema,
+  UploadAttachmentErrorSchema,
+  UploadAttachmentResponseSchema,
+} from '../schemas/attachment';
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 
 const c = initContract();
@@ -61,6 +68,44 @@ export const attachmentContract = c.router({
       500: AttachmentErrorSchema,
     },
     summary: 'Add an attachment to a page',
+  },
+
+  /**
+   * RFC-0004 Phase 6 — direct upload for the editor's paste / drag-and-drop
+   * handlers. The client POSTs the file (multipart) with the owning
+   * `pageId` (for the write-permission check) and an `intent` tag, then
+   * splices the returned canonical `url` straight into the Markdown
+   * source. Distinct from `addAttachment` in that it is rate-limited
+   * (20 uploads/min/user → 429 + `Retry-After`), enforces the editor's
+   * size / MIME caps, and returns the lean `{ url, filename, mimeType,
+   * sizeBytes }` shape the editor needs rather than the full attachment
+   * document. Browser-side upload progress is observed by the client via
+   * `XMLHttpRequest.upload.onprogress`; the server just receives the
+   * multipart body normally.
+   */
+  uploadAttachment: {
+    method: 'POST',
+    path: '/attachments/upload',
+    contentType: 'multipart/form-data',
+    // ts-rest validates `body` against the *raw* request before multer
+    // has parsed the multipart payload, so the multipart fields (`file`,
+    // `pageId`, `intent`) are not yet on `req.body`. Mirroring
+    // `addAttachment`, the body schema stays permissive and the handler
+    // validates the text fields itself after multer runs.
+    body: z.object({
+      file: z.any().describe('Attachment binary'),
+    }),
+    responses: {
+      200: UploadAttachmentResponseSchema,
+      400: UploadAttachmentErrorSchema,
+      401: AuthenticationRequiredErrorSchema,
+      403: UploadAttachmentErrorSchema,
+      413: UploadAttachmentErrorSchema,
+      415: UploadAttachmentErrorSchema,
+      429: UploadAttachmentErrorSchema,
+      500: InternalServerErrorSchema,
+    },
+    summary: 'Upload an attachment from the editor (paste / drag-and-drop)',
   },
 
   /**

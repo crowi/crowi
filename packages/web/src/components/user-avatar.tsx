@@ -10,11 +10,12 @@ interface UserAvatarProps {
     username: string;
     image?: string | null;
   };
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
 const sizeClasses = {
+  xs: 'h-5 w-5',
   sm: 'h-6 w-6',
   md: 'h-8 w-8',
   xl: 'h-14 w-14',
@@ -22,6 +23,7 @@ const sizeClasses = {
 } as const;
 
 const sizePx = {
+  xs: 20,
   sm: 24,
   md: 32,
   xl: 56,

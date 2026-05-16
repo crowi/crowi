@@ -3,6 +3,9 @@ import { markdown } from '@codemirror/lang-markdown';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
+import { autocompleteExtension } from './autocomplete-extension';
+import { dropHandler } from './drop-handler';
+import { pasteHandler } from './paste-handler';
 
 export interface BuildExtensionsProps {
   readonly?: boolean;
@@ -31,6 +34,30 @@ export interface BuildExtensionsProps {
    * the editor-foundation behaviour untouched for non-collab callers.
    */
   disableHistory?: boolean;
+  /**
+   * RFC-0004 Phase 5 — enable the `@username` / `[[page]]` autocomplete
+   * extension. Default `true` so every editor surface gets completion;
+   * tests / bare mounts that don't want network-backed sources can
+   * pass `false`.
+   */
+  autocomplete?: boolean;
+  /**
+   * RFC-0004 Phase 6 — enable the paste handler (URL smart-link +
+   * image-blob upload). Requires the owning `pageId` so an image paste
+   * can upload to the page. Omit (the default) for bare mounts / tests
+   * that have no page context — the editor then uses CodeMirror's
+   * default paste only.
+   */
+  paste?: { pageId: string };
+  /**
+   * RFC-0004 Phase 7 — enable the drag-and-drop upload handler. Like
+   * `paste`, requires the owning `pageId` for the upload's
+   * write-permission check. D&D is read-only-aware at drop time
+   * (`EditorState.readOnly`), so the same builder output works for both
+   * the writable and the cap-reached read-only editor. Omit for bare
+   * mounts / tests with no page context.
+   */
+  dnd?: { pageId: string };
 }
 
 /**
@@ -56,14 +83,32 @@ export interface BuildExtensionsProps {
  *  - `EditorView.updateListener.of(...)` to bridge document changes
  *    back to React state. We skip the dispatch when no `onChange` is
  *    supplied so build-extensions stays cheap to call from tests.
+ *  - `autocompleteExtension()` after the markdown language so its
+ *    completion source can read the markdown syntax tree (suppression
+ *    contexts), before `extraExtensions` so a caller can still layer.
+ *  - `pasteHandler` / `dropHandler` after autocomplete and before
+ *    `extraExtensions` — both attach DOM event handlers, so ordering vs
+ *    autocomplete is immaterial, but keeping them before
+ *    `extraExtensions` lets a caller still override.
  *  - `extraExtensions` last so caller-supplied extensions win on
  *    precedence ties (CodeMirror layers later extensions on top).
  */
 export function buildExtensions(props: BuildExtensionsProps): Extension[] {
-  const { readonly = false, extraExtensions, onChange, disableHistory = false } = props;
+  const { readonly = false, extraExtensions, onChange, disableHistory = false, autocomplete = true, paste, dnd } = props;
   return [
     markdown(),
     syntaxHighlighting(defaultHighlightStyle),
+    autocomplete ? autocompleteExtension() : [],
+    // RFC-0004 Phase 6 — paste handler (URL smart-link + image upload).
+    // Placed before `extraExtensions` so a caller-supplied paste handler
+    // (none today) could still take precedence; a no-op `[]` when the
+    // caller passes no page context.
+    paste ? pasteHandler({ pageId: paste.pageId }) : [],
+    // RFC-0004 Phase 7 — drag-and-drop upload handler. Independent of
+    // the paste handler (different DOM events) and likewise a no-op `[]`
+    // without a page context. Read-only suppression is decided per drop
+    // from `EditorState.readOnly`, so this needs no readonly prop.
+    dnd ? dropHandler({ pageId: dnd.pageId }) : [],
     // RFC-0003 Phase 7: skip the built-in undo stack + its keymap when
     // a Yjs `UndoManager` is taking over via `extraExtensions`. The
     // `defaultKeymap` is kept (it carries cursor / selection / line

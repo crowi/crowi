@@ -547,6 +547,11 @@ const EditorPane = function EditorPane({
         session={session}
         aria-label={ariaLabel}
         className={editorClassName}
+        // RFC-0004: the session-driven variant has no `pageId` prop, so
+        // the paste / drag-and-drop upload handlers need `uploadPageId`
+        // passed explicitly — without it `uploadConfig` is undefined and
+        // both handlers stay detached.
+        uploadPageId={realtimePageId}
         // yText → body mirror so the preview + attachment markdown
         // insertion paths keep working without a Y.Text dependency.
         onYTextChange={onChange}
