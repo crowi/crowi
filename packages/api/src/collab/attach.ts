@@ -11,6 +11,7 @@ import type { Extension } from '@hocuspocus/server';
 import type Crowi from 'src/crowi';
 import { getEditorCapCounter } from 'src/util/collab-cap';
 import { createWsTokenUtil } from 'src/util/ws-token';
+import { createPresenceCollabDeps } from 'src/service/presence';
 import { buildCollabRedisExtension } from './extension-redis';
 
 const debug = Debug('crowi:collab:attach');
@@ -184,6 +185,12 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     editorCapCounter,
     pageEventPublisher,
     extensions,
+    // RFC-0005 — inject the api-side presence adapter so a collab
+    // connect / disconnect publishes a page-presence viewer-list
+    // change (the `✏️` editing badge). `@crowi/collab` is
+    // crowi-agnostic; this adapter resolves the process-shared
+    // presence service lazily and swallows failures.
+    presence: createPresenceCollabDeps(crowi),
   });
 
   // `noServer: true` — the upgrade handshake is owned by the api

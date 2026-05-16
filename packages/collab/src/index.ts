@@ -28,6 +28,7 @@ export {
 } from './save-flow';
 export { createCompactor, type Compactor, type CompactPageDeps, type CompactPageResult } from './compaction';
 export { createContributorsTracker, type ContributorsTracker } from './contributors';
+export { type PresenceHooks, noopPresenceHooks } from './presence';
 export { CONTENT_FIELD } from './yjs-doc';
 export { payloadToUint8Array } from './yjs-payload';
 
