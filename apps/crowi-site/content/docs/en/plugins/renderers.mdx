@@ -1,0 +1,94 @@
+---
+title: Renderer plugins
+description: Plugins that extend Markdown rendering — emoji / KaTeX / PlantUML and more
+---
+
+Renderer plugins add parse, transform, and render behaviour to Crowi's
+server-side Markdown pipeline. For the design details, see
+[RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md)
+(Renderer Plugin Architecture).
+
+This page covers the **overview and list** of renderer plugins. For the
+syntax you can actually write as a user, see
+[Markdown syntax](../guide/markdown); for plugin installation steps, see
+[Managing plugins](./managing).
+
+## How the renderer pipeline works
+
+Crowi's renderer rests on three design commitments:
+
+- **SSR-first**: Every renderer plugin must produce HTML on the server.
+  Client-side rendering of plugin content is forbidden because it causes
+  layout shift.
+- **No external API calls while editing**: Plugins that fetch external
+  data reserve space with a placeholder while editing and only fetch at
+  explicit moments such as page save.
+- **No new syntax (mostly)**: Plugins extend behaviour, not grammar.
+
+The core renderer pipeline (TOC / wikilink / mention / code block) is
+registered **before** plugins. Renderer plugins append on top of it.
+
+## First-party renderer plugins
+
+The Crowi repository ships the following four renderer plugins.
+
+| Plugin | Role | External dependency | Status |
+| ------ | ---- | ------------------- | ------ |
+| `@crowi/plugin-renderer-emoji` | Converts shortcodes like `:smile:` to Unicode emoji | None | Landed (Phase 6) |
+| `@crowi/plugin-renderer-katex` | Renders `$inline$` / `$$display$$` LaTeX math to HTML server-side via KaTeX | None | Landed (Phase 6) |
+| `@crowi/plugin-renderer-plantuml` | Renders ` ```plantuml ` blocks via a PlantUML server and embeds SVG/PNG | PlantUML server | Landed (Phase 6) |
+| `@crowi/plugin-renderer-crowi-legacy` | Reproduces Crowi v1 syntax quirks (e.g. `##hoge` heading without a space) | None | Landed (Phase 6), default-off |
+
+> **Tip**: `@crowi/plugin-renderer-github-embed` (GitHub PR / Issue
+> cards) and `@crowi/plugin-renderer-mermaid` (Mermaid diagrams) are
+> planned in RFC-0002, but they are in progress as Phase 7 / Phase 6.1
+> respectively and have not shipped yet.
+
+### emoji
+
+`@crowi/plugin-renderer-emoji` replaces shortcodes like `:smile:` with
+Unicode emoji via `remark-emoji`. It does no I/O and no caching. Code
+blocks and inline code are intentionally skipped, and unknown shortcodes
+(`:not-emoji:`) pass through verbatim. An `accessible` mode that wraps
+emoji in `<span role="img" aria-label="smile">` for screen readers is on
+by default.
+
+### KaTeX
+
+`@crowi/plugin-renderer-katex` parses `$inline$` and `$$display$$` LaTeX
+math via `remark-math` and renders it to HTML via
+`katex.renderToString`. It supports the standard KaTeX commands. Macro
+and `\newcommand` customisation is planned for a future release.
+
+### PlantUML
+
+`@crowi/plugin-renderer-plantuml` renders ` ```plantuml ` fenced code
+blocks by sending them to an operator-configured PlantUML server. The
+diagram source is deflate + base64 encoded, and the SVG (sanitised) or
+PNG returned by the server is embedded.
+
+This plugin requires an external server. Crowi's `docker-compose.yml`
+ships a PlantUML server (`:8080`), so it works out of the box in
+development. The server URL is changeable via the admin config
+(`serverUrl`), and the output format (`svg` / `png`) is selectable.
+Render results are cached with a 1-hour TTL, and failures such as
+network errors are cached as errors for 5 minutes.
+
+### crowi-legacy
+
+`@crowi/plugin-renderer-crowi-legacy` is a compatibility plugin that
+reproduces Crowi v1 non-standard-Markdown quirks (e.g. treating `##hoge`
+with no space after the hashes as a heading). It is bundled but
+**off by default**, and migration users from v1 enable it from the
+admin UI.
+
+Note that the v1 behaviour of turning a single newline into `<br>` was
+in this plugin in an earlier development stage, but it has since moved
+into the core pipeline as a Crowi-wide default.
+
+## Related pages
+
+- Markdown syntax for users → [Markdown syntax](../guide/markdown)
+- Installing and configuring plugins → [Managing plugins](./managing)
+- How plugins work → [Plugin architecture](./overview)
+- Building your own renderer → [Developing plugins](./developing)

@@ -1,22 +1,122 @@
 ---
 title: Getting started
-description: Install and set up Crowi
+description: A 5-minute quick start for running Crowi 2.0 locally
 ---
 
-This page is a placeholder. Detailed setup instructions are coming soon.
+This page walks through the fastest way to get Crowi 2.0 (codename
+*Reignite*) running on your machine. It takes about 5 minutes.
+
+> **Caution**: Crowi v2 is under active alpha development. There is no
+> stable release yet. **Do not run it in production.** What follows is a
+> local development / evaluation setup only. For a production-grade
+> install, see [Installation](./operations/installation).
 
 ## Requirements
 
-- Node.js 22.x
-- MongoDB
-- Redis
-- Elasticsearch (optional)
+Local development needs the following:
 
-## Quick start
+| Software | Version | Purpose |
+| -------- | ------- | ------- |
+| Node.js | 22.x | Runtime (pinned by the repo's `.nvmrc` / `engines`) |
+| pnpm | 9.x or later | Package manager (the monorepo uses pnpm workspaces) |
+| Docker / Docker Compose | latest | Runs MongoDB / Redis / Elasticsearch / PlantUML in containers |
+
+The middleware Crowi depends on (MongoDB / Redis / Elasticsearch /
+PlantUML) is started together by the bundled `docker-compose.yml`, so
+you do not need to install them individually.
+
+> **Tip**: The Node.js version is recorded as `22` in `.nvmrc`. If you
+> use `nvm`, run `nvm use` at the repo root to switch to the correct
+> version.
+
+## 1. Clone the repository
 
 ```bash
 git clone https://github.com/crowi/crowi.git
 cd crowi
+```
+
+## 2. Install dependencies
+
+```bash
 pnpm install
+```
+
+`pnpm install` also sets up the lefthook Git hooks (pre-commit /
+pre-push) automatically.
+
+## 3. Start the middleware
+
+`docker compose up -d` starts the middleware required for development
+in the background.
+
+```bash
+docker compose up -d
+```
+
+By default the following four services come up. The application itself
+(api / web) is started on the host via `pnpm dev`, so it is not
+included here.
+
+| Service | Port | Purpose |
+| ------- | ---- | ------- |
+| MongoDB | 27017 | Persistence for pages / revisions / users / etc. |
+| Redis | 6379 | Sessions / real-time collaboration pub/sub |
+| Elasticsearch | 9200 | Full-text search backend (optional) |
+| PlantUML | 8080 | PlantUML diagram rendering server (optional) |
+
+## 4. Prepare the environment file
+
+Copy `.env.example` at the repo root to `.env`. The api loads the root
+`.env` via `dotenv` at boot.
+
+```bash
+cp .env.example .env
+```
+
+The defaults in `.env.example` are enough to boot for local development,
+but setting `CROWI_ENCRYPTION_KEY` is strongly recommended. Without it,
+sensitive config (OAuth secrets, etc.) is stored as plaintext and a
+warning is logged at startup.
+
+Run:
+
+```bash
+pnpm --filter @crowi/api crypto:gen-key
+```
+
+to generate a 32-byte AES-256 key, then paste the output into
+`CROWI_ENCRYPTION_KEY` in `.env`. See [Config encryption](./operations/encryption)
+for details.
+
+## 5. Start the development server
+
+```bash
 pnpm dev
 ```
+
+`pnpm dev` starts api, web, and all plugins concurrently through
+Turborepo. Once running, the following URLs are available:
+
+| Service | URL |
+| ------- | --- |
+| Web (frontend) | http://localhost:4302 |
+| API | http://localhost:4301 |
+
+Open http://localhost:4302 in a browser to see Crowi. On the first run
+an installer screen appears — create your administrator user there.
+
+To start just one side, use these filtered scripts:
+
+```bash
+pnpm dev:api     # api + plugins only (no Next.js)
+pnpm dev:web     # Next.js frontend only
+pnpm dev:site    # crowi.wiki LP + docs (this site, :4303)
+```
+
+## Next steps
+
+- Production deployment → [Installation](./operations/installation)
+- Page creation / editing basics → [Pages](./guide/pages)
+- The full list of settings → [Configuration](./operations/configuration)
+- Want to contribute? → [Contributing](./reference/contributing)

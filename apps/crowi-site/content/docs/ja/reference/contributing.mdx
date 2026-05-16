@@ -1,0 +1,124 @@
+---
+title: コントリビュート
+description: Crowi 2.0 の開発に参加するための開発フロー・規約ガイド
+---
+
+このページは、Crowi 2.0 のコードベースに変更を加えるための開発フローと
+規約をまとめたものです。開発環境のセットアップ自体は
+[はじめに](../getting-started) を先に済ませてください。
+
+> **注意**: Crowi v2 は alpha 開発中です。ここで説明する規約は開発が
+> 進むにつれて変わる可能性があります。
+
+## 開発コマンド
+
+スクリプトはリポジトリルートと各パッケージの `package.json` に定義されて
+います。`pnpm <script>` は Turborepo によって自動でパッケージを絞り込み
+ます。
+
+| コマンド | 用途 |
+| -------- | ---- |
+| `pnpm dev` | api + web + プラグインを並行起動 |
+| `pnpm dev:api` / `pnpm dev:web` | 片側だけ起動 |
+| `pnpm test` | 全パッケージのテスト (api は Jest + supertest + mongodb-memory-server) |
+| `pnpm type-check` | 型チェック (api + web + site) |
+| `pnpm lint` | Lint。**errors=0 が必須** (warning は許容) |
+| `pnpm format` | Biome によるフォーマット |
+| `pnpm build` | 全パッケージのビルド |
+
+特定のパッケージだけ動かしたいときは
+`pnpm --filter @crowi/api <script>` のように絞り込めます。
+
+> **Tip**: ts-rest の契約 (`packages/api-contract`) を編集したら、
+> `pnpm --filter @crowi/api-contract build` で dts を再生成してください。
+> turbo パイプラインは `dev` / `build` / `test` で `^build` を自動実行
+> しますが、単発のスクリプトでは手動が必要になることがあります。
+
+## Lint と Format
+
+Crowi は **Biome** をフォーマッタに、**ESLint** を Linter に使い分けて
+います。
+
+- Lint は `pnpm lint` で実行され、**エラー 0** が必須です。warning は
+  許容されますが、エラーは pre-push フックで弾かれます。
+- Format は Biome が担当します。ステージされたファイルに対して
+  pre-commit フックが自動実行するため、通常は手動実行は不要です。
+  フックをバイパスした場合のみ `pnpm format` を使ってください。
+- 既存の `any` を見かけても、無関係なコードまで巻き込んで直さないで
+  ください。差分は触っている範囲に絞ります。新たな `any` の追加は
+  避けてください。
+
+## lefthook フック
+
+Git フックは `lefthook` で管理され、`pnpm install` 時に自動でセットアップ
+されます。
+
+| フック | 内容 |
+| ------ | ---- |
+| pre-commit | ステージされたファイルに Biome フォーマットを適用 |
+| pre-push | `pnpm lint` を実行 (errors=0 必須) |
+
+## コミットメッセージ
+
+コミットメッセージは **Conventional Commits** 形式に従います。
+
+```
+feat(api): add page export endpoint
+fix(web): correct notification bell badge count
+refactor(merge): deduplicate ws token signer
+chore(config): bump dev ports
+docs(todo): update phase status
+```
+
+- 型は `feat` / `fix` / `refactor` / `chore` / `docs` などを使い、
+  スコープに `api` / `web` / `api-contract` などを書きます。
+- 変更の意図が自明でないときは、なぜその変更をしたのかを説明する
+  本文を複数段落で添えてください。
+
+## Changesets
+
+リリースノートの蓄積には `@changesets/cli` を使います。v2 開発中も
+`pnpm changeset add` で各変更を `.changeset/*.md` として蓄積していき、
+将来のリリース時にリリースノートが自動生成されます。
+
+- changeset は「ユーザー価値の単位」で 1 つ作ります。機能追加・バグ修正・
+  破壊的変更が対象です。
+- 内部リファクタ・コード整理・lint 修正・フォーマット・テスト追加だけ、
+  あるいはドキュメント更新だけの変更には changeset は不要です。判断基準は
+  「次の changelog に書いて意味があるか」です。
+- bump レベルは、バグ修正なら `patch`、新機能なら `minor`、破壊的変更
+  なら `major` を選びます。
+
+```bash
+pnpm changeset add        # package + bump レベル + 概要を対話的に選ぶ
+pnpm changeset status     # 蓄積された未公開 changeset 一覧
+```
+
+## TypeScript の指針
+
+- 新たな `any` は追加しません。`any` のあるコードを触るときは、機を見て
+  適切な型へ少しずつ置き換えます。
+- 1 つの変更で無関係なコードを巻き込まず、差分は焦点を絞ります。
+- フィールドの再定義より `Pick<>` / `Omit<>` を優先します。
+- Mongoose ドキュメントの型は `models/xxx.ts` の `XxxDocument` を import
+  します。
+
+## 移行を伴う変更
+
+Crowi 2.0 への移行は機能単位で進みます。レガシーの Express コントローラ +
+Swig ビューを ts-rest エンドポイント + Next.js ページとして再実装します。
+
+- 移行コミットでは無関係なレガシーコードに触れないでください。
+- 既存のデプロイが段階的に切り替えられるよう、可能な範囲でレガシー
+  エンドポイントとのワイヤフォーマット / 挙動の互換を保ってください。
+- 新しいコードは `routes/ts-rest/`、`(auth)/` / `(admin)/`、`lib/`、
+  `components/` の下に置きます。レガシーコードは `controllers/`、
+  `routes/api/` などに残します。
+
+現状のフェーズ状況はリポジトリの `TODO.md` に記載されています。
+
+## 関連ページ
+
+- 開発環境のセットアップ → [はじめに](../getting-started)
+- アーキテクチャ全体像 → [アーキテクチャ](./architecture)
+- 設計提案の一覧 → [RFC インデックス](./rfcs)

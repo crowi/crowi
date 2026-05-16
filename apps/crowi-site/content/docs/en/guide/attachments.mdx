@@ -1,0 +1,101 @@
+---
+title: Attachments
+description: Attaching files and images to pages
+---
+
+In Crowi, you can attach files to any page. Screenshots, PDFs, log files —
+anything you want to keep alongside a page's body can be uploaded as an
+attachment.
+
+## Where attachments live
+
+Attachments are stored **bound to an existing page**. When you open a page,
+an "Attachments" section appears in the page body footer and lists every
+attachment linked to that page.
+
+> **Note**: Attachments require the page to exist first. Crowi 1.x had a
+> behaviour where uploading an attachment could implicitly create an empty
+> page (`page_id=0`); this was removed in v2. To attach a file to a new
+> page, create and save the page first, then add the attachment.
+
+## Adding a file
+
+Use the Attachments section in the page footer to pick a file and upload
+it. Once the upload finishes, the file is added to the list right away,
+along with a record of who uploaded it and when.
+
+Internally, an attachment is sent to `POST /api/v2/pages/:pageId/attachments`
+as `multipart/form-data`. The uploaded file is stored via the configured
+storage driver (local disk / S3, depending on the operator's setup) and a
+single `Attachment` document is created.
+
+For choosing a storage backend, see
+[Storage configuration](../operations/storage).
+
+## Inline image previews
+
+When an attachment is an image (PNG / JPEG / GIF / WebP, etc.), the
+attachment list shows an **inline thumbnail preview** instead of a
+download link. Non-image files (PDFs, zips, text, etc.) are shown as
+download links.
+
+Each attachment is assigned a URL of the form `/api/v2/attachments/<id>`.
+Hitting that URL delivers the actual file: images are served `inline` in
+the browser, while other files are downloaded under their original
+filename.
+
+> **Tip**: Attachment delivery enforces the page's view permission. Even
+> if someone knows an attachment's URL, the file is not delivered to a
+> user who cannot view the owning page (a 404 is returned to hide its
+> existence).
+
+### Images in the page body
+
+To display an image inside the Markdown body, reference the attachment's
+URL with image syntax.
+
+```markdown
+![Screenshot](/api/v2/attachments/64f0a1b2c3d4e5f6a7b8c9d0)
+```
+
+> **Note**: **Drag-and-drop upload** into the editor and **automatic
+> insertion of uploaded images into the body** are not yet implemented in
+> the v2 alpha. For now, the workflow is to upload via the Attachments
+> section first, then paste the assigned URL into the body manually.
+> Support is planned for a future release.
+
+## Removing an attachment
+
+You can remove an attachment from each item in the attachment list.
+Removing it deletes both the `Attachment` document and the actual file in
+storage.
+
+Only users matching one of the following can remove an attachment:
+
+| Condition | Description |
+| --------- | ----------- |
+| Attachment creator | The user who uploaded the file |
+| Administrator | A user with the `admin` role |
+| Granted user of the page | A user listed in the page's `grantedUsers` |
+
+> **Note**: In Crowi 1.x anyone could delete an attachment; in v2
+> permission is restricted as shown above.
+
+## Compatibility with legacy URLs
+
+Crowi 1.x URLs of the form `/files/:id` are 302-redirected to the new
+delivery endpoint `/api/v2/attachments/:id`. Attachment URLs embedded into
+page bodies before the migration keep working, so there is no need to
+rewrite older pages.
+
+## When a page is permanently deleted
+
+When a page is permanently deleted from the trash, the attachments linked
+to that page are deleted as well, including their storage objects. See
+[Trash](./trash) for details.
+
+## Related pages
+
+- [Working with pages](./pages) — creating and editing pages
+- [Writing Markdown](./markdown) — image syntax in the body
+- [Storage configuration](../operations/storage) — where attachments are stored (local / S3)

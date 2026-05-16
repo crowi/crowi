@@ -1,22 +1,119 @@
 ---
 title: はじめに
-description: Crowi のインストールとセットアップ手順
+description: Crowi 2.0 をローカルで動かすまでの 5 分間クイックスタート
 ---
 
-このページは仮の内容です。Crowi のインストール手順は近日中にここに記載されます。
+このページでは、Crowi 2.0 (コードネーム *Reignite*) を手元のマシンで
+起動するまでの最短手順を説明します。所要時間はおよそ 5 分です。
+
+> **注意**: Crowi v2 は現在 alpha 開発中です。安定版リリースはまだ
+> ありません。**本番環境では使用しないでください。** ここで説明するのは
+> あくまで開発・評価用のローカル起動手順です。本番向けの詳細な
+> インストールは [インストール](./operations/installation) を参照して
+> ください。
 
 ## 動作環境
 
-- Node.js 22.x
-- MongoDB
-- Redis
-- (任意) Elasticsearch
+ローカル開発には以下が必要です。
 
-## クイックスタート
+| ソフトウェア | バージョン | 用途 |
+| ------------ | ---------- | ---- |
+| Node.js | 22.x | ランタイム (リポジトリの `.nvmrc` / `engines` で固定) |
+| pnpm | 9.x 以上 | パッケージマネージャ (monorepo は pnpm workspaces) |
+| Docker / Docker Compose | 最新 | MongoDB / Redis / Elasticsearch / PlantUML をコンテナで起動 |
+
+Crowi 本体が必要とするミドルウェア (MongoDB / Redis / Elasticsearch /
+PlantUML) は、リポジトリ同梱の `docker-compose.yml` でまとめて立ち上げる
+ため、個別にインストールする必要はありません。
+
+> **Tip**: Node.js のバージョンは `.nvmrc` に `22` と記載されています。
+> `nvm` を使っているなら、リポジトリのルートで `nvm use` を実行すると
+> 正しいバージョンに切り替わります。
+
+## 1. リポジトリの取得
 
 ```bash
 git clone https://github.com/crowi/crowi.git
 cd crowi
+```
+
+## 2. 依存パッケージのインストール
+
+```bash
 pnpm install
+```
+
+`pnpm install` の過程で lefthook の Git フック (pre-commit / pre-push) も
+自動でセットアップされます。
+
+## 3. ミドルウェアの起動
+
+`docker compose up -d` で、開発に必要なミドルウェアをバックグラウンドで
+起動します。
+
+```bash
+docker compose up -d
+```
+
+デフォルトでは以下の 4 サービスが立ち上がります。アプリ本体 (api / web)
+はホスト側で `pnpm dev` から起動するため、ここでは含まれません。
+
+| サービス | ポート | 用途 |
+| -------- | ------ | ---- |
+| MongoDB | 27017 | ページ・リビジョン・ユーザーなどの永続化先 |
+| Redis | 6379 | セッション / リアルタイム共同編集の pub/sub |
+| Elasticsearch | 9200 | 全文検索バックエンド (任意) |
+| PlantUML | 8080 | PlantUML 図のレンダリングサーバ (任意) |
+
+## 4. 環境変数ファイルの用意
+
+リポジトリルートの `.env.example` を `.env` にコピーします。api は起動時に
+ルートの `.env` を `dotenv` で読み込みます。
+
+```bash
+cp .env.example .env
+```
+
+ローカル開発では `.env.example` の初期値のままでも起動できますが、
+`CROWI_ENCRYPTION_KEY` の設定を強く推奨します。未設定の場合、機密設定
+(OAuth シークレットなど) が平文で保存され、起動時に警告が出ます。
+
+```bash
+pnpm --filter @crowi/api crypto:gen-key
+```
+
+で 32 バイトの AES-256 鍵を生成し、出力値を `.env` の
+`CROWI_ENCRYPTION_KEY` に貼り付けてください。詳細は
+[設定の暗号化](./operations/encryption) を参照してください。
+
+## 5. 開発サーバの起動
+
+```bash
 pnpm dev
 ```
+
+`pnpm dev` は Turborepo 経由で api・web・各プラグインを並行起動します。
+起動後、以下の URL でアクセスできます。
+
+| サービス | URL |
+| -------- | --- |
+| Web (フロントエンド) | http://localhost:4302 |
+| API | http://localhost:4301 |
+
+ブラウザで http://localhost:4302 を開くと Crowi の画面が表示されます。
+初回はインストーラ画面が出るので、管理者ユーザーを作成してください。
+
+片側だけ起動したい場合は、次の絞り込みスクリプトも使えます。
+
+```bash
+pnpm dev:api     # api + プラグインのみ (Next.js なし)
+pnpm dev:web     # Next.js フロントエンドのみ
+pnpm dev:site    # crowi.wiki LP + ドキュメント (このサイト、:4303)
+```
+
+## 次のステップ
+
+- 本番環境への導入手順 → [インストール](./operations/installation)
+- ページの作成・編集の基本 → [ページ](./guide/pages)
+- 設定項目の一覧 → [設定](./operations/configuration)
+- 開発に参加したい場合 → [コントリビュート](./reference/contributing)

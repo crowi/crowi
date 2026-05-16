@@ -1,0 +1,145 @@
+---
+title: 設定
+description: 環境変数と crowi.config.json による Crowi の設定
+---
+
+Crowi 2.0 の設定は、大きく 3 つのレイヤーに分かれています。
+
+1. **環境変数** (`.env` / プロセス環境) — 接続先や暗号鍵など、起動時に
+   必要な値。
+2. **`crowi.config.json`** — どのプラグインを読み込み、どのドライバを
+   有効にするか。
+3. **管理画面の設定** — アプリのタイトルや OAuth、メール、ストレージの
+   詳細値。MongoDB の `Config` コレクションに保存されます。
+
+このページでは 1 と 2 を扱います。3 の設定値については
+[管理画面](./admin) を参照してください。
+
+## 環境変数
+
+API は起動時に、カレントディレクトリ (リポジトリルート) の `.env` を
+`dotenv` で読み込みます。`.env.example` をコピーして編集してください。
+
+```bash
+cp .env.example .env
+```
+
+### 主要な環境変数
+
+| 変数名 | 必須 | 用途 |
+| ------ | ---- | ---- |
+| `MONGO_URI` | はい | MongoDB の接続文字列 (例: `mongodb://localhost/crowi`) |
+| `PORT` | いいえ (デフォルト `4301`) | API サーバの待ち受けポート |
+| `NODE_ENV` | いいえ | `development` / `production` |
+| `REDIS_URL` | 条件付き | セッション・Socket.IO アダプタ・リアルタイム共同編集の pub/sub・編集者上限カウンタ。シングルインスタンスでは省略可、**マルチインスタンス構成では必須**。TLS には `rediss://` を使用 |
+| `PASSWORD_SEED` | はい | レガシーパスワードハッシュのシード (フォールバック検証で使用) |
+| `CLIENT_URL` | 本番では必須 | CORS の許可オリジン。開発環境では localhost が自動許可される |
+| `CROWI_ENCRYPTION_KEY` | 推奨 | 機密 Config を AES-256-GCM で暗号化する 32 バイトのマスターキー (base64)。未設定時は平文保存にフォールバック。詳細は [機密設定の暗号化](./encryption) |
+| `ELASTICSEARCH_URI` | 任意 | 全文検索バックエンド。`@crowi/plugin-search-elasticsearch` と組み合わせる |
+| `SECRET_TOKEN` | いいえ | セッション関連のシークレット |
+
+### リアルタイム共同編集まわりの変数
+
+リアルタイム共同編集 (RFC-0003) で使う変数です。詳細は
+[リアルタイム共同編集の運用](./realtime-collab) を参照してください。
+
+| 変数名 | 必須 | 用途 |
+| ------ | ---- | ---- |
+| `WS_TOKEN_SECRET` | マルチで必須 | WebSocket 接続認証に使う短命 JWT (wsToken) の HMAC 署名鍵。マルチインスタンスでは全レプリカで**同じ値**にする。未設定時はプロセスごとにランダム生成され、警告ログが出る |
+| `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | 1 ページあたりの同時編集者上限。超過したクライアントは read-only で接続する |
+| `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが接続する WebSocket URL。未指定時は `window.location` から導出する。`/collab/*` を API と別ホストに分離している場合のみ設定 |
+| `NEXT_PUBLIC_API_URL` | Web で必要 | ブラウザから見た API のベース URL |
+
+> **Tip**: `WS_TOKEN_SECRET` と `CROWI_ENCRYPTION_KEY` はどちらも
+> `openssl rand -base64 32` で生成できます。`CROWI_ENCRYPTION_KEY` は
+> `pnpm --filter @crowi/api crypto:gen-key` でも生成できます。
+
+### Docker での環境変数
+
+`docker compose --profile app` で全スタックを起動する場合、`api`
+サービスは `.env` を `env_file` として読み込みます。ただし
+コンテナネットワーク向けの URI (`MONGO_URI` / `REDIS_URL` /
+`ELASTICSEARCH_URI` / `CLIENT_URL`) は `docker-compose.yml` 側の
+`environment` 指定が `.env` の値を上書きします。機密値
+(`CROWI_ENCRYPTION_KEY` / `WS_TOKEN_SECRET` など) は `.env` に
+書いておけばそのまま渡ります。
+
+## crowi.config.json
+
+`crowi.config.json` はリポジトリルート (= 運用時はランナープロジェクトの
+ルート) に置く JSON ファイルで、**どのプラグインを読み込み、どのドライバを
+有効にするか** を宣言します。プラグインごとの設定値 (S3 のバケット名や
+OAuth クライアント ID など) はここには書かず、MongoDB の `Config`
+コレクションに保存されます。
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-emoji",
+    "@crowi/plugin-renderer-katex"
+  ],
+  "storage": {
+    "driver": "s3"
+  },
+  "search": {
+    "driver": "elasticsearch"
+  }
+}
+```
+
+### フィールド一覧
+
+| キー | 型 | デフォルト | 内容 |
+| ---- | -- | ---------- | ---- |
+| `plugins` | `string[]` | `[]` | 起動時に読み込むプラグインの npm パッケージ名。暗黙のデフォルト (`@crowi/plugin-storage-local`) に追加される形で読み込まれる |
+| `storage.driver` | `string` | `"local"` | ファイルアップローダが使うストレージドライバ名。詳細は [ストレージドライバ](./storage) |
+| `search.driver` | `string` | `"mongo"` | 検索サービスが使うドライバ名。詳細は [検索のセットアップ](./search-setup) |
+
+ファイルが存在しない場合や項目が省略された場合は、上記のデフォルト値が
+適用されます。スキーマに合わない内容を書くと、起動時に明示的なエラーで
+失敗します。
+
+### プラグインの解決方法
+
+`plugins` に挙げた名前は、ランナープロジェクトの `node_modules/` から
+解決されます。プラグインを追加するには、ランナーの `package.json` に
+依存として宣言したうえで `crowi.config.json:plugins` に名前を追加します。
+API パッケージ自体を再ビルドする必要はありません。
+
+`@crowi/plugin-storage-local` は **暗黙のデフォルトプラグイン** として
+常に読み込まれるため、`plugins` に明示しなくてもローカルストレージは
+利用できます。
+
+プラグインの追加・有効化の詳しい手順は [プラグインの管理](../plugins/managing)、
+プラグインの種類は [プラグインの概要](../plugins/overview) を参照して
+ください。
+
+### ドライバ名とプラグインの対応
+
+`storage.driver` / `search.driver` に指定できるドライバ名は、読み込んだ
+プラグインが登録したものです。代表的な対応は次のとおりです。
+
+| 設定 | ドライバ名 | 提供プラグイン |
+| ---- | ---------- | -------------- |
+| `storage.driver` | `local` | `@crowi/plugin-storage-local` (デフォルト) |
+| `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
+| `search.driver` | `mongo` | コア組み込み (デフォルト) |
+| `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
+
+レンダラ系プラグイン (`@crowi/plugin-renderer-emoji` /
+`-katex` / `-plantuml` / `-crowi-legacy`) は `plugins` に追加するだけで
+有効になり、`storage` / `search` のようなドライバ選択は不要です。
+
+> **Tip**: `crowi.config.json` でドライバ名を切り替えても、対応する
+> プラグインが `plugins` に入っていなければ起動時に警告が出ます。ドライバを
+> 切り替えるときは、プラグインの追加とセットで行ってください。
+
+## 次のステップ
+
+- [機密設定の暗号化](./encryption) — `CROWI_ENCRYPTION_KEY` の詳細
+- [ストレージドライバ](./storage) — `storage.driver` の切り替え手順
+- [検索のセットアップ](./search-setup) — Elasticsearch の設定
+- [プラグインの管理](../plugins/managing) — プラグインの追加・有効化

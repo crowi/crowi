@@ -1,0 +1,137 @@
+---
+title: Backup
+description: Backing up and restoring Crowi data (MongoDB / attachments / Redis)
+---
+
+Crowi's data is spread across several places. To design a backup, you need
+to understand what each data store holds and which ones are essential for
+recovery.
+
+## Overview of what to back up
+
+| Data store | Contents | Backup |
+| ---------- | -------- | ------ |
+| MongoDB | All documents — pages, revisions, users, comments, config | **Required** |
+| Attachment storage | The actual uploaded files | **Required** |
+| Elasticsearch | The full-text search index | Not needed (rebuildable) |
+| Redis | Sessions, Socket.IO adapter, editor counters, etc. | Not needed (assumed volatile) |
+
+The key point: **MongoDB and the attachment storage are the two things
+essential for recovery**, while Elasticsearch and Redis do not need to be
+backed up (they can be regenerated if lost).
+
+## Backing up MongoDB
+
+All of Crowi's core data lives in MongoDB. Page bodies, revision history,
+users, comments, settings (Config) — losing this means losing the wiki
+itself.
+
+### mongodump
+
+Use `mongodump` to take a snapshot of the whole database.
+
+```bash
+# Dump using the connection info matching MONGO_URI
+mongodump --uri "mongodb://localhost:27017/crowi" --out ./backup/crowi-$(date +%Y%m%d)
+```
+
+- Collections are written to the output directory in BSON format.
+- For an authenticated cluster or a replica set, include the credentials
+  and replica set name in `--uri`.
+- Sensitive Config (OAuth secrets, SMTP passwords, etc.) is included in
+  the dump in its `CROWI_ENCRYPTION_KEY`-encrypted form. **Store the key
+  separately and securely so the same `CROWI_ENCRYPTION_KEY` can be used
+  on the restore target.** If you lose the key, the encrypted sensitive
+  values cannot be decrypted.
+
+> **Tip**: For regular backups, schedule `mongodump` with cron or similar
+> and transfer the output to storage separate from the repository (such as
+> object storage). Using dated directories makes generation management
+> easier.
+
+### mongorestore
+
+Restore from a dump with `mongorestore`.
+
+```bash
+mongorestore --uri "mongodb://localhost:27017/crowi" ./backup/crowi-20260516/crowi
+```
+
+- To restore over existing data, empty the target DB beforehand or
+  consider the `--drop` option.
+- After restoring, rebuild the search index if needed (see below).
+
+## Backing up attachments
+
+The actual attachment files are stored in different places depending on
+the **storage driver** you have selected. The backup procedure varies by
+driver.
+
+| Driver | Storage location | Backup method |
+| ------ | ---------------- | ------------- |
+| Local (`plugin-storage-local`) | The server filesystem | Copy / archive the whole storage directory |
+| S3 (`plugin-storage-aws-s3`) | An S3 bucket | S3 versioning / cross-region replication / `aws s3 sync` |
+
+For storage driver configuration, see [Storage settings](./storage).
+
+> **Important**: Take the MongoDB and attachment backups **as close to the
+> same point in time as possible**. If the timing diverges significantly,
+> you can get inconsistencies — attachment metadata in MongoDB without the
+> actual file (or vice versa).
+
+### Migrating files between drivers
+
+Separate from backup purposes, file migration when switching storage
+drivers is done with the `crowi-admin` CLI.
+
+```bash
+crowi-admin storage copy --from local --to s3
+# To see the target keys before actually copying
+crowi-admin storage copy --from local --to s3 --dry-run
+```
+
+## Elasticsearch — no backup needed
+
+The Elasticsearch full-text search index is **derived data that can be
+rebuilt at any time** from the MongoDB page data. It does not need to be
+included in backups.
+
+After restoring MongoDB to another environment, rebuild the search index.
+
+```bash
+crowi-admin search rebuild
+```
+
+For search backend configuration, see
+[Setting up the search backend](./search-setup).
+
+## Redis — no backup needed
+
+Redis is used as the session store, the Socket.IO adapter, the pub/sub
+for realtime collaborative editing, and a per-page editor counter. None of
+it is **data that matters if it is lost**.
+
+- Losing Redis resets login sessions and users are asked to log in again,
+  but the wiki content is unaffected.
+- The source of truth for realtime collaborative editing is
+  `Page.yjsState` in MongoDB; Redis is only for live routing.
+
+Therefore no persistent backup of Redis is needed. For details see
+[Operating realtime collaborative editing](./realtime-collab).
+
+## Recovery procedure summary
+
+The rough flow for restoring Crowi to a new environment is as follows.
+
+1. Restore MongoDB with `mongorestore`.
+2. Restore the attachment files to the storage driver's location.
+3. Set the **same `CROWI_ENCRYPTION_KEY`** as when the dump was taken in
+   the restore target's `.env` (required to decrypt sensitive Config).
+4. Start the api.
+5. Rebuild the search index with `crowi-admin search rebuild`.
+6. Redis can start empty (sessions are regenerated on re-login).
+
+> **Tip**: Before going into production, we strongly recommend running a
+> recovery from backup end-to-end once in a staging environment. Issues
+> with key storage and attachment consistency are often found only when
+> you actually restore.

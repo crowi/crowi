@@ -1,0 +1,151 @@
+---
+title: Architecture
+description: Crowi 2.0 monorepo layout and the API + Web overview
+---
+
+This page gives a bird's-eye view of the entire Crowi 2.0 (codename
+*Reignite*) codebase structure. Crowi is currently mid-rebuild from a
+legacy Express + Swig + jQuery monolith to an Express + ts-rest API plus
+a Next.js 16 frontend.
+
+## Monorepo layout
+
+The repository is a Turborepo + pnpm workspaces monorepo.
+
+```
+crowi/
+├── apps/
+│   └── crowi-site/          # crowi.wiki LP + docs (Next.js + Fumadocs, :4303)
+├── crowi.config.json        # dev runner config (plugins + active drivers)
+├── .env.example             # dev runtime env template
+└── packages/
+    ├── api/                 # Express 4 + ts-rest 3 API (:4301)
+    ├── api-contract/        # ts-rest contracts + Zod schemas
+    ├── web/                 # Next.js 16 App Router frontend (:4302)
+    ├── collab/              # Real-time collaboration (Hocuspocus) library
+    ├── runner/              # Config loader + plugin resolver
+    ├── plugin-api/          # Plugin SDK (CrowiPlugin / registries / context)
+    ├── plugin-aws/          # Shared AWS credentials base for AWS plugins
+    ├── plugin-storage-local/         # Local FS storage driver (default)
+    ├── plugin-storage-aws-s3/        # S3 storage driver
+    ├── plugin-search-elasticsearch/  # Elasticsearch search driver
+    ├── plugin-renderer-{emoji,katex,plantuml,crowi-legacy}/
+    ├── admin-cli/           # `crowi-admin` CLI
+    └── tsconfig/            # Shared tsconfig presets
+```
+
+Three big building blocks — the **API** (`packages/api`), the **Web**
+frontend (`packages/web`), and the **ts-rest contracts**
+(`packages/api-contract`) — sit at the center, with plugins and the
+runner around them.
+
+## Tech stack
+
+| Layer | Technology |
+| ----- | ---------- |
+| API | Express 4 + ts-rest 3 + Mongoose + JWT auth |
+| Web | Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS v4 + shadcn/ui + @tanstack/react-query |
+| Site | Next.js 16 (static export) + Fumadocs UI + i18n (ja / en) |
+| Shared | TypeScript 5.x strict, pnpm workspaces, Turborepo |
+| Lint / Format | Biome (format) + ESLint (lint), lefthook hooks |
+| Tests | Jest + supertest + mongodb-memory-server (API) |
+
+## API server (`packages/api`)
+
+### Boot sequence
+
+`Crowi.init()` initialises subsystems roughly in the following order:
+
+1. `setupEncryption` — prepares the encryption key provider for sensitive Config
+2. `setupDatabase` — connects to MongoDB
+3. `setupModels` — registers Mongoose models
+4. `setupRedisClient` — connects the Redis client
+5. `setupSessionConfig` — session configuration
+6. `setupConfig` — loads the Config collection
+7. `migrateConfig` — config migration
+8. `runAwsConfigMigration` — migrates v1 AWS config (before plugins)
+9. `setupRenderer` — registers the core renderer pipeline (TOC / wikilink / mention / code block)
+10. `setupPlugins` — starts plugins resolved by `@crowi/runner`
+11. `setupMailer` / `setupSlack` — mail / Slack
+12. `setupDNSCache` / `setupLRU`
+13. `buildServer` — builds the Express server
+
+The renderer boots **before** plugins. This means the registry handed
+to plugins already has the core registrations in place, and renderer
+plugins append on top of it.
+
+### Routing
+
+The API has four route families:
+
+- Public ts-rest routes (no auth)
+- Authenticated ts-rest routes (under `jwtAuth(crowi)`; most page / user / comment endpoints)
+- Admin ts-rest routes (under `jwtAdminRequired(crowi)` = JWT + `user.admin === true`)
+- Legacy Express routes (`/_api/*`, `/login`, etc. mounted for back-compat)
+
+New endpoints live under `routes/ts-rest/`; legacy code lives under
+`controllers/` / `routes/api/`.
+
+### Auth and models
+
+Authentication uses JWT (access token + refresh token). Mongoose models
+include Page (with grant) / Revision / User / Comment / Bookmark / Like
+/ Watcher / Notification / Activity / Config / Backlink / Share /
+Attachment, among others.
+
+Sensitive config (OAuth secrets, AWS keys, SMTP password, Slack token)
+is encrypted with AES-256-GCM. See [Config encryption](../operations/encryption)
+for details.
+
+### Real-time collaboration
+
+Hocuspocus is not a separate process — it is attached inside the api
+process as the `@crowi/collab` library. It uses the api's `http.Server`
+in `ws noServer` mode to handle `/collab/*` upgrades. See
+[Operating real-time collaboration](../operations/realtime-collab) for
+details.
+
+## Web frontend (`packages/web`)
+
+It uses the Next.js 16 App Router, dividing `src/app/` into three Route
+Groups.
+
+| Route Group | Contents | Gate |
+| ----------- | -------- | ---- |
+| `(public)/` | login / register / installer | none |
+| `(auth)/` | regular page features | redirect via `useAuth` |
+| `(admin)/` | admin screens | `user.admin === true` |
+
+Data fetching uses `@tanstack/react-query` throughout. `apiClient` (the
+ts-rest client) is generated from the shared contracts, and hooks live
+in `src/lib/use-*.ts`. Shared UI consists of `components/ui/` (shadcn)
+plus cross-cutting primitives like `LoadingSpinner` / `ErrorAlert` /
+`AccessDeniedCard` / `NotFoundCard`.
+
+## ts-rest contracts (`packages/api-contract`)
+
+All API contracts and Zod schemas are consolidated here, built by tsup
+into CJS + ESM + `.d.ts`. They are mounted under `/api/v2`, and each
+top-level namespace (`page`, `user`, `bookmark`, `notification`,
+`admin`, `adminCrypto`, …) is a `c.router(...)` collected into
+`apiContract`.
+
+Defining contracts in one place keeps the API implementation and the
+Web client calls aligned against the same types. After editing
+contracts, regenerate the dts with
+`pnpm --filter @crowi/api-contract build`.
+
+## Migration strategy
+
+The migration to Crowi 2.0 proceeds feature by feature. A legacy Express
+controller + Swig view is re-implemented as a ts-rest endpoint + Next.js
+page, and the legacy route stays in place until the new path is
+verified. Old routes are removed together in a separate phase. The
+current phase status is recorded in the repository's `TODO.md`.
+
+## Related pages
+
+- The list of design proposals → [RFC index](./rfcs)
+- Getting involved in development → [Contributing](./contributing)
+- How plugins work → [Plugin architecture](../plugins/overview)
+- Operating real-time collaboration → [Operating real-time collaboration](../operations/realtime-collab)

@@ -1,0 +1,85 @@
+---
+title: Bookmarks, likes and watching
+description: Bookmarking, liking, watching pages and seen-by
+---
+
+Crowi provides several lightweight actions for pages: **bookmarks**,
+**likes**, **watching**, and **seen-by**. Each has a different purpose, so
+this page explains how to tell them apart.
+
+## Bookmarks
+
+A bookmark is for "read it later / mark a page you use often".
+
+- A bookmark is **private to you**. Who has bookmarked a page does not affect
+  anyone else.
+- Pages you have bookmarked can be listed from the bookmark list under your
+  user page (`/user/<username>/bookmarks`).
+- Bookmarking the same page again does not create a duplicate (it is
+  idempotent).
+
+You can add or remove a bookmark from the page view screen.
+
+## Likes
+
+A like is a **shared reaction** to a page.
+
+- A like is recorded in the page's `liker` list, and the page shows "how many
+  people liked it". Unlike a bookmark, the like state is visible to everyone.
+- Liking an already-liked page does not double-count it (it is idempotent).
+  You can also unlike.
+- Liking records an **activity**, and from it a **notification** is generated
+  (unliking removes the activity too).
+
+> **Tip**: Thinking of a bookmark as "a private bookmark of yours" and a like
+> as "an evaluation visible to everyone" makes them easier to tell apart.
+
+## Watching
+
+Watching controls whether you receive update notifications for a page.
+
+The watch state can take one of two values.
+
+| State | Meaning |
+| ----- | ------- |
+| WATCH | Receive notifications for this page |
+| IGNORE | Do not receive notifications for this page |
+
+- For a page where the watch state has never been explicitly set, a
+  **default state is determined automatically**. If you are involved as the
+  page's creator, a comment author, or a revision author, you are treated as
+  "watching (WATCH)"; otherwise as "not watching".
+- Once you explicitly set the watch state to WATCH / IGNORE, the explicit
+  value takes priority from then on.
+- The current API has only the two states WATCH / IGNORE; there is no
+  operation to "clear the explicit setting and return to the default-derived
+  behaviour".
+
+## Seen-by
+
+When you view a page, you are recorded as a **seen-by user**.
+
+- Accessing a page automatically adds you to its seen-by list.
+- The seen-by list records "who has viewed this page", and the seen-by count
+  is displayed.
+- No matter how many times the same user opens the page, the seen-by entry is
+  not duplicated (it is idempotent).
+
+Seen-by is information for grasping "how widely a page has been read by the
+team". No explicit action is needed — it is recorded automatically just by
+viewing.
+
+## Differences between the four actions
+
+| Action | Public/private | Main purpose | Automatic/manual |
+| ------ | -------------- | ------------ | ---------------- |
+| Bookmark | Private to you | Read later / favourite | Manual |
+| Like | Visible to everyone | Evaluation / reaction to a page | Manual |
+| Watch | Private to you | Update notification setting | Manual (default is auto-derived) |
+| Seen-by | Visible to everyone | Record of viewing | Automatic |
+
+## Related pages
+
+- [Pages](./pages) — page basics
+- [Notifications](./notifications) — how likes and watching relate to notifications
+- [Profile](./profile) — user pages and the bookmark list
