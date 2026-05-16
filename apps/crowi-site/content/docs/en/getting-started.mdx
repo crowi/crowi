@@ -67,14 +67,14 @@ included here.
 
 ## 4. Prepare the environment file
 
-Copy `.env.sample` at the repo root to `.env`. The api loads the root
+Copy `.env.example` at the repo root to `.env`. The api loads the root
 `.env` via `dotenv` at boot.
 
 ```bash
-cp .env.sample .env
+cp .env.example .env
 ```
 
-The defaults in `.env.sample` are enough to boot for local development,
+The defaults in `.env.example` are enough to boot for local development,
 but setting `CROWI_ENCRYPTION_KEY` is strongly recommended. Without it,
 sensitive config (OAuth secrets, etc.) is stored as plaintext and a
 warning is logged at startup.

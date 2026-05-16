@@ -67,14 +67,14 @@ docker compose up -d
 
 ## 4. 環境変数ファイルの用意
 
-リポジトリルートの `.env.sample` を `.env` にコピーします。api は起動時に
+リポジトリルートの `.env.example` を `.env` にコピーします。api は起動時に
 ルートの `.env` を `dotenv` で読み込みます。
 
 ```bash
-cp .env.sample .env
+cp .env.example .env
 ```
 
-ローカル開発では `.env.sample` の初期値のままでも起動できますが、
+ローカル開発では `.env.example` の初期値のままでも起動できますが、
 `CROWI_ENCRYPTION_KEY` の設定を強く推奨します。未設定の場合、機密設定
 (OAuth シークレットなど) が平文で保存され、起動時に警告が出ます。
 
