@@ -1,0 +1,188 @@
+---
+title: Developing plugins
+description: Building your own plugin with @crowi/plugin-api
+---
+
+This page explains how to build your own Crowi plugin using
+`@crowi/plugin-api`. For how plugins work overall see
+[Plugin architecture](./overview), and for the design background see
+[RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md).
+
+> **Caution**: Crowi v2 is under active alpha development, and
+> `@crowi/plugin-api` is currently at version `0.x`. The API stability
+> guarantee (working across every v2 minor) takes effect once it
+> reaches `2.x`. The contract may change during the alpha period.
+
+## What a plugin really is
+
+A Crowi plugin is not a bespoke format — it is an **ordinary npm
+package**. The requirements are roughly just these two:
+
+- It (peer-)depends on `@crowi/plugin-api`
+- It **default-exports** an object satisfying the `CrowiPlugin` type
+
+At boot the runtime loads this default export via
+`await import('<plugin-name>')` and calls each `register*` callback.
+
+## A minimal plugin skeleton
+
+Here is a minimal plugin that provides a single storage driver. Since
+`@crowi/plugin-api` is a type-only package, you import only types from
+it.
+
+```ts
+import type { CrowiPlugin } from '@crowi/plugin-api';
+
+const myPlugin: CrowiPlugin = {
+  name: '@example/crowi-plugin-mystorage',
+  version: '0.1.0',
+
+  registerStorage: (registry, ctx) => {
+    ctx.log.info('registering mystorage driver');
+    registry.register('mystorage', {
+      put: async (key, body, meta) => {
+        // ... upload logic
+        return { key };
+      },
+      get: async (key) => {
+        // ... download logic
+        throw new Error('not implemented');
+      },
+      delete: async (key) => {
+        // ... delete logic
+      },
+    });
+  },
+};
+
+export default myPlugin;
+```
+
+`name` must match the npm package name. It also doubles as the
+namespace for config rows (`plugin:<name>:*`) and page metadata.
+
+## Adding a config schema
+
+To give the plugin config values, declare a Zod schema in
+`configSchema`. The admin screen at `/admin/plugins` walks this schema
+to auto-generate a config form.
+
+```ts
+import { z } from 'zod';
+import type { CrowiPlugin } from '@crowi/plugin-api';
+
+const myPlugin: CrowiPlugin = {
+  name: '@example/crowi-plugin-mystorage',
+  version: '0.1.0',
+
+  configSchema: z.object({
+    endpoint: z.string().url().describe('Storage endpoint URL'),
+    bucket: z.string().describe('Bucket name'),
+    accessKey: z.string().describe('@sensitive Access key'),
+  }),
+
+  registerStorage: (registry, ctx) => {
+    const config = ctx.config<{ endpoint: string; bucket: string; accessKey: string }>();
+    // config.accessKey is the decrypted value
+    // ... build the driver using config
+  },
+};
+
+export default myPlugin;
+```
+
+Two markers placed in a schema field's description change the admin UI
+behaviour:
+
+| Marker | Format | Effect |
+| ------ | ------ | ------ |
+| `@sensitive` | `z.string().describe('@sensitive ...')` | Auto-encrypts on write. Rendered as a secret input. |
+| `@action` | `z.string().describe('@action "Test" POST /test')` | Renders an action button next to the field; calls a `registerRoutes` endpoint. |
+
+## What you can do with PluginContext
+
+The second argument of each `register*` callback, `PluginContext`, is
+the only conduit for a plugin to interact with the core safely. Do not
+import `@crowi/server` directly.
+
+- `config<T>()` — read this plugin's typed config
+- `dependencyConfig<T>(name)` — read a dependency plugin declared in `requires`
+- `setConfig(key, value)` — write a single config field
+- `pageMetadata` — read / write page metadata in this plugin's namespace
+- `model(name)` — access core Mongoose models (Page / User / Comment …)
+- `crypto` — symmetric encrypt / decrypt
+- `log` — a structured logger auto-prefixed with the plugin name
+
+## Extension points
+
+All `register*` callbacks of `CrowiPlugin` are optional. Implement only
+what the plugin contributes.
+
+| Callback | What it extends |
+| -------- | --------------- |
+| `registerStorage` | A file storage driver |
+| `registerSearch` | A full-text search backend |
+| `registerAuth` | An authentication provider |
+| `registerNotifier` | A notification sink |
+| `registerRenderer` | Markdown renderer extensions |
+| `registerRoutes` | The plugin's own ts-rest endpoints (`/api/v2/plugins/<name>/*`) |
+| `registerHooks` | Event subscription (internal-only in v2.0; not yet a stable extension point) |
+
+You can also declare lifecycle hooks:
+
+- `onInstall` — runs once on first activation (used for migrating v1 config, etc.; idempotent)
+- `onUninstall` — runs on removal (config kept by default, dropped only with purge)
+- `reconfigure` — called when config changes via the admin UI, to refresh cached connections
+
+If you do not implement `reconfigure`, the plugin is treated as
+"config changes require a server restart".
+
+## Dependency plugins
+
+If you depend on another plugin at runtime, list its npm name in
+`requires`. The PluginManager resolves the dependency graph and loads
+`requires` first (cycles fail boot).
+
+Credential sharing is the typical case. `@crowi/plugin-storage-aws-s3`
+declares `@crowi/plugin-aws` in `requires` and reads `region` /
+`accessKeyId` / `secretAccessKey` via `ctx.dependencyConfig()`. There is
+no need to duplicate the fields in its own schema.
+
+## Building a renderer plugin
+
+`registerRenderer` lets you extend the Markdown renderer. The registry
+provides methods to add unified plugins, mdast node renderers, code-block
+renderers, embed-tag renderers, and URL inline-expansion rules. A
+code-block renderer is an object with `cacheVersion`, an optional
+`reservation` (placeholder shape), and `render`, and it is cached via
+`PluginRenderCache`.
+
+For concrete examples, the in-repo plugins
+`packages/plugin-renderer-plantuml` (code block + cache + external I/O),
+`packages/plugin-renderer-katex` (unified plugin + node transform), and
+`packages/plugin-renderer-emoji` (a minimal no-I/O example) are good
+references.
+
+## Reference implementations
+
+The first-party plugins bundled in the repository can be read directly
+as reference implementations.
+
+| Package | What it demonstrates |
+| ------- | -------------------- |
+| `packages/plugin-storage-local` | A minimal `registerStorage` example |
+| `packages/plugin-storage-aws-s3` | Credential sharing via `requires` + `@sensitive` |
+| `packages/plugin-aws` | A config-only base plugin with no `register*` |
+| `packages/plugin-search-elasticsearch` | `registerSearch` |
+| `packages/plugin-renderer-*` | Variations of `registerRenderer` |
+
+Also, `packages/plugin-api/src/__fixtures__/example-plugin.ts` is a
+sanity fixture that exercises every extension point in one file (not for
+runtime use, but a good sample of how the contract is used).
+
+## Related pages
+
+- How plugins work → [Plugin architecture](./overview)
+- Installing and configuring plugins → [Managing plugins](./managing)
+- The list of renderer plugins → [Renderer plugins](./renderers)
+- The list of design proposals → [RFC index](../reference/rfcs)

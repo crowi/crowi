@@ -1,0 +1,77 @@
+---
+title: Search
+description: Full-text search across pages
+---
+
+Crowi includes full-text search for finding pages across your wiki. You
+use it from the search box in the header or from the search page
+(`/_search`).
+
+## What search results contain
+
+Search runs over **the body and path of pages**. For each matching page,
+the following is shown in the results:
+
+- The page's path and title
+- A snippet of the matched section (matched terms are highlighted)
+- The bookmark count
+- Page metadata such as the creator and last editor
+
+Search results are **limited to pages you can view**. Private pages you
+have no permission for (owner-only / restricted / specified-users) are
+filtered out by the search backend, so they never leak into your results.
+
+## Narrowing the search scope
+
+On the search page you can narrow results in two ways in addition to the
+keyword.
+
+### Page-type tabs
+
+The tabs below the search box let you switch the type of pages to target.
+
+| Tab | Targets |
+| --- | ------- |
+| All | All pages regardless of type |
+| Portal | Directory-style pages whose path ends with `/` (excluding `/user/*`) |
+| Page | Leaf pages whose path does not end with `/` (excluding `/user/*`) |
+| User | Pages under `/user/*` |
+
+### Filtering by path tree
+
+To search only within a particular path, use the tree filter (`tree`).
+For example, specifying `/team/eng/` restricts the search to pages under
+that prefix. When the filter is active it is shown below the search box
+and can be cleared with a single click.
+
+> **Tip**: If you enter search from a page you are viewing, the search
+> starts scoped to the path you are currently on. In a large wiki,
+> narrowing the range with the tree first and then searching by keyword
+> makes it easier to reach the page you want.
+
+## Paging through results
+
+Up to 50 results are shown per page. When there are more hits than that,
+use the pager at the bottom of the results to move to the next page. The
+total hit count is reported by the backend and shown above the result
+list.
+
+## When search is unavailable
+
+Crowi's full-text search depends on a **search driver plugin**. In an
+environment where no search backend plugin (such as Elasticsearch) is
+installed, the search page shows a "search is currently unavailable"
+message and searches cannot be run.
+
+> **Note**: As of the v2 alpha, the search backend (Elasticsearch) is
+> temporarily removed from the development `docker compose` setup, and
+> turning the search driver into a plugin is still in progress. If search
+> is shown as disabled, the operator needs to configure a search backend.
+
+For the search backend setup steps, see
+[Setting up the search backend](../operations/search-setup).
+
+## Related pages
+
+- [Working with pages](./pages) — page structure and paths
+- [Setting up the search backend](../operations/search-setup) — operator-side setup

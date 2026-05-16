@@ -1,0 +1,83 @@
+---
+title: Revisions and rollback
+description: Page history, diffs and rolling back to past versions
+---
+
+Every time you save a page, the body at that moment is recorded as a
+**revision**. A Crowi page itself always points at the latest revision, and
+all past revisions remain as history. This lets you trace "when, who, and
+what changed" after the fact, and roll back to a past state if needed.
+
+## What a revision is
+
+A revision is a snapshot of a page body, created one per save. Each revision
+holds the following.
+
+- The page path
+- The body (Markdown)
+- The author
+- The creation timestamp
+- The saver (`savedBy`) and contributors (`contributors`)
+
+`savedBy` and `contributors` are recorded when you save during realtime
+collaborative editing. `savedBy` is the user who pressed the Save button, and
+`contributors` lists the users who were present on the same page during that
+save cycle. See [Realtime collaborative editing](./realtime-editing) for
+details.
+
+> **Note**: Older revisions created in Crowi 1.x have no `savedBy` /
+> `contributors`. In that case, only the author is shown, as before.
+
+## Viewing history
+
+A page's history can be viewed on the history screen at
+`/_history?path=<page path>`. The history screen lists the page's revisions
+newest first.
+
+Each row in the list shows the following.
+
+| Column | Content |
+| ------ | ------- |
+| From / To | Radio buttons to pick the two revisions to compare |
+| Author | The revision's saver. Contributors are shown alongside when present |
+| Created | When the revision was created |
+| Revision | Identifying information for the revision |
+
+A revision created by collaborative editing displays the saver combined with
+the contributors, like "Alice (with Bob, Carol)".
+
+## Viewing diffs
+
+On the history screen you can pick any two revisions and view the **diff**.
+
+- When you open the history screen, the "latest revision" and "the revision
+  just before it" are selected by default, so the most recent change is shown
+  immediately.
+- Pick the pair of revisions you want to compare with the From / To radio
+  buttons and press the "Compare" button to refresh the diff view below.
+- For a page with only one revision (a page that has never been updated since
+  creation), the single first revision is shown.
+
+## Rolling back to a past version
+
+When you want to return to the content of a past revision, perform a
+**rollback**.
+
+A rollback re-saves the body of a past revision as a new revision. Rather than
+rewinding history, it saves the past body again, so the page's latest state
+is replaced with the past content.
+
+- A rollback does not erase the revision history up to that point. It simply
+  adds one new revision.
+- This means that even in a "I rolled back, but actually want to undo that"
+  situation, you can switch again as yet another new revision.
+
+> **Tip**: Because history stacks up in a straight line, you can roll back
+> safely even when you notice a mistaken edit. "Only move forward, never
+> erase history" is Crowi's history model.
+
+## Related pages
+
+- [Pages](./pages) — editing and saving pages
+- [Realtime collaborative editing](./realtime-editing) — saving and recording contributors
+- [Comments](./comments) — comments tied to a specific revision

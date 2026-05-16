@@ -1,0 +1,73 @@
+---
+title: RFC インデックス
+description: Crowi 2.0 の設計提案 (RFC) の一覧
+---
+
+Crowi 2.0 の大きな設計判断は **RFC (Request for Comments)** として
+リポジトリの `docs/rfcs/` に文書化されています。このページは、現時点で
+存在する RFC の一覧と概要をまとめたものです。
+
+> **注意**: 各 RFC の `Status` はいずれも Draft です。Crowi v2 は alpha
+> 開発中であり、RFC の内容は実装の進行に合わせて改訂されることがあります。
+> 各 RFC の「round」表記は、その文書が何回目の改訂かを示します。
+
+## RFC 一覧
+
+| 番号 | タイトル | ターゲット | 状態 |
+| ---- | -------- | ---------- | ---- |
+| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | プラグインアーキテクチャ | Crowi 2.0 | Draft (round 2) |
+| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | レンダラプラグインアーキテクチャ | Crowi 2.1 | Draft (round 3.1)・Phase 1–6 実装済み |
+| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | リアルタイム共同編集 | Crowi 2.1 | Draft (round 2) |
+| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | エディタ UX の強化 | Crowi 2.2 | Draft (round 2) |
+
+## RFC-0001: プラグインアーキテクチャ
+
+ファイルストレージ・外部検索・認証プロバイダ・通知シンクという 4 つの
+互いに独立した関心事を、コアから切り出して独立配布可能なプラグインに
+する提案です。コアは、プラグインを 1 つも入れなくても動く「バッテリー
+同梱」のデフォルトを持ちます。運用者は CLI でプラグインを追加し、管理
+UI から設定します。Crowi 2.0 のプラグインモデルの土台です。
+
+→ 利用者向けの解説は [プラグインアーキテクチャ](../plugins/overview)。
+
+## RFC-0002: レンダラプラグインアーキテクチャ
+
+RFC-0001 のプラグインモデルに「レンダリング」という 5 つ目の関心事を
+追加する提案です。Markdown のパース・AST 変換・埋め込み処理・HTML 描画
+がプラグインの拡張ポイントになります。SSR ファースト、編集中は外部 API
+を叩かない、新しい記法を基本的に増やさない、という 3 つの設計上の約束が
+特徴です。Phase 1–6 が実装済みで、Phase 7 以降が進行中です。
+
+→ 利用者向けの解説は [レンダラプラグイン](../plugins/renderers)。
+
+## RFC-0003: リアルタイム共同編集
+
+Crowi 2.1 にリアルタイム共同編集を追加する提案です。同期エンジンに Yjs、
+WebSocket バックエンドに Hocuspocus を使います。複数ユーザーが同じ
+ページを同時編集でき、変更は CRDT セマンティクスで決定的に収束します。
+正規の Markdown ソースは、明示的な保存時に `Revision` ドキュメントへ
+書き出されます。
+
+→ 利用者向けの解説は [リアルタイム共同編集](../guide/realtime-editing)、
+運用者向けは [リアルタイム共同編集の運用](../operations/realtime-collab)。
+
+## RFC-0004: エディタ UX の強化
+
+RFC-0003 の最小限の CodeMirror 6 エディタの上に、4 つの編集生産性機能を
+追加する提案です。`@user` メンションと `[[Page` wikilink のオートコン
+プリート、URL / 画像のペースト処理、ドラッグ&ドロップアップロード、
+そして下書きページの管理ビューです。Crowi 2.2 (v2.1 安定化後) を
+ターゲットにしています。
+
+## RFC を読むには
+
+RFC 本文はリポジトリの `docs/rfcs/` 配下にあります。上の表のリンクから
+GitHub 上で直接読めます。各 RFC は冒頭にステータス・ターゲットリリース・
+依存する RFC を記したメタデータブロックを持ち、続いて Summary / Goals /
+Non-goals / 詳細設計、という構成になっています。
+
+## 関連ページ
+
+- アーキテクチャ全体像 → [アーキテクチャ](./architecture)
+- プラグインの仕組み → [プラグインアーキテクチャ](../plugins/overview)
+- 開発に参加する → [コントリビュート](./contributing)

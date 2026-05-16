@@ -1,0 +1,133 @@
+---
+title: Migrating from v1
+description: Upgrading from Crowi v1 to v2 (Reignite), and the current state of data compatibility
+---
+
+> **Caution**: Crowi 2.0 — codename *Reignite* — is currently under
+> **active alpha development**. There is no stable v2 release yet, and
+> **migrating a production v1 to v2 is not recommended at this time**. Use
+> it for evaluation purposes only. See `TODO.md` for the latest progress.
+
+This page explains how to think about data compatibility when migrating
+from Crowi v1 to v2, and the migration paths available today.
+
+## What is v2 (Reignite)
+
+Crowi v2 is a version with a fully rebuilt frontend.
+
+- **v1**: An Express + Swig (templating) + jQuery monolith
+- **v2**: Express + ts-rest API + Next.js 16 (App Router) + React 19
+
+The UI and application layers have been rebuilt, but the **data layer
+(the shape of the data in MongoDB) stays compatible with v1**. The
+document structures for pages, revisions, users, comments, and so on can
+be read as-is from v1. In other words, your existing wiki data is designed
+to carry over to v2.
+
+## Current state of data compatibility
+
+| Area | Compatibility |
+| ---- | ------------- |
+| MongoDB document shape | Compatible with v1. v2 reads existing data as-is |
+| Attachments | Accessed via the storage driver. Storage location is the same as v1 |
+| Passwords | Falls back to legacy hash verification with `PASSWORD_SEED` |
+| Config | v1 Config is also readable. Sensitive-value encryption is a new (optional) v2 feature |
+
+> **Note**: v2 adds a mechanism to encrypt sensitive Config (OAuth secrets,
+> SMTP passwords, etc.) with AES-256-GCM. Plaintext config rows inherited
+> from v1 are still readable as-is, but if you enable encryption you can
+> re-encrypt them with the crypto feature in the admin panel. See
+> [Encrypting sensitive data](./encryption) for details.
+
+## Current state of the migration path
+
+The data shape is compatible, but the **v1 → v2 migration path itself is
+still being worked on**.
+
+- Booting v2 directly against a v1 MongoDB is technically possible, but
+  there is no officially verified and documented migration procedure yet.
+- Some data needs conversion to match v2's new features (such as the
+  wikilink migration described below).
+- Migration procedures and tools will be developed incrementally toward
+  the stable release.
+
+For this reason, we strongly recommend that for now you **do not migrate
+production data**, and limit yourself to trying it out in a verification
+environment using a copy of your v1 data.
+
+## Migration tools via crowi-admin
+
+The operator-side CLI `crowi-admin` provides data conversion commands.
+Because `crowi-admin` connects directly to MongoDB, run it from a
+directory where `@crowi/api` is installed (usually the runner package).
+
+### wikilink migration
+
+A one-shot data migration that converts v1-era wikilink syntax to match
+the v2 renderer.
+
+```bash
+# First check what will change (does not write new revisions)
+crowi-admin migrate --only=wikilink --dry-run
+
+# Actually run the migration
+crowi-admin migrate --only=wikilink
+```
+
+With `--dry-run`, the command only scans the target pages and reports;
+it does not write anything. Always check the scope of impact with a
+dry-run before the real run.
+
+> **Tip**: v1-era wikilink syntax can also be interpreted at render time
+> by the `@crowi/plugin-renderer-crowi-legacy` plugin. If you would rather
+> not convert the data itself, enabling that plugin is an alternative.
+> For plugins, see [Plugin overview](../plugins/overview).
+
+### Rebuilding the search index
+
+If you want to use full-text search on data migrated from v1, you need to
+rebuild the search index on the v2 side.
+
+```bash
+crowi-admin search rebuild
+```
+
+See [Setting up the search backend](./search-setup) for details.
+
+### Storage migration
+
+To change where attachment files are stored (for example from local to
+S3), use the storage copy command.
+
+```bash
+crowi-admin storage copy --from local --to s3 --dry-run
+crowi-admin storage copy --from local --to s3
+```
+
+## What to do before migrating
+
+Before actually trying a migration, complete the following.
+
+1. **Take a complete backup of the v1 data** — back up MongoDB with
+   `mongodump` and the attachments via the storage driver's location.
+   See [Backup](./backup) for the procedure.
+2. **Prepare a verification environment** — use a copy of the v1 data and
+   bring up v2 in an environment isolated from production.
+3. **Prepare a `CROWI_ENCRYPTION_KEY`** — if you will use sensitive-config
+   encryption in v2, generate a key and store it securely.
+4. **Check migration tools with a dry-run** — always check the scope of
+   impact with `--dry-run` before running `crowi-admin migrate` or
+   `storage copy`.
+
+## Summary
+
+- v2's data shape is compatible with v1, and existing wiki data carries
+  over.
+- However, v2 is under active alpha development and the migration path is
+  still in progress. **Production migration is not recommended at this
+  time.**
+- The `crowi-admin` migration commands (wikilink / search rebuild /
+  storage copy) are provided, but always check each one with `--dry-run`
+  first.
+- Migration procedures will be documented toward the stable release. See
+  `TODO.md` and Crowi's release announcements for the latest status.

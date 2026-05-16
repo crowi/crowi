@@ -1,0 +1,178 @@
+---
+title: Admin panel
+description: Using the admin panel sections (App / Security / Authentication / Mail / Share / Users / Storage / Plugins)
+---
+
+The Crowi admin panel is where you manage site-wide settings, users, and
+plugin configuration from the web UI. Open `/admin` to see the dashboard,
+and use the left sidebar to move between sections.
+
+## Accessing the admin panel
+
+- The admin panel is accessible **only to users with `user.admin === true`**.
+  A user without permission who opens anything under `/admin` sees an
+  "Access denied" card.
+- Authorization is also enforced on the API side. Admin endpoints are
+  mounted under the `jwtAdminRequired` middleware (= JWT auth +
+  `user.admin === true`), so requests that bypass the UI are still
+  rejected with 401 / 403.
+- The first administrator is granted automatically to the first user
+  created during installation. Subsequent admin grants are done from the
+  [Users](#users) section.
+
+> **Tip**: Admin privileges are powerful. Log in as a regular user for
+> everyday editing, and use an admin account only when you need to change
+> settings.
+
+## Dashboard
+
+The `/admin` landing page shows cards for each section. The sidebar
+headings are grouped as follows.
+
+| Group | Sections | Status |
+| ----- | -------- | ------ |
+| Settings | App / Security / Share / Plugins | Available |
+| Auth | Authentication | Available |
+| Storage | Storage (+ storage plugins) | Available |
+| Mail | Mail | Available |
+| Notification | Notification | In progress |
+| Users | Users | Available |
+| Maintenance | Search / Backlink | Available |
+
+The storage, mail, notification, and auth groups can have sidebar entries
+injected by loaded plugins via `adminPlacement`. For example, the
+Elasticsearch search plugin and the AWS credentials plugin appear as
+links to their settings pages in the matching group.
+
+## App
+
+Basic site settings. Maps to `GET/PUT /admin/app`.
+
+- Configure app-wide items such as the **site title**.
+- Keys that contain sensitive values are masked on input; saving while
+  left blank keeps the existing value (this prevents accidentally
+  overwriting it with an empty string).
+
+> **Note**: In older versions, App settings included AWS S3 upload
+> credentials. In v2 those have moved to the [Storage](#storage) section
+> and the storage plugin settings.
+
+## Security
+
+Sign-up and access control settings. Maps to `GET/PUT /admin/security`.
+
+- **Basic auth**: Set a username and password to put HTTP Basic auth in
+  front of the whole site — useful for a temporary deployment outside the
+  corporate network.
+- **Registration mode (registrationMode)**: Controls whether new users can
+  register.
+  - `Open` — anyone can register
+  - `Restricted` — only email domains matching the registration whitelist
+    are allowed
+  - `Closed` — registration is fully closed (admin invites only)
+- **Registration whitelist (registrationWhiteList)**: The list of email
+  domains allowed in `Restricted` mode.
+
+## Authentication
+
+Switches the authentication method itself. Maps to `GET/PUT /admin/auth`.
+
+- **requireThirdPartyAuth**: Makes third-party auth (OAuth) mandatory.
+- **disablePasswordAuth**: Disables password-based login.
+
+> **Caution**: If you disable password auth while OAuth is not configured,
+> nobody can log in. Crowi rejects a settings change that would lock you
+> out with a 422 error, but it is safest to make this change while keeping
+> a logged-in session open in a separate browser.
+
+OAuth provider (Google / GitHub) clientId / secret configuration is
+**in progress**. There is currently no OAuth settings UI in the admin
+panel; OAuth is planned to be split out into an authentication plugin.
+
+## Mail
+
+Mail delivery (SMTP / AWS SES) settings. Maps to `GET/PUT /admin/mail`
+and `POST /admin/mail/test`.
+
+- Configure the sender address and SMTP host / port / user / password, or
+  AWS SES credentials.
+- Sensitive values such as passwords are masked on input.
+- The **test send** button sends a test mail to the logged-in admin's
+  registered email address so you can verify the configuration.
+
+See [Mail settings](./mail) for details.
+
+## Share
+
+Toggles external share links on or off. A simple toggle that maps to
+`GET/PUT /admin/share`. When disabled, external share links can no longer
+be issued for pages. For the user-facing sharing feature, see
+[Sharing pages](../guide/sharing).
+
+## Users
+
+List, search, and manage users. Maps to the `GET /admin/users` family of
+endpoints.
+
+| Operation | Description |
+| --------- | ----------- |
+| List / search | Filter by email or username, browse with pagination |
+| Invite | Enter multiple email addresses and invite users in bulk |
+| Edit profile | Change a user's display name and email address |
+| Admin permission | Grant or revoke admin permission |
+| Status change | Activate (ACTIVE) or suspend (SUSPENDED) a user |
+| Reset password | Reissue a random password (the plaintext is returned once) |
+
+> **Tip**: The plaintext password returned by a password reset is shown
+> only at that moment. After a reset, deliver it to the user promptly over
+> a secure channel and have them change it themselves after their first
+> login.
+
+## Storage
+
+A read-only page that shows the status of the attachment storage
+(storage driver). Maps to `GET /admin/storage`.
+
+- Shows the currently active driver and the list of all loaded drivers.
+- **Driver switching is not done from the admin panel.** Edit
+  `storage.driver` in `crowi.config.json` and restart the api.
+- File migration between drivers is done with the
+  `crowi-admin storage copy --from <a> --to <b>` CLI.
+
+For storage configuration and plugins in general, see
+[Storage settings](./storage).
+
+## Plugins
+
+Lists loaded plugins and lets you edit each plugin's configuration.
+
+- `/admin/plugins` lists the loaded plugins.
+- `/admin/plugins/edit?name=<plugin-name>` edits an individual plugin's
+  configuration. The form is auto-generated from the plugin's Zod schema;
+  for sensitive fields only "whether a value is set" round-trips — the
+  plaintext is never shown.
+- Clearing the render cache per-plugin or globally is also done here.
+
+For installing and managing plugins see [Managing plugins](../plugins/managing),
+and for how plugins work see [Plugin overview](../plugins/overview).
+
+## Maintenance
+
+- **Search** — A page to check the status of the search driver. Index
+  rebuilds are done with the `crowi-admin search rebuild` CLI. See
+  [Setting up the search backend](./search-setup) for details.
+- **Backlink** — A page for backlink maintenance.
+
+## Sections in progress
+
+The following are not yet complete as of the v2 alpha.
+
+- **Notification** — The admin page for global notification settings,
+  including Slack integration, is in progress. The sidebar entry appears,
+  but the functionality is being implemented incrementally.
+- **Google / GitHub OAuth settings** — The UI for configuring auth
+  provider clientId / secret from the admin panel is in progress.
+
+Crowi 2.0 (Reignite) is under active alpha development, so the structure
+of the admin panel will continue to change. See `TODO.md` in the
+repository for the latest status.

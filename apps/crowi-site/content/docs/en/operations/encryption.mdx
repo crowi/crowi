@@ -1,0 +1,145 @@
+---
+title: Encrypting sensitive config
+description: Encrypting sensitive config with CROWI_ENCRYPTION_KEY
+---
+
+Crowi can **encrypt sensitive configuration values at rest** — OAuth
+secrets, AWS credentials, SMTP passwords, Slack tokens, and the like. To
+enable encryption, set the master key `CROWI_ENCRYPTION_KEY`.
+
+> **Important**: `CROWI_ENCRYPTION_KEY` is optional, but **strongly
+> recommended for production**. The app works without it, but sensitive
+> values are stored in plaintext in MongoDB (the legacy mode described
+> below).
+
+## What gets encrypted
+
+Only the keys in the MongoDB `Config` collection that are registered as
+sensitive are encrypted. The targets built into Crowi are as follows.
+
+| Namespace:key | Description |
+| ------------- | ----------- |
+| `crowi:google:clientSecret` | Google OAuth client secret |
+| `crowi:github:clientSecret` | GitHub OAuth client secret |
+| `crowi:upload:aws:accessKeyId` / `secretAccessKey` | AWS credentials for uploads |
+| `crowi:mail:aws:accessKeyId` / `secretAccessKey` | AWS credentials for mail (SES) |
+| `crowi:mail:smtpPassword` | SMTP password |
+| `notification:slack:clientSecret` / `token` | Slack integration secret / token |
+| `crowi:plugin:@crowi/plugin-aws:accessKeyId` / `secretAccessKey` | AWS plugin credentials |
+
+In addition, configuration fields that a plugin marks with `@sensitive`
+are automatically registered into the sensitive list at boot and follow
+the same encryption path (`crowi:plugin:<plugin name>:<field>`).
+
+> **Note**: User passwords (`User.password`) are separately hashed with
+> bcrypt and are not part of this encryption. API tokens and shared-page
+> secret words use a different mechanism, since they need equality
+> lookups.
+
+## Generating the master key
+
+`CROWI_ENCRYPTION_KEY` must be a **base64-encoded 32-byte value** (which
+decodes to exactly 32 bytes = the AES-256 key length). Generate it with
+one of the following.
+
+```bash
+# Option 1: openssl
+openssl rand -base64 32
+
+# Option 2: the script bundled with Crowi
+pnpm --filter @crowi/api crypto:gen-key
+```
+
+Set the generated value in `.env`.
+
+```bash
+CROWI_ENCRYPTION_KEY="the generated base64 string"
+```
+
+Restart the API after setting it to enable encryption of sensitive
+values.
+
+## How encryption works
+
+The encryption logic is implemented in
+`packages/api/src/util/crypto.ts`.
+
+- **Algorithm**: AES-256-GCM (authenticated encryption)
+- **Stored format**: `enc:v1:<base64(iv)>:<base64(authTag)>:<base64(ciphertext)>`
+- The IV is regenerated on every call, so **the same plaintext yields a
+  different ciphertext each time** (non-deterministic). This means
+  equality lookups on encrypted values are not possible, but that is
+  fine because sensitive config is always loaded by `(namespace, key)`.
+- Sensitive keys are encrypted automatically by `Config.updateByParams`
+  (= saving config) and decrypted automatically by
+  `Config.loadAllConfig` (= loading config).
+
+Ciphertexts carry the `enc:v1:` prefix, so whether a value is encrypted
+can be determined from the presence of that prefix.
+
+## Legacy mode (when the key is unset)
+
+When `CROWI_ENCRYPTION_KEY` is unset, or does not decode to 32 bytes,
+Crowi runs in **legacy mode**.
+
+- Sensitive values are stored in MongoDB **as plaintext**.
+- A warning is logged at boot.
+- Encryption is treated as best-effort, so the app never crashes just
+  because the key is missing.
+
+Also, even after you enable encryption, plaintext rows that are not yet
+encrypted (= without the `enc:v1:` prefix) can still be read. `decrypt`
+passes prefix-less values through untouched, so a mix of legacy and
+encrypted data still works.
+
+## Re-encrypting existing plaintext data
+
+If you enable encryption later on, sensitive values saved before that
+remain in plaintext. To encrypt them all at once, use the encryption
+settings screen in the admin UI (`/admin/crypto`).
+
+### Checking the status
+
+Opening `/admin/crypto` shows the current encryption status. Internally
+it calls `GET /api/v2/admin/crypto/status`, which returns the following.
+
+- `encryptionConfigured` — whether the server has a usable master key
+- `encryptedCount` — the number of already-encrypted sensitive values
+- `unencryptedCount` — the number of sensitive values still in plaintext
+- `entries` — the presence / encryption state of each sensitive key
+
+### Running re-encryption
+
+Running re-encryption from the screen calls
+`POST /api/v2/admin/crypto/reencrypt`.
+
+- If the master key is unset, it fails with `503`
+  (`ENCRYPTION_NOT_CONFIGURED`). Set `CROWI_ENCRYPTION_KEY` first.
+- Already-encrypted rows are skipped (re-running is safe).
+- Only plaintext rows are rewritten into the `enc:v1:` format.
+- The result returns `rewritten` (the count rewritten),
+  `alreadyEncrypted` (already encrypted), and `missing` (values that do
+  not exist).
+
+> **Tip**: Re-encryption is safe to run any number of times
+> (idempotent). Run it whenever you need to — for example after
+> entering new OAuth settings in plaintext.
+
+## About key rotation
+
+In the current Crowi 2.0 alpha, `CROWI_ENCRYPTION_KEY` assumes a single
+fixed key. If you change the key to a different value, values encrypted
+before that can no longer be decrypted (GCM authentication-tag
+verification fails). If you need to change the key, prepare to re-enter
+the affected sensitive settings from the admin UI before the change.
+
+KMS-backed key providers (AWS / GCP) are planned for the future; an
+extension point is already provided as the `KeyProvider` interface in
+`crypto.ts`.
+
+## Next steps
+
+- [Configuration](./configuration) — environment variables in general
+- [Storage drivers](./storage) — configuring S3 credentials
+- [Mail / SMTP setup](./mail) — configuring the SMTP password
+- [Admin](./admin) — overview of the admin UI

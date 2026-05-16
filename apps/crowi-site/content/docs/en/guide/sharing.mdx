@@ -1,0 +1,52 @@
+---
+title: External page sharing
+description: Login-free external share links (under development)
+---
+
+> **Warning**: External page sharing (Share) is **currently under
+> development** and is not yet available as of the v2 alpha. This page
+> describes the planned feature in advance. The actual usage steps will be
+> added here once the feature ships.
+
+## What external sharing is
+
+External sharing lets people who are not logged in to Crowi read a
+specific page. It is intended for cases such as showing a single wiki page
+to an external reviewer or business partner.
+
+When sharing is enabled, a unique share link is issued for that page.
+Anyone who knows the link can view the page even without a Crowi account.
+Sharing can be deactivated at any time once it is no longer needed.
+
+## Planned behaviour
+
+The data model (`Share`) is designed around the following assumptions:
+
+- At most one active share can exist per page
+- A share link is identified by a random UUID and is hard to guess
+- Deactivating a share makes the link immediately unviewable
+- Access through a share is recorded, so you can later check when and how
+  it was viewed
+- A "secret keyword" (`secretKeyword`) can be set per share, so that only
+  people who know the keyword in addition to the link can view it (under
+  consideration)
+
+Note that the Crowi admin screen already has a setting to **enable or
+disable the external sharing feature itself**. That setting controls
+whether external sharing is allowed instance-wide and is intended for
+operators. The screen where a user shares an individual page will be
+provided in a future release.
+
+## Current status
+
+At the v2 alpha stage, the action for a user to externally share a page is
+not yet available. If you need to share something externally for now,
+please use a workaround such as copying the body and handing it over.
+
+This page will be updated with the actual usage as the implementation
+progresses.
+
+## Related pages
+
+- [Working with pages](./pages) — page visibility (grant)
+- [Admin panel](../operations/admin) — instance-wide settings

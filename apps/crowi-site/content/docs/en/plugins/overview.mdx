@@ -1,0 +1,133 @@
+---
+title: Plugin architecture
+description: How Crowi 2.0 plugins work and the design rationale (RFC-0001 / RFC-0002)
+---
+
+Crowi 2.0 adopts an architecture that pulls concerns inherently
+independent of the core — file storage, full-text search, rendering,
+authentication, and notification — out into independently distributable
+**plugins**. For the design background, see
+[RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md)
+(Plugin Architecture) and
+[RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md)
+(Renderer Plugin Architecture).
+
+## Design principles
+
+Crowi's plugin model rests on a few principles:
+
+- **Batteries included**: A fresh Crowi install works as a complete Wiki
+  without adding a single plugin. Local file storage, MongoDB-based
+  search, email + password auth, and in-app notifications are on by
+  default.
+- **Distributed as npm packages**: Plugins are ordinary npm packages, not
+  a bespoke format. There is no global plugin registry and no
+  curl-piped installer.
+- **No rebuild required**: The api itself does not depend on plugins.
+  Adding or removing a plugin is just a change to the operator's runner
+  project dependencies — the api image never needs to be rebuilt.
+- **Stable API across v2.x**: A plugin written against
+  `@crowi/plugin-api@2.x` keeps working through every v2 minor.
+
+> **Tip**: Plugin execution is not sandboxed. Plugins run with the same
+> Node permissions as the server. Only install packages from publishers
+> you trust.
+
+## Plugin types
+
+Crowi plugins fall roughly into the following types by the extension
+point they contribute to. One plugin may implement several extension
+points.
+
+| Type | Extension point | Examples |
+| ---- | --------------- | -------- |
+| Storage | `registerStorage` | `@crowi/plugin-storage-local`, `@crowi/plugin-storage-aws-s3` |
+| Search | `registerSearch` | `@crowi/plugin-search-elasticsearch` |
+| Renderer | `registerRenderer` | `@crowi/plugin-renderer-emoji` / `-katex` / `-plantuml` / `-crowi-legacy` |
+| Auth | `registerAuth` | (for external OAuth providers; expanding) |
+| Notifier | `registerNotifier` | (for notification sinks such as Slack; expanding) |
+| Base (config-only) | (no register) | `@crowi/plugin-aws` — shares credentials with downstream AWS plugins |
+| Routes | `registerRoutes` | ts-rest contracts for "Test connection" buttons or OAuth callbacks |
+
+Storage and search each select a "driver" via `storage.driver` /
+`search.driver` in `crowi.config.json`. You can install several driver
+plugins and switch between them with configuration.
+
+## The `CrowiPlugin` interface
+
+Every plugin **default-exports** an object satisfying the `CrowiPlugin`
+type exposed by `@crowi/plugin-api`. The runtime loads it at boot via
+`await import('<plugin-name>')`.
+
+The main fields are:
+
+| Field | Role |
+| ----- | ---- |
+| `name` | npm package name. Doubles as the namespace for config rows (`plugin:<name>:*`) and page metadata. |
+| `version` | The plugin's own version (the npm package's semver). |
+| `requires` | npm names of other plugins needed at runtime; the dependency graph is resolved and they load first. |
+| `configSchema` | A Zod schema describing the plugin's global config values. The admin UI walks it to auto-generate a config form. |
+| `pageMetadataSchema` | A per-page metadata schema. When set, the page-edit UI renders a section for the plugin. |
+| `adminPlacement` | Where the plugin appears in the admin sidebar (`section` / `label` / `icon`). |
+| `register*` | Registration callbacks for each extension point (storage / search / auth / notifier / renderer / routes). Declare only those you use. |
+| `onInstall` / `onUninstall` | Hooks for first activation / removal; used for migrating v1 config, etc. |
+| `reconfigure` | Called when config changes via the admin UI, so cached connections can be refreshed. |
+
+All `register*` callbacks are optional. A storage-only plugin needs only
+`registerStorage`.
+
+## PluginContext
+
+Every `register*` callback receives a `PluginContext`. It is the only
+conduit through which a plugin reads core state. Plugins must not import
+`@crowi/server` directly — they always go through the context.
+
+`PluginContext` provides:
+
+- `config<T>()` — read this plugin's typed config (parsed via `configSchema`)
+- `dependencyConfig<T>(name)` — read a dependency plugin declared in `requires`
+- `setConfig(key, value)` — write a single config field
+- `pageMetadata` — read / write page metadata scoped to this plugin's namespace
+- `model(name)` — access core Mongoose models (Page / User / Comment …)
+- `crypto` — symmetric encrypt / decrypt via the `KeyProvider`
+- `log` — a structured logger auto-prefixed with the plugin name
+
+`dependencyConfig` exists for credential-sharing plugins like
+`@crowi/plugin-aws`: the base plugin owns `region` / `accessKeyId` /
+`secretAccessKey`, and dependents such as `@crowi/plugin-storage-aws-s3`
+read them without duplicating the fields in their own schema.
+
+## Plugin resolution by the runner
+
+The api package itself does not depend on plugins. Resolving plugin npm
+names is the job of `@crowi/runner`.
+
+1. The runner reads `crowi.config.json` and takes the names listed in
+   the `plugins` array.
+2. Using `createRequire(<projectDir>/package.json)`, it resolves those
+   npm names against the **runner project's `node_modules/`**.
+3. It walks each plugin's `requires` via BFS, loading transitive
+   dependencies too.
+4. The resulting list of resolved `CrowiPlugin` instances is handed to
+   the api boot sequence.
+
+So adding a plugin as an operator is just two steps:
+
+- Add the plugin to the runner project's `package.json` dependencies
+- List the package name in `plugins` in `crowi.config.json`
+
+For the concrete steps, see [Managing plugins](./managing).
+
+## Placement in the boot sequence
+
+Plugins start after config and models are ready, but before the legacy
+mailer / slack initialisers. The core renderer pipeline (TOC / wikilink
+/ mention / code block) is registered **before** plugins, so renderer
+plugins append on top of the core registrations.
+
+## Related pages
+
+- Installing and configuring plugins → [Managing plugins](./managing)
+- The list of renderer plugins → [Renderer plugins](./renderers)
+- Building your own plugin → [Developing plugins](./developing)
+- The overall architecture → [Architecture](../reference/architecture)

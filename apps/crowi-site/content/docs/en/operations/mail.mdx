@@ -1,0 +1,137 @@
+---
+title: Mail / SMTP setup
+description: Configuring outgoing mail and test delivery
+---
+
+Crowi can send notification mail such as password resets and
+invitations. Mail delivery can use either **SMTP** or **AWS SES**, and is
+configured from the mail settings screen in the admin UI
+(`/admin/mail`).
+
+> **Note**: Mail configuration is not required. When neither SMTP nor SES
+> is configured, the mailer is not initialized, and operations that
+> involve sending mail fail with a "mailer not configured" error.
+
+## Mailer selection logic
+
+At boot (and when settings are saved), the API loads the mail settings
+and decides the delivery method in the following priority order.
+
+1. **`mail:from` is unset** → the mailer is not initialized (mail
+   feature off).
+2. **SMTP host and port are set** → use SMTP.
+3. **AWS access key and secret key are set** → use SES.
+4. None of the above → the mailer is not initialized.
+
+In other words, SMTP settings take priority over SES. The sender address
+(`mail:from`) is required for either method.
+
+## Configuring mail in the admin UI
+
+Opening `/admin/mail` shows the current mail settings. Internally,
+`GET /api/v2/admin/mail` retrieves the following values.
+
+| Setting | Description |
+| ------- | ----------- |
+| `from` | Sender mail address (e.g. `crowi@example.com`) |
+| `smtpHost` | Hostname of the SMTP server |
+| `smtpPort` | Port number of the SMTP server |
+| `smtpUser` | Username for SMTP authentication |
+| `smtpPassword` | Password for SMTP authentication (sensitive) |
+| `aws.region` | The SES region |
+| `aws.accessKeyId` | AWS access key ID for SES |
+| `aws.secretAccessKey` | AWS secret access key for SES (sensitive) |
+
+Saving the settings calls `PUT /api/v2/admin/mail`, after which
+`setupMailer()` is re-run. As a result, the new mail settings take
+effect immediately **without restarting the server**.
+
+### Handling of sensitive values
+
+`smtpPassword` and `aws.secretAccessKey` are treated as sensitive
+settings.
+
+- On retrieval (`GET`), the actual value is not returned — only whether
+  a value is set (`hasValue`).
+- On save, fields submitted with an empty input are treated as
+  **unchanged**, and the existing value is kept. Explicitly sending an
+  empty string clears the value.
+- When `CROWI_ENCRYPTION_KEY` is set, these values are automatically
+  encrypted when stored in MongoDB. See
+  [Encrypting sensitive config](./encryption) for details.
+
+## Sending via SMTP
+
+An example configuration for using a general SMTP server (Gmail,
+Mailgun, an in-house mail server, etc.).
+
+| Setting | Example value |
+| ------- | ------------- |
+| Sender (`from`) | `crowi@example.com` |
+| SMTP host | `smtp.example.com` |
+| SMTP port | `587` (STARTTLS) or `465` (SSL/TLS) |
+| SMTP user | `crowi@example.com` |
+| SMTP password | (a password issued on the SMTP server side) |
+
+Behaviour related to the port:
+
+- Specifying **port `465`** makes the connection automatically `secure:
+  true` (SSL/TLS).
+- For other ports (e.g. `587`), a STARTTLS upgrade is attempted.
+- SMTP authentication (AUTH) is enabled only when both the SMTP user and
+  password are set. If only one of them is set, the connection is made
+  without authentication.
+
+## Sending via AWS SES
+
+To use AWS SES, leave the SMTP host / port blank and configure the SES
+region and credentials.
+
+| Setting | Example value |
+| ------- | ------------- |
+| Sender (`from`) | `crowi@example.com` (an address verified in SES) |
+| AWS region | `us-east-1` |
+| Access key ID | (the key of an IAM user with SES send permission) |
+| Secret access key | (same as above) |
+
+> **Tip**: While SES is in the sandbox state, it can only send to
+> verified addresses. For production, request sandbox removal from AWS.
+> The sender address must also be verified on the SES side.
+
+## Sending a test mail
+
+You can verify that mail settings are correct with the **test send**
+feature in the admin UI. It calls `POST /api/v2/admin/mail/test` and
+sends a test mail **to the operating administrator's own mail address**.
+
+- The test send uses the saved settings, or the SMTP settings being
+  entered on the screen.
+- If the SMTP host / port is not configured, it fails with a `502`
+  error.
+- Network errors and authentication failures are also returned as `502`
+  (`MAIL_TEST_FAILED`) with a message. Use the error message as a clue
+  to review the configuration.
+- The test mail's subject and body are fixed ASCII text. It is designed
+  to reach the recipient's inbox even when the character-encoding
+  settings are wrong.
+
+> **Note**: The test mail's recipient is fixed as "the operating
+> administrator's mail address". You cannot specify an arbitrary
+> recipient. The administrator account performing the test must have a
+> valid mail address registered.
+
+## Troubleshooting
+
+| Symptom | What to check |
+| ------- | ------------- |
+| No mail is sent at all | Whether `mail:from` is set. Whether either SMTP or SES is fully configured |
+| Test send returns `502` | Whether the SMTP host / port is correct. Whether the credentials are correct. Whether a firewall is blocking the send port |
+| Authentication error | Whether both the SMTP user and password are entered. Whether the password was saved empty and is now unset |
+| Settings changes are not reflected | `setupMailer()` runs after saving, so changes are normally applied immediately. If they still are not, restart the API |
+
+## Next steps
+
+- [Configuration](./configuration) — environment variables in general
+- [Encrypting sensitive config](./encryption) — encrypting SMTP passwords / SES keys
+- [Admin](./admin) — overview of the admin UI
+- [Notifications](../guide/notifications) — the user-facing notification feature

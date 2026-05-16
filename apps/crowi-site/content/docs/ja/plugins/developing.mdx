@@ -1,0 +1,187 @@
+---
+title: プラグイン開発
+description: "@crowi/plugin-api を使って独自プラグインを作る"
+---
+
+このページでは、`@crowi/plugin-api` を使って独自の Crowi プラグインを
+作る手順を説明します。プラグインの仕組み全体は
+[プラグインアーキテクチャ](./overview) を、設計の経緯は
+[RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md)
+を参照してください。
+
+> **注意**: Crowi v2 は alpha 開発中であり、`@crowi/plugin-api` の
+> バージョンは現時点で `0.x` です。`2.x` に到達して以降の API 安定保証
+> (v2 系のすべてのマイナーで動作) はその時点から有効になります。alpha
+> 期間中は契約が変わる可能性があります。
+
+## プラグインの正体
+
+Crowi プラグインは特別な形式ではなく、**通常の npm パッケージ** です。
+要件はおおむね次の 2 点だけです。
+
+- `@crowi/plugin-api` に (peer) 依存する
+- `CrowiPlugin` 型を満たすオブジェクトを **デフォルトエクスポート** する
+
+ランタイムは起動時に `await import('<plugin-name>')` でこのデフォルト
+エクスポートを読み込み、各 `register*` コールバックを呼び出します。
+
+## 最小プラグインの骨子
+
+次は、ストレージドライバを 1 つだけ提供する最小構成のプラグイン例です。
+`@crowi/plugin-api` は型のみのパッケージなので、import するのは型だけです。
+
+```ts
+import type { CrowiPlugin } from '@crowi/plugin-api';
+
+const myPlugin: CrowiPlugin = {
+  name: '@example/crowi-plugin-mystorage',
+  version: '0.1.0',
+
+  registerStorage: (registry, ctx) => {
+    ctx.log.info('registering mystorage driver');
+    registry.register('mystorage', {
+      put: async (key, body, meta) => {
+        // ... アップロード処理
+        return { key };
+      },
+      get: async (key) => {
+        // ... ダウンロード処理
+        throw new Error('not implemented');
+      },
+      delete: async (key) => {
+        // ... 削除処理
+      },
+    });
+  },
+};
+
+export default myPlugin;
+```
+
+`name` は npm パッケージ名と一致させる必要があります。これは設定行
+(`plugin:<name>:*`) とページメタデータの名前空間も兼ねます。
+
+## 設定スキーマを足す
+
+プラグインに設定値を持たせるには、`configSchema` に Zod スキーマを
+宣言します。管理画面 `/admin/plugins` がこのスキーマを辿って設定フォーム
+を自動生成します。
+
+```ts
+import { z } from 'zod';
+import type { CrowiPlugin } from '@crowi/plugin-api';
+
+const myPlugin: CrowiPlugin = {
+  name: '@example/crowi-plugin-mystorage',
+  version: '0.1.0',
+
+  configSchema: z.object({
+    endpoint: z.string().url().describe('ストレージのエンドポイント URL'),
+    bucket: z.string().describe('バケット名'),
+    accessKey: z.string().describe('@sensitive アクセスキー'),
+  }),
+
+  registerStorage: (registry, ctx) => {
+    const config = ctx.config<{ endpoint: string; bucket: string; accessKey: string }>();
+    // config.accessKey は復号済みの値
+    // ... config を使ってドライバを構築
+  },
+};
+
+export default myPlugin;
+```
+
+スキーマフィールドの説明文に付ける 2 つのマーカーが、管理 UI の挙動を
+変えます。
+
+| マーカー | 書式 | 効果 |
+| -------- | ---- | ---- |
+| `@sensitive` | `z.string().describe('@sensitive ...')` | 保存時に自動暗号化。シークレット入力欄で描画。 |
+| `@action` | `z.string().describe('@action "Test" POST /test')` | フィールド横にアクションボタンを描画。`registerRoutes` のエンドポイントを呼ぶ。 |
+
+## PluginContext でできること
+
+各 `register*` コールバックの第 2 引数 `PluginContext` が、プラグインが
+コアと安全にやり取りするための唯一の窓口です。`@crowi/server` を直接
+import してはいけません。
+
+- `config<T>()` — このプラグインの型付き設定を読む
+- `dependencyConfig<T>(name)` — `requires` に宣言した依存プラグインの設定を読む
+- `setConfig(key, value)` — 設定フィールドを 1 つ書き込む
+- `pageMetadata` — このプラグイン名前空間のページメタデータを読み書き
+- `model(name)` — コアの Mongoose モデル (Page / User / Comment …) にアクセス
+- `crypto` — 対称 暗号化 / 復号
+- `log` — プラグイン名で自動プレフィックスされる構造化ロガー
+
+## 拡張ポイント一覧
+
+`CrowiPlugin` の `register*` コールバックは、すべて任意です。プラグインが
+貢献するものだけ実装します。
+
+| コールバック | 拡張する対象 |
+| ------------ | ------------ |
+| `registerStorage` | ファイルストレージドライバ |
+| `registerSearch` | 全文検索バックエンド |
+| `registerAuth` | 認証プロバイダ |
+| `registerNotifier` | 通知シンク |
+| `registerRenderer` | Markdown レンダラ拡張 |
+| `registerRoutes` | プラグイン独自の ts-rest エンドポイント (`/api/v2/plugins/<name>/*`) |
+| `registerHooks` | イベント購読 (v2.0 では内部利用のみ、まだ安定拡張ポイントではない) |
+
+ライフサイクルフックも宣言できます。
+
+- `onInstall` — 初回有効化時に一度だけ実行 (v1 設定の移行などに使う、冪等)
+- `onUninstall` — 削除時に実行 (既定では設定保持、purge 指定時のみ)
+- `reconfigure` — 管理 UI で設定が変わったときに呼ばれ、キャッシュした接続などを更新
+
+`reconfigure` を実装しない場合、そのプラグインは「設定変更にはサーバ
+再起動が必要」として扱われます。
+
+## 依存プラグイン
+
+他のプラグインに実行時依存する場合は `requires` に npm 名を列挙します。
+PluginManager が依存グラフを解決し、`requires` を先に読み込みます
+(循環は起動失敗)。
+
+資格情報の共有が典型例です。`@crowi/plugin-storage-aws-s3` は
+`@crowi/plugin-aws` を `requires` に宣言し、`ctx.dependencyConfig()` で
+`region` / `accessKeyId` / `secretAccessKey` を読み取ります。自前の
+スキーマで重複定義する必要はありません。
+
+## レンダラプラグインを作る
+
+`registerRenderer` で Markdown レンダラを拡張できます。レジストリは
+unified プラグインの追加、mdast ノードレンダラ、コードブロックレンダラ、
+埋め込みタグレンダラ、URL インライン展開ルールの登録メソッドを提供します。
+コードブロックレンダラは `cacheVersion`・任意の `reservation` (プレース
+ホルダ形状)・`render` を持つオブジェクトで、`PluginRenderCache` 経由で
+キャッシュされます。
+
+具体的な実装例としては、リポジトリ内の
+`packages/plugin-renderer-plantuml` (コードブロック + キャッシュ + 外部
+I/O)、`packages/plugin-renderer-katex` (unified プラグイン + ノード変換)、
+`packages/plugin-renderer-emoji` (no-I/O の最小例) が参考になります。
+
+## 参考実装
+
+リポジトリ同梱のファーストパーティプラグインは、そのまま参考実装として
+読めます。
+
+| パッケージ | 何の例として読めるか |
+| ---------- | -------------------- |
+| `packages/plugin-storage-local` | `registerStorage` の最小例 |
+| `packages/plugin-storage-aws-s3` | `requires` による資格情報共有 + `@sensitive` |
+| `packages/plugin-aws` | `register*` を持たない設定のみのベースプラグイン |
+| `packages/plugin-search-elasticsearch` | `registerSearch` |
+| `packages/plugin-renderer-*` | `registerRenderer` の各バリエーション |
+
+また `packages/plugin-api/src/__fixtures__/example-plugin.ts` は、
+すべての拡張ポイントを 1 ファイルで網羅したサニティ用フィクスチャです
+(実行用ではありませんが、契約の使い方の見本になります)。
+
+## 関連ページ
+
+- プラグインの仕組み → [プラグインアーキテクチャ](./overview)
+- プラグインの導入と設定 → [プラグインの導入と設定](./managing)
+- レンダラプラグインの一覧 → [レンダラプラグイン](./renderers)
+- 設計提案の一覧 → [RFC インデックス](../reference/rfcs)

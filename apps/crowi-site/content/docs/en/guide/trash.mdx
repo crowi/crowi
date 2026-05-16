@@ -1,0 +1,78 @@
+---
+title: Trash
+description: Restoring and permanently deleting pages
+---
+
+Page deletion in Crowi is **two-stage**. When you delete a page it first
+moves to the "Trash", from which you can either "Restore" it or "Delete it
+permanently". Even if you delete a page by mistake, you can get it back as
+long as it has not been permanently deleted.
+
+## What happens when you delete a page
+
+When you delete a page, Crowi does the following:
+
+- Changes the page's status to `deleted`
+- Renames the page to a path under `/trash/` (e.g. `/foo/bar` → `/trash/foo/bar`)
+- Creates a redirect page at the original path pointing to the trashed page
+- Deactivates any external share (Share) for that page
+
+As a result, a deleted page no longer appears in the normal page list and
+is shown together in the trash list instead. The body and revision
+history are kept as-is.
+
+> **Note**: Because deletion is implemented as a path rename, pages that
+> Crowi considers an "undeletable path" (such as system-reserved paths)
+> cannot be deleted.
+
+## Browsing the trash
+
+Visiting `/trash/` shows a list of deleted pages. The path hierarchy is
+preserved, so you can also follow sub-paths such as `/trash/team/eng/` to
+narrow down what you see inside the trash.
+
+Each item in the trash offers two actions:
+
+| Action | Description |
+| ------ | ----------- |
+| Restore | Returns the page to its original path and sets its status back to published |
+| Delete forever | Permanently removes the page from the database (cannot be undone) |
+
+## Restoring a page
+
+Choosing "Restore" from the trash list returns the page to its original
+pre-deletion path and makes it viewable and editable as usual. On restore,
+the redirect page that was created at the original path during deletion is
+removed.
+
+> **Note**: If another page already exists at the restore target path and
+> it is not the redirect page created during deletion, Crowi detects the
+> inconsistency and aborts the restore. In that case manual data cleanup
+> is required.
+
+## Permanently deleting a page
+
+Choosing "Delete forever" from the trash list shows a confirmation
+dialog. When executed, the following data related to the page is deleted
+all together:
+
+- The page document itself
+- All revisions (history)
+- Bookmarks on the page
+- Attachments of the page (including their storage objects)
+- Comments on the page
+- Activity related to the page
+- The redirect page at the original path
+
+> **Warning**: Permanent deletion **cannot be undone**. Everything,
+> including history and attachments, is lost. Make sure the page is truly
+> no longer needed before running it.
+
+Permanent deletion is processed as a request to `DELETE /api/v2/pages`
+with `completely: true` attached.
+
+## Related pages
+
+- [Working with pages](./pages) — creating and deleting pages
+- [Revisions](./revisions) — revisions and rollback
+- [Attachments](./attachments) — how attachments are handled on permanent deletion

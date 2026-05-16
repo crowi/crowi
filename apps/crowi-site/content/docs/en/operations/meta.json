@@ -1,4 +1,4 @@
 {
   "title": "Operations",
-  "pages": ["realtime-collab"]
+  "pages": ["installation", "configuration", "encryption", "storage", "admin", "mail", "realtime-collab", "search-setup", "backup", "upgrading-from-v1"]
 }

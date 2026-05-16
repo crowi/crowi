@@ -1,0 +1,152 @@
+---
+title: プラグインの導入と設定
+description: プラグインのインストール、有効化、管理 UI からの設定
+---
+
+このページでは、Crowi 2.0 にプラグインを導入し、管理画面から設定する
+手順を説明します。プラグインの仕組み全体については
+[プラグインアーキテクチャ](./overview) を先に読むことをおすすめします。
+
+## プラグインは 2 段階で有効になる
+
+Crowi のプラグインは「導入 (load)」と「設定 (configure)」の 2 段階に
+分かれています。
+
+1. **導入** — どのプラグインを読み込むかを `crowi.config.json` で宣言する。
+   これはコード変更ではなく運用者の設定変更です。
+2. **設定** — 各プラグインの設定値 (S3 バケット名、OAuth クライアント ID
+   など) を管理画面 `/admin/plugins` から入力する。設定値は MongoDB の
+   Config コレクションに `plugin:<name>:*` という名前空間で保存されます。
+
+`crowi.config.json` には「どのプラグインを読むか」と「どのドライバを
+使うか」だけを書きます。バケット名やシークレットといった **設定値そのもの**
+はこのファイルには書きません。
+
+## 導入手順
+
+### 1. runner プロジェクトの依存に追加
+
+プラグインは通常の npm パッケージです。Crowi を動かしている runner
+プロジェクト (api を起動するプロジェクト) の `package.json` の依存関係に
+プラグインを加えます。
+
+```bash
+pnpm add @crowi/plugin-storage-aws-s3
+```
+
+開発リポジトリでは、ファーストパーティのプラグインは workspace 内に
+すでに存在するため、pnpm の hoisted な `node_modules/` 経由で解決され、
+追加インストールは不要です。
+
+### 2. crowi.config.json に列挙
+
+リポジトリルートの `crowi.config.json` の `plugins` 配列に、導入する
+プラグインの npm パッケージ名を追加します。
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-emoji",
+    "@crowi/plugin-renderer-katex"
+  ],
+  "storage": {
+    "driver": "s3"
+  },
+  "search": {
+    "driver": "elasticsearch"
+  }
+}
+```
+
+ストレージや検索のように「ドライバ」を選択するプラグインの場合は、
+`storage.driver` / `search.driver` で使用するドライバ名を指定します。
+ドライバ名は省略すると、デフォルトのバッテリー同梱プラグインが提供する
+`local` / `mongo` が使われます。
+
+> **Tip**: `crowi.config.json` で列挙したプラグインが他プラグインを
+> `requires` で必要としている場合、推移的な依存も自動で読み込まれます。
+> 例えば `@crowi/plugin-storage-aws-s3` は `@crowi/plugin-aws` を要求する
+> ため、後者を明示的に列挙しなくても読み込まれます。
+
+### 3. api の再起動
+
+プラグインの読み込みは起動時に一度だけ行われます。`crowi.config.json` を
+変更したら api を再起動してください。プラグインの追加・削除に api イメージ
+の再ビルドは不要です。
+
+Docker 構成では、`crowi.config.json` はイメージに焼き込まず、コンテナへ
+マウントする運用です (`docker-compose.yml` の api サービスは
+`./crowi.config.json:/app/crowi.config.json:ro` をマウントしています)。
+
+## 管理画面からの設定
+
+api が起動すると、読み込まれたプラグインは管理画面 `/admin/plugins` に
+一覧表示されます。各行には npm 名・バージョン・登録した拡張ポイントが
+表示され、クリックすると `/admin/plugins/edit?name=<name>` の設定フォーム
+へ移動します。
+
+### スキーマ駆動の設定フォーム
+
+設定フォームは、プラグインが宣言した `configSchema` (Zod スキーマ) を
+ランタイムが辿って **自動生成** します。プラグイン側が React コンポーネント
+を出荷する必要はありません。
+
+各プラグインは管理サイドバーにも独自のエントリを追加します。表示位置は
+プラグインの `adminPlacement` で決まり、`register*` フックの種類から
+セクション (storage / mail / notification / auth …) が自動で導出されます。
+`register*` を持たない設定のみのベースプラグイン (`@crowi/plugin-aws`
+など) は、サイドバーに出すために `section: 'shared'` を宣言します。
+
+### `@sensitive` マーカー
+
+`configSchema` のフィールドの説明文が `@sensitive` で始まる場合、その
+フィールドは **機密扱い** になります。
+
+```ts
+z.string().describe('@sensitive AWS secret access key')
+```
+
+機密フィールドは、コアの機密 Config と同じ `KeyProvider` を使って保存時に
+自動暗号化され、読み取り時に復号されます。管理 UI ではシークレット用の
+入力欄 (`<SecretField>`: 保存済みバッジ / 入力中のクリア / 取り消し) で
+レンダリングされます。暗号化の前提となる `CROWI_ENCRYPTION_KEY` の設定に
+ついては [設定の暗号化](../operations/encryption) を参照してください。
+
+### `@action` マーカー
+
+フィールドの説明文が `@action` で始まる場合、そのフィールドの隣に
+アクションボタンが描画されます。
+
+```ts
+z.string().describe('@action "Test connection" POST /test')
+```
+
+書式は `@action "<ラベル>" <メソッド> <パス>` です。ボタンを押すと、
+プラグインが `registerRoutes` で提供したエンドポイント
+(`/api/v2/plugins/<name>/...` に対する相対パス) が呼び出されます。
+「接続テスト」「Google で認証」といった操作を、プラグインが専用 UI を
+書かずに提供できます。
+
+## レンダーキャッシュのクリア
+
+レンダラプラグイン (PlantUML など) は、レンダリング結果を MongoDB の
+`PluginRenderCache` にキャッシュします。`/admin/plugins` 画面には、
+全レンダーキャッシュをまとめてクリアするボタンがあります。プラグインの
+出力形が変わったときなどに利用してください。
+
+## プラグインの削除
+
+プラグインを外すには `crowi.config.json` の `plugins` から該当の名前を
+取り除いて api を再起動します。設定行 (`plugin:<name>:*`) は、運用者が
+あとで再導入する可能性を考えて **既定では保持** されます。設定行も含めて
+完全に破棄したい場合のみ、削除時に明示的な purge 操作を行います。
+
+## 関連ページ
+
+- プラグインの仕組み → [プラグインアーキテクチャ](./overview)
+- レンダラプラグインの一覧 → [レンダラプラグイン](./renderers)
+- ストレージの選択 → [ストレージ](../operations/storage)
+- 検索バックエンドの設定 → [検索のセットアップ](../operations/search-setup)

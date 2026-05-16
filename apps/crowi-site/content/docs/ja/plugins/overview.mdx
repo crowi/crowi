@@ -1,0 +1,130 @@
+---
+title: プラグインアーキテクチャ
+description: Crowi 2.0 のプラグインの仕組みと設計思想 (RFC-0001 / RFC-0002)
+---
+
+Crowi 2.0 は、ファイルストレージ・全文検索・レンダラ・認証・通知といった
+本来コアと独立した関心事を、独立配布可能な **プラグイン** として切り出した
+アーキテクチャを採用しています。設計の経緯は
+[RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md)
+(プラグインアーキテクチャ) と
+[RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md)
+(レンダラプラグインアーキテクチャ) を参照してください。
+
+## 設計の原則
+
+Crowi のプラグインモデルは、次のいくつかの原則の上に成り立っています。
+
+- **バッテリー同梱**: プラグインを 1 つも追加しなくても、初期状態の Crowi
+  は完結した Wiki として動作します。ローカルファイルストレージ、MongoDB
+  ベースの検索、メール + パスワード認証、アプリ内通知がデフォルトで
+  有効です。
+- **npm パッケージとして配布**: プラグインは特別な形式ではなく、通常の
+  npm パッケージです。グローバルなプラグインレジストリや curl パイプ式の
+  インストーラはありません。
+- **再ビルド不要**: api 本体はプラグインに依存しません。プラグインの
+  追加・削除は、運用者が自分の runner プロジェクトの依存関係を変えるだけで
+  完結し、api のイメージを焼き直す必要はありません。
+- **v2.x の間は API 安定**: `@crowi/plugin-api@2.x` に対して書かれた
+  プラグインは、v2 系のすべてのマイナーバージョンで動作し続けます。
+
+> **Tip**: プラグインの実行はサンドボックス化されていません。プラグインは
+> サーバと同じ Node 権限で動作します。信頼できる発行元のパッケージのみを
+> 導入してください。
+
+## プラグインの種類
+
+Crowi のプラグインは、貢献する拡張ポイントによっておおよそ次の種類に
+分かれます。1 つのプラグインが複数の拡張ポイントを実装することもできます。
+
+| 種類 | 拡張ポイント | 例 |
+| ---- | ------------ | -- |
+| ストレージ | `registerStorage` | `@crowi/plugin-storage-local`、`@crowi/plugin-storage-aws-s3` |
+| 検索 | `registerSearch` | `@crowi/plugin-search-elasticsearch` |
+| レンダラ | `registerRenderer` | `@crowi/plugin-renderer-emoji` / `-katex` / `-plantuml` / `-crowi-legacy` |
+| 認証 | `registerAuth` | (外部 OAuth プロバイダ向け、今後拡充予定) |
+| 通知 | `registerNotifier` | (Slack などの通知シンク向け、今後拡充予定) |
+| ベース (設定のみ) | (register なし) | `@crowi/plugin-aws` — 後続の AWS 系プラグインに資格情報を共有 |
+| ルート | `registerRoutes` | 「接続テスト」ボタンや OAuth コールバック用の ts-rest 契約 |
+
+ストレージと検索は、それぞれ「ドライバ」を `crowi.config.json` の
+`storage.driver` / `search.driver` で選択する形になっています。複数の
+ドライバプラグインを導入しておき、設定でどれを使うか切り替えられます。
+
+## `CrowiPlugin` インターフェース
+
+すべてのプラグインは、`@crowi/plugin-api` が公開する `CrowiPlugin` 型を
+満たすオブジェクトを **デフォルトエクスポート** します。ランタイムは
+起動時に `await import('<plugin-name>')` でこれを読み込みます。
+
+主なフィールドは次のとおりです。
+
+| フィールド | 役割 |
+| ---------- | ---- |
+| `name` | npm パッケージ名。設定行 (`plugin:<name>:*`) とページメタデータの名前空間を兼ねます。 |
+| `version` | プラグイン自身のバージョン (npm パッケージの semver)。 |
+| `requires` | 実行時に必要な他プラグインの npm 名。依存グラフを解決して先に読み込みます。 |
+| `configSchema` | プラグインのグローバル設定値を表す Zod スキーマ。管理 UI がこれを辿って設定フォームを自動生成します。 |
+| `pageMetadataSchema` | ページ単位のメタデータスキーマ。指定するとページ編集 UI にプラグイン用の入力欄が出ます。 |
+| `adminPlacement` | 管理サイドバーでの表示位置 (`section` / `label` / `icon`)。 |
+| `register*` | 各拡張ポイントへの登録コールバック (storage / search / auth / notifier / renderer / routes)。実装するものだけ宣言します。 |
+| `onInstall` / `onUninstall` | 初回有効化 / 削除時のフック。v1 設定の移行などに使います。 |
+| `reconfigure` | 管理 UI から設定が変わったときに呼ばれ、キャッシュした接続などを更新します。 |
+
+`register*` コールバックはすべて任意です。ストレージだけ提供するプラグイン
+なら `registerStorage` だけ実装すれば十分です。
+
+## PluginContext
+
+各 `register*` コールバックには `PluginContext` が渡されます。これが、
+プラグインがコアの状態に触れる唯一の窓口です。プラグインは
+`@crowi/server` を直接 import せず、必ず context 経由でやり取りします。
+
+`PluginContext` が提供するもの:
+
+- `config<T>()` — このプラグインの型付き設定 (`configSchema` でパース) を読む
+- `dependencyConfig<T>(name)` — `requires` に宣言した依存プラグインの設定を読む
+- `setConfig(key, value)` — 設定フィールドを 1 つ書き込む
+- `pageMetadata` — このプラグインの名前空間に閉じたページメタデータの読み書き
+- `model(name)` — コアの Mongoose モデル (Page / User / Comment …) にアクセス
+- `crypto` — `KeyProvider` を使った対称 暗号化 / 復号
+- `log` — プラグイン名で自動プレフィックスされる構造化ロガー
+
+`dependencyConfig` は、`@crowi/plugin-aws` のような資格情報共有プラグインの
+ために用意されています。ベースプラグインが `region` / `accessKeyId` /
+`secretAccessKey` を持ち、`@crowi/plugin-storage-aws-s3` などの依存先が
+自前のスキーマで重複定義せずにそれを読み取れます。
+
+## runner によるプラグイン解決
+
+api パッケージ自身はプラグインを依存に持ちません。プラグインの npm 名を
+解決するのは `@crowi/runner` の役割です。
+
+1. runner は `crowi.config.json` を読み、`plugins` 配列に列挙された名前を
+   取得します。
+2. `createRequire(<projectDir>/package.json)` を使って、その npm 名を
+   **runner プロジェクトの `node_modules/`** から解決します。
+3. 各プラグインの `requires` を BFS で辿り、推移的な依存も読み込みます。
+4. 結果として、解決済みの `CrowiPlugin` インスタンス一覧が api の起動
+   シーケンスに渡されます。
+
+つまり、運用者がプラグインを 1 つ追加するには次の 2 つを行うだけです。
+
+- runner プロジェクトの `package.json` の依存にプラグインを加える
+- `crowi.config.json` の `plugins` にそのパッケージ名を列挙する
+
+具体的な手順は [プラグインの導入と設定](./managing) を参照してください。
+
+## 起動シーケンスでの位置づけ
+
+プラグインは、設定とモデルの準備が終わった後、レガシーな mailer / slack
+初期化の前に起動します。レンダラのコアパイプライン (TOC / wikilink /
+メンション / コードブロック) は **プラグインより先に** 登録されるため、
+レンダラプラグインはコアの登録の上に追記する形になります。
+
+## 関連ページ
+
+- プラグインの導入と設定 → [プラグインの導入と設定](./managing)
+- レンダラプラグインの一覧 → [レンダラプラグイン](./renderers)
+- 独自プラグインの作り方 → [プラグイン開発](./developing)
+- アーキテクチャ全体像 → [アーキテクチャ](../reference/architecture)
