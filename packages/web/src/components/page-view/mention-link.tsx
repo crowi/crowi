@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import BoringAvatar from 'boring-avatars';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -34,9 +35,9 @@ export function MentionLink({ username }: { username: string }) {
 
   if (!user) {
     return (
-      <a href={href} className={cn(MENTION_CLASS, 'underline decoration-primary/40 hover:decoration-primary/70')}>
+      <Link href={href} className={cn(MENTION_CLASS, 'underline decoration-primary/40 hover:decoration-primary/70')}>
         @{username}
-      </a>
+      </Link>
     );
   }
 
@@ -45,7 +46,7 @@ export function MentionLink({ username }: { username: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <a href={href} className={cn(MENTION_CLASS, 'inline-flex items-center gap-1 align-middle no-underline hover:underline')}>
+        <Link href={href} className={cn(MENTION_CLASS, 'inline-flex items-center gap-1 align-middle no-underline hover:underline')}>
           <Avatar className="size-5 shrink-0">
             {user.image ? <AvatarImage src={user.image} alt={displayName} /> : null}
             <AvatarFallback className="bg-transparent p-0" aria-label={displayName}>
@@ -53,7 +54,7 @@ export function MentionLink({ username }: { username: string }) {
             </AvatarFallback>
           </Avatar>
           @{username}
-        </a>
+        </Link>
       </TooltipTrigger>
       <TooltipContent>{displayName}</TooltipContent>
     </Tooltip>

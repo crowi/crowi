@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, u
 import { Check, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import Link from 'next/link';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
 
@@ -176,6 +177,19 @@ const components = {
       : isMention
         ? 'text-primary font-medium decoration-primary/40 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors'
         : 'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors';
+    // Internal app paths (wikilinks, page links) navigate through the
+    // Next.js router so the move is a client-side transition — no full
+    // document reload, no auth re-check, no layout loading flash.
+    // External links and in-page `#` anchors (incl. broken wikilinks,
+    // whose href is `#`) stay plain `<a>`.
+    const isInternal = !!href && href.startsWith('/') && !href.startsWith('//');
+    if (isInternal) {
+      return (
+        <Link href={href} className={composedClassName} {...props}>
+          {children}
+        </Link>
+      );
+    }
     return (
       <a href={href} className={composedClassName} target={isExternal ? '_blank' : undefined} rel={isExternal ? 'noopener noreferrer' : undefined} {...props}>
         {children}
