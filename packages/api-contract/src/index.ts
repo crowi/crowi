@@ -16,6 +16,7 @@ export * from './schemas/backlink';
 export * from './schemas/draft';
 export * from './schemas/autocomplete';
 export * from './schemas/collab';
+export * from './schemas/presence';
 export * from './schemas/attachment';
 export * from './schemas/adminCrypto';
 export * from './schemas/search';
