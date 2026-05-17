@@ -1,6 +1,7 @@
 import type { EditorView } from '@codemirror/view';
 import { API_BASE_URL } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
+import { notify } from '@/lib/notify';
 
 /**
  * RFC-0004 Phase 6/7 — progress-placeholder lifecycle shared by the
@@ -286,7 +287,13 @@ export async function runUpload(view: EditorView, file: File, filename: string, 
   try {
     const outcome = await uploadAttachment(file, filename, pageId, intent, onProgress);
     replacePlaceholder(view, uploadId, buildSuccessText(displayName, outcome.url, isImage));
-  } catch {
+  } catch (err) {
+    // Surface the failure: the inline `![Upload failed: …]` marker is
+    // easy to miss (and looks like a stray link), so also toast the
+    // server-supplied reason. Without this an upload failure — a
+    // storage-backend error, a permission change — was fully silent.
+    const reason = err instanceof Error && err.message ? err.message : 'Upload failed.';
+    notify.error(`${displayName}: ${reason}`);
     replacePlaceholder(view, uploadId, buildFailureText(displayName, isImage));
   }
 }
