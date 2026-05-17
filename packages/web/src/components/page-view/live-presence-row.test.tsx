@@ -35,30 +35,32 @@ afterEach(() => {
 });
 
 describe('LivePresenceRow', () => {
-  it('hides the row when the only viewer is the current user', () => {
+  // The row wrapper always renders (it reserves a fixed height to avoid
+  // layout shift); only its *content* is conditional.
+  it('reserves the row but shows no content when the only viewer is the current user', () => {
     mockPresence([viewer('me')], 'me');
     render(<LivePresenceRow pageId="page-1" />);
-    expect(screen.queryByTestId('live-presence-row')).toBeNull();
+    expect(screen.getByTestId('live-presence-row').childElementCount).toBe(0);
   });
 
-  it('hides the row when there are no viewers at all', () => {
+  it('reserves the row but shows no content when there are no viewers at all', () => {
     mockPresence([], 'me');
     render(<LivePresenceRow pageId="page-1" />);
-    expect(screen.queryByTestId('live-presence-row')).toBeNull();
+    expect(screen.getByTestId('live-presence-row').childElementCount).toBe(0);
   });
 
-  it('hides the row when the presence WebSocket is in error state', () => {
-    // Even with other viewers present, an error status hides the row
-    // so the rest of the page degrades gracefully.
+  it('reserves the row but shows no content when the presence WebSocket is in error state', () => {
+    // Even with other viewers present, an error status hides the
+    // content so the rest of the page degrades gracefully.
     mockPresence([viewer('me'), viewer('alice')], 'me', 'error');
     render(<LivePresenceRow pageId="page-1" />);
-    expect(screen.queryByTestId('live-presence-row')).toBeNull();
+    expect(screen.getByTestId('live-presence-row').childElementCount).toBe(0);
   });
 
-  it('renders the row when another viewer is present', () => {
+  it('renders content in the row when another viewer is present', () => {
     mockPresence([viewer('me'), viewer('alice')], 'me');
     render(<LivePresenceRow pageId="page-1" />);
-    expect(screen.getByTestId('live-presence-row')).toBeTruthy();
+    expect(screen.getByTestId('live-presence-row').childElementCount).toBeGreaterThan(0);
   });
 
   it('renders the editing badge for a viewer with the editor open', () => {

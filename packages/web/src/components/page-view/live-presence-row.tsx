@@ -21,12 +21,15 @@ import { m } from '@paraglide/messages.js';
  *   - viewers who also have the editor open get a ✏️ corner badge;
  *   - the current user appears in their own stack (Google Docs model)
  *     and is labelled "(you)" in the popover / sheet;
- *   - the whole row hides when the only viewer is the current user —
- *     there is no value in showing yourself alone (RFC open question 2);
+ *   - the row *content* is hidden when the only viewer is the current
+ *     user — no value in showing yourself alone (RFC open question 2);
  *   - on narrow viewports (< 768px) the row collapses to a single
  *     `[👁 N]` chip that taps open a sheet listing all viewers;
- *   - if the presence WebSocket never connects the row hides itself
- *     (graceful fallback — `usePresence` reports `status: 'error'`).
+ *   - if the presence WebSocket never connects the row content is
+ *     hidden (graceful fallback — `usePresence` reports `status:
+ *     'error'`);
+ *   - the row reserves a fixed height even when its content is hidden,
+ *     so a viewer joining / leaving never shifts the page layout.
  */
 
 /** Inline avatars before overflow folds into `[+N]`. */
@@ -42,28 +45,33 @@ interface LivePresenceRowProps {
 export function LivePresenceRow({ pageId }: LivePresenceRowProps) {
   const { viewers, selfUserId, status } = usePresence(pageId);
 
-  // Graceful fallback: hide the row entirely when the WS isn't up.
-  if (status === 'error') return null;
-
-  // Hide when alone — only the current user (or nobody) is present.
-  const hasOthers = viewers.some((v) => v.userId !== selfUserId);
-  if (!hasOthers) return null;
+  // Show content only when the presence channel is up and someone
+  // besides the current user is here (no value in showing yourself
+  // alone; an errored WS degrades gracefully). The wrapper below always
+  // renders with a fixed min-height, so reserving the row's vertical
+  // space is independent of whether there is content to show — content
+  // appearing or disappearing never shifts the page layout.
+  const hasOthers = status !== 'error' && viewers.some((v) => v.userId !== selfUserId);
 
   return (
-    <div className="flex items-center gap-2" data-testid="live-presence-row">
-      {/* Desktop / wide: label + avatar stack. */}
-      <div className="hidden md:flex items-center gap-2">
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-          {m['page.presence_label']()}
-        </span>
-        <PresenceAvatarStack viewers={viewers} selfUserId={selfUserId} />
-      </div>
+    <div className="flex items-center gap-2 min-h-7 md:min-h-6" data-testid="live-presence-row">
+      {hasOthers && (
+        <>
+          {/* Desktop / wide: label + avatar stack. */}
+          <div className="hidden md:flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+              {m['page.presence_label']()}
+            </span>
+            <PresenceAvatarStack viewers={viewers} selfUserId={selfUserId} />
+          </div>
 
-      {/* Narrow: collapsed [👁 N] chip → sheet. */}
-      <div className="md:hidden">
-        <PresenceMobileChip viewers={viewers} selfUserId={selfUserId} />
-      </div>
+          {/* Narrow: collapsed [👁 N] chip → sheet. */}
+          <div className="md:hidden">
+            <PresenceMobileChip viewers={viewers} selfUserId={selfUserId} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
