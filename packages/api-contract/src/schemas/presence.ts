@@ -98,3 +98,44 @@ export type PresenceViewersMessage = z.infer<typeof PresenceViewersMessageSchema
 
 export const PresenceServerMessageSchema = PresenceViewersMessageSchema;
 export type PresenceServerMessage = z.infer<typeof PresenceServerMessageSchema>;
+
+/**
+ * RFC-0005 Phase 3 — `GET /api/v2/pages/:id/likers`.
+ *
+ * A single entry in the "liked by" list. Sourced from the page's
+ * `liker` ObjectId array (the authoritative set of who liked the
+ * page); the per-user `likedAt` is a best-effort enrichment from the
+ * `ACTION_LIKE` Activity record and is `null` when no Activity row
+ * exists (e.g. likes recorded before activity logging, or a stale
+ * Activity row that was pruned).
+ */
+export const LikerSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  displayName: z.string(),
+  avatarUrl: z.string().nullable(),
+  likedAt: z.string().nullable(),
+});
+export type Liker = z.infer<typeof LikerSchema>;
+
+/**
+ * Response body of `GET /api/v2/pages/:id/likers`.
+ *
+ *   - `users`      — the liker list, newest-liked first when `likedAt`
+ *                    is known (entries without a timestamp sort last).
+ *   - `totalCount` — the full size of `page.liker`, independent of the
+ *                    `limit` cap so the chip count stays accurate.
+ */
+export const LikersResponseSchema = z.object({
+  users: z.array(LikerSchema),
+  totalCount: z.number().int().nonnegative(),
+});
+export type LikersResponse = z.infer<typeof LikersResponseSchema>;
+
+/** Query schema of `GET /api/v2/pages/:id/likers`. */
+export const GetLikersRequestSchema = z.object({
+  // Optional cap on returned `users`. `totalCount` always reflects the
+  // full count regardless of `limit`. Omit for the full list.
+  limit: z.coerce.number().int().positive().optional(),
+});
+export type GetLikersRequest = z.infer<typeof GetLikersRequestSchema>;

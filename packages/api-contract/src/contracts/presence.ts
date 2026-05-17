@@ -1,6 +1,6 @@
 import { initContract } from '@ts-rest/core';
 import { z } from 'zod';
-import { PresenceTokenResponseSchema } from '../schemas/presence';
+import { GetLikersRequestSchema, LikersResponseSchema, PresenceTokenResponseSchema } from '../schemas/presence';
 import { PageNotFoundErrorSchema } from '../schemas/page';
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
 
@@ -48,5 +48,35 @@ export const presenceContract = c.router({
       500: InternalServerErrorSchema,
     },
     summary: 'Issue a short-lived presence token (JWT) for the live-presence WebSocket session',
+  },
+
+  /**
+   * GET /api/v2/pages/:id/likers (RFC-0005 Phase 3)
+   *
+   * Returns the users who have liked the page, backing the "Liked by"
+   * modal opened from the meta-chip row. Read access to the page is
+   * sufficient — the like list is not private.
+   *
+   * Data source: the page's `liker` ObjectId array (authoritative).
+   * Each entry's `likedAt` is a best-effort join with the `ACTION_LIKE`
+   * Activity record and may be `null`.
+   *
+   * Authorisation: same fail-closed pipeline as `getPresenceToken`
+   * (401 unauthenticated / 400 malformed id / 404 not-found-or-not-
+   * granted / 500 on DB exception).
+   */
+  getLikers: {
+    method: 'GET',
+    path: '/pages/:id/likers',
+    pathParams: z.object({ id: z.string() }),
+    query: GetLikersRequestSchema,
+    responses: {
+      200: LikersResponseSchema,
+      400: InvalidPageIdErrorSchema,
+      401: AuthenticationRequiredErrorSchema,
+      404: PageNotFoundErrorSchema,
+      500: InternalServerErrorSchema,
+    },
+    summary: 'List the users who have liked a page',
   },
 });
