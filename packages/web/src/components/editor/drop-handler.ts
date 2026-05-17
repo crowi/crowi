@@ -9,10 +9,12 @@ import { runUpload } from './upload-placeholder';
  *
  * Wires `dragenter` / `dragover` / `drop` on the editor DOM so dropping
  * one or more files uploads them to `/api/v2/attachments/upload` and
- * splices a progress placeholder at the cursor (the same lifecycle the
- * paste handler uses — see `upload-placeholder.ts`). The drop position
- * is the natural cursor: CodeMirror's own `dragover` handling already
- * moves the caret under the mouse, so no coordinate maths is needed
+ * splices a progress placeholder at the drop position (the same
+ * lifecycle the paste handler uses — see `upload-placeholder.ts`). The
+ * `drop` handler `preventDefault`s the event, which suppresses
+ * CodeMirror's native drop handling — including the caret move — so it
+ * resolves the drop position itself from the event coordinates
+ * (`posAtCoords`) and moves the caret there before uploading
  * (RFC §"Drop position").
  *
  * Three concerns layered on top of the bare upload:
@@ -200,8 +202,9 @@ function dndEventHandlers(pageId: string): Extension {
     dragover(event: DragEvent, view: EditorView): boolean {
       if (!hasFiles(event.dataTransfer)) return false;
       if (isReadOnly(view)) return false;
-      // Signal a copy cursor; CodeMirror's own dragover handling moves
-      // the caret under the mouse, which is the eventual drop position.
+      // Signal a copy cursor. The actual insertion position is resolved
+      // in `drop` from the event coordinates — `dragover` does not move
+      // the real selection.
       if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
       return false;
     },
@@ -244,9 +247,25 @@ function dndEventHandlers(pageId: string): Extension {
         }
       }
 
-      // Fire-and-forget: `uploadSerially` owns the placeholder lifecycle
-      // and never throws (per-file failures land in a static marker).
       if (accepted.length > 0) {
+        // Move the caret to where the file was dropped. `preventDefault`
+        // above suppressed CodeMirror's native drop handling, so the
+        // selection still sits at the pre-drag cursor; without this the
+        // placeholder would splice there instead of at the drop point.
+        // `posAtCoords` can throw before the view is laid out (or under
+        // a headless test DOM) — fall back to the current selection.
+        let dropPos: number | null = null;
+        try {
+          dropPos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        } catch {
+          dropPos = null;
+        }
+        if (dropPos != null) {
+          view.dispatch({ selection: { anchor: dropPos } });
+        }
+        // Fire-and-forget: `uploadSerially` owns the placeholder
+        // lifecycle and never throws (per-file failures land in a
+        // static marker).
         void uploadSerially(view, accepted, pageId);
       }
       return true;
