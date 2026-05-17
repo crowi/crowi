@@ -6,6 +6,15 @@ import { UserAvatar } from '@/components/user-avatar';
 import { useLikers } from '@/lib/use-likers';
 import { m } from '@paraglide/messages.js';
 
+/**
+ * Cap on the liker list the dialog fetches. The list is a scrollable
+ * modal, not a paginated view — a generous cap keeps a pathological
+ * page (thousands of likers) from loading an unbounded payload while
+ * still covering every realistic case. `totalCount` in the description
+ * still reflects the true total.
+ */
+const LIKERS_DIALOG_LIMIT = 100;
+
 interface LikersDialogProps {
   pageId: string;
   open: boolean;
@@ -36,7 +45,7 @@ export function LikersDialog({ pageId, open, onOpenChange, fallbackCount }: Like
 }
 
 function LikersFullList({ pageId, enabled }: { pageId: string; enabled: boolean }) {
-  const { data, isLoading } = useLikers(pageId, { enabled });
+  const { data, isLoading } = useLikers(pageId, { enabled, limit: LIKERS_DIALOG_LIMIT });
   const users = data?.users ?? [];
 
   if (isLoading) {

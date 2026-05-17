@@ -33,6 +33,14 @@ const PRESENCE_HEARTBEAT_MS = 15_000;
 const PRESENCE_RECONNECT_BASE_MS = 1_000;
 const PRESENCE_RECONNECT_MAX_MS = 15_000;
 
+/**
+ * Close code the presence server sends when the viewer's read grant
+ * was revoked mid-session (`WS_CLOSE.NO_ACCESS` in `presence/attach.ts`).
+ * Reconnecting after this is futile — the server would re-check and
+ * reject again — so the client stops and leaves the row hidden.
+ */
+const PRESENCE_CLOSE_NO_ACCESS = 4403;
+
 export type PresenceStatus = 'connecting' | 'connected' | 'error';
 
 interface UsePresenceResult {
@@ -211,15 +219,18 @@ export function usePresence(pageId: string | null | undefined): UsePresenceResul
         // `onclose` always follows `onerror`; handle teardown there.
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (disposed) return;
         if (heartbeatTimer) {
           clearInterval(heartbeatTimer);
           heartbeatTimer = null;
         }
-        // Reconnect with capped exponential backoff. Until a connection
-        // is re-established the row hides (`status: 'error'`).
+        // The row hides whenever the connection is down (`status: 'error'`).
         setStatus('error');
+        // Permission revoked server-side — do not reconnect, it would
+        // only be rejected again.
+        if (event.code === PRESENCE_CLOSE_NO_ACCESS) return;
+        // Otherwise reconnect with capped exponential backoff.
         const delay = Math.min(PRESENCE_RECONNECT_BASE_MS * 2 ** reconnectAttempts, PRESENCE_RECONNECT_MAX_MS);
         reconnectAttempts += 1;
         reconnectTimer = setTimeout(connect, delay);

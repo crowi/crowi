@@ -116,7 +116,9 @@ function PresenceMobileChip({ viewers, selfUserId }: ViewerListProps) {
         <Eye className="h-3.5 w-3.5" aria-hidden="true" />
         {viewers.length}
       </SheetTrigger>
-      <SheetContent side="bottom">
+      {/* No SheetDescription — the title alone names the sheet; opt out
+          of Radix's describedby warning explicitly. */}
+      <SheetContent side="bottom" aria-describedby={undefined}>
         <SheetHeader>
           <SheetTitle>{m['page.presence_sheet_title']()}</SheetTitle>
         </SheetHeader>

@@ -28,7 +28,7 @@ class FakeWebSocket {
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
   onerror: (() => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event: { code: number }) => void) | null = null;
   close = vi.fn(() => {
     this.readyState = 3;
   });
@@ -53,9 +53,9 @@ class FakeWebSocket {
   emitRaw(data: unknown) {
     this.onmessage?.({ data });
   }
-  fail() {
+  fail(code = 1006) {
     this.readyState = 3;
-    this.onclose?.();
+    this.onclose?.({ code });
   }
 }
 
@@ -221,6 +221,35 @@ describe('usePresence', () => {
       ws.open();
       ws.fail();
     });
+    expect(result.current.status).toBe('error');
+  });
+
+  it('reconnects after an unclean close but not after a 4403 (permission revoked)', async () => {
+    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // Unclean close → a reconnect is scheduled.
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(1006);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // 4403 = read grant revoked → the client must stop reconnecting.
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      FakeWebSocket.instances[1].fail(4403);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
     expect(result.current.status).toBe('error');
   });
 

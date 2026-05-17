@@ -64,10 +64,10 @@ describe('MetaChipRow', () => {
   });
 
   it('greys out a zero-count chip as non-interactive', () => {
-    // likerCount 0 → the like chip is disabled (not a button).
+    // likerCount 0 → the like chip is disabled (not a button);
+    // backlinks default to 0 via the beforeEach mock.
     render(<MetaChipRow page={makePage({ likerCount: 0, seenUsersCount: 5, commentCount: 1 })} />);
-    useBacklinks.mockReturnValue({ data: { backlinks: [{ _id: 'b1' }], hasNext: false } });
-    // 0 likes + 0 backlinks (default mock) → 2 active chips (view, comment).
+    // 0 likes + 0 backlinks → 2 active chips (view, comment).
     expect(screen.getAllByRole('button')).toHaveLength(2);
   });
 
