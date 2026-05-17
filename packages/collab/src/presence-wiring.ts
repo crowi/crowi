@@ -21,14 +21,20 @@ import { type PresenceHooks, noopPresenceHooks } from './presence';
  * Wrap an `onAuthenticate` hook so `presence.markEditing` fires once
  * authentication resolves a `CollabContext`. The returned wrapper has
  * the exact signature of the base hook.
+ *
+ * The payload type is constrained to carry a `socketId` (the
+ * `onAuthenticatePayload` Hocuspocus passes always does) so the
+ * per-connection editing signal can be keyed by it — a user with two
+ * editor tabs gets two distinct signals, and closing one tab does not
+ * clear the badge while the other is still editing.
  */
-export function wrapOnAuthenticateWithPresence<P>(
+export function wrapOnAuthenticateWithPresence<P extends { socketId: string }>(
   baseOnAuthenticate: (payload: P) => Promise<CollabContext>,
   presence: PresenceHooks = noopPresenceHooks,
 ): (payload: P) => Promise<CollabContext> {
   return async (payload: P): Promise<CollabContext> => {
     const ctx = await baseOnAuthenticate(payload);
-    void presence.markEditing(ctx.pageId, ctx.userId).catch((err: unknown) => {
+    void presence.markEditing(ctx.pageId, ctx.userId, payload.socketId).catch((err: unknown) => {
       console.warn('[crowi:collab] presence.markEditing failed (non-blocking):', (err as Error).message);
     });
     return ctx;
@@ -49,7 +55,7 @@ export function wrapOnDisconnectWithPresence(
     await baseOnDisconnect(payload);
     const ctx = payload.context;
     if (ctx && ctx.pageId && ctx.userId) {
-      void presence.unmarkEditing(ctx.pageId, ctx.userId).catch((err: unknown) => {
+      void presence.unmarkEditing(ctx.pageId, ctx.userId, payload.socketId).catch((err: unknown) => {
         console.warn('[crowi:collab] presence.unmarkEditing failed (non-blocking):', (err as Error).message);
       });
     }

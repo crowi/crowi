@@ -12,18 +12,24 @@ const debug = Debug('crowi:collab:presence');
  * via `createCollabServer`'s `presence` option.
  *
  *   - `markEditing`   — called from `onAuthenticate` once a collab
- *                       wsToken verifies. The api adapter publishes a
- *                       viewer-list change so the editing user picks
- *                       up an `✏️` badge in the page-presence row.
+ *                       wsToken verifies. The api adapter records a
+ *                       short-lived editing signal (keyed by the
+ *                       connection's `socketId`) so the editing user
+ *                       picks up an `✏️` badge in the page-presence row.
  *   - `unmarkEditing` — called from `onDisconnect`. Symmetric: the
- *                       badge clears on the next presence broadcast.
+ *                       signal is cleared so the badge disappears on
+ *                       the next presence broadcast.
+ *
+ * `socketId` is the per-connection identity Hocuspocus assigns; it
+ * disambiguates a single user with multiple editor tabs so closing one
+ * tab does not clear the badge while another is still editing.
  *
  * Both are best-effort: a presence failure must never block or break a
  * collab connection.
  */
 export interface PresenceHooks {
-  markEditing(pageId: string, userId: string): Promise<void>;
-  unmarkEditing(pageId: string, userId: string): Promise<void>;
+  markEditing(pageId: string, userId: string, socketId: string): Promise<void>;
+  unmarkEditing(pageId: string, userId: string, socketId: string): Promise<void>;
 }
 
 /**
@@ -34,18 +40,18 @@ export interface PresenceHooks {
  * every caller to supply a presence adapter.
  */
 export const noopPresenceHooks: PresenceHooks = {
-  async markEditing(pageId: string, userId: string): Promise<void> {
+  async markEditing(pageId: string, userId: string, socketId: string): Promise<void> {
     if (!pageId || !userId) {
       console.warn(`[crowi:collab:presence] markEditing called with empty arg (pageId=${pageId}, userId=${userId})`);
       return;
     }
-    debug('markEditing(page=%s, user=%s) [noop — no presence adapter injected]', pageId, userId);
+    debug('markEditing(page=%s, user=%s, socket=%s) [noop — no presence adapter injected]', pageId, userId, socketId);
   },
-  async unmarkEditing(pageId: string, userId: string): Promise<void> {
+  async unmarkEditing(pageId: string, userId: string, socketId: string): Promise<void> {
     if (!pageId || !userId) {
       console.warn(`[crowi:collab:presence] unmarkEditing called with empty arg (pageId=${pageId}, userId=${userId})`);
       return;
     }
-    debug('unmarkEditing(page=%s, user=%s) [noop — no presence adapter injected]', pageId, userId);
+    debug('unmarkEditing(page=%s, user=%s, socket=%s) [noop — no presence adapter injected]', pageId, userId, socketId);
   },
 };

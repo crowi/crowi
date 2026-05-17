@@ -35,10 +35,20 @@ const debug = Debug('crowi:service:presence');
  *     pageId; every instance (including A) re-broadcasts the fresh
  *     viewer list to its locally-connected clients. Same
  *     Redis-as-shared-state pattern as RFC-0003.
- *   - `isEditing`: NOT stored in the presence hash. It is derived at
- *     `listViewers` time by joining the viewer set with RFC-0003's
- *     editor-cap Set `crowi:collab:editors:<pageId>` (whose members are
- *     `<userId>:<socketId>`). Single source of truth for "is editing".
+ *   - `isEditing`: NOT stored in the viewer hash. It is derived at
+ *     `listViewers` time from a dedicated, short-lived *editing hash*
+ *     `crowi:presence:editing:<pageId>` — one field per editor
+ *     connection (`<userId>:<socketId>`), value `lastSeenAt`
+ *     (epoch-ms). The collab process refreshes its own fields every
+ *     `EDITING_REFRESH_MS`; a field older than `EDITING_TTL_MS` is
+ *     considered stale and swept. This replaces the earlier design
+ *     that joined the RFC-0003 editor-cap Set: that Set is a *soft
+ *     concurrency-limit counter* with a 24h key TTL whose members are
+ *     only SREM'd on a clean `onDisconnect`, so an api crash / restart
+ *     could leave stale members for up to 24h and paint the `✏️` badge
+ *     on plain viewers. The editing hash self-heals: when the editing
+ *     process dies it stops refreshing, and every field ages out
+ *     within `EDITING_TTL_MS`.
  *
  * Fail-soft posture: when `crowi.redis` is null (REDIS_URL unset,
  * single-instance dev) presence degrades to an in-process-only store
@@ -50,8 +60,12 @@ const debug = Debug('crowi:service:presence');
 const VIEWER_HASH_PREFIX = 'crowi:presence:viewers:';
 /** Redis pub/sub channel for cross-instance viewer-list invalidation. */
 const PRESENCE_UPDATES_CHANNEL = 'crowi:presence:updates';
-/** Editor-cap Set prefix from RFC-0003 (`util/editor-cap-counter.ts`). */
-const EDITOR_CAP_PREFIX = 'crowi:collab:editors:';
+/**
+ * Redis key prefix for the per-page *editing hash* — the presence-owned
+ * short-lived editing signal that drives the `✏️` badge. One field per
+ * editor connection (`<userId>:<socketId>`), value `lastSeenAt`.
+ */
+const EDITING_HASH_PREFIX = 'crowi:presence:editing:';
 
 /**
  * A viewer entry is considered live for 30s after its last heartbeat.
@@ -67,8 +81,36 @@ const VIEWER_TTL_MS = 30_000;
  */
 const VIEWER_HASH_TTL_SECONDS = 60;
 
+/**
+ * An editing-hash field is considered live for 30s after its last
+ * refresh. The collab process refreshes every `EDITING_REFRESH_MS`
+ * (10s) so a healthy editor field stays comfortably fresh; once the
+ * editing process dies and stops refreshing, the field ages out within
+ * this window and the badge disappears.
+ */
+const EDITING_TTL_MS = 30_000;
+/**
+ * Key-level TTL for the editing hash, re-applied on every write.
+ * Comfortably above `EDITING_TTL_MS` so a slow-to-disconnect editor
+ * keeps the hash, but bounded so an abandoned page's editing hash is
+ * reaped even if no `unmarkEditing` ever fires.
+ */
+const EDITING_HASH_TTL_SECONDS = 60;
+/**
+ * Interval at which the collab→presence adapter refreshes the
+ * `lastSeenAt` of every live editor connection it owns. Well under
+ * `EDITING_TTL_MS` so a single missed tick does not age a field out.
+ */
+const EDITING_REFRESH_MS = 10_000;
+
 const viewerHashKey = (pageId: string): string => `${VIEWER_HASH_PREFIX}${pageId}`;
-const editorCapKey = (pageId: string): string => `${EDITOR_CAP_PREFIX}${pageId}`;
+const editingHashKey = (pageId: string): string => `${EDITING_HASH_PREFIX}${pageId}`;
+const editingField = (userId: string, socketId: string): string => `${userId}:${socketId}`;
+/** Inverse of `editingField` — the `userId` portion of a `<userId>:<socketId>` field. */
+const editingFieldUserId = (field: string): string => {
+  const sep = field.indexOf(':');
+  return sep < 0 ? field : field.slice(0, sep);
+};
 
 /** Denormalised viewer identity persisted in the Redis hash field. */
 interface StoredViewer {
@@ -99,7 +141,6 @@ export interface PresenceRedisClient {
   hGetAll(key: string): Promise<Record<string, string>>;
   hDel(key: string, field: string | string[]): Promise<number>;
   expire(key: string, seconds: number): Promise<boolean | number>;
-  sMembers(key: string): Promise<string[]>;
   publish(channel: string, message: string): Promise<number>;
   duplicate(): PresenceRedisClient;
   connect(): Promise<unknown>;
@@ -135,25 +176,33 @@ export interface PresenceService {
    */
   leave(pageId: string, userId: string): Promise<void>;
   /**
-   * Current live viewer list for a page, with `isEditing` joined from
-   * the RFC-0003 editor-cap Set. Stale entries (heartbeat older than
+   * Current live viewer list for a page, with `isEditing` derived from
+   * the short-lived editing hash. Stale entries (heartbeat older than
    * `VIEWER_TTL_MS`) are filtered out and swept from the hash.
    */
   listViewers(pageId: string): Promise<PresenceViewer[]>;
   /**
    * Collab `onAuthenticate` integration point — a user opened the
-   * editor for this page. Presence does not store an editing flag
-   * itself (it joins the editor-cap Set at `listViewers` time); this
-   * just publishes a viewer-list change so the next broadcast picks up
-   * the freshly-added editor-cap entry.
+   * editor for this page on connection `socketId`. Records an editing
+   * signal in the editing hash and publishes a viewer-list change so
+   * the editor immediately picks up an `✏️` badge.
    */
-  markEditing(pageId: string, userId: string): Promise<void>;
+  markEditing(pageId: string, userId: string, socketId: string): Promise<void>;
   /**
-   * Collab `onDisconnect` integration point — a user closed the editor.
-   * Symmetric with `markEditing`: publishes a viewer-list change so the
-   * `✏️` badge clears on the next broadcast.
+   * Keep-alive for a live editor connection — refreshes the editing
+   * hash field's `lastSeenAt` so it does not age past `EDITING_TTL_MS`.
+   * Unlike `markEditing` this does NOT publish a viewer-list change
+   * (the editing set did not change), so periodic refreshes do not
+   * trigger redundant broadcasts.
    */
-  unmarkEditing(pageId: string, userId: string): Promise<void>;
+  refreshEditing(pageId: string, userId: string, socketId: string): Promise<void>;
+  /**
+   * Collab `onDisconnect` integration point — a user closed the editor
+   * on connection `socketId`. Removes the editing-hash field and
+   * publishes a viewer-list change so the `✏️` badge clears on the next
+   * broadcast.
+   */
+  unmarkEditing(pageId: string, userId: string, socketId: string): Promise<void>;
   /**
    * Subscribe to viewer-list change notifications. The listener is
    * invoked with a `pageId` whenever that page's viewer list may have
@@ -197,12 +246,16 @@ export async function createPresenceService(redis: PresenceRedisClient | null): 
 
 /**
  * Single-instance (no Redis) implementation. Viewer state lives in a
- * process-local Map; `markEditing` / `unmarkEditing` cannot consult the
- * editor-cap Set (also Redis-backed) so `isEditing` is always `false`
- * — acceptable for dev, and documented in the RFC's fail-soft notes.
+ * process-local Map; the editing signal is tracked in a parallel
+ * process-local Map (`editing`), keyed `<pageId>` → `<userId>:<socketId>`
+ * → `lastSeenAt`, mirroring the Redis editing hash. `isEditing` is
+ * therefore accurate in single-instance dev too.
  */
 function createInProcessPresenceService(emitter: EventEmitter, emitChange: (pageId: string) => void): PresenceService {
   const pages = new Map<string, Map<string, StoredViewer>>();
+  // pageId → (`<userId>:<socketId>` → lastSeenAt). Mirrors the Redis
+  // editing hash for the no-Redis dev path.
+  const editing = new Map<string, Map<string, number>>();
 
   const pageMap = (pageId: string): Map<string, StoredViewer> => {
     let m = pages.get(pageId);
@@ -211,6 +264,35 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
       pages.set(pageId, m);
     }
     return m;
+  };
+
+  const editingMap = (pageId: string): Map<string, number> => {
+    let m = editing.get(pageId);
+    if (!m) {
+      m = new Map();
+      editing.set(pageId, m);
+    }
+    return m;
+  };
+
+  /**
+   * Set of userIds with a fresh editing signal for a page. Stale
+   * fields (older than `EDITING_TTL_MS`) are swept as a side effect —
+   * same pattern as the Redis implementation.
+   */
+  const editingUserIds = (pageId: string): Set<string> => {
+    const m = editing.get(pageId);
+    const ids = new Set<string>();
+    if (!m) return ids;
+    const cutoff = Date.now() - EDITING_TTL_MS;
+    for (const [field, lastSeenAt] of m) {
+      if (lastSeenAt < cutoff) {
+        m.delete(field);
+        continue;
+      }
+      ids.add(editingFieldUserId(field));
+    }
+    return ids;
   };
 
   return {
@@ -243,6 +325,7 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
       const m = pages.get(pageId);
       if (!m) return [];
       const cutoff = Date.now() - VIEWER_TTL_MS;
+      const editingIds = editingUserIds(pageId);
       const out: PresenceViewer[] = [];
       for (const [userId, entry] of m) {
         if (entry.lastHeartbeatAt < cutoff) {
@@ -254,17 +337,22 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
           username: entry.username,
           displayName: entry.displayName,
           avatarUrl: entry.avatarUrl,
-          // No Redis → no editor-cap Set → no editing signal in dev.
-          isEditing: false,
+          isEditing: editingIds.has(entry.userId),
           joinedAt: entry.joinedAt,
         });
       }
       return out.sort((a, b) => a.joinedAt - b.joinedAt);
     },
-    async markEditing(pageId) {
+    async markEditing(pageId, userId, socketId) {
+      editingMap(pageId).set(editingField(userId, socketId), Date.now());
       emitChange(pageId);
     },
-    async unmarkEditing(pageId) {
+    async refreshEditing(pageId, userId, socketId) {
+      // Keep-alive only — no broadcast (the editing set is unchanged).
+      editingMap(pageId).set(editingField(userId, socketId), Date.now());
+    },
+    async unmarkEditing(pageId, userId, socketId) {
+      editing.get(pageId)?.delete(editingField(userId, socketId));
       emitChange(pageId);
     },
     onViewersChanged(listener) {
@@ -342,22 +430,54 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
 
   /**
    * Extract the set of userIds currently editing this page from the
-   * RFC-0003 editor-cap Set. Members are `<userId>:<socketId>`; a user
-   * with multiple editor tabs appears once in the resulting set.
+   * presence-owned editing hash. Fields are `<userId>:<socketId>` with
+   * a `lastSeenAt` value; a field older than `EDITING_TTL_MS` is stale
+   * and swept from the hash as a side effect (same pattern as the
+   * viewer-hash stale sweep). A user with multiple editor tabs appears
+   * once in the resulting set.
    */
   const editingUserIds = async (pageId: string): Promise<Set<string>> => {
     try {
-      const members = await redis.sMembers(editorCapKey(pageId));
+      const raw = await redis.hGetAll(editingHashKey(pageId));
       const ids = new Set<string>();
-      for (const member of members) {
-        const sep = member.indexOf(':');
-        ids.add(sep < 0 ? member : member.slice(0, sep));
+      const stale: string[] = [];
+      const cutoff = Date.now() - EDITING_TTL_MS;
+      for (const [field, value] of Object.entries(raw ?? {})) {
+        const lastSeenAt = Number(value);
+        if (!Number.isFinite(lastSeenAt) || lastSeenAt < cutoff) {
+          stale.push(field);
+          continue;
+        }
+        ids.add(editingFieldUserId(field));
+      }
+      if (stale.length > 0) {
+        try {
+          await redis.hDel(editingHashKey(pageId), stale);
+        } catch (err) {
+          debug('stale editing-field sweep failed for page %s: %s', pageId, (err as Error).message);
+        }
       }
       return ids;
     } catch (err) {
       // Editing is advisory — a failed read just means no `✏️` badge.
-      console.warn(`[crowi:presence] editor-cap read failed for page ${pageId}:`, (err as Error).message);
+      console.warn(`[crowi:presence] editing-hash read failed for page ${pageId}:`, (err as Error).message);
       return new Set();
+    }
+  };
+
+  /**
+   * Write (or refresh) an editing-hash field's `lastSeenAt` and re-apply
+   * the key TTL. Shared by `markEditing` and `refreshEditing`; failures
+   * are warn-only (editing is advisory — a failed write just means no
+   * `✏️` badge).
+   */
+  const writeEditingField = async (pageId: string, userId: string, socketId: string): Promise<void> => {
+    const key = editingHashKey(pageId);
+    try {
+      await redis.hSet(key, editingField(userId, socketId), String(Date.now()));
+      await redis.expire(key, EDITING_HASH_TTL_SECONDS);
+    } catch (err) {
+      console.warn(`[crowi:presence] editing-hash write failed for page ${pageId}:`, (err as Error).message);
     }
   };
 
@@ -446,17 +566,28 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
       return out.sort((a, b) => a.joinedAt - b.joinedAt);
     },
 
-    async markEditing(pageId, userId) {
-      // The editor-cap SADD is owned by `@crowi/collab`'s
-      // `editorCapCounter.tryAcquire` (RFC-0003). Presence only needs
-      // to nudge a re-broadcast so the freshly-added editing user gets
-      // an `✏️` badge.
-      debug('markEditing page=%s user=%s — publishing viewer-list change', pageId, userId);
+    async markEditing(pageId, userId, socketId) {
+      // Record a fresh editing signal in the presence-owned editing
+      // hash, then publish so the editor immediately gets an `✏️` badge.
+      await writeEditingField(pageId, userId, socketId);
+      debug('markEditing page=%s user=%s socket=%s — publishing viewer-list change', pageId, userId, socketId);
       await publishChange(pageId);
     },
 
-    async unmarkEditing(pageId, userId) {
-      debug('unmarkEditing page=%s user=%s — publishing viewer-list change', pageId, userId);
+    async refreshEditing(pageId, userId, socketId) {
+      // Keep-alive for a live editor connection. NO publish: the editing
+      // set is unchanged, so a refresh must not trigger a redundant
+      // viewer-list broadcast.
+      await writeEditingField(pageId, userId, socketId);
+    },
+
+    async unmarkEditing(pageId, userId, socketId) {
+      try {
+        await redis.hDel(editingHashKey(pageId), editingField(userId, socketId));
+      } catch (err) {
+        console.warn(`[crowi:presence] unmarkEditing delete failed for page ${pageId}:`, (err as Error).message);
+      }
+      debug('unmarkEditing page=%s user=%s socket=%s — publishing viewer-list change', pageId, userId, socketId);
       await publishChange(pageId);
     },
 
@@ -501,33 +632,93 @@ export function getPresenceService(crowi: Crowi): Promise<PresenceService> {
 
 /**
  * Collab → presence wiring. `@crowi/collab` is crowi-agnostic, so the
- * api hands it these two thin adapters via `createCollabServer`'s
- * `presence` option. Each resolves the process-shared presence service
- * lazily and forwards the call; errors are swallowed because presence
- * is advisory and must never block a collab connection.
+ * api hands it this adapter via `createCollabServer`'s `presence`
+ * option. Each call resolves the process-shared presence service
+ * lazily and forwards; errors are swallowed because presence is
+ * advisory and must never block a collab connection.
+ *
+ * The adapter also owns a periodic *refresher*: it tracks every live
+ * editor connection of *this* process in an in-process Map and, on a
+ * `setInterval`, calls `service.refreshEditing` for each so the Redis
+ * editing hash field never ages past `EDITING_TTL_MS` while the editor
+ * is connected. This is the self-heal mechanism — when the process
+ * dies the Map and interval die with it, nothing refreshes the editing
+ * hash, and every field ages out within `EDITING_TTL_MS` so the `✏️`
+ * badge disappears on plain viewers. A clean disconnect removes the
+ * field immediately via `unmarkEditing`. In a multi-instance
+ * deployment each instance refreshes only its own connections, so the
+ * scheme stays correct under load balancing.
  */
 export interface PresenceCollabDeps {
-  markEditing(pageId: string, userId: string): Promise<void>;
-  unmarkEditing(pageId: string, userId: string): Promise<void>;
+  markEditing(pageId: string, userId: string, socketId: string): Promise<void>;
+  unmarkEditing(pageId: string, userId: string, socketId: string): Promise<void>;
+  /**
+   * Stop the periodic editing-hash refresher. Called from the collab
+   * `shutdown()` so a graceful api teardown does not leak a timer.
+   */
+  shutdown(): void;
 }
 
 export function createPresenceCollabDeps(crowi: Crowi): PresenceCollabDeps {
+  // socketId → { pageId, userId } for every live editor connection
+  // this process owns. Drives the periodic refresher below.
+  const liveEditors = new Map<string, { pageId: string; userId: string }>();
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Lazily start the refresher on the first `markEditing`. `.unref()`
+  // so the timer never keeps the process alive on its own.
+  const ensureRefresher = (): void => {
+    if (refreshTimer !== null) return;
+    refreshTimer = setInterval(() => {
+      void (async () => {
+        let service: PresenceService;
+        try {
+          service = await getPresenceService(crowi);
+        } catch {
+          // Service not resolvable right now — skip this tick.
+          return;
+        }
+        // Snapshot the entries: a concurrent `unmarkEditing` may mutate
+        // `liveEditors` while the refresh awaits are in flight.
+        const entries = Array.from(liveEditors.entries());
+        await Promise.all(
+          entries.map(([socketId, { pageId, userId }]) =>
+            service.refreshEditing(pageId, userId, socketId).catch((err: unknown) => {
+              debug('refreshEditing tick failed for socket %s: %s', socketId, (err as Error).message);
+            }),
+          ),
+        );
+      })();
+    }, EDITING_REFRESH_MS);
+    refreshTimer.unref();
+  };
+
   return {
-    async markEditing(pageId, userId) {
+    async markEditing(pageId, userId, socketId) {
+      liveEditors.set(socketId, { pageId, userId });
+      ensureRefresher();
       try {
         const service = await getPresenceService(crowi);
-        await service.markEditing(pageId, userId);
+        await service.markEditing(pageId, userId, socketId);
       } catch (err) {
         console.warn('[crowi:presence] collab markEditing wiring failed (non-blocking):', (err as Error).message);
       }
     },
-    async unmarkEditing(pageId, userId) {
+    async unmarkEditing(pageId, userId, socketId) {
+      liveEditors.delete(socketId);
       try {
         const service = await getPresenceService(crowi);
-        await service.unmarkEditing(pageId, userId);
+        await service.unmarkEditing(pageId, userId, socketId);
       } catch (err) {
         console.warn('[crowi:presence] collab unmarkEditing wiring failed (non-blocking):', (err as Error).message);
       }
+    },
+    shutdown() {
+      if (refreshTimer !== null) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+      liveEditors.clear();
     },
   };
 }
@@ -541,4 +732,4 @@ export const _setPresenceServiceForTesting = (service: PresenceService | null): 
   cachedService = service == null ? null : Promise.resolve(service);
 };
 
-export { PRESENCE_UPDATES_CHANNEL, VIEWER_HASH_PREFIX, VIEWER_TTL_MS };
+export { PRESENCE_UPDATES_CHANNEL, VIEWER_HASH_PREFIX, VIEWER_TTL_MS, EDITING_HASH_PREFIX, EDITING_TTL_MS, EDITING_REFRESH_MS };

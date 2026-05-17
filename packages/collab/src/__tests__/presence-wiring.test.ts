@@ -19,6 +19,7 @@ interface PresenceCall {
   method: 'markEditing' | 'unmarkEditing';
   pageId: string;
   userId: string;
+  socketId: string;
 }
 
 /** Recording presence adapter — logs every call for assertion. */
@@ -26,44 +27,50 @@ function makeRecordingPresence(): PresenceHooks & { calls: PresenceCall[] } {
   const calls: PresenceCall[] = [];
   return {
     calls,
-    async markEditing(pageId, userId) {
-      calls.push({ method: 'markEditing', pageId, userId });
+    async markEditing(pageId, userId, socketId) {
+      calls.push({ method: 'markEditing', pageId, userId, socketId });
     },
-    async unmarkEditing(pageId, userId) {
-      calls.push({ method: 'unmarkEditing', pageId, userId });
+    async unmarkEditing(pageId, userId, socketId) {
+      calls.push({ method: 'unmarkEditing', pageId, userId, socketId });
     },
   };
 }
 
 const PAGE = 'pageabc';
 const USER = 'useracb';
+const SOCKET = 'socket-1';
 
-/** Minimal onDisconnect payload — only `context` is read by the wrapper. */
-const disconnectPayload = (context: Partial<CollabContext> | undefined) => ({ context }) as unknown as onDisconnectPayload<CollabContext>;
+/**
+ * Minimal onDisconnect payload — `context` + `socketId` are read by
+ * the wrapper.
+ */
+const disconnectPayload = (context: Partial<CollabContext> | undefined, socketId = SOCKET) =>
+  ({ context, socketId }) as unknown as onDisconnectPayload<CollabContext>;
 
 describe('collab → presence wiring (RFC-0005 Phase 1)', () => {
-  test('onAuthenticate wrapper fires presence.markEditing with the resolved context', async () => {
+  test('onAuthenticate wrapper fires presence.markEditing with the resolved context + socketId', async () => {
     const presence = makeRecordingPresence();
     const base = async (): Promise<CollabContext> => ({ pageId: PAGE, userId: USER, readonly: false });
 
     const wrapped = wrapOnAuthenticateWithPresence(base, presence);
-    const ctx = await wrapped({});
+    const ctx = await wrapped({ socketId: SOCKET });
     // Fire-and-forget — let the swallowed promise settle.
     await new Promise((r) => setImmediate(r));
 
     expect(ctx).toEqual({ pageId: PAGE, userId: USER, readonly: false });
-    expect(presence.calls).toEqual([{ method: 'markEditing', pageId: PAGE, userId: USER }]);
+    // socketId is threaded from the auth payload, not the context.
+    expect(presence.calls).toEqual([{ method: 'markEditing', pageId: PAGE, userId: USER, socketId: SOCKET }]);
   });
 
-  test('onDisconnect wrapper fires presence.unmarkEditing with the context page/user', async () => {
+  test('onDisconnect wrapper fires presence.unmarkEditing with the context page/user + payload socketId', async () => {
     const presence = makeRecordingPresence();
     const base = async (): Promise<void> => undefined;
 
     const wrapped = wrapOnDisconnectWithPresence(base, presence);
-    await wrapped(disconnectPayload({ pageId: PAGE, userId: USER, readonly: false }));
+    await wrapped(disconnectPayload({ pageId: PAGE, userId: USER, readonly: false }, 'socket-9'));
     await new Promise((r) => setImmediate(r));
 
-    expect(presence.calls).toEqual([{ method: 'unmarkEditing', pageId: PAGE, userId: USER }]);
+    expect(presence.calls).toEqual([{ method: 'unmarkEditing', pageId: PAGE, userId: USER, socketId: 'socket-9' }]);
   });
 
   test('onDisconnect wrapper skips unmarkEditing when the connection never authenticated', async () => {
@@ -106,7 +113,7 @@ describe('collab → presence wiring (RFC-0005 Phase 1)', () => {
     const wrapped = wrapOnAuthenticateWithPresence(base, throwingPresence);
     // The wrapper must still resolve the context despite the presence
     // failure (fire-and-forget, error swallowed + warn-logged).
-    const ctx = await wrapped({});
+    const ctx = await wrapped({ socketId: SOCKET });
     await new Promise((r) => setImmediate(r));
 
     expect(ctx).toMatchObject({ pageId: PAGE });
@@ -117,6 +124,6 @@ describe('collab → presence wiring (RFC-0005 Phase 1)', () => {
     const base = async (): Promise<CollabContext> => ({ pageId: PAGE, userId: USER, readonly: false });
     // No presence arg — must not throw.
     const wrapped = wrapOnAuthenticateWithPresence(base);
-    await expect(wrapped({})).resolves.toMatchObject({ pageId: PAGE });
+    await expect(wrapped({ socketId: SOCKET })).resolves.toMatchObject({ pageId: PAGE });
   });
 });

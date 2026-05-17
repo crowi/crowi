@@ -1,13 +1,34 @@
-import { createPresenceService, type PresenceRedisClient, PRESENCE_UPDATES_CHANNEL, VIEWER_HASH_PREFIX, VIEWER_TTL_MS } from './presence';
+import type Crowi from 'src/crowi';
+import {
+  createPresenceService,
+  createPresenceCollabDeps,
+  _setPresenceServiceForTesting,
+  type PresenceRedisClient,
+  type PresenceService,
+  PRESENCE_UPDATES_CHANNEL,
+  VIEWER_HASH_PREFIX,
+  VIEWER_TTL_MS,
+  EDITING_HASH_PREFIX,
+  EDITING_TTL_MS,
+  EDITING_REFRESH_MS,
+} from './presence';
 
 /**
- * RFC-0005 Phase 1 — presence service tests.
+ * RFC-0005 — presence service tests.
  *
  * Exercises the Redis-backed implementation against a deterministic
  * in-memory fake (`FakeRedis`) so join / leave / dedup / TTL-sweep /
- * isEditing-join / cross-instance pub/sub all run without a live
+ * editing-hash join / cross-instance pub/sub all run without a live
  * Redis. The in-process (no-Redis) fallback is also covered so the
  * single-instance dev path doesn't silently regress.
+ *
+ * Bug-fix note: `isEditing` is no longer derived from the RFC-0003
+ * editor-cap Set (`crowi:collab:editors:<pageId>`). That Set is a
+ * soft concurrency-limit counter with a 24h key TTL whose members can
+ * survive an api crash for up to 24h, painting the `✏️` badge on plain
+ * viewers. Editing is now its own short-lived hash
+ * `crowi:presence:editing:<pageId>` (field `<userId>:<socketId>`,
+ * value `lastSeenAt`) that the collab process must keep refreshing.
  */
 
 /**
@@ -18,16 +39,13 @@ import { createPresenceService, type PresenceRedisClient, PRESENCE_UPDATES_CHANN
 class FakeRedis implements PresenceRedisClient {
   isOpen = true;
   private readonly hashes: Map<string, Map<string, string>>;
-  private readonly sets: Map<string, Set<string>>;
   private readonly subscribers: Map<string, Array<(message: string) => void>>;
 
   constructor(shared?: {
     hashes: Map<string, Map<string, string>>;
-    sets: Map<string, Set<string>>;
     subscribers: Map<string, Array<(message: string) => void>>;
   }) {
     this.hashes = shared?.hashes ?? new Map();
-    this.sets = shared?.sets ?? new Map();
     this.subscribers = shared?.subscribers ?? new Map();
   }
 
@@ -69,18 +87,17 @@ class FakeRedis implements PresenceRedisClient {
   }
 
   async expire(): Promise<boolean> {
-    // TTL is exercised at the application layer (lastHeartbeatAt
-    // sweep); the fake does not model key expiry.
+    // TTL is exercised at the application layer (lastHeartbeatAt /
+    // lastSeenAt sweep); the fake does not model key expiry.
     return true;
   }
 
-  async sMembers(key: string): Promise<string[]> {
-    return [...(this.sets.get(key) ?? [])];
-  }
-
-  /** Test helper — seed the editor-cap Set for isEditing-join tests. */
-  seedEditorSet(key: string, members: string[]): void {
-    this.sets.set(key, new Set(members));
+  /** Test helper — seed the editing hash directly for stale-sweep tests. */
+  seedEditingHash(key: string, fields: Record<string, number>): void {
+    const h = this.hash(key);
+    for (const [field, lastSeenAt] of Object.entries(fields)) {
+      h.set(field, String(lastSeenAt));
+    }
   }
 
   async publish(channel: string, message: string): Promise<number> {
@@ -99,7 +116,7 @@ class FakeRedis implements PresenceRedisClient {
   }
 
   duplicate(): PresenceRedisClient {
-    return new FakeRedis({ hashes: this.hashes, sets: this.sets, subscribers: this.subscribers });
+    return new FakeRedis({ hashes: this.hashes, subscribers: this.subscribers });
   }
 
   async connect(): Promise<unknown> {
@@ -119,7 +136,7 @@ const viewer = (userId: string, overrides: Partial<{ username: string; displayNa
   avatarUrl: overrides.avatarUrl ?? null,
 });
 
-describe('presence service — Redis-backed (RFC-0005 Phase 1)', () => {
+describe('presence service — Redis-backed (RFC-0005)', () => {
   it('registers a viewer on join and surfaces it in listViewers', async () => {
     const service = await createPresenceService(new FakeRedis());
     await service.join(PAGE_A, viewer('u1'));
@@ -198,19 +215,79 @@ describe('presence service — Redis-backed (RFC-0005 Phase 1)', () => {
     await service.shutdown();
   });
 
-  it('joins the editor-cap Set so a viewing editor gets isEditing=true', async () => {
+  it('markEditing writes the editing hash so a viewing editor gets isEditing=true', async () => {
     const redis = new FakeRedis();
-    // RFC-0003 editor-cap Set member shape is `<userId>:<socketId>`.
-    redis.seedEditorSet(`crowi:collab:editors:${PAGE_A}`, ['u1:socket-1', 'u1:socket-2']);
     const service = await createPresenceService(redis);
 
     await service.join(PAGE_A, viewer('u1'));
     await service.join(PAGE_A, viewer('u2'));
+    await service.markEditing(PAGE_A, 'u1', 'socket-1');
 
     const viewers = await service.listViewers(PAGE_A);
     const byId = Object.fromEntries(viewers.map((v) => [v.userId, v.isEditing]));
     expect(byId.u1).toBe(true);
     expect(byId.u2).toBe(false);
+    await service.shutdown();
+  });
+
+  it('dedupes a user with two editor tabs to a single isEditing viewer', async () => {
+    const redis = new FakeRedis();
+    const service = await createPresenceService(redis);
+
+    await service.join(PAGE_A, viewer('u1'));
+    await service.markEditing(PAGE_A, 'u1', 'socket-1');
+    await service.markEditing(PAGE_A, 'u1', 'socket-2');
+
+    const viewers = await service.listViewers(PAGE_A);
+    expect(viewers).toHaveLength(1);
+    expect(viewers[0].isEditing).toBe(true);
+
+    // Closing one tab leaves the other editing — badge stays.
+    await service.unmarkEditing(PAGE_A, 'u1', 'socket-1');
+    expect((await service.listViewers(PAGE_A))[0].isEditing).toBe(true);
+
+    // Closing the last tab clears the badge.
+    await service.unmarkEditing(PAGE_A, 'u1', 'socket-2');
+    expect((await service.listViewers(PAGE_A))[0].isEditing).toBe(false);
+    await service.shutdown();
+  });
+
+  it('treats a stale editing-hash field as not editing and sweeps it', async () => {
+    const redis = new FakeRedis();
+    // Seed the editing hash with a field whose lastSeenAt is well past
+    // the TTL — the failure mode the bug fix targets (a never-cleaned
+    // editing signal from a crashed api process).
+    redis.seedEditingHash(`${EDITING_HASH_PREFIX}${PAGE_A}`, {
+      'u1:dead-socket': Date.now() - EDITING_TTL_MS - 5_000,
+    });
+    const service = await createPresenceService(redis);
+
+    await service.join(PAGE_A, viewer('u1'));
+
+    const viewers = await service.listViewers(PAGE_A);
+    expect(viewers[0].isEditing).toBe(false);
+    // The stale field is swept from the editing hash as a side effect.
+    expect(await redis.hGet(`${EDITING_HASH_PREFIX}${PAGE_A}`, 'u1:dead-socket')).toBeNull();
+    await service.shutdown();
+  });
+
+  it('refreshEditing keeps a signal fresh but does NOT publish a viewer-list change', async () => {
+    const redis = new FakeRedis();
+    const publishSpy = jest.spyOn(redis, 'publish');
+    const service = await createPresenceService(redis);
+
+    await service.markEditing(PAGE_A, 'u1', 'socket-1');
+    const afterMark = publishSpy.mock.calls.filter(([, msg]) => msg === PAGE_A).length;
+
+    await service.refreshEditing(PAGE_A, 'u1', 'socket-1');
+    await service.refreshEditing(PAGE_A, 'u1', 'socket-1');
+
+    // markEditing publishes once; refreshEditing publishes never.
+    expect(afterMark).toBe(1);
+    expect(publishSpy.mock.calls.filter(([, msg]) => msg === PAGE_A)).toHaveLength(1);
+    // The signal is still present after the refreshes.
+    await service.join(PAGE_A, viewer('u1'));
+    expect((await service.listViewers(PAGE_A))[0].isEditing).toBe(true);
     await service.shutdown();
   });
 
@@ -221,8 +298,8 @@ describe('presence service — Redis-backed (RFC-0005 Phase 1)', () => {
     const changes: string[] = [];
     service.onViewersChanged((pageId) => changes.push(pageId));
 
-    await service.markEditing(PAGE_A, 'u1');
-    await service.unmarkEditing(PAGE_A, 'u1');
+    await service.markEditing(PAGE_A, 'u1', 'socket-1');
+    await service.unmarkEditing(PAGE_A, 'u1', 'socket-1');
 
     // Each call publishes the pageId on the updates channel exactly
     // once. (The local handler also re-broadcasts via the pub/sub
@@ -256,6 +333,20 @@ describe('presence service — Redis-backed (RFC-0005 Phase 1)', () => {
     await instanceB.shutdown();
   });
 
+  it('an editing signal written on one instance is visible on another', async () => {
+    const sharedRedis = new FakeRedis();
+    const instanceA = await createPresenceService(sharedRedis);
+    const instanceB = await createPresenceService(sharedRedis);
+
+    await instanceA.join(PAGE_A, viewer('u1'));
+    await instanceA.markEditing(PAGE_A, 'u1', 'socket-1');
+
+    expect((await instanceB.listViewers(PAGE_A))[0].isEditing).toBe(true);
+
+    await instanceA.shutdown();
+    await instanceB.shutdown();
+  });
+
   it('publishes joins on the documented pub/sub channel name', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
@@ -277,8 +368,39 @@ describe('presence service — in-process fallback (no Redis)', () => {
 
     const viewers = await service.listViewers(PAGE_A);
     expect(viewers.map((v) => v.userId).sort()).toEqual(['u1', 'u2']);
-    // No Redis → no editor-cap Set → no editing signal.
+    // No editing signal yet.
     expect(viewers.every((v) => v.isEditing === false)).toBe(true);
+    await service.shutdown();
+  });
+
+  it('tracks an editing signal in-process so isEditing is accurate without Redis', async () => {
+    const service = await createPresenceService(null);
+    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u2'));
+    await service.markEditing(PAGE_A, 'u1', 'socket-1');
+
+    const byId = Object.fromEntries((await service.listViewers(PAGE_A)).map((v) => [v.userId, v.isEditing]));
+    expect(byId.u1).toBe(true);
+    expect(byId.u2).toBe(false);
+
+    await service.unmarkEditing(PAGE_A, 'u1', 'socket-1');
+    expect((await service.listViewers(PAGE_A)).find((v) => v.userId === 'u1')?.isEditing).toBe(false);
+    await service.shutdown();
+  });
+
+  it('refreshEditing in-process keeps the signal alive without emitting a change', async () => {
+    const service = await createPresenceService(null);
+    const changes: string[] = [];
+    service.onViewersChanged((pageId) => changes.push(pageId));
+
+    await service.join(PAGE_A, viewer('u1'));
+    await service.markEditing(PAGE_A, 'u1', 'socket-1');
+    const afterMark = changes.length;
+
+    await service.refreshEditing(PAGE_A, 'u1', 'socket-1');
+    // refreshEditing must not emit a change event.
+    expect(changes.length).toBe(afterMark);
+    expect((await service.listViewers(PAGE_A))[0].isEditing).toBe(true);
     await service.shutdown();
   });
 
@@ -292,5 +414,125 @@ describe('presence service — in-process fallback (no Redis)', () => {
 
     expect(changes).toEqual([PAGE_A, PAGE_A]);
     await service.shutdown();
+  });
+});
+
+/**
+ * RFC-0005 — collab → presence wiring + periodic editing-hash
+ * refresher. The adapter tracks every live editor connection of *this*
+ * process and re-`refreshEditing`s them on an interval so the Redis
+ * editing hash field never ages out while the editor is connected;
+ * `shutdown()` stops the timer.
+ */
+describe('createPresenceCollabDeps — editing-hash refresher', () => {
+  interface RecordingService extends PresenceService {
+    calls: Array<{ method: 'markEditing' | 'refreshEditing' | 'unmarkEditing'; pageId: string; userId: string; socketId: string }>;
+  }
+
+  /** A presence-service stand-in that records the editing calls. */
+  const makeRecordingService = (): RecordingService => {
+    const calls: RecordingService['calls'] = [];
+    return {
+      calls,
+      async join() {},
+      async heartbeat() {
+        return true;
+      },
+      async leave() {},
+      async listViewers() {
+        return [];
+      },
+      async markEditing(pageId, userId, socketId) {
+        calls.push({ method: 'markEditing', pageId, userId, socketId });
+      },
+      async refreshEditing(pageId, userId, socketId) {
+        calls.push({ method: 'refreshEditing', pageId, userId, socketId });
+      },
+      async unmarkEditing(pageId, userId, socketId) {
+        calls.push({ method: 'unmarkEditing', pageId, userId, socketId });
+      },
+      onViewersChanged() {
+        return () => {};
+      },
+      async shutdown() {},
+    };
+  };
+
+  // `createPresenceCollabDeps` only ever reads `crowi` through
+  // `getPresenceService`, which is short-circuited here by
+  // `_setPresenceServiceForTesting`, so a bare object suffices.
+  const fakeCrowi = {} as Crowi;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    _setPresenceServiceForTesting(null);
+  });
+
+  it('forwards markEditing / unmarkEditing to the presence service with the socketId', async () => {
+    const service = makeRecordingService();
+    _setPresenceServiceForTesting(service);
+    const deps = createPresenceCollabDeps(fakeCrowi);
+
+    await deps.markEditing(PAGE_A, 'u1', 'socket-1');
+    await deps.unmarkEditing(PAGE_A, 'u1', 'socket-1');
+    deps.shutdown();
+
+    expect(service.calls).toEqual([
+      { method: 'markEditing', pageId: PAGE_A, userId: 'u1', socketId: 'socket-1' },
+      { method: 'unmarkEditing', pageId: PAGE_A, userId: 'u1', socketId: 'socket-1' },
+    ]);
+  });
+
+  it('refreshes every live editor connection on each interval tick', async () => {
+    const service = makeRecordingService();
+    _setPresenceServiceForTesting(service);
+    const deps = createPresenceCollabDeps(fakeCrowi);
+
+    await deps.markEditing(PAGE_A, 'u1', 'socket-1');
+    await deps.markEditing(PAGE_A, 'u2', 'socket-2');
+
+    // Advance one refresh interval and let the async tick body settle.
+    await jest.advanceTimersByTimeAsync(EDITING_REFRESH_MS);
+
+    const refreshes = service.calls.filter((c) => c.method === 'refreshEditing');
+    expect(refreshes).toEqual(
+      expect.arrayContaining([
+        { method: 'refreshEditing', pageId: PAGE_A, userId: 'u1', socketId: 'socket-1' },
+        { method: 'refreshEditing', pageId: PAGE_A, userId: 'u2', socketId: 'socket-2' },
+      ]),
+    );
+    expect(refreshes).toHaveLength(2);
+    deps.shutdown();
+  });
+
+  it('stops refreshing a connection once it is unmarked', async () => {
+    const service = makeRecordingService();
+    _setPresenceServiceForTesting(service);
+    const deps = createPresenceCollabDeps(fakeCrowi);
+
+    await deps.markEditing(PAGE_A, 'u1', 'socket-1');
+    await deps.unmarkEditing(PAGE_A, 'u1', 'socket-1');
+
+    await jest.advanceTimersByTimeAsync(EDITING_REFRESH_MS);
+
+    expect(service.calls.filter((c) => c.method === 'refreshEditing')).toHaveLength(0);
+    deps.shutdown();
+  });
+
+  it('shutdown stops the refresher so no further ticks fire', async () => {
+    const service = makeRecordingService();
+    _setPresenceServiceForTesting(service);
+    const deps = createPresenceCollabDeps(fakeCrowi);
+
+    await deps.markEditing(PAGE_A, 'u1', 'socket-1');
+    deps.shutdown();
+
+    await jest.advanceTimersByTimeAsync(EDITING_REFRESH_MS * 3);
+
+    expect(service.calls.filter((c) => c.method === 'refreshEditing')).toHaveLength(0);
   });
 });
