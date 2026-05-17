@@ -1,68 +1,39 @@
 'use client';
 
-import { useState } from 'react';
-import { Eye, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { UserAvatar } from '@/components/user-avatar';
 import { useSeenUsers } from '@/lib/use-seen';
 import { m } from '@paraglide/messages.js';
 
-const SEEN_USERS_PREVIEW_LIMIT = 10;
-
-interface SeenUserListProps {
+interface SeenUsersDialogProps {
   pageId: string;
-  // Initial count from the page payload, used until the query resolves.
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Count from the chip, shown in the description until the query resolves. */
   fallbackCount?: number;
 }
 
-export function SeenUserList({ pageId, fallbackCount }: SeenUserListProps) {
-  const { data } = useSeenUsers(pageId, { limit: SEEN_USERS_PREVIEW_LIMIT });
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const previewUsers = data?.seenUsers ?? [];
-  const seenUsersCount = data?.seenUsersCount ?? fallbackCount ?? 0;
-
-  if (seenUsersCount === 0) {
-    return null;
-  }
-
-  const hiddenCount = Math.max(0, seenUsersCount - previewUsers.length);
-
+/**
+ * RFC-0005 Phase 3 — "Seen by" modal.
+ *
+ * The dialog body (`SeenUsersFullList`) is unchanged from v1.x — it is
+ * just no longer reached via an avatar-stack overflow button. The
+ * historical seen-users avatar stack below the page title has been
+ * removed; the modal is now opened from the `[👁 N] 閲覧` meta-chip
+ * (`MetaChipRow`).
+ */
+export function SeenUsersDialog({ pageId, open, onOpenChange, fallbackCount }: SeenUsersDialogProps) {
   return (
-    <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
-      <Eye className="h-4 w-4" aria-hidden="true" />
-      <span>{m['page.seen_by']()}</span>
-      {previewUsers.length > 0 ? (
-        <ul className="flex items-center -space-x-2" aria-label={m['page.seen_by']()}>
-          {previewUsers.map((user) => {
-            const tooltip = user.name ? `${user.name} (@${user.username})` : `@${user.username}`;
-            return (
-              <li key={user._id} title={tooltip} className="rounded-full ring-2 ring-background">
-                <UserAvatar user={user} size="sm" />
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <span>{seenUsersCount}</span>
-      )}
-      {hiddenCount > 0 && (
-        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setDialogOpen(true)}>
-          {m['page.seen_by_more']({ count: hiddenCount })}
-        </Button>
-      )}
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{m['page.seen_by_dialog_title']()}</DialogTitle>
-            <DialogDescription>{m['page.seen_by_dialog_description']({ count: seenUsersCount })}</DialogDescription>
-          </DialogHeader>
-          <SeenUsersFullList pageId={pageId} enabled={dialogOpen} />
-        </DialogContent>
-      </Dialog>
-    </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{m['page.seen_by_dialog_title']()}</DialogTitle>
+          <DialogDescription>{m['page.seen_by_dialog_description']({ count: fallbackCount ?? 0 })}</DialogDescription>
+        </DialogHeader>
+        <SeenUsersFullList pageId={pageId} enabled={open} />
+      </DialogContent>
+    </Dialog>
   );
 }
 

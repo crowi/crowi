@@ -6,6 +6,7 @@ import { Link2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { useBacklinks } from '@/lib/use-backlinks';
+import { SCROLL_TARGETS } from '@/lib/scroll-to-section';
 import { m } from '@paraglide/messages.js';
 
 const INITIAL_LIMIT = 5;
@@ -40,8 +41,8 @@ export function BacklinkList({ pageId }: BacklinkListProps) {
   if (backlinks.length === 0) return null;
 
   return (
-    <section className="mt-6 pt-6 border-t" aria-labelledby="backlinks-heading">
-      <h3 id="backlinks-heading" className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3">
+    <section id="backlinks" className="mt-6 pt-6 border-t" aria-labelledby={SCROLL_TARGETS.BACKLINKS}>
+      <h3 id={SCROLL_TARGETS.BACKLINKS} className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3 scroll-mt-4 outline-none">
         <Link2 className="h-4 w-4" aria-hidden="true" />
         {m['page.backlinks_heading']()}
       </h3>

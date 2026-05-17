@@ -5,6 +5,7 @@ import { Loader2, MessageSquare } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/lib/use-auth';
 import { useAddComment, useDeleteComment, usePageCommentsList } from '@/lib/use-page-comments';
+import { SCROLL_TARGETS } from '@/lib/scroll-to-section';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { CommentItem } from './comment-item';
 import { CommentForm } from './comment-form';
@@ -50,7 +51,7 @@ export function PageComments({ page }: PageCommentsProps) {
     <section id="comments" className="mt-8 border-t pt-6 scroll-mt-4" aria-label={m['page_comments.heading']()}>
       <div className="flex items-center gap-2 mb-4">
         <MessageSquare className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">
+        <h2 id={SCROLL_TARGETS.COMMENTS} className="text-lg font-semibold scroll-mt-4 outline-none">
           {m['page_comments.heading']()} {comments.length > 0 ? `(${comments.length})` : ''}
         </h2>
       </div>
