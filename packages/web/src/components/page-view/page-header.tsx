@@ -54,7 +54,10 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
 
   return (
     <header className="space-y-5">
-      <div className="flex items-center justify-between gap-4 min-h-9">
+      {/* Breadcrumb + action buttons. On mobile they stack vertically —
+          side by side they overflow the viewport (the action group is
+          `shrink-0`); from `md` up they share one row. */}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 min-h-9">
         <Breadcrumb path={page.path} />
 
         <div className="flex items-center gap-1 shrink-0">
