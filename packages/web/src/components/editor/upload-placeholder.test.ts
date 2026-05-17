@@ -11,6 +11,7 @@ import {
   insertPlaceholder,
   replacePlaceholder,
   makeProgressUpdater,
+  padToOwnLine,
 } from './upload-placeholder';
 
 /**
@@ -85,6 +86,35 @@ describe('findPlaceholderRange', () => {
     const rangeB = findPlaceholderRange(doc, 'b');
     expect(doc.slice(rangeA!.from, rangeA!.to)).toBe('![Uploading shot.png (0%)…](#u=a)');
     expect(doc.slice(rangeB!.from, rangeB!.to)).toBe('![Uploading shot.png (0%)…](#u=b)');
+  });
+});
+
+describe('padToOwnLine', () => {
+  it('wraps both sides when the position is mid-line', () => {
+    // pos 2 of "abcd" — surrounded by non-newline text.
+    expect(padToOwnLine('abcd', 2, 'IMG')).toBe('\nIMG\n');
+  });
+
+  it('breaks a bare image off the end of a heading line', () => {
+    // Dropping at the end of "## Goals" (before its trailing newline).
+    expect(padToOwnLine('## Goals\nnext', 8, 'IMG')).toBe('\nIMG');
+  });
+
+  it('adds no leading newline at the start of the document', () => {
+    expect(padToOwnLine('abc', 0, 'IMG')).toBe('IMG\n');
+  });
+
+  it('adds no trailing newline at the end of the document', () => {
+    expect(padToOwnLine('abc', 3, 'IMG')).toBe('\nIMG');
+  });
+
+  it('adds nothing when the position already sits on a blank line', () => {
+    // "a\n\nb" — pos 2 is between the two newlines.
+    expect(padToOwnLine('a\n\nb', 2, 'IMG')).toBe('IMG');
+  });
+
+  it('adds only a trailing newline right after an existing newline', () => {
+    expect(padToOwnLine('ab\ncd', 3, 'IMG')).toBe('IMG\n');
   });
 });
 

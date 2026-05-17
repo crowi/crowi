@@ -25,8 +25,9 @@ import { getAccessToken } from '@/lib/auth-token';
  * cannot be confused when they finish out of order.
  *
  * The pure text helpers (`buildPlaceholderText`, `buildSuccessText`,
- * `buildFailureText`, `findPlaceholderRange`) are exported so the
- * placeholder grammar is unit-testable without mounting an editor.
+ * `buildFailureText`, `findPlaceholderRange`, `padToOwnLine`) are
+ * exported so the placeholder grammar is unit-testable without mounting
+ * an editor.
  */
 
 /** Editor intent forwarded to the upload endpoint for telemetry. */
@@ -127,6 +128,20 @@ export function findPlaceholderRange(doc: string, uploadId: string): { from: num
   if (openBracket < 0) return null;
   const from = openBracket > 0 && doc[openBracket - 1] === '!' ? openBracket - 1 : openBracket;
   return { from, to: tailIdx + tail.length };
+}
+
+/**
+ * Pad `text` with newlines so it lands on its own line when spliced at
+ * `pos`. A bare `![](url)` dropped at the end of a `## Heading` or a
+ * list item would otherwise glue onto that line (`## Heading![](url)`),
+ * which is broken Markdown — GitHub's editor breaks the line the same
+ * way. A `\n` is prepended unless `pos` already sits at the start of a
+ * line, and appended unless it sits at the end of one.
+ */
+export function padToOwnLine(doc: string, pos: number, text: string): string {
+  const leading = pos > 0 && doc[pos - 1] !== '\n' ? '\n' : '';
+  const trailing = pos < doc.length && doc[pos] !== '\n' ? '\n' : '';
+  return `${leading}${text}${trailing}`;
 }
 
 /**
@@ -261,7 +276,11 @@ export async function runUpload(view: EditorView, file: File, filename: string, 
   const uploadId = newUploadId();
   const displayName = sanitizeFilename(filename);
 
-  insertPlaceholder(view, pos, buildPlaceholderText(uploadId, displayName, 0, isImage));
+  // Images are placed on their own line (see `padToOwnLine`); inline
+  // file links (`[name](url)`) are fine mid-sentence and get no padding.
+  const placeholder = buildPlaceholderText(uploadId, displayName, 0, isImage);
+  const inserted = isImage ? padToOwnLine(view.state.doc.toString(), pos, placeholder) : placeholder;
+  insertPlaceholder(view, pos, inserted);
   const onProgress = makeProgressUpdater(view, uploadId, displayName, isImage);
 
   try {
