@@ -12,6 +12,7 @@ import { m } from '@paraglide/messages.js';
 import { BookmarkButton } from './bookmark-button';
 import { LikeButton } from './like-button';
 import { LinkSharePopover } from './link-share-popover';
+import { LivePresenceRow } from './live-presence-row';
 import { PageActionsMenu } from './page-actions-menu';
 import { SeenUserList } from './seen-user-list';
 import { WatchButton } from './watch-button';
@@ -27,6 +28,13 @@ interface PageHeaderProps {
    * just echo the URL basename).
    */
   showTitle?: boolean;
+  /**
+   * RFC-0005 live presence row above the title. Defaults on for the
+   * live page view; callers rendering a stale revision / deleted page
+   * / user cover pass `false` — presence is only meaningful for the
+   * page someone is actually reading right now.
+   */
+  showPresence?: boolean;
 }
 
 function getPageTitle(path: string): string {
@@ -35,7 +43,7 @@ function getPageTitle(path: string): string {
   return segments[segments.length - 1] || 'Untitled';
 }
 
-export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = true, showTitle = true }: PageHeaderProps) {
+export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = true, showTitle = true, showPresence = false }: PageHeaderProps) {
   const { user, isAuthenticated } = useAuth();
   const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
   const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
@@ -58,6 +66,8 @@ export function PageHeader({ page, onEdit, showActions = false, showSeenUsers = 
           {showActions && <PageActionsMenu page={page} />}
         </div>
       </div>
+
+      {showPresence && isAuthenticated && <LivePresenceRow pageId={page._id} />}
 
       {showTitle ? (
         <div className="flex items-center gap-3">

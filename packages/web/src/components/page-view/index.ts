@@ -8,4 +8,5 @@ export { LikeButton } from './like-button';
 export { PageActionsMenu } from './page-actions-menu';
 export { DeletePageDialog } from './delete-page-dialog';
 export { SeenUserList } from './seen-user-list';
+export { LivePresenceRow } from './live-presence-row';
 export { BacklinkList } from './backlink-list';
