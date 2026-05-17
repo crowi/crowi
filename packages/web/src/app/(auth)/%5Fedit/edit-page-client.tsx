@@ -19,6 +19,7 @@ import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarni
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { UnsavedChangesDialog } from '@/components/editor/UnsavedChangesDialog';
 import { usePage } from '@/lib/use-page';
+import { usePresence } from '@/lib/use-presence';
 import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
 import { useScrollSync } from '@/lib/use-scroll-sync';
 import { useCollabSave } from '@/lib/use-collab-save';
@@ -608,6 +609,16 @@ interface UpdatePageEditorProps {
 function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   const router = useRouter();
   const { page, isLoading, isError, error } = usePage({ page_id: pageId });
+
+  // RFC-0005 — register the editor on the page's presence channel. The
+  // editor connects to /collab for editing; this also connects it to
+  // /presence so the editor appears in the live presence row that page
+  // *viewers* see, carrying the ✏️ editing badge (which `listViewers`
+  // joins from the collab editing signal). Without this an editor is
+  // absent from the presence channel and vanishes from viewers' rows.
+  // The returned viewer list is intentionally unused here — the editor
+  // shows peers via `CollabPresenceAvatars`, not this row.
+  usePresence(pageId);
 
   // RFC-0003 Phase 7: in realtime mode the canonical body lives in
   // Y.Text. We still keep a React-side `body` string for the preview
