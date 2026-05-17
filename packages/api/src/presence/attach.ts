@@ -222,6 +222,32 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
       return;
     }
 
+    // The token verified, so userId / pageId are known. Register the
+    // close + error handlers NOW, before the async permission / identity
+    // round-trips below. A socket that closes *during* those awaits (a
+    // fast client navigation, React's dev double-mount) would otherwise
+    // fire `'close'` into the void — the handler being attached only
+    // after the awaits — leaving a phantom `connections` entry whose
+    // `'close'` never runs. That phantom poisons the multi-tab
+    // `userStillConnected` check in `handleClose`, so a later *real*
+    // disconnect skips `presence.leave` and the viewer is stuck in the
+    // hash for every other client on the page.
+    const conn: PresenceConnection = {
+      ws,
+      userId: claims.userId,
+      pageId: claims.pageId,
+      permittedUntil: 0,
+    };
+    let closed = false;
+    ws.on('close', () => {
+      closed = true;
+      void handleClose(conn);
+    });
+    ws.on('error', (err: Error) => {
+      // A single bad socket must not crash the api process.
+      console.error('[crowi:presence] websocket error', err);
+    });
+
     // 3. re-check read permission (token was minted up to 5 min ago).
     const permitted = await hasReadPermission(claims.pageId, claims.userId);
     if (!permitted) {
@@ -237,13 +263,18 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
       return;
     }
 
-    const conn: PresenceConnection = {
-      ws,
-      userId: claims.userId,
-      pageId: claims.pageId,
-      permittedUntil: Date.now() + PERMISSION_CACHE_TTL_MS,
-    };
+    // The socket closed while permission / identity were resolving —
+    // the close handler has already run; do not register a viewer.
+    if (closed) {
+      debug('presence socket closed during setup user=%s page=%s', conn.userId, conn.pageId);
+      return;
+    }
+
+    conn.permittedUntil = Date.now() + PERMISSION_CACHE_TTL_MS;
     connections.set(ws, conn);
+    ws.on('message', (data: Buffer | ArrayBuffer) => {
+      void handleClientMessage(conn, data);
+    });
 
     // Register the viewer. `join` publishes a viewer-list change, which
     // flows back through `onViewersChanged` → `broadcastViewers`, so
@@ -254,16 +285,14 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
       console.warn(`[crowi:presence] join failed for page ${conn.pageId}:`, (err as Error).message);
     }
 
-    ws.on('message', (data: Buffer | ArrayBuffer) => {
-      void handleClientMessage(conn, data);
-    });
-    ws.on('close', () => {
+    // The socket closed while `join` was in flight — the close handler
+    // ran before the viewer entry existed, so reconcile now to remove
+    // the entry `join` just wrote.
+    if (closed) {
+      debug('presence socket closed during join user=%s page=%s', conn.userId, conn.pageId);
       void handleClose(conn);
-    });
-    ws.on('error', (err: Error) => {
-      // A single bad socket must not crash the api process.
-      console.error('[crowi:presence] websocket error', err);
-    });
+      return;
+    }
 
     debug('presence connected user=%s page=%s', conn.userId, conn.pageId);
   };
