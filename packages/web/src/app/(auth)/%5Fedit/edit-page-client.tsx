@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
+import { GrantSelect } from '@/components/editor/GrantSelect';
 import type * as Y from 'yjs';
 import { CollaborativeMarkdownEditor, useCollabSession, type CollabSession } from '@/components/editor/CollaborativeMarkdownEditor';
 import { CollabForceReloadDialog } from '@/components/editor/CollabForceReloadDialog';
@@ -22,7 +23,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { useAuth } from '@/lib/use-auth';
 import { usePage } from '@/lib/use-page';
 import { usePresence } from '@/lib/use-presence';
-import { PageRevisionConflictError, useUpdatePage } from '@/lib/use-page-mutations';
+import { PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
 import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { useScrollSync } from '@/lib/use-scroll-sync';
 import { useCollabSave } from '@/lib/use-collab-save';
@@ -144,6 +145,16 @@ interface EditorShellProps {
    * 4 more props through the parent.
    */
   useRealtimeSave?: boolean;
+  /**
+   * RFC-0005 Phase 2 — page visibility (grant) controls. When `grant`
+   * is supplied the header renders the `GrantSelect`; `onChangeGrant`
+   * persists the new value. Omitted by the create flow before a draft
+   * page id exists (the draft is always GRANT_PUBLIC then).
+   */
+  grant?: number;
+  onChangeGrant?: (grant: number) => void;
+  /** `true` while a grant mutation is in flight (disables the selector). */
+  isGrantSaving?: boolean;
 }
 
 function EditorShell({
@@ -161,6 +172,9 @@ function EditorShell({
   onReadonlyChange,
   readonly = false,
   useRealtimeSave = false,
+  grant,
+  onChangeGrant,
+  isGrantSaving = false,
 }: EditorShellProps) {
   // RFC-0003 Phase 7: a single Hocuspocus connection (= one Y.Doc +
   // one provider) is shared by the wide + narrow editor panes. Both
@@ -358,7 +372,10 @@ function EditorShell({
             <h2 className="text-lg font-semibold leading-tight">{title}</h2>
             <p className="text-muted-foreground truncate text-sm">{subtitle}</p>
           </div>
-          {realtimePageId && <CollabPresenceAvatars awareness={session.awareness} localClientId={session.awareness?.clientID ?? null} className="shrink-0" />}
+          <div className="flex shrink-0 items-center gap-3">
+            {grant !== undefined && onChangeGrant && <GrantSelect value={grant} onChange={onChangeGrant} disabled={isGrantSaving || readonly} />}
+            {realtimePageId && <CollabPresenceAvatars awareness={session.awareness} localClientId={session.awareness?.clientID ?? null} />}
+          </div>
         </div>
         {feedback && (
           <Alert variant="destructive" className="mt-3">
@@ -636,6 +653,7 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   const [readonly, setReadonly] = useState<boolean>(false);
 
   const updateMutation = useUpdatePage();
+  const setGrantMutation = useSetPageGrant();
   const handleReadonlyChange = useCallback((next: boolean) => {
     setReadonly(next);
   }, []);
@@ -655,6 +673,21 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
       return;
     }
     router.back();
+  };
+
+  // RFC-0005 Phase 2 — persist a visibility change immediately via the
+  // grant-only endpoint (no revision push). The page query is
+  // invalidated on success, so `page.grant` re-renders with the new
+  // value. A failure surfaces inline; the selector reverts because it
+  // is driven straight off the (unchanged) `page.grant`.
+  const handleChangeGrant = async (nextGrant: number) => {
+    if (!page || nextGrant === page.grant) return;
+    setFeedback(null);
+    try {
+      await setGrantMutation.mutateAsync({ page_id: page._id, grant: nextGrant });
+    } catch (err) {
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : m['edit.grant_update_failed']() });
+    }
   };
 
   const handleSave = async () => {
@@ -725,6 +758,9 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
       // Phase 8: in-flight edits land via `crowi:save` over Hocuspocus
       // — the HTTP path stays around for the create flow only.
       useRealtimeSave={true}
+      grant={page.grant ?? 1}
+      onChangeGrant={handleChangeGrant}
+      isGrantSaving={setGrantMutation.isPending}
     />
   );
 }

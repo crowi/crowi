@@ -211,6 +211,92 @@ describe('Routes /api/v2/pages (ts-rest updatePage)', () => {
   });
 });
 
+describe('Routes /api/v2/pages/grant (ts-rest setPageGrant)', () => {
+  const PATH_PREFIX = '/ts-rest-grant-test/';
+  let Page;
+  let accessToken: string;
+  let otherAccessToken: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+
+    [{ accessToken }, { accessToken: otherAccessToken }] = await Promise.all([
+      createTestUser({ name: 'Grant Test', username: 'grantTester', email: 'grant-tester@example.com' }),
+      createTestUser({ name: 'Grant Other', username: 'grantOther', email: 'grant-other@example.com' }),
+    ]);
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  describe('PUT /api/v2/pages/grant', () => {
+    it('returns 401 when no Authorization header is provided', async () => {
+      const res = await request(app).put('/api/v2/pages/grant').send({ page_id: '000000000000000000000000', grant: 4 }).set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('updates only the grant without pushing a new revision', async () => {
+      const path = `${PATH_PREFIX}basic`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+      const revisionId = createRes.body.page.revision._id;
+      expect(createRes.body.page.grant).toBe(1);
+
+      const res = await request(app).put('/api/v2/pages/grant').set(headers).send({ page_id: pageId, grant: 4 });
+      expect(res.status).toBe(200);
+      expect(res.body.page._id).toBe(pageId);
+      expect(res.body.page.grant).toBe(4);
+
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.grant).toBe(4);
+      // Grant-only change must NOT create a new revision.
+      expect(pageDoc.revision.toString()).toBe(revisionId);
+    });
+
+    it('returns 400 INVALID_GRANT for out-of-range grant values', async () => {
+      const path = `${PATH_PREFIX}bad-grant`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).put('/api/v2/pages/grant').set(headers).send({ page_id: pageId, grant: 99 });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_GRANT');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
+      const res = await request(app).put('/api/v2/pages/grant').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000', grant: 4 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
+      const path = `${PATH_PREFIX}private`;
+      const ownerHeaders = authHeaders(accessToken);
+      const otherHeaders = authHeaders(otherAccessToken);
+
+      // OWNER-grant (4) page so other users cannot access it.
+      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private', grant: 4 });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).put('/api/v2/pages/grant').set(otherHeaders).send({ page_id: pageId, grant: 1 });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.grant).toBe(4);
+    });
+  });
+});
+
 describe('Routes /api/v2/pages/rename (ts-rest renamePage)', () => {
   const PATH_PREFIX = '/ts-rest-rename-test/';
   let Page;

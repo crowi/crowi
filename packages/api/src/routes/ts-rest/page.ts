@@ -414,6 +414,47 @@ export default (crowi: Crowi, _app: Express) => {
         };
       }
     },
+    /**
+     * PUT /api/v2/pages/grant
+     *
+     * Grant-only update. Mutates `page.grant` / `grantedUsers` via
+     * Page.updateGrant — no revision is pushed, so changing a page's
+     * visibility never lands a no-op entry in the page history.
+     * Authorization mirrors updatePage (findPageByIdAndGrantedUser).
+     */
+    setPageGrant: async ({ body: requestBody, req }) => {
+      const user = req.user as UserDocument;
+      const { page_id, grant } = requestBody;
+
+      debug('setPageGrant called with:', { page_id, grant, userId: user._id });
+
+      if (!VALID_GRANTS.includes(grant)) {
+        return invalidGrantResponse();
+      }
+
+      try {
+        const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+        if (!pageData) {
+          return pageNotFoundResponse;
+        }
+
+        const updated = (await Page.updateGrant(pageData, grant, user)) as PageDocument;
+        const populated = await Page.populatePageData(updated, null);
+        return { status: 200 as const, body: { page: pageToResponse(populated) } };
+      } catch (err) {
+        const error = err as Error;
+        debug('Error updating page grant:', error.message);
+
+        if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+          return pageNotFoundResponse;
+        }
+
+        return {
+          status: 400 as const,
+          body: { error: { code: 'PAGE_GRANT_UPDATE_FAILED', message: error.message || 'Failed to update page grant' } },
+        };
+      }
+    },
     // Idempotent: Page.seen uses addToSet so re-posting from the same user
     // does not inflate seenUsers / seenUsersCount.
     seenPage: async ({ body: requestBody, req }) => {

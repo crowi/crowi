@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import { unwrapResult } from './unwrap-result';
-import type { RenamePageRequest, UpdatePageRequest } from '@crowi/api-contract';
+import type { RenamePageRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
 interface DeletePageRequest {
@@ -44,6 +44,33 @@ export function useUpdatePage() {
           404: { message: m['errors.page_not_found'](), preferLocal: true },
         },
         fallback: m['errors.update_failed'](),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['page'] });
+    },
+  });
+}
+
+/**
+ * Update only a page's grant (visibility). Unlike `useUpdatePage` this
+ * does not push a new revision — it powers the editor's visibility
+ * selector, where a grant change must not land in the page history.
+ */
+export function useSetPageGrant() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: SetPageGrantRequest) => {
+      const result = await apiClient.page.setPageGrant({ body: data });
+      return unwrapResult(result, {
+        ok: (body) => body.page,
+        errors: {
+          400: m['edit.grant_update_failed'](),
+          403: { message: m['errors.permission_denied_edit'](), preferLocal: true },
+          404: { message: m['errors.page_not_found'](), preferLocal: true },
+        },
+        fallback: m['edit.grant_update_failed'](),
       });
     },
     onSuccess: () => {

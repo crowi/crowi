@@ -212,6 +212,19 @@ export const UpdatePageRequestSchema = z.object({
 });
 export type UpdatePageRequest = z.infer<typeof UpdatePageRequestSchema>;
 
+// Set page grant request schema
+//
+// A lightweight grant-only update. Unlike `updatePage` this does NOT
+// push a new revision — it only mutates `page.grant` / `grantedUsers`
+// (see Page.updateGrant). Used by the editor's grant (visibility)
+// selector so changing a page's visibility never produces a no-op
+// revision in the history.
+export const SetPageGrantRequestSchema = z.object({
+  page_id: z.string(),
+  grant: z.number().int(),
+});
+export type SetPageGrantRequest = z.infer<typeof SetPageGrantRequestSchema>;
+
 // Rename page request schema
 export const RenamePageRequestSchema = z.object({
   page_id: z.string(),
