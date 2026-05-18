@@ -280,10 +280,16 @@ function EditorShell({
     setUnsavedDialogOpen(false);
     onCancel();
   }, [onCancel]);
-  // Collab status toasts: first 'disconnected' surfaces a persistent
-  // error toast; first 'connected' after a drop confirms recovery;
-  // 'auth-failed' is terminal and recommends a reload.
+  // Collab status toasts: a 'disconnected' surfaces a persistent offline
+  // error toast; the first 'connected' after that replaces it with a
+  // 'reconnected' confirmation; 'auth-failed' is terminal.
   const prevStatusRef = useRef<CollabStatus>('connecting');
+  // Whether the persistent offline toast is currently showing. A
+  // reconnect goes 'disconnected' → 'connecting' → 'connected', so the
+  // recovery toast must key off "was offline" rather than the
+  // immediately-previous status (which is 'connecting', not
+  // 'disconnected', by the time 'connected' arrives).
+  const wasOfflineRef = useRef(false);
   useEffect(() => {
     if (!realtimePageId) return;
     const prev = prevStatusRef.current;
@@ -291,11 +297,13 @@ function EditorShell({
     if (next === prev) return;
     prevStatusRef.current = next;
     if (next === 'disconnected') {
+      wasOfflineRef.current = true;
       toast.error(m['edit.connection_offline'](), {
         id: COLLAB_STATUS_TOAST_ID,
         duration: Infinity,
       });
-    } else if (next === 'connected' && prev === 'disconnected') {
+    } else if (next === 'connected' && wasOfflineRef.current) {
+      wasOfflineRef.current = false;
       toast.success(m['edit.connection_reconnected'](), {
         id: COLLAB_STATUS_TOAST_ID,
         duration: 3000,
