@@ -666,12 +666,13 @@ export default (crowi: Crowi, _app: Express) => {
     /**
      * DELETE /api/v2/attachments/:id
      *
-     * Authorization (semantic change from legacy):
-     *   - attachment.creator
-     *   - user.admin
-     *   - user is in page.grantedUsers
-     * Anyone else → 403. The legacy `/_api/attachments.remove` allowed
-     * anonymous deletion.
+     * Authorization (wiki policy): any authenticated user who can view the
+     * owning page may delete an attachment — the same open-collaboration
+     * posture as page editing. The caller still has to pass the page grant
+     * check (so an attachment on a page they cannot see stays a 404), but
+     * we no longer restrict deletion to the creator / admin / grantedUsers.
+     * The legacy `/_api/attachments.remove` allowed even anonymous
+     * deletion; we keep it authenticated-only (`authenticatedRouter`).
      */
     removeAttachment: async ({ params, req }) => {
       const user = req.user as UserDocument;
@@ -701,24 +702,13 @@ export default (crowi: Crowi, _app: Express) => {
         };
       }
 
-      // Resolve the page for grant + grantedUsers check.
+      // Resolve the page for the view-grant check. Any authenticated user
+      // who can view the page may delete its attachments (wiki policy).
       const grant = await loadGrantedPage(Page, attachment.page.toString(), user);
       if ('error' in grant) {
         return {
           status: 404 as const,
           body: errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found'),
-        };
-      }
-      const page = grant.page;
-
-      const isCreator = attachment.creator.toString() === user._id.toString();
-      const isAdmin = user.admin === true;
-      const isGrantedUser = (page.grantedUsers || []).some((gid) => gid.toString() === user._id.toString());
-
-      if (!isCreator && !isAdmin && !isGrantedUser) {
-        return {
-          status: 403 as const,
-          body: errorBody('FORBIDDEN_FOR_DELETE', 'You do not have permission to remove this attachment'),
         };
       }
 

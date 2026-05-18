@@ -415,10 +415,10 @@ describe('Routes /api/v2 attachments (ts-rest)', () => {
       expect(res.body.success).toBe(true);
     });
 
-    it('rejects a non-creator non-admin user with 403', async () => {
-      // Create a public page so `otherAccessToken` can still see it; otherwise
-      // the grant check would short-circuit to 404 before we reach the 403 branch.
-      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}delete-403`, '# dx');
+    it('lets any authenticated user delete an attachment they did not create (wiki policy)', async () => {
+      // Wiki policy: deletion is open to any authenticated user who can view
+      // the owning page — not restricted to creator / admin / grantedUsers.
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}delete-anyone`, '# dx');
       const upload = await request(app)
         .post(`/api/v2/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
@@ -427,8 +427,11 @@ describe('Routes /api/v2 attachments (ts-rest)', () => {
 
       const id = upload.body.attachment._id;
       const res = await request(app).delete(`/api/v2/attachments/${id}`).set(authHeaders(otherAccessToken));
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('FORBIDDEN_FOR_DELETE');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      const Attachment = crowi.model('Attachment');
+      expect(await Attachment.findById(id)).toBeNull();
     });
   });
 
