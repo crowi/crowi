@@ -3,6 +3,7 @@ import {
   apiContract,
   type Attachment as AttachmentSchema,
   type UploadAttachmentErrorCode,
+  type UserPublic,
   IMAGE_UPLOAD_MIME,
   DND_EXTRA_UPLOAD_MIME,
 } from '@crowi/api-contract';
@@ -444,6 +445,120 @@ export default (crowi: Crowi, _app: Express) => {
         };
       } catch (err) {
         debug('listAttachments error', err);
+        return internalServerErrorResponse;
+      }
+    },
+
+    /**
+     * GET /api/v2/pages/:pageId/attachments/usage
+     *
+     * Phase 8 — full attachment usage breakdown for a page. Scans every
+     * revision body of the page (via the `path` key) for attachment embed
+     * URIs and splits the page's attachments into:
+     *   - `latest`: referenced by the page's current revision body.
+     *   - `past`: referenced only by older revisions (plus orphans referenced
+     *     by none), each carrying the revisions that used it.
+     *
+     * On-demand (no caching) — `/_attachments` is a deliberate navigation,
+     * not a hot path. The revision query deliberately omits `renderedAst`
+     * (multi-MB per page); only `body` is needed for the scan.
+     */
+    getAttachmentUsage: async ({ params, req }) => {
+      const user = req.user as UserDocument;
+      const { pageId } = params;
+
+      const grant = await loadGrantedPage(Page, pageId, user);
+      if ('error' in grant) {
+        if (grant.error.status === 400) {
+          return invalidPageIdResponse;
+        }
+        return pageNotFoundResponse;
+      }
+      const page = grant.page;
+
+      try {
+        const Revision = crowi.model('Revision');
+
+        // All revisions of the page, newest-first. `author` is populated for
+        // the past-revision link rendering; `renderedAst` is intentionally
+        // excluded — it is heavy and the scan only needs the raw body.
+        const revisions = (await Revision.find({ path: page.path }).select('_id body createdAt author').sort({ createdAt: -1 }).populate('author')) as Array<{
+          _id: Types.ObjectId;
+          body?: string;
+          createdAt?: Date;
+          author?: PopulatedUserPublic | Types.ObjectId | string | null;
+        }>;
+
+        // `page.revision` may be a bare ObjectId or a populated Revision
+        // document (findPageById populates it). Normalise to the hex id.
+        const rawRevision = page.revision as unknown;
+        const latestRevisionId =
+          rawRevision == null
+            ? null
+            : typeof rawRevision === 'object' && rawRevision !== null && '_id' in rawRevision
+              ? toStringId((rawRevision as { _id: Types.ObjectId | string })._id)
+              : toStringId(rawRevision as Types.ObjectId | string);
+
+        // Per-revision referenced-id sets, plus the aggregate of which past
+        // (non-latest) revisions reference each attachment id.
+        let latestIds: Set<string> = new Set();
+        const referencedByPast = new Map<
+          string,
+          Array<{ revisionId: string; createdAt: string; author: PopulatedUserPublic | Types.ObjectId | string | null }>
+        >();
+
+        for (const revision of revisions) {
+          const ids = revision.body ? collectReferencedAttachmentIds(revision.body) : new Set<string>();
+          const isLatest = latestRevisionId !== null && revision._id.toString() === latestRevisionId;
+          if (isLatest) {
+            latestIds = ids;
+            continue;
+          }
+          for (const id of ids) {
+            const list = referencedByPast.get(id) ?? [];
+            list.push({
+              revisionId: revision._id.toString(),
+              createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
+              author: revision.author ?? null,
+            });
+            referencedByPast.set(id, list);
+          }
+        }
+
+        const attachments = (await Attachment.getListByPageId(new Types.ObjectId(pageId))) as AttachmentDocument[];
+
+        const latest: AttachmentSchema[] = [];
+        const past: Array<{
+          attachment: AttachmentSchema;
+          referencingRevisions: Array<{ revisionId: string; createdAt: string; author: UserPublic }>;
+        }> = [];
+
+        for (const att of attachments) {
+          const attId = att._id.toString().toLowerCase();
+          if (latestIds.has(attId)) {
+            latest.push(attachmentToResponse(att, true));
+            continue;
+          }
+          // Past-only or orphan (orphan → empty referencingRevisions).
+          const refs = referencedByPast.get(attId) ?? [];
+          past.push({
+            attachment: attachmentToResponse(att, false),
+            referencingRevisions: refs.map((r) => ({
+              revisionId: r.revisionId,
+              createdAt: r.createdAt,
+              author: isPopulatedUser(r.author)
+                ? toUserPublic(r.author)
+                : toUserPublic({ _id: r.author ? toStringId(r.author as Types.ObjectId | string) : '' }),
+            })),
+          });
+        }
+
+        return {
+          status: 200 as const,
+          body: { pagePath: page.path, latest, past },
+        };
+      } catch (err) {
+        debug('getAttachmentUsage error', err);
         return internalServerErrorResponse;
       }
     },
