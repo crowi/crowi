@@ -10,6 +10,14 @@ import { UserPublicSchema } from './userPublic';
  * - `url` is a relative URL (`/api/v2/attachments/:id`) computed by the
  *   handler from the document's `fileUrl` virtual. Browsers fetch the
  *   stream endpoint via the same origin, so absolute URLs are not needed.
+ * - `inUse` (Phase 7) is `true` when the attachment is referenced by the
+ *   page's latest revision body (a `/api/v2/attachments/<id>` or legacy
+ *   `/files/<id>` URI). `listAttachments` computes it by scanning the
+ *   latest revision body once; when the revision is missing or empty it
+ *   falls back to `true` for every attachment so files are not hidden
+ *   while the reference state is undetermined. The `addAttachment`
+ *   (upload) response sets `inUse: false` — a freshly uploaded file is
+ *   not yet spliced into the body.
  */
 export const AttachmentSchema = z.object({
   _id: z.string(),
@@ -22,6 +30,7 @@ export const AttachmentSchema = z.object({
   fileSize: z.number(),
   createdAt: z.string(),
   url: z.string(),
+  inUse: z.boolean(),
 });
 export type Attachment = z.infer<typeof AttachmentSchema>;
 
