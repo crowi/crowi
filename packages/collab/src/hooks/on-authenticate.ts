@@ -1,6 +1,7 @@
 import type { onAuthenticatePayload } from '@hocuspocus/server';
 import Debug from 'debug';
 import type { CollabModels } from '../models';
+import { DRAFT_STATUS } from '../page-status';
 import { type CollabContext, type CollabWsTokenUtil, type EditorCapCounter, noopEditorCapCounter } from '../types';
 
 /**
@@ -11,14 +12,6 @@ import { type CollabContext, type CollabWsTokenUtil, type EditorCapCounter, noop
 const defaultCheckEditorCap = async (_pageId: string): Promise<{ readonly: boolean }> => ({ readonly: false });
 
 const debug = Debug('crowi:collab:auth');
-
-/**
- * RFC-0004 `Page.status` value for a not-yet-published page. Declared
- * locally — the collab library deliberately does not import from
- * `@crowi/api`, so the string is duplicated here. It must stay byte-
- * identical to `STATUS_DRAFT` in `@crowi/api`'s `models/page.ts`.
- */
-const DRAFT_STATUS = 'draft';
 
 /**
  * Minimal `findById(...).select(...).lean().exec()` chain shape — only

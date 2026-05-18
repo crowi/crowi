@@ -250,6 +250,68 @@ describe('createSaveFlow.executeSave', () => {
     expect(page.revision.toString()).toBe(r2.revisionId);
   });
 
+  test('publish-on-save: a draft page transitions to published after a successful save', async () => {
+    const tracker = createContributorsTracker();
+    const publisher = makeMockPublisher();
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+
+    // Seed a page in the RFC-0004 draft state (status: 'draft').
+    const { pageId } = await fixtures.seedPage({ status: 'draft' });
+    const user = await seedUser(models);
+
+    const doc = new Y.Doc();
+    doc.getText(CONTENT_FIELD).insert(0, '# Published now');
+
+    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page = models.Page as any;
+    const page = await Page.findById(pageId).exec();
+    expect(page.status).toBe('published');
+  });
+
+  test('publish-on-save: an already-published page keeps its status untouched on save', async () => {
+    const tracker = createContributorsTracker();
+    const publisher = makeMockPublisher();
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+
+    // `fixtures.seedPage` defaults to status: 'published'.
+    const { pageId } = await fixtures.seedPage();
+    const user = await seedUser(models);
+
+    const doc = new Y.Doc();
+    doc.getText(CONTENT_FIELD).insert(0, 'just an edit');
+
+    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page = models.Page as any;
+    const page = await Page.findById(pageId).exec();
+    expect(page.status).toBe('published');
+  });
+
+  test('publish-on-save: a second save of an already-published draft is a no-op on status', async () => {
+    const tracker = createContributorsTracker();
+    const publisher = makeMockPublisher();
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+
+    const { pageId } = await fixtures.seedPage({ status: 'draft' });
+    const user = await seedUser(models);
+
+    const doc = new Y.Doc();
+    doc.getText(CONTENT_FIELD).insert(0, 'v1');
+    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page = models.Page as any;
+    expect((await Page.findById(pageId).exec()).status).toBe('published');
+
+    // Second save: the page is now published — status must stay put.
+    doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, '\nv2');
+    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+    expect((await Page.findById(pageId).exec()).status).toBe('published');
+  });
+
   test('CollabSaveError is exported as a real Error subclass (instanceof works)', async () => {
     // Quick sanity check — the on-stateless handler depends on
     // `err instanceof CollabSaveError` for code-narrowing.
