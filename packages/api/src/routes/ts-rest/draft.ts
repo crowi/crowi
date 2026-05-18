@@ -2,7 +2,7 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import { apiContract } from '@crowi/api-contract';
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
-import { GRANT_OWNER, PageDocument, STATUS_DRAFT } from 'src/models/page';
+import { GRANT_PUBLIC, PageDocument, STATUS_DRAFT } from 'src/models/page';
 import { isValidObjectId, toISOStringOrNull } from 'src/util/ts-rest-helpers';
 import type { UserDocument } from 'src/models/user';
 import Debug from 'debug';
@@ -41,11 +41,16 @@ export default (crowi: Crowi, _app: Express) => {
     /**
      * POST /api/v2/pages/drafts
      *
-     * Create a draft at `path`. The grant is forced to OWNER (`4`) so
-     * the draft is author-only at the grant layer too — listing /
-     * search already exclude other users' drafts by status, but the
-     * grant keeps a draft invisible even to code paths that predate the
-     * RFC-0004 status filters.
+     * Create a draft at `path` with the default `GRANT_PUBLIC` grant
+     * (RFC-0005 Phase 1). A draft's author-only visibility is enforced
+     * entirely by `status: 'draft'` — `findPage*` collapse a non-author
+     * by-id / by-path access into not-found, and listing / search /
+     * backlink all exclude other users' drafts by status. The grant is
+     * deliberately left public so that once publish-on-save flips the
+     * status to `published`, the page is immediately visible to other
+     * users; a `GRANT_OWNER` draft would stay invisible at the grant
+     * layer even after the status flip. (Phase 2 will let the editor
+     * pick a non-public grant explicitly.)
      */
     createDraft: async ({ body, req }) => {
       const user = req.user as UserDocument;
@@ -106,7 +111,7 @@ export default (crowi: Crowi, _app: Express) => {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           redirectTo: null,
-          grant: GRANT_OWNER,
+          grant: GRANT_PUBLIC,
           status: STATUS_DRAFT,
           grantedUsers: [user],
         });

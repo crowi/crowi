@@ -70,6 +70,85 @@ When you save, the body at that moment is persisted as a new `Revision`
 (history entry). The page itself always points at the latest revision, and
 past revisions can be followed from [Revisions and rollback](./revisions).
 
+## The page header
+
+Starting with Crowi 2.2, the page-view header has been restructured. Two
+rows sit above and below the title, visually separating "who is on this
+page right now" from "who has been involved with this page over time".
+
+### Live presence row (above the title)
+
+Just above the page title, the avatars of **users who currently have the
+page open** appear in real time.
+
+- Opening a page automatically connects you to the presence channel, and
+  other viewers' avatars appear within a few seconds. When someone leaves,
+  their avatar disappears.
+- A user who is **also editing** gets a small `✏️` badge in the corner of
+  their avatar. This indicates that they have the
+  [realtime collaborative editing](./realtime-editing) editor open.
+- Up to 5 avatars are shown; beyond that they collapse into `[+N]`.
+  Clicking `[+N]` opens a popover listing all current viewers (your own
+  entry is labelled "(you)").
+- **If you are the only person present, this row is not shown at all.**
+  Your browser tab already tells you that you are here, so a row with just
+  your own avatar adds no value.
+- On narrow viewports (mobile, etc.), the row collapses into a `[👁 N]`
+  chip; tapping it opens a sheet with the viewer list.
+- If the realtime presence connection fails, this row simply hides itself.
+  The rest of the page (body, meta row, comments) keeps working normally.
+
+> **Note**: Live presence is the "who is here now" signal. The list of
+> people who have viewed the page in the past is available from the
+> "Seen" chip in the meta row below.
+
+### Meta chip row (below the title)
+
+The meta row below the title consists of static information (author,
+last-updated time) and four **clickable chips**.
+
+```
+[author avatar] Author Name  ·  ⏱ Updated 5 min ago  ·  [👍 1] Likes  ·  [👁 2] Seen  ·  [💬 2] Comments  ·  [🔗 3] Backlinks
+```
+
+Each chip is a uniform `[icon][count][label]` pill. Clicking one does the
+following:
+
+| Chip | Click action | Contents |
+| ---- | ------------ | -------- |
+| Likes | Opens a "Liked by" modal | List of users who liked this page |
+| Seen | Opens a "Seen by" modal | List of users who have ever opened this page |
+| Comments | Scrolls to the comments section | Jumps to the comments area at the bottom of the page |
+| Backlinks | Scrolls to the backlinks list | Jumps to the backlinks list in the page footer |
+
+- A chip whose count is **0** is rendered greyed out and is not clickable.
+  Hovering it shows a tooltip such as "No likes yet". The chip stays in
+  place rather than disappearing, so the row layout is stable regardless of
+  the page's state.
+- When you press the like button, the like chip's count updates
+  immediately.
+
+> **Tip**: The Comments and Backlinks chips are shortcuts for jumping to
+> the relevant section on long pages. After scrolling, focus moves to the
+> target heading, so keyboard users can continue reading from there.
+
+### Where did the v1.x "seen users" avatar row go?
+
+In Crowi 1.x, a row of overlapping avatars for "users who viewed this
+page" sat below the page title. **In Crowi 2.2 this avatar row has been
+removed.**
+
+Its role has been replaced by the **"Seen" chip + modal** in the meta chip
+row. Clicking the Seen chip opens a modal with the list of users who have
+opened this page.
+
+This is a deliberate simplification. The new **live presence row** above
+the title became the primary "who is around" signal, so "who has viewed
+this in the past" is consolidated into a compact chip — avoiding two
+confusingly similar avatar rows.
+
+See [RFC-0005](../reference/rfcs) for the design details.
+
 ## Moving a page (rename)
 
 Changing a page's URL is called a "rename". When you rename a page, the

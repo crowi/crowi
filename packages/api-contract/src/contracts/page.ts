@@ -7,6 +7,7 @@ import {
   ListPagesResponseSchema,
   CreatePageRequestSchema,
   UpdatePageRequestSchema,
+  SetPageGrantRequestSchema,
   RenamePageRequestSchema,
   PageSchema,
   PageNotFoundErrorSchema,
@@ -88,6 +89,26 @@ export const pageContract = c.router({
       409: PageRevisionErrorSchema,
     },
     summary: 'Update existing page',
+  },
+
+  /**
+   * Update only a page's grant (visibility), without pushing a new
+   * revision. Powers the editor's visibility selector — a grant change
+   * is a property mutation, not a content edit, so it must not appear
+   * in the page history.
+   */
+  setPageGrant: {
+    method: 'PUT',
+    path: '/pages/grant',
+    body: SetPageGrantRequestSchema,
+    responses: {
+      200: z.object({ page: PageSchema }),
+      400: z.object({ error: z.object({ code: z.string(), message: z.string() }) }),
+      401: AuthenticationRequiredErrorSchema,
+      403: PageNotGrantedErrorSchema,
+      404: PageNotFoundErrorSchema,
+    },
+    summary: 'Update page grant (visibility) only',
   },
 
   /**

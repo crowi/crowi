@@ -59,7 +59,13 @@ export default function UserPage({ params }: UserPageProps) {
 
       {hasUserPage && (
         <article className="space-y-12">
-          <PageHeader page={userPageDoc} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(userPageDoc._id)}`)} showActions showTitle={false} />
+          <PageHeader
+            page={userPageDoc}
+            onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(userPageDoc._id)}`)}
+            showActions
+            showTitle={false}
+            showMeta={false}
+          />
           <PageContent page={userPageDoc} />
         </article>
       )}

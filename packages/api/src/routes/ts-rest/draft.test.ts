@@ -83,6 +83,20 @@ describe('Routes /api/v2/pages/drafts (ts-rest draft)', () => {
       expect(page?.path).toBe(path);
     });
 
+    it('creates the draft with the default GRANT_PUBLIC grant (RFC-0005)', async () => {
+      // The draft's author-only visibility is enforced by `status:
+      // 'draft'`, not by the grant — so the grant defaults to public
+      // and the page is visible to others the instant publish-on-save
+      // flips the status.
+      const path = `${PATH_PREFIX}public-grant`;
+      const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+
+      expect(res.status).toBe(201);
+      const Page = crowi.model('Page');
+      const page = await Page.findById(res.body.pageId);
+      expect(page?.grant).toBe(Page.GRANT_PUBLIC);
+    });
+
     it('seeds the draft with initialBody when provided', async () => {
       const path = `${PATH_PREFIX}with-body`;
       const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path, initialBody: '# seeded content' });
@@ -245,6 +259,45 @@ describe('Routes /api/v2/pages/drafts (ts-rest draft)', () => {
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('keeps a draft hidden from a non-author even though the grant is public (RFC-0005)', async () => {
+      // Regression guard for the RFC-0005 grant change: a draft now
+      // carries GRANT_PUBLIC, so the *only* thing hiding it from a
+      // non-author is `status: 'draft'`. Confirm a non-author still
+      // gets a 404 on a public-grant draft.
+      const path = `${PATH_PREFIX}public-grant-hidden`;
+      const createRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const pageId = createRes.body.pageId as string;
+
+      const Page = crowi.model('Page');
+      expect((await Page.findById(pageId))?.grant).toBe(Page.GRANT_PUBLIC);
+
+      const byPath = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(bobToken));
+      expect(byPath.status).toBe(404);
+      expect(byPath.body.error.code).toBe('PAGE_NOT_FOUND');
+
+      const byId = await request(app).get('/api/v2/pages').query({ page_id: pageId }).set(authHeaders(bobToken));
+      expect(byId.status).toBe(404);
+      expect(byId.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('makes the page visible to other users once publish-on-save flips the status', async () => {
+      // The collab save flow flips `status: 'draft' -> 'published'`
+      // after a successful save (see save-flow.ts step 6b). Simulate
+      // that transition here and confirm a non-author can then read
+      // the page — which is only possible because the draft was
+      // created with the public grant.
+      const path = `${PATH_PREFIX}published-visible`;
+      const createRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const pageId = createRes.body.pageId as string;
+
+      const Page = crowi.model('Page');
+      await Page.updateOne({ _id: pageId, status: 'draft' }, { $set: { status: 'published' } });
+
+      const res = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(bobToken));
+      expect(res.status).toBe(200);
+      expect(res.body.page.path).toBe(path);
     });
   });
 });

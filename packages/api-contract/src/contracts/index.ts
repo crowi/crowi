@@ -7,6 +7,7 @@ import { meContract } from './me';
 import { pageContract } from './page';
 import { pagePreviewContract } from './page-preview';
 import { pageCollabContract } from './page-collab';
+import { presenceContract } from './presence';
 import { userContract } from './user';
 import { commentContract } from './comment';
 import { bookmarkContract } from './bookmark';
@@ -31,6 +32,7 @@ export const apiContract = c.router({
   page: pageContract,
   pagePreview: pagePreviewContract,
   pageCollab: pageCollabContract,
+  presence: presenceContract,
   user: userContract,
   comment: commentContract,
   bookmark: bookmarkContract,

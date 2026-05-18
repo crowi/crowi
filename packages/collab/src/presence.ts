@@ -3,23 +3,55 @@ import Debug from 'debug';
 const debug = Debug('crowi:collab:presence');
 
 /**
- * Stub presence hook called from `onAuthenticate` after a wsToken
- * passes verify. RFC-0005 will lift this into a real awareness
- * aggregator (page-level presence UI); Phase 5 / 9 keeps it as a
- * no-op so the call site stays stable.
+ * Presence integration surface (RFC-0005).
  *
- * Embedded into the collab library directly because the previous
- * `resolveApiDistFile` dance is gone (RFC-0003 Phase 9 same-process
- * attach removed the api-dist bridge). When RFC-0005 lands a real
- * implementation it'll live on the api side as
- * `service/presence.ts` and the collab attach helper will inject
- * the real function via deps; this default keeps tests / single-
- * instance dev working without that wiring.
+ * `@crowi/collab` is deliberately crowi-agnostic — it never imports
+ * `@crowi/api`. The real presence implementation (Redis viewer hash +
+ * pub/sub) lives on the api side as `service/presence.ts`; the api's
+ * `attachCollabServer` injects an adapter satisfying this interface
+ * via `createCollabServer`'s `presence` option.
+ *
+ *   - `markEditing`   — called from `onAuthenticate` once a collab
+ *                       wsToken verifies. The api adapter records a
+ *                       short-lived editing signal (keyed by the
+ *                       connection's `socketId`) so the editing user
+ *                       picks up an `✏️` badge in the page-presence row.
+ *   - `unmarkEditing` — called from `onDisconnect`. Symmetric: the
+ *                       signal is cleared so the badge disappears on
+ *                       the next presence broadcast.
+ *
+ * `socketId` is the per-connection identity Hocuspocus assigns; it
+ * disambiguates a single user with multiple editor tabs so closing one
+ * tab does not clear the badge while another is still editing.
+ *
+ * Both are best-effort: a presence failure must never block or break a
+ * collab connection.
  */
-export const markEditing = async (pageId: string, userId: string): Promise<void> => {
-  if (!pageId || !userId) {
-    console.warn(`[crowi:collab:presence] markEditing called with empty arg (pageId=${pageId}, userId=${userId})`);
-    return;
-  }
-  debug('markEditing(page=%s, user=%s) [stub — RFC-0005 will implement]', pageId, userId);
+export interface PresenceHooks {
+  markEditing(pageId: string, userId: string, socketId: string): Promise<void>;
+  unmarkEditing(pageId: string, userId: string, socketId: string): Promise<void>;
+}
+
+/**
+ * Default no-op presence hooks. Used when the host process does not
+ * inject a real implementation — single-instance dev without the api's
+ * presence service, and the collab unit tests. Keeps the
+ * `onAuthenticate` / `onDisconnect` call sites stable without forcing
+ * every caller to supply a presence adapter.
+ */
+export const noopPresenceHooks: PresenceHooks = {
+  async markEditing(pageId: string, userId: string, socketId: string): Promise<void> {
+    if (!pageId || !userId) {
+      console.warn(`[crowi:collab:presence] markEditing called with empty arg (pageId=${pageId}, userId=${userId})`);
+      return;
+    }
+    debug('markEditing(page=%s, user=%s, socket=%s) [noop — no presence adapter injected]', pageId, userId, socketId);
+  },
+  async unmarkEditing(pageId: string, userId: string, socketId: string): Promise<void> {
+    if (!pageId || !userId) {
+      console.warn(`[crowi:collab:presence] unmarkEditing called with empty arg (pageId=${pageId}, userId=${userId})`);
+      return;
+    }
+    debug('unmarkEditing(page=%s, user=%s, socket=%s) [noop — no presence adapter injected]', pageId, userId, socketId);
+  },
 };

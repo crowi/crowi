@@ -11,6 +11,7 @@ import type { Extension } from '@hocuspocus/server';
 import type Crowi from 'src/crowi';
 import { getEditorCapCounter } from 'src/util/collab-cap';
 import { createWsTokenUtil } from 'src/util/ws-token';
+import { createPresenceCollabDeps } from 'src/service/presence';
 import { buildCollabRedisExtension } from './extension-redis';
 
 const debug = Debug('crowi:collab:attach');
@@ -175,6 +176,13 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
   //
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const collab = require('@crowi/collab') as typeof import('@crowi/collab');
+  // RFC-0005 — the api-side presence adapter so a collab connect /
+  // disconnect records a short-lived editing signal (the `✏️` badge).
+  // `@crowi/collab` is crowi-agnostic; this adapter resolves the
+  // process-shared presence service lazily and swallows failures. It
+  // also owns a periodic refresher whose timer must be stopped on
+  // shutdown — hence the handle is kept (see `shutdown()` below).
+  const presenceDeps = createPresenceCollabDeps(crowi);
   const hocuspocus = collab.createCollabServer({
     models,
     wsTokenUtil,
@@ -184,6 +192,7 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     editorCapCounter,
     pageEventPublisher,
     extensions,
+    presence: presenceDeps,
   });
 
   // `noServer: true` — the upgrade handshake is owned by the api
@@ -324,6 +333,17 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
         wss.close();
       } catch (err) {
         console.error('[crowi:collab] wss.close failed during shutdown:', err);
+      }
+
+      // 5b. Stop the RFC-0005 presence editing-hash refresher so its
+      //     `setInterval` does not outlive the collab engine. The
+      //     timer is already `.unref()`-d (it never blocks process
+      //     exit), but a test harness that calls `shutdown()` and
+      //     keeps the process alive would otherwise see it tick on.
+      try {
+        presenceDeps.shutdown();
+      } catch (err) {
+        console.error('[crowi:collab] presence refresher shutdown failed:', err);
       }
 
       // 6. Disconnect the cap counter last. With a shared `crowi.redis`

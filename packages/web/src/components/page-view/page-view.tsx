@@ -142,7 +142,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
 
         <Card className="opacity-75">
           <CardContent className="pt-6">
-            <PageHeader page={page} showSeenUsers={false} />
+            <PageHeader page={page} />
             <PageContent page={page} />
           </CardContent>
         </Card>
@@ -163,6 +163,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
               router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
             }}
             showActions={!isStaleRevision}
+            showPresence={!isStaleRevision}
           />
           <PageContent page={page} />
           {!isStaleRevision && (

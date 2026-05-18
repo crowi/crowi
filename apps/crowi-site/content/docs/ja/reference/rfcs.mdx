@@ -19,6 +19,7 @@ Crowi 2.0 の大きな設計判断は **RFC (Request for Comments)** として
 | [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | レンダラプラグインアーキテクチャ | Crowi 2.1 | Draft (round 3.1)・Phase 1–6 実装済み |
 | [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | リアルタイム共同編集 | Crowi 2.1 | Draft (round 2) |
 | [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | エディタ UX の強化 | Crowi 2.2 | Draft (round 2) |
+| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | ページプレゼンスとヘッダー UI | Crowi 2.2 | Draft (round 2) |
 
 ## RFC-0001: プラグインアーキテクチャ
 
@@ -58,6 +59,18 @@ RFC-0003 の最小限の CodeMirror 6 エディタの上に、4 つの編集生�
 プリート、URL / 画像のペースト処理、ドラッグ&ドロップアップロード、
 そして下書きページの管理ビューです。Crowi 2.2 (v2.1 安定化後) を
 ターゲットにしています。
+
+## RFC-0005: ページプレゼンスとヘッダー UI
+
+ページ閲覧画面に 2 つの関連変更を加える提案です。1 つはタイトル上の
+**ライブプレゼンス行** — 今そのページを見ているユーザーをリアルタイムに
+表示し、編集中のユーザーをバッジで区別します。もう 1 つは
+**メタチップ行の再構成** — いいね・閲覧・コメント・バックリンクを統一
+されたクリック可能なチップに変え、「今いる人」と「過去に見た人」の
+シグナルを分離します。プレゼンスの WebSocket は RFC-0003 の `/collab` と
+同じ api プロセスに同居 attach され、専用インフラを増やしません。
+
+→ 利用者向けの解説は [ページの基本操作](../guide/pages)。
 
 ## RFC を読むには
 

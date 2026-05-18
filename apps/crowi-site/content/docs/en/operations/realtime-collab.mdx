@@ -160,6 +160,17 @@ Key points:
   hurt UX.
 - Sticky sessions are **not** required.
 
+> **Note (Crowi 2.2 / RFC-0005)**: The page-presence feature attaches its
+> WebSocket at `/presence/:pageId`, with **exactly the same setup** as
+> `/collab/*`. In your reverse proxy, route a `/presence/` location to the
+> api upstream the same way as `/collab/` and forward the `Upgrade` header
+> (for nginx, duplicate the `location /collab/` block above and change only
+> the path; for Traefik, add `/presence` to the `PathPrefix` rule).
+> Presence viewer state and cross-instance propagation share the `REDIS_URL`
+> Redis — there is no extra dedicated infrastructure. If the presence
+> WebSocket does not reach the api, the live presence row simply hides
+> itself; page viewing is unaffected.
+
 ## Environment variables
 
 | Variable | Required | Purpose |

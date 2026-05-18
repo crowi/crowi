@@ -20,6 +20,7 @@ and summarises the RFCs that currently exist.
 | [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | Renderer Plugin Architecture | Crowi 2.1 | Draft (round 3.1), Phase 1–6 landed |
 | [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | Real-time Collaborative Editing | Crowi 2.1 | Draft (round 2) |
 | [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | Editor UX Enhancement | Crowi 2.2 | Draft (round 2) |
+| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | Page Presence & Header UI | Crowi 2.2 | Draft (round 2) |
 
 ## RFC-0001: Plugin Architecture
 
@@ -62,6 +63,19 @@ minimal CodeMirror 6 editor from RFC-0003: autocomplete for `@user`
 mentions and `[[Page` wikilinks, paste handling for URLs / images,
 drag-and-drop upload, and a management view for draft pages. It targets
 Crowi 2.2 (after v2.1 stabilisation).
+
+## RFC-0005: Page Presence & Header UI
+
+A proposal for two related changes to the page view. One is a **live
+presence row** above the title — it shows, in real time, who is
+currently viewing the page, with editing users distinguished by a
+badge. The other is a **meta chip row restructure** — likes, views,
+comments, and backlinks become a uniform set of clickable chips,
+separating the "who's here now" signal from "who has visited". The
+presence WebSocket attaches to the same api process as RFC-0003's
+`/collab`, so it adds no dedicated infrastructure.
+
+→ For a user-facing explanation, see [Working with pages](../guide/pages).
 
 ## How to read the RFCs
 

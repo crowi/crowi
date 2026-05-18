@@ -1,8 +1,12 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { PageWithRevision } from '@crowi/api-contract';
 import { apiClient } from './api-client';
 import { unwrapResult } from './unwrap-result';
+import { likersKeys } from './use-likers';
+import { notify } from './notify';
+import { m } from '@paraglide/messages.js';
 
 /**
  * Query key prefix for like-related caches. We do not cache "is liked" by
@@ -14,6 +18,44 @@ export const likeKeys = {
   all: ['like'] as const,
 };
 
+/** Cached shape of a `['page', ...]` query (see `usePage`). */
+interface CachedPageData {
+  page: PageWithRevision | null;
+  notFound: boolean;
+  notGranted: boolean;
+}
+
+/**
+ * RFC-0005 Phase 3 — optimistically patch every cached `['page']` entry
+ * whose page matches `pageId`, flipping `liker` / `likerCount` so the
+ * meta-chip count updates the instant the like button is pressed. The
+ * page query key embeds `{path, revision_id}` (not the bare id), so we
+ * scan all `['page']` caches rather than addressing one key.
+ *
+ * Returns the list of `[queryKey, previousData]` pairs so `onError` can
+ * roll the caches back if the request fails.
+ */
+function patchCachedPages(queryClient: ReturnType<typeof useQueryClient>, pageId: string, nextIsLiked: boolean) {
+  const snapshots: Array<[readonly unknown[], CachedPageData]> = [];
+
+  for (const [queryKey, data] of queryClient.getQueriesData<CachedPageData>({ queryKey: ['page'] })) {
+    if (!data?.page || data.page._id !== pageId) continue;
+    snapshots.push([queryKey, data]);
+
+    const liker = data.page.liker ?? [];
+    const currentCount = data.page.likerCount ?? liker.length;
+    queryClient.setQueryData<CachedPageData>(queryKey, {
+      ...data,
+      page: {
+        ...data.page,
+        likerCount: Math.max(0, currentCount + (nextIsLiked ? 1 : -1)),
+      },
+    });
+  }
+
+  return snapshots;
+}
+
 /**
  * Hook to toggle the current user's like on a specific page.
  *
@@ -21,8 +63,9 @@ export const likeKeys = {
  * "is liked" — that is derived from `page.liker` (returned by `getPage`).
  * Callers must pass `isLiked` so the hook knows which endpoint to call.
  *
- * On success, invalidates:
- * - ['page'] (prefix) so the page header refetches with new liker/likerCount
+ * The like meta-chip count is updated optimistically (`onMutate`) and rolled
+ * back with an error toast (`onError`) if the request fails. On success the
+ * `page` query is invalidated so liker / likerCount reconcile with the server.
  */
 export function useToggleLike(pageId: string | undefined, isLiked: boolean) {
   const queryClient = useQueryClient();
@@ -46,9 +89,25 @@ export function useToggleLike(pageId: string | undefined, isLiked: boolean) {
         fallback,
       });
     },
-    onSuccess: () => {
-      // Invalidate the page query so liker/likerCount refresh in the UI.
+    onMutate: () => {
+      if (!pageId) return { snapshots: [] };
+      // `isLiked` is the state *before* the toggle, so the next state is `!isLiked`.
+      const snapshots = patchCachedPages(queryClient, pageId, !isLiked);
+      return { snapshots };
+    },
+    onError: (_error, _vars, context) => {
+      // Roll the optimistic count back, then surface the failure.
+      for (const [queryKey, previous] of context?.snapshots ?? []) {
+        queryClient.setQueryData(queryKey, previous);
+      }
+      notify.error(isLiked ? m['page.unlike_failed']() : m['page.like_failed']());
+    },
+    onSettled: () => {
+      // Reconcile with the server (liker / likerCount) regardless of outcome.
       queryClient.invalidateQueries({ queryKey: ['page'] });
+      if (pageId) {
+        queryClient.invalidateQueries({ queryKey: likersKeys.pagePrefix(pageId) });
+      }
     },
   });
 

@@ -19,7 +19,8 @@ import { createOnDisconnect } from './hooks/on-disconnect';
 import { createCompactor } from './compaction';
 import { createContributorsTracker, type ContributorsTracker } from './contributors';
 import { createSaveFlow, type SaveFlow } from './save-flow';
-import { markEditing } from './presence';
+import { type PresenceHooks, noopPresenceHooks } from './presence';
+import { wrapOnAuthenticateWithPresence, wrapOnDisconnectWithPresence } from './presence-wiring';
 
 const debug = Debug('crowi:collab:server');
 
@@ -78,6 +79,17 @@ export interface CreateCollabServerOptions {
    * tests run unchanged.
    */
   extensions?: Array<Extension>;
+  /**
+   * RFC-0005 — page-presence integration. `@crowi/collab` is
+   * crowi-agnostic, so the api injects an adapter (backed by
+   * `service/presence.ts`'s Redis viewer hash + pub/sub) here.
+   * `onAuthenticate` fires `markEditing`, `onDisconnect` fires
+   * `unmarkEditing`, both fire-and-forget so a presence failure can
+   * never block a collab connection. Defaults to a no-op so unit
+   * tests and single-instance dev without the api presence service
+   * run unchanged.
+   */
+  presence?: PresenceHooks;
 }
 
 /**
@@ -112,28 +124,22 @@ export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<
     models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
   });
 
+  const presence = opts.presence ?? noopPresenceHooks;
+
   const baseOnAuthenticate = createOnAuthenticate({
     wsTokenUtil,
     models: { Page: models.Page },
     checkEditorCap,
     editorCapCounter,
   });
-  const onDisconnect = createOnDisconnect({ editorCapCounter });
-  /**
-   * Wrap `onAuthenticate` so we can fire-and-forget the presence
-   * stub once authentication succeeds. `markEditing` is a no-op stub
-   * in Phase 5 (real implementation lands with RFC-0005); calling it
-   * here pins the swap point so RFC-0005 lands without changing
-   * collab. Errors are swallowed because presence is purely
-   * advisory — a failure must never block a connection.
-   */
-  const onAuthenticate = async (payload: Parameters<typeof baseOnAuthenticate>[0]): Promise<CollabContext> => {
-    const ctx = await baseOnAuthenticate(payload);
-    void markEditing(ctx.pageId, ctx.userId).catch((err: unknown) => {
-      console.warn('[crowi:collab] presence.markEditing failed (non-blocking):', (err as Error).message);
-    });
-    return ctx;
-  };
+  const baseOnDisconnect = createOnDisconnect({ editorCapCounter });
+  // RFC-0005 — wrap `onAuthenticate` / `onDisconnect` so a collab
+  // connect / disconnect fires `presence.markEditing` / `unmarkEditing`
+  // (the page-presence `✏️` editing badge). Both are fire-and-forget;
+  // the wrapping logic lives in `presence-wiring.ts` (no Hocuspocus
+  // runtime import there) so the collab Jest suite can unit-test it.
+  const onAuthenticate = wrapOnAuthenticateWithPresence(baseOnAuthenticate, presence);
+  const onDisconnect = wrapOnDisconnectWithPresence(baseOnDisconnect, presence);
 
   const onLoadDocument = createOnLoadDocument({
     models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },

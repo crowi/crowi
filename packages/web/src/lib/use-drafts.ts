@@ -15,6 +15,16 @@ export const draftsKeys = {
   all: ['drafts'] as const,
 };
 
+/**
+ * Editor route for a draft, by page id. Mirrors the `_edit?page_id=`
+ * form `UpdatePageEditor` resolves. Shared by `/me/creating-pages`
+ * (the New page form + draft rows) and the `_edit?path=` create flow,
+ * which `router.replace`s to this URL once its draft exists.
+ */
+export function draftEditHref(pageId: string): string {
+  return `/_edit?page_id=${encodeURIComponent(pageId)}`;
+}
+
 const EMPTY_DRAFTS: ListDraftsResponse = { drafts: [] };
 
 /**

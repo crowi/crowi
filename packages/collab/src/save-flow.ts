@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import type { CollabModels } from './models';
 import type { ContributorsTracker } from './contributors';
 import type { CollabPageEventPublisher } from './types';
+import { DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
 import { CONTENT_FIELD } from './yjs-doc';
 
 const debug = Debug('crowi:collab:save');
@@ -85,6 +86,12 @@ export interface CreateSaveFlowOptions {
  *      `onLoadDocument` reads `page.currentRevision ?? page.revision`
  *      so the latest revision still wins; `yjsState` is rebuilt from
  *      the body. No data loss, no manual recovery.
+ *
+ *   6b. publish-on-save (RFC-0005 Phase 1): if the page was a `draft`,
+ *      flip `status` to `published`. Runs only after the save is
+ *      durable (steps 5 + 6) so it is strictly additive — a failure
+ *      is logged and swallowed, and the idempotent `status: 'draft'`-
+ *      filtered `updateOne` retries cleanly on the next save.
  *
  *   7. Drop every pending `PageYjsUpdate` for the page — the new
  *      `yjsState` already captures everything, so leaving them around
@@ -200,6 +207,30 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
         // disk via step 5. Warn so an operator sees this in logs but
         // the client gets `crowi:save-ok`.
         console.warn(`[crowi:collab] save: collab-pointer write failed for page ${pageId}; recoverable on next load.`, (err as Error).message);
+      }
+
+      // Step 6b: publish-on-save (RFC-0005 Phase 1). A `draft` page
+      // transitions to `published` on its first successful save. The
+      // save itself is already durable on disk (step 5 persisted the
+      // Revision; step 6 wrote the collab pointer), so flipping the
+      // status here is strictly additive — it never gates or rolls
+      // back the save. A failure is logged and swallowed: the page
+      // simply stays a draft and the *next* save retries the flip
+      // (the transition is idempotent — `updateOne` filtered on
+      // `status: DRAFT_STATUS` is a no-op once published). Already-
+      // published pages match `page.status !== DRAFT_STATUS` and skip
+      // the write entirely.
+      if (page.status === DRAFT_STATUS) {
+        try {
+          await Page.updateOne({ _id: pageId, status: DRAFT_STATUS }, { $set: { status: PUBLISHED_STATUS } }).exec();
+          debug('publish-on-save: page %s transitioned draft -> published', pageId);
+        } catch (err) {
+          // Recoverable on the next save — don't fail the save itself.
+          console.warn(
+            `[crowi:collab] save: publish-on-save status flip failed for page ${pageId}; page stays draft, retried on next save.`,
+            (err as Error).message,
+          );
+        }
       }
 
       // Step 7: drop pending PageYjsUpdate rows (now folded into yjsState).

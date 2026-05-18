@@ -17,16 +17,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { DraftPathConflictError, useCancelDraft, useCreateDraft, useDrafts } from '@/lib/use-drafts';
+import { DraftPathConflictError, draftEditHref, useCancelDraft, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { notify } from '@/lib/notify';
 import type { DraftSummary } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-
-/** Editor route for a draft, by page id. Mirrors `_edit?page_id=`. */
-function draftEditHref(pageId: string): string {
-  return `/_edit?page_id=${encodeURIComponent(pageId)}`;
-}
 
 export function CreatingPagesClient() {
   return (
