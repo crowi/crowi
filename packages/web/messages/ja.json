@@ -104,6 +104,8 @@
   "page.attachments_remove": "削除",
   "page.attachments_remove_confirm": "この添付ファイルを削除しますか？",
   "page.attachments_remove_failed": "添付ファイルの削除に失敗しました",
+  "page.attachments_view_all": "全てのファイル一覧",
+  "page.attachments_none_in_use": "最新版で使われている添付ファイルはありません",
   "page.attachment_detail_download": "ダウンロード",
   "page.attachment_detail_meta_type": "種類",
   "page.attachment_detail_meta_size": "サイズ",

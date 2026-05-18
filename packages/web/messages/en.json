@@ -104,6 +104,8 @@
   "page.attachments_remove": "Remove",
   "page.attachments_remove_confirm": "Remove this attachment?",
   "page.attachments_remove_failed": "Failed to remove attachment.",
+  "page.attachments_view_all": "View all attachments",
+  "page.attachments_none_in_use": "No attachments are used in the latest revision.",
   "page.attachment_detail_download": "Download",
   "page.attachment_detail_meta_type": "Type",
   "page.attachment_detail_meta_size": "Size",
