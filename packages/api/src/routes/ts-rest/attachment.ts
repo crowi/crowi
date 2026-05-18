@@ -125,12 +125,35 @@ const pageNotFoundResponse = {
 } as const;
 
 /**
+ * Phase 7 — extract the set of attachment ObjectId hex strings referenced by
+ * a revision body. We scan the raw Markdown source (not the rendered AST)
+ * because embed URLs appear verbatim in the source. Two URI forms are
+ * matched: the current `/api/v2/attachments/<id>` (the `fileUrl` virtual /
+ * stream route) and the legacy `/files/<id>` form still present in bodies
+ * saved before the migration. Ids are lower-cased for a defensive,
+ * case-insensitive `Set` lookup against `attachment._id.toString()`.
+ */
+const ATTACHMENT_URI_RE = /(?:\/api\/v2\/attachments\/|\/files\/)([0-9a-f]{24})/gi;
+
+const collectReferencedAttachmentIds = (body: string): Set<string> => {
+  const ids = new Set<string>();
+  for (const match of body.matchAll(ATTACHMENT_URI_RE)) {
+    ids.add(match[1].toLowerCase());
+  }
+  return ids;
+};
+
+/**
  * Convert an AttachmentDocument (with optional populated `creator`) into the
  * wire response. The model's `fileUrl` virtual returns
  * `/api/v2/attachments/:id` after this migration, so we surface that as
  * `url`.
+ *
+ * `inUse` (Phase 7) is supplied by the caller: `listAttachments` derives it
+ * from the latest revision body scan, while `addAttachment` passes `false`
+ * because a just-uploaded file is not yet referenced in the body.
  */
-const attachmentToResponse = (attachment: AttachmentDocument): AttachmentSchema => {
+const attachmentToResponse = (attachment: AttachmentDocument, inUse: boolean): AttachmentSchema => {
   // Re-read off a JSON-serialized clone so populated subdocs (creator) come
   // through plainly. attachmentSchema has `toJSON: { virtuals: true }` so the
   // `fileUrl` virtual is included automatically.
@@ -166,6 +189,7 @@ const attachmentToResponse = (attachment: AttachmentDocument): AttachmentSchema 
     fileSize: obj.fileSize,
     createdAt: toISOStringOrNull(obj.createdAt as Date | undefined) ?? new Date(0).toISOString(),
     url: obj.fileUrl,
+    inUse,
   };
 };
 
@@ -394,9 +418,29 @@ export default (crowi: Crowi, _app: Express) => {
 
       try {
         const attachments = (await Attachment.getListByPageId(new Types.ObjectId(pageId))) as AttachmentDocument[];
+
+        // Phase 7 — derive `inUse` from the page's latest revision body. The
+        // page is already loaded via `loadGrantedPage` (with no revisionId,
+        // so `grant.page.revision` is the latest revision). We read just the
+        // body and scan it once for attachment URIs. If the revision is
+        // missing or its body is empty we cannot determine references, so we
+        // fall back to `inUse: true` for every attachment rather than hide
+        // files while the reference state is undetermined.
+        const revisionId = grant.page.revision;
+        let referencedIds: Set<string> | null = null;
+        if (revisionId) {
+          const Revision = crowi.model('Revision');
+          const revision = (await Revision.findById(revisionId).select('body')) as { body?: string } | null;
+          if (revision?.body) {
+            referencedIds = collectReferencedAttachmentIds(revision.body);
+          }
+        }
+
         return {
           status: 200 as const,
-          body: { attachments: attachments.map(attachmentToResponse) },
+          body: {
+            attachments: attachments.map((a) => attachmentToResponse(a, referencedIds === null ? true : referencedIds.has(a._id.toString().toLowerCase()))),
+          },
         };
       } catch (err) {
         debug('listAttachments error', err);
@@ -479,7 +523,10 @@ export default (crowi: Crowi, _app: Express) => {
 
             cleanupTmp();
 
-            const body = attachmentToResponse(created);
+            // Phase 7 — a freshly uploaded file is not yet referenced in the
+            // page body, so it starts `inUse: false`. The next
+            // `listAttachments` recomputes this from the latest revision.
+            const body = attachmentToResponse(created, false);
             return resolve({
               status: 200 as const,
               body: { attachment: body, url: body.url },
