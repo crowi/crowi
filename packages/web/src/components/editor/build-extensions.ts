@@ -5,6 +5,7 @@ import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { autocompleteExtension } from './autocomplete-extension';
 import { dropHandler } from './drop-handler';
+import { listKeymap } from './list-keymap';
 import { pasteHandler } from './paste-handler';
 
 export interface BuildExtensionsProps {
@@ -75,8 +76,13 @@ export interface BuildExtensionsProps {
  *    decisions see the language definition.
  *  - `syntaxHighlighting(defaultHighlightStyle)` second so the tag tree
  *    set up by `markdown()` is themed.
- *  - `history()` + `keymap.of([defaultKeymap, historyKeymap])` next so
- *    the editor has the cross-platform defaults Cmd/Ctrl-Z, etc.
+ *  - `history()` + `keymap.of([listKeymap, defaultKeymap, historyKeymap])`
+ *    next so the editor has the cross-platform defaults Cmd/Ctrl-Z, etc.
+ *    `listKeymap` (RFC-0005) is listed first so its Enter / Tab bindings
+ *    win over `defaultKeymap`'s — `keymap` tries higher-precedence
+ *    bindings first and falls through on a `false` return, so the Tab
+ *    bindings only intercept Tab when the cursor is inside a markdown
+ *    list (otherwise the editor's default focus-move Tab is preserved).
  *  - `readonly` toggle as `EditorState.readOnly.of(true)` when on, so a
  *    no-op (empty array) when off — extensions can be `[]` and unified
  *    flattens them.
@@ -114,7 +120,11 @@ export function buildExtensions(props: BuildExtensionsProps): Extension[] {
     // `defaultKeymap` is kept (it carries cursor / selection / line
     // editing bindings that are doc-shape agnostic and harmless).
     disableHistory ? [] : history(),
-    keymap.of([...defaultKeymap, ...(disableHistory ? [] : historyKeymap)]),
+    // RFC-0005: `listKeymap` first so its Enter (tight list continuation,
+    // fixing the loose-list blank-line bug) and Tab / Shift-Tab (list
+    // indent / dedent) bindings take precedence; each falls through to
+    // `defaultKeymap` when it returns `false` (cursor not in a list).
+    keymap.of([...listKeymap, ...defaultKeymap, ...(disableHistory ? [] : historyKeymap)]),
     readonly ? EditorState.readOnly.of(true) : [],
     onChange
       ? EditorView.updateListener.of((update) => {
