@@ -1,6 +1,8 @@
-import { createElasticsearchDriver, docToEsSource, parseUri, shouldIndex } from '../driver';
-import type { PageStreamDoc } from '../driver';
+import { applyConfig, applyConfigInPlace, createElasticsearchDriver, docToEsSource, parseUri, shouldIndex } from '../driver';
+import type { ElasticsearchDriverConfig, PageStreamDoc } from '../driver';
 import type { SearchableDoc } from '@crowi/plugin-api';
+
+const CONFIG: ElasticsearchDriverConfig = { url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' };
 
 describe('shouldIndex', () => {
   const base: PageStreamDoc = { _id: 'p1', path: '/foo', redirectTo: null, status: 'published', grant: 1 };
@@ -93,10 +95,7 @@ describe('docToEsSource', () => {
 
 describe('createElasticsearchDriver query()', () => {
   const installFakeClient = (response: unknown) => {
-    const driver = createElasticsearchDriver(
-      { url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' },
-      { countUsers: async () => 5 },
-    );
+    const driver = createElasticsearchDriver(applyConfig(CONFIG), { countUsers: async () => 5 });
     const fakeSearch = jest.fn().mockResolvedValue(response);
     (driver.client as unknown as { search: typeof fakeSearch }).search = fakeSearch;
     return { driver, fakeSearch };
@@ -145,7 +144,7 @@ describe('createElasticsearchDriver query()', () => {
 
 describe('createElasticsearchDriver index/remove()', () => {
   it('index() sends a single ES9 index request (no _type, no bulk overhead)', async () => {
-    const driver = createElasticsearchDriver({ url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
+    const driver = createElasticsearchDriver(applyConfig(CONFIG));
     const fakeIndex = jest.fn().mockResolvedValue({ result: 'created' });
     (driver.client as unknown as { index: typeof fakeIndex }).index = fakeIndex;
 
@@ -167,7 +166,7 @@ describe('createElasticsearchDriver index/remove()', () => {
   });
 
   it('remove() sends a single ES9 delete request', async () => {
-    const driver = createElasticsearchDriver({ url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
+    const driver = createElasticsearchDriver(applyConfig(CONFIG));
     const fakeDelete = jest.fn().mockResolvedValue({ result: 'deleted' });
     (driver.client as unknown as { delete: typeof fakeDelete }).delete = fakeDelete;
 
@@ -178,7 +177,7 @@ describe('createElasticsearchDriver index/remove()', () => {
   });
 
   it('remove() swallows 404 (idempotent)', async () => {
-    const driver = createElasticsearchDriver({ url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
+    const driver = createElasticsearchDriver(applyConfig(CONFIG));
     const notFound = Object.assign(new Error('not found'), { statusCode: 404 });
     const fakeDelete = jest.fn().mockRejectedValue(notFound);
     (driver.client as unknown as { delete: typeof fakeDelete }).delete = fakeDelete;
@@ -187,7 +186,7 @@ describe('createElasticsearchDriver index/remove()', () => {
   });
 
   it('remove() rethrows non-404 errors', async () => {
-    const driver = createElasticsearchDriver({ url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
+    const driver = createElasticsearchDriver(applyConfig(CONFIG));
     const serverErr = Object.assign(new Error('boom'), { statusCode: 500 });
     const fakeDelete = jest.fn().mockRejectedValue(serverErr);
     (driver.client as unknown as { delete: typeof fakeDelete }).delete = fakeDelete;
@@ -199,10 +198,7 @@ describe('createElasticsearchDriver index/remove()', () => {
 describe('createElasticsearchDriver query() user-count caching', () => {
   it('caches countUsers() across query calls', async () => {
     const countUsers = jest.fn(async () => 42);
-    const driver = createElasticsearchDriver(
-      { url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' },
-      { countUsers },
-    );
+    const driver = createElasticsearchDriver(applyConfig(CONFIG), { countUsers });
     const fakeSearch = jest.fn().mockResolvedValue({ hits: { total: 0, hits: [] } });
     (driver.client as unknown as { search: typeof fakeSearch }).search = fakeSearch;
 
@@ -211,5 +207,154 @@ describe('createElasticsearchDriver query() user-count caching', () => {
     await driver.query({ q: 'c' });
 
     expect(countUsers).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('applyConfig', () => {
+  it('builds a connected state from a configured url', () => {
+    const state = applyConfig(CONFIG);
+    expect(state.client).not.toBeNull();
+    expect(state.node).toBe('http://localhost:9200');
+    expect(state.baseIndexName).toBe('crowi');
+    expect(state.aliasName).toBe('crowi-current');
+    expect(state.analyzer).toBe('default');
+    expect(state.requestTimeout).toBe(5000);
+  });
+
+  it('yields a disabled state (client=null) when url is empty', () => {
+    const state = applyConfig({ url: '', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
+    expect(state.client).toBeNull();
+    expect(state.node).toBe('');
+    expect(state.aliasName).toBe('crowi-current');
+  });
+});
+
+describe('reconfigure: applyConfigInPlace + driver state ref', () => {
+  it('swaps state.client and returns the previous client for closing', () => {
+    const state = applyConfig(CONFIG);
+    const firstClient = state.client;
+    const { oldClient } = applyConfigInPlace(state, { ...CONFIG, url: 'http://other:9200/other' });
+    expect(oldClient).toBe(firstClient);
+    expect(state.client).not.toBe(firstClient);
+    expect(state.client).not.toBeNull();
+  });
+
+  it('updates baseIndexName / aliasName / analyzer / requestTimeout in place', () => {
+    const state = applyConfig(CONFIG);
+    applyConfigInPlace(state, { url: 'http://es:9200/wiki', indexName: 'wiki', requestTimeout: 12000, analyzer: 'kuromoji' });
+    expect(state.baseIndexName).toBe('wiki');
+    expect(state.aliasName).toBe('wiki-current');
+    expect(state.analyzer).toBe('kuromoji');
+    expect(state.requestTimeout).toBe(12000);
+    expect(state.node).toBe('http://es:9200');
+  });
+
+  it('a driver bound to the state ref sees the new alias on the next query', async () => {
+    const state = applyConfig(CONFIG);
+    const driver = createElasticsearchDriver(state);
+
+    const firstSearch = jest.fn().mockResolvedValue({ hits: { total: 0, hits: [] } });
+    (state.client as unknown as { search: typeof firstSearch }).search = firstSearch;
+    await driver.query({ q: 'before' });
+    expect(firstSearch.mock.calls[0][0].index).toBe('crowi-current');
+
+    applyConfigInPlace(state, { ...CONFIG, url: 'http://es:9200/wiki', indexName: 'wiki' });
+    const secondSearch = jest.fn().mockResolvedValue({ hits: { total: 0, hits: [] } });
+    (state.client as unknown as { search: typeof secondSearch }).search = secondSearch;
+    await driver.query({ q: 'after' });
+    expect(secondSearch.mock.calls[0][0].index).toBe('wiki-current');
+  });
+
+  it('an inflight query() completes on the snapshotted old client despite a mid-flight reconfigure', async () => {
+    const state = applyConfig(CONFIG);
+    const driver = createElasticsearchDriver(state);
+    const oldClient = state.client;
+
+    // Old client's search resolves only after we trigger it explicitly.
+    let releaseOldSearch: (() => void) | undefined;
+    const oldSearch = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseOldSearch = () => resolve({ hits: { total: 1, hits: [{ _id: 'p1', _source: { path: '/old' } }] } });
+        }),
+    );
+    (oldClient as unknown as { search: typeof oldSearch }).search = oldSearch;
+
+    // Start the query; it snapshots the old client.
+    const inflight = driver.query({ q: 'inflight' });
+    await Promise.resolve(); // let query() reach the snapshot + await
+
+    // Reconfigure mid-flight: swaps in a brand-new client.
+    applyConfigInPlace(state, { ...CONFIG, url: 'http://es:9200/wiki', indexName: 'wiki' });
+    expect(state.client).not.toBe(oldClient);
+
+    // The inflight query must still resolve via the OLD client.
+    releaseOldSearch?.();
+    const result = await inflight;
+    expect(oldSearch).toHaveBeenCalledTimes(1);
+    expect(result.hits[0].path).toBe('/old');
+  });
+
+  it('throws "Search not configured" once url is reconfigured to empty', async () => {
+    const state = applyConfig(CONFIG);
+    const driver = createElasticsearchDriver(state);
+    applyConfigInPlace(state, { ...CONFIG, url: '' });
+
+    await expect(driver.query({ q: 'x' })).rejects.toThrow(/Search not configured/);
+    await expect(driver.index({ id: 'p', path: '/p', body: 'b' })).rejects.toThrow(/Search not configured/);
+    await expect(driver.remove('p')).rejects.toThrow(/Search not configured/);
+    expect(driver.rebuild).toBeDefined();
+    await expect(driver.rebuild?.()).rejects.toThrow(/Search not configured/);
+  });
+});
+
+describe('plugin reconfigure() hook', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pluginModule = require('../index') as typeof import('../index');
+  const plugin = pluginModule.default;
+
+  const makeCtx = (config: Record<string, unknown>) => {
+    const log = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+    const models: Record<string, unknown> = {
+      Page: { allPageCount: async () => 0, getStreamOfFindAll: () => ({ eachAsync: async () => {} }) },
+      Bookmark: { aggregate: async () => [] },
+      User: { countDocuments: () => ({ exec: async () => 0 }) },
+    };
+    return {
+      log,
+      config: <T>() => config as T,
+      model: (name: string) => models[name],
+      setConfig: async () => {},
+      dependencyConfig: <T>() => ({}) as T,
+    };
+  };
+
+  it('exposes reconfigure (so PluginInfo.supportsHotReload is derived true)', () => {
+    expect(typeof plugin.reconfigure).toBe('function');
+  });
+
+  it('swaps the live client and closes the previous one fire-and-forget', async () => {
+    const { registerSearch, reconfigure } = plugin;
+    if (!registerSearch || !reconfigure) throw new Error('plugin must expose registerSearch + reconfigure');
+
+    const registry = { register: jest.fn() };
+    const bootCtx = makeCtx({ url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    registerSearch(registry as any, bootCtx as any);
+
+    const driver = registry.register.mock.calls[0][1] as import('../driver').ElasticsearchDriver;
+    const firstClient = driver.client;
+    const close = jest.fn().mockResolvedValue(undefined);
+    (firstClient as unknown as { close: typeof close }).close = close;
+
+    const reCtx = makeCtx({ url: 'http://es:9200/wiki', indexName: 'wiki', requestTimeout: 9000, analyzer: 'kuromoji' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await reconfigure(reCtx as any);
+
+    expect(driver.baseIndexName).toBe('wiki');
+    expect(driver.aliasName).toBe('wiki-current');
+    expect(driver.client).not.toBe(firstClient);
+    // close() is fire-and-forget but must have been invoked.
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });
