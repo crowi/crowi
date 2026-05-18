@@ -10,6 +10,7 @@ import Crowi from 'src/crowi';
 import { Express, Request, Response, Router } from 'express';
 import multer from 'multer';
 import fs from 'node:fs';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 import { Types } from 'mongoose';
 import Debug from 'debug';
@@ -177,6 +178,43 @@ export default (crowi: Crowi, _app: Express) => {
 
   const upload = multer({ dest: crowi.tmpDir });
 
+  /** Absolute path to the placeholder image served when an attachment is gone. */
+  const FILE_NOT_FOUND_IMAGE = path.join(crowi.publicDir, 'images', 'file-not-found.png');
+
+  /**
+   * Stream the `file-not-found.png` placeholder as a `200 image/png` response.
+   *
+   * Phase 3 — used by `GET /api/v2/attachments/:id` when the attachment record
+   * is missing OR its backing object is gone from storage. We deliberately
+   * return `200` (not `404`) so an embedded `<img>` in a wiki page renders the
+   * placeholder inline instead of a broken-image glyph. No `Content-Disposition`
+   * is set so the image displays inline.
+   */
+  const servePlaceholder = (res: Response) => {
+    const stream = fs.createReadStream(FILE_NOT_FOUND_IMAGE);
+    stream.on('error', (err) => {
+      debug('placeholder stream error', err);
+      if (!res.headersSent) {
+        res.status(500).end();
+      } else {
+        res.end();
+      }
+    });
+    res.status(200).setHeader('Content-Type', 'image/png');
+    stream.pipe(res);
+  };
+
+  /**
+   * Whether a storage-driver `get()` rejection means the object is simply
+   * missing (as opposed to a real failure). The local driver throws
+   * `code: 'ENOENT'`; the S3 driver surfaces a missing object as the AWS SDK
+   * v3 `NoSuchKey` error (`$metadata.httpStatusCode === 404`, no `code`).
+   */
+  const isMissingFileError = (err: unknown): boolean => {
+    const e = err as { code?: string; name?: string; $metadata?: { httpStatusCode?: number } };
+    return e.code === 'ENOENT' || e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404;
+  };
+
   // RFC-0004 Phase 6/7 — the editor-upload endpoint caps multer at the
   // larger D&D ceiling (50 MB) so a legitimate drag-and-drop upload is
   // never aborted mid-parse. The per-intent cap (paste 10 MB / dnd
@@ -287,7 +325,10 @@ export default (crowi: Crowi, _app: Express) => {
     }
 
     if (!attachment) {
-      res.status(404).json(errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found'));
+      // Phase 3 — a missing attachment record means the file was deleted or
+      // never existed; serve the placeholder image instead of a 404 so
+      // embedded references render gracefully.
+      servePlaceholder(res);
       return;
     }
 
@@ -304,9 +345,12 @@ export default (crowi: Crowi, _app: Express) => {
     try {
       stream = await Attachment.findDeliveryFile(attachment);
     } catch (err) {
-      const e = err as { code?: string };
-      if (e.code === 'ENOENT') {
-        res.status(404).json(errorBody('ATTACHMENT_NOT_FOUND', 'File not found'));
+      // Phase 3 — the record exists but the backing object is gone from
+      // storage (local `ENOENT` / S3 `NoSuchKey`). Serve the placeholder
+      // image so embedded references render gracefully. Any other driver
+      // error is a genuine failure → 500.
+      if (isMissingFileError(err)) {
+        servePlaceholder(res);
         return;
       }
       debug('attachment delivery error', err);
