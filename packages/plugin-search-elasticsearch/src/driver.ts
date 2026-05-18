@@ -77,19 +77,87 @@ export interface ElasticsearchDriver extends SearchDriver {
   readonly client: Client;
 }
 
-/** TTL for the cached user count used by the bookmark-count function-score factor. */
-const USER_COUNT_TTL_MS = 5 * 60 * 1000;
+/**
+ * Mutable driver state. `createElasticsearchDriver` receives a ref to
+ * this; each driver method snapshots the fields it needs *once at the
+ * top* of the call, so a concurrent `reconfigure` cannot swap the
+ * client / index name mid-operation. `reconfigure` mutates the fields
+ * in place via {@link applyConfigInPlace}; the next call sees the new
+ * values. An empty `url` leaves `client` as `null` — the methods then
+ * throw a `Search not configured` error rather than touching a stale
+ * client.
+ */
+export interface ESDriverState {
+  /** `null` when `url` is empty (driver configured-but-disabled). */
+  client: Client | null;
+  /** ES node URI parsed out of `config.url`; empty string when `url` is empty. */
+  node: string;
+  /** Base index name (without timestamp / `-current` suffix). */
+  baseIndexName: string;
+  /** Runtime alias the driver reads / writes (`<baseIndexName>-current`). */
+  aliasName: string;
+  analyzer: Analyzer;
+  requestTimeout: number;
+}
 
-export function createElasticsearchDriver(config: ElasticsearchDriverConfig, deps: ElasticsearchDriverDeps = {}): ElasticsearchDriver {
-  const log = deps.log;
+/**
+ * Build a fresh {@link ESDriverState} from a config. An empty `url`
+ * yields a disabled state (`client: null`) instead of throwing — the
+ * driver stays registered but every method rejects with a
+ * `Search not configured` error.
+ */
+export function applyConfig(config: ElasticsearchDriverConfig): ESDriverState {
+  if (!config.url) {
+    return {
+      client: null,
+      node: '',
+      baseIndexName: config.indexName,
+      aliasName: `${config.indexName}-current`,
+      analyzer: config.analyzer,
+      requestTimeout: config.requestTimeout,
+    };
+  }
   const { node, indexName } = parseUri(config.url);
-  const aliasName = `${indexName}-current`;
-
   const clientOpts: ClientOptions = {
     node,
     requestTimeout: config.requestTimeout,
   };
-  const client = new Client(clientOpts);
+  return {
+    client: new Client(clientOpts),
+    node,
+    baseIndexName: indexName,
+    aliasName: `${indexName}-current`,
+    analyzer: config.analyzer,
+    requestTimeout: config.requestTimeout,
+  };
+}
+
+/**
+ * Mutate `target` in place to reflect `config`. Used by `reconfigure`:
+ * the old client reference is returned so the caller can `close()` it
+ * (fire-and-forget) once the swap is done — inflight operations have
+ * already snapshotted the old client and will run to completion.
+ */
+export function applyConfigInPlace(target: ESDriverState, config: ElasticsearchDriverConfig): { oldClient: Client | null } {
+  const oldClient = target.client;
+  // Assign over the freshly-built state so a new ESDriverState field
+  // propagates through reconfigure automatically — no manual field
+  // list here to fall out of sync with applyConfig.
+  Object.assign(target, applyConfig(config));
+  return { oldClient };
+}
+
+/** TTL for the cached user count used by the bookmark-count function-score factor. */
+const USER_COUNT_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Build the search driver around a {@link ESDriverState} ref. Methods
+ * snapshot `state` *once at the top* — a `reconfigure` running
+ * concurrently with an inflight call cannot swap the client mid-call;
+ * the next call sees the new client / index name.
+ */
+export function createElasticsearchDriver(state: ESDriverState, deps: ElasticsearchDriverDeps = {}): ElasticsearchDriver {
+  const log = deps.log;
 
   // Cached user count: refreshed on miss, every USER_COUNT_TTL_MS.
   // Avoids hammering Mongo with a full collection count on every
@@ -108,12 +176,26 @@ export function createElasticsearchDriver(config: ElasticsearchDriverConfig, dep
   };
 
   const driver: ElasticsearchDriver = {
-    aliasName,
-    node,
-    baseIndexName: indexName,
-    client,
+    // Getters off the state ref: `reconfigure` makes these mutable, so
+    // they must always reflect the *current* state, not a boot-time
+    // literal. Tests read `driver.client` to install fakes — since the
+    // getter returns the same object reference, mutating its methods
+    // still works.
+    get aliasName() {
+      return state.aliasName;
+    },
+    get node() {
+      return state.node;
+    },
+    get baseIndexName() {
+      return state.baseIndexName;
+    },
+    get client() {
+      return requireClient(state.client);
+    },
 
     async index(doc: SearchableDoc): Promise<void> {
+      const { client, aliasName } = snapshot(state);
       const source = docToEsSource(doc);
       await client.index({
         index: aliasName,
@@ -123,6 +205,7 @@ export function createElasticsearchDriver(config: ElasticsearchDriverConfig, dep
     },
 
     async remove(id: string): Promise<void> {
+      const { client, aliasName } = snapshot(state);
       try {
         await client.delete({ index: aliasName, id });
       } catch (err) {
@@ -135,6 +218,7 @@ export function createElasticsearchDriver(config: ElasticsearchDriverConfig, dep
     },
 
     async query(q: SearchQuery): Promise<SearchHits> {
+      const { client, aliasName } = snapshot(state);
       const page = q.page && q.page > 0 ? q.page : 1;
       const limit = clampLimit(q.limit);
       const from = (page - 1) * limit;
@@ -186,14 +270,18 @@ export function createElasticsearchDriver(config: ElasticsearchDriverConfig, dep
     },
 
     async rebuild(): Promise<void> {
+      // Snapshot up front: a `reconfigure` mid-rebuild must not retarget
+      // a long-running rebuild onto a different cluster / index name —
+      // it runs to completion against the cluster it started on.
+      const { client, aliasName, baseIndexName, analyzer } = snapshot(state);
       if (!deps.iteratePages || !deps.countAllPages || !deps.getBookmarkCountsBulk) {
         throw new Error('@crowi/plugin-search-elasticsearch: rebuild() requires iteratePages / countAllPages / getBookmarkCountsBulk deps.');
       }
 
-      const newIndexName = createTimestampedIndexName(indexName);
+      const newIndexName = createTimestampedIndexName(baseIndexName);
       log?.info('rebuild: creating index %s', newIndexName);
 
-      const mapping = loadMapping(config.analyzer);
+      const mapping = loadMapping(analyzer);
       await client.indices.create({ index: newIndexName, ...mapping });
 
       log?.info('rebuild: prefetching bookmark counts');
@@ -213,11 +301,39 @@ export function createElasticsearchDriver(config: ElasticsearchDriverConfig, dep
       await switchAlias(client, aliasName, newIndexName);
 
       log?.info('rebuild: cleaning up old indices');
-      await deleteOldIndices(client, indexName, newIndexName);
+      await deleteOldIndices(client, baseIndexName, newIndexName);
     },
   };
 
   return driver;
+}
+
+/**
+ * Thrown by every driver method when `url` is empty (the driver is
+ * registered-but-disabled). Surfaces to the search route as a clear
+ * "configure Elasticsearch" error rather than a `TypeError` on `null`.
+ */
+const SEARCH_NOT_CONFIGURED = '@crowi/plugin-search-elasticsearch: Search not configured (Elasticsearch url is empty).';
+
+function requireClient(client: Client | null): Client {
+  if (!client) {
+    throw new Error(SEARCH_NOT_CONFIGURED);
+  }
+  return client;
+}
+
+/**
+ * One-line snapshot taken at the top of every driver method. Reading
+ * `state` exactly once per call is what makes a concurrent
+ * `reconfigure` race-safe.
+ */
+function snapshot(state: ESDriverState): { client: Client; aliasName: string; baseIndexName: string; analyzer: Analyzer } {
+  return {
+    client: requireClient(state.client),
+    aliasName: state.aliasName,
+    baseIndexName: state.baseIndexName,
+    analyzer: state.analyzer,
+  };
 }
 
 // ---------------------------------------------------------------------------
