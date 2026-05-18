@@ -48,3 +48,14 @@ export function formatDateTime(dateString: string): string {
     minute: '2-digit',
   });
 }
+
+/**
+ * Format a date string to a fixed, locale-independent `YYYY-MM-DD HH:mm`
+ * string (e.g. `2026-05-18 11:13`). Used for absolute-datetime tooltips
+ * where a stable, compact representation is wanted regardless of locale.
+ */
+export function formatAbsoluteDateTime(dateString: string): string {
+  const date = new Date(dateString);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}

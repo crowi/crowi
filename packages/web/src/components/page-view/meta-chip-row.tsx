@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Clock, Link2, MessageSquare, ThumbsUp, Eye } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { formatDistanceToNow } from '@/lib/date-utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatAbsoluteDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { useBacklinks } from '@/lib/use-backlinks';
 import { SCROLL_TARGETS, scrollToSection } from '@/lib/scroll-to-section';
 import { m } from '@paraglide/messages.js';
@@ -52,6 +53,10 @@ export function MetaChipRow({ page }: MetaChipRowProps) {
   const { data: backlinkData } = useBacklinks(page._id, { limit: BACKLINK_COUNT_LIMIT });
   const backlinkCount = backlinkData?.backlinks.length ?? 0;
 
+  // The updater name links to the user page only when `displayUser` is a
+  // populated user object carrying a `username`; a bare id renders plain.
+  const updaterUsername = displayUser && 'username' in displayUser ? displayUser.username : null;
+
   return (
     <TooltipProvider>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
@@ -61,15 +66,26 @@ export function MetaChipRow({ page }: MetaChipRowProps) {
               <AvatarImage src={displayUser.image || undefined} alt={displayUser.name} />
               <AvatarFallback className="bg-primary/10 text-primary text-[10px]">{displayUser.name.charAt(0).toUpperCase()}</AvatarFallback>
             </Avatar>
-            <span className="text-foreground/80">{displayUser.name}</span>
+            {updaterUsername ? (
+              <Link href={`/user/${updaterUsername}`} className="text-foreground/80 hover:text-foreground hover:underline">
+                {displayUser.name}
+              </Link>
+            ) : (
+              <span className="text-foreground/80">{displayUser.name}</span>
+            )}
           </div>
         )}
 
         {page.updatedAt && (
-          <span className="inline-flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            {m['page.meta_updated']({ time: formatDistanceToNow(page.updatedAt) })}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href={`/_history?path=${encodeURIComponent(page.path)}`} className="inline-flex items-center gap-1 hover:text-foreground hover:underline">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                {m['page.meta_updated']({ time: formatDistanceToNow(page.updatedAt) })}
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>{formatAbsoluteDateTime(page.updatedAt)}</TooltipContent>
+          </Tooltip>
         )}
 
         <MetaChip
