@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Paperclip, Loader2, Trash2, Download, ZoomIn } from 'lucide-react';
+import { Paperclip, Loader2, Trash2, ZoomIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/use-auth';
 import { useAttachmentList, useRemoveAttachment } from '@/lib/use-attachments';
 import { getFileTypeIcon } from '@/lib/file-type-icon';
+import { AttachmentDetailModal } from './attachment-detail-modal';
 import type { Attachment } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -13,13 +14,15 @@ interface AttachmentListProps {
   pageId: string;
 }
 
-const formatBytes = (size: number): string => {
+/** Human-readable byte size. Exported so the detail modal reuses the same format. */
+export const formatBytes = (size: number): string => {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const isImageFormat = (fileFormat: string) => fileFormat.startsWith('image/');
+/** Whether a MIME type is an image — shared with the detail modal. */
+export const isImageFormat = (fileFormat: string) => fileFormat.startsWith('image/');
 
 /**
  * Page-footer attachment list. Mirrors the legacy Swig `<div id="page-attachment">`
@@ -27,33 +30,42 @@ const isImageFormat = (fileFormat: string) => fileFormat.startsWith('image/');
  * page view Card. Hidden entirely when the page has no attachments — same
  * "ghost when empty" behaviour as BacklinkList.
  *
- * Delete is shown only to the attachment creator and to admins. The server
- * also accepts page.grantedUsers (see migrate-attachments task), but we
- * gate that arm in the UI on creator/admin alone for now since the page
- * payload doesn't expose grantedUsers detail to the client. (Editing-flow
- * users in `migrate-page-edit-attachment-dnd` can revisit this.)
+ * Clicking any attachment (image thumbnail or non-image row) opens the
+ * detail modal. Delete is offered to any authenticated user — attachment
+ * deletion is open collaboration (wiki policy), matching the server's
+ * authenticated-only `removeAttachment` authz.
  */
 export function AttachmentList({ pageId }: AttachmentListProps) {
   const { user: currentUser } = useAuth();
   const { data, isLoading } = useAttachmentList(pageId);
   const removeMutation = useRemoveAttachment(pageId);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Attachment | null>(null);
 
   if (isLoading) return null;
   const attachments = data?.attachments ?? [];
   if (attachments.length === 0) return null;
 
-  const canDelete = (att: Attachment) => {
-    if (!currentUser) return false;
-    if (currentUser.admin === true) return true;
-    return att.creator._id === currentUser.id;
-  };
+  // Wiki policy: deletion is open to any authenticated user.
+  const canDelete = !!currentUser;
 
   const handleDelete = async (att: Attachment) => {
     if (!confirm(m['page.attachments_remove_confirm']())) return;
     setDeleteError(null);
     try {
       await removeMutation.mutateAsync(att._id);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : m['page.attachments_remove_failed']());
+    }
+  };
+
+  // Delete invoked from the detail modal — close the modal on success so the
+  // user isn't left looking at a now-deleted file.
+  const handleModalDelete = async (att: Attachment) => {
+    setDeleteError(null);
+    try {
+      await removeMutation.mutateAsync(att._id);
+      setSelected(null);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : m['page.attachments_remove_failed']());
     }
@@ -72,11 +84,9 @@ export function AttachmentList({ pageId }: AttachmentListProps) {
           return (
             <li key={att._id} className="flex items-start gap-3 text-sm">
               {isImageFormat(att.fileFormat) ? (
-                // Phase 6 wires this button to a detail modal; the thumbnail
-                // is a <button> already so that change is just an onClick.
                 <button
                   type="button"
-                  // TODO(phase-6): open the attachment detail modal on click.
+                  onClick={() => setSelected(att)}
                   className="group relative block w-1/5 max-w-[150px] shrink-0 overflow-hidden rounded border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={att.originalName || att.fileName}
                 >
@@ -90,25 +100,24 @@ export function AttachmentList({ pageId }: AttachmentListProps) {
                   </span>
                 </button>
               ) : (
-                <div className="flex items-start gap-2 flex-1">
+                // Clicking opens the detail modal — download moved into the
+                // modal so image / non-image click behaviour is uniform.
+                <button
+                  type="button"
+                  onClick={() => setSelected(att)}
+                  className="flex flex-1 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                >
                   <FileTypeIcon className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
                   <div className="flex-1 min-w-0">
-                    <a
-                      href={att.url}
-                      download={att.originalName}
-                      className="text-foreground hover:text-primary transition-colors break-all inline-flex items-center gap-1"
-                    >
-                      <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>{att.originalName || att.fileName}</span>
-                    </a>
+                    <span className="text-foreground transition-colors break-all hover:text-primary">{att.originalName || att.fileName}</span>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {att.fileFormat} · {formatBytes(att.fileSize)}
                     </p>
                   </div>
-                </div>
+                </button>
               )}
 
-              {canDelete(att) && (
+              {canDelete && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -130,6 +139,17 @@ export function AttachmentList({ pageId }: AttachmentListProps) {
           {deleteError}
         </p>
       )}
+
+      <AttachmentDetailModal
+        attachment={selected}
+        open={selected !== null}
+        onOpenChange={(o) => {
+          if (!o) setSelected(null);
+        }}
+        canDelete={canDelete}
+        onDelete={handleModalDelete}
+        isDeleting={removeMutation.isPending}
+      />
     </section>
   );
 }
