@@ -164,6 +164,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
             }}
             showActions={!isStaleRevision}
             showPresence={!isStaleRevision}
+            sticky={!isStaleRevision}
           />
           <PageContent page={page} />
           {!isStaleRevision && (

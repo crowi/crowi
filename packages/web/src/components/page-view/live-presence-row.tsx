@@ -40,10 +40,18 @@ const VIEWER_LIST_CAP = 20;
 
 interface LivePresenceRowProps {
   pageId: string;
+  /**
+   * `compact` shrinks the row for the sticky / scrolled page header:
+   * the "閲覧中" label is dropped and the row height is tightened. The
+   * fixed-height / no-layout-shift guarantee (RFC-0005) holds in both
+   * sizes — only the reserved height differs.
+   */
+  size?: 'default' | 'compact';
 }
 
-export function LivePresenceRow({ pageId }: LivePresenceRowProps) {
+export function LivePresenceRow({ pageId, size = 'default' }: LivePresenceRowProps) {
   const { viewers, selfUserId, status } = usePresence(pageId);
+  const isCompact = size === 'compact';
 
   // Show content only when the presence channel is up and someone
   // besides the current user is here (no value in showing yourself
@@ -54,15 +62,18 @@ export function LivePresenceRow({ pageId }: LivePresenceRowProps) {
   const hasOthers = status !== 'error' && viewers.some((v) => v.userId !== selfUserId);
 
   return (
-    <div className="flex items-center gap-2 min-h-7 md:min-h-6" data-testid="live-presence-row">
+    <div className={cn('flex items-center gap-2', isCompact ? 'min-h-6 md:min-h-5' : 'min-h-7 md:min-h-6')} data-testid="live-presence-row" data-size={size}>
       {hasOthers && (
         <>
-          {/* Desktop / wide: label + avatar stack. */}
+          {/* Desktop / wide: label + avatar stack. The "閲覧中" label is
+              dropped in compact mode to keep the sticky header tight. */}
           <div className="hidden md:flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-              {m['page.presence_label']()}
-            </span>
+            {!isCompact && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                {m['page.presence_label']()}
+              </span>
+            )}
             <PresenceAvatarStack viewers={viewers} selfUserId={selfUserId} />
           </div>
 
