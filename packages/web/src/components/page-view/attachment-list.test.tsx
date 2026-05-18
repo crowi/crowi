@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import type { Attachment } from '@crowi/api-contract';
@@ -8,6 +9,16 @@ const { useRemoveAttachment } = vi.hoisted(() => ({ useRemoveAttachment: vi.fn()
 const { useAuth } = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock('@/lib/use-attachments', () => ({ useAttachmentList, useRemoveAttachment }));
 vi.mock('@/lib/use-auth', () => ({ useAuth }));
+
+// `next/link` renders a plain anchor in unit tests — keep the mock minimal
+// so the "view all attachments" link assertions can read `href` directly.
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 import { AttachmentList } from './attachment-list';
 
@@ -23,6 +34,7 @@ function makeAttachment(overrides: Partial<Attachment> = {}): Attachment {
     fileSize: 2048,
     createdAt: '2026-05-01T00:00:00.000Z',
     url: '/api/v2/attachments/att-1',
+    inUse: true,
     ...overrides,
   };
 }
@@ -118,5 +130,43 @@ describe('AttachmentList', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /spec\.pdf/ }));
     expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  // Phase 7 — the footer list shows only attachments referenced by the
+  // latest revision (`inUse`), with a link to the full listing.
+  it('shows only inUse attachments and hides ones not used in the latest revision', () => {
+    useAttachmentList.mockReturnValue({
+      data: {
+        attachments: [
+          makeAttachment({ _id: 'att-used', originalName: 'used.png', url: '/api/v2/attachments/att-used', inUse: true }),
+          makeAttachment({ _id: 'att-stale', originalName: 'stale.png', url: '/api/v2/attachments/att-stale', inUse: false }),
+        ],
+      },
+      isLoading: false,
+    });
+    render(<AttachmentList pageId="page-1" />);
+
+    expect(screen.getByRole('img', { name: 'used.png' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'stale.png' })).toBeNull();
+  });
+
+  it('renders a "view all attachments" link pointing at /_attachments?pageId=<id>', () => {
+    useAttachmentList.mockReturnValue({ data: { attachments: [makeAttachment()] }, isLoading: false });
+    render(<AttachmentList pageId="page-42" />);
+
+    const link = screen.getByRole('link');
+    expect(link.getAttribute('href')).toBe('/_attachments?pageId=page-42');
+  });
+
+  it('keeps the section (with the view-all link) when no attachment is inUse', () => {
+    useAttachmentList.mockReturnValue({
+      data: { attachments: [makeAttachment({ inUse: false })] },
+      isLoading: false,
+    });
+    render(<AttachmentList pageId="page-1" />);
+
+    // No thumbnails are rendered, but the full-listing link stays reachable.
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(screen.getByRole('link').getAttribute('href')).toBe('/_attachments?pageId=page-1');
   });
 });

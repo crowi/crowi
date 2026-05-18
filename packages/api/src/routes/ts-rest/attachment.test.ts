@@ -111,6 +111,88 @@ describe('Routes /api/v2 attachments (ts-rest)', () => {
     });
   });
 
+  describe('GET /api/v2/pages/:pageId/attachments — inUse detection (Phase 7)', () => {
+    /** Upload a PNG to a page and return its attachment id. */
+    const uploadTo = async (pageId: string) => {
+      const res = await request(app)
+        .post(`/api/v2/pages/${pageId}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(res.status).toBe(200);
+      return res.body.attachment._id as string;
+    };
+
+    /**
+     * Overwrite the page's latest revision body in-place so the
+     * `listAttachments` body scan sees it. We mutate the Revision document
+     * directly rather than going through `updatePage` so the test does not
+     * depend on the editor's optimistic-concurrency `revision_id` handshake.
+     */
+    const setBody = async (pageId: string, body: string) => {
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const page = await Page.findById(pageId);
+      if (!page) throw new Error(`page ${pageId} not found`);
+      await Revision.updateOne({ _id: page.revision }, { $set: { body } });
+    };
+
+    const listOf = async (pageId: string) => {
+      const res = await request(app).get(`/api/v2/pages/${pageId}/attachments`).set(authHeaders(accessToken));
+      expect(res.status).toBe(200);
+      return res.body.attachments as Array<{ _id: string; inUse: boolean }>;
+    };
+
+    it('marks an attachment inUse when the latest revision body references its /api/v2/attachments/<id> URI', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-new-uri`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setBody(page._id, `# doc\n\n![pixel](/api/v2/attachments/${id})\n`);
+
+      const attachments = await listOf(page._id);
+      const target = attachments.find((a) => a._id === id);
+      expect(target?.inUse).toBe(true);
+    });
+
+    it('marks an attachment NOT inUse when the latest revision body does not reference it', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-unref`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setBody(page._id, '# doc with no attachment references\n');
+
+      const attachments = await listOf(page._id);
+      const target = attachments.find((a) => a._id === id);
+      expect(target?.inUse).toBe(false);
+    });
+
+    it('marks an attachment inUse when referenced via the legacy /files/<id> URI', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-legacy-uri`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setBody(page._id, `# doc\n\n![legacy](/files/${id})\n`);
+
+      const attachments = await listOf(page._id);
+      const target = attachments.find((a) => a._id === id);
+      expect(target?.inUse).toBe(true);
+    });
+
+    it('falls back to inUse=true for every attachment when the latest revision body is empty', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-empty-body`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setBody(page._id, '');
+
+      const attachments = await listOf(page._id);
+      const target = attachments.find((a) => a._id === id);
+      expect(target?.inUse).toBe(true);
+    });
+
+    it('reports inUse=false on the addAttachment (upload) response — a fresh upload is not yet referenced', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-upload-resp`, '# x');
+      const res = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(res.status).toBe(200);
+      expect(res.body.attachment.inUse).toBe(false);
+    });
+  });
+
   describe('POST /api/v2/pages/:pageId/attachments (add)', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app)
