@@ -10,9 +10,10 @@ import { notify } from '@/lib/notify';
  * When a file upload starts, the editor splices a GitHub-style
  * `![Uploading name (0%)…](#u=<id>)` placeholder into the document at
  * the cursor. As the upload streams, the percentage is updated in
- * place; on completion the whole placeholder token is replaced with the
- * final `![name](url)` (success) or `![Upload failed: name](#)`
- * (failure).
+ * place; on success the placeholder token is replaced with the final
+ * `![name](url)`. On failure the placeholder is removed entirely (the
+ * failure is surfaced via a toast instead) so a transient error never
+ * leaves broken `![](#…)` image markdown behind.
  *
  * Every mutation is a normal CodeMirror transaction. In a collaborative
  * editor `yCollab` intercepts those transactions and turns them into
@@ -25,10 +26,9 @@ import { notify } from '@/lib/notify';
  * therefore get two distinct, individually-addressable placeholders and
  * cannot be confused when they finish out of order.
  *
- * The pure text helpers (`buildPlaceholderText`, `buildSuccessText`,
- * `buildFailureText`, `findPlaceholderRange`, `padToOwnLine`) are
- * exported so the placeholder grammar is unit-testable without mounting
- * an editor.
+ * The pure helpers (`buildPlaceholderText`, `buildSuccessText`,
+ * `findPlaceholderRange`, `ownLinePadding`) are exported so the
+ * placeholder grammar is unit-testable without mounting an editor.
  */
 
 /** Editor intent forwarded to the upload endpoint for telemetry. */
@@ -106,12 +106,6 @@ export function buildSuccessText(filename: string, url: string, isImage: boolean
   return `${bang}[${filename}](${url})`;
 }
 
-/** Static failure marker (RFC §"Upload fails mid-operation"). */
-export function buildFailureText(filename: string, isImage: boolean): string {
-  const bang = isImage ? '!' : '';
-  return `${bang}[Upload failed: ${filename}](${ID_FRAGMENT_PREFIX}done)`;
-}
-
 /**
  * Locate the placeholder for `uploadId` in `doc`. The placeholder is the
  * whole `[…](#u=<id>)` (optionally `!`-prefixed) token; we find the
@@ -132,17 +126,20 @@ export function findPlaceholderRange(doc: string, uploadId: string): { from: num
 }
 
 /**
- * Pad `text` with newlines so it lands on its own line when spliced at
- * `pos`. A bare `![](url)` dropped at the end of a `## Heading` or a
+ * Newline padding so an image token lands on its own line when spliced
+ * at `pos`. A bare `![](url)` dropped at the end of a `## Heading` or a
  * list item would otherwise glue onto that line (`## Heading![](url)`),
  * which is broken Markdown — GitHub's editor breaks the line the same
- * way. A `\n` is prepended unless `pos` already sits at the start of a
- * line, and appended unless it sits at the end of one.
+ * way. `leading` is a `\n` unless `pos` already starts a line; `trailing`
+ * a `\n` unless it ends one. Returned separately (rather than pre-joined)
+ * so a caller removing the placeholder again knows how much padding it
+ * inserted.
  */
-export function padToOwnLine(doc: string, pos: number, text: string): string {
-  const leading = pos > 0 && doc[pos - 1] !== '\n' ? '\n' : '';
-  const trailing = pos < doc.length && doc[pos] !== '\n' ? '\n' : '';
-  return `${leading}${text}${trailing}`;
+export function ownLinePadding(doc: string, pos: number): { leading: string; trailing: string } {
+  return {
+    leading: pos > 0 && doc[pos - 1] !== '\n' ? '\n' : '',
+    trailing: pos < doc.length && doc[pos] !== '\n' ? '\n' : '',
+  };
 }
 
 /**
@@ -166,6 +163,26 @@ export function replacePlaceholder(view: EditorView, uploadId: string, text: str
   const range = findPlaceholderRange(view.state.doc.toString(), uploadId);
   if (!range) return;
   view.dispatch({ changes: { from: range.from, to: range.to, insert: text } });
+}
+
+/**
+ * Remove the placeholder for `uploadId` from the document, together with
+ * up to `leadingPad` / `trailingPad` own-line-padding newlines that were
+ * inserted around it (see `ownLinePadding`). Used when an upload fails:
+ * a removed placeholder restores the document so the user can retry from
+ * clean, rather than leaving a broken `![](#…)` image behind. The
+ * padding newlines are only consumed when still present (a collaborator
+ * may have edited around them). No-op when the placeholder has vanished.
+ */
+export function removePlaceholder(view: EditorView, uploadId: string, leadingPad = 0, trailingPad = 0): void {
+  const doc = view.state.doc.toString();
+  const range = findPlaceholderRange(doc, uploadId);
+  if (!range) return;
+  let { from } = range;
+  let { to } = range;
+  if (leadingPad > 0 && from > 0 && doc[from - 1] === '\n') from -= 1;
+  if (trailingPad > 0 && doc[to] === '\n') to += 1;
+  view.dispatch({ changes: { from, to } });
 }
 
 /** Percentage step below which a progress update is throttled away. */
@@ -277,23 +294,23 @@ export async function runUpload(view: EditorView, file: File, filename: string, 
   const uploadId = newUploadId();
   const displayName = sanitizeFilename(filename);
 
-  // Images are placed on their own line (see `padToOwnLine`); inline
+  // Images are placed on their own line (see `ownLinePadding`); inline
   // file links (`[name](url)`) are fine mid-sentence and get no padding.
   const placeholder = buildPlaceholderText(uploadId, displayName, 0, isImage);
-  const inserted = isImage ? padToOwnLine(view.state.doc.toString(), pos, placeholder) : placeholder;
-  insertPlaceholder(view, pos, inserted);
+  const { leading, trailing } = isImage ? ownLinePadding(view.state.doc.toString(), pos) : { leading: '', trailing: '' };
+  insertPlaceholder(view, pos, `${leading}${placeholder}${trailing}`);
   const onProgress = makeProgressUpdater(view, uploadId, displayName, isImage);
 
   try {
     const outcome = await uploadAttachment(file, filename, pageId, intent, onProgress);
     replacePlaceholder(view, uploadId, buildSuccessText(displayName, outcome.url, isImage));
   } catch (err) {
-    // Surface the failure: the inline `![Upload failed: …]` marker is
-    // easy to miss (and looks like a stray link), so also toast the
-    // server-supplied reason. Without this an upload failure — a
-    // storage-backend error, a permission change — was fully silent.
+    // Remove the placeholder (and its own-line padding) and toast the
+    // server-supplied reason. A failed upload — a transient storage
+    // error, a permission change — leaves no broken `![](#…)` image
+    // markdown behind; the user retries from a clean document.
     const reason = err instanceof Error && err.message ? err.message : 'Upload failed.';
     notify.error(`${displayName}: ${reason}`);
-    replacePlaceholder(view, uploadId, buildFailureText(displayName, isImage));
+    removePlaceholder(view, uploadId, leading.length, trailing.length);
   }
 }

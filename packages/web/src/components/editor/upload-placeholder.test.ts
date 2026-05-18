@@ -4,14 +4,14 @@ import { EditorView } from '@codemirror/view';
 import {
   buildPlaceholderText,
   buildSuccessText,
-  buildFailureText,
   findPlaceholderRange,
   generatePastedFilename,
   newUploadId,
   insertPlaceholder,
   replacePlaceholder,
+  removePlaceholder,
   makeProgressUpdater,
-  padToOwnLine,
+  ownLinePadding,
 } from './upload-placeholder';
 
 /**
@@ -35,11 +35,6 @@ describe('placeholder text helpers', () => {
   it('builds the success token as ![name](url) / [name](url)', () => {
     expect(buildSuccessText('pasted-1.png', 'https://x/a', true)).toBe('![pasted-1.png](https://x/a)');
     expect(buildSuccessText('notes.pdf', 'https://x/b', false)).toBe('[notes.pdf](https://x/b)');
-  });
-
-  it('builds a static failure marker', () => {
-    expect(buildFailureText('pasted-1.png', true)).toBe('![Upload failed: pasted-1.png](#u=done)');
-    expect(buildFailureText('notes.pdf', false)).toBe('[Upload failed: notes.pdf](#u=done)');
   });
 });
 
@@ -89,32 +84,32 @@ describe('findPlaceholderRange', () => {
   });
 });
 
-describe('padToOwnLine', () => {
-  it('wraps both sides when the position is mid-line', () => {
+describe('ownLinePadding', () => {
+  it('pads both sides when the position is mid-line', () => {
     // pos 2 of "abcd" — surrounded by non-newline text.
-    expect(padToOwnLine('abcd', 2, 'IMG')).toBe('\nIMG\n');
+    expect(ownLinePadding('abcd', 2)).toEqual({ leading: '\n', trailing: '\n' });
   });
 
   it('breaks a bare image off the end of a heading line', () => {
-    // Dropping at the end of "## Goals" (before its trailing newline).
-    expect(padToOwnLine('## Goals\nnext', 8, 'IMG')).toBe('\nIMG');
+    // End of "## Goals" (before its trailing newline) — lead only.
+    expect(ownLinePadding('## Goals\nnext', 8)).toEqual({ leading: '\n', trailing: '' });
   });
 
   it('adds no leading newline at the start of the document', () => {
-    expect(padToOwnLine('abc', 0, 'IMG')).toBe('IMG\n');
+    expect(ownLinePadding('abc', 0)).toEqual({ leading: '', trailing: '\n' });
   });
 
   it('adds no trailing newline at the end of the document', () => {
-    expect(padToOwnLine('abc', 3, 'IMG')).toBe('\nIMG');
+    expect(ownLinePadding('abc', 3)).toEqual({ leading: '\n', trailing: '' });
   });
 
   it('adds nothing when the position already sits on a blank line', () => {
     // "a\n\nb" — pos 2 is between the two newlines.
-    expect(padToOwnLine('a\n\nb', 2, 'IMG')).toBe('IMG');
+    expect(ownLinePadding('a\n\nb', 2)).toEqual({ leading: '', trailing: '' });
   });
 
   it('adds only a trailing newline right after an existing newline', () => {
-    expect(padToOwnLine('ab\ncd', 3, 'IMG')).toBe('IMG\n');
+    expect(ownLinePadding('ab\ncd', 3)).toEqual({ leading: '', trailing: '\n' });
   });
 });
 
@@ -151,6 +146,25 @@ describe('EditorView placeholder mutations', () => {
     const before = view.state.doc.toString();
     replacePlaceholder(view, 'gone', 'anything');
     expect(view.state.doc.toString()).toBe(before);
+  });
+
+  it('removePlaceholder deletes the placeholder and its own-line padding', () => {
+    // Insert `\n` + placeholder + `\n` at pos 5, as runUpload does for
+    // an image dropped mid-line.
+    insertPlaceholder(view, 5, `\n${buildPlaceholderText('u1', 'a.png', 0, true)}\n`);
+    removePlaceholder(view, 'u1', 1, 1);
+    expect(view.state.doc.toString()).toBe('hello world');
+  });
+
+  it('removePlaceholder deletes only the token when no padding was added', () => {
+    insertPlaceholder(view, 5, buildPlaceholderText('u2', 'a.png', 0, true));
+    removePlaceholder(view, 'u2', 0, 0);
+    expect(view.state.doc.toString()).toBe('hello world');
+  });
+
+  it('removePlaceholder is a no-op when the placeholder has vanished', () => {
+    removePlaceholder(view, 'gone', 1, 1);
+    expect(view.state.doc.toString()).toBe('hello world');
   });
 });
 
