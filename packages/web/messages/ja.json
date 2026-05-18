@@ -226,6 +226,8 @@
   "edit.failed_to_load_body": "ページを読み込めませんでした。{message}",
   "edit.failed_to_create": "ページの作成に失敗しました",
   "edit.failed_to_update": "ページの更新に失敗しました",
+  "edit.creating_draft": "エディタを準備中...",
+  "edit.draft_own_conflict_unresolved": "このパスには作成中のページが既にあります。「作成中のページ」一覧から開いてください。",
   "edit.editor_loading": "エディタを読み込み中...",
   "edit.attach_button": "ファイルを添付",
   "edit.attach_save_first": "添付するには先にページを保存してください",

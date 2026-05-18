@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import { unwrapResult } from './unwrap-result';
-import type { CreatePageRequest, RenamePageRequest, UpdatePageRequest } from '@crowi/api-contract';
+import type { RenamePageRequest, UpdatePageRequest } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
 interface DeletePageRequest {
@@ -43,24 +43,6 @@ export function useUpdatePage() {
           403: { message: m['errors.permission_denied_edit'](), preferLocal: true },
           404: { message: m['errors.page_not_found'](), preferLocal: true },
         },
-        fallback: m['errors.update_failed'](),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['page'] });
-    },
-  });
-}
-
-export function useCreatePage() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: CreatePageRequest) => {
-      const result = await apiClient.page.createPage({ body: data });
-      return unwrapResult(result, {
-        ok: (body) => body.page,
-        errors: { 400: m['errors.update_failed']() },
         fallback: m['errors.update_failed'](),
       });
     },

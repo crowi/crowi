@@ -226,6 +226,8 @@
   "edit.failed_to_load_body": "Failed to load page. {message}",
   "edit.failed_to_create": "Failed to create page",
   "edit.failed_to_update": "Failed to update page",
+  "edit.creating_draft": "Preparing the editor...",
+  "edit.draft_own_conflict_unresolved": "You already have a draft at this path. Open it from your Creating pages list.",
   "edit.editor_loading": "Loading editor...",
   "edit.attach_button": "Attach file",
   "edit.attach_save_first": "Save the page first to enable attachments",

@@ -18,9 +18,12 @@ import { CollabPresenceAvatars } from '@/components/editor/CollabPresenceAvatars
 import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarning';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { UnsavedChangesDialog } from '@/components/editor/UnsavedChangesDialog';
+import { ErrorAlert } from '@/components/ui/error-alert';
+import { useAuth } from '@/lib/use-auth';
 import { usePage } from '@/lib/use-page';
 import { usePresence } from '@/lib/use-presence';
-import { PageRevisionConflictError, useCreatePage, useUpdatePage } from '@/lib/use-page-mutations';
+import { PageRevisionConflictError, useUpdatePage } from '@/lib/use-page-mutations';
+import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { useScrollSync } from '@/lib/use-scroll-sync';
 import { useCollabSave } from '@/lib/use-collab-save';
 import type { CollabStatus } from '@/lib/use-collab-document';
@@ -730,35 +733,116 @@ interface CreatePageEditorProps {
   path: string;
 }
 
+/**
+ * RFC-0005 Phase 3 (option A) — the `_edit?path=X` create flow.
+ *
+ * Instead of the legacy "create on save" path (which left the editor
+ * with `pageId={null}` → no D&D upload, no realtime, no presence),
+ * this mounts a *draft* page via `POST /pages/drafts` and immediately
+ * `router.replace`s the URL to `_edit?page_id=<pageId>`. `EditPageClient`
+ * then re-resolves the mode and renders `UpdatePageEditor`, so the new
+ * page is edited with a real page id from the first keystroke.
+ *
+ * `replace` (not `push`) is deliberate: a reload of the resulting
+ * `?path=` history entry would otherwise POST a second draft.
+ *
+ * Branches:
+ *   - 201 → replace to the draft editor.
+ *   - 409 + owner is the current user → an existing own draft; look it
+ *     up in the drafts list and replace to it. (Re-opening `?path=` for
+ *     a page you already started.)
+ *   - 409 + owner is someone else → inline "being created by …".
+ *   - 400 → inline error (published page exists / invalid path).
+ */
 function CreatePageEditor({ path }: CreatePageEditorProps) {
   const router = useRouter();
-  const [body, setBody] = useState<string>('');
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const { user } = useAuth();
+  const createDraft = useCreateDraft();
+  // `useDrafts` is only consulted in the own-409 branch — it is cheap
+  // (30s staleTime, shared cache) and lets us recover the page id of a
+  // draft this user already started at `path`.
+  const { data: draftsData } = useDrafts();
+  const [error, setError] = useState<CreateDraftError | null>(null);
 
-  const createMutation = useCreatePage();
+  // `useRef` guard: React 18 StrictMode mounts effects twice in dev,
+  // and we never want two `POST /pages/drafts` for one editor open.
+  const startedRef = useRef(false);
 
-  const handleSave = async () => {
-    setFeedback(null);
-    try {
-      const created = await createMutation.mutateAsync({ path, body });
-      router.push(created.path);
-    } catch (err) {
-      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : m['edit.failed_to_create']() });
-    }
-  };
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
 
+    createDraft.mutate(
+      { path },
+      {
+        onSuccess: ({ pageId }) => {
+          router.replace(draftEditHref(pageId));
+        },
+        onError: (err) => {
+          if (err instanceof DraftPathConflictError) {
+            // Own existing draft → resolve its page id from the list
+            // and hop straight into its editor.
+            if (user && err.owner.id === user.id) {
+              const own = draftsData?.drafts.find((d) => d.path === path);
+              if (own) {
+                router.replace(draftEditHref(own.pageId));
+                return;
+              }
+              // The list hasn't loaded the matching row yet (or it was
+              // cancelled between calls) — surface a recoverable error
+              // rather than spin forever.
+              setError({ kind: 'message', text: m['edit.draft_own_conflict_unresolved']() });
+              return;
+            }
+            setError({ kind: 'conflict', displayName: err.owner.displayName, username: err.owner.username });
+            return;
+          }
+          setError({ kind: 'message', text: err instanceof Error ? err.message : m['edit.failed_to_create']() });
+        },
+      },
+    );
+    // Run exactly once on mount. `path` is stable for a given editor
+    // open (a new path = a fresh navigation = a fresh component), and
+    // the other deps are intentionally excluded so a `draftsData`
+    // refetch can't re-fire the POST.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (error) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-4">
+        <Card className="w-full max-w-2xl">
+          <CardHeader>
+            <CardTitle>{m['edit.title_create']()}</CardTitle>
+            <CardDescription className="font-mono">{path}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {error.kind === 'conflict' ? (
+              <ErrorAlert
+                title={m['creating_pages.conflict_title']()}
+                message={m['creating_pages.conflict_message']({ displayName: error.displayName, username: error.username })}
+              />
+            ) : (
+              <ErrorAlert message={error.text} />
+            )}
+            <Button variant="outline" onClick={() => router.back()}>
+              {m['common.go_back']()}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Default: the draft POST (and, on success, the `router.replace`)
+  // are in flight. The replace swaps in `UpdatePageEditor`, so this
+  // spinner is only ever shown briefly.
   return (
-    <EditorShell
-      title={m['edit.title_create']()}
-      subtitle={path}
-      body={body}
-      onChangeBody={setBody}
-      onSave={handleSave}
-      onCancel={() => router.back()}
-      isSaving={createMutation.isPending}
-      feedback={feedback}
-      pageId={null}
-      onAttachError={(message) => setFeedback({ kind: 'error', message })}
-    />
+    <div className="flex flex-1 items-center justify-center">
+      <LoadingSpinner message={m['edit.creating_draft']()} />
+    </div>
   );
 }
+
+/** Mutually exclusive failure states surfaced by the create flow. */
+type CreateDraftError = { kind: 'conflict'; displayName: string; username: string } | { kind: 'message'; text: string };
