@@ -3,6 +3,7 @@ import type { Root } from 'mdast';
 import type { TocEntryResponse, WikiLinkResponse, MentionResponse } from '@crowi/api-contract';
 import type { MongoCacheStorage } from './cache';
 import { buildCorePlugins, buildPluginDispatchPlugins } from './core';
+import { makeMentionResolve, type MentionUsernameResolver } from './core/mention-resolve';
 import { RendererRegistryImpl } from './registry';
 
 /**
@@ -219,6 +220,17 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
 export interface PipelinePluginDispatch {
   cache: MongoCacheStorage;
   pageId: string | null;
+  /**
+   * Phase 2 mention existence resolver — batch-checks which `@username`
+   * mentions belong to real users. Built from the `User` model by
+   * `createRenderer`'s `crowi` closure. When supplied AND the render is
+   * in `mode: 'save'`, the mention-resolve transform demotes unknown-user
+   * mention link nodes to plain text. Absent (unit tests, non-save runs)
+   * → every `@username` keeps its link node, matching pre-Phase-2
+   * behaviour. This is `pageId`-independent (orphan revision bodies are
+   * still resolved).
+   */
+  resolveMentionUsernames?: MentionUsernameResolver;
 }
 
 export async function runPipeline(
@@ -288,6 +300,15 @@ export async function runPipeline(
     for (const transform of dispatchPlugins) {
       await transform(transformed);
     }
+  }
+
+  // Phase 2 mention resolution — demote `@username` link nodes whose
+  // username does not belong to a real user back to plain text. Runs
+  // only at save-time (`mode: 'save'`) so the persisted `renderedAst`
+  // is already correct; read / view paths reuse it without re-querying.
+  // `pageId`-independent: an orphan revision body still gets resolved.
+  if (dispatch?.resolveMentionUsernames && ctx.mode === 'save') {
+    await makeMentionResolve(dispatch.resolveMentionUsernames)(transformed);
   }
 
   // After all transforms, fire registered NodeRenderers for any

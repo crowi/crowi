@@ -15,6 +15,7 @@ import { remarkWikiLinks } from './wikilinks';
 export type { UnifiedTransformPlugin } from './headings';
 export { makeCodeBlockDispatch } from './code-block-dispatch';
 export { makeEmbedTagDispatch } from './embed-tags';
+export { makeMentionResolve, type MentionUsernameResolver } from './mention-resolve';
 export { makeUrlInlineExpandDispatch } from './url-inline-expand';
 
 /**

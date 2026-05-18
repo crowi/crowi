@@ -1,7 +1,9 @@
 import Debug from 'debug';
 import type { PluginLogger, RenderContext } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
+import type { UserModel } from 'src/models/user';
 import { type MongoCacheStorage, createMongoCacheStorage } from './cache';
+import type { MentionUsernameResolver } from './core/mention-resolve';
 import { createPipelineEsmDepsLoader, type LoadPipelineEsmDeps, type PipelineMetadata, type PipelineResult, runPipeline } from './pipeline';
 import { RendererRegistryImpl } from './registry';
 import { serializeMdast } from './serialize';
@@ -75,6 +77,21 @@ export function createRenderer(crowi: Crowi): Renderer {
   const loadDeps: LoadPipelineEsmDeps = createPipelineEsmDepsLoader();
   const cache = createMongoCacheStorage(crowi);
 
+  // Phase 2 mention existence resolver — batch-checks `@username`
+  // mentions against the `User` collection in a single `$in` query (no
+  // per-mention N+1). `runPipeline` only invokes this in `mode: 'save'`,
+  // so the resolved AST is persisted once and reused on read / view.
+  // The `User` model is looked up lazily per call: `createRenderer` runs
+  // during `Crowi.init` before all models are guaranteed registered.
+  const resolveMentionUsernames: MentionUsernameResolver = async (usernames) => {
+    if (usernames.length === 0) return new Set();
+    const User = crowi.model('User') as UserModel;
+    const found = await User.find({ username: { $in: usernames } })
+      .select('username')
+      .exec();
+    return new Set(found.map((u) => u.username));
+  };
+
   // RenderContext for the core pipeline (not for plugins). `cache` and
   // `auth` are intentionally absent — the bundled core transforms
   // (headings / wikilinks / mentions / code-blocks / syntax-highlight)
@@ -91,7 +108,7 @@ export function createRenderer(crowi: Crowi): Renderer {
     cache,
     async run(body, options = {}) {
       const ctx = buildCtx(options);
-      return runPipeline(body, registry, ctx, loadDeps, { cache, pageId: options.pageId ?? null });
+      return runPipeline(body, registry, ctx, loadDeps, { cache, pageId: options.pageId ?? null, resolveMentionUsernames });
     },
     async runMetadata(body, options = {}) {
       const result = await this.run(body, options);
