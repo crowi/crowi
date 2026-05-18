@@ -253,6 +253,60 @@ describe('usePresence', () => {
     expect(result.current.status).toBe('error');
   });
 
+  it('stops reconnecting after a 4401 (expired token) close', async () => {
+    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+
+    renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // 4401 = the presence token is expired / invalid. Reconnecting with
+    // the same token just loops — the client must stop.
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(4401);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it('backs off across handshake-then-close cycles (no flat 1s reconnect loop)', async () => {
+    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+
+    renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+
+    // Cycle 1: the handshake completes (`open`) then the socket closes
+    // uncleanly before any `viewers` frame — the first reconnect fires
+    // after the ~1s backoff floor.
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(1006);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // Cycle 2: same again. The backoff must have grown to ~2s — a
+    // reconnect must NOT fire within another 1s. (It did when `onopen`
+    // reset the attempt counter, pinning the loop at a flat 1s.)
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      FakeWebSocket.instances[1].fail(1006);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(3);
+  });
+
   it('reports error status when the token request fails (no WebSocket opened)', async () => {
     getPresenceToken.mockResolvedValue({ status: 500, body: { error: { message: 'boom' } } });
 

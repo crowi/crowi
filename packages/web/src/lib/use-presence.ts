@@ -41,6 +41,15 @@ const PRESENCE_RECONNECT_MAX_MS = 15_000;
  */
 const PRESENCE_CLOSE_NO_ACCESS = 4403;
 
+/**
+ * Close code for an invalid / expired presence token (`WS_CLOSE
+ * .INVALID_TOKEN` in `presence/attach.ts`). The token in hand is stale,
+ * so an immediate retry with the *same* token just loops — the client
+ * stops and waits for `usePresenceToken` to refetch a fresh one, which
+ * re-runs the connection effect.
+ */
+const PRESENCE_CLOSE_INVALID_TOKEN = 4401;
+
 export type PresenceStatus = 'connecting' | 'connected' | 'error';
 
 interface UsePresenceResult {
@@ -188,7 +197,6 @@ export function usePresence(pageId: string | null | undefined): UsePresenceResul
 
       ws.onopen = () => {
         if (disposed) return;
-        reconnectAttempts = 0;
         setStatus('connected');
         // Fire one heartbeat immediately, then on the 15s cadence.
         const beat = () => {
@@ -211,6 +219,13 @@ export function usePresence(pageId: string | null | undefined): UsePresenceResul
         }
         const message = PresenceViewersMessageSchema.safeParse(parsed);
         if (!message.success) return;
+        // A parsed `viewers` broadcast proves the connection is truly
+        // established — the server rejects a bad token *before* sending
+        // any frame. Resetting the backoff here (rather than on `onopen`,
+        // which fires for the doomed handshake too) stops a
+        // handshake-then-reject case, e.g. an expired token, from
+        // pinning the reconnect delay at its 1s floor forever.
+        reconnectAttempts = 0;
         const { dueAt } = ingestBroadcast(flicker, message.data.viewers, Date.now());
         project(dueAt);
       };
@@ -227,9 +242,11 @@ export function usePresence(pageId: string | null | undefined): UsePresenceResul
         }
         // The row hides whenever the connection is down (`status: 'error'`).
         setStatus('error');
-        // Permission revoked server-side — do not reconnect, it would
-        // only be rejected again.
-        if (event.code === PRESENCE_CLOSE_NO_ACCESS) return;
+        // A revoked read grant (4403) or a stale token (4401) would just
+        // be rejected again on an immediate retry — stop reconnecting.
+        // A fresh token from `usePresenceToken`'s refetch re-runs this
+        // effect; a restored grant is picked up on that reconnect.
+        if (event.code === PRESENCE_CLOSE_NO_ACCESS || event.code === PRESENCE_CLOSE_INVALID_TOKEN) return;
         // Otherwise reconnect with capped exponential backoff.
         const delay = Math.min(PRESENCE_RECONNECT_BASE_MS * 2 ** reconnectAttempts, PRESENCE_RECONNECT_MAX_MS);
         reconnectAttempts += 1;
