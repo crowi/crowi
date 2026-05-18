@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   AddAttachmentResponseSchema,
   AttachmentErrorSchema,
+  AttachmentUsageResponseSchema,
   ListAttachmentsResponseSchema,
   RemoveAttachmentResponseSchema,
   UploadAttachmentErrorSchema,
@@ -68,6 +69,29 @@ export const attachmentContract = c.router({
       500: AttachmentErrorSchema,
     },
     summary: 'Add an attachment to a page',
+  },
+
+  /**
+   * Phase 8 — full attachment usage breakdown for a page. Scans every
+   * revision body of the page to split attachments into `latest`
+   * (referenced by the current revision) and `past` (referenced only by
+   * older revisions, plus orphans). Backs the `/_attachments?pageId=`
+   * page. Same view-grant requirement as `listAttachments`.
+   */
+  getAttachmentUsage: {
+    method: 'GET',
+    path: '/pages/:pageId/attachments/usage',
+    pathParams: z.object({
+      pageId: z.string(),
+    }),
+    responses: {
+      200: AttachmentUsageResponseSchema,
+      400: AttachmentErrorSchema,
+      401: AuthenticationRequiredErrorSchema,
+      404: AttachmentErrorSchema,
+      500: InternalServerErrorSchema,
+    },
+    summary: 'Get the full attachment usage breakdown for a page',
   },
 
   /**

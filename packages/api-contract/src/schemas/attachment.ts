@@ -40,6 +40,48 @@ export const ListAttachmentsResponseSchema = z.object({
 });
 export type ListAttachmentsResponse = z.infer<typeof ListAttachmentsResponseSchema>;
 
+/**
+ * Phase 8 — one past-revision usage entry for an attachment that is NOT
+ * referenced by the page's latest revision. `referencingRevisions` lists
+ * every past revision whose body embeds the attachment (newest-first);
+ * each entry links to the revision view (`/<path>?revision_id=<id>`).
+ * An empty `referencingRevisions` array means the attachment is an
+ * orphan — referenced by no revision at all.
+ */
+export const PastAttachmentUsageSchema = z.object({
+  attachment: AttachmentSchema,
+  referencingRevisions: z.array(
+    z.object({
+      revisionId: z.string(),
+      createdAt: z.string(),
+      author: UserPublicSchema,
+    }),
+  ),
+});
+export type PastAttachmentUsage = z.infer<typeof PastAttachmentUsageSchema>;
+
+/**
+ * Phase 8 — `GET /pages/:pageId/attachments/usage`.
+ *
+ * Splits every attachment on a page into two groups by scanning all of
+ * the page's revision bodies for embed URIs:
+ *   - `latest`: attachments referenced by the page's current (latest)
+ *     revision body.
+ *   - `past`: attachments referenced only by past revisions (plus
+ *     orphans referenced by none), each carrying the revisions that
+ *     used it so the `/_attachments` page can link back to them.
+ *
+ * `pagePath` is included so the web client can build the
+ * `/<pagePath>?revision_id=<id>` revision links without a second
+ * page lookup.
+ */
+export const AttachmentUsageResponseSchema = z.object({
+  pagePath: z.string(),
+  latest: z.array(AttachmentSchema),
+  past: z.array(PastAttachmentUsageSchema),
+});
+export type AttachmentUsageResponse = z.infer<typeof AttachmentUsageResponseSchema>;
+
 // POST /pages/:pageId/attachments (multipart) → response
 export const AddAttachmentResponseSchema = z.object({
   attachment: AttachmentSchema,
