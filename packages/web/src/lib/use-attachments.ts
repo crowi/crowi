@@ -7,6 +7,7 @@ import type { Attachment, ListAttachmentsResponse } from '@crowi/api-contract';
 export const attachmentsKeys = {
   all: ['attachments'] as const,
   list: (pageId: string) => ['attachments', pageId] as const,
+  usage: (pageId: string) => ['attachments', pageId, 'usage'] as const,
 };
 
 /**

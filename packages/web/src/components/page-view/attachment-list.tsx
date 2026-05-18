@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Paperclip, Loader2, Trash2, ZoomIn, FolderOpen } from 'lucide-react';
+import { Paperclip, Loader2, Trash2, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/use-auth';
 import { useAttachmentList, useRemoveAttachment } from '@/lib/use-attachments';
-import { getFileTypeIcon } from '@/lib/file-type-icon';
 import { AttachmentDetailModal } from './attachment-detail-modal';
+import { AttachmentThumbnail } from './attachment-thumbnail';
 import type { Attachment } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -93,59 +93,24 @@ export function AttachmentList({ pageId }: AttachmentListProps) {
         <p className="text-sm text-muted-foreground">{m['page.attachments_none_in_use']()}</p>
       ) : (
         <ul className="space-y-3">
-          {inUseAttachments.map((att) => {
-            const FileTypeIcon = getFileTypeIcon(att.fileFormat, att.originalName || att.fileName);
-            return (
-              <li key={att._id} className="flex items-start gap-3 text-sm">
-                {isImageFormat(att.fileFormat) ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelected(att)}
-                    className="group relative block w-1/5 max-w-[150px] shrink-0 overflow-hidden rounded border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={att.originalName || att.fileName}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={att.url} alt={att.originalName} className="aspect-square w-full object-cover" loading="lazy" />
-                    <span
-                      className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-                      aria-hidden="true"
-                    >
-                      <ZoomIn className="h-6 w-6 text-white" />
-                    </span>
-                  </button>
-                ) : (
-                  // Clicking opens the detail modal — download moved into the
-                  // modal so image / non-image click behaviour is uniform.
-                  <button
-                    type="button"
-                    onClick={() => setSelected(att)}
-                    className="flex flex-1 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-                  >
-                    <FileTypeIcon className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-foreground transition-colors break-all hover:text-primary">{att.originalName || att.fileName}</span>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {att.fileFormat} · {formatBytes(att.fileSize)}
-                      </p>
-                    </div>
-                  </button>
-                )}
+          {inUseAttachments.map((att) => (
+            <li key={att._id} className="flex items-start gap-3 text-sm">
+              <AttachmentThumbnail attachment={att} onSelect={setSelected} />
 
-                {canDelete && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(att)}
-                    disabled={removeMutation.isPending}
-                    aria-label={m['page.attachments_remove']()}
-                    className="shrink-0"
-                  >
-                    {removeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  </Button>
-                )}
-              </li>
-            );
-          })}
+              {canDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDelete(att)}
+                  disabled={removeMutation.isPending}
+                  aria-label={m['page.attachments_remove']()}
+                  className="shrink-0"
+                >
+                  {removeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
+              )}
+            </li>
+          ))}
         </ul>
       )}
 
