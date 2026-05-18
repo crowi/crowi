@@ -58,6 +58,13 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
   - **Quality (LOW)**: `rate-limit.ts` / `upload-placeholder.ts` / `autocomplete-extension.ts` / `drop-handler.ts` / `attachment.ts` / `page.ts` の冒頭に "RFC-0004 Phase N" の WHAT-narration block コメントが多い。WHY (fail-open posture / id-keyed placeholder 等) だけ残して phase tag を剥がす
   - **Reuse (MEDIUM)**: legacy `models/user.ts:531` の `findUsersByPartOfEmail` が手書き email escape を残しており、新 `util/regex.ts` の `escapeRegExp` を使っていない (merge 範囲外の follow-up)
   - **Reuse (LOW)**: `app/(auth)/_edit/edit-page-client.tsx` が `sonner` を直 import (`toast.success` / `toast.error` 約 6 箇所)。`lib/notify.ts` 経由に寄せるには `notify.success` level の追加が必要
+- [ ] **RFC-0005 merge simplify advisory (`90e8a90e` 直後の 3-agent レビュー由来)**:
+  - **Reuse (HIGH)**: `packages/api/src/util/presence-token.ts` は `util/ws-token.ts` の ~110/140 行を line-for-line 複製 (同じ `resolve*Secret` / `WS_TOKEN_SECRET` 読み + 警告文 / `cachedUtil` memoize / sign-verify)。差分は issuer 文字列 (`crowi-presence` vs `crowi-collab`) と claims schema のみ。generic `createSignedWsTokenUtil({ issuer, ttlSeconds, payloadSchema })` を 1 ファイルに抽出して両者が呼ぶ形に
+  - **Reuse (MEDIUM)**: `packages/api/src/presence/attach.ts` と `collab/attach.ts` が WS-noServer の upgrade-filter + 6-step drain-shutdown skeleton (~60 行) を共有。`attachWsNamespace({ path, onConnection })` helper を抽出して per-protocol ロジックだけ残す
+  - **Efficiency (HIGH)**: `service/presence.ts` の `heartbeat` が `hGet`+`hSet`+`expire` の 3 Redis round-trip/beat。N viewer × 15s ごとに 3N round-trip。MULTI/pipeline で 1 往復に。editing-hash refresher (`createPresenceCollabDeps`) の per-editor `writeEditingField` も batch 化
+  - **Quality (MEDIUM)**: `service/presence.ts` / `use-presence.ts` / `presence-anti-flicker.ts` 冒頭の block コメントが RFC セクション参照 + wire-format narration で過剰 (`presence.ts` header だけ ~50 行)。非自明な WHY だけ残す
+  - **Quality (MEDIUM)**: `components/page-view/meta-chip-row.tsx` の `typeof page.creator === 'object' ? ... : null` guard が `creator` / `lastUpdateUser` で重複。`asPopulatedUser(x)` helper に
+  - **Reuse (LOW)**: `use-presence.ts` の `resolvePresenceUrl` が `use-collab-document.ts` の `resolveCollabUrl` の env-precedence ロジックを複製 → `lib/resolve-ws-url.ts` に抽出。`useLikers` が他の hook と違い `unwrapResult` でなく raw `result.status === 200` チェック (convention 不一致)。`PresenceRedisClient` と `editor-cap-counter.ts` の `MinimalRedisClient` の型重複
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 

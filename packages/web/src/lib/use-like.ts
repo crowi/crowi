@@ -103,8 +103,15 @@ export function useToggleLike(pageId: string | undefined, isLiked: boolean) {
       notify.error(isLiked ? m['page.unlike_failed']() : m['page.like_failed']());
     },
     onSettled: () => {
-      // Reconcile with the server (liker / likerCount) regardless of outcome.
-      queryClient.invalidateQueries({ queryKey: ['page'] });
+      // Reconcile with the server (liker / likerCount) regardless of
+      // outcome. Scope the invalidation to caches whose page matches
+      // `pageId`: the page query key embeds {path, revision_id} rather
+      // than the bare id, so we filter by payload like `patchCachedPages`
+      // — a bare `['page']` invalidation would refetch every cached page.
+      queryClient.invalidateQueries({
+        queryKey: ['page'],
+        predicate: (query) => (query.state.data as CachedPageData | undefined)?.page?._id === pageId,
+      });
       if (pageId) {
         queryClient.invalidateQueries({ queryKey: likersKeys.pagePrefix(pageId) });
       }
