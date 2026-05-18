@@ -5,6 +5,7 @@ import { Check, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import Link from 'next/link';
+import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/components/editor/list-classnames';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
 
@@ -295,21 +296,31 @@ const components = {
       {children}
     </td>
   ),
-  ul: ({ children, ...props }: ChildrenProps) => (
-    <ul className="list-disc pl-6 my-4 space-y-1.5 marker:text-foreground/40" {...props}>
+  // `className` is destructured out and merged (not spread) so the
+  // GFM `contains-task-list` / `task-list-item` markers reach the
+  // Tailwind `[&.…]` variants instead of clobbering the base classes.
+  ul: ({ children, className, ...props }: ChildrenProps & { className?: unknown }) => (
+    <ul className={mergeListClassName(UL_CLASSNAME, className)} {...props}>
       {children}
     </ul>
   ),
-  ol: ({ children, ...props }: ChildrenProps) => (
-    <ol className="list-decimal pl-6 my-4 space-y-1.5 marker:text-foreground/40" {...props}>
+  ol: ({ children, className, ...props }: ChildrenProps & { className?: unknown }) => (
+    <ol className={mergeListClassName(OL_CLASSNAME, className)} {...props}>
       {children}
     </ol>
   ),
-  li: ({ children, ...props }: ChildrenProps) => (
-    <li className="leading-relaxed [&>p]:my-1" {...props}>
+  li: ({ children, className, ...props }: ChildrenProps & { className?: unknown }) => (
+    <li className={mergeListClassName(LI_CLASSNAME, className)} {...props}>
       {children}
     </li>
   ),
+  // GFM task-list checkboxes (`- [ ]` / `- [x]`) arrive as
+  // `<input type="checkbox" checked disabled>`. React warns
+  // ("changing an uncontrolled input to be controlled") when `checked`
+  // is passed without `onChange` / `readOnly`; force a controlled,
+  // non-interactive checkbox. Any other `<input>` passes through.
+  input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
+    type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, ...props }: { src?: string | Blob; alt?: string }) => (
     // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
     <img src={typeof src === 'string' ? src : undefined} alt={alt || ''} className="max-w-full h-auto rounded-lg my-6" loading="lazy" {...props} />

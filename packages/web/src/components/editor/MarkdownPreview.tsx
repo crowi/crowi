@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePreview } from '@/lib/use-preview';
+import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
 import { renderMdastToReactNode } from './render-mdast';
 import { m } from '@paraglide/messages.js';
 
@@ -215,21 +216,27 @@ const previewComponents = {
       {children}
     </td>
   ),
-  ul: ({ children, ...props }: ChildrenProps) => (
-    <ul className="list-disc pl-6 my-4 space-y-1.5 marker:text-foreground/40" {...props}>
+  // See `page-content.tsx` — `className` is merged (not spread) so the
+  // GFM task-list markers survive into the Tailwind `[&.…]` variants.
+  ul: ({ children, className, ...props }: ChildrenProps & { className?: unknown }) => (
+    <ul className={mergeListClassName(UL_CLASSNAME, className)} {...props}>
       {children}
     </ul>
   ),
-  ol: ({ children, ...props }: ChildrenProps) => (
-    <ol className="list-decimal pl-6 my-4 space-y-1.5 marker:text-foreground/40" {...props}>
+  ol: ({ children, className, ...props }: ChildrenProps & { className?: unknown }) => (
+    <ol className={mergeListClassName(OL_CLASSNAME, className)} {...props}>
       {children}
     </ol>
   ),
-  li: ({ children, ...props }: ChildrenProps) => (
-    <li className="leading-relaxed [&>p]:my-1" {...props}>
+  li: ({ children, className, ...props }: ChildrenProps & { className?: unknown }) => (
+    <li className={mergeListClassName(LI_CLASSNAME, className)} {...props}>
       {children}
     </li>
   ),
+  // GFM task-list checkbox — controlled + non-interactive, see
+  // `page-content.tsx` for the React warning this resolves.
+  input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
+    type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, ...props }: { src?: string | Blob; alt?: string }) => (
     // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
     <img src={typeof src === 'string' ? src : undefined} alt={alt || ''} className="max-w-full h-auto rounded-lg my-6" loading="lazy" {...props} />
