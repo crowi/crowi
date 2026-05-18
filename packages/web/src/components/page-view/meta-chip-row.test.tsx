@@ -35,6 +35,17 @@ function makePage(overrides: Partial<PageWithRevision> = {}): PageWithRevision {
   } as PageWithRevision;
 }
 
+// Radix Tooltip mounts a presence layer that reads element size via
+// ResizeObserver, which jsdom does not implement. A no-op stub is enough
+// for these render-level assertions.
+beforeEach(() => {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
 beforeEach(() => {
   useBacklinks.mockReturnValue({ data: { backlinks: [], hasNext: false } });
   useLikers.mockReturnValue({ data: { users: [], totalCount: 0 }, isLoading: false });
@@ -85,6 +96,34 @@ describe('MetaChipRow', () => {
     fireEvent.click(viewChip);
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(screen.getByText('閲覧者一覧')).toBeTruthy();
+  });
+
+  it('renders the updater name as a link to the user page when populated', () => {
+    render(<MetaChipRow page={makePage()} />);
+    const updaterLink = screen.getByRole('link', { name: 'Alice' });
+    expect(updaterLink.getAttribute('href')).toBe('/user/alice');
+  });
+
+  it('renders the updater name as plain text when not populated (bare id)', () => {
+    // A non-populated `lastUpdateUser` is a bare id string; the row then
+    // falls back to `creator` — keep that null too so nothing is populated.
+    render(<MetaChipRow page={makePage({ lastUpdateUser: 'u1' as never, creator: null, revision: undefined })} />);
+    expect(screen.queryByRole('link', { name: 'Alice' })).toBeNull();
+  });
+
+  it('links the updated-at chip to the page history view', () => {
+    render(<MetaChipRow page={makePage()} />);
+    const historyLink = screen.getByRole('link', { name: /に更新/ });
+    expect(historyLink.getAttribute('href')).toBe(`/_history?path=${encodeURIComponent('/docs/example')}`);
+  });
+
+  it('shows an absolute datetime tooltip on the updated-at chip', async () => {
+    render(<MetaChipRow page={makePage()} />);
+    const historyLink = screen.getByRole('link', { name: /に更新/ });
+    fireEvent.focus(historyLink);
+    // updatedAt 2026-05-10T00:00:00Z → formatAbsoluteDateTime → `YYYY-MM-DD HH:mm`.
+    const tooltips = await screen.findAllByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+    expect(tooltips.length).toBeGreaterThan(0);
   });
 
   it('scrolls to the comments heading when the comment chip is clicked', () => {
