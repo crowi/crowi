@@ -193,6 +193,127 @@ describe('Routes /api/v2 attachments (ts-rest)', () => {
     });
   });
 
+  describe('GET /api/v2/pages/:pageId/attachments/usage (Phase 8)', () => {
+    /** Upload a PNG to a page and return its attachment id. */
+    const uploadTo = async (pageId: string) => {
+      const res = await request(app)
+        .post(`/api/v2/pages/${pageId}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(res.status).toBe(200);
+      return res.body.attachment._id as string;
+    };
+
+    /** Overwrite the page's latest revision body in-place. */
+    const setLatestBody = async (pageId: string, body: string) => {
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const page = await Page.findById(pageId);
+      if (!page) throw new Error(`page ${pageId} not found`);
+      await Revision.updateOne({ _id: page.revision }, { $set: { body } });
+    };
+
+    /**
+     * Insert a standalone past revision for the page's path with an explicit
+     * `createdAt` so it sorts before the latest revision. It is NOT linked
+     * to `page.revision`, so the usage handler treats it as a past revision.
+     */
+    const addPastRevision = async (pagePath: string, body: string, createdAt: Date) => {
+      const Revision = crowi.model('Revision');
+      const [rev] = await Revision.create([
+        {
+          path: pagePath,
+          body,
+          format: 'markdown',
+          author: new Types.ObjectId(userId),
+          createdAt,
+        },
+      ]);
+      return rev._id.toString() as string;
+    };
+
+    const usageOf = async (pageId: string) => {
+      const res = await request(app).get(`/api/v2/pages/${pageId}/attachments/usage`).set(authHeaders(accessToken));
+      expect(res.status).toBe(200);
+      return res.body as {
+        pagePath: string;
+        latest: Array<{ _id: string }>;
+        past: Array<{ attachment: { _id: string }; referencingRevisions: Array<{ revisionId: string; createdAt: string }> }>;
+      };
+    };
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app).get('/api/v2/pages/000000000000000000000000/attachments/usage');
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('returns 400 when pageId is malformed', async () => {
+      const res = await request(app).get('/api/v2/pages/not-an-objectid/attachments/usage').set(authHeaders(accessToken));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_PAGE_ID');
+    });
+
+    it('returns 404 when the user has no grant on the page', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-private`, '# secret', 4 /* GRANT_OWNER */);
+      const res = await request(app).get(`/api/v2/pages/${page._id}/attachments/usage`).set(authHeaders(otherAccessToken));
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('puts an attachment referenced by the latest revision in the latest group', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-latest`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setLatestBody(page._id, `# doc\n\n![pixel](/api/v2/attachments/${id})\n`);
+
+      const usage = await usageOf(page._id);
+      expect(usage.pagePath).toBe(`${PATH_PREFIX}usage-latest`);
+      expect(usage.latest.map((a) => a._id)).toContain(id);
+      expect(usage.past.map((p) => p.attachment._id)).not.toContain(id);
+    });
+
+    it('puts a past-only attachment in the past group with its referencing revisions', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-past`, '# placeholder');
+      const id = await uploadTo(page._id);
+      // Latest revision does NOT reference it.
+      await setLatestBody(page._id, '# doc with no references\n');
+      // One past revision references it.
+      const pastRevId = await addPastRevision(`${PATH_PREFIX}usage-past`, `# old\n\n![p](/api/v2/attachments/${id})\n`, new Date(Date.now() - 60_000));
+
+      const usage = await usageOf(page._id);
+      expect(usage.latest.map((a) => a._id)).not.toContain(id);
+      const entry = usage.past.find((p) => p.attachment._id === id);
+      expect(entry).toBeDefined();
+      expect(entry?.referencingRevisions.map((r) => r.revisionId)).toEqual([pastRevId]);
+    });
+
+    it('lists multiple referencing revisions for an attachment used by several past revisions', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-multi`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setLatestBody(page._id, '# latest, unrelated\n');
+      const older = await addPastRevision(`${PATH_PREFIX}usage-multi`, `# v1\n\n![p](/files/${id})\n`, new Date(Date.now() - 120_000));
+      const newer = await addPastRevision(`${PATH_PREFIX}usage-multi`, `# v2\n\n![p](/api/v2/attachments/${id})\n`, new Date(Date.now() - 60_000));
+
+      const usage = await usageOf(page._id);
+      const entry = usage.past.find((p) => p.attachment._id === id);
+      expect(entry).toBeDefined();
+      // Newest-first ordering from the handler's sort.
+      expect(entry?.referencingRevisions.map((r) => r.revisionId)).toEqual([newer, older]);
+    });
+
+    it('puts an orphan attachment (referenced by no revision) in the past group with empty referencingRevisions', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-orphan`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setLatestBody(page._id, '# nothing references the file\n');
+
+      const usage = await usageOf(page._id);
+      expect(usage.latest.map((a) => a._id)).not.toContain(id);
+      const entry = usage.past.find((p) => p.attachment._id === id);
+      expect(entry).toBeDefined();
+      expect(entry?.referencingRevisions).toEqual([]);
+    });
+  });
+
   describe('POST /api/v2/pages/:pageId/attachments (add)', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app)
