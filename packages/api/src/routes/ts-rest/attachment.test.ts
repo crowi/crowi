@@ -162,13 +162,106 @@ describe('Routes /api/v2 attachments (ts-rest)', () => {
   });
 
   describe('GET /api/v2/attachments/:id (raw stream)', () => {
+    // The placeholder image shipped at `packages/api/public/images/file-not-found.png`.
+    // `crowi` is not booted at module-eval time, so read it lazily in beforeAll.
+    let fileNotFoundImage: Buffer;
+
+    beforeAll(() => {
+      fileNotFoundImage = fs.readFileSync(path.resolve(crowi.publicDir, 'images', 'file-not-found.png'));
+    });
+
+    // Buffer the raw response bytes so placeholder/image assertions can compare
+    // the streamed body directly.
+    const bufferParser = (response: NodeJS.ReadableStream, callback: (err: Error | null, body: Buffer) => void) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer) => chunks.push(chunk));
+      response.on('end', () => callback(null, Buffer.concat(chunks)));
+      response.on('error', (err) => callback(err, Buffer.alloc(0)));
+    };
+
     it('returns 401 without auth', async () => {
       const res = await request(app).get('/api/v2/attachments/000000000000000000000000');
       expect(res.status).toBe(401);
     });
 
-    it('returns 404 for a non-existent attachment', async () => {
-      const res = await request(app).get('/api/v2/attachments/000000000000000000000000').set(authHeaders(accessToken));
+    it('serves the file-not-found placeholder for a non-existent attachment record', async () => {
+      const res = await request(app).get('/api/v2/attachments/000000000000000000000000').set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('image/png');
+      const received = res.body as Buffer;
+      expect(Buffer.isBuffer(received)).toBe(true);
+      expect(received.equals(fileNotFoundImage)).toBe(true);
+    });
+
+    it('serves the placeholder when the backing file is missing (local ENOENT)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}enoent`, '# e');
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      // Delete the backing object out from under the still-present record so
+      // the local storage driver's `get()` throws `code: 'ENOENT'`.
+      const Attachment = crowi.model('Attachment');
+      const stored = await Attachment.findById(id);
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      await driver.delete(stored.filePath);
+
+      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('image/png');
+      const received = res.body as Buffer;
+      expect(received.equals(fileNotFoundImage)).toBe(true);
+    });
+
+    it('serves the placeholder when the storage driver throws a NoSuchKey error (S3)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}nosuchkey`, '# s3');
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      // Simulate the AWS SDK v3 missing-object shape: `name === 'NoSuchKey'`
+      // with `$metadata.httpStatusCode === 404` and NO `code` property.
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      const getSpy = jest.spyOn(driver, 'get').mockImplementationOnce(() => {
+        const err = Object.assign(new Error('The specified key does not exist.'), {
+          name: 'NoSuchKey',
+          $metadata: { httpStatusCode: 404 },
+        });
+        return Promise.reject(err);
+      });
+
+      try {
+        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toBe('image/png');
+        const received = res.body as Buffer;
+        expect(received.equals(fileNotFoundImage)).toBe(true);
+      } finally {
+        getSpy.mockRestore();
+      }
+    });
+
+    it('returns 404 (not the placeholder) when the caller lacks grant on the page', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}grant-fail`, '# secret', 4 /* GRANT_OWNER */);
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(otherAccessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
     });
