@@ -807,10 +807,34 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
   // draft this user already started at `path`.
   const { data: draftsData } = useDrafts();
   const [error, setError] = useState<CreateDraftError | null>(null);
+  // Page id of the draft once it exists (fresh `201` or a resolved
+  // own-`409`). When set we render `UpdatePageEditor` directly rather
+  // than waiting for `router.replace` to swap modes — see the comment
+  // on `enterDraftEditor` below.
+  const [draftPageId, setDraftPageId] = useState<string | null>(null);
 
   // `useRef` guard: React 18 StrictMode mounts effects twice in dev,
   // and we never want two `POST /pages/drafts` for one editor open.
   const startedRef = useRef(false);
+
+  // Switch this component into the draft editor.
+  //
+  // `router.replace` alone is NOT enough: it only changes the query
+  // string on the *same* `/_edit` route, and a query-only navigation
+  // does not reliably re-render `EditPageClient` against the new
+  // `page_id` search param — `resolveMode` keeps returning `create`
+  // and the "preparing" spinner spins forever even though the draft
+  // was created. So we drive the mode switch from local state
+  // (`draftPageId`) and use `replace` only to keep the URL honest for
+  // reload / Back (a reload of `?path=` would otherwise POST a second
+  // draft; `?page_id=` reloads straight into `UpdatePageEditor`).
+  const enterDraftEditor = useCallback(
+    (pageId: string) => {
+      router.replace(draftEditHref(pageId));
+      setDraftPageId(pageId);
+    },
+    [router],
+  );
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -820,7 +844,7 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
       { path },
       {
         onSuccess: ({ pageId }) => {
-          router.replace(draftEditHref(pageId));
+          enterDraftEditor(pageId);
         },
         onError: (err) => {
           if (err instanceof DraftPathConflictError) {
@@ -829,7 +853,7 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
             if (user && err.owner.id === user.id) {
               const own = draftsData?.drafts.find((d) => d.path === path);
               if (own) {
-                router.replace(draftEditHref(own.pageId));
+                enterDraftEditor(own.pageId);
                 return;
               }
               // The list hasn't loaded the matching row yet (or it was
@@ -851,6 +875,13 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
     // refetch can't re-fire the POST.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Draft exists → render the real editor with its page id. This is
+  // the direct mode switch that does not depend on the query-only
+  // `router.replace` re-rendering `EditPageClient`.
+  if (draftPageId) {
+    return <UpdatePageEditor pageId={draftPageId} />;
+  }
 
   if (error) {
     return (
@@ -878,9 +909,9 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
     );
   }
 
-  // Default: the draft POST (and, on success, the `router.replace`)
-  // are in flight. The replace swaps in `UpdatePageEditor`, so this
-  // spinner is only ever shown briefly.
+  // Default: the draft POST is in flight. On success `enterDraftEditor`
+  // sets `draftPageId`, which renders `UpdatePageEditor` above — so
+  // this spinner is only ever shown briefly.
   return (
     <div className="flex flex-1 items-center justify-center">
       <LoadingSpinner message={m['edit.creating_draft']()} />

@@ -55,8 +55,16 @@ vi.mock('@/components/editor/MarkdownEditor', () => ({ MarkdownEditor: () => nul
 vi.mock('@/components/editor/MarkdownPreview', () => ({ MarkdownPreview: () => null }));
 vi.mock('@/lib/use-page', () => ({ usePage: () => ({ page: null, isLoading: true, isError: false }) }));
 vi.mock('@/lib/use-presence', () => ({ usePresence: () => undefined }));
+// `UpdatePageEditor` mounts these unconditionally; the real hooks call
+// `useQueryClient()` and would throw without a `QueryClientProvider`.
+vi.mock('@/lib/use-page-mutations', () => ({
+  useUpdatePage: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetPageGrant: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  PageRevisionConflictError: class extends Error {},
+}));
 
 import { DraftPathConflictError } from '@/lib/use-drafts';
+import { m } from '@paraglide/messages.js';
 import { EditPageClient } from './edit-page-client';
 
 beforeEach(() => {
@@ -94,6 +102,24 @@ describe('CreatePageEditor (_edit?path=)', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
     expect(createDraftMutate).toHaveBeenCalledWith({ path: '/new/page' }, expect.anything());
     expect(replace).toHaveBeenCalledWith('/_edit?page_id=draft-1');
+  });
+
+  it('201: switches to the draft editor without depending on the URL re-render', async () => {
+    // Regression: `CreatePageEditor` used to render `UpdatePageEditor`
+    // only when `useSearchParams()` re-resolved to `?page_id=` after
+    // the `router.replace`. A query-only navigation does not reliably
+    // re-render `EditPageClient`, so the "preparing the editor" spinner
+    // hung forever. The mode switch must now be driven by local state.
+    // `useSearchParams` stays on `?path=` (the default mock) — the
+    // editor must still appear.
+    mutateResolvesWith('draft-1');
+    render(<EditPageClient />);
+
+    // `UpdatePageEditor` mounts → `usePage` (mocked `isLoading: true`)
+    // → the page-loading spinner. The "preparing the editor" message
+    // must be gone even though the search param never changed.
+    await waitFor(() => expect(screen.queryByText(m['edit.loading_page']())).not.toBeNull());
+    expect(screen.queryByText(m['edit.creating_draft']())).toBeNull();
   });
 
   it('409 own draft: looks the page id up from the drafts list and replaces to it', async () => {
