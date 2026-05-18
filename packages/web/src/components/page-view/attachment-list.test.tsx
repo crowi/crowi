@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import type { Attachment } from '@crowi/api-contract';
 
 // Mock the data + auth hooks so the list is pure UI — no react-query, no API.
@@ -71,7 +71,7 @@ describe('AttachmentList', () => {
     expect(overlay?.querySelector('svg')).not.toBeNull();
   });
 
-  it('renders a non-image attachment with a file-type icon and download link', () => {
+  it('renders a non-image attachment as a button with a file-type icon', () => {
     useAttachmentList.mockReturnValue({
       data: {
         attachments: [
@@ -88,12 +88,35 @@ describe('AttachmentList', () => {
     });
     render(<AttachmentList pageId="page-1" />);
 
-    // No thumbnail for non-image files.
+    // No thumbnail for non-image files; the row is a <button> (download moved
+    // into the detail modal so click behaviour is uniform with images).
     expect(screen.queryByRole('img')).toBeNull();
-    const link = screen.getByRole('link', { name: /spec\.pdf/ });
-    expect(link.getAttribute('href')).toBe('/api/v2/attachments/att-2');
-    // The file-type icon is rendered (lucide icons render as <svg>).
-    const item = link.closest('li');
+    const button = screen.getByRole('button', { name: /spec\.pdf/ });
+    const item = button.closest('li');
     expect(item?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('opens the detail modal when an image thumbnail is clicked', () => {
+    useAttachmentList.mockReturnValue({ data: { attachments: [makeAttachment()] }, isLoading: false });
+    render(<AttachmentList pageId="page-1" />);
+
+    // The detail modal (a Radix Dialog) is closed until a row is clicked.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'diagram.png' }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('opens the detail modal when a non-image row is clicked', () => {
+    useAttachmentList.mockReturnValue({
+      data: {
+        attachments: [makeAttachment({ _id: 'att-2', fileName: 'att-2.pdf', originalName: 'spec.pdf', fileFormat: 'application/pdf' })],
+      },
+      isLoading: false,
+    });
+    render(<AttachmentList pageId="page-1" />);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /spec\.pdf/ }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 });
