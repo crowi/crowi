@@ -2,12 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
-import type { Attachment, ListAttachmentsResponse } from '@crowi/api-contract';
+import type { Attachment, AttachmentMeta, ListAttachmentsResponse } from '@crowi/api-contract';
 
 export const attachmentsKeys = {
   all: ['attachments'] as const,
   list: (pageId: string) => ['attachments', pageId] as const,
   usage: (pageId: string) => ['attachments', pageId, 'usage'] as const,
+  detail: (id: string) => ['attachments', 'detail', id] as const,
 };
 
 /**
@@ -24,6 +25,36 @@ export function useAttachmentList(pageId: string | undefined) {
     },
     enabled: !!pageId,
     staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Fetch metadata for a single attachment by id (`GET /attachments/:id/meta`).
+ *
+ * Backs the in-body attachment modal: a `/api/v2/attachments/<id>` link or
+ * embed in a page body carries only the id. The `attachmentsKeys.detail(id)`
+ * cache key dedupes repeated body references — a page that embeds the same
+ * attachment twice fetches its metadata once. `staleTime` is generous
+ * because attachment metadata (name / size / type) is effectively immutable.
+ *
+ * `enabled` is gated on `id` so the hook can be mounted unconditionally with
+ * a not-yet-resolved id.
+ */
+export function useAttachment(id: string | undefined) {
+  return useQuery({
+    queryKey: attachmentsKeys.detail(id ?? ''),
+    queryFn: async (): Promise<AttachmentMeta> => {
+      if (!id) throw new Error('attachment id is required');
+      const result = await apiClient.attachment.getAttachmentMeta({ params: { id } });
+      if (result.status !== 200) {
+        const body = result.body as { error?: { message?: string } } | undefined;
+        throw new Error(body?.error?.message ?? 'Failed to load attachment');
+      }
+      return result.body;
+    },
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 }

@@ -87,7 +87,7 @@ export function AttachmentDetailModal({ attachment, open, onOpenChange, canDelet
             <img src={attachment.url} alt={name} className="max-h-full max-w-full object-contain" />
           ) : isPdf ? (
             <iframe src={attachment.url} title={name} className="h-full w-full min-h-[60vh] border-0">
-              <a href={attachment.url} download={name}>
+              <a href={attachment.url} download={name} target="_blank" rel="noopener">
                 {m['page.attachment_detail_pdf_fallback']()}
               </a>
             </iframe>
@@ -122,7 +122,10 @@ export function AttachmentDetailModal({ attachment, open, onOpenChange, canDelet
               </Button>
             )}
             <Button asChild>
-              <a href={attachment.url} download={name}>
+              {/* `target="_blank"` keeps the raw-file fetch in a new tab so
+                  the wiki page never full-page-navigates away (which would
+                  truncate its streaming-SSR response). */}
+              <a href={attachment.url} download={name} target="_blank" rel="noopener">
                 <Download className="h-4 w-4" />
                 <span>{m['page.attachment_detail_download']()}</span>
               </a>

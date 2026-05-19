@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/components/editor/list-classnames';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
+import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from '@/components/page-view/inline-attachment-link';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -201,6 +202,17 @@ const components = {
       : isMention
         ? 'text-primary font-medium decoration-primary/40 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors'
         : 'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors';
+    // Attachment references (`/api/v2/attachments/<id>` or legacy
+    // `/files/<id>`) open the detail modal on left-click instead of
+    // full-page-navigating to the raw file — see `InlineAttachmentLink`.
+    const attachmentId = extractAttachmentId(href);
+    if (attachmentId && href) {
+      return (
+        <InlineAttachmentLink attachmentId={attachmentId} variant="link" href={href} className={composedClassName}>
+          {children}
+        </InlineAttachmentLink>
+      );
+    }
     // Internal links (bare `/path` wikilinks/page links, or full URLs
     // pointing at this same app) navigate through the Next.js router —
     // a client-side transition, no full document reload, no auth
@@ -321,10 +333,21 @@ const components = {
   // non-interactive checkbox. Any other `<input>` passes through.
   input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
-  img: ({ src, alt, ...props }: { src?: string | Blob; alt?: string }) => (
-    // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
-    <img src={typeof src === 'string' ? src : undefined} alt={alt || ''} className="max-w-full h-auto rounded-lg my-6" loading="lazy" {...props} />
-  ),
+  img: ({ src, alt, ...props }: { src?: string | Blob; alt?: string }) => {
+    const srcString = typeof src === 'string' ? src : undefined;
+    const imgClassName = 'max-w-full h-auto rounded-lg my-6';
+    // An embedded attachment image still renders the image, but a plain
+    // left-click opens the detail modal instead of navigating to the raw
+    // file. Right-click (save / copy) and modifier-clicks are untouched.
+    const attachmentId = extractAttachmentId(srcString);
+    if (attachmentId && srcString) {
+      return <InlineAttachmentLink attachmentId={attachmentId} variant="image" href={srcString} className={imgClassName} alt={alt} />;
+    }
+    return (
+      // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
+      <img src={srcString} alt={alt || ''} className={imgClassName} loading="lazy" {...props} />
+    );
+  },
   hr: ({ ...props }) => <hr className="my-10 border-foreground/10" {...props} />,
   p: ({ children, ...props }: ChildrenProps) => (
     <p className="my-4 leading-[1.7] text-foreground/90" {...props}>
@@ -426,7 +449,9 @@ export function PageContent({ page }: PageContentProps) {
 
   return (
     <TargetHashContext.Provider value={targetHashContextValue}>
-      <div className="crowi-prose min-w-0">{renderedNode}</div>
+      <InlineAttachmentProvider>
+        <div className="crowi-prose min-w-0">{renderedNode}</div>
+      </InlineAttachmentProvider>
     </TargetHashContext.Provider>
   );
 }
