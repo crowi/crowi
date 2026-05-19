@@ -64,15 +64,19 @@ export default async function RootLayout({
 
           This inline script — which runs independently of React, so it
           works even when hydration never happens — detects exactly that
-          state (a `back_forward` navigation whose `__next_f` stayed
-          empty) and reloads once. A healthy back_forward restore has a
-          populated `__next_f` so it never fires; the reload is a plain
-          navigation (type !== 'back_forward') so it cannot loop.
+          state and reloads once. It checks at `DOMContentLoaded`: a
+          healthy document streams every `__next_f` chunk before parsing
+          ends, so by then `__next_f` is populated; a truncated document
+          finishes parsing early with `__next_f` still empty. Checking at
+          parse-end (rather than on a fixed timeout) reloads the broken
+          case as fast as possible while never misfiring on a healthy
+          one. The reload is a plain navigation (type !== 'back_forward')
+          so it cannot loop.
         */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){var n=performance.getEntriesByType('navigation')[0];if(n&&n.type==='back_forward'){setTimeout(function(){if(!window.__next_f||window.__next_f.length===0){location.reload()}},2000)}})()",
+              "(function(){var n=performance.getEntriesByType('navigation')[0];if(!n||n.type!=='back_forward')return;function c(){if(!window.__next_f||window.__next_f.length===0){location.reload()}}document.readyState==='loading'?document.addEventListener('DOMContentLoaded',c):c()})()",
           }}
         />
       </head>
