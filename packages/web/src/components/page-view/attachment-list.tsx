@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Paperclip, Loader2, Trash2, FolderOpen } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Paperclip, FolderOpen } from 'lucide-react';
 import { useAuth } from '@/lib/use-auth';
 import { useAttachmentList, useRemoveAttachment } from '@/lib/use-attachments';
 import { AttachmentDetailModal } from './attachment-detail-modal';
@@ -31,10 +30,10 @@ export const isImageFormat = (fileFormat: string) => fileFormat.startsWith('imag
  * page view Card. Hidden entirely when the page has no attachments — same
  * "ghost when empty" behaviour as BacklinkList.
  *
- * Clicking any attachment (image thumbnail or non-image row) opens the
- * detail modal. Delete is offered to any authenticated user — attachment
- * deletion is open collaboration (wiki policy), matching the server's
- * authenticated-only `removeAttachment` authz.
+ * Attachments render as a uniform tile grid (image thumbnail or
+ * file-type icon). Clicking a tile opens the detail modal; deletion
+ * happens from inside that modal (open collaboration / wiki policy —
+ * the server's `removeAttachment` is authenticated-only).
  *
  * Phase 7 — the list shows only attachments referenced by the page's
  * latest revision (`att.inUse`), keeping the page footer focused on the
@@ -60,16 +59,6 @@ export function AttachmentList({ pageId }: AttachmentListProps) {
   // Wiki policy: deletion is open to any authenticated user.
   const canDelete = !!currentUser;
 
-  const handleDelete = async (att: Attachment) => {
-    if (!confirm(m['page.attachments_remove_confirm']())) return;
-    setDeleteError(null);
-    try {
-      await removeMutation.mutateAsync(att._id);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : m['page.attachments_remove_failed']());
-    }
-  };
-
   // Delete invoked from the detail modal — close the modal on success so the
   // user isn't left looking at a now-deleted file.
   const handleModalDelete = async (att: Attachment) => {
@@ -92,23 +81,10 @@ export function AttachmentList({ pageId }: AttachmentListProps) {
       {inUseAttachments.length === 0 ? (
         <p className="text-sm text-muted-foreground">{m['page.attachments_none_in_use']()}</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5">
           {inUseAttachments.map((att) => (
-            <li key={att._id} className="flex items-start gap-3 text-sm">
+            <li key={att._id}>
               <AttachmentThumbnail attachment={att} onSelect={setSelected} />
-
-              {canDelete && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(att)}
-                  disabled={removeMutation.isPending}
-                  aria-label={m['page.attachments_remove']()}
-                  className="shrink-0"
-                >
-                  {removeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                </Button>
-              )}
             </li>
           ))}
         </ul>

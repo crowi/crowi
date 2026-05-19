@@ -82,9 +82,9 @@ export function AttachmentUsageView({ pageId }: AttachmentUsageViewProps) {
         {data.latest.length === 0 ? (
           <p className="text-sm text-muted-foreground">{m['page.attachments_none_in_use']()}</p>
         ) : (
-          <ul className="space-y-3">
+          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5">
             {data.latest.map((att) => (
-              <li key={att._id} className="flex items-start gap-3 text-sm">
+              <li key={att._id}>
                 <AttachmentThumbnail attachment={att} onSelect={setSelected} />
               </li>
             ))}

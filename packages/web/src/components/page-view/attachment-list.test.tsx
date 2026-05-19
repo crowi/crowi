@@ -71,9 +71,9 @@ describe('AttachmentList', () => {
     const img = screen.getByRole('img', { name: 'diagram.png' });
     expect(thumbButton.contains(img)).toBe(true);
 
-    // 150px cap + mobile 20% width constraint applied to the thumbnail.
+    // 150px cap + square tile (the grid cell sizes the width).
     expect(thumbButton.className).toContain('max-w-[150px]');
-    expect(thumbButton.className).toContain('w-1/5');
+    expect(thumbButton.className).toContain('aspect-square');
 
     // Hover overlay carries the ZoomIn (+) mark, hidden until group-hover.
     expect(thumbButton.className).toContain('group');
