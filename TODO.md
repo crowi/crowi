@@ -65,6 +65,10 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
   - **Quality (MEDIUM)**: `service/presence.ts` / `use-presence.ts` / `presence-anti-flicker.ts` 冒頭の block コメントが RFC セクション参照 + wire-format narration で過剰 (`presence.ts` header だけ ~50 行)。非自明な WHY だけ残す
   - **Quality (MEDIUM)**: `components/page-view/meta-chip-row.tsx` の `typeof page.creator === 'object' ? ... : null` guard が `creator` / `lastUpdateUser` で重複。`asPopulatedUser(x)` helper に
   - **Reuse (LOW)**: `use-presence.ts` の `resolvePresenceUrl` が `use-collab-document.ts` の `resolveCollabUrl` の env-precedence ロジックを複製 → `lib/resolve-ws-url.ts` に抽出。`useLikers` が他の hook と違い `unwrapResult` でなく raw `result.status === 200` チェック (convention 不一致)。`PresenceRedisClient` と `editor-cap-counter.ts` の `MinimalRedisClient` の型重複
+- [ ] **feature-inline-attachment-modal simplify advisory (3-agent レビュー由来)**:
+  - **Reuse / Quality (MEDIUM)**: attachment-URI 正規表現が web (`components/page-view/inline-attachment-link.tsx` の `ATTACHMENT_URL_RE`) と api (`routes/ts-rest/attachment.ts` の `ATTACHMENT_URI_RE`) で重複。prefix 部分 (`/api/v2/attachments/` `/files/` + 24-hex id) は同一知識でドリフトする。`@crowi/api-contract` に prefix 定数を hoist し、両 regex がそこから anchored / global を各自合成する形に
+  - **Quality (MEDIUM)**: `InlineAttachmentLink` の `variant: 'link' | 'image'` 分岐は共有マークアップが `handleClick` のみ。`InlineAttachmentImage` / `InlineAttachmentTextLink` の 2 コンポーネント + 共有 `useInlineAttachmentClick(attachmentId)` hook に分割すると stringly-typed な `variant` と variant 固有 optional props (`alt` / `children`) が消える
+  - **Quality (LOW)**: `inline-attachment-modal.tsx` の `AttachmentMeta`→`Attachment` bridge (`{ ...meta, inUse: false }` + `canDelete={false}` / `noopDelete` / `isDeleting={false}` の dead-prop)。`AttachmentDetailModal` を `AttachmentMeta | Attachment` 受け取り + delete 系 prop を optional にすれば bridge と dead-prop が不要
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 

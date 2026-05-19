@@ -82,12 +82,12 @@ interface InlineAttachmentLinkProps {
  *
  * Outside an `InlineAttachmentProvider` it degrades to the plain element.
  */
+// A modifier-key or non-primary-button click is left alone so the
+// browser's native "open in new tab / window" still works.
+const isPlainPrimaryClick = (event: React.MouseEvent) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+
 export function InlineAttachmentLink({ attachmentId, variant, href, className, children, alt }: InlineAttachmentLinkProps) {
   const ctx = useContext(InlineAttachmentContext);
-
-  // A modifier-key or non-primary-button click is left alone so the
-  // browser's native "open in new tab / window" still works.
-  const isPlainPrimaryClick = (event: React.MouseEvent) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 
   const handleClick = useCallback(
     (event: React.MouseEvent) => {
