@@ -28,9 +28,9 @@ function FileTypeIconView({ mime, fileName, className }: { mime: string; fileNam
  *
  * Both variants are the same square tile so the list reads as a uniform
  * grid — image: the thumbnail with a hover `(+)` zoom overlay; non-image:
- * a centred file-type icon. Clicking either opens the detail modal via
- * `onSelect`; the file name lives on `aria-label` / `title` (the modal
- * shows the full metadata).
+ * the file name (clamped to 2 lines) above a file-type icon, since an
+ * icon alone doesn't say which file it is. Clicking either opens the
+ * detail modal via `onSelect` (which shows the full metadata).
  */
 export function AttachmentThumbnail({ attachment, onSelect }: AttachmentThumbnailProps) {
   const name = attachment.originalName || attachment.fileName;
@@ -60,11 +60,12 @@ export function AttachmentThumbnail({ attachment, onSelect }: AttachmentThumbnai
     <button
       type="button"
       onClick={() => onSelect(attachment)}
-      className="flex aspect-square w-full max-w-[150px] items-center justify-center rounded border border-border bg-muted/30 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex aspect-square w-full max-w-[150px] flex-col items-center justify-center gap-1.5 rounded border border-border bg-muted/30 p-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={name}
       title={name}
     >
-      <FileTypeIconView mime={attachment.fileFormat} fileName={name} className="h-1/2 w-1/2 text-muted-foreground" />
+      <span className="line-clamp-2 w-full break-all text-center text-[11px] leading-tight text-muted-foreground">{name}</span>
+      <FileTypeIconView mime={attachment.fileFormat} fileName={name} className="h-2/5 w-2/5 shrink-0 text-muted-foreground" />
     </button>
   );
 }
