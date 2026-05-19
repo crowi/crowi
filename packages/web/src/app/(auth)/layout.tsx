@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/use-auth';
-import { useBfcacheRecovery } from '@/lib/use-bfcache-recovery';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
@@ -24,14 +23,8 @@ import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, isLoading, isAuthenticated, logout, refetch } = useAuth();
+  const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
-
-  // Recover from a bfcache restore (e.g. Back from a full-page navigation to
-  // an attachment URL). A fetch hung at freeze time leaves `isLoading` /
-  // pending queries stuck, so the screen would otherwise show "Loading..."
-  // forever. See use-bfcache-recovery.ts.
-  useBfcacheRecovery(refetch);
 
   useEffect(() => {
     // 接続エラー中はリダイレクトしない
