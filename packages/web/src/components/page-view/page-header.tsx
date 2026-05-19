@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/breadcrumb';
-import { Lock, Edit2 } from 'lucide-react';
+import { ArrowUp, Lock, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { useAuth } from '@/lib/use-auth';
@@ -213,6 +213,16 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
               compact header lines up with the article column. */}
           <div className="max-w-4xl mx-auto px-4 py-2 space-y-2">
             <div className="flex items-center gap-2">
+              {/* Scroll-to-top — sits to the left of the title, hanging
+                  out past the content gutter (`-ml-9`). */}
+              <button
+                type="button"
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                aria-label={m['page.scroll_to_top']()}
+                className="-ml-9 shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </button>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
               {isPrivate && <Lock className="h-4 w-4 text-muted-foreground shrink-0" aria-label="Private page" />}
               <div className="flex items-center gap-1 shrink-0">

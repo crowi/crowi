@@ -101,6 +101,7 @@
   "page.backlinks_heading": "このページへのバックリンク",
   "page.backlinks_read_more": "さらに表示",
   "page.attachments_heading": "添付ファイル",
+  "page.scroll_to_top": "ページ上部へスクロール",
   "page.attachments_remove": "削除",
   "page.attachments_remove_confirm": "この添付ファイルを削除しますか？",
   "page.attachments_remove_failed": "添付ファイルの削除に失敗しました",
