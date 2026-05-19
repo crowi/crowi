@@ -569,6 +569,62 @@ describe('Routes /api/v2 attachments (ts-rest)', () => {
     });
   });
 
+  describe('GET /api/v2/attachments/:id/meta (single attachment metadata)', () => {
+    /** Upload a PNG to a page and return its attachment id. */
+    const uploadTo = async (pageId: string) => {
+      const res = await request(app)
+        .post(`/api/v2/pages/${pageId}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(res.status).toBe(200);
+      return res.body.attachment._id as string;
+    };
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app).get('/api/v2/attachments/000000000000000000000000/meta');
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('returns 400 for a malformed id', async () => {
+      const res = await request(app).get('/api/v2/attachments/not-an-objectid/meta').set(authHeaders(accessToken));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_ATTACHMENT_ID');
+    });
+
+    it('returns 404 for a non-existent attachment', async () => {
+      const res = await request(app).get('/api/v2/attachments/000000000000000000000000/meta').set(authHeaders(accessToken));
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
+    });
+
+    it('returns 404 (not 403) when the caller lacks grant on the owning page', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}meta-private`, '# secret', 4 /* GRANT_OWNER */);
+      const id = await uploadTo(page._id);
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/meta`).set(authHeaders(otherAccessToken));
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
+    });
+
+    it('returns the attachment metadata for a viewer with grant', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}meta-ok`, '# m');
+      const id = await uploadTo(page._id);
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/meta`).set(authHeaders(accessToken));
+      expect(res.status).toBe(200);
+      expect(res.body._id).toBe(id);
+      expect(res.body.page).toBe(page._id);
+      expect(res.body.fileFormat).toBe('image/png');
+      expect(res.body.originalName).toBe('pixel.png');
+      expect(res.body.creator._id).toBe(userId);
+      expect(res.body.url).toBe(`/api/v2/attachments/${id}`);
+      // `inUse` is a page-scoped flag and is intentionally omitted from the
+      // meta projection (a bare-id lookup has no page context).
+      expect(res.body.inUse).toBeUndefined();
+    });
+  });
+
   describe('DELETE /api/v2/attachments/:id (remove)', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app).delete('/api/v2/attachments/000000000000000000000000');

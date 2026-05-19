@@ -2,6 +2,7 @@ import { createExpressEndpoints, initServer } from '@ts-rest/express';
 import {
   apiContract,
   type Attachment as AttachmentSchema,
+  type AttachmentMeta,
   type UploadAttachmentErrorCode,
   type UserPublic,
   IMAGE_UPLOAD_MIME,
@@ -192,6 +193,18 @@ const attachmentToResponse = (attachment: AttachmentDocument, inUse: boolean): A
     url: obj.fileUrl,
     inUse,
   };
+};
+
+/**
+ * The `AttachmentMeta` projection (`AttachmentSchema` minus `inUse`) used by
+ * `GET /attachments/:id/meta`. `inUse` is a page-scoped derivation; the meta
+ * endpoint resolves a bare id and has no page context, so the field is
+ * dropped rather than faked. Reuses `attachmentToResponse` and strips the
+ * flag so the two stay in sync.
+ */
+const attachmentToMetaResponse = (attachment: AttachmentDocument): AttachmentMeta => {
+  const { inUse: _inUse, ...meta } = attachmentToResponse(attachment, false);
+  return meta;
 };
 
 export default (crowi: Crowi, _app: Express) => {
@@ -561,6 +574,60 @@ export default (crowi: Crowi, _app: Express) => {
         debug('getAttachmentUsage error', err);
         return internalServerErrorResponse;
       }
+    },
+
+    /**
+     * GET /api/v2/attachments/:id/meta
+     *
+     * Metadata for a single attachment by id — backs the in-body attachment
+     * modal. Authorization mirrors the streaming route
+     * `GET /api/v2/attachments/:id`: the caller must be able to view the
+     * owning page (`loadGrantedPage`). 404 (not 403) on any failure so the
+     * existence of a hidden page / attachment is not leaked. Unlike the
+     * streaming route there is no placeholder fallback — a missing record is
+     * a plain 404 because the JSON consumer (the modal) cannot render an
+     * image placeholder.
+     */
+    getAttachmentMeta: async ({ params, req }) => {
+      const user = req.user as UserDocument;
+      const { id } = params;
+
+      if (!isValidObjectId(id)) {
+        return {
+          status: 400 as const,
+          body: errorBody('INVALID_ATTACHMENT_ID', 'Invalid attachment id'),
+        };
+      }
+
+      let attachment: AttachmentDocument | null;
+      try {
+        attachment = (await Attachment.findById(id).populate('creator')) as AttachmentDocument | null;
+      } catch (err) {
+        debug('getAttachmentMeta lookup error', err);
+        return internalServerErrorResponse;
+      }
+      if (!attachment) {
+        return {
+          status: 404 as const,
+          body: errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found'),
+        };
+      }
+
+      const grant = await loadGrantedPage(Page, attachment.page.toString(), user);
+      if ('error' in grant) {
+        // Collapse INVALID_PAGE_ID + PAGE_NOT_FOUND alike to 404 — the page
+        // id comes from the persisted attachment, and a hidden page must not
+        // be distinguishable from a missing one.
+        return {
+          status: 404 as const,
+          body: errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found'),
+        };
+      }
+
+      return {
+        status: 200 as const,
+        body: attachmentToMetaResponse(attachment),
+      };
     },
 
     /**
