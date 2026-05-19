@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren, ReactElement } from 'react';
 import { createElement } from 'react';
@@ -8,7 +8,7 @@ import type { PageWithRevision } from '@crowi/api-contract';
 // PageHeader composes a tree of data-driven children. Mock every leaf
 // hook so the test is pure layout — no react-query, no API, no WS.
 const { useAuth } = vi.hoisted(() => ({ useAuth: vi.fn() }));
-const { useStickyHeader } = vi.hoisted(() => ({ useStickyHeader: vi.fn() }));
+const { useStickyHeader, useMeasuredHeight } = vi.hoisted(() => ({ useStickyHeader: vi.fn(), useMeasuredHeight: vi.fn() }));
 const { useToggleLike } = vi.hoisted(() => ({ useToggleLike: vi.fn() }));
 const { useWatchStatus, useToggleWatch } = vi.hoisted(() => ({ useWatchStatus: vi.fn(), useToggleWatch: vi.fn() }));
 const { useToggleBookmark } = vi.hoisted(() => ({ useToggleBookmark: vi.fn() }));
@@ -19,7 +19,7 @@ const { useLikers } = vi.hoisted(() => ({ useLikers: vi.fn() }));
 const { useSeenUsers } = vi.hoisted(() => ({ useSeenUsers: vi.fn() }));
 
 vi.mock('@/lib/use-auth', () => ({ useAuth }));
-vi.mock('@/lib/use-sticky-header', () => ({ useStickyHeader }));
+vi.mock('@/lib/use-sticky-header', () => ({ useStickyHeader, useMeasuredHeight }));
 vi.mock('@/lib/use-like', () => ({ useToggleLike }));
 vi.mock('@/lib/use-watch', () => ({ useWatchStatus, useToggleWatch }));
 vi.mock('@/lib/use-bookmark', () => ({ useToggleBookmark }));
@@ -68,7 +68,10 @@ beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {};
 
   useAuth.mockReturnValue({ user: { id: 'u1' }, isAuthenticated: true });
-  useStickyHeader.mockReturnValue({ sentinelRef: { current: null }, compact: false });
+  // Expanded by default. `H` is the measured expanded-header height that
+  // both the placeholder spacer and the `scrollY >= H` trigger key off.
+  useStickyHeader.mockReturnValue({ compact: false });
+  useMeasuredHeight.mockReturnValue({ ref: { current: null }, height: 240 });
   useToggleLike.mockReturnValue({ toggle: vi.fn(), isPending: false, isError: false, error: null });
   useWatchStatus.mockReturnValue({ isLoading: false });
   useToggleWatch.mockReturnValue({ watching: false, toggle: vi.fn(), isPending: false, isError: false, error: null });
@@ -85,9 +88,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-/** Mark the sticky header as scrolled past → compact layout. */
+/** Mark the sticky header as scrolled past `H` → compact layout. */
 function mockCompact() {
-  useStickyHeader.mockReturnValue({ sentinelRef: { current: null }, compact: true });
+  useStickyHeader.mockReturnValue({ compact: true });
 }
 
 /**
@@ -101,12 +104,21 @@ function renderHeader(ui: ReactElement) {
 }
 
 describe('PageHeader — expanded state', () => {
-  it('renders a sticky header with a sentinel when sticky is enabled', () => {
+  it('renders the expanded header (no compact bar) when sticky is enabled but not scrolled', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
-    const header = document.querySelector('header');
-    expect(header?.className).toContain('sticky');
-    expect(header?.className).toContain('top-0');
-    expect(screen.getByTestId('sticky-header-sentinel')).toBeTruthy();
+    expect(document.querySelector('header')?.getAttribute('data-compact')).toBe('false');
+    expect(screen.getByTestId('page-header-expanded')).toBeTruthy();
+    // No fixed compact bar while expanded.
+    expect(screen.queryByTestId('page-header-compact')).toBeNull();
+  });
+
+  it('keeps the expanded header in normal flow (the placeholder wrapper is visible, not invisible)', () => {
+    renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    // While expanded the measurement/placeholder wrapper is the visible
+    // header — it must not carry the `invisible` class.
+    const placeholder = screen.getByTestId('sticky-header-placeholder');
+    expect(placeholder.className).not.toContain('invisible');
+    expect(placeholder.getAttribute('aria-hidden')).toBe('false');
   });
 
   it('shows the breadcrumb in the expanded state', () => {
@@ -123,10 +135,11 @@ describe('PageHeader — expanded state', () => {
     expect(likeButton.textContent).toContain('いいね');
   });
 
-  it('renders no sentinel and no sticky class when sticky is disabled', () => {
+  it('renders no placeholder and no compact bar when sticky is disabled', () => {
     renderHeader(<PageHeader page={makePage()} showActions />);
-    expect(screen.queryByTestId('sticky-header-sentinel')).toBeNull();
-    expect(document.querySelector('header')?.className).not.toContain('sticky');
+    expect(screen.queryByTestId('sticky-header-placeholder')).toBeNull();
+    expect(screen.queryByTestId('page-header-compact')).toBeNull();
+    expect(document.querySelector('header')?.getAttribute('data-compact')).toBe('false');
   });
 });
 
@@ -135,46 +148,71 @@ describe('PageHeader — compact state', () => {
     mockCompact();
   });
 
-  it('marks the header as compact when scrolled past the sentinel', () => {
+  /** The fixed compact bar. The compact-layout assertions scope here. */
+  function compactBar() {
+    return within(screen.getByTestId('page-header-compact'));
+  }
+
+  it('marks the header as compact when scrolled past H', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
     expect(document.querySelector('header')?.getAttribute('data-compact')).toBe('true');
   });
 
-  it('hides the breadcrumb in the compact state', () => {
+  it('mounts a fixed compact bar with the compact-layout classes', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
-    expect(screen.queryByRole('link', { name: /Home/ })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'guide' })).toBeNull();
+    const bar = screen.getByTestId('page-header-compact');
+    expect(bar.className).toContain('fixed');
+    expect(bar.className).toContain('top-0');
+    // z-30 keeps the compact bar below the `(auth)` app header (z-40).
+    expect(bar.className).toContain('z-30');
   });
 
-  it('shows only the path tail as the title in the compact state', () => {
+  it('keeps the expanded header in flow as the placeholder (invisible) so content does not shift', () => {
+    renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    // The expanded layout stays mounted and in flow — its measurement
+    // wrapper is the placeholder spacer of height H. It is `invisible`
+    // (still occupies space) so the article below never moves.
+    const placeholder = screen.getByTestId('sticky-header-placeholder');
+    expect(placeholder.className).toContain('invisible');
+    expect(placeholder.getAttribute('aria-hidden')).toBe('true');
+    expect(within(placeholder).getByTestId('page-header-expanded')).toBeTruthy();
+  });
+
+  it('shows no breadcrumb in the compact bar', () => {
+    renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    expect(compactBar().queryByRole('link', { name: /Home/ })).toBeNull();
+    expect(compactBar().queryByRole('link', { name: 'guide' })).toBeNull();
+  });
+
+  it('shows only the path tail as the title in the compact bar', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
     // /docs/guide/example → "example"; the full path is not rendered.
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('example');
+    expect(compactBar().getByRole('heading', { level: 1 }).textContent).toBe('example');
   });
 
-  it('renders the like button icon-only (no text label) in the compact state', () => {
+  it('renders the like button icon-only (no text label) in the compact bar', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
-    expect(screen.queryByText('いいね')).toBeNull();
+    expect(compactBar().queryByText('いいね')).toBeNull();
     // The icon-only like button still exposes its accessible name.
-    expect(screen.getByLabelText('いいねを追加')).toBeTruthy();
+    expect(compactBar().getByLabelText('いいねを追加')).toBeTruthy();
   });
 
-  it('does not render the meta-chip row in the compact state', () => {
+  it('does not render the meta-chip row in the compact bar', () => {
     renderHeader(<PageHeader page={makePage({ commentCount: 3 })} sticky showActions />);
     // The meta-chip row carries the localized "... に更新" timestamp.
-    expect(screen.queryByText(/に更新/)).toBeNull();
+    expect(compactBar().queryByText(/に更新/)).toBeNull();
   });
 
-  it('collapses watch / bookmark / link into the dotmenu in the compact state', () => {
+  it('collapses watch / bookmark / link into the dotmenu in the compact bar', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
-    // watch / bookmark / link are no longer standalone controls.
-    expect(screen.queryByLabelText('ウォッチする')).toBeNull();
-    expect(screen.queryByLabelText('ブックマークを追加')).toBeNull();
-    expect(screen.queryByLabelText('リンクを共有')).toBeNull();
+    // watch / bookmark / link are not standalone controls in the bar.
+    expect(compactBar().queryByLabelText('ウォッチする')).toBeNull();
+    expect(compactBar().queryByLabelText('ブックマークを追加')).toBeNull();
+    expect(compactBar().queryByLabelText('リンクを共有')).toBeNull();
 
     // They appear inside the dotmenu instead. Radix opens the menu on
     // pointerdown; jsdom needs an explicit PointerEvent.
-    const trigger = screen.getByLabelText('その他のアクション');
+    const trigger = compactBar().getByLabelText('その他のアクション');
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     fireEvent.click(trigger);
     expect(screen.getByRole('menuitem', { name: 'ウォッチ' })).toBeTruthy();
@@ -182,7 +220,7 @@ describe('PageHeader — compact state', () => {
     expect(screen.getByRole('menuitem', { name: 'タイトルとURL' })).toBeTruthy();
   });
 
-  it('renders the live presence row at compact size', () => {
+  it('renders the live presence row at compact size in the compact bar', () => {
     usePresence.mockReturnValue({
       viewers: [
         { userId: 'u1', username: 'me', displayName: 'Me', avatarUrl: null, isEditing: false, joinedAt: 1 },
@@ -192,6 +230,22 @@ describe('PageHeader — compact state', () => {
       status: 'connected',
     });
     renderHeader(<PageHeader page={makePage()} sticky showActions showPresence />);
-    expect(screen.getByTestId('live-presence-row').getAttribute('data-size')).toBe('compact');
+    expect(compactBar().getByTestId('live-presence-row').getAttribute('data-size')).toBe('compact');
+  });
+});
+
+describe('PageHeader — placeholder keeps document flow constant', () => {
+  it('the placeholder wrapper is present in BOTH expanded and compact states', () => {
+    // Expanded: the wrapper is the visible header.
+    useStickyHeader.mockReturnValue({ compact: false });
+    const { unmount } = renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    expect(screen.getByTestId('sticky-header-placeholder')).toBeTruthy();
+    unmount();
+    cleanup();
+
+    // Compact: the same wrapper survives in flow as the H-tall spacer.
+    useStickyHeader.mockReturnValue({ compact: true });
+    renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    expect(screen.getByTestId('sticky-header-placeholder')).toBeTruthy();
   });
 });
