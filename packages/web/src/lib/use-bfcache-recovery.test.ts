@@ -21,9 +21,27 @@ function firePageShow(persisted: boolean) {
   window.dispatchEvent(event);
 }
 
+/** Let the async `pageshow` handler's awaited query work settle. */
+function flushMicrotasks() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe('useBfcacheRecovery', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('skips the initial-load pageshow (first pageshow is not a restore)', () => {
+    const recheckAuth = vi.fn();
+    const { client, wrapper } = makeContext();
+    const cancelSpy = vi.spyOn(client, 'cancelQueries');
+    renderHook(() => useBfcacheRecovery(recheckAuth), { wrapper });
+
+    // The first pageshow after a fresh load is the initial load.
+    firePageShow(false);
+
+    expect(recheckAuth).not.toHaveBeenCalled();
+    expect(cancelSpy).not.toHaveBeenCalled();
   });
 
   it('re-runs the auth check on a bfcache restore (pageshow persisted)', () => {
@@ -31,32 +49,39 @@ describe('useBfcacheRecovery', () => {
     const { wrapper } = makeContext();
     renderHook(() => useBfcacheRecovery(recheckAuth), { wrapper });
 
-    firePageShow(true);
+    firePageShow(false); // initial load
+    firePageShow(true); // bfcache restore
 
     expect(recheckAuth).toHaveBeenCalledTimes(1);
   });
 
-  it('invalidates active queries on a bfcache restore', () => {
+  it('also recovers on a non-bfcache restore (persisted = false reload)', () => {
     const recheckAuth = vi.fn();
-    const { client, wrapper } = makeContext();
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { wrapper } = makeContext();
     renderHook(() => useBfcacheRecovery(recheckAuth), { wrapper });
 
-    firePageShow(true);
+    firePageShow(false); // initial load
+    firePageShow(false); // Back reload — the page was evicted from bfcache
 
-    expect(invalidateSpy).toHaveBeenCalledWith({ type: 'active' });
+    expect(recheckAuth).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores a normal pageshow (persisted = false)', () => {
+  it('cancels then refetches active queries on a restore', async () => {
     const recheckAuth = vi.fn();
     const { client, wrapper } = makeContext();
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const cancelSpy = vi.spyOn(client, 'cancelQueries');
+    const refetchSpy = vi.spyOn(client, 'refetchQueries');
     renderHook(() => useBfcacheRecovery(recheckAuth), { wrapper });
 
-    firePageShow(false);
+    firePageShow(false); // initial load
+    firePageShow(true); // restore
+    await flushMicrotasks();
 
-    expect(recheckAuth).not.toHaveBeenCalled();
-    expect(invalidateSpy).not.toHaveBeenCalled();
+    // cancelQueries must run first so refetchQueries is not deduped
+    // against a frozen in-flight request.
+    expect(cancelSpy).toHaveBeenCalledWith({ type: 'active' });
+    expect(refetchSpy).toHaveBeenCalledWith({ type: 'active' });
+    expect(cancelSpy.mock.invocationCallOrder[0]).toBeLessThan(refetchSpy.mock.invocationCallOrder[0]);
   });
 
   it('removes the listener on unmount', () => {
@@ -64,6 +89,7 @@ describe('useBfcacheRecovery', () => {
     const { wrapper } = makeContext();
     const { unmount } = renderHook(() => useBfcacheRecovery(recheckAuth), { wrapper });
 
+    firePageShow(false); // initial load
     unmount();
     firePageShow(true);
 
