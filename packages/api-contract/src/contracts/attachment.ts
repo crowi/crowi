@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   AddAttachmentResponseSchema,
   AttachmentErrorSchema,
+  AttachmentMetaSchema,
   AttachmentUsageResponseSchema,
   ListAttachmentsResponseSchema,
   RemoveAttachmentResponseSchema,
@@ -92,6 +93,34 @@ export const attachmentContract = c.router({
       500: InternalServerErrorSchema,
     },
     summary: 'Get the full attachment usage breakdown for a page',
+  },
+
+  /**
+   * Metadata for a single attachment, keyed by its Mongo ObjectId. Backs the
+   * in-body attachment modal: a `/api/v2/attachments/<id>` link / embed in a
+   * page body carries only the id, so the modal fetches the file's metadata
+   * (name, size, type, uploader, url) here instead of full-page-navigating
+   * to the raw stream route.
+   *
+   * Authorization mirrors the streaming route `GET /api/v2/attachments/:id`:
+   * the caller must be able to view the page that owns the attachment
+   * (`loadGrantedPage` succeeds); 404 on any failure to avoid leaking the
+   * existence of a hidden page / attachment.
+   */
+  getAttachmentMeta: {
+    method: 'GET',
+    path: '/attachments/:id/meta',
+    pathParams: z.object({
+      id: z.string(),
+    }),
+    responses: {
+      200: AttachmentMetaSchema,
+      400: AttachmentErrorSchema,
+      401: AuthenticationRequiredErrorSchema,
+      404: AttachmentErrorSchema,
+      500: InternalServerErrorSchema,
+    },
+    summary: 'Get metadata for a single attachment by id',
   },
 
   /**

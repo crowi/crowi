@@ -34,6 +34,19 @@ export const AttachmentSchema = z.object({
 });
 export type Attachment = z.infer<typeof AttachmentSchema>;
 
+/**
+ * Attachment metadata as returned by `GET /api/v2/attachments/:id/meta`.
+ *
+ * Identical to `AttachmentSchema` minus `inUse`: the meta endpoint resolves
+ * a bare attachment id (a body reference carries no page context) and
+ * `inUse` is a page-scoped derivation computed by scanning a page's latest
+ * revision body. `listAttachments` / `getAttachmentUsage` are the right
+ * place for that flag; surfacing a meaningless value here would be a lie,
+ * so the field is omitted instead.
+ */
+export const AttachmentMetaSchema = AttachmentSchema.omit({ inUse: true });
+export type AttachmentMeta = z.infer<typeof AttachmentMetaSchema>;
+
 // GET /pages/:pageId/attachments
 export const ListAttachmentsResponseSchema = z.object({
   attachments: z.array(AttachmentSchema),
