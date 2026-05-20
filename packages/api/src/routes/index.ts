@@ -1,8 +1,10 @@
-import { Express } from 'express';
+import { getRequestListener } from '@hono/node-server';
+import { Express, NextFunction, Request, Response } from 'express';
 import Crowi from 'src/crowi';
 
 import multer from 'multer';
 
+import { buildHonoApp } from '../hono';
 import form from '../form';
 
 import Admin from './admin';
@@ -51,6 +53,33 @@ export default (crowi: Crowi, app: Express) => {
 
   // Mount ts-rest routes (new system)
   TsRestRoutes(crowi, app);
+
+  // RFC-0006 Phase 2 — Hono mount.
+  //
+  // Build the Hono app once at boot and bridge it into Express as a
+  // terminal `/api/v2/*` handler via `@hono/node-server`'s
+  // `getRequestListener(fetch)` (which returns a Node-native
+  // `(IncomingMessage, ServerResponse) => Promise` — directly usable as
+  // an Express handler). Hono is registered AFTER ts-rest so any path
+  // already owned by an existing ts-rest router is served by ts-rest
+  // before reaching Hono. Hono returns 404 for unknown paths (Phase 2
+  // has zero Hono routes), which the client treats identically to the
+  // existing ts-rest "no match" behaviour. As Phase 3-4 commits migrate
+  // resources, the ts-rest sub-router for that resource is removed and
+  // the path falls through to Hono.
+  //
+  // Phase 6 cleanup deletes the Express host entirely and replaces this
+  // with `serve({ fetch: honoApp.fetch, createServer: http.createServer })`
+  // (see `.feature-state/specs/feature-hono-integration.md`).
+  const honoApp = buildHonoApp(crowi);
+  const honoListener = getRequestListener(honoApp.fetch);
+  app.use('/api/v2', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await honoListener(req, res);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   app.use(routes.Admin);
   app.use(routes.Login);
