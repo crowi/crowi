@@ -205,13 +205,15 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
         <div
           data-testid="page-header-compact"
           className={cn(
-            'fixed inset-x-0 top-0 z-30 bg-background shadow-header',
+            'fixed inset-x-0 top-0 z-30 h-[60px] bg-background shadow-header',
             'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
           )}
         >
           {/* Match the (auth) layout content width / gutters so the
-              compact header lines up with the article column. */}
-          <div className="max-w-4xl mx-auto px-4 py-2 space-y-2">
+              compact header lines up with the article column. The bar
+              is a fixed 60px tall; the title row and the (shrunken)
+              presence row are vertically centred inside it. */}
+          <div className="mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4">
             <div className="flex items-center gap-2">
               {/* Scroll-to-top — sits to the left of the title, hanging
                   out past the content gutter (`-ml-9`). */}
