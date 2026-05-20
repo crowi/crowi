@@ -51,16 +51,31 @@ collab, plugin-*, admin-cli, tsconfig). Anywhere the RFC says
   `packages/web/package.json` all declare `"zod": "catalog:"`.
 - `grep '@hono' packages/` returns 0 hits — no Hono dep is installed yet.
 
-**Decision (2026-05-20, user)**: Phase 2 bumps the catalog to **zod v4**
-in lock-step with the `@hono/zod-openapi` introduction. Rationale: the
-latest `@hono/zod-openapi` line targets zod v4 as its peer; doing the
-zod major and the Hono adoption in the same Phase 2 commit avoids
-touching every schema file twice. The implementer for Phase 2 needs to
-audit zod v3 → v4 breaking changes against the schemas (`.nonempty()`
-on strings, `.passthrough()` semantics, error issue shape, coerce
-behavior, etc.) and update accordingly. The diff between the existing
-`openapi.json` / `openapi.yaml` and the regenerated ones must be
-explainable purely as "zod-v4 + OpenAPI-3.1 bump" — anything else is
+**Decision (2026-05-20, user, revisited after impl audit)**: Phase 2
+bumps the catalog to **zod v4** while simultaneously **dropping
+`@ts-rest/open-api`** — the latter was the only dependency that pinned
+zod to v3 (its transitive `@anatine/zod-openapi` reads zod-v3 internal
+`_def` fields at runtime). The replacement OpenAPI generator is Hono's
+`honoApp.getOpenAPIDocument()`, so the Phase 5 "spec generator swap"
+work is merged into Phase 2 commit 1.
+
+Confirmed peer ranges (npm view, 2026-05-20):
+
+- `@ts-rest/open-api` (any version) → peer `zod ^3.22.3` + transitive
+  zod-v3-internal reader → **drop entirely in Phase 2**.
+- `@ts-rest/core@3.53.0-rc.1` → no zod peer constraint → bump to this
+  RC, keep it through Phase 4.
+- `@ts-rest/express` → tracks `@ts-rest/core` → bump in sync.
+- `@hono/zod-openapi@^1.4.0` → peer `zod ^4.0.0` → adopt.
+
+The implementer for Phase 2 audits zod v3 → v4 breaking changes against
+the schemas (`.nonempty()` on strings, `.passthrough()` semantics, error
+issue shape, coerce behavior, custom error map shape, etc.) and updates
+accordingly. The regenerated `openapi.json` / `openapi.yaml` will have a
+near-empty `paths{}` (Hono has no routes yet — Phase 3/4 populates them)
+but full `components.schemas`. Diff is expected to be dominated by
+"ts-rest-derived metadata disappearing" + "zod v4 syntactic shifts" +
+"openapi 3.0.2 → 3.1.0"; anything outside those three explanations is
 investigated before the bootstrap commit lands.
 
 ## 3. `/api/v2` mount mechanics
@@ -334,8 +349,18 @@ integration".
   yaml header).
 - No `src/generated/openapi.ts` exists today.
 
-RFC §"OpenAPI generation pipeline" covers the Phase 5 / 6 replacement
-and CI gate.
+**Decision (2026-05-20, user)**: the spec generator swap originally
+planned for Phase 5 is **merged into Phase 2 commit 1**. Reason:
+`@ts-rest/open-api` is the only dependency that pins zod to v3 (see §2),
+so removing it is the precondition for the Phase 2 zod-v4 bump. Once
+the ts-rest openapi generator is gone, the Hono-based
+`scripts/generate-openapi.ts` is the only one in the tree from Phase 2
+onward. Phase 5 becomes an empty marker phase. The OpenAPI 3.0.2 →
+3.1.0 bump happens at the same Phase 2 commit (Hono default).
+
+RFC §"OpenAPI generation pipeline" remains accurate for the Phase 6
+artefacts (`openapi-typescript` types module, CI gate) but the Phase 5
+chronology no longer applies.
 
 ## 11. AppType placement — tsconfig observations
 
