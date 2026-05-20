@@ -1,5 +1,4 @@
 import { initContract } from '@ts-rest/core';
-import { appContract } from './app';
 import { authContract } from './auth';
 import { installerContract } from './installer';
 import { tokenAuthContract } from './tokenAuth';
@@ -21,10 +20,15 @@ import { adminCryptoContract } from './adminCrypto';
 import { adminContract } from './admin';
 import { searchContract } from './search';
 
+// Hono-style route exports (RFC-0006 Phase 3+). Resources migrated off
+// ts-rest expose `createRoute(...)` objects rather than a `c.router`
+// branch. Re-exported here so the package barrel surfaces them to both
+// the `@crowi/api` handler chain and the OpenAPI generator.
+export * from './app';
+
 const c = initContract();
 
 export const apiContract = c.router({
-  app: appContract,
   auth: authContract, // Legacy - to be removed
   installer: installerContract,
   tokenAuth: tokenAuthContract,

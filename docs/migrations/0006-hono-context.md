@@ -491,6 +491,19 @@ bump, Hono-native multipart, Hono-owns-server final shape, OpenAPI 3.1).
   should equal what was sent.
 - (Phase 3 pilot) Run the §11 build-order smoke test and lock in the
   final `AppType` placement (option 1 default, option 2 fallback).
+  **Decided 2026-05-20: option 2 confirmed.** Option 1 (`@crowi/api`
+  exports `AppType` → `@crowi/api-contract` imports it via
+  `import type`) failed the smoke test — `pnpm --filter
+  @crowi/api-contract build` runs before `@crowi/api`'s `dist/` is
+  emitted because the workspace graph has `@crowi/api ->
+  @crowi/api-contract` (not the reverse), so the dts compile cannot
+  resolve `@crowi/api/hono`. Option 2 is now permanent:
+  `@crowi/api-contract` is the single source of truth for `AppType`
+  via a stub `OpenAPIHono` chain in `src/client.ts` that mirrors every
+  `createRoute(...)` exported by the contracts; `@crowi/api` re-exports
+  `AppType` from there for downstream symmetry. Phase 4 commits keep
+  this chain in lock-step with the real `@crowi/api` handler chain by
+  wrapping the previous `registerXRoutes(...)` return value.
 - (Phase 4 attachment) Verify that `Content-Length` early-rejection
   on the editor-upload endpoint reproduces the multer
   `LIMIT_FILE_SIZE` behavior closely enough (no large body buffered

@@ -1,23 +1,21 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { AppInfoResponse } from '@crowi/api-contract';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 
 export const appInfoKeys = {
   all: ['app', 'info'] as const,
 };
 
 export function useAppInfo() {
-  return useQuery<AppInfoResponse, Error>({
+  return useQuery({
     queryKey: appInfoKeys.all,
     queryFn: async () => {
-      const result = await apiClient.app.getInfo();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        fallback: 'Failed to fetch app info',
-      });
+      const response = await apiClientV2.app.info.$get();
+      if (!response.ok) {
+        throw new Error('Failed to fetch app info');
+      }
+      return response.json();
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,

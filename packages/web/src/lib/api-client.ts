@@ -1,11 +1,28 @@
 import { initClient } from '@ts-rest/core';
-import { apiContract } from '@crowi/api-contract';
+import { apiContract, createClient } from '@crowi/api-contract';
 import { clearTokens, storeTokens } from './auth-token';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
 
-let isRefreshing = false;
 let refreshPromise: Promise<string | null> | null = null;
+
+/**
+ * Return a single in-flight refresh promise so concurrent 401s coalesce
+ * onto one `/auth/refresh` call. Capturing the local `promise` reference
+ * before reading `refreshPromise` avoids the TOCTOU race where `.finally`
+ * nulls out `refreshPromise` between the `if (!refreshPromise)` check and
+ * the `await`.
+ */
+function acquireRefreshedToken(): Promise<string | null> {
+  let promise = refreshPromise;
+  if (promise == null) {
+    promise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+    refreshPromise = promise;
+  }
+  return promise;
+}
 
 async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
@@ -79,20 +96,7 @@ export const apiClient = initClient(apiContract, {
       console.log('[api-client] Got 401, attempting token refresh...');
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
-        // Prevent multiple simultaneous refresh requests
-        if (!isRefreshing) {
-          console.log('[api-client] Starting refresh (not already refreshing)');
-          isRefreshing = true;
-          refreshPromise = refreshAccessToken().finally(() => {
-            isRefreshing = false;
-            refreshPromise = null;
-          });
-        } else {
-          console.log('[api-client] Already refreshing, waiting for existing promise');
-        }
-
-        // Wait for refresh to complete
-        const newAccessToken = await refreshPromise;
+        const newAccessToken = await acquireRefreshedToken();
         console.log('[api-client] Refresh complete, hasNewToken:', !!newAccessToken);
 
         if (newAccessToken) {
@@ -128,4 +132,47 @@ export const apiClient = initClient(apiContract, {
       headers: response.headers,
     };
   },
+});
+
+/**
+ * RFC-0006 Phase 3 — `hc<AppType>` client for Hono-served resources.
+ *
+ * Wraps the global `fetch` with the same access-token / refresh-token
+ * dance as the ts-rest `apiClient` above so call sites can flip from
+ * `apiClient.<resource>.<endpoint>` to `apiClientV2.<resource>.<endpoint>.
+ * $get(...)` resource-by-resource as Phase 4 progresses. Phase 6
+ * deletes the legacy `apiClient` once all resources have moved.
+ */
+const REFRESH_PATH = '/auth/refresh';
+
+const apiV2Fetch: typeof fetch = async (input, init) => {
+  const headers = new Headers(init?.headers);
+  const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  if (accessToken && !headers.has('authorization')) {
+    headers.set('authorization', `Bearer ${accessToken}`);
+  }
+
+  let response = await fetch(input, { ...init, headers });
+
+  // Don't try to refresh when the failed call *is* the refresh endpoint —
+  // doing so would recurse once `/auth/refresh` lands on Hono (Phase 4).
+  const urlString = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  const isRefreshEndpoint = urlString.includes(REFRESH_PATH);
+
+  if (response.status === 401 && !isRefreshEndpoint && typeof window !== 'undefined') {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      const newAccessToken = await acquireRefreshedToken();
+      if (newAccessToken) {
+        headers.set('authorization', `Bearer ${newAccessToken}`);
+        response = await fetch(input, { ...init, headers });
+      }
+    }
+  }
+
+  return response;
+};
+
+export const apiClientV2 = createClient(`${API_BASE_URL}/api/v2`, {
+  fetch: apiV2Fetch,
 });

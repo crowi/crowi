@@ -1,5 +1,6 @@
-import { getRequestListener } from '@hono/node-server';
-import { Express, NextFunction, Request, Response } from 'express';
+import { Readable } from 'node:stream';
+
+import type { Express, NextFunction, Request as ExpressRequest, Response } from 'express';
 import Crowi from 'src/crowi';
 
 import multer from 'multer';
@@ -51,35 +52,111 @@ export default (crowi: Crowi, app: Express) => {
     ApplicationInstalled: applicationInstalled,
   } = middlewares;
 
-  // Mount ts-rest routes (new system)
-  TsRestRoutes(crowi, app);
-
-  // RFC-0006 Phase 2 — Hono mount.
+  // RFC-0006 Phase 3 — Hono mount (ordered BEFORE ts-rest).
   //
-  // Build the Hono app once at boot and bridge it into Express as a
-  // terminal `/api/v2/*` handler via `@hono/node-server`'s
-  // `getRequestListener(fetch)` (which returns a Node-native
-  // `(IncomingMessage, ServerResponse) => Promise` — directly usable as
-  // an Express handler). Hono is registered AFTER ts-rest so any path
-  // already owned by an existing ts-rest router is served by ts-rest
-  // before reaching Hono. Hono returns 404 for unknown paths (Phase 2
-  // has zero Hono routes), which the client treats identically to the
-  // existing ts-rest "no match" behaviour. As Phase 3-4 commits migrate
-  // resources, the ts-rest sub-router for that resource is removed and
-  // the path falls through to Hono.
+  // Build the Hono app once at boot and dispatch matching `/api/v2/*`
+  // requests to it via `app.fetch(Request) -> Response`. The Phase-2
+  // implementation used `@hono/node-server`'s `getRequestListener`
+  // which writes directly to the Node `res`; that prevented us from
+  // detecting Hono's 404 and falling through to ts-rest. Now we drive
+  // `honoApp.fetch` directly, inspect the returned `Response` status,
+  // and call Express `next()` for 404s so ts-rest can take over for
+  // un-migrated resources.
   //
-  // Phase 6 cleanup deletes the Express host entirely and replaces this
-  // with `serve({ fetch: honoApp.fetch, createServer: http.createServer })`
-  // (see `.feature-state/specs/feature-hono-integration.md`).
+  // Mount order rationale: ts-rest's authenticatedRouter installs
+  // `jwtAuth` greedily on every `/api/v2/*` path, so a Phase-3 public
+  // Hono route (`GET /app/info`) would be intercepted with 401 if
+  // Hono ran AFTER ts-rest. Putting Hono first lets it serve its
+  // known routes; for everything else the fall-through hands off to
+  // ts-rest, which still owns every un-migrated resource. As Phase 4
+  // commits land more resources, those ts-rest mounts are removed
+  // and the path is served exclusively by Hono.
+  //
+  // Phase 6 cleanup deletes the Express host entirely and replaces
+  // this with `serve({ fetch: honoApp.fetch, createServer:
+  // http.createServer })` (see
+  // `.feature-state/specs/feature-hono-integration.md`).
   const honoApp = buildHonoApp(crowi);
-  const honoListener = getRequestListener(honoApp.fetch);
-  app.use('/api/v2', async (req: Request, res: Response, next: NextFunction) => {
+  app.use('/api/v2', async (req: ExpressRequest, res: Response, next: NextFunction) => {
     try {
-      await honoListener(req, res);
+      const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'http';
+      const host = req.headers.host ?? 'localhost';
+      // `app.use('/api/v2', ...)` strips the mount prefix from
+      // `req.url` (Express convention). Our Hono routes are declared
+      // without the `/api/v2` prefix (e.g. `path: '/app/info'`), so
+      // the stripped `req.url` is exactly what Hono needs to match.
+      const url = `${proto}://${host}${req.url}`;
+
+      const headers = new Headers();
+      for (const [key, value] of Object.entries(req.headers)) {
+        if (value === undefined) continue;
+        if (Array.isArray(value)) {
+          for (const v of value) headers.append(key, v);
+        } else {
+          headers.set(key, String(value));
+        }
+      }
+
+      const init: RequestInit = { method: req.method, headers };
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        // express.json() / express.urlencoded() already parsed the
+        // body; reserialize it so Hono receives the wire-shape it
+        // would have read off the wire. Phase 6 removes Express body
+        // parsing entirely, eliminating this round-trip.
+        const body = (req as ExpressRequest & { body?: unknown }).body;
+        if (body !== undefined && body !== null) {
+          if (typeof body === 'string' || body instanceof Buffer) {
+            init.body = body instanceof Buffer ? new Uint8Array(body) : body;
+          } else {
+            init.body = JSON.stringify(body);
+            if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+          }
+          // The original `content-length` reflects the wire bytes Express
+          // already read; after reserialization it no longer matches the
+          // outgoing body. Drop it so Hono / fetch recompute as needed.
+          headers.delete('content-length');
+        }
+      }
+
+      const response = await honoApp.fetch(new Request(url, init));
+
+      if (response.status === 404) {
+        // Hono returned the not-found fallback (no route matched).
+        // Hand the request off to the next Express middleware so
+        // ts-rest gets a chance. 5xx and other non-404 responses are
+        // returned verbatim — they came from Hono's `onError` or a
+        // handler-level mapping and must not fall through.
+        return next();
+      }
+
+      res.status(response.status);
+      // `Set-Cookie` may appear multiple times; the standard Headers iterator
+      // collapses them in `forEach`, so use `getSetCookie()` to preserve every
+      // entry and forward the rest of the headers via `forEach`.
+      const setCookies = typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
+      response.headers.forEach((value, key) => {
+        if (key.toLowerCase() === 'set-cookie') return;
+        res.setHeader(key, value);
+      });
+      if (setCookies.length > 0) {
+        res.setHeader('set-cookie', setCookies);
+      }
+
+      if (response.body == null) {
+        res.end();
+        return;
+      }
+      // Stream the body straight through instead of buffering — Phase 4
+      // adds attachment / search routes that can produce large payloads.
+      Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]).pipe(res);
     } catch (err) {
       next(err);
     }
   });
+
+  // Mount ts-rest routes (legacy stack — Phase 4+ removes resources
+  // here one by one).
+  TsRestRoutes(crowi, app);
 
   app.use(routes.Admin);
   app.use(routes.Login);
