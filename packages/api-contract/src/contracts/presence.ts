@@ -1,5 +1,5 @@
 import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { GetLikersRequestSchema, LikersResponseSchema, PresenceTokenResponseSchema } from '../schemas/presence';
 import { PageNotFoundErrorSchema } from '../schemas/page';
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';

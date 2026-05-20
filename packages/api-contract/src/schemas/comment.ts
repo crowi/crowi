@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { PageUserSchema } from './page';
 
 // Comment schema - matches CommentDocument shape, with creator populated

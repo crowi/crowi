@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 /**
  * Wire-shape of a single plugin config field. Mirrors the runtime
@@ -80,7 +80,7 @@ export type ListPluginsResponse = z.infer<typeof ListPluginsResponseSchema>;
 export const PluginConfigResponseSchema = z.object({
   name: z.string(),
   fields: z.array(PluginFieldSchema),
-  values: z.record(z.unknown()),
+  values: z.record(z.string(), z.unknown()),
 });
 export type PluginConfigResponse = z.infer<typeof PluginConfigResponseSchema>;
 
@@ -92,7 +92,7 @@ export type PluginConfigResponse = z.infer<typeof PluginConfigResponseSchema>;
  *   - non-empty string     → replace and re-encrypt
  */
 export const UpdatePluginConfigRequestSchema = z.object({
-  values: z.record(z.unknown()),
+  values: z.record(z.string(), z.unknown()),
 });
 export type UpdatePluginConfigRequest = z.infer<typeof UpdatePluginConfigRequestSchema>;
 

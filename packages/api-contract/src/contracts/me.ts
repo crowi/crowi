@@ -1,5 +1,5 @@
 import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import {
   UserProfileResponseSchema,
   UpdateProfileRequestSchema,
@@ -43,7 +43,7 @@ export const meContract = c.router({
     path: '/me/picture',
     contentType: 'multipart/form-data',
     body: z.object({
-      file: z.any().describe('Profile picture file'),
+      file: z.any().optional().describe('Profile picture file'),
     }),
     responses: {
       200: PictureUploadResponseSchema,

@@ -1,5 +1,5 @@
 import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import {
   AdminUserIdParamSchema,
   AdminUserMutationResponseSchema,

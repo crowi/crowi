@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { UserPublicSchema } from './userPublic';
 
 // 24-character hex ObjectId string. Mirrors isValidObjectId in

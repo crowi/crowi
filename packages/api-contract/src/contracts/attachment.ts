@@ -1,5 +1,5 @@
 import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import {
   AddAttachmentResponseSchema,
   AttachmentErrorSchema,
@@ -60,7 +60,7 @@ export const attachmentContract = c.router({
     }),
     contentType: 'multipart/form-data',
     body: z.object({
-      file: z.any().describe('Attachment binary'),
+      file: z.any().optional().describe('Attachment binary'),
     }),
     responses: {
       200: AddAttachmentResponseSchema,
@@ -146,7 +146,7 @@ export const attachmentContract = c.router({
     // `addAttachment`, the body schema stays permissive and the handler
     // validates the text fields itself after multer runs.
     body: z.object({
-      file: z.any().describe('Attachment binary'),
+      file: z.any().optional().describe('Attachment binary'),
     }),
     responses: {
       200: UploadAttachmentResponseSchema,

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 /**
  * RFC-0004 Phase 5 — schemas for the autocomplete endpoints

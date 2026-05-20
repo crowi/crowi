@@ -1,5 +1,5 @@
 import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { CryptoStatusResponseSchema, EncryptionNotConfiguredErrorSchema, ReencryptResponseSchema } from '../schemas/adminCrypto';
 import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema } from '../schemas/common';
 

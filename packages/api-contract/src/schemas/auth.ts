@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 // Token-based authentication schemas
 export const TokenAuthLoginRequestSchema = z.object({

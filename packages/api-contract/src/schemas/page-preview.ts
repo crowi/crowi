@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 /**
  * Request body for POST /pages/preview. Just the raw markdown body —

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 export const InstallerStatusResponseSchema = z.object({
   status: z.enum(['installer_required', 'already_installed']),

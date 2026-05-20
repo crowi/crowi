@@ -1,5 +1,5 @@
 import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { LoginRequestSchema, LoginResponseSchema, RegisterRequestSchema, RegisterResponseSchema, ErrorResponseSchema } from '../schemas/auth';
 import { ApplicationNotInstalledErrorSchema } from '../schemas/common';
 

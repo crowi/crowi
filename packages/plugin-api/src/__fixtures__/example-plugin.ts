@@ -8,7 +8,7 @@
  * Do not import from here at runtime.
  */
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { initContract } from '@ts-rest/core';
 import type { CrowiPlugin } from '../plugin';
 

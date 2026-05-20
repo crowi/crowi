@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import type { PluginContext } from './context';
 import type { StorageRegistry } from './registries/storage';
 import type { SearchRegistry } from './registries/search';

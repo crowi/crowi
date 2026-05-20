@@ -1,4 +1,10 @@
-import { type ZodTypeAny, z } from 'zod';
+// Plugin config schemas are still authored against zod v3 (see
+// `packages/plugin-*`/index.ts). The serializer introspects v3 internals
+// (`_def`, `ZodEffects`, `ZodNativeEnum`, etc.) that were restructured in
+// zod v4, so we explicitly pin this file to the `zod/v3` compat module
+// that the v4 package ships. The v4 schemas live in `@crowi/api-contract`
+// and never reach this code path.
+import { type ZodTypeAny, z } from 'zod/v3';
 import { ACTION_FIELD_MARKER, SENSITIVE_FIELD_MARKER, getActionAnnotation } from '@crowi/plugin-api';
 
 /**

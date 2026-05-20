@@ -1,5 +1,5 @@
 import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { TokenAuthLoginRequestSchema, TokenAuthRegisterRequestSchema, TokenAuthResponseSchema, RefreshTokenRequestSchema } from '../schemas/auth';
 import { ApplicationNotInstalledErrorSchema, AuthenticationRequiredErrorSchema, ApiErrorSchema } from '../schemas/common';
 

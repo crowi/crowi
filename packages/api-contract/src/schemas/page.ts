@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { RevisionTypeSchema } from './collab';
 import { UserPublicSchema } from './userPublic';
 
@@ -113,7 +113,7 @@ export const RevisionSchema = z.object({
 export type Revision = z.infer<typeof RevisionSchema>;
 
 // Page extended data schema
-export const PageExtendedSchema = z.record(z.any()).optional();
+export const PageExtendedSchema = z.record(z.string(), z.any()).optional();
 
 // Base page schema - matches PageDocument
 export const PageSchema = z.object({
