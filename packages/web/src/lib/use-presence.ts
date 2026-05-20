@@ -52,7 +52,7 @@ const PRESENCE_CLOSE_INVALID_TOKEN = 4401;
 
 export type PresenceStatus = 'connecting' | 'connected' | 'error';
 
-interface UsePresenceResult {
+export interface UsePresenceResult {
   /**
    * Viewers the UI should render right now — anti-flicker applied, the
    * current user always included if present, ordered by `joinedAt`.

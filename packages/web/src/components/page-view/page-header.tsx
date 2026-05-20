@@ -6,6 +6,7 @@ import { ArrowUp, Lock, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { useAuth } from '@/lib/use-auth';
+import { usePresence } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
 import { cn } from '@/lib/utils';
 import { m } from '@paraglide/messages.js';
@@ -77,6 +78,13 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
   const { compact: scrolled } = useStickyHeader(expandedHeight);
   const compact = sticky && scrolled;
 
+  // Hoisted so the expanded and compact LivePresenceRow share ONE
+  // WebSocket. With each row calling `usePresence` itself the compact
+  // mount on scroll opened a second WS and the viewer list lagged
+  // 2-3s behind the expanded row every time the header stuck.
+  // `usePresence(null)` is a no-op when presence is off.
+  const presence = usePresence(showPresence && isAuthenticated ? page._id : null);
+
   const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
   const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
   const pageTitle = getPageTitle(page.path);
@@ -141,7 +149,7 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
         </div>
       </div>
 
-      {showPresence && isAuthenticated && <LivePresenceRow pageId={page._id} />}
+      {showPresence && isAuthenticated && <LivePresenceRow presence={presence} />}
 
       {showTitle ? (
         <div className="flex items-center gap-3">
@@ -233,7 +241,7 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
                 {showActions && <PageActionsMenu page={page} compact isAuthenticated={isAuthenticated} />}
               </div>
             </div>
-            {showPresence && isAuthenticated && <LivePresenceRow pageId={page._id} size="compact" />}
+            {showPresence && isAuthenticated && <LivePresenceRow presence={presence} size="compact" />}
           </div>
         </div>
       )}

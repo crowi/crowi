@@ -7,7 +7,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { usePresence } from '@/lib/use-presence';
+import type { UsePresenceResult } from '@/lib/use-presence';
 import { cn } from '@/lib/utils';
 import { m } from '@paraglide/messages.js';
 
@@ -39,7 +39,14 @@ const MAX_VISIBLE_AVATARS = 5;
 const VIEWER_LIST_CAP = 20;
 
 interface LivePresenceRowProps {
-  pageId: string;
+  /**
+   * The result of `usePresence(pageId)`. The hook is hoisted to the
+   * parent so the expanded and compact (sticky) variants of this row
+   * share ONE WebSocket — otherwise compact-mount would open a second
+   * connection and the viewer list would lag 2-3s behind the expanded
+   * row every time the header sticks.
+   */
+  presence: UsePresenceResult;
   /**
    * `compact` shrinks the row for the sticky / scrolled page header:
    * the "閲覧中" label is dropped and the row height is tightened. The
@@ -49,8 +56,8 @@ interface LivePresenceRowProps {
   size?: 'default' | 'compact';
 }
 
-export function LivePresenceRow({ pageId, size = 'default' }: LivePresenceRowProps) {
-  const { viewers, selfUserId, status } = usePresence(pageId);
+export function LivePresenceRow({ presence, size = 'default' }: LivePresenceRowProps) {
+  const { viewers, selfUserId, status } = presence;
   const isCompact = size === 'compact';
 
   // Show content only when the presence channel is up and someone
