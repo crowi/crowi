@@ -51,8 +51,17 @@ collab, plugin-*, admin-cli, tsconfig). Anywhere the RFC says
   `packages/web/package.json` all declare `"zod": "catalog:"`.
 - `grep '@hono' packages/` returns 0 hits — no Hono dep is installed yet.
 
-Zod v3 is locked for all three consumers. The `@hono/zod-openapi` pin
-chosen in Phase 2 must declare a `^3` peer; this is unconfirmed (§14).
+**Decision (2026-05-20, user)**: Phase 2 bumps the catalog to **zod v4**
+in lock-step with the `@hono/zod-openapi` introduction. Rationale: the
+latest `@hono/zod-openapi` line targets zod v4 as its peer; doing the
+zod major and the Hono adoption in the same Phase 2 commit avoids
+touching every schema file twice. The implementer for Phase 2 needs to
+audit zod v3 → v4 breaking changes against the schemas (`.nonempty()`
+on strings, `.passthrough()` semantics, error issue shape, coerce
+behavior, etc.) and update accordingly. The diff between the existing
+`openapi.json` / `openapi.yaml` and the regenerated ones must be
+explainable purely as "zod-v4 + OpenAPI-3.1 bump" — anything else is
+investigated before the bootstrap commit lands.
 
 ## 3. `/api/v2` mount mechanics
 
@@ -136,8 +145,16 @@ All three v2 handlers invoke multer **inside** the ts-rest handler:
 `upload.single('file')(req as Request, res as Response, async (err) => ...)`.
 Parsed file at `req.file`, form fields at `req.body.<name>`.
 
-Hono ships `c.req.parseBody()` / `c.req.formData()` natively. The
-multer-vs-Hono-native decision is deferred to Phase 4 (§14).
+Hono ships `c.req.parseBody()` / `c.req.formData()` natively.
+
+**Decision (2026-05-20, user)**: Phase 4 attachment migration uses
+**Hono-native `c.req.parseBody()`**; `multer` is dropped from the dep
+tree. The editor-upload endpoint's `LIMIT_FILE_SIZE` early-rejection is
+reproduced by reading `c.req.header('content-length')` and returning
+413 before invoking `parseBody()`. Per-intent caps (paste 10 MB / dnd
+50 MB) stay in the handler as today. `multer` itself can be removed in
+the Phase 4 attachment commit if no legacy `_api` route still depends
+on it, otherwise the removal slides to Phase 6 dep cleanup.
 
 ## 6. Rate-limit middleware
 
@@ -379,9 +396,19 @@ changes).
   `@hocuspocus/extension-redis` extension when `crowi.redis !== null`.
 
 Both attaches install at the same `http.Server` so HTTP and WS share
-one listener. The spec lists this code as out-of-scope for the
-framework swap; RFC §"Mounting Hono in the api process" covers how
-the Hono mount preserves this.
+one listener.
+
+**Decision (2026-05-20, user)**: the final shape (after Phase 6) is
+**Hono owns `http.Server`** — Express is removed entirely from
+`packages/api/src/`. During Phase 2-4 the Hono mount lives as Express
+middleware purely for implementation-order reasons (ts-rest depends on
+`@ts-rest/express` and we don't migrate every route in one step). At
+Phase 6 cleanup the `http.createServer(this.app)` call in
+`crowi/index.ts:562` is replaced with
+`serve({ fetch: honoApp.fetch, createServer: http.createServer, port })`;
+the returned `http.Server` is then passed to `attachCollabServer` /
+`attachPresenceServer`. The two `noServer` WebSocket attaches do not
+change shape, only the source of the `http.Server` argument changes.
 
 ## 13. Misc. facts worth recording
 
@@ -420,26 +447,47 @@ the Hono mount preserves this.
 
 ## 14. Open items for re-confirmation in later phases
 
+Items still genuinely open after the 2026-05-20 user decisions (zod v4
+bump, Hono-native multipart, Hono-owns-server final shape, OpenAPI 3.1).
+
 - (Phase 2) Pin the exact published `@hono/zod-openapi` version whose
-  `peerDependencies.zod` range accepts `^3.23.8`. If the latest line
-  has jumped to a zod-v4 peer, pin the prior line.
+  `peerDependencies.zod` range accepts the chosen zod v4 line. Audit
+  zod v3 → v4 breaking changes against the schemas — `.nonempty()`
+  on strings, `.passthrough()` semantics, error issue shape, coerce
+  behavior, custom error map shape, etc. — and update the schemas
+  before the bootstrap commit.
 - (Phase 2) Confirm whether `@hono/node-server`'s Express adapter
   preserves the body already parsed by upstream `express.json()`, or
-  whether the global `express.json()` must be removed for
-  `/api/v2`. Suggested test: a tiny POST handler that echoes
-  `await c.req.json()`, then check the result matches what curl
-  sent.
+  whether the global `express.json()` must be bypassed for `/api/v2`
+  during Phase 2-4. The conflict goes away entirely at Phase 6 when
+  Express is removed; the question is only about the same-process
+  coexistence window. Suggested test during Phase 2: a tiny POST
+  handler echoes `await c.req.json()`, curl sends a body, the result
+  should equal what was sent.
 - (Phase 3 pilot) Run the §11 build-order smoke test and lock in the
-  final `AppType` placement (option 1 or 2).
-- (Phase 4 attachment) Decide multer-via-shim vs Hono-native
-  multipart (§5). The placeholder middleware location is
-  `packages/api/src/hono/middleware/multipart.ts`.
-- (Phase 6) Re-grep `from '@ts-rest/core'` after dep removal and
-  audit `packages/plugin-api/src/routes.ts` +
+  final `AppType` placement (option 1 default, option 2 fallback).
+- (Phase 4 attachment) Verify that `Content-Length` early-rejection
+  on the editor-upload endpoint reproduces the multer
+  `LIMIT_FILE_SIZE` behavior closely enough (no large body buffered
+  before the 413 response). If not, slot a small streaming check in
+  before `c.req.parseBody()`.
+- (Phase 6) Re-grep `from '@ts-rest/core'` and `from 'express'` after
+  dep removal. Audit `packages/plugin-api/src/routes.ts` +
   `packages/plugin-api/src/__fixtures__/example-plugin.ts` for
-  dangling `AppRouter` imports. The Phase-6 `chore(deps)` commit
-  needs to include `packages/plugin-api/` files (not in the spec's
-  original commitPlan).
+  dangling `AppRouter` imports — the Phase-6 `chore(deps)` commit
+  must include `packages/plugin-api/` files.
+- (Phase 6) Plan the Express → Hono migration of every middleware
+  currently applied globally in `crowi/express-init.ts`: cors,
+  session (with `connect-redis`), passport (passport-local +
+  passport-google + …), `connect-flash`, `BasicAuth`, `LoginChecker`,
+  request-context middleware. Pick replacements (`hono/cors`,
+  `hono-sessions`, hand-rolled passport-equivalents, etc.) and
+  validate auth flows survive (`/api/v2/auth/*` and any SSR auth
+  paths) before deleting the Express middleware stack.
+- (Phase 6) After the `http.Server` ownership swap to `serve({ fetch,
+  createServer })`, smoke-test `/collab/*` and `/presence/*` WS
+  upgrades against the new server. The two `attach*Server` helpers
+  do not change but their argument source does.
 - (Phase 6) Wire the
   `git diff --exit-code packages/api-contract/openapi.json
   packages/api-contract/openapi.yaml
