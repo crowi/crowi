@@ -35,17 +35,11 @@ import { createJwtUtil } from 'src/util/jwt';
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 
+import { AUTH_REQUIRED_BODY, INTERNAL_ERROR_BODY } from './_helpers/errors';
+import { toAuthUser } from './_helpers/user-shape';
 import { isAppInstalled } from './installer';
 
 const debug = Debug('crowi:hono:handlers:tokenAuth');
-
-const INTERNAL_ERROR_BODY = {
-  error: { code: 'INTERNAL_ERROR' as const, message: 'Internal server error' as const },
-};
-
-const AUTH_REQUIRED_BODY = {
-  error: { code: 'AUTHENTICATION_REQUIRED' as const, message: 'Authentication is required' as const },
-};
 
 const INVALID_CREDENTIALS_BODY = {
   error: { code: 'INVALID_CREDENTIALS' as const, message: 'Invalid email or password' as const },
@@ -58,30 +52,6 @@ const APP_NOT_INSTALLED_BODY = {
     redirectTo: '/installer' as const,
   },
 };
-
-/**
- * Convert Mongoose's `null | string` `user.image` to the
- * contract-friendly `string | undefined`. The TokenAuthResponseSchema
- * + TokenMeResponseSchema both declare `image: z.string().optional()`,
- * which translates to `string | undefined` — `null` trips the `c.json`
- * typed-response check.
- */
-const toUserImage = (image: string | null | undefined): string | undefined => image ?? undefined;
-
-type AuthUser = Pick<UserDocument, 'username' | 'email' | 'name'> & {
-  _id: { toString(): string };
-  image?: string | null;
-  admin?: boolean;
-};
-
-const toAuthUser = (user: AuthUser) => ({
-  id: user._id.toString(),
-  username: user.username,
-  email: user.email,
-  name: user.name,
-  image: toUserImage(user.image),
-  admin: user.admin === true,
-});
 
 export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const User = crowi.model('User');
