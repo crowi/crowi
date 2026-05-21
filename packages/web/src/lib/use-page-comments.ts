@@ -1,10 +1,17 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 import type { Comment } from '@crowi/api-contract';
 
+/**
+ * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.comment.*`
+ * (ts-rest) to `apiClientV2.comments.$method` (hc<AppType>). The wire
+ * payload (`{ comments }`, `{ comment }`, `{ ok: true }`) is preserved.
+ * Error envelopes (`{ error: { code, message } }`) are mapped through
+ * `extractErrorMessage` so users see the server's intended message
+ * when available, falling back to a generic verb.
+ */
 export const commentKeys = {
   all: ['comments'] as const,
   detail: (pageId: string) => ['comments', { pageId }] as const,
@@ -24,16 +31,26 @@ function useInvalidateComments(pageId: string | null | undefined) {
   };
 }
 
+const extractErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+  try {
+    const body = (await response.json()) as { error?: { message?: string } };
+    return body.error?.message || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export function usePageCommentsList(pageId: string | null | undefined) {
   const query = useQuery({
     queryKey: pageId ? commentKeys.detail(pageId) : commentKeys.all,
     queryFn: async () => {
       if (!pageId) return [] as Comment[];
-      const result = await apiClient.comment.listComments({ query: { page_id: pageId } });
-      return unwrapResult(result, {
-        ok: (body) => body.comments,
-        fallback: 'Failed to fetch comments',
-      });
+      const response = await apiClientV2.comments.$get({ query: { page_id: pageId } });
+      if (response.ok) {
+        const body = await response.json();
+        return body.comments;
+      }
+      throw new Error(await extractErrorMessage(response, 'Failed to fetch comments'));
     },
     enabled: Boolean(pageId),
     // Comments rarely change after a page is rendered; avoid the focus-refetch
@@ -57,19 +74,19 @@ export function useAddComment(pageId: string | null | undefined) {
   const mutation = useMutation({
     mutationFn: async (input: { revisionId: string; comment: string; commentPosition?: number }) => {
       if (!pageId) throw new Error('pageId is required');
-      const result = await apiClient.comment.addComment({
-        body: {
+      const response = await apiClientV2.comments.$post({
+        json: {
           page_id: pageId,
           revision_id: input.revisionId,
           comment: input.comment,
           comment_position: input.commentPosition,
         },
       });
-      return unwrapResult(result, {
-        ok: (body) => body.comment,
-        errors: { 400: 'Failed to add comment', 403: 'Failed to add comment', 404: 'Failed to add comment' },
-        fallback: 'Failed to add comment',
-      });
+      if (response.ok) {
+        const body = await response.json();
+        return body.comment;
+      }
+      throw new Error(await extractErrorMessage(response, 'Failed to add comment'));
     },
     onSuccess: () => invalidate(),
   });
@@ -87,14 +104,11 @@ export function useDeleteComment(pageId: string | null | undefined) {
   const mutation = useMutation({
     mutationFn: async (commentId: string) => {
       if (!pageId) throw new Error('pageId is required');
-      const result = await apiClient.comment.deleteComment({
-        body: { comment_id: commentId, page_id: pageId },
+      const response = await apiClientV2.comments.$delete({
+        json: { comment_id: commentId, page_id: pageId },
       });
-      return unwrapResult(result, {
-        ok: () => true,
-        errors: { 400: 'Failed to delete comment', 403: 'Failed to delete comment', 404: 'Failed to delete comment' },
-        fallback: 'Failed to delete comment',
-      });
+      if (response.ok) return true;
+      throw new Error(await extractErrorMessage(response, 'Failed to delete comment'));
     },
     onSuccess: () => invalidate(),
   });

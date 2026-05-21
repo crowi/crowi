@@ -1,7 +1,16 @@
-import request from 'supertest';
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
+import request from 'supertest';
+
+import { Fixture, app, crowi } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
+
+/**
+ * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
+ * `comment` resource. The Hono port preserves the legacy 4xx
+ * envelopes byte-for-byte (`PAGE_NOT_FOUND` / `PAGE_NOT_GRANTED` /
+ * `COMMENT_NOT_FOUND` / `INVALID_REQUEST`), and the commentCount
+ * post-save hook on the Comment model is exercised end-to-end.
+ */
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -27,8 +36,8 @@ const cleanupPathPrefix = async (prefix: string) => {
   await Promise.all([Comment.deleteMany({ page: { $in: pageIds } }), Page.deleteMany(filter), Revision.deleteMany(filter)]);
 };
 
-describe('Routes /api/v2/comments (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-comment-test/';
+describe('Routes /api/v2/comments (Hono)', () => {
+  const PATH_PREFIX = '/hono-comment-test/';
   let Page: ReturnType<typeof crowi.model>;
   let Comment: ReturnType<typeof crowi.model>;
   let accessToken: string;
@@ -39,8 +48,8 @@ describe('Routes /api/v2/comments (ts-rest)', () => {
     Comment = crowi.model('Comment');
 
     [{ accessToken }, { accessToken: otherAccessToken }] = await Promise.all([
-      createTestUser({ name: 'Comment Tester', username: 'commentTester', email: 'comment-tester@example.com' }),
-      createTestUser({ name: 'Comment Other', username: 'commentOther', email: 'comment-other@example.com' }),
+      createTestUser({ name: 'Comment Tester', username: 'honoCommentTester', email: 'hono-comment-tester@example.com' }),
+      createTestUser({ name: 'Comment Other', username: 'honoCommentOther', email: 'hono-comment-other@example.com' }),
     ]);
   });
 
@@ -91,7 +100,7 @@ describe('Routes /api/v2/comments (ts-rest)', () => {
       expect(listRes.status).toBe(200);
       expect(listRes.body.comments).toHaveLength(1);
       expect(listRes.body.comments[0].comment).toBe('first comment');
-      expect(listRes.body.comments[0].creator.username).toBe('commentTester');
+      expect(listRes.body.comments[0].creator.username).toBe('honoCommentTester');
       expect(listRes.body.comments[0].revision).toBe(revisionId);
     });
   });
@@ -116,12 +125,10 @@ describe('Routes /api/v2/comments (ts-rest)', () => {
       expect(res.status).toBe(200);
       expect(res.body.comment).toBeDefined();
       expect(res.body.comment.comment).toBe('hello world');
-      expect(res.body.comment.creator.username).toBe('commentTester');
+      expect(res.body.comment.creator.username).toBe('honoCommentTester');
       expect(res.body.comment.page).toBe(pageId);
       expect(res.body.comment.revision).toBe(revisionId);
 
-      // commentCount is updated asynchronously by the Comment post-save hook;
-      // poll briefly to allow it to land.
       let pageDoc: { commentCount: number } | null = null;
       for (let i = 0; i < 10; i += 1) {
         pageDoc = await Page.findById(pageId).exec();
@@ -132,7 +139,6 @@ describe('Routes /api/v2/comments (ts-rest)', () => {
     });
 
     it('returns 404 PAGE_NOT_FOUND when caller has no grant on the target page', async () => {
-      // Owner-grant page; only the creator can comment.
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}private`, '# private', 4);
 
       const res = await request(app)

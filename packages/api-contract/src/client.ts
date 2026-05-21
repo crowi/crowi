@@ -37,6 +37,7 @@ import type { z } from 'zod';
 import { appRoutes } from './contracts/app';
 import { backlinkRoutes } from './contracts/backlink';
 import { bookmarkRoutes } from './contracts/bookmark';
+import { commentRoutes } from './contracts/comment';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
@@ -44,6 +45,7 @@ import { userRoutes } from './contracts/user';
 import type { AppInfoResponseSchema } from './schemas/app';
 import type { GetBacklinksResponseSchema } from './schemas/backlink';
 import type { BookmarkResponseSchema, ListMyBookmarksResponseSchema, RemoveBookmarkResponseSchema } from './schemas/bookmark';
+import type { AddCommentResponseSchema, DeleteCommentResponseSchema, ListCommentsResponseSchema } from './schemas/comment';
 import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
 import type {
   ApiTokenResponseSchema,
@@ -73,6 +75,9 @@ type BookmarkResponse = z.infer<typeof BookmarkResponseSchema>;
 type ListMyBookmarksResponse = z.infer<typeof ListMyBookmarksResponseSchema>;
 type RemoveBookmarkResponse = z.infer<typeof RemoveBookmarkResponseSchema>;
 type GetBacklinksResponse = z.infer<typeof GetBacklinksResponseSchema>;
+type ListCommentsResponse = z.infer<typeof ListCommentsResponseSchema>;
+type AddCommentResponse = z.infer<typeof AddCommentResponseSchema>;
+type DeleteCommentResponse = z.infer<typeof DeleteCommentResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -149,6 +154,18 @@ const stubBookmarkResponse: BookmarkResponse = { bookmark: null };
 const stubListMyBookmarks: ListMyBookmarksResponse = { bookmarks: [], pager: stubPager, total: 0 };
 const stubRemoveBookmark: RemoveBookmarkResponse = { ok: true };
 const stubBacklinks: GetBacklinksResponse = { backlinks: [], hasNext: false };
+const stubListComments: ListCommentsResponse = { comments: [] };
+const stubComment = {
+  _id: '',
+  page: '',
+  creator: null,
+  revision: '',
+  comment: '',
+  commentPosition: -1,
+  createdAt: '',
+};
+const stubAddComment: AddCommentResponse = { comment: stubComment };
+const stubDeleteComment: DeleteCommentResponse = { ok: true };
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -189,7 +206,10 @@ const contractApp = new OpenAPIHono()
   .openapi(bookmarkRoutes.listMyBookmarksRoute, (c) => c.json(stubListMyBookmarks, 200))
   .openapi(bookmarkRoutes.addBookmarkRoute, (c) => c.json(stubBookmarkResponse, 200))
   .openapi(bookmarkRoutes.removeBookmarkRoute, (c) => c.json(stubRemoveBookmark, 200))
-  .openapi(backlinkRoutes.getBacklinksRoute, (c) => c.json(stubBacklinks, 200));
+  .openapi(backlinkRoutes.getBacklinksRoute, (c) => c.json(stubBacklinks, 200))
+  .openapi(commentRoutes.listCommentsRoute, (c) => c.json(stubListComments, 200))
+  .openapi(commentRoutes.addCommentRoute, (c) => c.json(stubAddComment, 200))
+  .openapi(commentRoutes.deleteCommentRoute, (c) => c.json(stubDeleteComment, 200));
 
 export type AppType = typeof contractApp;
 
