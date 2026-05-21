@@ -1,29 +1,52 @@
-import { initContract } from '@ts-rest/core';
-import { PreviewPageRequestSchema, PreviewPageResponseSchema } from '../schemas/page-preview';
-import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
-
-const c = initContract();
-
 /**
- * Standalone preview contract. Separated from `pageContract` because
- * preview is a read-only render operation (no revision is created) and
- * has no permission scope tied to a specific page — it's "render this
- * arbitrary markdown for the logged-in user", not "fetch this page".
+ * RFC-0006 Phase 4 Batch 4 — `pagePreview` resource ported to
+ * `@hono/zod-openapi`. Single endpoint:
  *
- * The path stays under `/pages/preview` for discoverability alongside
- * the page CRUD endpoints, but the contract export is its own router
- * so the responsibility boundary is explicit.
+ *   POST /pages/preview — render arbitrary markdown to mdast
+ *
+ * Authentication is required (same as the rest of `/pages/*`); the
+ * page handler chain reuses the `createJwtAuth(crowi)` apply installed
+ * by the revision handler so this contract does not declare auth
+ * middleware itself.
+ *
+ * Standalone contract (separate from `pageContract`) because preview
+ * is a read-only render operation: no revision is created, no page
+ * is fetched, and the contract has no permission scope tied to a
+ * specific page — the input is raw markdown that may belong to no
+ * persisted page at all.
  */
-export const pagePreviewContract = c.router({
-  previewPage: {
-    method: 'POST',
-    path: '/pages/preview',
-    body: PreviewPageRequestSchema,
-    responses: {
-      200: PreviewPageResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      500: InternalServerErrorSchema,
+import { createRoute } from '@hono/zod-openapi';
+
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
+import { PreviewPageRequestSchema, PreviewPageResponseSchema } from '../schemas/page-preview';
+
+export const previewPageRoute = createRoute({
+  method: 'post',
+  path: '/pages/preview',
+  tags: ['page-preview'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Render markdown to mdast for the editor preview pane',
+  request: {
+    body: {
+      content: { 'application/json': { schema: PreviewPageRequestSchema } },
     },
-    summary: 'Render markdown to mdast for the editor preview pane',
+  },
+  responses: {
+    200: {
+      description: 'Rendered mdast tree (serialised — same shape as a persisted revision.renderedAst)',
+      content: { 'application/json': { schema: PreviewPageResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Renderer pipeline failure',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
   },
 });
+
+export const pagePreviewRoutes = {
+  previewPageRoute,
+};

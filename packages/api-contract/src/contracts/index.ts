@@ -1,5 +1,4 @@
 import { initContract } from '@ts-rest/core';
-import { pagePreviewContract } from './page-preview';
 import { pageCollabContract } from './page-collab';
 import { presenceContract } from './presence';
 import { draftContract } from './draft';
@@ -24,6 +23,7 @@ export * from './comment';
 export * from './revision';
 export * from './notification';
 export * from './page';
+export * from './page-preview';
 
 const c = initContract();
 
@@ -47,13 +47,12 @@ const c = initContract();
 // `./bookmark` / `./backlink` / `./comment` / `./revision` /
 // `./notification` and are re-exported above.
 //
-// Batch 4 (1/2) migrated `page` (14 endpoints — the largest single
-// resource) to Hono. Its `createRoute(...)` objects live under
-// `./page` and are re-exported above. The page handler does NOT
-// install its own `createJwtAuth(crowi)` — the revision handler's
-// broad apply on `/pages/*` is shared.
+// Batch 4 migrated `page` (14 endpoints — the largest resource) and
+// `pagePreview` (1 endpoint) to Hono. Their `createRoute(...)` objects
+// live under `./page` / `./page-preview` and are re-exported above.
+// The page handler does NOT install its own `createJwtAuth(crowi)` —
+// the revision handler's broad apply on `/pages/*` is shared.
 export const apiContract = c.router({
-  pagePreview: pagePreviewContract,
   pageCollab: pageCollabContract,
   presence: presenceContract,
   draft: draftContract,

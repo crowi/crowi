@@ -15,12 +15,11 @@ import { Express, Router } from 'express';
 // `revision`, `notification` resources moved to Hono
 // (`hono/handlers/{bookmark,backlink,comment,revision,notification}.ts`).
 // The matching ts-rest router files were deleted.
-// RFC-0006 Phase 4 Batch 4 (1/2) — `page` (14 endpoints — the largest
-// single resource) moved to Hono (`hono/handlers/page.ts`). The page
-// handler does NOT install its own jwtAuth — the revision handler's
-// broad apply on `/pages/*` is shared. See
-// `hono/index.ts:buildHonoApp` for the register order.
-import pagePreviewRoutes from './page-preview';
+// RFC-0006 Phase 4 Batch 4 — `page` (14 endpoints) and `pagePreview`
+// resources moved to Hono (`hono/handlers/page.ts`,
+// `hono/handlers/page-preview.ts`). The page handler does NOT install
+// its own jwtAuth — the revision handler's broad apply on `/pages/*`
+// is shared. See `hono/index.ts:buildHonoApp` for the register order.
 import pageCollabRoutes from './page-collab';
 import presenceRoutes from './presence';
 import draftRoutes from './draft';
@@ -52,7 +51,6 @@ export default (crowi: Crowi, app: Express) => {
   const authenticatedRouter = Router();
   authenticatedRouter.use(jwtAuth(crowi)); // Apply JWT auth to all routes
 
-  const pagePreviewRouter = pagePreviewRoutes(crowi, app);
   const pageCollabRouter = pageCollabRoutes(crowi, app);
   const presenceRouter = presenceRoutes(crowi, app);
   const draftRouter = draftRoutes(crowi, app);
@@ -69,7 +67,6 @@ export default (crowi: Crowi, app: Express) => {
   // any future ts-rest sibling that gets a `/pages/...` prefix.
   authenticatedRouter.use(draftRouter);
   authenticatedRouter.use(autocompleteRouter);
-  authenticatedRouter.use(pagePreviewRouter);
   authenticatedRouter.use(pageCollabRouter);
   authenticatedRouter.use(presenceRouter);
   authenticatedRouter.use(attachmentRouter);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { apiClient } from './api-client';
+import { apiClientV2 } from './api-client';
 
 /**
  * Render `body` to mdast via POST /api/v2/pages/preview.
@@ -15,16 +15,20 @@ import { apiClient } from './api-client';
  *
  * The mutation throws on non-200 so the preview pane can fall back
  * to a "Preview failed" message; transient 401s self-recover via the
- * apiClient's refresh dance.
+ * apiClientV2 fetch wrapper's refresh dance.
+ *
+ * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.pagePreview.*`
+ * (ts-rest) to `apiClientV2.pages.preview.$post` (hc<AppType>).
  */
 export function usePreview() {
   return useMutation({
     mutationFn: async (body: string): Promise<unknown> => {
-      const result = await apiClient.pagePreview.previewPage({ body: { body } });
-      if (result.status === 200) {
-        return result.body.renderedAst;
+      const response = await apiClientV2.pages.preview.$post({ json: { body } });
+      if (!response.ok) {
+        throw new Error('Failed to render preview');
       }
-      throw new Error('Failed to render preview');
+      const data = await response.json();
+      return data.renderedAst;
     },
   });
 }

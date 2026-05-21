@@ -22,7 +22,7 @@ const createTestUser = async () => {
   return { user, accessToken };
 };
 
-describe('Routes /api/v2/pages/preview (ts-rest previewPage)', () => {
+describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   let accessToken: string;
 
   beforeAll(async () => {

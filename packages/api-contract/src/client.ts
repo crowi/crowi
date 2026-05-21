@@ -42,6 +42,7 @@ import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
 import { notificationRoutes } from './contracts/notification';
 import { pageRoutes } from './contracts/page';
+import { pagePreviewRoutes } from './contracts/page-preview';
 import { revisionRoutes } from './contracts/revision';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { userRoutes } from './contracts/user';
@@ -65,6 +66,7 @@ import type {
   OpenNotificationResponseSchema,
 } from './schemas/notification';
 import type { GetPageResponseSchema, ListPagesResponseSchema, PageSchema, SeenUsersResponseSchema, WatchStatusResponseSchema } from './schemas/page';
+import type { PreviewPageResponseSchema } from './schemas/page-preview';
 import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
 import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
@@ -101,6 +103,7 @@ type GetPageResponse = z.infer<typeof GetPageResponseSchema>;
 type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
 type SeenUsersResponse = z.infer<typeof SeenUsersResponseSchema>;
 type WatchStatusResponse = z.infer<typeof WatchStatusResponseSchema>;
+type PreviewPageResponse = z.infer<typeof PreviewPageResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -245,6 +248,7 @@ const stubPageResponse = { page: stubPage };
 const stubListPages: ListPagesResponse = { pages: [], pager: stubPager, portalPage: null };
 const stubSeenUsers: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
 const stubWatchStatus: WatchStatusResponse = { watching: false };
+const stubPreview: PreviewPageResponse = { renderedAst: null };
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -317,6 +321,11 @@ const contractApp = new OpenAPIHono()
   .openapi(pageRoutes.deletePageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.revertDeletedPageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.renamePageRoute, (c) => c.json(stubPageResponse, 200))
+  // page-preview — single endpoint, `/pages/preview` (literal under
+  // `/pages/*`). Method is POST so it does not collide with GET /pages
+  // (getPage) or POST /pages (createPage) — Hono dispatches by
+  // method+path so this is purely organisational.
+  .openapi(pagePreviewRoutes.previewPageRoute, (c) => c.json(stubPreview, 200))
   .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
   .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
   // `/notifications/status` registers before `/notifications/{id}/open`

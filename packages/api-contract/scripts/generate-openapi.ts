@@ -42,6 +42,7 @@ import {
   installerRoutes,
   meRoutes,
   notificationRoutes,
+  pagePreviewRoutes,
   pageRoutes,
   revisionRoutes,
   tokenAuthRoutes,
@@ -267,9 +268,10 @@ const routeGroups = [
   commentRoutes,
   revisionRoutes,
   // page registers AFTER revision so the spec `paths{}` ordering
-  // matches the runtime handler chain (revision -> page ->
-  // notification — see `packages/api/src/hono/index.ts:buildHonoApp`).
+  // matches the runtime handler chain (revision -> page -> page-preview
+  // -> notification — see `packages/api/src/hono/index.ts:buildHonoApp`).
   pageRoutes,
+  pagePreviewRoutes,
   notificationRoutes,
 ];
 for (const group of routeGroups) {
