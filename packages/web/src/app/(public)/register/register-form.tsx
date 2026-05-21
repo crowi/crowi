@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiClient } from '@/lib/api-client';
+import { apiClientV2 } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
 
 export function RegisterForm() {
@@ -35,8 +35,11 @@ export function RegisterForm() {
     setErrors([]);
 
     try {
-      const result = await apiClient.tokenAuth.tokenRegister({
-        body: {
+      // RFC-0006 Phase 4 Batch 1 — switched from
+      // `apiClient.tokenAuth.tokenRegister` to
+      // `apiClientV2.auth.register.$post`. Wire format unchanged.
+      const response = await apiClientV2.auth.register.$post({
+        json: {
           username: formData.username,
           name: formData.name,
           email: formData.email,
@@ -44,15 +47,17 @@ export function RegisterForm() {
         },
       });
 
-      if (result.status === 201) {
+      if (response.status === 201) {
+        const body = await response.json();
         // Store tokens (also mirrors access token into a cookie so
         // browser-built `<img>` requests can authenticate).
-        storeTokens(result.body);
+        storeTokens(body);
 
         // Redirect to home
         router.push('/');
-      } else if (result.status === 400 || result.status === 409 || result.status === 503) {
-        setErrors([result.body.error.message || '登録に失敗しました']);
+      } else if (response.status === 400 || response.status === 403 || response.status === 409 || response.status === 503) {
+        const body = await response.json();
+        setErrors([body.error?.message || '登録に失敗しました']);
       } else {
         setErrors(['予期しないエラーが発生しました']);
       }

@@ -1,13 +1,13 @@
 import Crowi from 'src/crowi';
 import { Express, Router } from 'express';
-// `app` resource was migrated to Hono in RFC-0006 Phase 3; the route now
-// lives at `packages/api/src/hono/handlers/app.ts` and is registered via
-// `buildHonoApp(crowi)` in `packages/api/src/routes/index.ts`.
-// RFC-0006 Phase 4 Batch 1 — `installer` resource moved to Hono
-// (`hono/handlers/installer.ts`); the legacy `auth` (SSR) ts-rest
-// resource was deleted outright in the same batch — see
-// `packages/api-contract/src/contracts/index.ts` for the rationale.
-import tokenAuthRoutes from './tokenAuth';
+// RFC-0006 Phase 3 — `app` resource moved to Hono (handler:
+// `packages/api/src/hono/handlers/app.ts`).
+// RFC-0006 Phase 4 Batch 1 — `installer` + `tokenAuth` resources moved
+// to Hono (`hono/handlers/installer.ts`, `hono/handlers/tokenAuth.ts`);
+// the legacy `auth` SSR resource (`/api/v2/login` / `/api/v2/register`
+// etc.) was deleted outright because no frontend consumer existed.
+// The `publicRouter` Express stage was therefore retired — every
+// remaining ts-rest resource needs auth.
 import meRoutes from './me';
 import pageRoutes from './page';
 import pagePreviewRoutes from './page-preview';
@@ -37,22 +37,12 @@ export default (crowi: Crowi, app: Express) => {
   // ========================================
   // Authentication Layer Structure
   // ========================================
-  // 1. Public routes (no authentication required)
-  // 2. Authenticated routes (JWT authentication required)
-  // 3. Admin routes (JWT authentication + admin permission required)
+  // 1. Authenticated routes (JWT authentication required)
+  // 2. Admin routes (JWT authentication + admin permission required)
   // ========================================
-
-  // Public Router - No authentication required
-  const publicRouter = Router();
-  // `appRouter` removed — `app` resource is served by Hono (Phase 3).
-  // `installerRouter` removed — `installer` resource is served by Hono
-  // (Phase 4 Batch 1).
-  // `authRouter` removed — legacy SSR auth contract deleted wholesale
-  // in Phase 4 Batch 1 (no frontend consumer).
-  const tokenAuthRouter = tokenAuthRoutes(crowi, app);
-
-  debug('Mounting public routes (no auth required)');
-  publicRouter.use(tokenAuthRouter);
+  // Public routes are now exclusively served by Hono (see
+  // `packages/api/src/hono/handlers/`); no ts-rest public router is
+  // mounted on `/api/v2` any more.
 
   // Authenticated Router - JWT authentication required
   const authenticatedRouter = Router();
@@ -106,7 +96,6 @@ export default (crowi: Crowi, app: Express) => {
   adminRouter.use(adminSubRouter);
 
   // Mount all routers under /api/v2
-  app.use('/api/v2', publicRouter);
   app.use('/api/v2', authenticatedRouter);
   app.use('/api/v2', adminRouter);
 

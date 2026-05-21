@@ -1,5 +1,4 @@
 import { initContract } from '@ts-rest/core';
-import { tokenAuthContract } from './tokenAuth';
 import { meContract } from './me';
 import { pageContract } from './page';
 import { pagePreviewContract } from './page-preview';
@@ -24,6 +23,7 @@ import { searchContract } from './search';
 // the `@crowi/api` handler chain and the OpenAPI generator.
 export * from './app';
 export * from './installer';
+export * from './tokenAuth';
 
 const c = initContract();
 
@@ -37,7 +37,6 @@ const c = initContract();
 // production traffic, so we drop them in this phase rather than porting
 // them.
 export const apiContract = c.router({
-  tokenAuth: tokenAuthContract,
   me: meContract,
   page: pageContract,
   pagePreview: pagePreviewContract,

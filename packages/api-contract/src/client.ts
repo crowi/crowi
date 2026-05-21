@@ -36,12 +36,15 @@ import type { z } from 'zod';
 
 import { appRoutes } from './contracts/app';
 import { installerRoutes } from './contracts/installer';
+import { tokenAuthRoutes } from './contracts/tokenAuth';
 import type { AppInfoResponseSchema } from './schemas/app';
 import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
+import type { TokenAuthResponseSchema } from './schemas/auth';
 
 type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
 type InstallerStatusResponse = z.infer<typeof InstallerStatusResponseSchema>;
 type CreateAdminResponse = z.infer<typeof CreateAdminResponseSchema>;
+type TokenAuthResponse = z.infer<typeof TokenAuthResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -56,10 +59,45 @@ type CreateAdminResponse = z.infer<typeof CreateAdminResponseSchema>;
  * are part of the route's `responses` map and `hc`'s type inference
  * picks them up automatically.
  */
+const stubUser = {
+  id: '',
+  username: '',
+  email: '',
+  name: '',
+  admin: false,
+} as const;
+
+const stubTokens: TokenAuthResponse = {
+  accessToken: '',
+  refreshToken: '',
+  expiresIn: 0,
+  user: stubUser,
+};
+
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
-  .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200));
+  .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200))
+  .openapi(tokenAuthRoutes.tokenLoginRoute, (c) => c.json(stubTokens, 200))
+  .openapi(tokenAuthRoutes.tokenRegisterRoute, (c) => c.json(stubTokens, 201))
+  .openapi(tokenAuthRoutes.tokenRefreshRoute, (c) => c.json(stubTokens, 200))
+  .openapi(tokenAuthRoutes.tokenLogoutRoute, (c) => c.json({ message: '' }, 200))
+  .openapi(tokenAuthRoutes.tokenMeRoute, (c) =>
+    c.json(
+      {
+        user: {
+          id: '',
+          username: '',
+          email: '',
+          name: '',
+          status: 0,
+          admin: false,
+          createdAt: '',
+        },
+      },
+      200,
+    ),
+  );
 
 export type AppType = typeof contractApp;
 
