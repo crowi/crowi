@@ -39,6 +39,7 @@ import {
   installerRoutes,
   meRoutes,
   tokenAuthRoutes,
+  userRoutes,
   AdminPagerSchema,
   AdminRequiredErrorSchema,
   AdminUserIdParamSchema,
@@ -249,7 +250,7 @@ for (const [name, schema] of schemas) {
 // them into `paths{}` without needing the real handler implementation
 // (this script intentionally cannot import `@crowi/api` — see the file
 // header for the hermeticity rationale).
-const routeGroups = [appRoutes, installerRoutes, tokenAuthRoutes, meRoutes];
+const routeGroups = [appRoutes, installerRoutes, tokenAuthRoutes, meRoutes, userRoutes];
 for (const group of routeGroups) {
   for (const route of Object.values(group)) {
     // `openapi(route, handler)` requires a handler; `_def` is the

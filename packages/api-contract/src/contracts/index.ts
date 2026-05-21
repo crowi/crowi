@@ -3,7 +3,6 @@ import { pageContract } from './page';
 import { pagePreviewContract } from './page-preview';
 import { pageCollabContract } from './page-collab';
 import { presenceContract } from './presence';
-import { userContract } from './user';
 import { commentContract } from './comment';
 import { bookmarkContract } from './bookmark';
 import { revisionContract } from './revision';
@@ -24,6 +23,7 @@ export * from './app';
 export * from './installer';
 export * from './tokenAuth';
 export * from './me';
+export * from './user';
 
 const c = initContract();
 
@@ -37,15 +37,15 @@ const c = initContract();
 // production traffic, so we drop them in this phase rather than porting
 // them.
 //
-// Batch 2 migrated `me` to Hono — it now exposes `createRoute(...)`
-// definitions via `./me`. The legacy ts-rest `meContract` branch was
-// dropped from the aggregator below.
+// Batch 2 migrated `me` and `user` to Hono — both now expose
+// `createRoute(...)` definitions via `./me` and `./user`. The legacy
+// ts-rest `meContract` / `userContract` branches were dropped from the
+// aggregator below.
 export const apiContract = c.router({
   page: pageContract,
   pagePreview: pagePreviewContract,
   pageCollab: pageCollabContract,
   presence: presenceContract,
-  user: userContract,
   comment: commentContract,
   bookmark: bookmarkContract,
   revision: revisionContract,

@@ -1,0 +1,200 @@
+/**
+ * RFC-0006 Phase 4 Batch 2 — `user` resource Hono port.
+ *
+ * Replaces `packages/api/src/routes/ts-rest/user.ts`. Three endpoints,
+ * all behind `createJwtAuth(crowi)` applied broadly to `/user/*`:
+ *
+ *   GET /user/:username             — profile + recent activity
+ *   GET /user/:username/bookmarks   — paginated bookmarks
+ *   GET /user/:username/pages       — paginated created pages
+ *
+ * Wire-format parity is preserved. The legacy handlers checked `req.user`
+ * manually and returned `AUTHENTICATION_REQUIRED`; the middleware does
+ * that uniformly now so the per-handler guard goes away. The 404 envelope
+ * (`USER_NOT_FOUND`) covers both "no document" and "user is not active"
+ * cases — same as before, to avoid leaking user-existence signal.
+ *
+ * Both pagination endpoints respect the same `visiblePageStatusOr` +
+ * `GRANT_PUBLIC` policy as the ts-rest version when viewing another
+ * user's pages.
+ */
+import { getUserBookmarksRoute, getUserPageRoute, getUserPagesRoute } from '@crowi/api-contract';
+import type { OpenAPIHono } from '@hono/zod-openapi';
+import Debug from 'debug';
+import type { Types } from 'mongoose';
+
+import type Crowi from 'src/crowi';
+import type { BookmarkDocument } from 'src/models/bookmark';
+import { type PageDocument, visiblePageStatusOr } from 'src/models/page';
+import { type PageLike, pageToResponse } from 'src/util/page-response';
+import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
+
+import type { CrowiHonoBindings } from '../app';
+import { createJwtAuth } from '../middleware/auth';
+
+import { INTERNAL_ERROR_BODY } from './_helpers/errors';
+
+const debug = Debug('crowi:hono:handlers:user');
+
+const USER_NOT_FOUND_BODY = {
+  error: { code: 'USER_NOT_FOUND' as const, message: 'User not found' as const },
+};
+
+/**
+ * Shape the ts-rest handler accepted for bookmark documents. Mirrors
+ * `routes/ts-rest/user.ts` so the response shape is byte-identical.
+ */
+interface BookmarkLike {
+  _id: Types.ObjectId | string;
+  page?: PageLike | null;
+  user: PopulatedUser | Types.ObjectId | string;
+  createdAt?: Date;
+  toObject?: () => BookmarkLike;
+}
+
+const bookmarkToResponse = (bookmark: BookmarkDocument | BookmarkLike) => {
+  const obj: BookmarkLike =
+    typeof (bookmark as BookmarkDocument).toObject === 'function' ? (bookmark as BookmarkDocument).toObject() : (bookmark as BookmarkLike);
+  return {
+    _id: toStringId(obj._id),
+    page: obj.page ? pageToResponse(obj.page) : null,
+    user: isPopulatedUser(obj.user) ? toPageUser(obj.user) : toStringId(obj.user as Types.ObjectId | string),
+    createdAt: toISOStringOrNull(obj.createdAt) || new Date().toISOString(),
+  };
+};
+
+export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
+  const User = crowi.model('User');
+  const Page = crowi.model('Page');
+  const Bookmark = crowi.model('Bookmark');
+
+  // Every `/user/*` endpoint requires auth. Apply the middleware
+  // broadly so each route below sees `c.get('user')` populated.
+  app.use('/user/*', createJwtAuth(crowi));
+
+  return app
+    .openapi(getUserPageRoute, async (c) => {
+      const currentUser = c.get('user');
+      const { username } = c.req.valid('param');
+
+      debug('getUserPage called with:', { username, currentUserId: currentUser._id });
+
+      try {
+        const targetUser = await User.findUserByUsername(username);
+        if (!targetUser || targetUser.status !== User.STATUS_ACTIVE) {
+          return c.json(USER_NOT_FOUND_BODY, 404);
+        }
+
+        const isViewingSelf = currentUser._id.equals(targetUser._id);
+        // Match `findListByCreator`'s visibility conditions.
+        const pageCountConditions: Record<string, unknown> = {
+          creator: targetUser._id,
+          redirectTo: null,
+          $or: visiblePageStatusOr(currentUser._id, targetUser._id),
+        };
+        if (!isViewingSelf) {
+          pageCountConditions.grant = Page.GRANT_PUBLIC;
+        }
+        const createdPagesCount = await Page.countDocuments(pageCountConditions);
+        const bookmarksCount = await Bookmark.countDocuments({ user: targetUser._id });
+
+        const recentPagesRaw = await Page.findListByCreator(targetUser, { limit: 10, offset: 0 }, currentUser);
+        const recentPages = (await Page.populate(recentPagesRaw, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
+
+        const bookmarkResult = await Bookmark.findByUserId(targetUser._id, { limit: 10, offset: 0 });
+        const recentBookmarks = bookmarkResult.data as BookmarkDocument[];
+
+        return c.json(
+          {
+            user: toUserPublic(targetUser),
+            createdPagesCount,
+            bookmarksCount,
+            recentPages: recentPages.map((page) => pageToResponse(page)),
+            recentBookmarks: recentBookmarks.filter((bookmark) => bookmark.page).map((bookmark) => bookmarkToResponse(bookmark)),
+          },
+          200,
+        );
+      } catch (err) {
+        const error = err as Error;
+        debug('Error fetching user page:', error.message, error.stack);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(getUserBookmarksRoute, async (c) => {
+      const currentUser = c.get('user');
+      const { username } = c.req.valid('param');
+      const { limit, offset } = c.req.valid('query');
+
+      debug('getUserBookmarks called with:', { username, limit, offset, currentUserId: currentUser._id });
+
+      try {
+        const targetUser = await User.findUserByUsername(username);
+        if (!targetUser || targetUser.status !== User.STATUS_ACTIVE) {
+          return c.json(USER_NOT_FOUND_BODY, 404);
+        }
+
+        const bookmarkResult = await Bookmark.findByUserId(targetUser._id, { limit, offset });
+        const bookmarks = bookmarkResult.data as BookmarkDocument[];
+        const total = bookmarkResult.meta.total;
+
+        const prev = offset > 0 ? Math.max(0, offset - limit) : null;
+        const next = offset + limit < total ? offset + limit : null;
+
+        return c.json(
+          {
+            bookmarks: bookmarks.filter((bookmark) => bookmark.page).map((bookmark) => bookmarkToResponse(bookmark)),
+            pager: { prev, next, offset },
+            total,
+          },
+          200,
+        );
+      } catch (err) {
+        const error = err as Error;
+        debug('Error fetching user bookmarks:', error.message, error.stack);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(getUserPagesRoute, async (c) => {
+      const currentUser = c.get('user');
+      const { username } = c.req.valid('param');
+      const { limit, offset } = c.req.valid('query');
+
+      debug('getUserPages called with:', { username, limit, offset, currentUserId: currentUser._id });
+
+      try {
+        const targetUser = await User.findUserByUsername(username);
+        if (!targetUser || targetUser.status !== User.STATUS_ACTIVE) {
+          return c.json(USER_NOT_FOUND_BODY, 404);
+        }
+
+        const rawPages = await Page.findListByCreator(targetUser, { limit, offset }, currentUser);
+        const pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
+
+        const pageCountConditions: Record<string, unknown> = {
+          creator: targetUser._id,
+          redirectTo: null,
+          $or: visiblePageStatusOr(currentUser._id, targetUser._id),
+        };
+        if (!currentUser._id.equals(targetUser._id)) {
+          pageCountConditions.grant = Page.GRANT_PUBLIC;
+        }
+        const total = await Page.countDocuments(pageCountConditions);
+
+        const prev = offset > 0 ? Math.max(0, offset - limit) : null;
+        const next = offset + limit < total ? offset + limit : null;
+
+        return c.json(
+          {
+            pages: pages.map((page) => pageToResponse(page)),
+            pager: { prev, next, offset },
+            total,
+          },
+          200,
+        );
+      } catch (err) {
+        const error = err as Error;
+        debug('Error fetching user pages:', error.message, error.stack);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    });
+};

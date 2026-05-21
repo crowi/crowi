@@ -38,6 +38,7 @@ import { appRoutes } from './contracts/app';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
+import { userRoutes } from './contracts/user';
 import type { AppInfoResponseSchema } from './schemas/app';
 import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
 import type {
@@ -49,6 +50,7 @@ import type {
   UserProfileResponseSchema,
 } from './schemas/me';
 import type { TokenAuthResponseSchema } from './schemas/auth';
+import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
 
 type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
 type InstallerStatusResponse = z.infer<typeof InstallerStatusResponseSchema>;
@@ -60,6 +62,9 @@ type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
 type PasswordUpdateSuccess = z.infer<typeof PasswordUpdateSuccessSchema>;
 type ApiTokenResponse = z.infer<typeof ApiTokenResponseSchema>;
 type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;
+type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
+type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
+type UserPagesResponse = z.infer<typeof UserPagesResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -100,6 +105,38 @@ const stubProfile: UserProfileResponse = {
   createdAt: '',
 };
 
+const stubUserPublic = {
+  _id: '',
+  id: '',
+  username: '',
+  name: '',
+  email: 'stub@example.com',
+  image: null,
+  introduction: '',
+  createdAt: '',
+  admin: false,
+} as const;
+
+const stubUserPage: UserPageResponse = {
+  user: stubUserPublic,
+  createdPagesCount: 0,
+  bookmarksCount: 0,
+};
+
+const stubPager = { prev: null, next: null, offset: 0 } as const;
+
+const stubUserBookmarks: UserBookmarksResponse = {
+  bookmarks: [],
+  pager: stubPager,
+  total: 0,
+};
+
+const stubUserPages: UserPagesResponse = {
+  pages: [],
+  pager: stubPager,
+  total: 0,
+};
+
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
@@ -131,7 +168,10 @@ const contractApp = new OpenAPIHono()
   .openapi(meRoutes.updatePasswordRoute, (c) => c.json({ status: 'ok', message: '' } satisfies PasswordUpdateSuccess, 200))
   .openapi(meRoutes.getApiTokenRoute, (c) => c.json({ status: 'ok', apiToken: '' } satisfies ApiTokenResponse, 200))
   .openapi(meRoutes.resetApiTokenRoute, (c) => c.json({ status: 'ok', apiToken: '' } satisfies ApiTokenResponse, 200))
-  .openapi(meRoutes.recentlyViewedPagesRoute, (c) => c.json({ pages: [] } satisfies RecentlyViewedPagesResponse, 200));
+  .openapi(meRoutes.recentlyViewedPagesRoute, (c) => c.json({ pages: [] } satisfies RecentlyViewedPagesResponse, 200))
+  .openapi(userRoutes.getUserPageRoute, (c) => c.json(stubUserPage, 200))
+  .openapi(userRoutes.getUserBookmarksRoute, (c) => c.json(stubUserBookmarks, 200))
+  .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200));
 
 export type AppType = typeof contractApp;
 

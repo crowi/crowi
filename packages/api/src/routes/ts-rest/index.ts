@@ -8,13 +8,13 @@ import { Express, Router } from 'express';
 // etc.) was deleted outright because no frontend consumer existed.
 // The `publicRouter` Express stage was therefore retired — every
 // remaining ts-rest resource needs auth.
-// RFC-0006 Phase 4 Batch 2 — `me` resource moved to Hono
-// (`hono/handlers/me.ts`). The ts-rest router file was deleted.
+// RFC-0006 Phase 4 Batch 2 — `me` + `user` resources moved to Hono
+// (`hono/handlers/me.ts`, `hono/handlers/user.ts`). The ts-rest
+// router files were deleted.
 import pageRoutes from './page';
 import pagePreviewRoutes from './page-preview';
 import pageCollabRoutes from './page-collab';
 import presenceRoutes from './presence';
-import userRoutes from './user';
 import commentRoutes from './comment';
 import bookmarkRoutes from './bookmark';
 import revisionRoutes from './revision';
@@ -53,7 +53,6 @@ export default (crowi: Crowi, app: Express) => {
   const pagePreviewRouter = pagePreviewRoutes(crowi, app);
   const pageCollabRouter = pageCollabRoutes(crowi, app);
   const presenceRouter = presenceRoutes(crowi, app);
-  const userRouter = userRoutes(crowi, app);
   const commentRouter = commentRoutes(crowi, app);
   const bookmarkRouter = bookmarkRoutes(crowi, app);
   const revisionRouter = revisionRoutes(crowi, app);
@@ -74,7 +73,6 @@ export default (crowi: Crowi, app: Express) => {
   authenticatedRouter.use(pagePreviewRouter);
   authenticatedRouter.use(pageCollabRouter);
   authenticatedRouter.use(presenceRouter);
-  authenticatedRouter.use(userRouter);
   authenticatedRouter.use(commentRouter);
   authenticatedRouter.use(bookmarkRouter);
   authenticatedRouter.use(revisionRouter);

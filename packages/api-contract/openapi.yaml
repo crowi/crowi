@@ -5029,4 +5029,2583 @@ paths:
                       - message
                 required:
                   - error
+  /me:
+    get:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Get current user profile
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  username:
+                    type: string
+                  name:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                  lang:
+                    type: string
+                    enum:
+                      - en
+                      - en-US
+                      - en-GB
+                      - ja
+                  image:
+                    type:
+                      - string
+                      - 'null'
+                  introduction:
+                    type: string
+                  googleId:
+                    type:
+                      - string
+                      - 'null'
+                  githubId:
+                    type:
+                      - string
+                      - 'null'
+                  hasPassword:
+                    type: boolean
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - username
+                  - name
+                  - email
+                  - lang
+                  - image
+                  - hasPassword
+                  - createdAt
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+    put:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Update profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userForm:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                    email:
+                      type: string
+                      format: email
+                    lang:
+                      type: string
+                      enum:
+                        - en
+                        - en-US
+                        - en-GB
+                        - ja
+                  required:
+                    - name
+                    - email
+                    - lang
+              required:
+                - userForm
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  username:
+                    type: string
+                  name:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                  lang:
+                    type: string
+                    enum:
+                      - en
+                      - en-US
+                      - en-GB
+                      - ja
+                  image:
+                    type:
+                      - string
+                      - 'null'
+                  introduction:
+                    type: string
+                  googleId:
+                    type:
+                      - string
+                      - 'null'
+                  githubId:
+                    type:
+                      - string
+                      - 'null'
+                  hasPassword:
+                    type: boolean
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - username
+                  - name
+                  - email
+                  - lang
+                  - image
+                  - hasPassword
+                  - createdAt
+        '400':
+          description: Profile update failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - error
+                  message:
+                    type: string
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - status
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /me/picture:
+    post:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Upload profile picture
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  description: Profile picture file
+      responses:
+        '200':
+          description: Picture uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  url:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - status
+        '400':
+          description: Upload failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - error
+                  message:
+                    type: string
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - status
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+    delete:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Delete profile picture
+      responses:
+        '200':
+          description: Picture deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                  message:
+                    type: string
+                required:
+                  - status
+        '400':
+          description: Delete failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - error
+                  message:
+                    type: string
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - status
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /me/password:
+    put:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Update password
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                oldPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+                  maxLength: 100
+                  pattern: >-
+                    ^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])[a-zA-Z\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]+$
+                newPasswordConfirm:
+                  type: string
+              required:
+                - newPassword
+                - newPasswordConfirm
+      responses:
+        '200':
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                  message:
+                    type: string
+                required:
+                  - status
+                  - message
+        '400':
+          description: Password update failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - error
+                  message:
+                    type: string
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - status
+                  - message
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /me/apiToken:
+    get:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Get current API token
+      responses:
+        '200':
+          description: Current API token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                  apiToken:
+                    type: string
+                required:
+                  - status
+                  - apiToken
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - error
+                  message:
+                    type: string
+                required:
+                  - status
+                  - message
+    post:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Regenerate API token
+      responses:
+        '200':
+          description: Regenerated API token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                  apiToken:
+                    type: string
+                required:
+                  - status
+                  - apiToken
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - error
+                  message:
+                    type: string
+                required:
+                  - status
+                  - message
+  /me/recently-viewed-pages:
+    get:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Get the current user's recently-viewed pages
+      responses:
+        '200':
+          description: Recently-viewed pages list (up to 5)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        path:
+                          type: string
+                        revision:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                path:
+                                  type: string
+                                body:
+                                  type: string
+                                format:
+                                  type: string
+                                  default: markdown
+                                author:
+                                  type:
+                                    - object
+                                    - 'null'
+                                  properties:
+                                    _id:
+                                      type: string
+                                    id:
+                                      type: string
+                                    username:
+                                      type: string
+                                    name:
+                                      type: string
+                                    email:
+                                      type: string
+                                      format: email
+                                    image:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    createdAt:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - username
+                                    - name
+                                    - email
+                                    - createdAt
+                                createdAt:
+                                  type: string
+                                meta:
+                                  type: object
+                                  properties:
+                                    toc:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          level:
+                                            type: integer
+                                            minimum: 1
+                                            maximum: 6
+                                          text:
+                                            type: string
+                                          anchorId:
+                                            type: string
+                                        required:
+                                          - level
+                                          - text
+                                          - anchorId
+                                    wikiLinks:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          raw:
+                                            type: string
+                                          target:
+                                            type: string
+                                          displayText:
+                                            type: string
+                                        required:
+                                          - raw
+                                          - target
+                                    mentions:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          username:
+                                            type: string
+                                        required:
+                                          - username
+                                    codeBlockLanguages:
+                                      type: array
+                                      items:
+                                        type: string
+                                renderedAst: {}
+                                rendererVersion:
+                                  type: string
+                                parentRevisionId:
+                                  type:
+                                    - string
+                                    - 'null'
+                                type:
+                                  type: string
+                                  enum:
+                                    - snapshot
+                                    - incremental
+                                savedBy:
+                                  anyOf:
+                                    - type: string
+                                    - type: object
+                                      properties:
+                                        _id:
+                                          type: string
+                                        id:
+                                          type: string
+                                        username:
+                                          type: string
+                                        name:
+                                          type: string
+                                        email:
+                                          type: string
+                                          format: email
+                                        image:
+                                          type:
+                                            - string
+                                            - 'null'
+                                        createdAt:
+                                          type: string
+                                      required:
+                                        - _id
+                                        - username
+                                        - name
+                                        - email
+                                        - createdAt
+                                    - type: 'null'
+                                contributors:
+                                  type: array
+                                  items:
+                                    anyOf:
+                                      - type: string
+                                      - type: object
+                                        properties:
+                                          _id:
+                                            type: string
+                                          id:
+                                            type: string
+                                          username:
+                                            type: string
+                                          name:
+                                            type: string
+                                          email:
+                                            type: string
+                                            format: email
+                                          image:
+                                            type:
+                                              - string
+                                              - 'null'
+                                          createdAt:
+                                            type: string
+                                        required:
+                                          - _id
+                                          - username
+                                          - name
+                                          - email
+                                          - createdAt
+                                message:
+                                  type: string
+                              required:
+                                - _id
+                                - path
+                                - body
+                                - createdAt
+                        redirectTo:
+                          type:
+                            - string
+                            - 'null'
+                        status:
+                          type:
+                            - string
+                            - 'null'
+                          enum:
+                            - wip
+                            - published
+                            - deleted
+                            - deprecated
+                            - null
+                        grant:
+                          type: number
+                        grantedUsers:
+                          type: array
+                          items:
+                            type: string
+                        creator:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                name:
+                                  type: string
+                                email:
+                                  type: string
+                                  format: email
+                                image:
+                                  type:
+                                    - string
+                                    - 'null'
+                                createdAt:
+                                  type: string
+                              required:
+                                - _id
+                                - username
+                                - name
+                                - email
+                                - createdAt
+                            - type: 'null'
+                        lastUpdateUser:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                name:
+                                  type: string
+                                email:
+                                  type: string
+                                  format: email
+                                image:
+                                  type:
+                                    - string
+                                    - 'null'
+                                createdAt:
+                                  type: string
+                              required:
+                                - _id
+                                - username
+                                - name
+                                - email
+                                - createdAt
+                            - type: 'null'
+                        liker:
+                          type: array
+                          items:
+                            type: string
+                        commentCount:
+                          type: number
+                          default: 0
+                        extended:
+                          type: object
+                          additionalProperties: {}
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
+                        currentRevision:
+                          type:
+                            - string
+                            - 'null'
+                        yjsCheckpointAt:
+                          type:
+                            - string
+                            - 'null'
+                        latestRevision:
+                          type: string
+                        likerCount:
+                          type: number
+                        seenUsersCount:
+                          type: number
+                      required:
+                        - _id
+                        - path
+                        - createdAt
+                required:
+                  - pages
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /user/{username}:
+    get:
+      tags:
+        - user
+      security:
+        - bearerAuth: []
+      summary: Get user page information
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: username
+          in: path
+      responses:
+        '200':
+          description: User profile with statistics + recent activity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      id:
+                        type: string
+                      username:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                        format: email
+                      image:
+                        type:
+                          - string
+                          - 'null'
+                      introduction:
+                        type: string
+                      createdAt:
+                        type: string
+                      admin:
+                        type: boolean
+                      status:
+                        type: integer
+                        enum:
+                          - 1
+                          - 2
+                          - 3
+                          - 4
+                          - 5
+                    required:
+                      - _id
+                      - username
+                      - name
+                      - email
+                      - createdAt
+                  createdPagesCount:
+                    type: number
+                  bookmarksCount:
+                    type: number
+                  recentPages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        path:
+                          type: string
+                        revision:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                path:
+                                  type: string
+                                body:
+                                  type: string
+                                format:
+                                  type: string
+                                  default: markdown
+                                author:
+                                  type:
+                                    - object
+                                    - 'null'
+                                  properties:
+                                    _id:
+                                      type: string
+                                    id:
+                                      type: string
+                                    username:
+                                      type: string
+                                    name:
+                                      type: string
+                                    email:
+                                      type: string
+                                      format: email
+                                    image:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    createdAt:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - username
+                                    - name
+                                    - email
+                                    - createdAt
+                                createdAt:
+                                  type: string
+                                meta:
+                                  type: object
+                                  properties:
+                                    toc:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          level:
+                                            type: integer
+                                            minimum: 1
+                                            maximum: 6
+                                          text:
+                                            type: string
+                                          anchorId:
+                                            type: string
+                                        required:
+                                          - level
+                                          - text
+                                          - anchorId
+                                    wikiLinks:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          raw:
+                                            type: string
+                                          target:
+                                            type: string
+                                          displayText:
+                                            type: string
+                                        required:
+                                          - raw
+                                          - target
+                                    mentions:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          username:
+                                            type: string
+                                        required:
+                                          - username
+                                    codeBlockLanguages:
+                                      type: array
+                                      items:
+                                        type: string
+                                renderedAst: {}
+                                rendererVersion:
+                                  type: string
+                                parentRevisionId:
+                                  type:
+                                    - string
+                                    - 'null'
+                                type:
+                                  type: string
+                                  enum:
+                                    - snapshot
+                                    - incremental
+                                savedBy:
+                                  anyOf:
+                                    - type: string
+                                    - type: object
+                                      properties:
+                                        _id:
+                                          type: string
+                                        id:
+                                          type: string
+                                        username:
+                                          type: string
+                                        name:
+                                          type: string
+                                        email:
+                                          type: string
+                                          format: email
+                                        image:
+                                          type:
+                                            - string
+                                            - 'null'
+                                        createdAt:
+                                          type: string
+                                      required:
+                                        - _id
+                                        - username
+                                        - name
+                                        - email
+                                        - createdAt
+                                    - type: 'null'
+                                contributors:
+                                  type: array
+                                  items:
+                                    anyOf:
+                                      - type: string
+                                      - type: object
+                                        properties:
+                                          _id:
+                                            type: string
+                                          id:
+                                            type: string
+                                          username:
+                                            type: string
+                                          name:
+                                            type: string
+                                          email:
+                                            type: string
+                                            format: email
+                                          image:
+                                            type:
+                                              - string
+                                              - 'null'
+                                          createdAt:
+                                            type: string
+                                        required:
+                                          - _id
+                                          - username
+                                          - name
+                                          - email
+                                          - createdAt
+                                message:
+                                  type: string
+                              required:
+                                - _id
+                                - path
+                                - body
+                                - createdAt
+                        redirectTo:
+                          type:
+                            - string
+                            - 'null'
+                        status:
+                          type:
+                            - string
+                            - 'null'
+                          enum:
+                            - wip
+                            - published
+                            - deleted
+                            - deprecated
+                            - null
+                        grant:
+                          type: number
+                        grantedUsers:
+                          type: array
+                          items:
+                            type: string
+                        creator:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                name:
+                                  type: string
+                                email:
+                                  type: string
+                                  format: email
+                                image:
+                                  type:
+                                    - string
+                                    - 'null'
+                                createdAt:
+                                  type: string
+                              required:
+                                - _id
+                                - username
+                                - name
+                                - email
+                                - createdAt
+                            - type: 'null'
+                        lastUpdateUser:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                name:
+                                  type: string
+                                email:
+                                  type: string
+                                  format: email
+                                image:
+                                  type:
+                                    - string
+                                    - 'null'
+                                createdAt:
+                                  type: string
+                              required:
+                                - _id
+                                - username
+                                - name
+                                - email
+                                - createdAt
+                            - type: 'null'
+                        liker:
+                          type: array
+                          items:
+                            type: string
+                        commentCount:
+                          type: number
+                          default: 0
+                        extended:
+                          type: object
+                          additionalProperties: {}
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
+                        currentRevision:
+                          type:
+                            - string
+                            - 'null'
+                        yjsCheckpointAt:
+                          type:
+                            - string
+                            - 'null'
+                        latestRevision:
+                          type: string
+                        likerCount:
+                          type: number
+                        seenUsersCount:
+                          type: number
+                      required:
+                        - _id
+                        - path
+                        - createdAt
+                  recentBookmarks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        page:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                            path:
+                              type: string
+                            revision:
+                              anyOf:
+                                - type: string
+                                - type: object
+                                  properties:
+                                    _id:
+                                      type: string
+                                    path:
+                                      type: string
+                                    body:
+                                      type: string
+                                    format:
+                                      type: string
+                                      default: markdown
+                                    author:
+                                      type:
+                                        - object
+                                        - 'null'
+                                      properties:
+                                        _id:
+                                          type: string
+                                        id:
+                                          type: string
+                                        username:
+                                          type: string
+                                        name:
+                                          type: string
+                                        email:
+                                          type: string
+                                          format: email
+                                        image:
+                                          type:
+                                            - string
+                                            - 'null'
+                                        createdAt:
+                                          type: string
+                                      required:
+                                        - _id
+                                        - username
+                                        - name
+                                        - email
+                                        - createdAt
+                                    createdAt:
+                                      type: string
+                                    meta:
+                                      type: object
+                                      properties:
+                                        toc:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              level:
+                                                type: integer
+                                                minimum: 1
+                                                maximum: 6
+                                              text:
+                                                type: string
+                                              anchorId:
+                                                type: string
+                                            required:
+                                              - level
+                                              - text
+                                              - anchorId
+                                        wikiLinks:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              raw:
+                                                type: string
+                                              target:
+                                                type: string
+                                              displayText:
+                                                type: string
+                                            required:
+                                              - raw
+                                              - target
+                                        mentions:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              username:
+                                                type: string
+                                            required:
+                                              - username
+                                        codeBlockLanguages:
+                                          type: array
+                                          items:
+                                            type: string
+                                    renderedAst: {}
+                                    rendererVersion:
+                                      type: string
+                                    parentRevisionId:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    type:
+                                      type: string
+                                      enum:
+                                        - snapshot
+                                        - incremental
+                                    savedBy:
+                                      anyOf:
+                                        - type: string
+                                        - type: object
+                                          properties:
+                                            _id:
+                                              type: string
+                                            id:
+                                              type: string
+                                            username:
+                                              type: string
+                                            name:
+                                              type: string
+                                            email:
+                                              type: string
+                                              format: email
+                                            image:
+                                              type:
+                                                - string
+                                                - 'null'
+                                            createdAt:
+                                              type: string
+                                          required:
+                                            - _id
+                                            - username
+                                            - name
+                                            - email
+                                            - createdAt
+                                        - type: 'null'
+                                    contributors:
+                                      type: array
+                                      items:
+                                        anyOf:
+                                          - type: string
+                                          - type: object
+                                            properties:
+                                              _id:
+                                                type: string
+                                              id:
+                                                type: string
+                                              username:
+                                                type: string
+                                              name:
+                                                type: string
+                                              email:
+                                                type: string
+                                                format: email
+                                              image:
+                                                type:
+                                                  - string
+                                                  - 'null'
+                                              createdAt:
+                                                type: string
+                                            required:
+                                              - _id
+                                              - username
+                                              - name
+                                              - email
+                                              - createdAt
+                                    message:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - path
+                                    - body
+                                    - createdAt
+                            redirectTo:
+                              type:
+                                - string
+                                - 'null'
+                            status:
+                              type:
+                                - string
+                                - 'null'
+                              enum:
+                                - wip
+                                - published
+                                - deleted
+                                - deprecated
+                                - null
+                            grant:
+                              type: number
+                            grantedUsers:
+                              type: array
+                              items:
+                                type: string
+                            creator:
+                              anyOf:
+                                - type: string
+                                - type: object
+                                  properties:
+                                    _id:
+                                      type: string
+                                    id:
+                                      type: string
+                                    username:
+                                      type: string
+                                    name:
+                                      type: string
+                                    email:
+                                      type: string
+                                      format: email
+                                    image:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    createdAt:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - username
+                                    - name
+                                    - email
+                                    - createdAt
+                                - type: 'null'
+                            lastUpdateUser:
+                              anyOf:
+                                - type: string
+                                - type: object
+                                  properties:
+                                    _id:
+                                      type: string
+                                    id:
+                                      type: string
+                                    username:
+                                      type: string
+                                    name:
+                                      type: string
+                                    email:
+                                      type: string
+                                      format: email
+                                    image:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    createdAt:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - username
+                                    - name
+                                    - email
+                                    - createdAt
+                                - type: 'null'
+                            liker:
+                              type: array
+                              items:
+                                type: string
+                            commentCount:
+                              type: number
+                              default: 0
+                            extended:
+                              type: object
+                              additionalProperties: {}
+                            createdAt:
+                              type: string
+                            updatedAt:
+                              type: string
+                            currentRevision:
+                              type:
+                                - string
+                                - 'null'
+                            yjsCheckpointAt:
+                              type:
+                                - string
+                                - 'null'
+                            latestRevision:
+                              type: string
+                            likerCount:
+                              type: number
+                            seenUsersCount:
+                              type: number
+                          required:
+                            - _id
+                            - path
+                            - createdAt
+                        user:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                name:
+                                  type: string
+                                email:
+                                  type: string
+                                  format: email
+                                image:
+                                  type:
+                                    - string
+                                    - 'null'
+                                introduction:
+                                  type: string
+                                createdAt:
+                                  type: string
+                                admin:
+                                  type: boolean
+                                status:
+                                  type: integer
+                                  enum:
+                                    - 1
+                                    - 2
+                                    - 3
+                                    - 4
+                                    - 5
+                              required:
+                                - _id
+                                - username
+                                - name
+                                - email
+                                - createdAt
+                        createdAt:
+                          type: string
+                      required:
+                        - _id
+                        - page
+                        - user
+                        - createdAt
+                required:
+                  - user
+                  - createdPagesCount
+                  - bookmarksCount
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - USER_NOT_FOUND
+                      message:
+                        type: string
+                        enum:
+                          - User not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /user/{username}/bookmarks:
+    get:
+      tags:
+        - user
+      security:
+        - bearerAuth: []
+      summary: Get user bookmarks (paginated)
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: username
+          in: path
+        - schema:
+            type:
+              - number
+              - 'null'
+            default: 50
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type:
+              - number
+              - 'null'
+            default: 0
+          required: false
+          name: offset
+          in: query
+      responses:
+        '200':
+          description: Paginated bookmarks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookmarks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        page:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                            path:
+                              type: string
+                            revision:
+                              anyOf:
+                                - type: string
+                                - type: object
+                                  properties:
+                                    _id:
+                                      type: string
+                                    path:
+                                      type: string
+                                    body:
+                                      type: string
+                                    format:
+                                      type: string
+                                      default: markdown
+                                    author:
+                                      type:
+                                        - object
+                                        - 'null'
+                                      properties:
+                                        _id:
+                                          type: string
+                                        id:
+                                          type: string
+                                        username:
+                                          type: string
+                                        name:
+                                          type: string
+                                        email:
+                                          type: string
+                                          format: email
+                                        image:
+                                          type:
+                                            - string
+                                            - 'null'
+                                        createdAt:
+                                          type: string
+                                      required:
+                                        - _id
+                                        - username
+                                        - name
+                                        - email
+                                        - createdAt
+                                    createdAt:
+                                      type: string
+                                    meta:
+                                      type: object
+                                      properties:
+                                        toc:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              level:
+                                                type: integer
+                                                minimum: 1
+                                                maximum: 6
+                                              text:
+                                                type: string
+                                              anchorId:
+                                                type: string
+                                            required:
+                                              - level
+                                              - text
+                                              - anchorId
+                                        wikiLinks:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              raw:
+                                                type: string
+                                              target:
+                                                type: string
+                                              displayText:
+                                                type: string
+                                            required:
+                                              - raw
+                                              - target
+                                        mentions:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              username:
+                                                type: string
+                                            required:
+                                              - username
+                                        codeBlockLanguages:
+                                          type: array
+                                          items:
+                                            type: string
+                                    renderedAst: {}
+                                    rendererVersion:
+                                      type: string
+                                    parentRevisionId:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    type:
+                                      type: string
+                                      enum:
+                                        - snapshot
+                                        - incremental
+                                    savedBy:
+                                      anyOf:
+                                        - type: string
+                                        - type: object
+                                          properties:
+                                            _id:
+                                              type: string
+                                            id:
+                                              type: string
+                                            username:
+                                              type: string
+                                            name:
+                                              type: string
+                                            email:
+                                              type: string
+                                              format: email
+                                            image:
+                                              type:
+                                                - string
+                                                - 'null'
+                                            createdAt:
+                                              type: string
+                                          required:
+                                            - _id
+                                            - username
+                                            - name
+                                            - email
+                                            - createdAt
+                                        - type: 'null'
+                                    contributors:
+                                      type: array
+                                      items:
+                                        anyOf:
+                                          - type: string
+                                          - type: object
+                                            properties:
+                                              _id:
+                                                type: string
+                                              id:
+                                                type: string
+                                              username:
+                                                type: string
+                                              name:
+                                                type: string
+                                              email:
+                                                type: string
+                                                format: email
+                                              image:
+                                                type:
+                                                  - string
+                                                  - 'null'
+                                              createdAt:
+                                                type: string
+                                            required:
+                                              - _id
+                                              - username
+                                              - name
+                                              - email
+                                              - createdAt
+                                    message:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - path
+                                    - body
+                                    - createdAt
+                            redirectTo:
+                              type:
+                                - string
+                                - 'null'
+                            status:
+                              type:
+                                - string
+                                - 'null'
+                              enum:
+                                - wip
+                                - published
+                                - deleted
+                                - deprecated
+                                - null
+                            grant:
+                              type: number
+                            grantedUsers:
+                              type: array
+                              items:
+                                type: string
+                            creator:
+                              anyOf:
+                                - type: string
+                                - type: object
+                                  properties:
+                                    _id:
+                                      type: string
+                                    id:
+                                      type: string
+                                    username:
+                                      type: string
+                                    name:
+                                      type: string
+                                    email:
+                                      type: string
+                                      format: email
+                                    image:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    createdAt:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - username
+                                    - name
+                                    - email
+                                    - createdAt
+                                - type: 'null'
+                            lastUpdateUser:
+                              anyOf:
+                                - type: string
+                                - type: object
+                                  properties:
+                                    _id:
+                                      type: string
+                                    id:
+                                      type: string
+                                    username:
+                                      type: string
+                                    name:
+                                      type: string
+                                    email:
+                                      type: string
+                                      format: email
+                                    image:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    createdAt:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - username
+                                    - name
+                                    - email
+                                    - createdAt
+                                - type: 'null'
+                            liker:
+                              type: array
+                              items:
+                                type: string
+                            commentCount:
+                              type: number
+                              default: 0
+                            extended:
+                              type: object
+                              additionalProperties: {}
+                            createdAt:
+                              type: string
+                            updatedAt:
+                              type: string
+                            currentRevision:
+                              type:
+                                - string
+                                - 'null'
+                            yjsCheckpointAt:
+                              type:
+                                - string
+                                - 'null'
+                            latestRevision:
+                              type: string
+                            likerCount:
+                              type: number
+                            seenUsersCount:
+                              type: number
+                          required:
+                            - _id
+                            - path
+                            - createdAt
+                        user:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                name:
+                                  type: string
+                                email:
+                                  type: string
+                                  format: email
+                                image:
+                                  type:
+                                    - string
+                                    - 'null'
+                                introduction:
+                                  type: string
+                                createdAt:
+                                  type: string
+                                admin:
+                                  type: boolean
+                                status:
+                                  type: integer
+                                  enum:
+                                    - 1
+                                    - 2
+                                    - 3
+                                    - 4
+                                    - 5
+                              required:
+                                - _id
+                                - username
+                                - name
+                                - email
+                                - createdAt
+                        createdAt:
+                          type: string
+                      required:
+                        - _id
+                        - page
+                        - user
+                        - createdAt
+                  pager:
+                    type: object
+                    properties:
+                      prev:
+                        type:
+                          - number
+                          - 'null'
+                      next:
+                        type:
+                          - number
+                          - 'null'
+                      offset:
+                        type: number
+                    required:
+                      - prev
+                      - next
+                      - offset
+                  total:
+                    type: number
+                required:
+                  - bookmarks
+                  - pager
+                  - total
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - USER_NOT_FOUND
+                      message:
+                        type: string
+                        enum:
+                          - User not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /user/{username}/pages:
+    get:
+      tags:
+        - user
+      security:
+        - bearerAuth: []
+      summary: Get pages created by the user (paginated)
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: username
+          in: path
+        - schema:
+            type:
+              - number
+              - 'null'
+            default: 50
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type:
+              - number
+              - 'null'
+            default: 0
+          required: false
+          name: offset
+          in: query
+      responses:
+        '200':
+          description: Paginated created pages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        path:
+                          type: string
+                        revision:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                path:
+                                  type: string
+                                body:
+                                  type: string
+                                format:
+                                  type: string
+                                  default: markdown
+                                author:
+                                  type:
+                                    - object
+                                    - 'null'
+                                  properties:
+                                    _id:
+                                      type: string
+                                    id:
+                                      type: string
+                                    username:
+                                      type: string
+                                    name:
+                                      type: string
+                                    email:
+                                      type: string
+                                      format: email
+                                    image:
+                                      type:
+                                        - string
+                                        - 'null'
+                                    createdAt:
+                                      type: string
+                                  required:
+                                    - _id
+                                    - username
+                                    - name
+                                    - email
+                                    - createdAt
+                                createdAt:
+                                  type: string
+                                meta:
+                                  type: object
+                                  properties:
+                                    toc:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          level:
+                                            type: integer
+                                            minimum: 1
+                                            maximum: 6
+                                          text:
+                                            type: string
+                                          anchorId:
+                                            type: string
+                                        required:
+                                          - level
+                                          - text
+                                          - anchorId
+                                    wikiLinks:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          raw:
+                                            type: string
+                                          target:
+                                            type: string
+                                          displayText:
+                                            type: string
+                                        required:
+                                          - raw
+                                          - target
+                                    mentions:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          username:
+                                            type: string
+                                        required:
+                                          - username
+                                    codeBlockLanguages:
+                                      type: array
+                                      items:
+                                        type: string
+                                renderedAst: {}
+                                rendererVersion:
+                                  type: string
+                                parentRevisionId:
+                                  type:
+                                    - string
+                                    - 'null'
+                                type:
+                                  type: string
+                                  enum:
+                                    - snapshot
+                                    - incremental
+                                savedBy:
+                                  anyOf:
+                                    - type: string
+                                    - type: object
+                                      properties:
+                                        _id:
+                                          type: string
+                                        id:
+                                          type: string
+                                        username:
+                                          type: string
+                                        name:
+                                          type: string
+                                        email:
+                                          type: string
+                                          format: email
+                                        image:
+                                          type:
+                                            - string
+                                            - 'null'
+                                        createdAt:
+                                          type: string
+                                      required:
+                                        - _id
+                                        - username
+                                        - name
+                                        - email
+                                        - createdAt
+                                    - type: 'null'
+                                contributors:
+                                  type: array
+                                  items:
+                                    anyOf:
+                                      - type: string
+                                      - type: object
+                                        properties:
+                                          _id:
+                                            type: string
+                                          id:
+                                            type: string
+                                          username:
+                                            type: string
+                                          name:
+                                            type: string
+                                          email:
+                                            type: string
+                                            format: email
+                                          image:
+                                            type:
+                                              - string
+                                              - 'null'
+                                          createdAt:
+                                            type: string
+                                        required:
+                                          - _id
+                                          - username
+                                          - name
+                                          - email
+                                          - createdAt
+                                message:
+                                  type: string
+                              required:
+                                - _id
+                                - path
+                                - body
+                                - createdAt
+                        redirectTo:
+                          type:
+                            - string
+                            - 'null'
+                        status:
+                          type:
+                            - string
+                            - 'null'
+                          enum:
+                            - wip
+                            - published
+                            - deleted
+                            - deprecated
+                            - null
+                        grant:
+                          type: number
+                        grantedUsers:
+                          type: array
+                          items:
+                            type: string
+                        creator:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                name:
+                                  type: string
+                                email:
+                                  type: string
+                                  format: email
+                                image:
+                                  type:
+                                    - string
+                                    - 'null'
+                                createdAt:
+                                  type: string
+                              required:
+                                - _id
+                                - username
+                                - name
+                                - email
+                                - createdAt
+                            - type: 'null'
+                        lastUpdateUser:
+                          anyOf:
+                            - type: string
+                            - type: object
+                              properties:
+                                _id:
+                                  type: string
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                name:
+                                  type: string
+                                email:
+                                  type: string
+                                  format: email
+                                image:
+                                  type:
+                                    - string
+                                    - 'null'
+                                createdAt:
+                                  type: string
+                              required:
+                                - _id
+                                - username
+                                - name
+                                - email
+                                - createdAt
+                            - type: 'null'
+                        liker:
+                          type: array
+                          items:
+                            type: string
+                        commentCount:
+                          type: number
+                          default: 0
+                        extended:
+                          type: object
+                          additionalProperties: {}
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
+                        currentRevision:
+                          type:
+                            - string
+                            - 'null'
+                        yjsCheckpointAt:
+                          type:
+                            - string
+                            - 'null'
+                        latestRevision:
+                          type: string
+                        likerCount:
+                          type: number
+                        seenUsersCount:
+                          type: number
+                      required:
+                        - _id
+                        - path
+                        - createdAt
+                  pager:
+                    type: object
+                    properties:
+                      prev:
+                        type:
+                          - number
+                          - 'null'
+                      next:
+                        type:
+                          - number
+                          - 'null'
+                      offset:
+                        type: number
+                    required:
+                      - prev
+                      - next
+                      - offset
+                  total:
+                    type: number
+                required:
+                  - pages
+                  - pager
+                  - total
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - USER_NOT_FOUND
+                      message:
+                        type: string
+                        enum:
+                          - User not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
 webhooks: {}
