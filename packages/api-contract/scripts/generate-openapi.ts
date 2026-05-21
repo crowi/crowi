@@ -2,7 +2,7 @@
 /**
  * Phase 2 — Hono-driven OpenAPI generator.
  *
- * Replaces the legacy `@ts-rest/open-api` script. This file is invoked
+ * Replaces the legacy ts-rest based script. This file is invoked
  * via `pnpm --filter @crowi/api-contract generate-openapi` (which runs
  * `tsx scripts/generate-openapi.ts`) and writes
  * `packages/api-contract/openapi.json` + `openapi.yaml`.
