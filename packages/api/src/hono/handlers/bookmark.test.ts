@@ -1,7 +1,16 @@
-import request from 'supertest';
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
+import request from 'supertest';
+
+import { Fixture, app, crowi } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
+
+/**
+ * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
+ * `bookmark` resource. Wire-format parity is the primary thing under
+ * test: the legacy `{ bookmark: null }` fallback for missing / not-
+ * granted pages, the `{ ok: true }` no-op delete, pager arithmetic,
+ * and the 401 / 400 envelopes from the Hono middleware.
+ */
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -35,8 +44,8 @@ const createPageViaApi = async (accessToken: string, path: string, body: string)
   return res.body.page as { _id: string; path: string };
 };
 
-describe('Routes /api/v2/bookmarks (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-bookmark-test/';
+describe('Routes /api/v2/bookmarks (Hono)', () => {
+  const PATH_PREFIX = '/hono-bookmark-test/';
   let accessToken: string;
   let otherAccessToken: string;
   let userId: string;
@@ -44,16 +53,16 @@ describe('Routes /api/v2/bookmarks (ts-rest)', () => {
   beforeAll(async () => {
     const owner = await createTestUser({
       name: 'Bookmark Test',
-      username: 'bookmarkTester',
-      email: 'bookmark-tester@example.com',
+      username: 'honoBookmarkTester',
+      email: 'hono-bookmark-tester@example.com',
     });
     accessToken = owner.accessToken;
     userId = owner.user._id.toString();
 
     const other = await createTestUser({
       name: 'Bookmark Other',
-      username: 'bookmarkOther',
-      email: 'bookmark-other@example.com',
+      username: 'honoBookmarkOther',
+      email: 'hono-bookmark-other@example.com',
     });
     otherAccessToken = other.accessToken;
   });
@@ -136,7 +145,6 @@ describe('Routes /api/v2/bookmarks (ts-rest)', () => {
     });
 
     it('returns { bookmark: null } when user has no grant on the page', async () => {
-      // Create owner-grant page as the owner so the other user is not granted.
       const ownerCreate = await request(app)
         .post('/api/v2/pages')
         .set(authHeaders(accessToken))
@@ -208,7 +216,6 @@ describe('Routes /api/v2/bookmarks (ts-rest)', () => {
       expect(res.status).toBe(200);
       expect(res.body.bookmarks.length).toBeGreaterThanOrEqual(2);
       expect(res.body.total).toBeGreaterThanOrEqual(2);
-      // Newest first
       const paths = res.body.bookmarks.map((b: { page: { path: string } }) => b.page.path);
       expect(paths).toContain(pageA.path);
       expect(paths).toContain(pageB.path);

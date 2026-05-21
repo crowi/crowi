@@ -16,6 +16,7 @@ import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
 import { registerAppRoutes } from './handlers/app';
+import { registerBookmarkRoutes } from './handlers/bookmark';
 import { registerInstallerRoutes } from './handlers/installer';
 import { registerMeRoutes } from './handlers/me';
 import { registerTokenAuthRoutes } from './handlers/tokenAuth';
@@ -45,7 +46,8 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withTokenAuth = registerTokenAuthRoutes(withInstaller, crowi);
   const withMe = registerMeRoutes(withTokenAuth, crowi);
   const withUser = registerUserRoutes(withMe, crowi);
-  return withUser;
+  const withBookmark = registerBookmarkRoutes(withUser, crowi);
+  return withBookmark;
 };
 
 // `AppType` lives in `@crowi/api-contract` (option 2 — see

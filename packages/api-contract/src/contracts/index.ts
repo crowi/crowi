@@ -4,7 +4,6 @@ import { pagePreviewContract } from './page-preview';
 import { pageCollabContract } from './page-collab';
 import { presenceContract } from './presence';
 import { commentContract } from './comment';
-import { bookmarkContract } from './bookmark';
 import { revisionContract } from './revision';
 import { notificationContract } from './notification';
 import { backlinkContract } from './backlink';
@@ -24,6 +23,7 @@ export * from './installer';
 export * from './tokenAuth';
 export * from './me';
 export * from './user';
+export * from './bookmark';
 
 const c = initContract();
 
@@ -47,7 +47,6 @@ export const apiContract = c.router({
   pageCollab: pageCollabContract,
   presence: presenceContract,
   comment: commentContract,
-  bookmark: bookmarkContract,
   revision: revisionContract,
   notification: notificationContract,
   backlink: backlinkContract,

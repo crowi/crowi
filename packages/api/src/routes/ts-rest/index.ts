@@ -11,15 +11,14 @@ import { Express, Router } from 'express';
 // RFC-0006 Phase 4 Batch 2 — `me` + `user` resources moved to Hono
 // (`hono/handlers/me.ts`, `hono/handlers/user.ts`). The ts-rest
 // router files were deleted.
+// RFC-0006 Phase 4 Batch 3 — `bookmark`, `backlink`, `comment`,
+// `revision`, `notification` resources moved to Hono
+// (`hono/handlers/{bookmark,backlink,comment,revision,notification}.ts`).
+// The matching ts-rest router files were deleted.
 import pageRoutes from './page';
 import pagePreviewRoutes from './page-preview';
 import pageCollabRoutes from './page-collab';
 import presenceRoutes from './presence';
-import commentRoutes from './comment';
-import bookmarkRoutes from './bookmark';
-import revisionRoutes from './revision';
-import notificationRoutes from './notification';
-import backlinkRoutes from './backlink';
 import draftRoutes from './draft';
 import autocompleteRoutes from './autocomplete';
 import attachmentRoutes from './attachment';
@@ -53,11 +52,6 @@ export default (crowi: Crowi, app: Express) => {
   const pagePreviewRouter = pagePreviewRoutes(crowi, app);
   const pageCollabRouter = pageCollabRoutes(crowi, app);
   const presenceRouter = presenceRoutes(crowi, app);
-  const commentRouter = commentRoutes(crowi, app);
-  const bookmarkRouter = bookmarkRoutes(crowi, app);
-  const revisionRouter = revisionRoutes(crowi, app);
-  const notificationRouter = notificationRoutes(crowi, app);
-  const backlinkRouter = backlinkRoutes(crowi, app);
   const draftRouter = draftRoutes(crowi, app);
   const autocompleteRouter = autocompleteRoutes(crowi, app);
   const attachmentRouter = attachmentRoutes(crowi, app);
@@ -73,11 +67,6 @@ export default (crowi: Crowi, app: Express) => {
   authenticatedRouter.use(pagePreviewRouter);
   authenticatedRouter.use(pageCollabRouter);
   authenticatedRouter.use(presenceRouter);
-  authenticatedRouter.use(commentRouter);
-  authenticatedRouter.use(bookmarkRouter);
-  authenticatedRouter.use(revisionRouter);
-  authenticatedRouter.use(notificationRouter);
-  authenticatedRouter.use(backlinkRouter);
   authenticatedRouter.use(attachmentRouter);
   authenticatedRouter.use(searchRouter);
 

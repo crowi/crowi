@@ -35,11 +35,13 @@ import { hc } from 'hono/client';
 import type { z } from 'zod';
 
 import { appRoutes } from './contracts/app';
+import { bookmarkRoutes } from './contracts/bookmark';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { userRoutes } from './contracts/user';
 import type { AppInfoResponseSchema } from './schemas/app';
+import type { BookmarkResponseSchema, ListMyBookmarksResponseSchema, RemoveBookmarkResponseSchema } from './schemas/bookmark';
 import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
 import type {
   ApiTokenResponseSchema,
@@ -65,6 +67,9 @@ type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSch
 type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
 type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
 type UserPagesResponse = z.infer<typeof UserPagesResponseSchema>;
+type BookmarkResponse = z.infer<typeof BookmarkResponseSchema>;
+type ListMyBookmarksResponse = z.infer<typeof ListMyBookmarksResponseSchema>;
+type RemoveBookmarkResponse = z.infer<typeof RemoveBookmarkResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -137,6 +142,10 @@ const stubUserPages: UserPagesResponse = {
   total: 0,
 };
 
+const stubBookmarkResponse: BookmarkResponse = { bookmark: null };
+const stubListMyBookmarks: ListMyBookmarksResponse = { bookmarks: [], pager: stubPager, total: 0 };
+const stubRemoveBookmark: RemoveBookmarkResponse = { ok: true };
+
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
@@ -171,7 +180,11 @@ const contractApp = new OpenAPIHono()
   .openapi(meRoutes.recentlyViewedPagesRoute, (c) => c.json({ pages: [] } satisfies RecentlyViewedPagesResponse, 200))
   .openapi(userRoutes.getUserPageRoute, (c) => c.json(stubUserPage, 200))
   .openapi(userRoutes.getUserBookmarksRoute, (c) => c.json(stubUserBookmarks, 200))
-  .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200));
+  .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200))
+  .openapi(bookmarkRoutes.getBookmarkRoute, (c) => c.json(stubBookmarkResponse, 200))
+  .openapi(bookmarkRoutes.listMyBookmarksRoute, (c) => c.json(stubListMyBookmarks, 200))
+  .openapi(bookmarkRoutes.addBookmarkRoute, (c) => c.json(stubBookmarkResponse, 200))
+  .openapi(bookmarkRoutes.removeBookmarkRoute, (c) => c.json(stubRemoveBookmark, 200));
 
 export type AppType = typeof contractApp;
 
