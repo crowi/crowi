@@ -47,10 +47,16 @@ const { getYjsToken, FakeProvider, providerInstances } = vi.hoisted(() => {
   return { getYjsToken: vi.fn(), FakeProvider, providerInstances: instances };
 });
 
+// RFC-0006 Batch 5 — `useYjsToken` reads `apiClientV2.pages[':id']
+// ['yjs-token'].$get` (Response-shaped) instead of the ts-rest
+// `apiClient.pageCollab.getYjsToken` envelope. The mock surface
+// matches what hc<AppType> exposes at runtime.
 vi.mock('@/lib/api-client', () => ({
-  apiClient: {
-    pageCollab: {
-      getYjsToken,
+  apiClientV2: {
+    pages: {
+      ':id': {
+        'yjs-token': { $get: getYjsToken },
+      },
     },
   },
   // RFC-0004: the paste handler's upload-placeholder reads API_BASE_URL
@@ -123,8 +129,15 @@ const validTokenResponse = (overrides: { readonly?: boolean; pageId?: string } =
   readonly: overrides.readonly ?? false,
 });
 
+/** Build a `Response`-shaped mock matching what hc<AppType>'s real fetch returns. */
+const tokenOkResponse = <T,>(body: T): { ok: true; status: number; json: () => Promise<T> } => ({
+  ok: true,
+  status: 200,
+  json: () => Promise.resolve(body),
+});
+
 beforeEach(() => {
-  getYjsToken.mockResolvedValue({ status: 200, body: validTokenResponse() });
+  getYjsToken.mockResolvedValue(tokenOkResponse(validTokenResponse()));
 });
 
 describe('CollaborativeMarkdownEditor', () => {
@@ -159,7 +172,7 @@ describe('CollaborativeMarkdownEditor', () => {
 
   it('forwards readonly transitions to the caller', async () => {
     const onReadonlyChange = vi.fn();
-    getYjsToken.mockResolvedValueOnce({ status: 200, body: validTokenResponse({ readonly: true }) });
+    getYjsToken.mockResolvedValueOnce(tokenOkResponse(validTokenResponse({ readonly: true })));
 
     render(createElement(CollaborativeMarkdownEditor, { pageId: 'page-1', onReadonlyChange }), {
       wrapper: makeWrapper(),

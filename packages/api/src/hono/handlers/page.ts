@@ -49,15 +49,11 @@ import { isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest
 
 import type { CrowiHonoBindings } from '../app';
 
-import { INVALID_PAGE_ID_BODY } from './_helpers/errors';
+import { INVALID_PAGE_ID_BODY, PAGE_NOT_FOUND_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:page');
 
 const VALID_GRANTS: number[] = Object.values(PageGrantEnum);
-
-const PAGE_NOT_FOUND_BODY = {
-  error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const },
-};
 
 const PAGE_NOT_GRANTED_BODY = {
   error: { code: 'PAGE_NOT_GRANTED' as const, message: 'Page is not granted for the user' as const },

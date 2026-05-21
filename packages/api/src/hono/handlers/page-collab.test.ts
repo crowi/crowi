@@ -27,8 +27,8 @@ const createTestUser = async (info: { name: string; username: string; email: str
   return { user, accessToken };
 };
 
-describe('Routes /api/v2/pages/:id/yjs-token (ts-rest getYjsToken)', () => {
-  const PATH_PREFIX = '/ts-rest-collab-token/';
+describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
+  const PATH_PREFIX = '/hono-collab-token/';
   let accessToken: string;
   let userId: string;
   let otherAccessToken: string;

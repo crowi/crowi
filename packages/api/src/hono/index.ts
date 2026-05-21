@@ -23,7 +23,9 @@ import { registerInstallerRoutes } from './handlers/installer';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notification';
 import { registerPageRoutes } from './handlers/page';
+import { registerPageCollabRoutes } from './handlers/page-collab';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
+import { registerPresenceRoutes } from './handlers/presence';
 import { registerRevisionRoutes } from './handlers/revision';
 import { registerTokenAuthRoutes } from './handlers/tokenAuth';
 import { registerUserRoutes } from './handlers/user';
@@ -55,15 +57,24 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withBookmark = registerBookmarkRoutes(withUser, crowi);
   const withBacklink = registerBacklinkRoutes(withBookmark, crowi);
   const withComment = registerCommentRoutes(withBacklink, crowi);
-  // Revision MUST register before page / page-preview: it owns the
-  // `app.use('/pages/*', createJwtAuth(crowi))` broad apply, and the
-  // downstream page handlers rely on that already-installed middleware
-  // (Hono does not dedupe middleware by reference — re-installing would
-  // cost a second JWT verify + User.findById per request).
+  // Revision MUST register before page / page-preview / pageCollab /
+  // presence: it owns the `app.use('/pages/*', createJwtAuth(crowi))`
+  // broad apply, and the downstream `/pages/*` handlers rely on that
+  // already-installed middleware (Hono does not dedupe middleware by
+  // reference — re-installing would cost a second JWT verify +
+  // User.findById per request).
   const withRevision = registerRevisionRoutes(withComment, crowi);
   const withPage = registerPageRoutes(withRevision, crowi);
   const withPagePreview = registerPagePreviewRoutes(withPage, crowi);
-  const withNotification = registerNotificationRoutes(withPagePreview, crowi);
+  // pageCollab (RFC-0003 wsToken) + presence (RFC-0005 token + likers)
+  // both attach `/pages/{id}/<suffix>` endpoints under the shared
+  // jwtAuth apply. presence depends on the same prefix as pageCollab
+  // so we keep them grouped; their relative order is irrelevant to
+  // routing (Hono dispatches by method+path) but mirrors the spec
+  // chain in `packages/api-contract/src/client.ts`.
+  const withPageCollab = registerPageCollabRoutes(withPagePreview, crowi);
+  const withPresence = registerPresenceRoutes(withPageCollab, crowi);
+  const withNotification = registerNotificationRoutes(withPresence, crowi);
   return withNotification;
 };
 

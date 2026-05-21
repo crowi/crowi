@@ -20,8 +20,12 @@ import { Express, Router } from 'express';
 // `hono/handlers/page-preview.ts`). The page handler does NOT install
 // its own jwtAuth — the revision handler's broad apply on `/pages/*`
 // is shared. See `hono/index.ts:buildHonoApp` for the register order.
-import pageCollabRoutes from './page-collab';
-import presenceRoutes from './presence';
+// RFC-0006 Phase 4 Batch 5 — `pageCollab` (RFC-0003 wsToken) and
+// `presence` (RFC-0005 presence token + Phase 3 likers) resources
+// moved to Hono (`hono/handlers/page-collab.ts`,
+// `hono/handlers/presence.ts`). Both reuse the revision handler's
+// `/pages/*` jwtAuth apply (same dedupe-avoidance rationale as
+// page / page-preview).
 import draftRoutes from './draft';
 import autocompleteRoutes from './autocomplete';
 import attachmentRoutes from './attachment';
@@ -51,8 +55,6 @@ export default (crowi: Crowi, app: Express) => {
   const authenticatedRouter = Router();
   authenticatedRouter.use(jwtAuth(crowi)); // Apply JWT auth to all routes
 
-  const pageCollabRouter = pageCollabRoutes(crowi, app);
-  const presenceRouter = presenceRoutes(crowi, app);
   const draftRouter = draftRoutes(crowi, app);
   const autocompleteRouter = autocompleteRoutes(crowi, app);
   const attachmentRouter = attachmentRoutes(crowi, app);
@@ -67,8 +69,6 @@ export default (crowi: Crowi, app: Express) => {
   // any future ts-rest sibling that gets a `/pages/...` prefix.
   authenticatedRouter.use(draftRouter);
   authenticatedRouter.use(autocompleteRouter);
-  authenticatedRouter.use(pageCollabRouter);
-  authenticatedRouter.use(presenceRouter);
   authenticatedRouter.use(attachmentRouter);
   authenticatedRouter.use(searchRouter);
 

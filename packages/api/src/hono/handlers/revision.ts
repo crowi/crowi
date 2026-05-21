@@ -37,15 +37,11 @@ import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 
-import { invalidRequestBody } from './_helpers/errors';
+import { PAGE_NOT_FOUND_BODY, invalidRequestBody } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:revision');
 
 const MAX_REVISION_IDS = 10;
-
-const PAGE_NOT_FOUND_BODY = {
-  error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const },
-};
 
 /**
  * Delegate to the shared `toRevisionResponse(PopulatedRevision, …)` and

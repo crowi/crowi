@@ -32,15 +32,11 @@ import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 
-import { invalidRequestBody } from './_helpers/errors';
+import { PAGE_NOT_FOUND_BODY, invalidRequestBody } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:comment');
 
 const COMMENT_POSITION_DEFAULT = -1;
-
-const PAGE_NOT_FOUND_BODY = {
-  error: { code: 'PAGE_NOT_FOUND' as const, message: 'Page not found' as const },
-};
 
 const PAGE_NOT_GRANTED_BODY = {
   error: { code: 'PAGE_NOT_GRANTED' as const, message: 'Page is not granted for the user' as const },

@@ -41,8 +41,10 @@ import { commentRoutes } from './contracts/comment';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
 import { notificationRoutes } from './contracts/notification';
+import { pageCollabRoutes } from './contracts/page-collab';
 import { pageRoutes } from './contracts/page';
 import { pagePreviewRoutes } from './contracts/page-preview';
+import { presenceRoutes } from './contracts/presence';
 import { revisionRoutes } from './contracts/revision';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { userRoutes } from './contracts/user';
@@ -65,8 +67,10 @@ import type {
   NotificationStatusResponseSchema,
   OpenNotificationResponseSchema,
 } from './schemas/notification';
+import type { WsTokenResponseSchema } from './schemas/collab';
 import type { GetPageResponseSchema, ListPagesResponseSchema, PageSchema, SeenUsersResponseSchema, WatchStatusResponseSchema } from './schemas/page';
 import type { PreviewPageResponseSchema } from './schemas/page-preview';
+import type { LikersResponseSchema, PresenceTokenResponseSchema } from './schemas/presence';
 import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
 import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
@@ -104,6 +108,9 @@ type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
 type SeenUsersResponse = z.infer<typeof SeenUsersResponseSchema>;
 type WatchStatusResponse = z.infer<typeof WatchStatusResponseSchema>;
 type PreviewPageResponse = z.infer<typeof PreviewPageResponseSchema>;
+type WsTokenResponse = z.infer<typeof WsTokenResponseSchema>;
+type PresenceTokenResponse = z.infer<typeof PresenceTokenResponseSchema>;
+type LikersResponse = z.infer<typeof LikersResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -249,6 +256,19 @@ const stubListPages: ListPagesResponse = { pages: [], pager: stubPager, portalPa
 const stubSeenUsers: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
 const stubWatchStatus: WatchStatusResponse = { watching: false };
 const stubPreview: PreviewPageResponse = { renderedAst: null };
+const stubWsToken: WsTokenResponse = {
+  wsToken: '',
+  pageId: '',
+  expiresAt: '',
+  readonly: false,
+};
+const stubPresenceToken: PresenceTokenResponse = {
+  token: '',
+  pageId: '',
+  selfUserId: '',
+  expiresAt: '',
+};
+const stubLikers: LikersResponse = { users: [], totalCount: 0 };
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -326,6 +346,14 @@ const contractApp = new OpenAPIHono()
   // (getPage) or POST /pages (createPage) — Hono dispatches by
   // method+path so this is purely organisational.
   .openapi(pagePreviewRoutes.previewPageRoute, (c) => c.json(stubPreview, 200))
+  // pageCollab + presence — `/pages/{id}/<suffix>` routes that share
+  // the revision handler's `/pages/*` jwtAuth apply. RFC-0003 wsToken
+  // and RFC-0005 presence token / likers list. The path uses a 24-hex
+  // ObjectId in position 2 vs. the literal `/pages/list` etc., so no
+  // matcher collision is possible.
+  .openapi(pageCollabRoutes.getYjsTokenRoute, (c) => c.json(stubWsToken, 200))
+  .openapi(presenceRoutes.getPresenceTokenRoute, (c) => c.json(stubPresenceToken, 200))
+  .openapi(presenceRoutes.getLikersRoute, (c) => c.json(stubLikers, 200))
   .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
   .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
   // `/notifications/status` registers before `/notifications/{id}/open`

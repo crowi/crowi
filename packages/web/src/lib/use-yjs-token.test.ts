@@ -4,15 +4,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 
-// Mock `apiClient` at the module level so the hook reads our fake
-// `pageCollab.getYjsToken`. Vitest hoists `vi.mock` calls above
-// imports; `vi.hoisted` makes the shared stub accessible from both
-// the factory and the test bodies without a TDZ violation.
+// Mock `apiClientV2` so the hook reads our fake `pages[':id']['yjs-token']
+// .$get`. Vitest hoists `vi.mock` above imports; `vi.hoisted` makes the
+// shared stub accessible from both the factory and the test bodies
+// without a TDZ violation. RFC-0006 Batch 5 switched the hook from
+// ts-rest's `apiClient.pageCollab.getYjsToken` to hc<AppType>'s
+// Response-shaped fetch call.
 const { getYjsToken } = vi.hoisted(() => ({ getYjsToken: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClient: {
-    pageCollab: {
-      getYjsToken,
+  apiClientV2: {
+    pages: {
+      ':id': {
+        'yjs-token': { $get: getYjsToken },
+      },
     },
   },
 }));
@@ -22,6 +26,14 @@ import { useYjsToken } from './use-yjs-token';
 beforeEach(() => {
   getYjsToken.mockReset();
 });
+
+/** Build a `Response`-shaped mock the hook can consume via `response.ok` + `response.json()`. */
+function okResponse<T>(body: T): { ok: true; status: number; json: () => Promise<T> } {
+  return { ok: true, status: 200, json: () => Promise.resolve(body) };
+}
+function errorResponse(status: number, body: unknown): { ok: false; status: number; json: () => Promise<unknown> } {
+  return { ok: false, status, json: () => Promise.resolve(body) };
+}
 
 function makeWrapper() {
   // Fresh QueryClient per test so query caches don't leak across cases.
@@ -53,12 +65,12 @@ describe('useYjsToken', () => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       readonly: false,
     };
-    getYjsToken.mockResolvedValueOnce({ status: 200, body });
+    getYjsToken.mockResolvedValueOnce(okResponse(body));
 
     const { result } = renderHook(() => useYjsToken('page-1'), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(getYjsToken).toHaveBeenCalledWith({ params: { id: 'page-1' } });
+    expect(getYjsToken).toHaveBeenCalledWith({ param: { id: 'page-1' } });
     expect(result.current.data).toEqual(body);
   });
 
@@ -67,15 +79,15 @@ describe('useYjsToken', () => {
     // we have to satisfy all retry attempts before react-query reaches
     // its terminal error state. `mockResolvedValue` (vs `…Once`)
     // returns the same 500 for every call.
-    getYjsToken.mockResolvedValue({ status: 500, body: { error: { message: 'upstream blew up' } } });
+    getYjsToken.mockResolvedValue(errorResponse(500, { error: { message: 'upstream blew up' } }));
 
     const { result } = renderHook(() => useYjsToken('page-1'), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
     expect(result.current.error).toBeInstanceOf(Error);
-    // `unwrapResult` falls back to the supplied default message when no
-    // per-status spec matches the response code.
-    expect((result.current.error as Error).message).toBe('Failed to issue wsToken');
+    // The hook lifts `error.message` from the response body; on a 500
+    // with a `{ error: { message } }` envelope it uses that verbatim.
+    expect((result.current.error as Error).message).toBe('upstream blew up');
   });
 
   it('propagates the readonly bit from the response', async () => {
@@ -85,7 +97,7 @@ describe('useYjsToken', () => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       readonly: true,
     };
-    getYjsToken.mockResolvedValueOnce({ status: 200, body });
+    getYjsToken.mockResolvedValueOnce(okResponse(body));
 
     const { result } = renderHook(() => useYjsToken('page-2'), { wrapper: makeWrapper() });
 

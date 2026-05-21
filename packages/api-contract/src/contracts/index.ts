@@ -1,6 +1,4 @@
 import { initContract } from '@ts-rest/core';
-import { pageCollabContract } from './page-collab';
-import { presenceContract } from './presence';
 import { draftContract } from './draft';
 import { autocompleteContract } from './autocomplete';
 import { attachmentContract } from './attachment';
@@ -24,6 +22,8 @@ export * from './revision';
 export * from './notification';
 export * from './page';
 export * from './page-preview';
+export * from './page-collab';
+export * from './presence';
 
 const c = initContract();
 
@@ -52,9 +52,14 @@ const c = initContract();
 // live under `./page` / `./page-preview` and are re-exported above.
 // The page handler does NOT install its own `createJwtAuth(crowi)` —
 // the revision handler's broad apply on `/pages/*` is shared.
+//
+// Batch 5 migrated `pageCollab` (1 endpoint — RFC-0003 wsToken) and
+// `presence` (2 endpoints — RFC-0005 presence token + likers) to Hono.
+// Both reuse the revision handler's `/pages/*` jwtAuth apply (same
+// dedupe-avoidance rationale as page / page-preview). The `createRoute(
+// ...)` objects live under `./page-collab` / `./presence` and are
+// re-exported above; the matching `apiContract` entries were dropped.
 export const apiContract = c.router({
-  pageCollab: pageCollabContract,
-  presence: presenceContract,
   draft: draftContract,
   autocomplete: autocompleteContract,
   attachment: attachmentContract,
