@@ -4,6 +4,7 @@ import type { UserDocument } from 'src/models/user';
 
 import { createJwtAdminRequired } from './middleware/admin';
 import { createJwtAuth } from './middleware/auth';
+import { createCors } from './middleware/cors';
 import { defaultHook } from './middleware/default-hook';
 import { honoOnError } from './middleware/error-handler';
 
@@ -42,4 +43,4 @@ export const createHonoApp = (): OpenAPIHono<CrowiHonoBindings> => {
   return app;
 };
 
-export { createJwtAuth, createJwtAdminRequired, defaultHook, honoOnError };
+export { createCors, createJwtAuth, createJwtAdminRequired, defaultHook, honoOnError };

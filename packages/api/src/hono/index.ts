@@ -16,6 +16,7 @@ import type { Context, Next } from 'hono';
 import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
+import { createCors } from './middleware/cors';
 import { registerAdminCryptoRoutes } from './handlers/adminCrypto';
 import { registerAdminAppRoutes } from './handlers/admin/app';
 import { registerAdminAuthRoutes } from './handlers/admin/auth';
@@ -64,6 +65,17 @@ export type { CrowiHonoBindings } from './app';
  */
 export const buildHonoApp = (crowi: Crowi) => {
   const base = createHonoApp();
+  // RFC-0006 Phase 6 Sub-batch C — Hono is now the CORS layer for
+  // `/api/v2/*`. The Express bridge in `routes/index.ts` retains its
+  // own `cors()` apply for the duration of Sub-batch C so the
+  // supertest suite (which goes Express → Hono) does not see a
+  // sudden behaviour swap; Sub-batch D removes both the bridge and
+  // the Express cors apply in one commit.
+  //
+  // `app.use('*', ...)` mutates the underlying Hono instance — it
+  // doesn't extend the typed openapi chain — so we install before
+  // any `register*Routes(...)` calls.
+  base.use('*', createCors(crowi));
   const withApp = registerAppRoutes(base, crowi);
   const withInstaller = registerInstallerRoutes(withApp, crowi);
   const withTokenAuth = registerTokenAuthRoutes(withInstaller, crowi);
