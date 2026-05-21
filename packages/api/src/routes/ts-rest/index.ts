@@ -3,8 +3,9 @@ import { Express, Router } from 'express';
 // `app` resource was migrated to Hono in RFC-0006 Phase 3; the route now
 // lives at `packages/api/src/hono/handlers/app.ts` and is registered via
 // `buildHonoApp(crowi)` in `packages/api/src/routes/index.ts`.
+// RFC-0006 Phase 4 Batch 1 — `installer` resource moved to Hono
+// (`hono/handlers/installer.ts`).
 import authRoutes from './auth';
-import installerRoutes from './installer';
 import tokenAuthRoutes from './tokenAuth';
 import meRoutes from './me';
 import pageRoutes from './page';
@@ -43,13 +44,13 @@ export default (crowi: Crowi, app: Express) => {
   // Public Router - No authentication required
   const publicRouter = Router();
   // `appRouter` removed — `app` resource is served by Hono (Phase 3).
+  // `installerRouter` removed — `installer` resource is served by Hono
+  // (Phase 4 Batch 1).
   const authRouter = authRoutes(crowi, app); // Legacy - to be removed
-  const installerRouter = installerRoutes(crowi, app);
   const tokenAuthRouter = tokenAuthRoutes(crowi, app);
 
   debug('Mounting public routes (no auth required)');
   publicRouter.use(authRouter);
-  publicRouter.use(installerRouter);
   publicRouter.use(tokenAuthRouter);
 
   // Authenticated Router - JWT authentication required

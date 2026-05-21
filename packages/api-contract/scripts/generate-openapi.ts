@@ -36,6 +36,7 @@ import jsYaml from 'js-yaml';
 
 import {
   appRoutes,
+  installerRoutes,
   AdminPagerSchema,
   AdminRequiredErrorSchema,
   AdminUserIdParamSchema,
@@ -246,18 +247,21 @@ for (const [name, schema] of schemas) {
 // them into `paths{}` without needing the real handler implementation
 // (this script intentionally cannot import `@crowi/api` — see the file
 // header for the hermeticity rationale).
-for (const route of Object.values(appRoutes)) {
-  // `openapi(route, handler)` requires a handler; `_def` is the
-  // internal path used by the bare-spec generator. The handler is
-  // never invoked, so we can pass a stub that returns 200.
-  app.openapi(route, (c) =>
-    c.json(
-      // biome-ignore lint/suspicious/noExplicitAny: stub handler — value
-      // never reaches the wire because the script only emits the spec
-      {} as any,
-      200,
-    ),
-  );
+const routeGroups = [appRoutes, installerRoutes];
+for (const group of routeGroups) {
+  for (const route of Object.values(group)) {
+    // `openapi(route, handler)` requires a handler; `_def` is the
+    // internal path used by the bare-spec generator. The handler is
+    // never invoked, so we can pass a stub that returns 200.
+    app.openapi(route, (c) =>
+      c.json(
+        // biome-ignore lint/suspicious/noExplicitAny: stub handler — value
+        // never reaches the wire because the script only emits the spec
+        {} as any,
+        200,
+      ),
+    );
+  }
 }
 
 // JWT bearer scheme — preserved from the legacy ts-rest generator.

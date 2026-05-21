@@ -1,6 +1,5 @@
 import { initContract } from '@ts-rest/core';
 import { authContract } from './auth';
-import { installerContract } from './installer';
 import { tokenAuthContract } from './tokenAuth';
 import { meContract } from './me';
 import { pageContract } from './page';
@@ -25,12 +24,12 @@ import { searchContract } from './search';
 // branch. Re-exported here so the package barrel surfaces them to both
 // the `@crowi/api` handler chain and the OpenAPI generator.
 export * from './app';
+export * from './installer';
 
 const c = initContract();
 
 export const apiContract = c.router({
   auth: authContract, // Legacy - to be removed
-  installer: installerContract,
   tokenAuth: tokenAuthContract,
   me: meContract,
   page: pageContract,

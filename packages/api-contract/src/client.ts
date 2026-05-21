@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 /**
- * RFC-0006 Phase 3 — typed Hono client factory.
+ * RFC-0006 — typed Hono client factory.
  *
  * Wraps the runtime `hc<AppType>(baseUrl)` call from `hono/client` with
  * the request-init plumbing the web app needs (auth header / pluggable
@@ -27,16 +27,21 @@
  *
  * If the route-definition <-> handler-implementation match ever drifts
  * (e.g. a contract is registered here but never wired in `@crowi/api`),
- * runtime requests will 404 — covered by integration tests.
+ * runtime requests will 404 — covered by integration tests in
+ * `packages/api/src/hono/handlers/*.test.ts`.
  */
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { hc } from 'hono/client';
 import type { z } from 'zod';
 
 import { appRoutes } from './contracts/app';
+import { installerRoutes } from './contracts/installer';
 import type { AppInfoResponseSchema } from './schemas/app';
+import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
 
 type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
+type InstallerStatusResponse = z.infer<typeof InstallerStatusResponseSchema>;
+type CreateAdminResponse = z.infer<typeof CreateAdminResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -46,8 +51,15 @@ type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
  * `OpenAPIHono`'s per-route type accumulator. Phase 4 commits extend
  * this chain one resource at a time so `AppType` stays in lock-step
  * with the real `@crowi/api` chain.
+ *
+ * Stub bodies use the success status only (200 / 201); the error arms
+ * are part of the route's `responses` map and `hc`'s type inference
+ * picks them up automatically.
  */
-const contractApp = new OpenAPIHono().openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200));
+const contractApp = new OpenAPIHono()
+  .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
+  .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
+  .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200));
 
 export type AppType = typeof contractApp;
 

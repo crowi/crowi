@@ -1,8 +1,8 @@
 /**
- * RFC-0006 Phase 3 — Hono application bootstrap.
+ * RFC-0006 Phase 3+ — Hono application bootstrap.
  *
  * `buildHonoApp(crowi)` returns the runtime `OpenAPIHono` chain that
- * serves `/api/v2/*` requests. Each Phase 3+ resource adds its handlers
+ * serves `/api/v2/*` requests. Each migrated resource adds its handlers
  * by calling `registerXRoutes(...)` against the running chain.
  *
  * **AppType placement**: `AppType` is re-exported from
@@ -16,6 +16,7 @@ import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
 import { registerAppRoutes } from './handlers/app';
+import { registerInstallerRoutes } from './handlers/installer';
 
 export { createHonoApp, createJwtAdminRequired, createJwtAuth, defaultHook, honoOnError } from './app';
 export type { CrowiHonoBindings } from './app';
@@ -28,8 +29,18 @@ export type { CrowiHonoBindings } from './app';
  * inside a single expression preserves OpenAPIHono's per-route type
  * accumulation, which keeps the contract `AppType` and the runtime
  * chain in lock-step.
+ *
+ * Order doesn't affect routing (Hono dispatches by `method + path`) but
+ * we keep it aligned with the contract stub chain in
+ * `packages/api-contract/src/client.ts` so the two are easy to eyeball
+ * for drift.
  */
-export const buildHonoApp = (crowi: Crowi) => registerAppRoutes(createHonoApp(), crowi);
+export const buildHonoApp = (crowi: Crowi) => {
+  const base = createHonoApp();
+  const withApp = registerAppRoutes(base, crowi);
+  const withInstaller = registerInstallerRoutes(withApp, crowi);
+  return withInstaller;
+};
 
 // `AppType` lives in `@crowi/api-contract` (option 2 — see
 // `packages/api-contract/src/client.ts` for the placement decision) so
