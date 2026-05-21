@@ -23,7 +23,7 @@ const reloadConfigCache = async () => {
   await crowi.getConfigService().load();
 };
 
-describe('Routes /api/v2/admin/mail (ts-rest)', () => {
+describe('Routes /api/v2/admin/mail (Hono)', () => {
   let Config;
   let adminToken: string;
   let adminEmail: string;
