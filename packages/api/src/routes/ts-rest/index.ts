@@ -4,8 +4,9 @@ import { Express, Router } from 'express';
 // lives at `packages/api/src/hono/handlers/app.ts` and is registered via
 // `buildHonoApp(crowi)` in `packages/api/src/routes/index.ts`.
 // RFC-0006 Phase 4 Batch 1 — `installer` resource moved to Hono
-// (`hono/handlers/installer.ts`).
-import authRoutes from './auth';
+// (`hono/handlers/installer.ts`); the legacy `auth` (SSR) ts-rest
+// resource was deleted outright in the same batch — see
+// `packages/api-contract/src/contracts/index.ts` for the rationale.
 import tokenAuthRoutes from './tokenAuth';
 import meRoutes from './me';
 import pageRoutes from './page';
@@ -46,11 +47,11 @@ export default (crowi: Crowi, app: Express) => {
   // `appRouter` removed — `app` resource is served by Hono (Phase 3).
   // `installerRouter` removed — `installer` resource is served by Hono
   // (Phase 4 Batch 1).
-  const authRouter = authRoutes(crowi, app); // Legacy - to be removed
+  // `authRouter` removed — legacy SSR auth contract deleted wholesale
+  // in Phase 4 Batch 1 (no frontend consumer).
   const tokenAuthRouter = tokenAuthRoutes(crowi, app);
 
   debug('Mounting public routes (no auth required)');
-  publicRouter.use(authRouter);
   publicRouter.use(tokenAuthRouter);
 
   // Authenticated Router - JWT authentication required

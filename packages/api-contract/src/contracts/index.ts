@@ -1,5 +1,4 @@
 import { initContract } from '@ts-rest/core';
-import { authContract } from './auth';
 import { tokenAuthContract } from './tokenAuth';
 import { meContract } from './me';
 import { pageContract } from './page';
@@ -28,8 +27,16 @@ export * from './installer';
 
 const c = initContract();
 
+// `auth` (legacy SSR) sub-contract was deleted in RFC-0006 Phase 4 Batch 1:
+// frontend never called `apiClient.auth.*`, the actual login / register
+// flow goes through the `tokenAuth` resource (`POST /api/v2/auth/login`
+// etc.), and the SSR pages at `/login` / `/register` are served by the
+// Express root routes — not under `/api/v2/`. The five legacy paths
+// (`GET /api/v2/login`, `POST /api/v2/login`, `GET /api/v2/register`,
+// `POST /api/v2/register`, `GET /api/v2/login/error/:reason`) carried no
+// production traffic, so we drop them in this phase rather than porting
+// them.
 export const apiContract = c.router({
-  auth: authContract, // Legacy - to be removed
   tokenAuth: tokenAuthContract,
   me: meContract,
   page: pageContract,
