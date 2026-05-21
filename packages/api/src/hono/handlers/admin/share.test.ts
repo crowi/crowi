@@ -29,7 +29,7 @@ const resetShareConfig = async () => {
   });
 };
 
-describe('Routes /api/v2/admin/share (ts-rest)', () => {
+describe('Routes /api/v2/admin/share (Hono)', () => {
   let adminToken: string;
   let userToken: string;
 
