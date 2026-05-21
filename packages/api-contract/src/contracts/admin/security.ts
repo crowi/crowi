@@ -1,40 +1,85 @@
-import { initContract } from '@ts-rest/core';
+/**
+ * RFC-0006 Phase 4 Batch 9 — `admin.security` sub-contract ported to
+ * `@hono/zod-openapi` route definitions.
+ *
+ *   GET /admin/security  — read the four `security:*` keys
+ *   PUT /admin/security  — persist them
+ *
+ * Auth + install:
+ *   - The handler installs `createJwtAdminRequired(crowi)` broadly on
+ *     `/admin/security/*` plus the bare `/admin/security` path.
+ */
+import { createRoute } from '@hono/zod-openapi';
+
 import { GetSecuritySettingsResponseSchema, UpdateSecuritySettingsRequestSchema, UpdateSecuritySettingsResponseSchema } from '../../schemas/admin/security';
 import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../../schemas/common';
 
-const c = initContract();
-
-/**
- * Admin → Security settings contract.
- *
- * Exposes the four `security:*` keys (basicName / basicSecret /
- * registrationMode / registrationWhiteList) under RESTful paths. Requires JWT
- * + admin permission; both 401 and 403 are produced by the surrounding
- * `jwtAdminRequired` middleware, not by handlers themselves.
- */
-export const adminSecurityContract = c.router({
-  getSecuritySettings: {
-    method: 'GET',
-    path: '/admin/security',
-    responses: {
-      200: GetSecuritySettingsResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      500: InternalServerErrorSchema,
+export const getSecuritySettingsRoute = createRoute({
+  method: 'get',
+  path: '/admin/security',
+  tags: ['admin.security'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Get the current security:* settings',
+  responses: {
+    200: {
+      description: 'Current security settings',
+      content: { 'application/json': { schema: GetSecuritySettingsResponseSchema } },
     },
-    summary: 'Get the current security:* settings',
-  },
-
-  updateSecuritySettings: {
-    method: 'PUT',
-    path: '/admin/security',
-    body: UpdateSecuritySettingsRequestSchema,
-    responses: {
-      200: UpdateSecuritySettingsResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      500: InternalServerErrorSchema,
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
-    summary: 'Update security:* settings (basicName / basicSecret / registrationMode / registrationWhiteList)',
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
   },
 });
+
+export const updateSecuritySettingsRoute = createRoute({
+  method: 'put',
+  path: '/admin/security',
+  tags: ['admin.security'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Update security:* settings (basicName / basicSecret / registrationMode / registrationWhiteList)',
+  request: {
+    body: {
+      content: { 'application/json': { schema: UpdateSecuritySettingsRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated settings (re-read from in-memory cache)',
+      content: { 'application/json': { schema: UpdateSecuritySettingsResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const adminSecurityRoutes = {
+  getSecuritySettingsRoute,
+  updateSecuritySettingsRoute,
+};
+
+export type {
+  GetSecuritySettingsResponse,
+  RegistrationMode,
+  SecuritySettings,
+  UpdateSecuritySettingsRequest,
+  UpdateSecuritySettingsResponse,
+} from '../../schemas/admin/security';

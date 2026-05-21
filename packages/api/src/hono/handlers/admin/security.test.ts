@@ -33,7 +33,7 @@ const resetSecurityConfig = async () => {
   });
 };
 
-describe('Routes /api/v2/admin/security (ts-rest)', () => {
+describe('Routes /api/v2/admin/security (Hono)', () => {
   let adminToken: string;
   let userToken: string;
 
