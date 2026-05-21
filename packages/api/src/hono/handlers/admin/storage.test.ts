@@ -17,7 +17,7 @@ const createTestUser = async (info: { name: string; username: string; email: str
   return { user, accessToken };
 };
 
-describe('Routes /api/v2/admin/storage (ts-rest)', () => {
+describe('Routes /api/v2/admin/storage (Hono)', () => {
   let adminToken: string;
   let userToken: string;
 

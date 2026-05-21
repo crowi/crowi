@@ -2,14 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { GetStorageStatusResponse } from '@crowi/api-contract';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 
 /**
- * Query key factory for the /admin/storage endpoint. Wrapped in the
- * standard `<feature>Keys = { all }` shape so future invalidations
- * (e.g. after a switch or a drive list refresh) have a consistent
- * handle.
+ * Query key factory for the /admin/storage endpoint.
  */
 export const adminStorageKeys = {
   all: ['admin', 'storage'] as const,
@@ -21,17 +17,20 @@ export const adminStorageKeys = {
  * drivers are installed. Read-only — no mutation hook because driver
  * switching is `crowi.config.json` + restart, not a runtime config
  * write. See `.feature-state/specs/feature-admin-storage.md`.
+ *
+ * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.storage.*`
+ * to `apiClientV2.admin.storage.$get` (hc<AppType>).
  */
 export function useAdminStorage() {
   return useQuery<GetStorageStatusResponse, Error>({
     queryKey: adminStorageKeys.status(),
     queryFn: async () => {
-      const result = await apiClient.admin.storage.getStorageStatus();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 401: 'Failed to fetch storage status', 403: 'Failed to fetch storage status' },
-        fallback: 'Failed to fetch storage status',
-      });
+      const response = await apiClientV2.admin.storage.$get();
+      if (response.status === 200) {
+        return (await response.json()) as GetStorageStatusResponse;
+      }
+      const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+      throw new Error(body?.error?.message ?? 'Failed to fetch storage status');
     },
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
