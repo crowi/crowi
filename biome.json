@@ -18,7 +18,8 @@
       "!packages/api/views/**",
       "!packages/api/local_modules/**",
       "!packages/api/locales/**",
-      "!packages/api/bin/**"
+      "!packages/api/bin/**",
+      "!**/generated/**"
     ]
   },
   "formatter": {
