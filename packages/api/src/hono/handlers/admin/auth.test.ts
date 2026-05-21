@@ -52,7 +52,7 @@ const disableThirdPartyOAuth = async () => {
   });
 };
 
-describe('Routes /api/v2/admin/auth (ts-rest)', () => {
+describe('Routes /api/v2/admin/auth (Hono)', () => {
   let adminToken: string;
   let adminWithGoogleToken: string;
   let userToken: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { apiClient } from './api-client';
+import { apiClientV2 } from './api-client';
 import { createAdminSettingsHooks } from './admin-settings-factory';
 import type { AuthSettings, UpdateAuthSettingsRequest } from '@crowi/api-contract';
 
@@ -26,10 +26,16 @@ export class AdminAuthSettingsValidationError extends Error {
   }
 }
 
+/**
+ * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.auth.*`
+ * (ts-rest) to `apiClientV2.admin.auth.$method` (hc<AppType>). Wire
+ * payload unchanged. The 422 envelope still triggers
+ * `AdminAuthSettingsValidationError`.
+ */
 const hooks = createAdminSettingsHooks<AuthSettings, UpdateAuthSettingsRequest>({
   queryKey: adminAuthKeys.all,
-  fetch: () => apiClient.admin.auth.getAuthSettings(),
-  update: (body) => apiClient.admin.auth.updateAuthSettings({ body }),
+  fetch: () => apiClientV2.admin.auth.$get(),
+  update: (body) => apiClientV2.admin.auth.$put({ json: body }),
   fetchErrorMessage: 'Failed to fetch auth settings',
   updateErrorMessage: 'Failed to update auth settings',
   mapValidationError: (body) => new AdminAuthSettingsValidationError(body.error.message),
