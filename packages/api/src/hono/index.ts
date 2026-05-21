@@ -12,6 +12,7 @@
  * the inferred type matches the runtime shape without `@crowi/api`
  * having to be built before `@crowi/api-contract`.
  */
+import type { Context, Next } from 'hono';
 import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
@@ -122,6 +123,49 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withAdminUsers = registerAdminUsersRoutes(withAdminSearch, crowi);
   const withAdminPlugins = registerAdminPluginsRoutes(withAdminUsers, crowi);
   const withNotification = registerNotificationRoutes(withAdminPlugins, crowi);
+
+  // RFC-0006 Phase 6 — expose the runtime OpenAPI 3.1 document at
+  // `/api/v2/openapi.json` and the Scalar API Reference UI at
+  // `/api/v2/docs`. The doc is built from the handlers actually
+  // registered above (vs. the bare scaffold in
+  // `packages/api-contract/scripts/generate-openapi.ts` which emits the
+  // commit-tracked artefact), so admins always see the live shape.
+  //
+  // We intentionally call `.doc31` / `.get` on the chained app for
+  // their side-effect only — capturing the return type would extend
+  // an already-TS2589-deep chain. The mutation registers the routes
+  // on the same underlying Hono instance, which is what consumers
+  // observe at runtime.
+  //
+  // Scalar (`@scalar/hono-api-reference`) is ESM-only with a `.js`
+  // extension, which Jest's CJS runtime cannot statically parse. We
+  // dynamic-import it from a lazy wrapper middleware so test files
+  // that boot the api process don't trip a transform error. The
+  // handler is registered eagerly; the import only runs on the first
+  // `GET /api/v2/docs` request.
+  withNotification.doc31('/openapi.json', {
+    openapi: '3.1.0',
+    info: {
+      title: 'Crowi API',
+      description: 'API for Crowi - Markdown-based Wiki Application',
+      version: '2.0.0',
+    },
+  });
+
+  // Scalar's middleware is typed for a bare `Env`; our bindings carry
+  // `Variables: { user: UserDocument }`. The two are compatible at
+  // runtime (the handler ignores `c.var.user`), so we cast the import
+  // result to a binding-agnostic shape to keep the chain clean.
+  type LooseMiddleware = (c: Context, next: Next) => Promise<Response | void>;
+  let scalarHandler: LooseMiddleware | null = null;
+  withNotification.get('/docs', async (c, next) => {
+    if (scalarHandler == null) {
+      const { Scalar } = await import('@scalar/hono-api-reference');
+      scalarHandler = Scalar({ url: '/api/v2/openapi.json' }) as unknown as LooseMiddleware;
+    }
+    return scalarHandler(c as Context, next);
+  });
+
   return withNotification;
 };
 

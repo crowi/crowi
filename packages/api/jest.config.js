@@ -116,13 +116,25 @@ module.exports = {
         '^common/(.*)': '<rootDir>/common/$1',
       },
       transform: {
+        // RFC-0006 Phase 6 — `@scalar/hono-api-reference` is published as
+        // pure ESM with a `.js` extension. ts-jest will down-compile its
+        // `import` statements to `require()` when we add the package path
+        // to the `.js` transform pattern, so Jest's CJS runtime can load it.
         '^.+\\.tsx?$': [
           'ts-jest',
           {
             tsconfig: 'tsconfig.json',
           },
         ],
+        '.+@scalar/.+\\.js$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+            useESM: false,
+          },
+        ],
       },
+      transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+))'],
     },
   ],
 

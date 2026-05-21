@@ -51,6 +51,7 @@
     "@hocuspocus/server": "^4.0.0",
     "@hono/node-server": "^2.0.3",
     "@hono/zod-openapi": "^1.4.0",
+    "@scalar/hono-api-reference": "^0.10.16",
     "@slack/client": "^5.0.2",
     "@types/cors": "^2.8.19",
     "async": "~1.5.0",
