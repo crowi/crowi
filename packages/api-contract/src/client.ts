@@ -49,6 +49,7 @@ import { pageRoutes } from './contracts/page';
 import { pagePreviewRoutes } from './contracts/page-preview';
 import { presenceRoutes } from './contracts/presence';
 import { revisionRoutes } from './contracts/revision';
+import { adminCryptoRoutes } from './contracts/adminCrypto';
 import { searchRoutes } from './contracts/search';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { userRoutes } from './contracts/user';
@@ -77,6 +78,7 @@ import type { PreviewPageResponseSchema } from './schemas/page-preview';
 import type { LikersResponseSchema, PresenceTokenResponseSchema } from './schemas/presence';
 import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
 import type { SearchPagesResponseSchema } from './schemas/search';
+import type { CryptoStatusResponseSchema, ReencryptResponseSchema } from './schemas/adminCrypto';
 import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
 import type { CreateDraftResponseSchema, ListDraftsResponseSchema } from './schemas/draft';
@@ -114,6 +116,8 @@ type ListRevisionsResponse = z.infer<typeof ListRevisionsResponseSchema>;
 type GetRevisionResponse = z.infer<typeof GetRevisionResponseSchema>;
 type GetRevisionsResponse = z.infer<typeof GetRevisionsResponseSchema>;
 type SearchPagesResponse = z.infer<typeof SearchPagesResponseSchema>;
+type CryptoStatusResponse = z.infer<typeof CryptoStatusResponseSchema>;
+type ReencryptResponse = z.infer<typeof ReencryptResponseSchema>;
 type ListNotificationsResponse = z.infer<typeof ListNotificationsResponseSchema>;
 type MarkAllAsReadResponse = z.infer<typeof MarkAllAsReadResponseSchema>;
 type NotificationStatusResponse = z.infer<typeof NotificationStatusResponseSchema>;
@@ -321,6 +325,13 @@ const stubAttachmentMeta: AttachmentMeta = (() => {
 const stubUploadAttachment: UploadAttachmentResponse = { url: '', filename: '', mimeType: '', sizeBytes: 0 };
 const stubRemoveAttachment: RemoveAttachmentResponse = { success: true };
 const stubSearchPages: SearchPagesResponse = { meta: { total: 0, results: 0 }, data: [] };
+const stubCryptoStatus: CryptoStatusResponse = {
+  encryptionConfigured: false,
+  unencryptedCount: 0,
+  encryptedCount: 0,
+  entries: [],
+};
+const stubReencrypt: ReencryptResponse = { rewritten: 0, alreadyEncrypted: 0, missing: 0 };
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -428,6 +439,12 @@ const contractApp = new OpenAPIHono()
   // on the path itself (no other handler owns `/search`). Registered
   // before notification to mirror the buildHonoApp chain.
   .openapi(searchRoutes.searchPagesRoute, (c) => c.json(stubSearchPages, 200))
+  // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
+  // admin-only (first time `createJwtAdminRequired(crowi)` lands on
+  // Hono). Registered between search and notification to mirror the
+  // buildHonoApp chain.
+  .openapi(adminCryptoRoutes.getCryptoStatusRoute, (c) => c.json(stubCryptoStatus, 200))
+  .openapi(adminCryptoRoutes.reencryptAllRoute, (c) => c.json(stubReencrypt, 200))
   .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
   .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
   // `/notifications/status` registers before `/notifications/{id}/open`

@@ -1,5 +1,4 @@
 import { initContract } from '@ts-rest/core';
-import { adminCryptoContract } from './adminCrypto';
 import { adminContract } from './admin';
 
 // Hono-style route exports (RFC-0006 Phase 3+). Resources migrated off
@@ -24,6 +23,7 @@ export * from './draft';
 export * from './autocomplete';
 export * from './attachment';
 export * from './search';
+export * from './adminCrypto';
 
 const c = initContract();
 
@@ -77,7 +77,15 @@ const c = initContract();
 // limit (driver latency naturally throttles bursts). The 503
 // `SERVICE_UNAVAILABLE` fallback when no `@crowi/plugin-search-*` is
 // registered is preserved byte-identical with the ts-rest era.
+//
+// Batch 8 migrated `adminCrypto` (2 endpoints, `/admin/crypto/status` +
+// `/admin/crypto/reencrypt`) to Hono. The handler installs
+// `createJwtAdminRequired(crowi)` per-path (same single-route install
+// pattern as `search`'s `/search` apply, but with the admin-required
+// factory — first time `jwtAdminRequired` lands on Hono). The remaining
+// admin sub-contracts (Batch 9 — `app` / `auth` / `security` / `mail` /
+// `share` / `storage` / `search` / `users` / `plugins`) are still ts-rest
+// and stay aggregated under the `admin` entry below.
 export const apiContract = c.router({
-  adminCrypto: adminCryptoContract,
   admin: adminContract,
 });

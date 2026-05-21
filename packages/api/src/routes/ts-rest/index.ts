@@ -40,8 +40,12 @@ import { Express, Router } from 'express';
 // (`hono/handlers/search.ts`). The ts-rest router file was deleted.
 // `attachmentStreamRouter` is the only remaining occupant of
 // `authenticatedRouter` and stays here until Phase 6 cleanup.
+// RFC-0006 Phase 4 Batch 8 — `adminCrypto` resource moved to Hono
+// (`hono/handlers/adminCrypto.ts`). The ts-rest router file was
+// deleted. `adminRouter` is retained because Batch 9 admin
+// sub-contracts (`app` / `auth` / `security` / `mail` / `share` /
+// `storage` / `search` / `users` / `plugins`) still live under it.
 import attachmentStreamRoutes from './attachment-stream';
-import adminCryptoRoutes from './adminCrypto';
 import adminRoutes from './admin';
 import jwtAuth from '../../middlewares/jwtAuth';
 import jwtAdminRequired from '../../middlewares/jwtAdminRequired';
@@ -76,15 +80,17 @@ export default (crowi: Crowi, app: Express) => {
   debug('Mounting authenticated routes (JWT required)');
   authenticatedRouter.use(attachmentStreamRouter);
 
-  // Admin Router - JWT authentication + admin permission required
+  // Admin Router - JWT authentication + admin permission required.
+  // Retained for Batch 9 admin sub-contracts (admin.app / admin.auth /
+  // admin.security / admin.mail / admin.share / admin.storage /
+  // admin.search / admin.users / admin.plugins). `adminCrypto` moved
+  // to Hono in Batch 8 — see `hono/handlers/adminCrypto.ts`.
   const adminRouter = Router();
   adminRouter.use(jwtAdminRequired(crowi)); // Apply JWT auth + admin check
 
-  const adminCryptoRouter = adminCryptoRoutes(crowi, app);
   const adminSubRouter = adminRoutes(crowi, app);
 
   debug('Mounting admin routes (JWT + admin required)');
-  adminRouter.use(adminCryptoRouter);
   adminRouter.use(adminSubRouter);
 
   // Mount all routers under /api/v2

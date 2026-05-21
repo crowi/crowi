@@ -15,6 +15,7 @@
 import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
+import { registerAdminCryptoRoutes } from './handlers/adminCrypto';
 import { registerAppRoutes } from './handlers/app';
 import { registerAttachmentRoutes } from './handlers/attachment';
 import { registerAutocompleteRoutes } from './handlers/autocomplete';
@@ -93,7 +94,14 @@ export const buildHonoApp = (crowi: Crowi) => {
   // the literal path itself, same single-route install pattern as
   // `/users/autocomplete`. No rate limit.
   const withSearch = registerSearchRoutes(withAttachment, crowi);
-  const withNotification = registerNotificationRoutes(withSearch, crowi);
+  // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
+  // admin-only. First Hono migration to install
+  // `createJwtAdminRequired(crowi)` (per-path, same single-route install
+  // pattern as `search` / `/users/autocomplete` but using the
+  // admin-required factory). No other handler owns `/admin/crypto/*`,
+  // so there is no double-apply risk.
+  const withAdminCrypto = registerAdminCryptoRoutes(withSearch, crowi);
+  const withNotification = registerNotificationRoutes(withAdminCrypto, crowi);
   return withNotification;
 };
 

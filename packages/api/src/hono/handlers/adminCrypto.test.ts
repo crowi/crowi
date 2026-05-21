@@ -19,7 +19,7 @@ const createUser = async (info: { name: string; username: string; email: string 
   return { user, accessToken };
 };
 
-describe('Routes /api/v2/admin/crypto (ts-rest)', () => {
+describe('Routes /api/v2/admin/crypto (Hono)', () => {
   let Config;
   let adminToken: string;
   let memberToken: string;

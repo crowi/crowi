@@ -35,6 +35,7 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import jsYaml from 'js-yaml';
 
 import {
+  adminCryptoRoutes,
   appRoutes,
   attachmentRoutes,
   autocompleteRoutes,
@@ -292,8 +293,12 @@ const routeGroups = [
   attachmentRoutes,
   // Batch 7 — search. Singleton literal path `/search` (OUTSIDE the
   // revision-owned `/pages/*` apply). Spec ordering mirrors the
-  // buildHonoApp chain (attachment -> search -> notification).
+  // buildHonoApp chain (attachment -> search -> adminCrypto ->
+  // notification).
   searchRoutes,
+  // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
+  // admin-only (first time `createJwtAdminRequired` lands on Hono).
+  adminCryptoRoutes,
   notificationRoutes,
 ];
 for (const group of routeGroups) {
