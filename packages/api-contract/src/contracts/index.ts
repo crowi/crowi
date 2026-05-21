@@ -6,7 +6,6 @@ import { presenceContract } from './presence';
 import { commentContract } from './comment';
 import { revisionContract } from './revision';
 import { notificationContract } from './notification';
-import { backlinkContract } from './backlink';
 import { draftContract } from './draft';
 import { autocompleteContract } from './autocomplete';
 import { attachmentContract } from './attachment';
@@ -24,6 +23,7 @@ export * from './tokenAuth';
 export * from './me';
 export * from './user';
 export * from './bookmark';
+export * from './backlink';
 
 const c = initContract();
 
@@ -49,7 +49,6 @@ export const apiContract = c.router({
   comment: commentContract,
   revision: revisionContract,
   notification: notificationContract,
-  backlink: backlinkContract,
   draft: draftContract,
   autocomplete: autocompleteContract,
   attachment: attachmentContract,

@@ -1,7 +1,16 @@
-import request from 'supertest';
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
+import request from 'supertest';
+
+import { Fixture, app, crowi } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
+
+/**
+ * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
+ * `backlink` resource. The async `Backlink.createBySavedPage` chain
+ * launched by the page-save event makes timing flaky, so we poll
+ * until the expected backlink count lands before asserting on the
+ * response shape.
+ */
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -39,10 +48,6 @@ const createPageViaApi = async (accessToken: string, path: string, body: string)
   return res.body.page as { _id: string; path: string; revision: { _id: string } };
 };
 
-// The pageEvent.on('create') hook fires Backlink.createBySavedPage as a
-// fire-and-forget chain whose internal awaits produce additional microtasks
-// and I/O round-trips. Poll until the expected number of backlinks land,
-// with a generous safety bound.
 const waitForBacklinkCount = async (pageId: string, expected: number, accessToken: string, maxTicks = 50) => {
   let last;
   for (let i = 0; i < maxTicks; i += 1) {
@@ -54,16 +59,16 @@ const waitForBacklinkCount = async (pageId: string, expected: number, accessToke
   return last;
 };
 
-describe('Routes /api/v2/backlinks (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-backlink-test/';
+describe('Routes /api/v2/backlinks (Hono)', () => {
+  const PATH_PREFIX = '/hono-backlink-test/';
   let accessToken: string;
   let userId: string;
 
   beforeAll(async () => {
     const tester = await createTestUser({
       name: 'Backlink Test',
-      username: 'backlinkTester',
-      email: 'backlink-tester@example.com',
+      username: 'honoBacklinkTester',
+      email: 'hono-backlink-tester@example.com',
     });
     accessToken = tester.accessToken;
     userId = tester.user._id.toString();
@@ -108,7 +113,7 @@ describe('Routes /api/v2/backlinks (ts-rest)', () => {
       expect(b.fromPage.path).toBe(source.path);
       expect(b.fromRevision._id).toBe(source.revision._id);
       expect(b.fromRevision.author).not.toBeNull();
-      expect(b.fromRevision.author.username).toBe('backlinkTester');
+      expect(b.fromRevision.author.username).toBe('honoBacklinkTester');
       expect(b.fromRevision.author._id).toBe(userId);
       expect(typeof b.updatedAt).toBe('string');
       expect(() => new Date(b.updatedAt).toISOString()).not.toThrow();
@@ -116,15 +121,12 @@ describe('Routes /api/v2/backlinks (ts-rest)', () => {
 
     it('hasNext is false when there are exactly `limit` records', async () => {
       const target = await createPageViaApi(accessToken, `${PATH_PREFIX}target-exact`, '# target');
-      // 3 source pages, all linking to target. We then query with limit=3
-      // so there are exactly `limit` matching backlinks.
       await Promise.all([
         createPageViaApi(accessToken, `${PATH_PREFIX}src-exact-1`, `<${target.path}>`),
         createPageViaApi(accessToken, `${PATH_PREFIX}src-exact-2`, `<${target.path}>`),
         createPageViaApi(accessToken, `${PATH_PREFIX}src-exact-3`, `<${target.path}>`),
       ]);
 
-      // Wait for all 3 backlinks then re-query with the actual limit under test.
       await waitForBacklinkCount(target._id, 3, accessToken);
       const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 3 });
 
@@ -142,7 +144,6 @@ describe('Routes /api/v2/backlinks (ts-rest)', () => {
         createPageViaApi(accessToken, `${PATH_PREFIX}src-more-4`, `<${target.path}>`),
       ]);
 
-      // Wait for all 4 to land before querying with limit=2.
       await waitForBacklinkCount(target._id, 4, accessToken);
       const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 2 });
 

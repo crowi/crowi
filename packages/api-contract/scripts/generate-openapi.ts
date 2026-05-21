@@ -36,6 +36,7 @@ import jsYaml from 'js-yaml';
 
 import {
   appRoutes,
+  backlinkRoutes,
   bookmarkRoutes,
   installerRoutes,
   meRoutes,
@@ -251,7 +252,7 @@ for (const [name, schema] of schemas) {
 // them into `paths{}` without needing the real handler implementation
 // (this script intentionally cannot import `@crowi/api` — see the file
 // header for the hermeticity rationale).
-const routeGroups = [appRoutes, installerRoutes, tokenAuthRoutes, meRoutes, userRoutes, bookmarkRoutes];
+const routeGroups = [appRoutes, installerRoutes, tokenAuthRoutes, meRoutes, userRoutes, bookmarkRoutes, backlinkRoutes];
 for (const group of routeGroups) {
   for (const route of Object.values(group)) {
     // `openapi(route, handler)` requires a handler; `_def` is the
