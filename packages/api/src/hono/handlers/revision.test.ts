@@ -1,7 +1,17 @@
-import request from 'supertest';
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
+import request from 'supertest';
+
+import { Fixture, app, crowi } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
+
+/**
+ * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
+ * `revision` resource. Exercises the literal-vs-template ordering
+ * (`/pages/revisions` must beat `/pages/revisions/{id}` for the
+ * `?ids=...` list form), the grant + existence-leak guards, and the
+ * Phase 8 `savedBy` / `contributors` surfacing for collab-flow
+ * checkpoints.
+ */
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -24,21 +34,20 @@ const cleanupPathPrefix = (prefix: string) => {
   return Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter)]);
 };
 
-describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-revision-test/';
+describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
+  const PATH_PREFIX = '/hono-revision-test/';
   let accessToken: string;
   let otherAccessToken: string;
 
   beforeAll(async () => {
     [{ accessToken }, { accessToken: otherAccessToken }] = await Promise.all([
-      createTestUser({ name: 'Revision Tester', username: 'revisionTester', email: 'revision-tester@example.com' }),
-      createTestUser({ name: 'Revision Other', username: 'revisionOther', email: 'revision-other@example.com' }),
+      createTestUser({ name: 'Revision Tester', username: 'honoRevisionTester', email: 'hono-revision-tester@example.com' }),
+      createTestUser({ name: 'Revision Other', username: 'honoRevisionOther', email: 'hono-revision-other@example.com' }),
     ]);
   });
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  /** Create a page (and capture its first revision) using the ts-rest createPage endpoint. */
   const createTestPage = async (path: string, body = '# initial', grant?: number) => {
     const headers = authHeaders(accessToken);
     const payload: { path: string; body: string; grant?: number } = { path, body };
@@ -52,7 +61,6 @@ describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
     };
   };
 
-  /** Append a new revision to an existing page so we can test list ordering. */
   const updateTestPage = async (pageId: string, body: string) => {
     const res = await request(app).put('/api/v2/pages').set(authHeaders(accessToken)).send({ page_id: pageId, body });
     expect(res.status).toBe(200);
@@ -103,11 +111,10 @@ describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
       const ids = res.body.revisions.map((r: { _id: string }) => r._id);
       expect(ids).toEqual([thirdRevisionId, secondRevisionId, firstRevisionId]);
 
-      // Body must not be included in the meta list response.
       for (const r of res.body.revisions) {
         expect(r.body).toBeUndefined();
         expect(r.path).toBe(`${PATH_PREFIX}list-order`);
-        expect(r.author.username).toBe('revisionTester');
+        expect(r.author.username).toBe('honoRevisionTester');
       }
 
       expect(res.body.pager).toEqual({ prev: null, next: null, offset: 0 });
@@ -131,12 +138,6 @@ describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
       expect(second.body.pager).toEqual({ prev: 0, next: null, offset: 2 });
     });
 
-    // Phase 8 (RFC-0003) — list endpoint surfaces the collab-flow
-    // `savedBy` + `contributors` fields when they are populated on a
-    // Revision document. Pre-RFC-0003 revisions (which is everything
-    // the existing tests above produce via the legacy createPage path
-    // that doesn't set savedBy) still respond with the field omitted
-    // so v1.x clients keep working untouched.
     it('omits savedBy/contributors for revisions without collab metadata (v1.x fallback)', async () => {
       const { pageId } = await createTestPage(`${PATH_PREFIX}v1x`, '# legacy');
 
@@ -144,25 +145,19 @@ describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.revisions).toHaveLength(1);
-      // The author should still be populated for back-compat.
       expect(res.body.revisions[0].author).toBeDefined();
-      expect(res.body.revisions[0].author.username).toBe('revisionTester');
-      // Pre-RFC-0003 revision → both fields missing.
+      expect(res.body.revisions[0].author.username).toBe('honoRevisionTester');
       expect(res.body.revisions[0].savedBy).toBeUndefined();
       expect(res.body.revisions[0].contributors).toBeUndefined();
     });
 
     it('surfaces savedBy + contributors when present on the Revision document', async () => {
-      // Build a revision directly via the model so we can attach
-      // savedBy + contributors without standing up the full Hocuspocus
-      // pipeline. The schema requires _id refs; we use the two
-      // pre-existing test users.
       const Page = crowi.model('Page');
       const Revision = crowi.model('Revision');
       const User = crowi.model('User');
 
-      const savedByUser = await User.findOne({ username: 'revisionTester' });
-      const peerUser = await User.findOne({ username: 'revisionOther' });
+      const savedByUser = await User.findOne({ username: 'honoRevisionTester' });
+      const peerUser = await User.findOne({ username: 'honoRevisionOther' });
       expect(savedByUser).not.toBeNull();
       expect(peerUser).not.toBeNull();
 
@@ -170,7 +165,6 @@ describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
       const page = await Page.findById(pageId);
       expect(page).not.toBeNull();
 
-      // Append a collab-style checkpoint revision with both fields set.
       await Revision.create({
         path: page.path,
         body: '# v2 collab',
@@ -187,13 +181,11 @@ describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
 
       const collabRev = res.body.revisions[0];
       expect(collabRev.savedBy).toBeDefined();
-      expect(collabRev.savedBy.username).toBe('revisionTester');
+      expect(collabRev.savedBy.username).toBe('honoRevisionTester');
       expect(Array.isArray(collabRev.contributors)).toBe(true);
       expect(collabRev.contributors).toHaveLength(1);
-      expect(collabRev.contributors[0].username).toBe('revisionOther');
+      expect(collabRev.contributors[0].username).toBe('honoRevisionOther');
 
-      // The older legacy revision (created via createTestPage) remains
-      // untouched in the same response.
       const legacyRev = res.body.revisions[1];
       expect(legacyRev.savedBy).toBeUndefined();
       expect(legacyRev.contributors).toBeUndefined();
@@ -232,7 +224,7 @@ describe('Routes /api/v2/pages/.../revisions (ts-rest)', () => {
       expect(res.body.revision._id).toBe(revisionId);
       expect(res.body.revision.path).toBe(path);
       expect(res.body.revision.body).toBe('# the body');
-      expect(res.body.revision.author.username).toBe('revisionTester');
+      expect(res.body.revision.author.username).toBe('honoRevisionTester');
     });
 
     it('returns 404 PAGE_NOT_FOUND when caller has no grant on the revisions page', async () => {

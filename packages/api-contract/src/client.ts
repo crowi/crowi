@@ -40,6 +40,7 @@ import { bookmarkRoutes } from './contracts/bookmark';
 import { commentRoutes } from './contracts/comment';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
+import { revisionRoutes } from './contracts/revision';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { userRoutes } from './contracts/user';
 import type { AppInfoResponseSchema } from './schemas/app';
@@ -55,6 +56,7 @@ import type {
   SuccessResponseSchema,
   UserProfileResponseSchema,
 } from './schemas/me';
+import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
 import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
 
@@ -78,6 +80,9 @@ type GetBacklinksResponse = z.infer<typeof GetBacklinksResponseSchema>;
 type ListCommentsResponse = z.infer<typeof ListCommentsResponseSchema>;
 type AddCommentResponse = z.infer<typeof AddCommentResponseSchema>;
 type DeleteCommentResponse = z.infer<typeof DeleteCommentResponseSchema>;
+type ListRevisionsResponse = z.infer<typeof ListRevisionsResponseSchema>;
+type GetRevisionResponse = z.infer<typeof GetRevisionResponseSchema>;
+type GetRevisionsResponse = z.infer<typeof GetRevisionsResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -166,6 +171,17 @@ const stubComment = {
 };
 const stubAddComment: AddCommentResponse = { comment: stubComment };
 const stubDeleteComment: DeleteCommentResponse = { ok: true };
+const stubListRevisions: ListRevisionsResponse = { revisions: [], pager: stubPager };
+const stubRevision = {
+  _id: '',
+  path: '',
+  body: '',
+  format: 'markdown',
+  author: null,
+  createdAt: '',
+};
+const stubGetRevision: GetRevisionResponse = { revision: stubRevision };
+const stubGetRevisions: GetRevisionsResponse = { revisions: [] };
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -209,7 +225,13 @@ const contractApp = new OpenAPIHono()
   .openapi(backlinkRoutes.getBacklinksRoute, (c) => c.json(stubBacklinks, 200))
   .openapi(commentRoutes.listCommentsRoute, (c) => c.json(stubListComments, 200))
   .openapi(commentRoutes.addCommentRoute, (c) => c.json(stubAddComment, 200))
-  .openapi(commentRoutes.deleteCommentRoute, (c) => c.json(stubDeleteComment, 200));
+  .openapi(commentRoutes.deleteCommentRoute, (c) => c.json(stubDeleteComment, 200))
+  .openapi(revisionRoutes.listRevisionsRoute, (c) => c.json(stubListRevisions, 200))
+  // `/pages/revisions` (list-by-ids) registers before `/pages/revisions/{id}`
+  // to match the runtime chain — see the contract file header for why
+  // ordering matters.
+  .openapi(revisionRoutes.getRevisionsRoute, (c) => c.json(stubGetRevisions, 200))
+  .openapi(revisionRoutes.getRevisionRoute, (c) => c.json(stubGetRevision, 200));
 
 export type AppType = typeof contractApp;
 
