@@ -49,6 +49,7 @@ import { pageRoutes } from './contracts/page';
 import { pagePreviewRoutes } from './contracts/page-preview';
 import { presenceRoutes } from './contracts/presence';
 import { revisionRoutes } from './contracts/revision';
+import { searchRoutes } from './contracts/search';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { userRoutes } from './contracts/user';
 import type { AppInfoResponseSchema } from './schemas/app';
@@ -75,6 +76,7 @@ import type { GetPageResponseSchema, ListPagesResponseSchema, PageSchema, SeenUs
 import type { PreviewPageResponseSchema } from './schemas/page-preview';
 import type { LikersResponseSchema, PresenceTokenResponseSchema } from './schemas/presence';
 import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
+import type { SearchPagesResponseSchema } from './schemas/search';
 import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
 import type { CreateDraftResponseSchema, ListDraftsResponseSchema } from './schemas/draft';
@@ -111,6 +113,7 @@ type DeleteCommentResponse = z.infer<typeof DeleteCommentResponseSchema>;
 type ListRevisionsResponse = z.infer<typeof ListRevisionsResponseSchema>;
 type GetRevisionResponse = z.infer<typeof GetRevisionResponseSchema>;
 type GetRevisionsResponse = z.infer<typeof GetRevisionsResponseSchema>;
+type SearchPagesResponse = z.infer<typeof SearchPagesResponseSchema>;
 type ListNotificationsResponse = z.infer<typeof ListNotificationsResponseSchema>;
 type MarkAllAsReadResponse = z.infer<typeof MarkAllAsReadResponseSchema>;
 type NotificationStatusResponse = z.infer<typeof NotificationStatusResponseSchema>;
@@ -317,6 +320,7 @@ const stubAttachmentMeta: AttachmentMeta = (() => {
 })();
 const stubUploadAttachment: UploadAttachmentResponse = { url: '', filename: '', mimeType: '', sizeBytes: 0 };
 const stubRemoveAttachment: RemoveAttachmentResponse = { success: true };
+const stubSearchPages: SearchPagesResponse = { meta: { total: 0, results: 0 }, data: [] };
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -420,6 +424,10 @@ const contractApp = new OpenAPIHono()
   .openapi(attachmentRoutes.uploadAttachmentRoute, (c) => c.json(stubUploadAttachment, 200))
   .openapi(attachmentRoutes.getAttachmentMetaRoute, (c) => c.json(stubAttachmentMeta, 200))
   .openapi(attachmentRoutes.removeAttachmentRoute, (c) => c.json(stubRemoveAttachment, 200))
+  // Batch 7 — search. Singleton literal path `/search`, installs jwtAuth
+  // on the path itself (no other handler owns `/search`). Registered
+  // before notification to mirror the buildHonoApp chain.
+  .openapi(searchRoutes.searchPagesRoute, (c) => c.json(stubSearchPages, 200))
   .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
   .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
   // `/notifications/status` registers before `/notifications/{id}/open`

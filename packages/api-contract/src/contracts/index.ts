@@ -1,7 +1,6 @@
 import { initContract } from '@ts-rest/core';
 import { adminCryptoContract } from './adminCrypto';
 import { adminContract } from './admin';
-import { searchContract } from './search';
 
 // Hono-style route exports (RFC-0006 Phase 3+). Resources migrated off
 // ts-rest expose `createRoute(...)` objects rather than a `c.router`
@@ -24,6 +23,7 @@ export * from './presence';
 export * from './draft';
 export * from './autocomplete';
 export * from './attachment';
+export * from './search';
 
 const c = initContract();
 
@@ -70,8 +70,14 @@ const c = initContract();
 // `draft` rides on the revision apply entirely (`/pages/drafts*`). The
 // rate-limit middleware (`hono/middleware/rate-limit.ts`) wraps both
 // autocomplete routes (60/min) and `uploadAttachment` (20/min).
+//
+// Batch 7 migrated `search` (1 endpoint, `GET /search`) to Hono. The
+// handler installs `createJwtAuth(crowi)` on the singleton literal path
+// itself — same install pattern as `/users/autocomplete`. No rate
+// limit (driver latency naturally throttles bursts). The 503
+// `SERVICE_UNAVAILABLE` fallback when no `@crowi/plugin-search-*` is
+// registered is preserved byte-identical with the ts-rest era.
 export const apiContract = c.router({
   adminCrypto: adminCryptoContract,
   admin: adminContract,
-  search: searchContract,
 });

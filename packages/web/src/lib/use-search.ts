@@ -1,8 +1,7 @@
 'use client';
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 import type { SearchPagesResponse, SearchPageType } from '@crowi/api-contract';
 
 /**
@@ -34,27 +33,38 @@ export const searchKeys = {
   query: (params: UseSearchPagesParams) => [...searchKeys.all, 'pages', params.q, params.type ?? null, params.tree ?? null, params.page ?? 1] as const,
 };
 
+/**
+ * RFC-0006 Phase 4 Batch 7 — switched from `apiClient.search.*`
+ * (ts-rest) to `apiClientV2.search.$get` (hc<AppType>). Wire payload
+ * unchanged. 503 SERVICE_UNAVAILABLE branches to `SearchDisabledError`
+ * so the consumer can render a "search is disabled" panel instead of a
+ * generic failure toast.
+ */
 export function useSearchPages(params: UseSearchPagesParams) {
   const enabled = params.q.length > 0;
   return useQuery({
     queryKey: searchKeys.query(params),
     queryFn: async (): Promise<SearchPagesResponse> => {
-      const result = await apiClient.search.searchPages({
+      // hc<AppType> serialises query values as strings. `page` / `limit`
+      // are coerced by the Zod schema on the server side
+      // (`z.coerce.number`); `tree` / `type` stay verbatim.
+      const response = await apiClientV2.search.$get({
         query: {
           q: params.q,
-          page: params.page,
-          limit: params.limit,
+          page: params.page !== undefined ? String(params.page) : undefined,
+          limit: params.limit !== undefined ? String(params.limit) : undefined,
           type: params.type,
           tree: params.tree,
         },
       });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: {
-          503: { message: 'Search is not configured.', ErrorClass: SearchDisabledError },
-        },
-        fallback: 'Failed to search pages',
-      });
+      if (response.status === 503) {
+        throw new SearchDisabledError('Search is not configured.');
+      }
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+        throw new Error(body?.error?.message ?? 'Failed to search pages');
+      }
+      return (await response.json()) as SearchPagesResponse;
     },
     enabled,
     placeholderData: keepPreviousData,

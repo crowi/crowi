@@ -36,7 +36,10 @@ import { Express, Router } from 'express';
 // the Express bridge (still mounted via the legacy `/_api` /
 // controllers path) until Phase 6 cleanup converts them to native
 // Hono Response streams.
-import searchRoutes from './search';
+// RFC-0006 Phase 4 Batch 7 — `search` resource moved to Hono
+// (`hono/handlers/search.ts`). The ts-rest router file was deleted.
+// `attachmentStreamRouter` is the only remaining occupant of
+// `authenticatedRouter` and stays here until Phase 6 cleanup.
 import attachmentStreamRoutes from './attachment-stream';
 import adminCryptoRoutes from './adminCrypto';
 import adminRoutes from './admin';
@@ -63,15 +66,14 @@ export default (crowi: Crowi, app: Express) => {
   const authenticatedRouter = Router();
   authenticatedRouter.use(jwtAuth(crowi)); // Apply JWT auth to all routes
 
-  const searchRouter = searchRoutes(crowi, app);
   // The raw streaming attachment routes (`GET /attachments/by-key/*`
   // and `GET /attachments/:id`) stay on Express until Phase 6 — see
   // `routes/ts-rest/attachment-stream.ts` for the streaming-vs-Hono
-  // rationale.
+  // rationale. It is the only remaining occupant of
+  // `authenticatedRouter` post-Batch 7.
   const attachmentStreamRouter = attachmentStreamRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
-  authenticatedRouter.use(searchRouter);
   authenticatedRouter.use(attachmentStreamRouter);
 
   // Admin Router - JWT authentication + admin permission required

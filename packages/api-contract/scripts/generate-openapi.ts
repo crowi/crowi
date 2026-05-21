@@ -50,6 +50,7 @@ import {
   pageRoutes,
   presenceRoutes,
   revisionRoutes,
+  searchRoutes,
   tokenAuthRoutes,
   userRoutes,
   AdminPagerSchema,
@@ -289,6 +290,10 @@ const routeGroups = [
   draftRoutes,
   autocompleteRoutes,
   attachmentRoutes,
+  // Batch 7 — search. Singleton literal path `/search` (OUTSIDE the
+  // revision-owned `/pages/*` apply). Spec ordering mirrors the
+  // buildHonoApp chain (attachment -> search -> notification).
+  searchRoutes,
   notificationRoutes,
 ];
 for (const group of routeGroups) {

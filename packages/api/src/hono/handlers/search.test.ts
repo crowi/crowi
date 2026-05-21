@@ -79,8 +79,8 @@ const withMockDriver = async (driver: SearchDriver | null, fn: () => Promise<voi
   }
 };
 
-describe('Routes /api/v2/search (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-search-test/';
+describe('Routes /api/v2/search (Hono)', () => {
+  const PATH_PREFIX = '/hono-search-test/';
   let accessToken: string;
   let userId: string;
   let username: string;

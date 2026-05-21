@@ -30,6 +30,7 @@ import { registerPageCollabRoutes } from './handlers/page-collab';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
 import { registerPresenceRoutes } from './handlers/presence';
 import { registerRevisionRoutes } from './handlers/revision';
+import { registerSearchRoutes } from './handlers/search';
 import { registerTokenAuthRoutes } from './handlers/tokenAuth';
 import { registerUserRoutes } from './handlers/user';
 
@@ -87,7 +88,12 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withDraft = registerDraftRoutes(withPresence, crowi);
   const withAutocomplete = registerAutocompleteRoutes(withDraft, crowi);
   const withAttachment = registerAttachmentRoutes(withAutocomplete, crowi);
-  const withNotification = registerNotificationRoutes(withAttachment, crowi);
+  // Batch 7 — search. Singleton literal path `/search` (OUTSIDE the
+  // revision-owned `/pages/*` apply). The handler installs jwtAuth on
+  // the literal path itself, same single-route install pattern as
+  // `/users/autocomplete`. No rate limit.
+  const withSearch = registerSearchRoutes(withAttachment, crowi);
+  const withNotification = registerNotificationRoutes(withSearch, crowi);
   return withNotification;
 };
 
