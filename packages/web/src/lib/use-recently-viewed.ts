@@ -1,12 +1,6 @@
 'use client';
 
-// TS2589-RFC-0006-PHASE-6: `response.json() as RecentlyViewedPagesResponse`
-// cast below exists because `apiClientV2` is typed as `any` (TS2589 limit
-// in `client.ts`). Drop the cast in Phase 6 once `hc<AppType>` recovers
-// strict typing.
-
 import { useQuery } from '@tanstack/react-query';
-import type { RecentlyViewedPagesResponse } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
 
 export const recentlyViewedKeys = {
@@ -28,7 +22,7 @@ export function useRecentlyViewedPages(opts: { enabled: boolean }) {
       if (!response.ok) {
         throw new Error('Failed to load recently viewed pages');
       }
-      return (await response.json()) as RecentlyViewedPagesResponse;
+      return await response.json();
     },
     enabled: opts.enabled,
     staleTime: 30 * 1000,

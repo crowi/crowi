@@ -1,15 +1,8 @@
 'use client';
 
-// TS2589-RFC-0006-PHASE-6: the `apiClientV2` proxy is typed as `any`
-// because `hc<AppType>` hits TS2589 (instantiation depth) at 90+ routes.
-// Each `response.json() as <Schema>` cast below preserves the
-// caller-side `.map(...)` / property-access type inference and is
-// expected to drop back to inferred types in Phase 6 once `client.ts`
-// splits the contract chain.
-
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import type { ListNotificationsResponse, Notification, OpenNotificationResponse } from '@crowi/api-contract';
+import type { Notification } from '@crowi/api-contract';
 
 /**
  * Query key factory for notification-related queries.
@@ -51,7 +44,7 @@ export function useUnreadCount() {
       const response = await apiClientV2.notifications.status.$get();
       if (response.status === 401) return 0;
       if (!response.ok) throw new Error('Failed to fetch unread notification count');
-      const body = (await response.json()) as { count: number };
+      const body = await response.json();
       return body.count;
     },
     refetchInterval: UNREAD_COUNT_POLL_INTERVAL_MS,
@@ -84,7 +77,7 @@ export function useNotifications({ limit = 10, offset = 0, enabled = false }: Us
       });
       if (response.status === 401) return EMPTY_LIST;
       if (!response.ok) throw new Error('Failed to fetch notifications');
-      return (await response.json()) as ListNotificationsResponse;
+      return await response.json();
     },
     enabled,
   });
@@ -105,7 +98,7 @@ export function useNotificationsInfinite(limit: number = 20) {
       });
       if (response.status === 401) throw new Error('Authentication required');
       if (!response.ok) throw new Error('Failed to fetch notifications');
-      return (await response.json()) as ListNotificationsResponse;
+      return await response.json();
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
@@ -149,12 +142,11 @@ export function useOpenNotification() {
     mutationFn: async (notificationId: string): Promise<Notification> => {
       const response = await apiClientV2.notifications[':id'].open.$post({
         param: { id: notificationId },
-        json: {},
       });
       if (response.status === 401) throw new Error('Authentication required');
       if (response.status === 404) throw new Error('Failed to open notification');
       if (!response.ok) throw new Error('Failed to open notification');
-      const body = (await response.json()) as OpenNotificationResponse;
+      const body = await response.json();
       return body.notification;
     },
     onSuccess: () => {

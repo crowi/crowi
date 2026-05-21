@@ -117,10 +117,7 @@ export function useRemoveAttachment(pageId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (attachmentId: string): Promise<void> => {
-      // The contract's DELETE body is `z.unknown()`; hc<AppType>
-      // requires the `json` arg to satisfy the type even when no body
-      // is sent on the wire.
-      const response = await apiClientV2.attachments[':id'].$delete({ param: { id: attachmentId }, json: undefined });
+      const response = await apiClientV2.attachments[':id'].$delete({ param: { id: attachmentId } });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
         throw new Error(body?.error?.message ?? 'Failed to remove attachment');

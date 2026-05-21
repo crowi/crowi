@@ -131,8 +131,8 @@ export function useToggleAdminRole() {
   return useMutation({
     mutationFn: async (params: { id: string; nextAdmin: boolean }): Promise<AdminUserMutationResponse> => {
       const response = params.nextAdmin
-        ? await apiClientV2.admin.users[':id'].admin.$put({ param: { id: params.id }, json: {} })
-        : await apiClientV2.admin.users[':id'].admin.$delete({ param: { id: params.id }, json: {} });
+        ? await apiClientV2.admin.users[':id'].admin.$put({ param: { id: params.id } })
+        : await apiClientV2.admin.users[':id'].admin.$delete({ param: { id: params.id } });
       if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
       return throwAdminUserError(response, m['admin.users.action.role_failed']());
     },
@@ -148,8 +148,8 @@ export function useToggleAdminStatus() {
     mutationFn: async (params: { id: string; nextStatus: 'active' | 'suspended' }): Promise<AdminUserMutationResponse> => {
       const response =
         params.nextStatus === 'active'
-          ? await apiClientV2.admin.users[':id'].status.active.$put({ param: { id: params.id }, json: {} })
-          : await apiClientV2.admin.users[':id'].status.suspended.$put({ param: { id: params.id }, json: {} });
+          ? await apiClientV2.admin.users[':id'].status.active.$put({ param: { id: params.id } })
+          : await apiClientV2.admin.users[':id'].status.suspended.$put({ param: { id: params.id } });
       if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
       return throwAdminUserError(response, m['admin.users.action.status_failed']());
     },
@@ -168,7 +168,6 @@ export function useResetAdminUserPassword() {
     mutationFn: async (params: { id: string }): Promise<ResetPasswordResponse> => {
       const response = await apiClientV2.admin.users[':id']['reset-password'].$post({
         param: { id: params.id },
-        json: {},
       });
       if (response.status === 200) return (await response.json()) as ResetPasswordResponse;
       return throwAdminUserError(response, m['admin.users.action.reset_password_failed']());

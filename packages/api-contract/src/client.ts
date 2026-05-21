@@ -20,15 +20,46 @@
  * - **Option 2 adopted**: `@crowi/api-contract` is the single source of
  *   truth for `AppType`. It builds a no-op Hono chain that mirrors the
  *   real route surface (every `createRoute(...)` exported by the
- *   contracts) and exports `AppType = typeof contractApp`. The real
- *   `@crowi/api` handler chain produces the same shape because both
- *   sides consume the same `createRoute` definitions, so the
- *   `hc<AppType>` client is type-safe against the real server.
+ *   contracts) and exports `AppType` as an intersection of every
+ *   sub-chain's `typeof`. The real `@crowi/api` handler chain produces
+ *   the same shape because both sides consume the same `createRoute`
+ *   definitions, so the `hc<AppType>` client is type-safe against the
+ *   real server.
  *
  * If the route-definition <-> handler-implementation match ever drifts
  * (e.g. a contract is registered here but never wired in `@crowi/api`),
  * runtime requests will 404 — covered by integration tests in
  * `packages/api/src/hono/handlers/*.test.ts`.
+ *
+ * **Phase 6 — TS2589 escape hatch removal**:
+ *
+ * Phase 4 Batch 9 hit TypeScript error 2589 ("type instantiation
+ * excessively deep") when the contract chain reached 90+ chained
+ * `.openapi(...)` calls; the previous workaround flattened the four
+ * sub-chains into one via `.route('/', sub)` calls and surfaced
+ * `AppType = typeof contractApp`, which still tripped 2589 in
+ * downstream `hc<AppType>` consumers. That commit reached
+ * for `@ts-expect-error` on the `hc<AppType>(baseUrl)` call and
+ * exported `CrowiApiClient = any`, which forced four frontend hooks to
+ * cast `response.json() as <Schema>`.
+ *
+ * The fix in this file:
+ *
+ * 1. The route surface is partitioned into six independent
+ *    `OpenAPIHono` chains, each holding ≤ ~22 `.openapi(...)` calls so
+ *    no single chain exceeds TS's instantiation-depth ceiling on its
+ *    own.
+ * 2. `AppType` is declared as the **intersection** of every chain's
+ *    `typeof`. `hc<T>` from `hono/client` constrains `T` to `Hono<any,
+ *    any, any>`, which an intersection of multiple `OpenAPIHono`
+ *    chains satisfies (each summand is a Hono), and the inferred
+ *    `Client<T, Prefix>` propagates each chain's routes through
+ *    `UnionToIntersection<Client<...>>` in the upstream hc declaration.
+ * 3. The chains are **not** merged via `.route('/', sub)`; that call
+ *    is what caused the type to flatten and explode in the previous
+ *    layout. Merging is only useful when the runtime needs a single
+ *    `app.fetch` entry-point, which is not the case here (the runtime
+ *    is `@crowi/api`'s real handler chain — these stubs never execute).
  */
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { hc } from 'hono/client';
@@ -432,7 +463,11 @@ const stubPluginConfig: PluginConfigResponse = { name: '', fields: [], values: {
 const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false };
 const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: '', removedCount: 0 };
 
-const earlyContractApp = new OpenAPIHono()
+// app boot / token-auth / me / user — 20 routes. The `_id` user is
+// freshly spelt out in `tokenMeRoute` because the user shape returned
+// by `/auth/me` (legacy JWT verify endpoint) embeds `status` and is
+// nominally different from `stubUser` (no `status` field).
+const appAuthMeUserChain = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
   .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200))
@@ -466,7 +501,12 @@ const earlyContractApp = new OpenAPIHono()
   .openapi(meRoutes.recentlyViewedPagesRoute, (c) => c.json({ pages: [] } satisfies RecentlyViewedPagesResponse, 200))
   .openapi(userRoutes.getUserPageRoute, (c) => c.json(stubUserPage, 200))
   .openapi(userRoutes.getUserBookmarksRoute, (c) => c.json(stubUserBookmarks, 200))
-  .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200))
+  .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200));
+
+// bookmark / backlink / comment / revision — 11 routes. Revision's
+// list-by-ids endpoint registers before the by-id endpoint to mirror
+// the runtime chain (first-match-wins on the Hono router).
+const bookmarkBacklinkCommentRevisionChain = new OpenAPIHono()
   .openapi(bookmarkRoutes.getBookmarkRoute, (c) => c.json(stubBookmarkResponse, 200))
   .openapi(bookmarkRoutes.listMyBookmarksRoute, (c) => c.json(stubListMyBookmarks, 200))
   .openapi(bookmarkRoutes.addBookmarkRoute, (c) => c.json(stubBookmarkResponse, 200))
@@ -480,15 +520,17 @@ const earlyContractApp = new OpenAPIHono()
   // to match the runtime chain — see the contract file header for why
   // ordering matters.
   .openapi(revisionRoutes.getRevisionsRoute, (c) => c.json(stubGetRevisions, 200))
-  .openapi(revisionRoutes.getRevisionRoute, (c) => c.json(stubGetRevision, 200))
-  // page resource — 14 endpoints. Registers AFTER revision so the
-  // shared `/pages/*` `createJwtAuth` apply in revision is reused
-  // by the page handler (Hono does not dedupe middleware references).
-  // Inside this block, literal sub-paths (`/pages/list`, `/pages/grant`,
-  // `/pages/seen`, `/pages/seen-users`, `/pages/like`, `/pages/unlike`,
-  // `/pages/watch`, `/pages/revert`, `/pages/rename`) come before the
-  // bare `/pages` CRUD endpoints — same first-match-wins ordering used
-  // by the revision / notification chains above.
+  .openapi(revisionRoutes.getRevisionRoute, (c) => c.json(stubGetRevision, 200));
+
+// page / page-preview / pageCollab / presence — 18 routes. Page CRUD
+// registers AFTER revision in the runtime chain so the shared
+// `/pages/*` `createJwtAuth` apply in revision is reused. Inside this
+// block, literal sub-paths (`/pages/list`, `/pages/grant`, `/pages/seen`,
+// `/pages/seen-users`, `/pages/like`, `/pages/unlike`, `/pages/watch`,
+// `/pages/revert`, `/pages/rename`) come before the bare `/pages` CRUD
+// endpoints — same first-match-wins ordering used by the revision /
+// notification chains.
+const pageChain = new OpenAPIHono()
   .openapi(pageRoutes.getPageRoute, (c) => c.json(stubPageWithRevision, 200))
   .openapi(pageRoutes.listPagesRoute, (c) => c.json(stubListPages, 200))
   .openapi(pageRoutes.createPageRoute, (c) => c.json(stubPageResponse, 200))
@@ -554,19 +596,18 @@ const lateContractApp = new OpenAPIHono()
   .openapi(notificationRoutes.openNotificationRoute, (c) => c.json(stubOpenNotification, 200));
 
 /**
- * Batch 9 — admin sub-contracts (32 endpoints). Kept as separate
- * `OpenAPIHono` chains and mounted onto `contractApp` via `route('/')`.
- * Splitting into multiple segments keeps each per-chain type
- * instantiation under the TS2589 ceiling that `hc<AppType>` hits at
- * ~75 chained `openapi(...)` calls.
+ * Batch 9 — admin sub-contracts (28 endpoints across two chains):
  *
- * - `adminSettingsContractApp`: the 8 read+write settings sub-contracts
- *   (app / auth / security / mail / share / storage / search).
+ * - `adminSettingsContractApp`: the 7 read+write settings sub-contracts
+ *   (app / auth / security / mail / share / storage / search) = 13 routes.
  * - `adminUsersPluginsContractApp`: the larger users (10) + plugins (5)
- *   sub-contracts.
+ *   sub-contracts = 15 routes.
  *
- * The Hono client (`hc<AppType>`) surfaces routes from all chains
- * identically because `route()` concatenates their schemas.
+ * Phase 6 (TS2589 escape hatch removal) — these chains are no longer
+ * concatenated onto a single `contractApp` via `.route('/', sub)`.
+ * Instead, every chain stands alone and `AppType` below is an
+ * intersection of their `typeof`s, which `hc<T>` happily collapses via
+ * its built-in `UnionToIntersection<Client<T, Prefix>>` plumbing.
  */
 const adminSettingsContractApp = new OpenAPIHono()
   .openapi(adminAppRoutes.getAppSettingsRoute, (c) => c.json(stubGetAppSettings, 200))
@@ -605,13 +646,38 @@ const adminUsersPluginsContractApp = new OpenAPIHono()
   .openapi(adminPluginsRoutes.clearRenderCacheAllRoute, (c) => c.json(stubClearRenderCache, 200))
   .openapi(adminPluginsRoutes.clearRenderCachePluginRoute, (c) => c.json(stubClearRenderCache, 200));
 
-const contractApp = earlyContractApp.route('/', lateContractApp).route('/', adminSettingsContractApp).route('/', adminUsersPluginsContractApp);
+/**
+ * Per-chain type aliases. These are **exported** so the dts bundler
+ * (tsup) keeps them as named declarations in `dist/index.d.ts`; if we
+ * referenced the `const` chain variables via `typeof` from inside
+ * `CrowiApiClient` without exporting them, tsup would inline the
+ * declarations and skip emitting `bookmarkBacklinkCommentRevisionChain`
+ * etc., causing downstream consumers to see `any` for those summands
+ * of the intersection.
+ *
+ * Each alias resolves to an `OpenAPIHono<Env, RoutesSchema>` shape
+ * carrying every route in that chain's `.openapi(...)` calls.
+ */
+export type AppAuthMeUserChain = typeof appAuthMeUserChain;
+export type BookmarkBacklinkCommentRevisionChain = typeof bookmarkBacklinkCommentRevisionChain;
+export type PageChain = typeof pageChain;
+export type LateContractApp = typeof lateContractApp;
+export type AdminSettingsContractApp = typeof adminSettingsContractApp;
+export type AdminUsersPluginsContractApp = typeof adminUsersPluginsContractApp;
 
-// Eagerly compute the inferred type once so downstream `hc<AppType>` calls
-// don't repeat the instantiation. This keeps TS2589 below the threshold
-// because `typeof contractApp` collapses to a single named type for the
-// client to consume.
-export type AppType = typeof contractApp;
+/**
+ * `AppType` is exposed as an alias of one representative sub-chain so
+ * legacy consumers that `import type { AppType }` keep building. The
+ * accurate client surface is `CrowiApiClient` below, which intersects
+ * the per-chain `hc` instantiations one at a time so TypeScript never
+ * has to fold every chain's schema into a single `Client<T, Prefix>`
+ * type expression. (Folding-via-intersection was the layout we tried
+ * first and it tripped TS2589 in `Client<T, Prefix>`'s
+ * `T extends HonoBase<any, infer S, any>` arm — `infer S` only sees
+ * the first summand, so only one chain's routes showed up on the
+ * proxy.)
+ */
+export type AppType = AppAuthMeUserChain;
 
 /**
  * Default request init applied to every call unless the caller overrides
@@ -629,37 +695,34 @@ export interface ClientOptions {
 }
 
 /**
- * Build a typed Hono client against the contract `AppType`.
+ * Inferred proxy type for the typed Hono client. Built as an
+ * intersection of one `hc<ChainType>` return type per sub-chain so
+ * TypeScript evaluates `Client<T, Prefix>` separately for each summand
+ * — avoiding the TS2589 instantiation-depth blow-up that the previous
+ * single-chain layout triggered at 90+ chained `.openapi(...)` calls.
  *
- * `baseUrl` should already include the `/api/v2` prefix because the
- * Hono `OpenAPIHono` chain is mounted there (see
- * `packages/api/src/routes/index.ts`).
+ * The runtime needs only **one** `hc(...)` call because the Hono client
+ * is a path-traversal `Proxy`: it lazily reflects whatever property
+ * chain the caller dots into. The actual route dispatch happens on the
+ * server, so the proxy's runtime behaviour is identical regardless of
+ * which `AppType` we hand `hc`. We hand it one chain (`AppType`) and
+ * then assert the returned proxy as the full intersection below.
  */
-export const createClient = (baseUrl: string, options: ClientOptions = {}) =>
-  // TS2589-RFC-0006-PHASE-6: `hc<AppType>` hits TS2589 (type
-  // instantiation excessively deep) at 90+ chained `openapi(...)` routes.
-  // The runtime call works fine; the cast surfaces the inferred client
-  // type via `CrowiApiClient` below using a deferred ReturnType so the
-  // dts pipeline doesn't have to materialise the proxy type up front.
-  // Consumer call sites use the proxy as `apiClientV2.<resource>.<path>.
-  // $method(...)`; the underlying `fetch` does the actual call.
-  // Phase 6 must remove this `@ts-expect-error` + the `any` cast below
-  // by splitting `contractApp` into independent chains and exposing
-  // `AppType` as a structural intersection.
-  // @ts-expect-error TS2589 — see TS2589-RFC-0006-PHASE-6 marker.
+export type CrowiApiClient = ReturnType<typeof hc<AppAuthMeUserChain>> &
+  ReturnType<typeof hc<BookmarkBacklinkCommentRevisionChain>> &
+  ReturnType<typeof hc<PageChain>> &
+  ReturnType<typeof hc<LateContractApp>> &
+  ReturnType<typeof hc<AdminSettingsContractApp>> &
+  ReturnType<typeof hc<AdminUsersPluginsContractApp>>;
+
+/**
+ * Build a typed Hono client against the contract chain. Constructs a
+ * single Hono `hc(...)` proxy and re-types it as the multi-chain
+ * intersection `CrowiApiClient` (see above for the runtime/type
+ * disconnect rationale).
+ */
+export const createClient = (baseUrl: string, options: ClientOptions = {}): CrowiApiClient =>
   hc<AppType>(baseUrl, {
     headers: options.headers,
     fetch: options.fetch,
-  });
-
-// TS2589-RFC-0006-PHASE-6: `CrowiApiClient` resolves to `any` here
-// because `ReturnType<typeof createClient>` cannot probe the
-// suppressed-error return. That's acceptable as a transient state:
-// consumer code branches off the runtime `Response` shape (see
-// `web/src/lib/use-*` hooks), and the request-side typing flows from
-// the per-resource `xxxRoutes` exports rather than the client proxy.
-// Phase 6 MUST restore strict typing — `grep -rn TS2589-RFC-0006-PHASE-6`
-// gives the full list of sites that need to come back to proper types
-// once the chain is split.
-// biome-ignore lint/suspicious/noExplicitAny: see TS2589-RFC-0006-PHASE-6 marker.
-export type CrowiApiClient = any;
+  }) as unknown as CrowiApiClient;

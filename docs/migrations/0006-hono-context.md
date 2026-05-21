@@ -534,15 +534,21 @@ bump, Hono-native multipart, Hono-owns-server final shape, OpenAPI 3.1).
   `pnpm verify-openapi` script on `@crowi/api-contract` invoked by
   CI; the implementer confirms the exact CI shape when reaching
   Phase 6.
-- **(Phase 6, must-fix) TS2589 escape hatch**: Phase 4 Batch 9 landed
+- **(Phase 6, resolved) TS2589 escape hatch**: Phase 4 Batch 9 landed
   with `hc<AppType>` at TS2589 (instantiation depth) on 90+ chained
-  `openapi(...)` routes. `packages/api-contract/src/client.ts` carries
-  a `@ts-expect-error` on the `hc<AppType>(baseUrl, ...)` call and
-  exports `CrowiApiClient = any`; frontend hooks
+  `openapi(...)` routes. `packages/api-contract/src/client.ts` originally
+  carried a `@ts-expect-error` on the `hc<AppType>(baseUrl, ...)` call
+  and exported `CrowiApiClient = any`; frontend hooks
   (`use-notifications.ts`, `use-page-comments.ts`, `use-page-list.ts`,
   `use-recently-viewed.ts`) added `response.json() as <Schema>` casts
-  to recover caller-side inference. Phase 6 splits the contract chain
-  into independent sub-chains and composes `AppType` as an
-  intersection so the proxy type materialises again. The marker
-  `TS2589-RFC-0006-PHASE-6` is grep-able across the codebase — every
-  hit must be removed before Phase 6 lands.
+  to recover caller-side inference. Phase 6 Sub-batch E resolved this:
+  the spec-only Hono chain is now partitioned into six independent
+  `OpenAPIHono` sub-chains (each well under TS's instantiation ceiling),
+  and `CrowiApiClient` is composed as the intersection of one
+  `ReturnType<typeof hc<ChainType>>` per chain so TypeScript evaluates
+  `Client<T, Prefix>` separately for every summand. The runtime stays a
+  single `hc(...)` Proxy (one cast to `CrowiApiClient`), since the
+  proxy's `.x.y.$method` lookup is dynamic and doesn't depend on which
+  `AppType` was handed to `hc`. The original grep marker has been
+  scrubbed; reach back to git history (`git log --grep 'TS2589'`) if
+  you need the discovery context.

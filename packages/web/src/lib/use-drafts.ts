@@ -112,11 +112,7 @@ export function useCancelDraft() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (pageId: string): Promise<void> => {
-      // The contract's DELETE body is `z.unknown()` (legacy parity:
-      // Express's json middleware hydrates `{}` for an empty body).
-      // hc<AppType> requires the `json` arg to satisfy the type even
-      // when the runtime body is unused.
-      const response = await apiClientV2.pages.drafts[':id'].$delete({ param: { id: pageId }, json: undefined });
+      const response = await apiClientV2.pages.drafts[':id'].$delete({ param: { id: pageId } });
       if (!response.ok) {
         throw new Error('Failed to cancel draft');
       }

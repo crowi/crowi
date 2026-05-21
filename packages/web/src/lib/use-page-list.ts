@@ -1,13 +1,8 @@
 'use client';
 
-// TS2589-RFC-0006-PHASE-6: `response.json() as ListPagesResponse` cast
-// below exists because `apiClientV2` is typed as `any` (TS2589 limit
-// in `client.ts`). Drop the cast in Phase 6 once `hc<AppType>` recovers
-// strict typing.
-
 import { useQuery } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import type { ListPagesRequest, ListPagesResponse } from '@crowi/api-contract';
+import type { ListPagesRequest } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.listPages`
@@ -32,7 +27,7 @@ export function usePageList(params: ListPagesRequest) {
       if (!response.ok) {
         throw new Error('Failed to fetch page list');
       }
-      return (await response.json()) as ListPagesResponse;
+      return await response.json();
     },
   });
 }

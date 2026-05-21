@@ -121,14 +121,18 @@ Adopt **Hono + `@hono/zod-openapi`** as the API framework. Specifically:
   to `zod/v3` (the compat namespace that ships inside zod v4) until
   those readers are rewritten. Net: a few `import { z } from 'zod/v3'`
   call sites in plugin internals.
-- **`AppType` instantiation depth**: 90+ chained `.openapi(...)` calls
-  push the TypeScript compiler past its default instantiation depth
-  in `hc<AppType>` inference (TS2589). Phase 4 used a temporary
-  `@ts-expect-error` + `CrowiApiClient = any` escape hatch in
-  `packages/api-contract/src/client.ts`; Phase 6 splits the chain
-  into independent sub-chains and intersects them to land a real
-  inferred type. See the spec.md gate
-  `grep -r 'TS2589-RFC-0006-PHASE-6'` for the marker tracker.
+- **`AppType` instantiation depth (resolved in Phase 6 Sub-batch E)**:
+  90+ chained `.openapi(...)` calls push the TypeScript compiler past
+  its default instantiation depth in `hc<AppType>` inference (TS2589).
+  Phase 4 used a temporary `@ts-expect-error` + `CrowiApiClient = any`
+  escape hatch in `packages/api-contract/src/client.ts`; Phase 6
+  Sub-batch E removed it by partitioning the spec-only Hono chain into
+  six independent `OpenAPIHono` sub-chains (each below TS's
+  instantiation ceiling) and composing `CrowiApiClient` as the
+  intersection of one `ReturnType<typeof hc<ChainType>>` per chain.
+  The runtime remains a single `hc(...)` Proxy that is asserted to
+  `CrowiApiClient`, because the Hono client's `.x.y.$method` traversal
+  is dynamic and the route dispatch lives on the server.
 - **Express still present (Phase 6 in progress)**: Until the Express
   host is replaced by `serve({ fetch: honoApp.fetch, createServer:
   http.createServer })`, the Hono app runs as an Express middleware
