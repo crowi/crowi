@@ -25,12 +25,10 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@ts-rest/core": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@crowi/tsconfig": "workspace:*",
-    "@ts-rest/core": "catalog:",
     "@types/node": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

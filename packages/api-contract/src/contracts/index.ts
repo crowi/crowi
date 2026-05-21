@@ -1,6 +1,5 @@
-// Hono-style route exports (RFC-0006 Phase 3+). Resources migrated off
-// ts-rest expose `createRoute(...)` objects rather than a `c.router`
-// branch. Re-exported here so the package barrel surfaces them to both
+// Hono-style route exports (RFC-0006 Phase 3+). Each resource exposes
+// `createRoute(...)` objects; the package barrel surfaces them to both
 // the `@crowi/api` handler chain and the OpenAPI generator.
 export * from './app';
 export * from './installer';
@@ -83,8 +82,7 @@ export * from './admin';
 // Batch 9 migrated the remaining 9 admin sub-contracts (`app`, `auth`,
 // `security`, `mail`, `share`, `storage`, `search`, `users`, `plugins`)
 // to Hono — `createRoute(...)` definitions live under
-// `./admin/<sub>.ts` and are re-exported via `./admin/index.ts`. With
-// this, the ts-rest `apiContract` aggregator no longer holds any
-// entries; `@ts-rest/core` is still a dependency of `@crowi/api-contract`
-// (it remains in lockfile for the `@ts-rest/express` Express bridge
-// until Phase 6) but no longer used here.
+// `./admin/<sub>.ts` and are re-exported via `./admin/index.ts`.
+//
+// Phase 6 cleanup removed the framework dependency entirely; nothing
+// in this barrel touches the old c.router aggregator anymore.

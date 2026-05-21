@@ -1,7 +1,7 @@
 {
   "name": "@crowi/api-contract",
   "version": "1.0.0",
-  "description": "API contract definitions for Crowi using ts-rest and zod",
+  "description": "API contract definitions for Crowi using Hono + zod-openapi",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.4.0",
-    "@ts-rest/core": "catalog:",
     "hono": "^4.10.0",
     "zod": "catalog:"
   },

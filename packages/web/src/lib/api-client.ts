@@ -65,13 +65,11 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 /**
- * RFC-0006 Phase 4 Batch 9 — the legacy `apiClient` (ts-rest
- * `initClient(apiContract)`) is gone. The `apiContract` aggregator is
- * empty after the 9 admin sub-contracts moved to Hono in Batch 9; all
- * resources now go through `apiClientV2` (hc<AppType>). The
- * `@ts-rest/core` package dep stays in package.json until Phase 6
- * cleanup because `@ts-rest/express` still serves the streaming
- * attachment routes (`attachment-stream.ts`).
+ * RFC-0006 Phase 4 Batch 9 / Phase 6 — the legacy `apiClient`
+ * (ts-rest `initClient(apiContract)`) is gone. The `apiContract`
+ * aggregator was emptied in Batch 9 when the 9 admin sub-contracts
+ * moved to Hono; Phase 6 then dropped the framework package itself.
+ * All resources now go through `apiClientV2` (`hc<AppType>`).
  */
 
 /**
