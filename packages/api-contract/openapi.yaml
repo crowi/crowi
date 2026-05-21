@@ -15656,10 +15656,6 @@ paths:
           description: Draft page id (24-char hex ObjectId)
           name: id
           in: path
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: Draft cancelled; the path is released
@@ -17221,10 +17217,6 @@ paths:
           description: Attachment id (24-char hex ObjectId)
           name: id
           in: path
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: Attachment removed
@@ -17993,10 +17985,6 @@ paths:
       security:
         - bearerAuth: []
       summary: Re-encrypt every plaintext sensitive Config value with the current key
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: Migration completed (counts reported)
@@ -20349,10 +20337,6 @@ paths:
           required: true
           name: id
           in: path
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: Updated user
@@ -20544,10 +20528,6 @@ paths:
           required: true
           name: id
           in: path
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: Updated user
@@ -20740,10 +20720,6 @@ paths:
           required: true
           name: id
           in: path
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: Updated user
@@ -20936,10 +20912,6 @@ paths:
           required: true
           name: id
           in: path
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: Updated user
@@ -21132,10 +21104,6 @@ paths:
           required: true
           name: id
           in: path
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: Updated user + new plaintext password
@@ -22464,10 +22432,6 @@ paths:
       security:
         - bearerAuth: []
       summary: Mark all unread notifications of the current user as read
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: All UNREAD notifications transitioned to UNOPENED
@@ -22610,10 +22574,6 @@ paths:
           required: true
           name: id
           in: path
-      requestBody:
-        content:
-          application/json:
-            schema: {}
       responses:
         '200':
           description: The opened notification (status=OPENED)

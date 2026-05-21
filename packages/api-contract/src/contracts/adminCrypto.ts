@@ -66,11 +66,6 @@ export const reencryptAllRoute = createRoute({
   tags: ['adminCrypto'],
   security: [{ bearerAuth: [] }],
   summary: 'Re-encrypt every plaintext sensitive Config value with the current key',
-  request: {
-    body: {
-      content: { 'application/json': { schema: z.unknown() } },
-    },
-  },
   responses: {
     200: {
       description: 'Migration completed (counts reported)',

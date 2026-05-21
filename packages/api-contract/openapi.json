@@ -23886,13 +23886,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Draft cancelled; the path is released",
@@ -26201,13 +26194,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Attachment removed",
@@ -27372,13 +27358,6 @@
           }
         ],
         "summary": "Re-encrypt every plaintext sensitive Config value with the current key",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Migration completed (counts reported)",
@@ -31064,13 +31043,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Updated user",
@@ -31366,13 +31338,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Updated user",
@@ -31670,13 +31635,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Updated user",
@@ -31974,13 +31932,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Updated user",
@@ -32278,13 +32229,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Updated user + new plaintext password",
@@ -34339,13 +34283,6 @@
           }
         ],
         "summary": "Mark all unread notifications of the current user as read",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "All UNREAD notifications transitioned to UNOPENED",
@@ -34575,13 +34512,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {}
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "The opened notification (status=OPENED)",

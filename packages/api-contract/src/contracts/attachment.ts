@@ -272,9 +272,6 @@ export const removeAttachmentRoute = createRoute({
   summary: 'Remove an attachment',
   request: {
     params: AttachmentIdPathParamsSchema,
-    body: {
-      content: { 'application/json': { schema: z.unknown() } },
-    },
   },
   responses: {
     200: {

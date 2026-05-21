@@ -42,14 +42,6 @@ import {
   ValidationErrorSchema,
 } from '../../schemas/common';
 
-/**
- * Body for the action-only routes (makeAdmin / removeFromAdmin / activate
- * / suspend / resetPassword). Express body-parser hydrates an empty
- * POST/PUT body to `{}` — declare `z.unknown()` so the schema accepts
- * both shapes without complaining (same idiom as adminCrypto.reencrypt).
- */
-const emptyActionBodySchema = z.unknown();
-
 export const listUsersRoute = createRoute({
   method: 'get',
   path: '/admin/users',
@@ -195,9 +187,6 @@ export const makeAdminRoute = createRoute({
   summary: 'Grant admin permission to a user',
   request: {
     params: AdminUserIdParamSchema,
-    body: {
-      content: { 'application/json': { schema: emptyActionBodySchema } },
-    },
   },
   responses: {
     200: {
@@ -235,9 +224,6 @@ export const removeFromAdminRoute = createRoute({
   summary: 'Revoke admin permission from a user',
   request: {
     params: AdminUserIdParamSchema,
-    body: {
-      content: { 'application/json': { schema: emptyActionBodySchema } },
-    },
   },
   responses: {
     200: {
@@ -275,9 +261,6 @@ export const activateUserRoute = createRoute({
   summary: 'Activate a user (status -> ACTIVE)',
   request: {
     params: AdminUserIdParamSchema,
-    body: {
-      content: { 'application/json': { schema: emptyActionBodySchema } },
-    },
   },
   responses: {
     200: {
@@ -315,9 +298,6 @@ export const suspendUserRoute = createRoute({
   summary: 'Suspend a user (status -> SUSPENDED)',
   request: {
     params: AdminUserIdParamSchema,
-    body: {
-      content: { 'application/json': { schema: emptyActionBodySchema } },
-    },
   },
   responses: {
     200: {
@@ -355,9 +335,6 @@ export const resetPasswordRoute = createRoute({
   summary: "Reset a user's password to a random value (returns plaintext)",
   request: {
     params: AdminUserIdParamSchema,
-    body: {
-      content: { 'application/json': { schema: emptyActionBodySchema } },
-    },
   },
   responses: {
     200: {

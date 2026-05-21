@@ -1,5 +1,25 @@
+/**
+ * RFC-0006 Phase 6 Sub-batch D — test harness for the Hono-only api.
+ *
+ * Express has been removed; the api now boots Hono via
+ * `@hono/node-server`'s `createAdaptorServer`. Supertest accepts any
+ * Node `RequestListener` `(req, res) => void`, so we expose one by
+ * piping through `getRequestListener(honoApp.fetch)` from
+ * `@hono/node-server`.
+ *
+ * Path rewrite: the OpenAPI contracts register every route at its
+ * **unprefixed** path (`/app/info`, `/pages/:id`, ...), and the
+ * production server reaches them via the URL rewriter in
+ * `crowi/index.ts:start()` that strips a leading `/api/v2`. Tests
+ * invariably dial `/api/v2/...`, so we install the same rewrite here
+ * — it keeps every existing supertest call site working without
+ * change.
+ */
+import { getRequestListener } from '@hono/node-server';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import Crowi from 'src/crowi';
-import { Express } from 'express';
+import { buildHonoApp } from 'src/hono';
+import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 
 // Silence boot-time noise that fires once per test file and drowns
 // the actual ✓ / ✕ output in the jest report:
@@ -33,7 +53,13 @@ import { Express } from 'express';
 }
 
 export let crowi: Crowi;
-export let app: Express;
+/**
+ * Node `RequestListener` (`(req, res) => void`) backed by the Hono
+ * app. Acceptable input to `supertest(app)` — every existing
+ * `request(app).get('/api/v2/...')` call works as before because the
+ * `/api/v2` prefix is stripped inline before Hono dispatches.
+ */
+export let app: (req: IncomingMessage, res: ServerResponse) => void;
 
 // @ts-ignore
 export const ROOT_DIR = global.ROOT_DIR as string;
@@ -59,7 +85,13 @@ beforeAll(async () => {
     BASE_URL: 'http://localhost:13001',
   });
   await crowi.init();
-  app = crowi.getApp();
+
+  const honoApp = buildHonoApp(crowi);
+  // Wrap `honoApp.fetch` so the `/api/v2` prefix in supertest URLs is
+  // stripped before Hono dispatches. Mirrors the rewrite that
+  // `crowi/index.ts:start()` applies on the production listener.
+  const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiV2Prefix(request));
+  app = getRequestListener(fetchFn);
 });
 
 afterAll(async () => {

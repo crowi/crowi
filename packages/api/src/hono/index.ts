@@ -29,6 +29,7 @@ import { registerAdminStorageRoutes } from './handlers/admin/storage';
 import { registerAdminUsersRoutes } from './handlers/admin/users';
 import { registerAppRoutes } from './handlers/app';
 import { registerAttachmentRoutes } from './handlers/attachment';
+import { registerAttachmentStreamRoutes } from './handlers/attachment-stream';
 import { registerAutocompleteRoutes } from './handlers/autocomplete';
 import { registerBacklinkRoutes } from './handlers/backlink';
 import { registerBookmarkRoutes } from './handlers/bookmark';
@@ -65,12 +66,9 @@ export type { CrowiHonoBindings } from './app';
  */
 export const buildHonoApp = (crowi: Crowi) => {
   const base = createHonoApp();
-  // RFC-0006 Phase 6 Sub-batch C — Hono is now the CORS layer for
-  // `/api/v2/*`. The Express bridge in `routes/index.ts` retains its
-  // own `cors()` apply for the duration of Sub-batch C so the
-  // supertest suite (which goes Express → Hono) does not see a
-  // sudden behaviour swap; Sub-batch D removes both the bridge and
-  // the Express cors apply in one commit.
+  // RFC-0006 Phase 6 Sub-batch D — Hono is the sole HTTP host, so
+  // this CORS apply is the only CORS layer in the process. The Express
+  // bridge that previously also ran `cors()` is gone.
   //
   // `app.use('*', ...)` mutates the underlying Hono instance — it
   // doesn't extend the typed openapi chain — so we install before
@@ -111,6 +109,16 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withDraft = registerDraftRoutes(withPresence, crowi);
   const withAutocomplete = registerAutocompleteRoutes(withDraft, crowi);
   const withAttachment = registerAttachmentRoutes(withAutocomplete, crowi);
+  // RFC-0006 Phase 6 Sub-batch D — raw streaming attachment routes
+  // (`GET /attachments/by-key/:key`, `GET /attachments/:id`). Hono
+  // native via `Readable.toWeb`, no Express bridge. Registers
+  // alongside the JSON attachment routes; the literal `:id{24-hex}`
+  // pattern keeps them disjoint from `/attachments/upload` /
+  // `/attachments/:id/meta`. Mutates the underlying instance
+  // (returns `app` unchanged-as-type), so registering after
+  // `registerAttachmentRoutes` is fine — both share the same
+  // jwt-auth broad apply.
+  registerAttachmentStreamRoutes(withAttachment, crowi);
   // Batch 7 — search. Singleton literal path `/search` (OUTSIDE the
   // revision-owned `/pages/*` apply). The handler installs jwtAuth on
   // the literal path itself, same single-route install pattern as

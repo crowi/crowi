@@ -64,7 +64,12 @@ interface TestServer {
 }
 
 async function startTestServer(): Promise<TestServer> {
-  const server = http.createServer(crowi.app);
+  // RFC-0006 Phase 6 Sub-batch D — Express is gone; the test only
+  // needs an http.Server that the WS upgrade handler can attach to.
+  // We use the bare `http.createServer()` with no request listener:
+  // the WebSocket smoke test never issues an HTTP request, so a
+  // request listener would be dead weight.
+  const server = http.createServer();
   const attachment = await attachCollabServer(server, crowi);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as AddressInfo).port;

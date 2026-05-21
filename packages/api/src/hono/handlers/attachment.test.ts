@@ -694,36 +694,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     });
   });
 
-  describe('GET /files/:id (legacy compat)', () => {
-    it('redirects to the new ts-rest endpoint when an attachment exists', async () => {
-      // Create a page + attachment so that `fileAccessRightOrLoginRequired`'s
-      // initial Attachment.findById succeeds. Without an attachment row that
-      // middleware short-circuits with a bare 404 (legacy behaviour).
-      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}legacy-redirect`, '# l');
-      const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
-        .set(authHeaders(accessToken))
-        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
-      expect(upload.status).toBe(200);
-      const id = upload.body.attachment._id;
-
-      // No session, so the middleware falls through to LoginRequired which
-      // emits a 302 to /login when there's no JWT cookie. We follow only the
-      // *first* redirect and confirm the path-rewrite hop is the one we
-      // installed.
-      const res = await request(app).get(`/files/${id}`).redirects(0);
-      // LoginRequired may or may not run depending on env; what we care
-      // about is that when the request gets through the middleware (with
-      // any auth shape), the response is a 302 to the new endpoint. In a
-      // pure-supertest run with no session, LoginRequired will redirect to
-      // /login first; that's also fine — both branches are well-defined.
-      expect([302, 401]).toContain(res.status);
-      if (res.status === 302) {
-        // Either the new endpoint OR the legacy /login fallback is acceptable;
-        // assert at minimum that the response isn't pointing at the dead
-        // legacy controller.
-        expect(res.headers.location).not.toContain('file-not-found.png');
-      }
-    });
-  });
+  // RFC-0006 Phase 6 Sub-batch D: `/files/:id` legacy compat redirect was
+  // deleted with the Express host. Frontend has been redirecting clients at
+  // `/api/v2/attachments/:id` directly since Phase 4 Batch 6; no more cover.
 });

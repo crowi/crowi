@@ -90,9 +90,6 @@ export const cancelDraftRoute = createRoute({
   summary: 'Cancel (delete) a draft page',
   request: {
     params: DraftIdPathParamsSchema,
-    body: {
-      content: { 'application/json': { schema: z.unknown() } },
-    },
   },
   responses: {
     200: {

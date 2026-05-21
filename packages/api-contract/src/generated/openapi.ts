@@ -6542,11 +6542,7 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Draft cancelled; the path is released */
                 200: {
@@ -7547,11 +7543,7 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Attachment removed */
                 200: {
@@ -7989,11 +7981,7 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Migration completed (counts reported) */
                 200: {
@@ -9783,11 +9771,7 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Updated user */
                 200: {
@@ -9912,11 +9896,7 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Updated user */
                 200: {
@@ -10053,11 +10033,7 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Updated user */
                 200: {
@@ -10196,11 +10172,7 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Updated user */
                 200: {
@@ -10340,11 +10312,7 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description Updated user + new plaintext password */
                 200: {
@@ -11301,11 +11269,7 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description All UNREAD notifications transitioned to UNOPENED */
                 200: {
@@ -11450,11 +11414,7 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": unknown;
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description The opened notification (status=OPENED) */
                 200: {

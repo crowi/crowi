@@ -71,11 +71,6 @@ export const markAllAsReadRoute = createRoute({
   tags: ['notification'],
   security: [{ bearerAuth: [] }],
   summary: 'Mark all unread notifications of the current user as read',
-  request: {
-    body: {
-      content: { 'application/json': { schema: z.unknown() } },
-    },
-  },
   responses: {
     200: {
       description: 'All UNREAD notifications transitioned to UNOPENED',
@@ -122,9 +117,6 @@ export const openNotificationRoute = createRoute({
   summary: 'Open a notification (set its status to OPENED)',
   request: {
     params: OpenNotificationParamSchema,
-    body: {
-      content: { 'application/json': { schema: z.unknown() } },
-    },
   },
   responses: {
     200: {
