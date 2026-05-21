@@ -2,9 +2,14 @@
 
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
+import { apiClientV2 } from './api-client';
 import type { SeenUsersResponse } from '@crowi/api-contract';
 
+/**
+ * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.{getSeenUsers,seenPage}`
+ * (ts-rest) to `apiClientV2.pages['seen-users'].$get` and
+ * `apiClientV2.pages.seen.$post` (hc<AppType>). Wire payload is unchanged.
+ */
 export const seenKeys = {
   all: ['seen-users'] as const,
   // `limit` is part of the key so preview (capped) and full-list caches stay
@@ -29,10 +34,14 @@ export function useSeenUsers(pageId: string | undefined, options?: { enabled?: b
     queryKey: pageId ? seenKeys.detail(pageId, limit) : seenKeys.all,
     queryFn: async (): Promise<SeenUsersResponse> => {
       if (!pageId) return EMPTY_RESULT;
-      const result = await apiClient.page.getSeenUsers({
-        query: { page_id: pageId, limit },
+      const response = await apiClientV2.pages['seen-users'].$get({
+        query: {
+          page_id: pageId,
+          limit: limit !== undefined ? String(limit) : undefined,
+        },
       });
-      return result.status === 200 ? result.body : EMPTY_RESULT;
+      if (!response.ok) return EMPTY_RESULT;
+      return await response.json();
     },
     enabled: !!pageId && options?.enabled !== false,
   });
@@ -49,10 +58,9 @@ export function useMarkSeen(pageId: string | undefined) {
   return useMutation({
     mutationFn: async (): Promise<SeenUsersResponse | null> => {
       if (!pageId) return null;
-      const result = await apiClient.page.seenPage({
-        body: { page_id: pageId },
-      });
-      return result.status === 200 ? result.body : null;
+      const response = await apiClientV2.pages.seen.$post({ json: { page_id: pageId } });
+      if (!response.ok) return null;
+      return await response.json();
     },
     onSuccess: (data) => {
       if (!data || !pageId) return;

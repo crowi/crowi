@@ -41,6 +41,7 @@ import { commentRoutes } from './contracts/comment';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
 import { notificationRoutes } from './contracts/notification';
+import { pageRoutes } from './contracts/page';
 import { revisionRoutes } from './contracts/revision';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { userRoutes } from './contracts/user';
@@ -63,6 +64,7 @@ import type {
   NotificationStatusResponseSchema,
   OpenNotificationResponseSchema,
 } from './schemas/notification';
+import type { GetPageResponseSchema, ListPagesResponseSchema, PageSchema, SeenUsersResponseSchema, WatchStatusResponseSchema } from './schemas/page';
 import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
 import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
@@ -94,6 +96,11 @@ type ListNotificationsResponse = z.infer<typeof ListNotificationsResponseSchema>
 type MarkAllAsReadResponse = z.infer<typeof MarkAllAsReadResponseSchema>;
 type NotificationStatusResponse = z.infer<typeof NotificationStatusResponseSchema>;
 type OpenNotificationResponse = z.infer<typeof OpenNotificationResponseSchema>;
+type Page = z.infer<typeof PageSchema>;
+type GetPageResponse = z.infer<typeof GetPageResponseSchema>;
+type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
+type SeenUsersResponse = z.infer<typeof SeenUsersResponseSchema>;
+type WatchStatusResponse = z.infer<typeof WatchStatusResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -209,6 +216,36 @@ const stubOpenNotification: OpenNotificationResponse = {
   },
 };
 
+// Page stub — every optional field omitted so the schema's defaults
+// kick in (commentCount default 0, etc.).
+const stubPage: Page = {
+  _id: '',
+  path: '',
+  commentCount: 0,
+  createdAt: '',
+};
+
+const stubPageWithRevision: GetPageResponse = {
+  page: {
+    _id: '',
+    path: '',
+    revision: {
+      _id: '',
+      path: '',
+      body: '',
+      format: 'markdown',
+      createdAt: '',
+    },
+    commentCount: 0,
+    createdAt: '',
+  },
+};
+
+const stubPageResponse = { page: stubPage };
+const stubListPages: ListPagesResponse = { pages: [], pager: stubPager, portalPage: null };
+const stubSeenUsers: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
+const stubWatchStatus: WatchStatusResponse = { watching: false };
+
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
@@ -258,6 +295,28 @@ const contractApp = new OpenAPIHono()
   // ordering matters.
   .openapi(revisionRoutes.getRevisionsRoute, (c) => c.json(stubGetRevisions, 200))
   .openapi(revisionRoutes.getRevisionRoute, (c) => c.json(stubGetRevision, 200))
+  // page resource — 14 endpoints. Registers AFTER revision so the
+  // shared `/pages/*` `createJwtAuth` apply in revision is reused
+  // by the page handler (Hono does not dedupe middleware references).
+  // Inside this block, literal sub-paths (`/pages/list`, `/pages/grant`,
+  // `/pages/seen`, `/pages/seen-users`, `/pages/like`, `/pages/unlike`,
+  // `/pages/watch`, `/pages/revert`, `/pages/rename`) come before the
+  // bare `/pages` CRUD endpoints — same first-match-wins ordering used
+  // by the revision / notification chains above.
+  .openapi(pageRoutes.getPageRoute, (c) => c.json(stubPageWithRevision, 200))
+  .openapi(pageRoutes.listPagesRoute, (c) => c.json(stubListPages, 200))
+  .openapi(pageRoutes.createPageRoute, (c) => c.json(stubPageResponse, 200))
+  .openapi(pageRoutes.updatePageRoute, (c) => c.json(stubPageResponse, 200))
+  .openapi(pageRoutes.setPageGrantRoute, (c) => c.json(stubPageResponse, 200))
+  .openapi(pageRoutes.seenPageRoute, (c) => c.json(stubSeenUsers, 200))
+  .openapi(pageRoutes.getSeenUsersRoute, (c) => c.json(stubSeenUsers, 200))
+  .openapi(pageRoutes.likePageRoute, (c) => c.json(stubPageResponse, 200))
+  .openapi(pageRoutes.unlikePageRoute, (c) => c.json(stubPageResponse, 200))
+  .openapi(pageRoutes.getWatchStatusRoute, (c) => c.json(stubWatchStatus, 200))
+  .openapi(pageRoutes.setWatchStatusRoute, (c) => c.json(stubWatchStatus, 200))
+  .openapi(pageRoutes.deletePageRoute, (c) => c.json(stubPageResponse, 200))
+  .openapi(pageRoutes.revertDeletedPageRoute, (c) => c.json(stubPageResponse, 200))
+  .openapi(pageRoutes.renamePageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
   .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
   // `/notifications/status` registers before `/notifications/{id}/open`

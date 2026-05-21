@@ -22,6 +22,7 @@ import { registerCommentRoutes } from './handlers/comment';
 import { registerInstallerRoutes } from './handlers/installer';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notification';
+import { registerPageRoutes } from './handlers/page';
 import { registerRevisionRoutes } from './handlers/revision';
 import { registerTokenAuthRoutes } from './handlers/tokenAuth';
 import { registerUserRoutes } from './handlers/user';
@@ -53,8 +54,14 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withBookmark = registerBookmarkRoutes(withUser, crowi);
   const withBacklink = registerBacklinkRoutes(withBookmark, crowi);
   const withComment = registerCommentRoutes(withBacklink, crowi);
+  // Revision MUST register before page: it owns the
+  // `app.use('/pages/*', createJwtAuth(crowi))` broad apply, and the
+  // downstream page handler relies on that already-installed middleware
+  // (Hono does not dedupe middleware by reference — re-installing would
+  // cost a second JWT verify + User.findById per request).
   const withRevision = registerRevisionRoutes(withComment, crowi);
-  const withNotification = registerNotificationRoutes(withRevision, crowi);
+  const withPage = registerPageRoutes(withRevision, crowi);
+  const withNotification = registerNotificationRoutes(withPage, crowi);
   return withNotification;
 };
 

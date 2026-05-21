@@ -24,8 +24,8 @@ const cleanupPathPrefix = (prefix: string) => {
   return Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter)]);
 };
 
-describe('Routes /api/v2/pages (ts-rest createPage)', () => {
-  const PATH_PREFIX = '/ts-rest-create-test/';
+describe('Routes /api/v2/pages (Hono createPage)', () => {
+  const PATH_PREFIX = '/hono-page-create-test/';
   let Page;
   let Revision;
   let accessToken: string;
@@ -56,7 +56,7 @@ describe('Routes /api/v2/pages (ts-rest createPage)', () => {
 
     it('creates a new page when authenticated and returns 200 with the page', async () => {
       const path = `${PATH_PREFIX}basic`;
-      const body = '# created via ts-rest';
+      const body = '# created via Hono';
 
       const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body });
 
@@ -91,8 +91,8 @@ describe('Routes /api/v2/pages (ts-rest createPage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages (ts-rest updatePage)', () => {
-  const PATH_PREFIX = '/ts-rest-update-test/';
+describe('Routes /api/v2/pages (Hono updatePage)', () => {
+  const PATH_PREFIX = '/hono-page-update-test/';
   let Page;
   let Revision;
   let accessToken: string;
@@ -211,8 +211,8 @@ describe('Routes /api/v2/pages (ts-rest updatePage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/grant (ts-rest setPageGrant)', () => {
-  const PATH_PREFIX = '/ts-rest-grant-test/';
+describe('Routes /api/v2/pages/grant (Hono setPageGrant)', () => {
+  const PATH_PREFIX = '/hono-page-grant-test/';
   let Page;
   let accessToken: string;
   let otherAccessToken: string;
@@ -297,8 +297,8 @@ describe('Routes /api/v2/pages/grant (ts-rest setPageGrant)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/rename (ts-rest renamePage)', () => {
-  const PATH_PREFIX = '/ts-rest-rename-test/';
+describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
+  const PATH_PREFIX = '/hono-page-rename-test/';
   let Page;
   let Revision;
   let accessToken: string;
@@ -518,8 +518,8 @@ describe('Routes /api/v2/pages/rename (ts-rest renamePage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages (ts-rest deletePage)', () => {
-  const PATH_PREFIX = '/ts-rest-delete-test/';
+describe('Routes /api/v2/pages (Hono deletePage)', () => {
+  const PATH_PREFIX = '/hono-page-delete-test/';
   let Page;
   let Bookmark;
   let Comment;
@@ -660,8 +660,8 @@ describe('Routes /api/v2/pages (ts-rest deletePage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/revert (ts-rest revertDeletedPage)', () => {
-  const PATH_PREFIX = '/ts-rest-revert-test/';
+describe('Routes /api/v2/pages/revert (Hono revertDeletedPage)', () => {
+  const PATH_PREFIX = '/hono-page-revert-test/';
   let Page;
   let accessToken: string;
 
@@ -731,8 +731,8 @@ describe('Routes /api/v2/pages/revert (ts-rest revertDeletedPage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/seen + /pages/seen-users (ts-rest seen)', () => {
-  const PATH_PREFIX = '/ts-rest-seen-test/';
+describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
+  const PATH_PREFIX = '/hono-page-seen-test/';
   let Page;
   let accessToken: string;
   let otherAccessToken: string;
@@ -926,8 +926,8 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (ts-rest seen)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-like-test/';
+describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
+  const PATH_PREFIX = '/hono-page-like-test/';
   let Page;
   let accessToken: string;
   let otherAccessToken: string;
@@ -1084,8 +1084,8 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (ts-rest)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/watch (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-watch-test/';
+describe('Routes /api/v2/pages/watch (Hono)', () => {
+  const PATH_PREFIX = '/hono-page-watch-test/';
   let Page;
   let Watcher;
   let accessToken: string;
@@ -1273,8 +1273,8 @@ describe('Routes /api/v2/pages/watch (ts-rest)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/list (ts-rest listPages — trash / include_deleted)', () => {
-  const PATH_PREFIX = '/ts-rest-trash-list-test/';
+describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)', () => {
+  const PATH_PREFIX = '/hono-page-trash-list-test/';
   let Page;
   let accessToken: string;
 

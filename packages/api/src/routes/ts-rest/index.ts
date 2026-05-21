@@ -15,7 +15,11 @@ import { Express, Router } from 'express';
 // `revision`, `notification` resources moved to Hono
 // (`hono/handlers/{bookmark,backlink,comment,revision,notification}.ts`).
 // The matching ts-rest router files were deleted.
-import pageRoutes from './page';
+// RFC-0006 Phase 4 Batch 4 (1/2) — `page` (14 endpoints — the largest
+// single resource) moved to Hono (`hono/handlers/page.ts`). The page
+// handler does NOT install its own jwtAuth — the revision handler's
+// broad apply on `/pages/*` is shared. See
+// `hono/index.ts:buildHonoApp` for the register order.
 import pagePreviewRoutes from './page-preview';
 import pageCollabRoutes from './page-collab';
 import presenceRoutes from './presence';
@@ -48,7 +52,6 @@ export default (crowi: Crowi, app: Express) => {
   const authenticatedRouter = Router();
   authenticatedRouter.use(jwtAuth(crowi)); // Apply JWT auth to all routes
 
-  const pageRouter = pageRoutes(crowi, app);
   const pagePreviewRouter = pagePreviewRoutes(crowi, app);
   const pageCollabRouter = pageCollabRoutes(crowi, app);
   const presenceRouter = presenceRoutes(crowi, app);
@@ -58,12 +61,14 @@ export default (crowi: Crowi, app: Express) => {
   const searchRouter = searchRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
-  // Draft + autocomplete routes mount before pageRouter so the exact
-  // `/pages/drafts` and `/pages/autocomplete` paths are matched ahead
-  // of any broad `/pages/*` pattern.
+  // Draft + autocomplete routes mount before any broad `/pages/*`
+  // matcher (now in Hono — page resource handler). Express does not
+  // serve `/pages/...` core CRUD endpoints any more, but draft +
+  // autocomplete keep using the `/pages/drafts` / `/pages/autocomplete`
+  // literal sub-paths so their relative ordering still matters for
+  // any future ts-rest sibling that gets a `/pages/...` prefix.
   authenticatedRouter.use(draftRouter);
   authenticatedRouter.use(autocompleteRouter);
-  authenticatedRouter.use(pageRouter);
   authenticatedRouter.use(pagePreviewRouter);
   authenticatedRouter.use(pageCollabRouter);
   authenticatedRouter.use(presenceRouter);

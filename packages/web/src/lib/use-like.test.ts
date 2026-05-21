@@ -3,13 +3,15 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type PropsWithChildren } from 'react';
 
-// Mock `apiClient` so the like/unlike calls hit our fake.
+// Mock `apiClientV2` so the like/unlike calls hit our fake (Batch 4
+// switched the hook from ts-rest's `apiClient.page.{like,unlike}Page`
+// to hc<AppType>'s `apiClientV2.pages.{like,unlike}.$post`).
 const { likePage, unlikePage } = vi.hoisted(() => ({
   likePage: vi.fn(),
   unlikePage: vi.fn(),
 }));
 vi.mock('./api-client', () => ({
-  apiClient: { page: { likePage, unlikePage } },
+  apiClientV2: { pages: { like: { $post: likePage }, unlike: { $post: unlikePage } } },
 }));
 
 // Mock `notify` so we can assert the error toast on revert.
