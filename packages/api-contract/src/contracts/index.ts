@@ -1,5 +1,4 @@
 import { initContract } from '@ts-rest/core';
-import { meContract } from './me';
 import { pageContract } from './page';
 import { pagePreviewContract } from './page-preview';
 import { pageCollabContract } from './page-collab';
@@ -24,6 +23,7 @@ import { searchContract } from './search';
 export * from './app';
 export * from './installer';
 export * from './tokenAuth';
+export * from './me';
 
 const c = initContract();
 
@@ -36,8 +36,11 @@ const c = initContract();
 // `POST /api/v2/register`, `GET /api/v2/login/error/:reason`) carried no
 // production traffic, so we drop them in this phase rather than porting
 // them.
+//
+// Batch 2 migrated `me` to Hono — it now exposes `createRoute(...)`
+// definitions via `./me`. The legacy ts-rest `meContract` branch was
+// dropped from the aggregator below.
 export const apiContract = c.router({
-  me: meContract,
   page: pageContract,
   pagePreview: pagePreviewContract,
   pageCollab: pageCollabContract,

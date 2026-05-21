@@ -17,6 +17,7 @@ import type Crowi from 'src/crowi';
 import { createHonoApp } from './app';
 import { registerAppRoutes } from './handlers/app';
 import { registerInstallerRoutes } from './handlers/installer';
+import { registerMeRoutes } from './handlers/me';
 import { registerTokenAuthRoutes } from './handlers/tokenAuth';
 
 export { createHonoApp, createJwtAdminRequired, createJwtAuth, defaultHook, honoOnError } from './app';
@@ -41,7 +42,8 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withApp = registerAppRoutes(base, crowi);
   const withInstaller = registerInstallerRoutes(withApp, crowi);
   const withTokenAuth = registerTokenAuthRoutes(withInstaller, crowi);
-  return withTokenAuth;
+  const withMe = registerMeRoutes(withTokenAuth, crowi);
+  return withMe;
 };
 
 // `AppType` lives in `@crowi/api-contract` (option 2 — see

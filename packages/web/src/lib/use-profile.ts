@@ -2,9 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getLocale, setLocale, locales, type Locale } from '@paraglide/runtime.js';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
-import type { UpdateProfileRequest, UpdatePasswordRequest } from '@crowi/api-contract';
+import type { UpdatePasswordRequest, UpdateProfileRequest } from '@crowi/api-contract';
+import { apiClientV2 } from './api-client';
 
 function profileLangToLocale(lang: string | undefined | null): Locale | null {
   if (!lang) return null;
@@ -14,15 +13,24 @@ function profileLangToLocale(lang: string | undefined | null): Locale | null {
   return locales.includes(base as Locale) ? (base as Locale) : null;
 }
 
+/**
+ * RFC-0006 Phase 4 Batch 2 — switched all `me` hooks from
+ * `apiClient.me.*` (ts-rest) to `apiClientV2.me.*.$method` (hc<AppType>).
+ * Wire payload is unchanged; the only difference at the call site is
+ * `response.ok` / `response.json()` instead of ts-rest's `result.status` +
+ * `result.body`. The `unwrapResult` helper isn't reused here because the
+ * legacy error envelopes (`{ status: 'error', errors: string[] }`) need
+ * resource-specific handling, just as before.
+ */
 export function useProfile() {
   return useQuery({
     queryKey: ['profile'],
     queryFn: async () => {
-      const result = await apiClient.me.getProfile();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        fallback: 'Failed to fetch profile',
-      });
+      const response = await apiClientV2.me.$get();
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile');
+      }
+      return response.json();
     },
   });
 }
@@ -32,12 +40,19 @@ export function useUpdateProfile() {
 
   return useMutation({
     mutationFn: async (data: UpdateProfileRequest) => {
-      const result = await apiClient.me.updateProfile({ body: data });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 400: 'Failed to update profile' },
-        fallback: 'Failed to update profile',
-      });
+      const response = await apiClientV2.me.$put({ json: data });
+      if (response.status === 200) {
+        return response.json();
+      }
+      // 400 surfaces a `{ status: 'error', errors: string[], message? }`
+      // body; lift the first error to the thrown message so callers can
+      // toast it without further parsing.
+      if (response.status === 400) {
+        const body = (await response.json()) as { errors?: string[]; message?: string };
+        const errors = body.errors || [];
+        throw new Error(errors[0] || body.message || 'Failed to update profile');
+      }
+      throw new Error('Failed to update profile');
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -55,15 +70,19 @@ export function useUploadPicture() {
 
   return useMutation({
     mutationFn: async (file: File) => {
-      // ts-rest automatically converts the body to FormData when contentType is 'multipart/form-data'
-      const result = await apiClient.me.uploadPicture({
-        body: { file },
+      // hc<AppType>'s `$post` for multipart/form-data takes the field
+      // map as `form` (mirrors Hono's `c.req.parseBody()` field shape).
+      const response = await apiClientV2.me.picture.$post({
+        form: { file },
       });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 400: 'Failed to upload picture' },
-        fallback: 'Failed to upload picture',
-      });
+      if (response.status === 200) {
+        return response.json();
+      }
+      if (response.status === 400) {
+        const body = (await response.json()) as { errors?: string[]; message?: string };
+        throw new Error(body.errors?.[0] || body.message || 'Failed to upload picture');
+      }
+      throw new Error('Failed to upload picture');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -76,12 +95,15 @@ export function useDeletePicture() {
 
   return useMutation({
     mutationFn: async () => {
-      const result = await apiClient.me.deletePicture();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 400: 'Failed to delete picture' },
-        fallback: 'Failed to delete picture',
-      });
+      const response = await apiClientV2.me.picture.$delete();
+      if (response.status === 200) {
+        return response.json();
+      }
+      if (response.status === 400) {
+        const body = (await response.json()) as { errors?: string[]; message?: string };
+        throw new Error(body.errors?.[0] || body.message || 'Failed to delete picture');
+      }
+      throw new Error('Failed to delete picture');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -92,14 +114,16 @@ export function useDeletePicture() {
 export function useUpdatePassword() {
   return useMutation({
     mutationFn: async (data: UpdatePasswordRequest) => {
-      const result = await apiClient.me.updatePassword({ body: data });
-      // 400 surfaces a structured `{ errors: string[], message? }` shape so we
-      // can join multiple validation messages — special-case it inline rather
-      // than going through unwrapResult's wire-message extraction.
-      if (result.status === 200) return result.body;
-      if (result.status === 400) {
-        const errors = result.body.errors || [];
-        throw new Error(errors.length > 0 ? errors.join(', ') : result.body.message || 'Failed to update password');
+      const response = await apiClientV2.me.password.$put({ json: data });
+      if (response.status === 200) {
+        return response.json();
+      }
+      // 400 surfaces a structured `{ errors: string[], message? }` shape
+      // so we can join multiple validation messages.
+      if (response.status === 400) {
+        const body = (await response.json()) as { errors?: string[]; message?: string };
+        const errors = body.errors || [];
+        throw new Error(errors.length > 0 ? errors.join(', ') : body.message || 'Failed to update password');
       }
       throw new Error('Failed to update password');
     },
@@ -110,11 +134,11 @@ export function useApiToken() {
   return useQuery({
     queryKey: ['apiToken'],
     queryFn: async () => {
-      const result = await apiClient.me.getApiToken();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        fallback: 'Failed to fetch API token',
-      });
+      const response = await apiClientV2.me.apiToken.$get();
+      if (!response.ok) {
+        throw new Error('Failed to fetch API token');
+      }
+      return response.json();
     },
   });
 }
@@ -124,12 +148,11 @@ export function useResetApiToken() {
 
   return useMutation({
     mutationFn: async () => {
-      const result = await apiClient.me.resetApiToken();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 500: 'Failed to reset API token' },
-        fallback: 'Failed to reset API token',
-      });
+      const response = await apiClientV2.me.apiToken.$post();
+      if (response.status === 200) {
+        return response.json();
+      }
+      throw new Error('Failed to reset API token');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['apiToken'] });

@@ -6,6 +6,7 @@ import Crowi from 'src/crowi';
 import multer from 'multer';
 
 import { buildHonoApp } from '../hono';
+import { HONO_UNMATCHED_HEADER } from '../hono/app';
 import form from '../form';
 
 import Admin from './admin';
@@ -98,34 +99,90 @@ export default (crowi: Crowi, app: Express) => {
       }
 
       const init: RequestInit = { method: req.method, headers };
+      // Buffer of the raw request body for multipart / non-JSON requests,
+      // captured before Hono runs so we can restore it onto `req` for
+      // ts-rest fall-through if Hono's `notFound` handler fires.
+      let restoreBody: Buffer | null = null;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
-        // express.json() / express.urlencoded() already parsed the
-        // body; reserialize it so Hono receives the wire-shape it
-        // would have read off the wire. Phase 6 removes Express body
-        // parsing entirely, eliminating this round-trip.
-        const body = (req as ExpressRequest & { body?: unknown }).body;
-        if (body !== undefined && body !== null) {
-          if (typeof body === 'string' || body instanceof Buffer) {
-            init.body = body instanceof Buffer ? new Uint8Array(body) : body;
-          } else {
-            init.body = JSON.stringify(body);
-            if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+        // express.json() / express.urlencoded() only parse the body when
+        // the request content-type matches; everything else (notably
+        // multipart/form-data) reaches us with the underlying Node
+        // `req` stream still un-consumed.
+        const contentType = req.headers['content-type'] ?? '';
+        const isParsedByExpress = /^application\/(json|x-www-form-urlencoded)/i.test(contentType);
+
+        if (!isParsedByExpress && contentType) {
+          // Drain the un-consumed body into a buffer so we can both:
+          //  (a) hand it to Hono via fetch, and
+          //  (b) re-inject it onto `req` for ts-rest fall-through if
+          //      Hono doesn't claim the path. Phase 6 cleanup removes
+          //      the bridge entirely so this buffer-and-restore dance
+          //      goes away.
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) {
+            chunks.push(chunk as Buffer);
           }
-          // The original `content-length` reflects the wire bytes Express
-          // already read; after reserialization it no longer matches the
-          // outgoing body. Drop it so Hono / fetch recompute as needed.
-          headers.delete('content-length');
+          restoreBody = Buffer.concat(chunks);
+          if (restoreBody.length > 0) {
+            init.body = new Uint8Array(restoreBody);
+          }
+        } else {
+          // Body was parsed (or absent). Reserialize the parsed shape so
+          // Hono receives the wire-equivalent. Phase 6 removes Express
+          // body parsing entirely, eliminating this round-trip.
+          const body = (req as ExpressRequest & { body?: unknown }).body;
+          if (body !== undefined && body !== null) {
+            if (typeof body === 'string' || body instanceof Buffer) {
+              init.body = body instanceof Buffer ? new Uint8Array(body) : body;
+            } else {
+              init.body = JSON.stringify(body);
+              if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+            }
+            // The original `content-length` reflects the wire bytes Express
+            // already read; after reserialization it no longer matches the
+            // outgoing body. Drop it so Hono / fetch recompute as needed.
+            headers.delete('content-length');
+          }
         }
       }
 
       const response = await honoApp.fetch(new Request(url, init));
 
-      if (response.status === 404) {
-        // Hono returned the not-found fallback (no route matched).
-        // Hand the request off to the next Express middleware so
-        // ts-rest gets a chance. 5xx and other non-404 responses are
-        // returned verbatim — they came from Hono's `onError` or a
-        // handler-level mapping and must not fall through.
+      if (response.status === 404 && response.headers.get(HONO_UNMATCHED_HEADER) === '1') {
+        // Hono's `notFound` handler set the marker header — no route
+        // matched, so fall through to ts-rest. Handler-emitted 404s
+        // (e.g. `USER_NOT_FOUND`) do not trigger `notFound`, so they
+        // hit the verbatim-forward path below.
+        //
+        // For multipart / other non-JSON bodies we drained the request
+        // stream into `restoreBody` so we could feed it to Hono;
+        // re-emit it as a `Readable` on `req` so downstream Express
+        // middleware (multer in particular) can re-parse it.
+        //
+        // NOTE (Phase 6 cleanup): this stream-replacement clobbers the
+        // EventEmitter methods inherited from `IncomingMessage`, so any
+        // listeners Express already attached (e.g. `req.on('close')`)
+        // won't fire from the new Readable. There is no integration
+        // test exercising this fall-through path today — none of the
+        // currently-migrated Hono routes overlap with ts-rest paths
+        // that need the body re-read. Either approach would tighten
+        // the contract, but the bridge is slated for removal in Phase 6
+        // once Express is gone, so this is intentionally left as a
+        // best-effort restore.
+        if (restoreBody !== null) {
+          const restored = Readable.from([restoreBody]);
+          Object.assign(req, {
+            pipe: restored.pipe.bind(restored),
+            on: restored.on.bind(restored),
+            once: restored.once.bind(restored),
+            read: restored.read.bind(restored),
+            unpipe: restored.unpipe.bind(restored),
+            removeListener: restored.removeListener.bind(restored),
+            resume: restored.resume.bind(restored),
+            pause: restored.pause.bind(restored),
+            readable: true,
+          });
+        }
         return next();
       }
 
@@ -148,7 +205,11 @@ export default (crowi: Crowi, app: Express) => {
       }
       // Stream the body straight through instead of buffering — Phase 4
       // adds attachment / search routes that can produce large payloads.
-      Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]).pipe(res);
+      // Surface stream errors to Express so they reach the project's
+      // error handler instead of silently terminating the response.
+      const bodyStream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
+      bodyStream.on('error', next);
+      bodyStream.pipe(res);
     } catch (err) {
       next(err);
     }

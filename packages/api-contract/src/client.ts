@@ -36,15 +36,30 @@ import type { z } from 'zod';
 
 import { appRoutes } from './contracts/app';
 import { installerRoutes } from './contracts/installer';
+import { meRoutes } from './contracts/me';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import type { AppInfoResponseSchema } from './schemas/app';
 import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
+import type {
+  ApiTokenResponseSchema,
+  PasswordUpdateSuccessSchema,
+  PictureUploadResponseSchema,
+  RecentlyViewedPagesResponseSchema,
+  SuccessResponseSchema,
+  UserProfileResponseSchema,
+} from './schemas/me';
 import type { TokenAuthResponseSchema } from './schemas/auth';
 
 type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
 type InstallerStatusResponse = z.infer<typeof InstallerStatusResponseSchema>;
 type CreateAdminResponse = z.infer<typeof CreateAdminResponseSchema>;
 type TokenAuthResponse = z.infer<typeof TokenAuthResponseSchema>;
+type UserProfileResponse = z.infer<typeof UserProfileResponseSchema>;
+type PictureUploadResponse = z.infer<typeof PictureUploadResponseSchema>;
+type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
+type PasswordUpdateSuccess = z.infer<typeof PasswordUpdateSuccessSchema>;
+type ApiTokenResponse = z.infer<typeof ApiTokenResponseSchema>;
+type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -74,6 +89,17 @@ const stubTokens: TokenAuthResponse = {
   user: stubUser,
 };
 
+const stubProfile: UserProfileResponse = {
+  id: '',
+  username: '',
+  name: '',
+  email: 'stub@example.com',
+  lang: 'en',
+  image: null,
+  hasPassword: false,
+  createdAt: '',
+};
+
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
@@ -88,7 +114,7 @@ const contractApp = new OpenAPIHono()
         user: {
           id: '',
           username: '',
-          email: '',
+          email: 'stub@example.com',
           name: '',
           status: 0,
           admin: false,
@@ -97,7 +123,15 @@ const contractApp = new OpenAPIHono()
       },
       200,
     ),
-  );
+  )
+  .openapi(meRoutes.getProfileRoute, (c) => c.json(stubProfile, 200))
+  .openapi(meRoutes.updateProfileRoute, (c) => c.json(stubProfile, 200))
+  .openapi(meRoutes.uploadPictureRoute, (c) => c.json({ status: true } satisfies PictureUploadResponse, 200))
+  .openapi(meRoutes.deletePictureRoute, (c) => c.json({ status: 'ok' } satisfies SuccessResponse, 200))
+  .openapi(meRoutes.updatePasswordRoute, (c) => c.json({ status: 'ok', message: '' } satisfies PasswordUpdateSuccess, 200))
+  .openapi(meRoutes.getApiTokenRoute, (c) => c.json({ status: 'ok', apiToken: '' } satisfies ApiTokenResponse, 200))
+  .openapi(meRoutes.resetApiTokenRoute, (c) => c.json({ status: 'ok', apiToken: '' } satisfies ApiTokenResponse, 200))
+  .openapi(meRoutes.recentlyViewedPagesRoute, (c) => c.json({ pages: [] } satisfies RecentlyViewedPagesResponse, 200));
 
 export type AppType = typeof contractApp;
 

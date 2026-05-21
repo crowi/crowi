@@ -8,7 +8,8 @@ import { Express, Router } from 'express';
 // etc.) was deleted outright because no frontend consumer existed.
 // The `publicRouter` Express stage was therefore retired — every
 // remaining ts-rest resource needs auth.
-import meRoutes from './me';
+// RFC-0006 Phase 4 Batch 2 — `me` resource moved to Hono
+// (`hono/handlers/me.ts`). The ts-rest router file was deleted.
 import pageRoutes from './page';
 import pagePreviewRoutes from './page-preview';
 import pageCollabRoutes from './page-collab';
@@ -48,7 +49,6 @@ export default (crowi: Crowi, app: Express) => {
   const authenticatedRouter = Router();
   authenticatedRouter.use(jwtAuth(crowi)); // Apply JWT auth to all routes
 
-  const meRouter = meRoutes(crowi, app);
   const pageRouter = pageRoutes(crowi, app);
   const pagePreviewRouter = pagePreviewRoutes(crowi, app);
   const pageCollabRouter = pageCollabRoutes(crowi, app);
@@ -65,7 +65,6 @@ export default (crowi: Crowi, app: Express) => {
   const searchRouter = searchRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
-  authenticatedRouter.use(meRouter);
   // Draft + autocomplete routes mount before pageRouter so the exact
   // `/pages/drafts` and `/pages/autocomplete` paths are matched ahead
   // of any broad `/pages/*` pattern.
