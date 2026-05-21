@@ -23,7 +23,8 @@
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
-    "generate-openapi": "tsx scripts/generate-openapi.ts"
+    "generate-openapi": "tsx scripts/generate-openapi.ts",
+    "test": "tsx --test src/contracts/admin/index.test.ts"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.4.0",
