@@ -34,7 +34,7 @@ const seedCacheEntry = async (overrides: Partial<{ pluginName: string; embedKey:
   });
 };
 
-describe('Routes /api/v2/admin/plugins (ts-rest) — Phase 4 cache clear endpoints', () => {
+describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints', () => {
   let adminToken: string;
   let userToken: string;
 
