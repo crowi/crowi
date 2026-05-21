@@ -35,6 +35,7 @@ import { hc } from 'hono/client';
 import type { z } from 'zod';
 
 import { appRoutes } from './contracts/app';
+import { attachmentRoutes } from './contracts/attachment';
 import { autocompleteRoutes } from './contracts/autocomplete';
 import { backlinkRoutes } from './contracts/backlink';
 import { bookmarkRoutes } from './contracts/bookmark';
@@ -78,6 +79,14 @@ import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
 import type { CreateDraftResponseSchema, ListDraftsResponseSchema } from './schemas/draft';
 import type { AutocompleteResponseSchema } from './schemas/autocomplete';
+import type {
+  AddAttachmentResponseSchema,
+  AttachmentMetaSchema,
+  AttachmentUsageResponseSchema,
+  ListAttachmentsResponseSchema,
+  RemoveAttachmentResponseSchema,
+  UploadAttachmentResponseSchema,
+} from './schemas/attachment';
 
 type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
 type InstallerStatusResponse = z.infer<typeof InstallerStatusResponseSchema>;
@@ -118,6 +127,12 @@ type LikersResponse = z.infer<typeof LikersResponseSchema>;
 type CreateDraftResponse = z.infer<typeof CreateDraftResponseSchema>;
 type ListDraftsResponse = z.infer<typeof ListDraftsResponseSchema>;
 type AutocompleteResponse = z.infer<typeof AutocompleteResponseSchema>;
+type ListAttachmentsResponse = z.infer<typeof ListAttachmentsResponseSchema>;
+type AddAttachmentResponse = z.infer<typeof AddAttachmentResponseSchema>;
+type AttachmentUsageResponse = z.infer<typeof AttachmentUsageResponseSchema>;
+type AttachmentMeta = z.infer<typeof AttachmentMetaSchema>;
+type UploadAttachmentResponse = z.infer<typeof UploadAttachmentResponseSchema>;
+type RemoveAttachmentResponse = z.infer<typeof RemoveAttachmentResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -280,6 +295,28 @@ const stubLikers: LikersResponse = { users: [], totalCount: 0 };
 const stubCreateDraft: CreateDraftResponse = { pageId: '' };
 const stubListDrafts: ListDraftsResponse = { drafts: [] };
 const stubAutocomplete: AutocompleteResponse = { results: [] };
+const stubAttachment = {
+  _id: '',
+  page: '',
+  creator: stubUserPublic,
+  filePath: '',
+  fileName: '',
+  originalName: '',
+  fileFormat: '',
+  fileSize: 0,
+  createdAt: '',
+  url: '',
+  inUse: false,
+} as const;
+const stubListAttachments: ListAttachmentsResponse = { attachments: [] };
+const stubAddAttachment: AddAttachmentResponse = { attachment: stubAttachment, url: '' };
+const stubAttachmentUsage: AttachmentUsageResponse = { pagePath: '', latest: [], past: [] };
+const stubAttachmentMeta: AttachmentMeta = (() => {
+  const { inUse: _inUse, ...rest } = stubAttachment;
+  return rest;
+})();
+const stubUploadAttachment: UploadAttachmentResponse = { url: '', filename: '', mimeType: '', sizeBytes: 0 };
+const stubRemoveAttachment: RemoveAttachmentResponse = { success: true };
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -365,18 +402,24 @@ const contractApp = new OpenAPIHono()
   .openapi(pageCollabRoutes.getYjsTokenRoute, (c) => c.json(stubWsToken, 200))
   .openapi(presenceRoutes.getPresenceTokenRoute, (c) => c.json(stubPresenceToken, 200))
   .openapi(presenceRoutes.getLikersRoute, (c) => c.json(stubLikers, 200))
-  // Batch 6 (first slice) — draft (RFC-0004). The literal sub-path
-  // `/pages/drafts*` sits under `/pages/*` but uses distinct
-  // method+path tuples, so they do not collide with the page /
-  // revision routes above (Hono dispatches by full method+path).
+  // Batch 6 — draft / autocomplete / attachment (RFC-0004). The
+  // literal sub-paths (`/pages/drafts`, `/pages/autocomplete`,
+  // `/pages/{pageId}/attachments[/usage]`) all sit under `/pages/*`
+  // but use distinct method+path tuples, so they do not collide with
+  // the page / revision routes above (Hono dispatches by full
+  // method+path). The attachment usage route registers before the
+  // bare list route to match the runtime chain.
   .openapi(draftRoutes.createDraftRoute, (c) => c.json(stubCreateDraft, 201))
   .openapi(draftRoutes.listDraftsRoute, (c) => c.json(stubListDrafts, 200))
   .openapi(draftRoutes.cancelDraftRoute, (c) => c.json(stubCreateDraft, 200))
-  // Batch 6 (second slice) — autocomplete (RFC-0004).
-  // `/users/autocomplete` is a singleton path; `/pages/autocomplete`
-  // sits under the revision-owned `/pages/*` apply.
   .openapi(autocompleteRoutes.autocompleteUsersRoute, (c) => c.json(stubAutocomplete, 200))
   .openapi(autocompleteRoutes.autocompletePagesRoute, (c) => c.json(stubAutocomplete, 200))
+  .openapi(attachmentRoutes.getAttachmentUsageRoute, (c) => c.json(stubAttachmentUsage, 200))
+  .openapi(attachmentRoutes.listAttachmentsRoute, (c) => c.json(stubListAttachments, 200))
+  .openapi(attachmentRoutes.addAttachmentRoute, (c) => c.json(stubAddAttachment, 200))
+  .openapi(attachmentRoutes.uploadAttachmentRoute, (c) => c.json(stubUploadAttachment, 200))
+  .openapi(attachmentRoutes.getAttachmentMetaRoute, (c) => c.json(stubAttachmentMeta, 200))
+  .openapi(attachmentRoutes.removeAttachmentRoute, (c) => c.json(stubRemoveAttachment, 200))
   .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
   .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
   // `/notifications/status` registers before `/notifications/{id}/open`

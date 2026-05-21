@@ -36,6 +36,7 @@ import jsYaml from 'js-yaml';
 
 import {
   appRoutes,
+  attachmentRoutes,
   autocompleteRoutes,
   backlinkRoutes,
   bookmarkRoutes,
@@ -279,14 +280,15 @@ const routeGroups = [
   pagePreviewRoutes,
   pageCollabRoutes,
   presenceRoutes,
-  // Batch 6 (slices 1 + 2) — draft + autocomplete. Both sit under
-  // the revision-owned `/pages/*` apply (autocomplete additionally
-  // mounts on the `/users/autocomplete` singleton); the spec
-  // ordering mirrors the buildHonoApp chain (revision -> page ->
-  // page-preview -> pageCollab -> presence -> draft -> autocomplete
+  // Batch 6 — draft / autocomplete / attachment. The `/pages/drafts`
+  // and `/pages/autocomplete` literal sub-paths sit under the
+  // revision-owned `/pages/*` apply at runtime; the spec ordering
+  // mirrors the buildHonoApp chain (revision -> page -> page-preview
+  // -> pageCollab -> presence -> draft -> autocomplete -> attachment
   // -> notification).
   draftRoutes,
   autocompleteRoutes,
+  attachmentRoutes,
   notificationRoutes,
 ];
 for (const group of routeGroups) {

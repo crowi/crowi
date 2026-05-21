@@ -26,13 +26,18 @@ import { Express, Router } from 'express';
 // `hono/handlers/presence.ts`). Both reuse the revision handler's
 // `/pages/*` jwtAuth apply (same dedupe-avoidance rationale as
 // page / page-preview).
-// RFC-0006 Phase 4 Batch 6 (slices 1 + 2) — `draft` + `autocomplete`
+// RFC-0006 Phase 4 Batch 6 — `draft`, `autocomplete`, `attachment`
 // resources (RFC-0004) moved to Hono (`hono/handlers/draft.ts`,
-// `hono/handlers/autocomplete.ts`). The matching ts-rest router
-// files were deleted. `attachment` remains on ts-rest for the third
-// commit in this batch.
-import attachmentRoutes from './attachment';
+// `hono/handlers/autocomplete.ts`, `hono/handlers/attachment.ts`).
+// attachment's multipart endpoints (`addAttachment` /
+// `uploadAttachment`) are now Hono-native via `c.req.parseBody()`;
+// multer is gone from those handlers. The streaming raw `GET
+// /attachments/:id` / `GET /attachments/by-key/:key` routes stay on
+// the Express bridge (still mounted via the legacy `/_api` /
+// controllers path) until Phase 6 cleanup converts them to native
+// Hono Response streams.
 import searchRoutes from './search';
+import attachmentStreamRoutes from './attachment-stream';
 import adminCryptoRoutes from './adminCrypto';
 import adminRoutes from './admin';
 import jwtAuth from '../../middlewares/jwtAuth';
@@ -58,12 +63,16 @@ export default (crowi: Crowi, app: Express) => {
   const authenticatedRouter = Router();
   authenticatedRouter.use(jwtAuth(crowi)); // Apply JWT auth to all routes
 
-  const attachmentRouter = attachmentRoutes(crowi, app);
   const searchRouter = searchRoutes(crowi, app);
+  // The raw streaming attachment routes (`GET /attachments/by-key/*`
+  // and `GET /attachments/:id`) stay on Express until Phase 6 — see
+  // `routes/ts-rest/attachment-stream.ts` for the streaming-vs-Hono
+  // rationale.
+  const attachmentStreamRouter = attachmentStreamRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
-  authenticatedRouter.use(attachmentRouter);
   authenticatedRouter.use(searchRouter);
+  authenticatedRouter.use(attachmentStreamRouter);
 
   // Admin Router - JWT authentication + admin permission required
   const adminRouter = Router();

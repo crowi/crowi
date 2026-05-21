@@ -44,8 +44,8 @@ const createPageViaApi = async (accessToken: string, pagePath: string, body: str
   return res.body.page as { _id: string; path: string };
 };
 
-describe('Routes /api/v2 attachments (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-attachment-test/';
+describe('Routes /api/v2 attachments (Hono)', () => {
+  const PATH_PREFIX = '/hono-attachment-test/';
   let accessToken: string;
   let otherAccessToken: string;
   let adminAccessToken: string;

@@ -16,6 +16,7 @@ import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
 import { registerAppRoutes } from './handlers/app';
+import { registerAttachmentRoutes } from './handlers/attachment';
 import { registerAutocompleteRoutes } from './handlers/autocomplete';
 import { registerBacklinkRoutes } from './handlers/backlink';
 import { registerBookmarkRoutes } from './handlers/bookmark';
@@ -76,17 +77,17 @@ export const buildHonoApp = (crowi: Crowi) => {
   // chain in `packages/api-contract/src/client.ts`.
   const withPageCollab = registerPageCollabRoutes(withPagePreview, crowi);
   const withPresence = registerPresenceRoutes(withPageCollab, crowi);
-  // Batch 6 (slices 1 + 2) — draft + autocomplete (RFC-0004).
-  // `/pages/drafts*` + `/pages/autocomplete` ride on the
-  // revision-owned `/pages/*` jwtAuth apply (same dedupe-avoidance
-  // rationale as page / page-preview / pageCollab / presence).
-  // autocomplete installs `createJwtAuth(crowi)` on the singleton
-  // `/users/autocomplete` literal itself. The rate-limit middleware
-  // (`hono/middleware/rate-limit.ts`) wraps both autocomplete
-  // endpoints at 60/min.
+  // Batch 6 — draft / autocomplete / attachment (RFC-0004). draft +
+  // `/pages/autocomplete` ride on the revision-owned `/pages/*` jwtAuth
+  // apply (same dedupe-avoidance rationale as page / page-preview /
+  // pageCollab / presence). autocomplete installs jwtAuth on the
+  // singleton `/users/autocomplete` literal itself; attachment installs
+  // jwtAuth + rate-limit on `/attachments/*`. Rate limiting wraps the
+  // two autocomplete endpoints (60/min) and `uploadAttachment` (20/min).
   const withDraft = registerDraftRoutes(withPresence, crowi);
   const withAutocomplete = registerAutocompleteRoutes(withDraft, crowi);
-  const withNotification = registerNotificationRoutes(withAutocomplete, crowi);
+  const withAttachment = registerAttachmentRoutes(withAutocomplete, crowi);
+  const withNotification = registerNotificationRoutes(withAttachment, crowi);
   return withNotification;
 };
 

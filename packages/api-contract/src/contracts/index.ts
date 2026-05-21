@@ -23,6 +23,7 @@ export * from './page-collab';
 export * from './presence';
 export * from './draft';
 export * from './autocomplete';
+export * from './attachment';
 
 const c = initContract();
 
@@ -59,18 +60,16 @@ const c = initContract();
 // ...)` objects live under `./page-collab` / `./presence` and are
 // re-exported above; the matching `apiContract` entries were dropped.
 //
-// Batch 6 — first slice: migrated `draft` (3 endpoints —
-// `/pages/drafts*`) to Hono. `draft` rides on the revision-owned
-// `/pages/*` jwtAuth apply (same dedupe-avoidance rationale as
-// page / page-preview / pageCollab / presence); the handler does
-// NOT install its own `createJwtAuth(crowi)`.
-//
-// Batch 6 — second slice: migrated `autocomplete` (2 endpoints) to
-// Hono. `/users/autocomplete` is a singleton path so the handler
-// installs `createJwtAuth(crowi)` itself on that literal; its
-// `/pages/autocomplete` sibling rides on the revision-owned
-// `/pages/*` apply. Rate limiting (`hono/middleware/rate-limit.ts`)
-// wraps both routes at 60/min.
+// Batch 6 migrated `draft` (3 endpoints), `autocomplete` (2 endpoints),
+// and `attachment` (6 endpoints — multipart `addAttachment` /
+// `uploadAttachment` are Hono-native via `c.req.parseBody()`) to Hono.
+// `attachment` installs `createJwtAuth(crowi)` on `/attachments/*` itself
+// (a path family OUTSIDE the revision-owned `/pages/*` apply);
+// `autocomplete` installs jwtAuth on the bare `/users/autocomplete`
+// path (its `/pages/autocomplete` sibling rides on the revision apply).
+// `draft` rides on the revision apply entirely (`/pages/drafts*`). The
+// rate-limit middleware (`hono/middleware/rate-limit.ts`) wraps both
+// autocomplete routes (60/min) and `uploadAttachment` (20/min).
 export const apiContract = c.router({
   adminCrypto: adminCryptoContract,
   admin: adminContract,

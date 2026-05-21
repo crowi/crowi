@@ -34,8 +34,8 @@ const createPageViaApi = async (accessToken: string, pagePath: string, grant?: n
   return res.body.page as { _id: string; path: string };
 };
 
-describe('Routes POST /api/v2/attachments/upload (ts-rest editor upload)', () => {
-  const PATH_PREFIX = '/ts-rest-attachment-upload-test/';
+describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
+  const PATH_PREFIX = '/hono-attachment-upload-test/';
   let ownerToken: string;
   let otherToken: string;
 
