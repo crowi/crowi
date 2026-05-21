@@ -1,9 +1,19 @@
-import request from 'supertest';
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
+import request from 'supertest';
+
+import type { ActivityDocument } from 'src/models/activity';
+import type { NotificationDocument } from 'src/models/notification';
+import { Fixture, app, crowi } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
-import { ActivityDocument } from 'src/models/activity';
-import { NotificationDocument } from 'src/models/notification';
+
+/**
+ * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
+ * `notification` resource. The literal-path `/notifications/status`
+ * route MUST resolve before `/notifications/:id/open`; the unread-
+ * count and open-by-id paths each have their own block to cover that
+ * ordering. Foreign-user notifications surface 404 (not 403) so we do
+ * not leak the existence of another user's data.
+ */
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -45,12 +55,7 @@ const createPageViaApi = async (accessToken: string, path: string, body: string)
 
 /**
  * Seed a notification directly via the model so tests can deterministically
- * control state. We deliberately bypass Activity.create here: the Activity
- * post-save hook calls Notification.upsertByActivity which always resets the
- * notification status to UNREAD and would race with an UNOPENED/OPENED seed.
- *
- * Instead we manually persist an Activity document and link the notification
- * to it, sidestepping post-save side effects entirely.
+ * control state — see the ts-rest era test for the post-save hook rationale.
  */
 const seedNotification = async (params: {
   recipient: Types.ObjectId;
@@ -66,11 +71,6 @@ const seedNotification = async (params: {
   const target = typeof params.pageId === 'string' ? new Types.ObjectId(params.pageId) : params.pageId;
   const status = params.status ?? 'UNREAD';
 
-  // Use insertMany (or new + save with a hooks-bypass guard) — but the simplest
-  // way to avoid the post-save hook is to construct the model and insert
-  // directly via the underlying collection. ActivityDocument is only used
-  // for `activities[].user` populate by the list endpoint; we wire up `_id`
-  // and `user` so getActionUsersFromActivities returns the actor.
   const activityDoc = new Activity({
     user: params.actor,
     targetModel: 'Page',
@@ -91,8 +91,8 @@ const seedNotification = async (params: {
   return notification;
 };
 
-describe('Routes /api/v2/notifications (ts-rest)', () => {
-  const PATH_PREFIX = '/ts-rest-notification-test/';
+describe('Routes /api/v2/notifications (Hono)', () => {
+  const PATH_PREFIX = '/hono-notification-test/';
   let recipient: { _id: Types.ObjectId };
   let actor: { _id: Types.ObjectId };
   let recipientToken: string;
@@ -101,16 +101,16 @@ describe('Routes /api/v2/notifications (ts-rest)', () => {
   beforeAll(async () => {
     const r = await createTestUser({
       name: 'Notif Recipient',
-      username: 'notifRecipient',
-      email: 'notif-recipient@example.com',
+      username: 'honoNotifRecipient',
+      email: 'hono-notif-recipient@example.com',
     });
     recipient = r.user;
     recipientToken = r.accessToken;
 
     const a = await createTestUser({
       name: 'Notif Actor',
-      username: 'notifActor',
-      email: 'notif-actor@example.com',
+      username: 'honoNotifActor',
+      email: 'hono-notif-actor@example.com',
     });
     actor = a.user;
     actorToken = a.accessToken;
@@ -118,7 +118,6 @@ describe('Routes /api/v2/notifications (ts-rest)', () => {
 
   afterEach(async () => {
     await cleanupPathPrefix(PATH_PREFIX);
-    // Clean any stray notifications/activities created for these users.
     const Notification = crowi.model('Notification');
     const Activity = crowi.model('Activity');
     await Promise.all([
@@ -168,7 +167,7 @@ describe('Routes /api/v2/notifications (ts-rest)', () => {
       expect(Array.isArray(n.actionUsers)).toBe(true);
       expect(n.actionUsers).toHaveLength(1);
       expect(n.actionUsers[0]._id).toBe(actor._id.toString());
-      expect(n.actionUsers[0].username).toBe('notifActor');
+      expect(n.actionUsers[0].username).toBe('honoNotifActor');
     });
 
     it('honors limit / offset and computes pager.next correctly', async () => {
@@ -214,7 +213,6 @@ describe('Routes /api/v2/notifications (ts-rest)', () => {
       const page2 = await createPageViaApi(recipientToken, `${PATH_PREFIX}r2`, '# r2');
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page1._id, status: 'UNREAD' });
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page2._id, status: 'UNREAD' });
-      // Foreign user notification should not be touched.
       await seedNotification({ recipient: actor._id, actor: recipient._id, pageId: page1._id, status: 'UNREAD' });
 
       const res = await request(app).post('/api/v2/notifications/read').set(authHeaders(recipientToken));
@@ -259,7 +257,6 @@ describe('Routes /api/v2/notifications (ts-rest)', () => {
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('NOTIFICATION_NOT_FOUND');
 
-      // Verify the foreign notification is untouched.
       const Notification = crowi.model('Notification');
       const reloaded = await Notification.findById(foreign._id);
       expect(reloaded?.status).toBe('UNREAD');
@@ -298,7 +295,6 @@ describe('Routes /api/v2/notifications (ts-rest)', () => {
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page1._id, status: 'UNREAD' });
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page2._id, status: 'UNOPENED' });
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page3._id, status: 'OPENED' });
-      // Foreign user UNREAD - must not be counted.
       await seedNotification({ recipient: actor._id, actor: recipient._id, pageId: page1._id, status: 'UNREAD' });
 
       const res = await request(app).get('/api/v2/notifications/status').set(authHeaders(recipientToken));

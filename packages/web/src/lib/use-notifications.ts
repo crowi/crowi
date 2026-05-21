@@ -1,14 +1,19 @@
 'use client';
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 import type { Notification } from '@crowi/api-contract';
 
 /**
  * Query key factory for notification-related queries.
  * - ['notifications', 'status']: unread count for the current user
  * - ['notifications', 'list', { limit, offset }]: paginated notification list
+ *
+ * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.notification.*`
+ * (ts-rest) to `apiClientV2.notifications.*.$method` (hc<AppType>).
+ * Wire payload is unchanged. 401 silently degrades to a zero-state so
+ * signed-out pages don't surface noisy auth errors (matches the legacy
+ * `unwrapResult` silent option).
  */
 export const notificationKeys = {
   all: ['notifications'] as const,
@@ -23,6 +28,11 @@ export const notificationKeys = {
  */
 const UNREAD_COUNT_POLL_INTERVAL_MS = 30_000;
 
+const EMPTY_LIST = {
+  notifications: [] as Notification[],
+  pager: { prev: null, next: null, offset: 0 },
+};
+
 /**
  * Hook to fetch the unread notification count for the current user.
  * Polls every 30s while the tab is active.
@@ -30,14 +40,12 @@ const UNREAD_COUNT_POLL_INTERVAL_MS = 30_000;
 export function useUnreadCount() {
   return useQuery({
     queryKey: notificationKeys.status(),
-    queryFn: async (): Promise<number> => {
-      const result = await apiClient.notification.getUnreadCount();
-      return unwrapResult(result, {
-        ok: (body) => body.count,
-        // Not authenticated → treat as zero, do not throw to avoid noisy errors.
-        silent: { statuses: [401], value: 0 },
-        fallback: 'Failed to fetch unread notification count',
-      });
+    queryFn: async () => {
+      const response = await apiClientV2.notifications.status.$get();
+      if (response.status === 401) return 0;
+      if (!response.ok) throw new Error('Failed to fetch unread notification count');
+      const body = await response.json();
+      return body.count;
     },
     refetchInterval: UNREAD_COUNT_POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
@@ -63,15 +71,13 @@ export interface UseNotificationsOptions {
 export function useNotifications({ limit = 10, offset = 0, enabled = false }: UseNotificationsOptions = {}) {
   return useQuery({
     queryKey: notificationKeys.list({ limit, offset }),
-    queryFn: async (): Promise<{ notifications: Notification[]; pager: { prev: number | null; next: number | null; offset: number } }> => {
-      const result = await apiClient.notification.listNotifications({
-        query: { limit, offset },
+    queryFn: async () => {
+      const response = await apiClientV2.notifications.$get({
+        query: { limit: String(limit), offset: String(offset) },
       });
-      return unwrapResult(result, {
-        ok: (body) => ({ notifications: body.notifications, pager: body.pager }),
-        silent: { statuses: [401], value: { notifications: [], pager: { prev: null, next: null, offset: 0 } } },
-        fallback: 'Failed to fetch notifications',
-      });
+      if (response.status === 401) return EMPTY_LIST;
+      if (!response.ok) throw new Error('Failed to fetch notifications');
+      return response.json();
     },
     enabled,
   });
@@ -87,14 +93,12 @@ export function useNotificationsInfinite(limit: number = 20) {
   return useInfiniteQuery({
     queryKey: notificationKeys.infinite(limit),
     queryFn: async ({ pageParam = 0 }) => {
-      const result = await apiClient.notification.listNotifications({
-        query: { limit, offset: pageParam },
+      const response = await apiClientV2.notifications.$get({
+        query: { limit: String(limit), offset: String(pageParam) },
       });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 401: { message: 'Authentication required', preferLocal: true } },
-        fallback: 'Failed to fetch notifications',
-      });
+      if (response.status === 401) throw new Error('Authentication required');
+      if (!response.ok) throw new Error('Failed to fetch notifications');
+      return response.json();
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
@@ -115,12 +119,10 @@ export function useMarkAllAsRead() {
 
   return useMutation({
     mutationFn: async () => {
-      const result = await apiClient.notification.markAllAsRead({ body: {} });
-      return unwrapResult(result, {
-        ok: () => true,
-        errors: { 401: { message: 'Authentication required', preferLocal: true } },
-        fallback: 'Failed to mark notifications as read',
-      });
+      const response = await apiClientV2.notifications.read.$post({ json: {} });
+      if (response.status === 401) throw new Error('Authentication required');
+      if (!response.ok) throw new Error('Failed to mark notifications as read');
+      return true;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });
@@ -138,18 +140,15 @@ export function useOpenNotification() {
 
   return useMutation({
     mutationFn: async (notificationId: string): Promise<Notification> => {
-      const result = await apiClient.notification.openNotification({
-        params: { id: notificationId },
-        body: {},
+      const response = await apiClientV2.notifications[':id'].open.$post({
+        param: { id: notificationId },
+        json: {},
       });
-      return unwrapResult(result, {
-        ok: (body) => body.notification,
-        errors: {
-          401: { message: 'Authentication required', preferLocal: true },
-          404: 'Failed to open notification',
-        },
-        fallback: 'Failed to open notification',
-      });
+      if (response.status === 401) throw new Error('Authentication required');
+      if (response.status === 404) throw new Error('Failed to open notification');
+      if (!response.ok) throw new Error('Failed to open notification');
+      const body = await response.json();
+      return body.notification;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });

@@ -3,7 +3,6 @@ import { pageContract } from './page';
 import { pagePreviewContract } from './page-preview';
 import { pageCollabContract } from './page-collab';
 import { presenceContract } from './presence';
-import { notificationContract } from './notification';
 import { draftContract } from './draft';
 import { autocompleteContract } from './autocomplete';
 import { attachmentContract } from './attachment';
@@ -24,6 +23,7 @@ export * from './bookmark';
 export * from './backlink';
 export * from './comment';
 export * from './revision';
+export * from './notification';
 
 const c = initContract();
 
@@ -41,12 +41,16 @@ const c = initContract();
 // `createRoute(...)` definitions via `./me` and `./user`. The legacy
 // ts-rest `meContract` / `userContract` branches were dropped from the
 // aggregator below.
+//
+// Batch 3 migrated `bookmark` / `backlink` / `comment` / `revision` /
+// `notification` to Hono — their `createRoute(...)` objects live under
+// `./bookmark` / `./backlink` / `./comment` / `./revision` /
+// `./notification` and are re-exported above.
 export const apiContract = c.router({
   page: pageContract,
   pagePreview: pagePreviewContract,
   pageCollab: pageCollabContract,
   presence: presenceContract,
-  notification: notificationContract,
   draft: draftContract,
   autocomplete: autocompleteContract,
   attachment: attachmentContract,

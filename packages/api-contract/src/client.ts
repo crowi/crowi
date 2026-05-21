@@ -40,6 +40,7 @@ import { bookmarkRoutes } from './contracts/bookmark';
 import { commentRoutes } from './contracts/comment';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
+import { notificationRoutes } from './contracts/notification';
 import { revisionRoutes } from './contracts/revision';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { userRoutes } from './contracts/user';
@@ -56,6 +57,12 @@ import type {
   SuccessResponseSchema,
   UserProfileResponseSchema,
 } from './schemas/me';
+import type {
+  ListNotificationsResponseSchema,
+  MarkAllAsReadResponseSchema,
+  NotificationStatusResponseSchema,
+  OpenNotificationResponseSchema,
+} from './schemas/notification';
 import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
 import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
@@ -83,6 +90,10 @@ type DeleteCommentResponse = z.infer<typeof DeleteCommentResponseSchema>;
 type ListRevisionsResponse = z.infer<typeof ListRevisionsResponseSchema>;
 type GetRevisionResponse = z.infer<typeof GetRevisionResponseSchema>;
 type GetRevisionsResponse = z.infer<typeof GetRevisionsResponseSchema>;
+type ListNotificationsResponse = z.infer<typeof ListNotificationsResponseSchema>;
+type MarkAllAsReadResponse = z.infer<typeof MarkAllAsReadResponseSchema>;
+type NotificationStatusResponse = z.infer<typeof NotificationStatusResponseSchema>;
+type OpenNotificationResponse = z.infer<typeof OpenNotificationResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -182,6 +193,21 @@ const stubRevision = {
 };
 const stubGetRevision: GetRevisionResponse = { revision: stubRevision };
 const stubGetRevisions: GetRevisionsResponse = { revisions: [] };
+const stubListNotifications: ListNotificationsResponse = { notifications: [], pager: stubPager };
+const stubMarkAllAsRead: MarkAllAsReadResponse = { ok: true };
+const stubNotificationStatus: NotificationStatusResponse = { count: 0 };
+const stubOpenNotification: OpenNotificationResponse = {
+  notification: {
+    _id: '',
+    user: '',
+    targetModel: 'Page',
+    target: { _id: '', path: '', status: null },
+    action: 'COMMENT',
+    status: 'OPENED',
+    actionUsers: [],
+    createdAt: '',
+  },
+};
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -231,7 +257,13 @@ const contractApp = new OpenAPIHono()
   // to match the runtime chain — see the contract file header for why
   // ordering matters.
   .openapi(revisionRoutes.getRevisionsRoute, (c) => c.json(stubGetRevisions, 200))
-  .openapi(revisionRoutes.getRevisionRoute, (c) => c.json(stubGetRevision, 200));
+  .openapi(revisionRoutes.getRevisionRoute, (c) => c.json(stubGetRevision, 200))
+  .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
+  .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
+  // `/notifications/status` registers before `/notifications/{id}/open`
+  // for the same literal-vs-template reason as the revision chain.
+  .openapi(notificationRoutes.getUnreadCountRoute, (c) => c.json(stubNotificationStatus, 200))
+  .openapi(notificationRoutes.openNotificationRoute, (c) => c.json(stubOpenNotification, 200));
 
 export type AppType = typeof contractApp;
 
