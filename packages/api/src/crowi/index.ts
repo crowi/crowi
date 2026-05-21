@@ -20,6 +20,9 @@ import controllers from 'src/controllers';
 import routes from '../routes';
 import { attachCollabServer, type AttachedCollab } from 'src/collab/attach';
 import { attachPresenceServer, type AttachedPresence } from 'src/presence/attach';
+import { createAdaptorServer } from '@hono/node-server';
+import { buildHonoApp } from 'src/hono';
+import { callExpressAsFetch } from 'src/hono/express-fallback';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
 import { hasSlackConfig } from '../models/config';
@@ -559,21 +562,43 @@ class Crowi {
       throw new Error('Must call init() before start().');
     }
 
-    const server = http.createServer(this.app);
+    // RFC-0006 Phase 6 Sub-batch B — Hono owns the `http.Server`.
+    //
+    // `buildHonoApp(crowi)` returns the `/api/v2/*` chain (already
+    // serving every live API call). The `notFound` handler then
+    // forwards every other path back into the Express app via
+    // `callExpressAsFetch`, so legacy SSR routes (`/`, `/_api/*`,
+    // `/admin/*`, OAuth callbacks, etc.) remain reachable until
+    // Sub-batch D drops the Express dependency entirely.
+    //
+    // We use `createAdaptorServer` instead of `serve` so we can
+    // wire the WebSocket `'upgrade'` handlers (collab / presence)
+    // **before** `server.listen()` runs — the upstream `serve()`
+    // helper listens immediately, which would race the first WS
+    // client against the upgrade hook.
+    const honoApp = buildHonoApp(this);
+    const expressApp = this.app;
+    honoApp.notFound(async (c) => callExpressAsFetch(expressApp, c.req.raw));
 
-    // RFC-0003 Phase 9 — attach Hocuspocus to the existing http.Server
+    const server = createAdaptorServer({
+      fetch: honoApp.fetch,
+      createServer: http.createServer,
+      port: this.port,
+    });
+
+    // RFC-0003 Phase 9 — attach Hocuspocus to the http.Server
     // **before** `listen()` so the `'upgrade'` event handler is wired
     // when the first WebSocket client races the listen callback. The
     // attach is async because it builds the editor-cap counter
     // (Redis SCARD round-trip when configured); we await it here so
     // the boot sequence stays serial and `start()` resolves only
     // when the api is fully ready to accept WebSocket upgrades.
-    this.collabAttachment = await attachCollabServer(server, this);
+    this.collabAttachment = await attachCollabServer(server as http.Server, this);
 
     // RFC-0005 — attach the `/presence` WebSocket alongside `/collab`.
     // Same `noServer` pattern; both upgrade handlers path-filter so
     // they coexist on the one http.Server listener.
-    this.presenceAttachment = await attachPresenceServer(server, this);
+    this.presenceAttachment = await attachPresenceServer(server as http.Server, this);
 
     // Promisify `server.listen` so `start()` resolves only after the
     // socket is actually bound. Callers (the bin entry, smoke tests)
@@ -587,7 +612,7 @@ class Crowi {
       };
       const onListening = () => {
         server.off('error', onError);
-        console.log('[' + this.node_env + '] Express server listening on port ' + this.port);
+        console.log('[' + this.node_env + '] Hono server listening on port ' + this.port);
         resolveListen();
       };
       server.once('error', onError);

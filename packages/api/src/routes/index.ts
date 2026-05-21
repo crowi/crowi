@@ -53,39 +53,26 @@ export default (crowi: Crowi, app: Express) => {
     ApplicationInstalled: applicationInstalled,
   } = middlewares;
 
-  // RFC-0006 Phase 3 — Hono mount (ordered BEFORE ts-rest).
+  // RFC-0006 Phase 6 Sub-batch B — production traffic no longer
+  // reaches this `/api/v2` mount: `crowi/index.ts:start()` runs the
+  // Hono app via `@hono/node-server`'s `createAdaptorServer`, so the
+  // Express host below is invoked only via the `callExpressAsFetch`
+  // fallback (= Hono `notFound`) for paths Hono does not match.
   //
-  // Build the Hono app once at boot and dispatch matching `/api/v2/*`
-  // requests to it via `app.fetch(Request) -> Response`. The Phase-2
-  // implementation used `@hono/node-server`'s `getRequestListener`
-  // which writes directly to the Node `res`; that prevented us from
-  // detecting Hono's 404 and falling through to ts-rest. Now we drive
-  // `honoApp.fetch` directly, inspect the returned `Response` status,
-  // and call Express `next()` for 404s so ts-rest can take over for
-  // un-migrated resources.
+  // The Express → Hono bridge survives Sub-batch B exclusively so
+  // the existing supertest-based tests (32 files dialling `crowi.app`
+  // at `/api/v2/*`) keep working. Sub-batch D deletes Express +
+  // every supertest test in one sweep — migrating the tests to a
+  // Hono-fetch shim is out of scope here.
   //
-  // Mount order rationale: ts-rest's authenticatedRouter installs
-  // `jwtAuth` greedily on every `/api/v2/*` path, so a Phase-3 public
-  // Hono route (`GET /app/info`) would be intercepted with 401 if
-  // Hono ran AFTER ts-rest. Putting Hono first lets it serve its
-  // known routes; for everything else the fall-through hands off to
-  // ts-rest, which still owns every un-migrated resource. As Phase 4
-  // commits land more resources, those ts-rest mounts are removed
-  // and the path is served exclusively by Hono.
-  //
-  // Phase 6 cleanup deletes the Express host entirely and replaces
-  // this with `serve({ fetch: honoApp.fetch, createServer:
-  // http.createServer })` (see
-  // `.feature-state/specs/feature-hono-integration.md`).
+  // The bridge intentionally falls through to `next()` on any Hono
+  // 404 so the legacy ts-rest mount below still serves un-migrated
+  // resources during local dev; Sub-batch D removes both.
   const honoApp = buildHonoApp(crowi);
   app.use('/api/v2', async (req: ExpressRequest, res: Response, next: NextFunction) => {
     try {
       const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'http';
       const host = req.headers.host ?? 'localhost';
-      // `app.use('/api/v2', ...)` strips the mount prefix from
-      // `req.url` (Express convention). Our Hono routes are declared
-      // without the `/api/v2` prefix (e.g. `path: '/app/info'`), so
-      // the stripped `req.url` is exactly what Hono needs to match.
       const url = `${proto}://${host}${req.url}`;
 
       const headers = new Headers();
@@ -99,37 +86,20 @@ export default (crowi: Crowi, app: Express) => {
       }
 
       const init: RequestInit = { method: req.method, headers };
-      // Buffer of the raw request body for multipart / non-JSON requests,
-      // captured before Hono runs so we can restore it onto `req` for
-      // ts-rest fall-through if Hono's `notFound` handler fires.
-      let restoreBody: Buffer | null = null;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
-        // express.json() / express.urlencoded() only parse the body when
-        // the request content-type matches; everything else (notably
-        // multipart/form-data) reaches us with the underlying Node
-        // `req` stream still un-consumed.
         const contentType = req.headers['content-type'] ?? '';
         const isParsedByExpress = /^application\/(json|x-www-form-urlencoded)/i.test(contentType);
 
         if (!isParsedByExpress && contentType) {
-          // Drain the un-consumed body into a buffer so we can both:
-          //  (a) hand it to Hono via fetch, and
-          //  (b) re-inject it onto `req` for ts-rest fall-through if
-          //      Hono doesn't claim the path. Phase 6 cleanup removes
-          //      the bridge entirely so this buffer-and-restore dance
-          //      goes away.
           const chunks: Buffer[] = [];
           for await (const chunk of req) {
             chunks.push(chunk as Buffer);
           }
-          restoreBody = Buffer.concat(chunks);
+          const restoreBody = Buffer.concat(chunks);
           if (restoreBody.length > 0) {
             init.body = new Uint8Array(restoreBody);
           }
         } else {
-          // Body was parsed (or absent). Reserialize the parsed shape so
-          // Hono receives the wire-equivalent. Phase 6 removes Express
-          // body parsing entirely, eliminating this round-trip.
           const body = (req as ExpressRequest & { body?: unknown }).body;
           if (body !== undefined && body !== null) {
             if (typeof body === 'string' || body instanceof Buffer) {
@@ -138,9 +108,6 @@ export default (crowi: Crowi, app: Express) => {
               init.body = JSON.stringify(body);
               if (!headers.has('content-type')) headers.set('content-type', 'application/json');
             }
-            // The original `content-length` reflects the wire bytes Express
-            // already read; after reserialization it no longer matches the
-            // outgoing body. Drop it so Hono / fetch recompute as needed.
             headers.delete('content-length');
           }
         }
@@ -149,47 +116,14 @@ export default (crowi: Crowi, app: Express) => {
       const response = await honoApp.fetch(new Request(url, init));
 
       if (response.status === 404 && response.headers.get(HONO_UNMATCHED_HEADER) === '1') {
-        // Hono's `notFound` handler set the marker header — no route
-        // matched, so fall through to ts-rest. Handler-emitted 404s
-        // (e.g. `USER_NOT_FOUND`) do not trigger `notFound`, so they
-        // hit the verbatim-forward path below.
-        //
-        // For multipart / other non-JSON bodies we drained the request
-        // stream into `restoreBody` so we could feed it to Hono;
-        // re-emit it as a `Readable` on `req` so downstream Express
-        // middleware (multer in particular) can re-parse it.
-        //
-        // NOTE (Phase 6 cleanup): this stream-replacement clobbers the
-        // EventEmitter methods inherited from `IncomingMessage`, so any
-        // listeners Express already attached (e.g. `req.on('close')`)
-        // won't fire from the new Readable. There is no integration
-        // test exercising this fall-through path today — none of the
-        // currently-migrated Hono routes overlap with ts-rest paths
-        // that need the body re-read. Either approach would tighten
-        // the contract, but the bridge is slated for removal in Phase 6
-        // once Express is gone, so this is intentionally left as a
-        // best-effort restore.
-        if (restoreBody !== null) {
-          const restored = Readable.from([restoreBody]);
-          Object.assign(req, {
-            pipe: restored.pipe.bind(restored),
-            on: restored.on.bind(restored),
-            once: restored.once.bind(restored),
-            read: restored.read.bind(restored),
-            unpipe: restored.unpipe.bind(restored),
-            removeListener: restored.removeListener.bind(restored),
-            resume: restored.resume.bind(restored),
-            pause: restored.pause.bind(restored),
-            readable: true,
-          });
-        }
+        // Hono's `notFound` set the marker — no route matched. Hand off
+        // to ts-rest / legacy Express below. Handler-emitted 404s
+        // (e.g. `PAGE_NOT_FOUND`) don't trigger `notFound`, so they
+        // bypass this branch and are forwarded verbatim.
         return next();
       }
 
       res.status(response.status);
-      // `Set-Cookie` may appear multiple times; the standard Headers iterator
-      // collapses them in `forEach`, so use `getSetCookie()` to preserve every
-      // entry and forward the rest of the headers via `forEach`.
       const setCookies = typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
       response.headers.forEach((value, key) => {
         if (key.toLowerCase() === 'set-cookie') return;
@@ -203,10 +137,6 @@ export default (crowi: Crowi, app: Express) => {
         res.end();
         return;
       }
-      // Stream the body straight through instead of buffering — Phase 4
-      // adds attachment / search routes that can produce large payloads.
-      // Surface stream errors to Express so they reach the project's
-      // error handler instead of silently terminating the response.
       const bodyStream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
       bodyStream.on('error', next);
       bodyStream.pipe(res);
