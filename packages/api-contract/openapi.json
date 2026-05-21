@@ -22964,6 +22964,647 @@
         }
       }
     },
+    "/pages/{id}/yjs-token": {
+      "get": {
+        "tags": [
+          "page-collab"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Issue a short-lived wsToken (JWT) for the Hocuspocus realtime session",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Page id (24-char hex ObjectId)",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "description": "Page id (24-char hex ObjectId)",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed wsToken (JWT) + scope metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "wsToken": {
+                      "type": "string"
+                    },
+                    "pageId": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    },
+                    "readonly": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "wsToken",
+                    "pageId",
+                    "expiresAt",
+                    "readonly"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INVALID_PAGE_ID"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Page not found (also covers grant-denied)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Page not found"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "wsToken signing or DB exception",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pages/{id}/presence-token": {
+      "get": {
+        "tags": [
+          "presence"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Issue a short-lived presence token (JWT) for the live-presence WebSocket session",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Page id (24-char hex ObjectId)",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "description": "Page id (24-char hex ObjectId)",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed presence token + scope metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "pageId": {
+                      "type": "string"
+                    },
+                    "selfUserId": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "pageId",
+                    "selfUserId",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INVALID_PAGE_ID"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Page not found (also covers grant-denied)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Page not found"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Token signing or DB exception",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pages/{id}/likers": {
+      "get": {
+        "tags": [
+          "presence"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List the users who have liked a page",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Page id (24-char hex ObjectId)",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "description": "Page id (24-char hex ObjectId)",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liker list (newest-liked first when known) with full totalCount",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "username": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "likedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "username",
+                          "displayName",
+                          "avatarUrl",
+                          "likedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "users",
+                    "totalCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INVALID_PAGE_ID"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Page not found (also covers grant-denied)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Page not found"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "DB exception",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/notifications": {
       "get": {
         "tags": [

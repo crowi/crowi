@@ -24,8 +24,8 @@ const createTestUser = async (info: { name: string; username: string; email: str
   return { user, accessToken };
 };
 
-describe('Routes /api/v2/pages/:id/presence-token (ts-rest getPresenceToken)', () => {
-  const PATH_PREFIX = '/ts-rest-presence-token/';
+describe('Routes /api/v2/pages/:id/presence-token (Hono getPresenceToken)', () => {
+  const PATH_PREFIX = '/hono-presence-token/';
   let accessToken: string;
   let userId: string;
   let otherAccessToken: string;

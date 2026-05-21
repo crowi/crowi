@@ -23,8 +23,8 @@ const createTestUser = async (info: { name: string; username: string; email: str
  * pagination + `likedAt` enrichment), the empty case, and the
  * permission gate (malformed id / missing / not-granted).
  */
-describe('Routes /api/v2/pages/:id/likers (ts-rest getLikers)', () => {
-  const PATH_PREFIX = '/ts-rest-likers/';
+describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
+  const PATH_PREFIX = '/hono-likers/';
   let owner: Awaited<ReturnType<typeof createTestUser>>;
   let liker1: Awaited<ReturnType<typeof createTestUser>>;
   let liker2: Awaited<ReturnType<typeof createTestUser>>;

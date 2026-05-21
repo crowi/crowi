@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PresenceViewersMessageSchema, type PresenceTokenResponse, type PresenceViewer } from '@crowi/api-contract';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 import { createAntiFlickerState, ingestBroadcast, refreshAdmissions, visibleViewers } from './presence-anti-flicker';
 
 /**
@@ -111,15 +110,20 @@ function sameViewers(a: PresenceViewer[], b: PresenceViewer[]): boolean {
  * server would otherwise reject it (mirrors `use-yjs-token`).
  */
 function usePresenceToken(pageId: string | null | undefined) {
-  return useQuery<PresenceTokenResponse>({
+  return useQuery({
     queryKey: ['presenceToken', pageId],
-    queryFn: async () => {
+    queryFn: async (): Promise<PresenceTokenResponse> => {
       if (!pageId) throw new Error('pageId is required for usePresenceToken');
-      const result = await apiClient.presence.getPresenceToken({ params: { id: pageId } });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        fallback: 'Failed to issue presence token',
-      });
+      const response = await apiClientV2.pages[':id']['presence-token'].$get({ param: { id: pageId } });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message =
+          body && typeof body === 'object' && 'error' in body && body.error && typeof body.error === 'object' && 'message' in body.error
+            ? String(body.error.message)
+            : 'Failed to issue presence token';
+        throw new Error(message);
+      }
+      return response.json();
     },
     enabled: Boolean(pageId),
     refetchInterval: (query) => {
