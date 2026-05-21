@@ -1,71 +1,91 @@
-import { initContract } from '@ts-rest/core';
-import { AutocompleteRequestSchema, AutocompleteRateLimitErrorSchema, AutocompleteResponseSchema } from '../schemas/autocomplete';
-import { AuthenticationRequiredErrorSchema, ValidationErrorSchema } from '../schemas/common';
-
-const c = initContract();
-
 /**
- * RFC-0004 Phase 5 — autocomplete contract.
+ * RFC-0006 Phase 4 Batch 6 — `autocomplete` resource ported to
+ * `@hono/zod-openapi` route definitions. Two endpoints (RFC-0004
+ * Phase 5):
  *
- * Standalone namespace (not folded into `userContract` / `pageContract`)
- * so the two editor-completion endpoints are discoverable as one bundle,
- * mirroring how `draftContract` keeps the draft-page surface separate.
- * Both endpoints run inside the authenticated router (`jwtAuth` applied
- * at mount time) and feed the CodeMirror `@username` / `[[page]]`
- * dropdowns. See `docs/rfcs/0004-editor-ux-enhancement.md` §"Autocomplete".
+ *   GET /users/autocomplete  — suggest users for an @mention
+ *   GET /pages/autocomplete  — suggest pages for a [[wikilink]]
  *
- * Matching, permission filtering, and rate limiting are server-side
- * concerns documented per-operation below; the client only debounces,
- * caches (LRU), and renders.
+ * Auth + rate limiting:
+ *   - `/pages/autocomplete` reuses the `revision` handler's broad
+ *     `/pages/*` `createJwtAuth(crowi)` apply (registered first in
+ *     `buildHonoApp` — same dedupe-avoidance rationale as the rest
+ *     of the `/pages/*` family).
+ *   - `/users/autocomplete` is OUTSIDE that prefix, so the autocomplete
+ *     handler installs `createJwtAuth(crowi)` on `/users/autocomplete`
+ *     itself (a single-route install, no other resource owns that path
+ *     today).
+ *   - Both endpoints additionally apply `withRateLimit({ name:
+ *     'autocomplete', limit: 60, windowMs: 60_000 })` AFTER jwtAuth so
+ *     the limiter has `c.get('user')`.
+ *
+ * The 429 wire shape is preserved verbatim — `Retry-After` header +
+ * `{ error: 'rate_limited', message, retryAfterSeconds }` body.
  */
-export const autocompleteContract = c.router({
-  /**
-   * GET /api/v2/users/autocomplete?q=<prefix>&limit=10
-   *
-   * Suggest users for an `@<char>` mention. Server matches `username`
-   * (highest), display name, then email-local-part, ranked
-   * prefix > substring > fuzzy. Only active users are returned.
-   *
-   *   - 200 `{ results }` ranked, capped at `limit`.
-   *   - 429 `{ error: 'rate_limited' }` + `Retry-After` when the
-   *     per-user budget (60 req/min) is exhausted.
-   */
-  autocompleteUsers: {
-    method: 'GET',
-    path: '/users/autocomplete',
-    query: AutocompleteRequestSchema,
-    responses: {
-      200: AutocompleteResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      429: AutocompleteRateLimitErrorSchema,
-    },
-    summary: 'Autocomplete users for an @mention',
-  },
+import { createRoute } from '@hono/zod-openapi';
 
-  /**
-   * GET /api/v2/pages/autocomplete?q=<prefix>&limit=10
-   *
-   * Suggest pages for a `[[` wikilink. Server matches the full path
-   * (highest) then the path leaf ("title"), ranked
-   * prefix > substring > fuzzy. Results are permission-filtered to
-   * pages the caller can read; draft pages are excluded unless the
-   * caller is the draft's author.
-   *
-   *   - 200 `{ results }` ranked, capped at `limit`.
-   *   - 429 `{ error: 'rate_limited' }` + `Retry-After` when the
-   *     per-user budget (60 req/min) is exhausted.
-   */
-  autocompletePages: {
-    method: 'GET',
-    path: '/pages/autocomplete',
+import { AuthenticationRequiredErrorSchema, ValidationErrorSchema } from '../schemas/common';
+import { AutocompleteRateLimitErrorSchema, AutocompleteRequestSchema, AutocompleteResponseSchema } from '../schemas/autocomplete';
+
+export const autocompleteUsersRoute = createRoute({
+  method: 'get',
+  path: '/users/autocomplete',
+  tags: ['autocomplete'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Autocomplete users for an @mention',
+  request: {
     query: AutocompleteRequestSchema,
-    responses: {
-      200: AutocompleteResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      429: AutocompleteRateLimitErrorSchema,
+  },
+  responses: {
+    200: {
+      description: 'Ranked user candidates',
+      content: { 'application/json': { schema: AutocompleteResponseSchema } },
     },
-    summary: 'Autocomplete pages for a [[wikilink]]',
+    400: {
+      description: 'Validation error',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    429: {
+      description: 'Per-user rate limit exceeded',
+      content: { 'application/json': { schema: AutocompleteRateLimitErrorSchema } },
+    },
   },
 });
+
+export const autocompletePagesRoute = createRoute({
+  method: 'get',
+  path: '/pages/autocomplete',
+  tags: ['autocomplete'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Autocomplete pages for a [[wikilink]]',
+  request: {
+    query: AutocompleteRequestSchema,
+  },
+  responses: {
+    200: {
+      description: 'Ranked page candidates (permission-filtered)',
+      content: { 'application/json': { schema: AutocompleteResponseSchema } },
+    },
+    400: {
+      description: 'Validation error',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    429: {
+      description: 'Per-user rate limit exceeded',
+      content: { 'application/json': { schema: AutocompleteRateLimitErrorSchema } },
+    },
+  },
+});
+
+export const autocompleteRoutes = {
+  autocompleteUsersRoute,
+  autocompletePagesRoute,
+};

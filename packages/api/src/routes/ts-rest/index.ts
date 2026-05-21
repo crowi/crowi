@@ -26,11 +26,11 @@ import { Express, Router } from 'express';
 // `hono/handlers/presence.ts`). Both reuse the revision handler's
 // `/pages/*` jwtAuth apply (same dedupe-avoidance rationale as
 // page / page-preview).
-// RFC-0006 Phase 4 Batch 6 (first slice) — `draft` resource
-// (RFC-0004) moved to Hono (`hono/handlers/draft.ts`). The matching
-// ts-rest router file was deleted. `autocomplete` + `attachment`
-// remain on ts-rest for the next two commits in this batch.
-import autocompleteRoutes from './autocomplete';
+// RFC-0006 Phase 4 Batch 6 (slices 1 + 2) — `draft` + `autocomplete`
+// resources (RFC-0004) moved to Hono (`hono/handlers/draft.ts`,
+// `hono/handlers/autocomplete.ts`). The matching ts-rest router
+// files were deleted. `attachment` remains on ts-rest for the third
+// commit in this batch.
 import attachmentRoutes from './attachment';
 import searchRoutes from './search';
 import adminCryptoRoutes from './adminCrypto';
@@ -58,14 +58,10 @@ export default (crowi: Crowi, app: Express) => {
   const authenticatedRouter = Router();
   authenticatedRouter.use(jwtAuth(crowi)); // Apply JWT auth to all routes
 
-  const autocompleteRouter = autocompleteRoutes(crowi, app);
   const attachmentRouter = attachmentRoutes(crowi, app);
   const searchRouter = searchRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
-  // autocomplete still uses the `/pages/autocomplete` literal — it
-  // mounts before any future broad `/pages/*` ts-rest sibling.
-  authenticatedRouter.use(autocompleteRouter);
   authenticatedRouter.use(attachmentRouter);
   authenticatedRouter.use(searchRouter);
 

@@ -22,6 +22,7 @@ export * from './page-preview';
 export * from './page-collab';
 export * from './presence';
 export * from './draft';
+export * from './autocomplete';
 
 const c = initContract();
 
@@ -63,6 +64,13 @@ const c = initContract();
 // `/pages/*` jwtAuth apply (same dedupe-avoidance rationale as
 // page / page-preview / pageCollab / presence); the handler does
 // NOT install its own `createJwtAuth(crowi)`.
+//
+// Batch 6 — second slice: migrated `autocomplete` (2 endpoints) to
+// Hono. `/users/autocomplete` is a singleton path so the handler
+// installs `createJwtAuth(crowi)` itself on that literal; its
+// `/pages/autocomplete` sibling rides on the revision-owned
+// `/pages/*` apply. Rate limiting (`hono/middleware/rate-limit.ts`)
+// wraps both routes at 60/min.
 export const apiContract = c.router({
   adminCrypto: adminCryptoContract,
   admin: adminContract,

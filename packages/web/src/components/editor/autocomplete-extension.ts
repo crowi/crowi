@@ -3,7 +3,7 @@ import { syntaxTree } from '@codemirror/language';
 import type { Extension } from '@codemirror/state';
 import type { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { apiClient } from '@/lib/api-client';
+import { apiClientV2 } from '@/lib/api-client';
 import { AutocompleteCache, type AutocompleteKind } from '@/lib/autocomplete-cache';
 import type { AutocompleteResult } from '@crowi/api-contract';
 
@@ -166,19 +166,17 @@ async function fetchResults(kind: AutocompleteKind, query: string): Promise<Auto
   }
 
   try {
-    const response =
-      kind === 'user'
-        ? await apiClient.autocomplete.autocompleteUsers({ query: { q: query, limit: RESULT_LIMIT } })
-        : await apiClient.autocomplete.autocompletePages({ query: { q: query, limit: RESULT_LIMIT } });
+    const queryArgs = { query: { q: query, limit: String(RESULT_LIMIT) } };
+    const response = kind === 'user' ? await apiClientV2.users.autocomplete.$get(queryArgs) : await apiClientV2.pages.autocomplete.$get(queryArgs);
 
-    if (response.status !== 200) {
+    if (!response.ok) {
       // 429 / 400 / 401 → behave as "zero results"; the dropdown
       // closes silently (RFC §"Cancellation conditions").
       return [];
     }
-    const results = response.body.results;
-    cache.set(kind, query, results);
-    return results;
+    const body = (await response.json()) as { results: AutocompleteResult[] };
+    cache.set(kind, query, body.results);
+    return body.results;
   } catch {
     // Network failure → silent close, same as zero results.
     return [];

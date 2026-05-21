@@ -16,6 +16,7 @@ import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
 import { registerAppRoutes } from './handlers/app';
+import { registerAutocompleteRoutes } from './handlers/autocomplete';
 import { registerBacklinkRoutes } from './handlers/backlink';
 import { registerBookmarkRoutes } from './handlers/bookmark';
 import { registerCommentRoutes } from './handlers/comment';
@@ -75,12 +76,17 @@ export const buildHonoApp = (crowi: Crowi) => {
   // chain in `packages/api-contract/src/client.ts`.
   const withPageCollab = registerPageCollabRoutes(withPagePreview, crowi);
   const withPresence = registerPresenceRoutes(withPageCollab, crowi);
-  // Batch 6 (first slice) — draft (RFC-0004). `/pages/drafts*` rides
-  // on the revision-owned `/pages/*` jwtAuth apply (same
-  // dedupe-avoidance rationale as page / page-preview / pageCollab /
-  // presence). The handler does NOT re-install `createJwtAuth(crowi)`.
+  // Batch 6 (slices 1 + 2) — draft + autocomplete (RFC-0004).
+  // `/pages/drafts*` + `/pages/autocomplete` ride on the
+  // revision-owned `/pages/*` jwtAuth apply (same dedupe-avoidance
+  // rationale as page / page-preview / pageCollab / presence).
+  // autocomplete installs `createJwtAuth(crowi)` on the singleton
+  // `/users/autocomplete` literal itself. The rate-limit middleware
+  // (`hono/middleware/rate-limit.ts`) wraps both autocomplete
+  // endpoints at 60/min.
   const withDraft = registerDraftRoutes(withPresence, crowi);
-  const withNotification = registerNotificationRoutes(withDraft, crowi);
+  const withAutocomplete = registerAutocompleteRoutes(withDraft, crowi);
+  const withNotification = registerNotificationRoutes(withAutocomplete, crowi);
   return withNotification;
 };
 

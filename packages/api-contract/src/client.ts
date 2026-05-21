@@ -35,6 +35,7 @@ import { hc } from 'hono/client';
 import type { z } from 'zod';
 
 import { appRoutes } from './contracts/app';
+import { autocompleteRoutes } from './contracts/autocomplete';
 import { backlinkRoutes } from './contracts/backlink';
 import { bookmarkRoutes } from './contracts/bookmark';
 import { commentRoutes } from './contracts/comment';
@@ -76,6 +77,7 @@ import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisio
 import type { TokenAuthResponseSchema } from './schemas/auth';
 import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
 import type { CreateDraftResponseSchema, ListDraftsResponseSchema } from './schemas/draft';
+import type { AutocompleteResponseSchema } from './schemas/autocomplete';
 
 type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
 type InstallerStatusResponse = z.infer<typeof InstallerStatusResponseSchema>;
@@ -115,6 +117,7 @@ type PresenceTokenResponse = z.infer<typeof PresenceTokenResponseSchema>;
 type LikersResponse = z.infer<typeof LikersResponseSchema>;
 type CreateDraftResponse = z.infer<typeof CreateDraftResponseSchema>;
 type ListDraftsResponse = z.infer<typeof ListDraftsResponseSchema>;
+type AutocompleteResponse = z.infer<typeof AutocompleteResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -276,6 +279,7 @@ const stubLikers: LikersResponse = { users: [], totalCount: 0 };
 
 const stubCreateDraft: CreateDraftResponse = { pageId: '' };
 const stubListDrafts: ListDraftsResponse = { drafts: [] };
+const stubAutocomplete: AutocompleteResponse = { results: [] };
 
 const contractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
@@ -368,6 +372,11 @@ const contractApp = new OpenAPIHono()
   .openapi(draftRoutes.createDraftRoute, (c) => c.json(stubCreateDraft, 201))
   .openapi(draftRoutes.listDraftsRoute, (c) => c.json(stubListDrafts, 200))
   .openapi(draftRoutes.cancelDraftRoute, (c) => c.json(stubCreateDraft, 200))
+  // Batch 6 (second slice) — autocomplete (RFC-0004).
+  // `/users/autocomplete` is a singleton path; `/pages/autocomplete`
+  // sits under the revision-owned `/pages/*` apply.
+  .openapi(autocompleteRoutes.autocompleteUsersRoute, (c) => c.json(stubAutocomplete, 200))
+  .openapi(autocompleteRoutes.autocompletePagesRoute, (c) => c.json(stubAutocomplete, 200))
   .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
   .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
   // `/notifications/status` registers before `/notifications/{id}/open`

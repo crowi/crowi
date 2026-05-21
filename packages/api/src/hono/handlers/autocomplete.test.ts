@@ -24,8 +24,8 @@ const createTestUser = async (info: { name: string; username: string; email: str
  * (other users' drafts and owner-granted pages excluded), and the
  * 60 req/min per-user rate limit (429 + `Retry-After`).
  */
-describe('Routes /api/v2/{users,pages}/autocomplete (ts-rest autocomplete)', () => {
-  const PATH_PREFIX = '/ts-rest-autocomplete-test/';
+describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => {
+  const PATH_PREFIX = '/hono-autocomplete-test/';
   let aliceToken: string;
   let aliceId: string;
   let bobToken: string;
