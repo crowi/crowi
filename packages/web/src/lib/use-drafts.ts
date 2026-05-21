@@ -1,8 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 import type { DraftConflictOwner, DraftSummary, ListDraftsResponse } from '@crowi/api-contract';
 
 /**
@@ -10,6 +9,11 @@ import type { DraftConflictOwner, DraftSummary, ListDraftsResponse } from '@crow
  * (`/api/v2/pages/drafts`), consumed by the `/me/creating-pages` view.
  * Drafts are a single flat user-scoped collection, so the key factory
  * has just `all`.
+ *
+ * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.draft.*` (ts-rest)
+ * to `apiClientV2.pages.drafts.*.$method` (hc<AppType>). Wire payload is
+ * unchanged; the only call-site difference is `response.ok` /
+ * `response.json()` instead of ts-rest's `result.status` + `result.body`.
  */
 export const draftsKeys = {
   all: ['drafts'] as const,
@@ -37,12 +41,12 @@ export function useDrafts() {
   return useQuery({
     queryKey: draftsKeys.all,
     queryFn: async (): Promise<ListDraftsResponse> => {
-      const result = await apiClient.draft.listDrafts();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        silent: { statuses: [401], value: EMPTY_DRAFTS },
-        fallback: 'Failed to fetch drafts',
-      });
+      const response = await apiClientV2.pages.drafts.$get();
+      if (response.status === 401) return EMPTY_DRAFTS;
+      if (response.ok) {
+        return (await response.json()) as ListDraftsResponse;
+      }
+      throw new Error('Failed to fetch drafts');
     },
     // Drafts only change when the user creates / cancels / publishes
     // one — all of which invalidate this key explicitly. A short stale
@@ -75,22 +79,22 @@ export class DraftPathConflictError extends Error {
  *   - 400 → plain `Error` (uncreatable path, or path held by a
  *     published page).
  *   - 409 → {@link DraftPathConflictError} with the owning user.
- *
- * Hand-rolled rather than via `unwrapResult`: success is 201 (not 200)
- * and the 409 must carry the `owner` object into a two-arg error, which
- * the helper's `ErrorClass` signature cannot express.
  */
 export function useCreateDraft() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: { path: string; initialBody?: string }): Promise<{ pageId: string }> => {
-      const result = await apiClient.draft.createDraft({ body: input });
-      if (result.status === 201) return result.body;
-      if (result.status === 409) {
-        throw new DraftPathConflictError(result.body.message, result.body.owner);
+      const response = await apiClientV2.pages.drafts.$post({ json: input });
+      if (response.status === 201) {
+        return (await response.json()) as { pageId: string };
       }
-      if (result.status === 400) {
-        throw new Error(result.body.message);
+      if (response.status === 409) {
+        const body = (await response.json()) as { message: string; owner: DraftConflictOwner };
+        throw new DraftPathConflictError(body.message, body.owner);
+      }
+      if (response.status === 400) {
+        const body = (await response.json()) as { message?: string };
+        throw new Error(body.message ?? 'Failed to create draft');
       }
       throw new Error('Failed to create draft');
     },
@@ -108,14 +112,14 @@ export function useCancelDraft() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (pageId: string): Promise<void> => {
-      // ts-rest's typed client requires `body` in the call args even
-      // when the contract's body schema is `z.unknown().optional()`.
-      const result = await apiClient.draft.cancelDraft({ params: { id: pageId }, body: undefined });
-      unwrapResult(result, {
-        ok: () => undefined,
-        errors: { 404: 'Failed to cancel draft' },
-        fallback: 'Failed to cancel draft',
-      });
+      // The contract's DELETE body is `z.unknown()` (legacy parity:
+      // Express's json middleware hydrates `{}` for an empty body).
+      // hc<AppType> requires the `json` arg to satisfy the type even
+      // when the runtime body is unused.
+      const response = await apiClientV2.pages.drafts[':id'].$delete({ param: { id: pageId }, json: undefined });
+      if (!response.ok) {
+        throw new Error('Failed to cancel draft');
+      }
     },
     // Optimistically drop the row so the list updates instantly, then
     // invalidate to reconcile with the server.

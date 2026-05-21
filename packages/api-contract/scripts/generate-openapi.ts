@@ -39,6 +39,7 @@ import {
   backlinkRoutes,
   bookmarkRoutes,
   commentRoutes,
+  draftRoutes,
   installerRoutes,
   meRoutes,
   notificationRoutes,
@@ -277,6 +278,12 @@ const routeGroups = [
   pagePreviewRoutes,
   pageCollabRoutes,
   presenceRoutes,
+  // Batch 6 (first slice) — draft. The `/pages/drafts*` literal
+  // sub-paths sit under the revision-owned `/pages/*` apply at
+  // runtime; the spec ordering mirrors the buildHonoApp chain
+  // (revision -> page -> page-preview -> pageCollab -> presence ->
+  // draft -> notification).
+  draftRoutes,
   notificationRoutes,
 ];
 for (const group of routeGroups) {

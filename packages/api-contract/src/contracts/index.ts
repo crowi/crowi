@@ -1,7 +1,4 @@
 import { initContract } from '@ts-rest/core';
-import { draftContract } from './draft';
-import { autocompleteContract } from './autocomplete';
-import { attachmentContract } from './attachment';
 import { adminCryptoContract } from './adminCrypto';
 import { adminContract } from './admin';
 import { searchContract } from './search';
@@ -24,6 +21,7 @@ export * from './page';
 export * from './page-preview';
 export * from './page-collab';
 export * from './presence';
+export * from './draft';
 
 const c = initContract();
 
@@ -59,10 +57,13 @@ const c = initContract();
 // dedupe-avoidance rationale as page / page-preview). The `createRoute(
 // ...)` objects live under `./page-collab` / `./presence` and are
 // re-exported above; the matching `apiContract` entries were dropped.
+//
+// Batch 6 — first slice: migrated `draft` (3 endpoints —
+// `/pages/drafts*`) to Hono. `draft` rides on the revision-owned
+// `/pages/*` jwtAuth apply (same dedupe-avoidance rationale as
+// page / page-preview / pageCollab / presence); the handler does
+// NOT install its own `createJwtAuth(crowi)`.
 export const apiContract = c.router({
-  draft: draftContract,
-  autocomplete: autocompleteContract,
-  attachment: attachmentContract,
   adminCrypto: adminCryptoContract,
   admin: adminContract,
   search: searchContract,

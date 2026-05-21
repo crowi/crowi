@@ -25,8 +25,8 @@ const createTestUser = async (info: { name: string; username: string; email: str
  * scoping to the caller, author-only cancel + path release, and the
  * by-path / by-id draft 404 for non-authors.
  */
-describe('Routes /api/v2/pages/drafts (ts-rest draft)', () => {
-  const PATH_PREFIX = '/ts-rest-draft-test/';
+describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
+  const PATH_PREFIX = '/hono-draft-test/';
   let aliceToken: string;
   let aliceId: string;
   let bobToken: string;

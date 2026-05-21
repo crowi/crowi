@@ -26,7 +26,10 @@ import { Express, Router } from 'express';
 // `hono/handlers/presence.ts`). Both reuse the revision handler's
 // `/pages/*` jwtAuth apply (same dedupe-avoidance rationale as
 // page / page-preview).
-import draftRoutes from './draft';
+// RFC-0006 Phase 4 Batch 6 (first slice) — `draft` resource
+// (RFC-0004) moved to Hono (`hono/handlers/draft.ts`). The matching
+// ts-rest router file was deleted. `autocomplete` + `attachment`
+// remain on ts-rest for the next two commits in this batch.
 import autocompleteRoutes from './autocomplete';
 import attachmentRoutes from './attachment';
 import searchRoutes from './search';
@@ -55,19 +58,13 @@ export default (crowi: Crowi, app: Express) => {
   const authenticatedRouter = Router();
   authenticatedRouter.use(jwtAuth(crowi)); // Apply JWT auth to all routes
 
-  const draftRouter = draftRoutes(crowi, app);
   const autocompleteRouter = autocompleteRoutes(crowi, app);
   const attachmentRouter = attachmentRoutes(crowi, app);
   const searchRouter = searchRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
-  // Draft + autocomplete routes mount before any broad `/pages/*`
-  // matcher (now in Hono — page resource handler). Express does not
-  // serve `/pages/...` core CRUD endpoints any more, but draft +
-  // autocomplete keep using the `/pages/drafts` / `/pages/autocomplete`
-  // literal sub-paths so their relative ordering still matters for
-  // any future ts-rest sibling that gets a `/pages/...` prefix.
-  authenticatedRouter.use(draftRouter);
+  // autocomplete still uses the `/pages/autocomplete` literal — it
+  // mounts before any future broad `/pages/*` ts-rest sibling.
   authenticatedRouter.use(autocompleteRouter);
   authenticatedRouter.use(attachmentRouter);
   authenticatedRouter.use(searchRouter);

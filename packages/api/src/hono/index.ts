@@ -19,6 +19,7 @@ import { registerAppRoutes } from './handlers/app';
 import { registerBacklinkRoutes } from './handlers/backlink';
 import { registerBookmarkRoutes } from './handlers/bookmark';
 import { registerCommentRoutes } from './handlers/comment';
+import { registerDraftRoutes } from './handlers/draft';
 import { registerInstallerRoutes } from './handlers/installer';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notification';
@@ -74,7 +75,12 @@ export const buildHonoApp = (crowi: Crowi) => {
   // chain in `packages/api-contract/src/client.ts`.
   const withPageCollab = registerPageCollabRoutes(withPagePreview, crowi);
   const withPresence = registerPresenceRoutes(withPageCollab, crowi);
-  const withNotification = registerNotificationRoutes(withPresence, crowi);
+  // Batch 6 (first slice) — draft (RFC-0004). `/pages/drafts*` rides
+  // on the revision-owned `/pages/*` jwtAuth apply (same
+  // dedupe-avoidance rationale as page / page-preview / pageCollab /
+  // presence). The handler does NOT re-install `createJwtAuth(crowi)`.
+  const withDraft = registerDraftRoutes(withPresence, crowi);
+  const withNotification = registerNotificationRoutes(withDraft, crowi);
   return withNotification;
 };
 
