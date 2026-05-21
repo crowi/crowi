@@ -35,7 +35,16 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import jsYaml from 'js-yaml';
 
 import {
+  adminAppRoutes,
+  adminAuthRoutes,
   adminCryptoRoutes,
+  adminMailRoutes,
+  adminPluginsRoutes,
+  adminSearchRoutes,
+  adminSecurityRoutes,
+  adminShareRoutes,
+  adminStorageRoutes,
+  adminUsersRoutes,
   appRoutes,
   attachmentRoutes,
   autocompleteRoutes,
@@ -299,6 +308,18 @@ const routeGroups = [
   // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
   // admin-only (first time `createJwtAdminRequired` lands on Hono).
   adminCryptoRoutes,
+  // Batch 9 — the 9 admin sub-contracts (app / auth / security / mail
+  // / share / storage / search / users / plugins). Spec ordering
+  // mirrors the buildHonoApp chain.
+  adminAppRoutes,
+  adminAuthRoutes,
+  adminSecurityRoutes,
+  adminMailRoutes,
+  adminShareRoutes,
+  adminStorageRoutes,
+  adminSearchRoutes,
+  adminUsersRoutes,
+  adminPluginsRoutes,
   notificationRoutes,
 ];
 for (const group of routeGroups) {
@@ -346,9 +367,16 @@ const doc = app.getOpenAPI31Document({
 
 mkdirSync(outputDir, { recursive: true });
 const jsonPath = join(outputDir, 'openapi.json');
-writeFileSync(jsonPath, `${JSON.stringify(doc, null, 2)}\n`);
+const jsonText = `${JSON.stringify(doc, null, 2)}\n`;
+writeFileSync(jsonPath, jsonText);
 console.log(`OpenAPI specification generated at: ${jsonPath}`);
 
+// Round-trip through JSON before dumping YAML — Batch 9 introduced
+// per-route `hook` overrides on admin.app / admin.mail, and Hono's
+// `getOpenAPI31Document` leaks the function through into the doc
+// object. JSON.stringify drops functions silently; YAML's dumper
+// throws. The round-trip strips functions uniformly so the two
+// generated artefacts stay byte-identical at the data level.
 const yamlPath = join(outputDir, 'openapi.yaml');
-writeFileSync(yamlPath, jsYaml.dump(doc));
+writeFileSync(yamlPath, jsYaml.dump(JSON.parse(jsonText)));
 console.log(`OpenAPI YAML specification generated at: ${yamlPath}`);

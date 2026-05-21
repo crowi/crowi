@@ -1,6 +1,3 @@
-import { initContract } from '@ts-rest/core';
-import { adminContract } from './admin';
-
 // Hono-style route exports (RFC-0006 Phase 3+). Resources migrated off
 // ts-rest expose `createRoute(...)` objects rather than a `c.router`
 // branch. Re-exported here so the package barrel surfaces them to both
@@ -24,8 +21,7 @@ export * from './autocomplete';
 export * from './attachment';
 export * from './search';
 export * from './adminCrypto';
-
-const c = initContract();
+export * from './admin';
 
 // `auth` (legacy SSR) sub-contract was deleted in RFC-0006 Phase 4 Batch 1:
 // frontend never called `apiClient.auth.*`, the actual login / register
@@ -82,10 +78,13 @@ const c = initContract();
 // `/admin/crypto/reencrypt`) to Hono. The handler installs
 // `createJwtAdminRequired(crowi)` per-path (same single-route install
 // pattern as `search`'s `/search` apply, but with the admin-required
-// factory — first time `jwtAdminRequired` lands on Hono). The remaining
-// admin sub-contracts (Batch 9 — `app` / `auth` / `security` / `mail` /
-// `share` / `storage` / `search` / `users` / `plugins`) are still ts-rest
-// and stay aggregated under the `admin` entry below.
-export const apiContract = c.router({
-  admin: adminContract,
-});
+// factory — first time `jwtAdminRequired` lands on Hono).
+//
+// Batch 9 migrated the remaining 9 admin sub-contracts (`app`, `auth`,
+// `security`, `mail`, `share`, `storage`, `search`, `users`, `plugins`)
+// to Hono — `createRoute(...)` definitions live under
+// `./admin/<sub>.ts` and are re-exported via `./admin/index.ts`. With
+// this, the ts-rest `apiContract` aggregator no longer holds any
+// entries; `@ts-rest/core` is still a dependency of `@crowi/api-contract`
+// (it remains in lockfile for the `@ts-rest/express` Express bridge
+// until Phase 6) but no longer used here.

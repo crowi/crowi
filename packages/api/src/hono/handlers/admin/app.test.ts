@@ -35,7 +35,7 @@ const reloadConfigCache = async () => {
  *   2. PUT with a stale client sending `upload` is rejected with 400.
  *   3. The remaining `app:*` keys still round-trip.
  */
-describe('Routes /api/v2/admin/app (ts-rest, post-storage-extraction)', () => {
+describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
   let Config;
   let adminToken: string;
   let memberToken: string;

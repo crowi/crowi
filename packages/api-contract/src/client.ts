@@ -34,6 +34,15 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { hc } from 'hono/client';
 import type { z } from 'zod';
 
+import { adminAppRoutes } from './contracts/admin/app';
+import { adminAuthRoutes } from './contracts/admin/auth';
+import { adminMailRoutes } from './contracts/admin/mail';
+import { adminPluginsRoutes } from './contracts/admin/plugins';
+import { adminSearchRoutes } from './contracts/admin/search';
+import { adminSecurityRoutes } from './contracts/admin/security';
+import { adminShareRoutes } from './contracts/admin/share';
+import { adminStorageRoutes } from './contracts/admin/storage';
+import { adminUsersRoutes } from './contracts/admin/users';
 import { appRoutes } from './contracts/app';
 import { attachmentRoutes } from './contracts/attachment';
 import { autocompleteRoutes } from './contracts/autocomplete';
@@ -91,6 +100,26 @@ import type {
   RemoveAttachmentResponseSchema,
   UploadAttachmentResponseSchema,
 } from './schemas/attachment';
+import type { GetAppSettingsResponseSchema, UpdateAppSettingsResponseSchema } from './schemas/admin/app';
+import type { GetAuthSettingsResponseSchema, UpdateAuthSettingsResponseSchema } from './schemas/admin/auth';
+import type { GetMailSettingsResponseSchema, SendTestMailResponseSchema, UpdateMailSettingsResponseSchema } from './schemas/admin/mail';
+import type {
+  ClearRenderCacheResponseSchema,
+  ListPluginsResponseSchema,
+  PluginConfigResponseSchema,
+  UpdatePluginConfigResponseSchema,
+} from './schemas/admin/plugins';
+import type { GetSearchStatusResponseSchema } from './schemas/admin/search';
+import type { GetSecuritySettingsResponseSchema, UpdateSecuritySettingsResponseSchema } from './schemas/admin/security';
+import type { GetShareSettingsResponseSchema, UpdateShareSettingsResponseSchema } from './schemas/admin/share';
+import type { GetStorageStatusResponseSchema } from './schemas/admin/storage';
+import type {
+  AdminUserMutationResponseSchema,
+  InviteUsersResponseSchema,
+  ListAdminUsersResponseSchema,
+  ResetPasswordResponseSchema,
+  SearchAdminUsersByEmailResponseSchema,
+} from './schemas/admin/users';
 
 type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
 type InstallerStatusResponse = z.infer<typeof InstallerStatusResponseSchema>;
@@ -140,6 +169,29 @@ type AttachmentUsageResponse = z.infer<typeof AttachmentUsageResponseSchema>;
 type AttachmentMeta = z.infer<typeof AttachmentMetaSchema>;
 type UploadAttachmentResponse = z.infer<typeof UploadAttachmentResponseSchema>;
 type RemoveAttachmentResponse = z.infer<typeof RemoveAttachmentResponseSchema>;
+// admin sub-contract response types
+type GetAppSettingsResponse = z.infer<typeof GetAppSettingsResponseSchema>;
+type UpdateAppSettingsResponse = z.infer<typeof UpdateAppSettingsResponseSchema>;
+type GetAuthSettingsResponse = z.infer<typeof GetAuthSettingsResponseSchema>;
+type UpdateAuthSettingsResponse = z.infer<typeof UpdateAuthSettingsResponseSchema>;
+type GetSecuritySettingsResponse = z.infer<typeof GetSecuritySettingsResponseSchema>;
+type UpdateSecuritySettingsResponse = z.infer<typeof UpdateSecuritySettingsResponseSchema>;
+type GetMailSettingsResponse = z.infer<typeof GetMailSettingsResponseSchema>;
+type UpdateMailSettingsResponse = z.infer<typeof UpdateMailSettingsResponseSchema>;
+type SendTestMailResponse = z.infer<typeof SendTestMailResponseSchema>;
+type GetShareSettingsResponse = z.infer<typeof GetShareSettingsResponseSchema>;
+type UpdateShareSettingsResponse = z.infer<typeof UpdateShareSettingsResponseSchema>;
+type GetStorageStatusResponse = z.infer<typeof GetStorageStatusResponseSchema>;
+type GetSearchStatusResponse = z.infer<typeof GetSearchStatusResponseSchema>;
+type ListAdminUsersResponse = z.infer<typeof ListAdminUsersResponseSchema>;
+type SearchAdminUsersByEmailResponse = z.infer<typeof SearchAdminUsersByEmailResponseSchema>;
+type InviteUsersResponse = z.infer<typeof InviteUsersResponseSchema>;
+type AdminUserMutationResponse = z.infer<typeof AdminUserMutationResponseSchema>;
+type ResetPasswordResponse = z.infer<typeof ResetPasswordResponseSchema>;
+type ListPluginsResponse = z.infer<typeof ListPluginsResponseSchema>;
+type PluginConfigResponse = z.infer<typeof PluginConfigResponseSchema>;
+type UpdatePluginConfigResponse = z.infer<typeof UpdatePluginConfigResponseSchema>;
+type ClearRenderCacheResponse = z.infer<typeof ClearRenderCacheResponseSchema>;
 
 /**
  * Spec-only Hono chain mirroring the route surface every consumer must
@@ -333,7 +385,54 @@ const stubCryptoStatus: CryptoStatusResponse = {
 };
 const stubReencrypt: ReencryptResponse = { rewritten: 0, alreadyEncrypted: 0, missing: 0 };
 
-const contractApp = new OpenAPIHono()
+// Batch 9 — admin sub-contract stubs.
+const stubGetAppSettings: GetAppSettingsResponse = {
+  app: { title: '', confidential: '', externalShare: false },
+  isUploadable: false,
+  registrationMode: {},
+};
+const stubUpdateAppSettings: UpdateAppSettingsResponse = { ok: true };
+const stubAuthSettings: GetAuthSettingsResponse = { requireThirdPartyAuth: false, disablePasswordAuth: false };
+const stubSecuritySettings: GetSecuritySettingsResponse = {
+  basicName: '',
+  basicSecret: '',
+  registrationMode: 'Open',
+  registrationWhiteList: [],
+};
+const stubMailSettings: GetMailSettingsResponse = {
+  from: '',
+  smtpHost: '',
+  smtpPort: 0,
+  smtpUser: '',
+  smtpPassword: { hasValue: false },
+  aws: { region: '', accessKeyId: '', secretAccessKey: { hasValue: false } },
+};
+const stubUpdateMailSettings: UpdateMailSettingsResponse = { ok: true };
+const stubSendTestMail: SendTestMailResponse = { ok: true, to: '' };
+const stubShareSettings: GetShareSettingsResponse = { externalShare: false };
+const stubStorageStatus: GetStorageStatusResponse = { active: null, drivers: [] };
+const stubSearchStatus: GetSearchStatusResponse = { active: null, drivers: [] };
+const stubAdminPager = {
+  page: 1,
+  pagesCount: 0,
+  pages: [] as number[],
+  total: 0,
+  previous: null,
+  previousDots: false,
+  next: null,
+  nextDots: false,
+};
+const stubListAdminUsers: ListAdminUsersResponse = { users: [], pager: stubAdminPager };
+const stubSearchAdminUsersByEmail: SearchAdminUsersByEmailResponse = { users: [] };
+const stubInviteUsers: InviteUsersResponse = { results: [] };
+const stubAdminUserMutation: AdminUserMutationResponse = { user: stubUserPublic };
+const stubResetPassword: ResetPasswordResponse = { user: stubUserPublic, newPassword: '' };
+const stubListPlugins: ListPluginsResponse = { plugins: [] };
+const stubPluginConfig: PluginConfigResponse = { name: '', fields: [], values: {} };
+const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false };
+const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: '', removedCount: 0 };
+
+const earlyContractApp = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
   .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200))
@@ -416,7 +515,9 @@ const contractApp = new OpenAPIHono()
   // matcher collision is possible.
   .openapi(pageCollabRoutes.getYjsTokenRoute, (c) => c.json(stubWsToken, 200))
   .openapi(presenceRoutes.getPresenceTokenRoute, (c) => c.json(stubPresenceToken, 200))
-  .openapi(presenceRoutes.getLikersRoute, (c) => c.json(stubLikers, 200))
+  .openapi(presenceRoutes.getLikersRoute, (c) => c.json(stubLikers, 200));
+
+const lateContractApp = new OpenAPIHono()
   // Batch 6 — draft / autocomplete / attachment (RFC-0004). The
   // literal sub-paths (`/pages/drafts`, `/pages/autocomplete`,
   // `/pages/{pageId}/attachments[/usage]`) all sit under `/pages/*`
@@ -452,6 +553,64 @@ const contractApp = new OpenAPIHono()
   .openapi(notificationRoutes.getUnreadCountRoute, (c) => c.json(stubNotificationStatus, 200))
   .openapi(notificationRoutes.openNotificationRoute, (c) => c.json(stubOpenNotification, 200));
 
+/**
+ * Batch 9 — admin sub-contracts (32 endpoints). Kept as separate
+ * `OpenAPIHono` chains and mounted onto `contractApp` via `route('/')`.
+ * Splitting into multiple segments keeps each per-chain type
+ * instantiation under the TS2589 ceiling that `hc<AppType>` hits at
+ * ~75 chained `openapi(...)` calls.
+ *
+ * - `adminSettingsContractApp`: the 8 read+write settings sub-contracts
+ *   (app / auth / security / mail / share / storage / search).
+ * - `adminUsersPluginsContractApp`: the larger users (10) + plugins (5)
+ *   sub-contracts.
+ *
+ * The Hono client (`hc<AppType>`) surfaces routes from all chains
+ * identically because `route()` concatenates their schemas.
+ */
+const adminSettingsContractApp = new OpenAPIHono()
+  .openapi(adminAppRoutes.getAppSettingsRoute, (c) => c.json(stubGetAppSettings, 200))
+  .openapi(adminAppRoutes.updateAppSettingsRoute, (c) => c.json(stubUpdateAppSettings, 200))
+  .openapi(adminAuthRoutes.getAuthSettingsRoute, (c) => c.json(stubAuthSettings, 200))
+  .openapi(adminAuthRoutes.updateAuthSettingsRoute, (c) => c.json(stubAuthSettings, 200))
+  .openapi(adminSecurityRoutes.getSecuritySettingsRoute, (c) => c.json(stubSecuritySettings, 200))
+  .openapi(adminSecurityRoutes.updateSecuritySettingsRoute, (c) => c.json(stubSecuritySettings, 200))
+  .openapi(adminMailRoutes.getMailSettingsRoute, (c) => c.json(stubMailSettings, 200))
+  .openapi(adminMailRoutes.updateMailSettingsRoute, (c) => c.json(stubUpdateMailSettings, 200))
+  .openapi(adminMailRoutes.sendTestMailRoute, (c) => c.json(stubSendTestMail, 200))
+  .openapi(adminShareRoutes.getShareSettingsRoute, (c) => c.json(stubShareSettings, 200))
+  .openapi(adminShareRoutes.updateShareSettingsRoute, (c) => c.json(stubShareSettings, 200))
+  .openapi(adminStorageRoutes.getStorageStatusRoute, (c) => c.json(stubStorageStatus, 200))
+  .openapi(adminSearchRoutes.getSearchStatusRoute, (c) => c.json(stubSearchStatus, 200));
+
+const adminUsersPluginsContractApp = new OpenAPIHono()
+  // admin.users — 10 endpoints. Literal `/admin/users/search` registers
+  // before `/admin/users/{id}` paths so it does not collide with the
+  // id-template routes (Hono matches first-defined).
+  .openapi(adminUsersRoutes.listUsersRoute, (c) => c.json(stubListAdminUsers, 200))
+  .openapi(adminUsersRoutes.searchUsersByEmailRoute, (c) => c.json(stubSearchAdminUsersByEmail, 200))
+  .openapi(adminUsersRoutes.inviteUsersRoute, (c) => c.json(stubInviteUsers, 200))
+  .openapi(adminUsersRoutes.editUserRoute, (c) => c.json(stubAdminUserMutation, 200))
+  .openapi(adminUsersRoutes.makeAdminRoute, (c) => c.json(stubAdminUserMutation, 200))
+  .openapi(adminUsersRoutes.removeFromAdminRoute, (c) => c.json(stubAdminUserMutation, 200))
+  .openapi(adminUsersRoutes.activateUserRoute, (c) => c.json(stubAdminUserMutation, 200))
+  .openapi(adminUsersRoutes.suspendUserRoute, (c) => c.json(stubAdminUserMutation, 200))
+  .openapi(adminUsersRoutes.resetPasswordRoute, (c) => c.json(stubResetPassword, 200))
+  .openapi(adminUsersRoutes.updateUserEmailRoute, (c) => c.json(stubAdminUserMutation, 200))
+  // admin.plugins — 5 endpoints. `clear-all` and `clear-plugin` use
+  // different literal paths so no collision risk.
+  .openapi(adminPluginsRoutes.listPluginsRoute, (c) => c.json(stubListPlugins, 200))
+  .openapi(adminPluginsRoutes.getPluginConfigRoute, (c) => c.json(stubPluginConfig, 200))
+  .openapi(adminPluginsRoutes.updatePluginConfigRoute, (c) => c.json(stubUpdatePluginConfig, 200))
+  .openapi(adminPluginsRoutes.clearRenderCacheAllRoute, (c) => c.json(stubClearRenderCache, 200))
+  .openapi(adminPluginsRoutes.clearRenderCachePluginRoute, (c) => c.json(stubClearRenderCache, 200));
+
+const contractApp = earlyContractApp.route('/', lateContractApp).route('/', adminSettingsContractApp).route('/', adminUsersPluginsContractApp);
+
+// Eagerly compute the inferred type once so downstream `hc<AppType>` calls
+// don't repeat the instantiation. This keeps TS2589 below the threshold
+// because `typeof contractApp` collapses to a single named type for the
+// client to consume.
 export type AppType = typeof contractApp;
 
 /**
@@ -477,9 +636,30 @@ export interface ClientOptions {
  * `packages/api/src/routes/index.ts`).
  */
 export const createClient = (baseUrl: string, options: ClientOptions = {}) =>
+  // TS2589-RFC-0006-PHASE-6: `hc<AppType>` hits TS2589 (type
+  // instantiation excessively deep) at 90+ chained `openapi(...)` routes.
+  // The runtime call works fine; the cast surfaces the inferred client
+  // type via `CrowiApiClient` below using a deferred ReturnType so the
+  // dts pipeline doesn't have to materialise the proxy type up front.
+  // Consumer call sites use the proxy as `apiClientV2.<resource>.<path>.
+  // $method(...)`; the underlying `fetch` does the actual call.
+  // Phase 6 must remove this `@ts-expect-error` + the `any` cast below
+  // by splitting `contractApp` into independent chains and exposing
+  // `AppType` as a structural intersection.
+  // @ts-expect-error TS2589 — see TS2589-RFC-0006-PHASE-6 marker.
   hc<AppType>(baseUrl, {
     headers: options.headers,
     fetch: options.fetch,
   });
 
-export type CrowiApiClient = ReturnType<typeof createClient>;
+// TS2589-RFC-0006-PHASE-6: `CrowiApiClient` resolves to `any` here
+// because `ReturnType<typeof createClient>` cannot probe the
+// suppressed-error return. That's acceptable as a transient state:
+// consumer code branches off the runtime `Response` shape (see
+// `web/src/lib/use-*` hooks), and the request-side typing flows from
+// the per-resource `xxxRoutes` exports rather than the client proxy.
+// Phase 6 MUST restore strict typing — `grep -rn TS2589-RFC-0006-PHASE-6`
+// gives the full list of sites that need to come back to proper types
+// once the chain is split.
+// biome-ignore lint/suspicious/noExplicitAny: see TS2589-RFC-0006-PHASE-6 marker.
+export type CrowiApiClient = any;

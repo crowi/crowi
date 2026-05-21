@@ -534,3 +534,15 @@ bump, Hono-native multipart, Hono-owns-server final shape, OpenAPI 3.1).
   `pnpm verify-openapi` script on `@crowi/api-contract` invoked by
   CI; the implementer confirms the exact CI shape when reaching
   Phase 6.
+- **(Phase 6, must-fix) TS2589 escape hatch**: Phase 4 Batch 9 landed
+  with `hc<AppType>` at TS2589 (instantiation depth) on 90+ chained
+  `openapi(...)` routes. `packages/api-contract/src/client.ts` carries
+  a `@ts-expect-error` on the `hc<AppType>(baseUrl, ...)` call and
+  exports `CrowiApiClient = any`; frontend hooks
+  (`use-notifications.ts`, `use-page-comments.ts`, `use-page-list.ts`,
+  `use-recently-viewed.ts`) added `response.json() as <Schema>` casts
+  to recover caller-side inference. Phase 6 splits the contract chain
+  into independent sub-chains and composes `AppType` as an
+  intersection so the proxy type materialises again. The marker
+  `TS2589-RFC-0006-PHASE-6` is grep-able across the codebase — every
+  hit must be removed before Phase 6 lands.

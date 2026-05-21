@@ -16,6 +16,15 @@ import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
 import { registerAdminCryptoRoutes } from './handlers/adminCrypto';
+import { registerAdminAppRoutes } from './handlers/admin/app';
+import { registerAdminAuthRoutes } from './handlers/admin/auth';
+import { registerAdminMailRoutes } from './handlers/admin/mail';
+import { registerAdminPluginsRoutes } from './handlers/admin/plugins';
+import { registerAdminSearchRoutes } from './handlers/admin/search';
+import { registerAdminSecurityRoutes } from './handlers/admin/security';
+import { registerAdminShareRoutes } from './handlers/admin/share';
+import { registerAdminStorageRoutes } from './handlers/admin/storage';
+import { registerAdminUsersRoutes } from './handlers/admin/users';
 import { registerAppRoutes } from './handlers/app';
 import { registerAttachmentRoutes } from './handlers/attachment';
 import { registerAutocompleteRoutes } from './handlers/autocomplete';
@@ -95,13 +104,24 @@ export const buildHonoApp = (crowi: Crowi) => {
   // `/users/autocomplete`. No rate limit.
   const withSearch = registerSearchRoutes(withAttachment, crowi);
   // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
-  // admin-only. First Hono migration to install
-  // `createJwtAdminRequired(crowi)` (per-path, same single-route install
-  // pattern as `search` / `/users/autocomplete` but using the
-  // admin-required factory). No other handler owns `/admin/crypto/*`,
-  // so there is no double-apply risk.
+  // admin-only (first time `createJwtAdminRequired` lands on Hono).
   const withAdminCrypto = registerAdminCryptoRoutes(withSearch, crowi);
-  const withNotification = registerNotificationRoutes(withAdminCrypto, crowi);
+  // Batch 9 — the 9 admin sub-contracts (app / auth / security / mail /
+  // share / storage / search / users / plugins). Each handler installs
+  // `createJwtAdminRequired(crowi)` broadly on its `/admin/<sub>/*`
+  // prefix + the bare `/admin/<sub>` path. No prefix overlap between
+  // sub-contracts (every one owns a distinct second-segment literal),
+  // so the broad apply pattern is safe.
+  const withAdminApp = registerAdminAppRoutes(withAdminCrypto, crowi);
+  const withAdminAuth = registerAdminAuthRoutes(withAdminApp, crowi);
+  const withAdminSecurity = registerAdminSecurityRoutes(withAdminAuth, crowi);
+  const withAdminMail = registerAdminMailRoutes(withAdminSecurity, crowi);
+  const withAdminShare = registerAdminShareRoutes(withAdminMail, crowi);
+  const withAdminStorage = registerAdminStorageRoutes(withAdminShare, crowi);
+  const withAdminSearch = registerAdminSearchRoutes(withAdminStorage, crowi);
+  const withAdminUsers = registerAdminUsersRoutes(withAdminSearch, crowi);
+  const withAdminPlugins = registerAdminPluginsRoutes(withAdminUsers, crowi);
+  const withNotification = registerNotificationRoutes(withAdminPlugins, crowi);
   return withNotification;
 };
 

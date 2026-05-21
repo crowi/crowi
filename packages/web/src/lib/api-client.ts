@@ -1,5 +1,4 @@
-import { initClient } from '@ts-rest/core';
-import { apiContract, createClient } from '@crowi/api-contract';
+import { createClient } from '@crowi/api-contract';
 import { clearTokens, storeTokens } from './auth-token';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
@@ -65,74 +64,15 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-export const apiClient = initClient(apiContract, {
-  baseUrl: `${API_BASE_URL}/api/v2`,
-  baseHeaders: {},
-  api: async ({ path, method, headers, body }) => {
-    // Get access token from localStorage (client-side only)
-    const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-
-    // Build headers object
-    const requestHeaders: HeadersInit = {
-      ...headers,
-    };
-
-    // Add Authorization header if token exists
-    if (accessToken) {
-      requestHeaders['Authorization'] = `Bearer ${accessToken}`;
-    }
-
-    // Make the fetch request
-    console.log('[api-client] Request:', method, path);
-    let response = await fetch(path, {
-      method,
-      headers: requestHeaders,
-      body: body as BodyInit | undefined,
-    });
-    console.log('[api-client] Response status:', response.status);
-
-    // If 401 and we have a refresh token, try to refresh
-    if (response.status === 401 && typeof window !== 'undefined') {
-      console.log('[api-client] Got 401, attempting token refresh...');
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        const newAccessToken = await acquireRefreshedToken();
-        console.log('[api-client] Refresh complete, hasNewToken:', !!newAccessToken);
-
-        if (newAccessToken) {
-          // Retry the original request with new token
-          console.log('[api-client] Retrying request with new token');
-          requestHeaders['Authorization'] = `Bearer ${newAccessToken}`;
-          response = await fetch(path, {
-            method,
-            headers: requestHeaders,
-            body: body as BodyInit | undefined,
-          });
-          console.log('[api-client] Retry response status:', response.status);
-        }
-      } else {
-        console.log('[api-client] No refresh token available');
-      }
-    }
-
-    // Parse response body based on content-type
-    const contentType = response.headers.get('content-type');
-    let responseBody;
-
-    if (contentType?.includes('application/json')) {
-      responseBody = await response.json();
-    } else {
-      responseBody = await response.text();
-    }
-
-    // Return in the format ts-rest expects
-    return {
-      status: response.status,
-      body: responseBody,
-      headers: response.headers,
-    };
-  },
-});
+/**
+ * RFC-0006 Phase 4 Batch 9 — the legacy `apiClient` (ts-rest
+ * `initClient(apiContract)`) is gone. The `apiContract` aggregator is
+ * empty after the 9 admin sub-contracts moved to Hono in Batch 9; all
+ * resources now go through `apiClientV2` (hc<AppType>). The
+ * `@ts-rest/core` package dep stays in package.json until Phase 6
+ * cleanup because `@ts-rest/express` still serves the streaming
+ * attachment routes (`attachment-stream.ts`).
+ */
 
 /**
  * RFC-0006 Phase 3 — `hc<AppType>` client for Hono-served resources.

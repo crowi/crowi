@@ -1,8 +1,13 @@
 'use client';
 
+// TS2589-RFC-0006-PHASE-6: `response.json() as <Schema>` casts below
+// exist because `apiClientV2` is typed as `any` (TS2589 limit at 90+
+// routes in `client.ts`). Drop the casts in Phase 6 once the contract
+// chain is split and `hc<AppType>` recovers strict typing.
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import type { Comment } from '@crowi/api-contract';
+import type { AddCommentResponse, Comment, ListCommentsResponse } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.comment.*`
@@ -47,7 +52,7 @@ export function usePageCommentsList(pageId: string | null | undefined) {
       if (!pageId) return [] as Comment[];
       const response = await apiClientV2.comments.$get({ query: { page_id: pageId } });
       if (response.ok) {
-        const body = await response.json();
+        const body = (await response.json()) as ListCommentsResponse;
         return body.comments;
       }
       throw new Error(await extractErrorMessage(response, 'Failed to fetch comments'));
@@ -83,7 +88,7 @@ export function useAddComment(pageId: string | null | undefined) {
         },
       });
       if (response.ok) {
-        const body = await response.json();
+        const body = (await response.json()) as AddCommentResponse;
         return body.comment;
       }
       throw new Error(await extractErrorMessage(response, 'Failed to add comment'));

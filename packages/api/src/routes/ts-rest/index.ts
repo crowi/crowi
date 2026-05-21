@@ -33,22 +33,21 @@ import { Express, Router } from 'express';
 // `uploadAttachment`) are now Hono-native via `c.req.parseBody()`;
 // multer is gone from those handlers. The streaming raw `GET
 // /attachments/:id` / `GET /attachments/by-key/:key` routes stay on
-// the Express bridge (still mounted via the legacy `/_api` /
-// controllers path) until Phase 6 cleanup converts them to native
-// Hono Response streams.
+// the Express bridge (`routes/ts-rest/attachment-stream.ts`) until
+// Phase 6 cleanup converts them to native Hono Response streams.
 // RFC-0006 Phase 4 Batch 7 — `search` resource moved to Hono
-// (`hono/handlers/search.ts`). The ts-rest router file was deleted.
-// `attachmentStreamRouter` is the only remaining occupant of
-// `authenticatedRouter` and stays here until Phase 6 cleanup.
+// (`hono/handlers/search.ts`). `attachmentStreamRouter` is the only
+// remaining occupant of `authenticatedRouter` and stays here until
+// Phase 6 cleanup.
 // RFC-0006 Phase 4 Batch 8 — `adminCrypto` resource moved to Hono
-// (`hono/handlers/adminCrypto.ts`). The ts-rest router file was
-// deleted. `adminRouter` is retained because Batch 9 admin
-// sub-contracts (`app` / `auth` / `security` / `mail` / `share` /
-// `storage` / `search` / `users` / `plugins`) still live under it.
+// (`hono/handlers/adminCrypto.ts`).
+// RFC-0006 Phase 4 Batch 9 — all 9 admin sub-contracts (app / auth /
+// security / mail / share / storage / search / users / plugins) moved
+// to Hono (`hono/handlers/admin/<sub>.ts`). The `adminRouter` Express
+// stage and the matching `routes/ts-rest/admin/` directory are gone.
+// `attachmentStreamRouter` is the only ts-rest stage left.
 import attachmentStreamRoutes from './attachment-stream';
-import adminRoutes from './admin';
 import jwtAuth from '../../middlewares/jwtAuth';
-import jwtAdminRequired from '../../middlewares/jwtAdminRequired';
 import Debug from 'debug';
 
 const debug = Debug('crowi:routes:ts-rest');
@@ -60,11 +59,12 @@ export default (crowi: Crowi, app: Express) => {
   // Authentication Layer Structure
   // ========================================
   // 1. Authenticated routes (JWT authentication required)
-  // 2. Admin routes (JWT authentication + admin permission required)
   // ========================================
-  // Public routes are now exclusively served by Hono (see
-  // `packages/api/src/hono/handlers/`); no ts-rest public router is
-  // mounted on `/api/v2` any more.
+  // Public and admin routes are now exclusively served by Hono (see
+  // `packages/api/src/hono/handlers/`); the `publicRouter` and
+  // `adminRouter` Express stages were retired in Batch 1 and Batch 9
+  // respectively. Only the raw streaming attachment routes
+  // (`attachment-stream.ts`) remain on the Express bridge.
 
   // Authenticated Router - JWT authentication required
   const authenticatedRouter = Router();
@@ -73,29 +73,14 @@ export default (crowi: Crowi, app: Express) => {
   // The raw streaming attachment routes (`GET /attachments/by-key/*`
   // and `GET /attachments/:id`) stay on Express until Phase 6 — see
   // `routes/ts-rest/attachment-stream.ts` for the streaming-vs-Hono
-  // rationale. It is the only remaining occupant of
-  // `authenticatedRouter` post-Batch 7.
+  // rationale.
   const attachmentStreamRouter = attachmentStreamRoutes(crowi, app);
 
   debug('Mounting authenticated routes (JWT required)');
   authenticatedRouter.use(attachmentStreamRouter);
 
-  // Admin Router - JWT authentication + admin permission required.
-  // Retained for Batch 9 admin sub-contracts (admin.app / admin.auth /
-  // admin.security / admin.mail / admin.share / admin.storage /
-  // admin.search / admin.users / admin.plugins). `adminCrypto` moved
-  // to Hono in Batch 8 — see `hono/handlers/adminCrypto.ts`.
-  const adminRouter = Router();
-  adminRouter.use(jwtAdminRequired(crowi)); // Apply JWT auth + admin check
-
-  const adminSubRouter = adminRoutes(crowi, app);
-
-  debug('Mounting admin routes (JWT + admin required)');
-  adminRouter.use(adminSubRouter);
-
-  // Mount all routers under /api/v2
+  // Mount under /api/v2
   app.use('/api/v2', authenticatedRouter);
-  app.use('/api/v2', adminRouter);
 
   debug('All ts-rest routes mounted successfully');
 };
