@@ -39,7 +39,7 @@ const clearUsers = async () => {
   await User.deleteMany({});
 };
 
-describe('Routes /api/v2/admin/users (ts-rest)', () => {
+describe('Routes /api/v2/admin/users (Hono)', () => {
   describe('GET /api/v2/admin/users', () => {
     let adminToken: string;
     let userToken: string;
