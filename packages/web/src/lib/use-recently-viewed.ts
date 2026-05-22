@@ -1,9 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { RecentlyViewedPagesResponse } from '@crowi/api-contract';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 
 export const recentlyViewedKeys = {
   all: ['me', 'recently-viewed'] as const,
@@ -13,17 +11,18 @@ export const recentlyViewedKeys = {
  * Lazy: only fetches once `enabled` flips true (dropdown opens). Short
  * staleTime because the list shifts on every page view and the
  * dropdown re-opens often.
+ *
+ * RFC-0006 Phase 4 Batch 2 — migrated to `apiClientV2.me['recently-viewed-pages'].$get`.
  */
 export function useRecentlyViewedPages(opts: { enabled: boolean }) {
-  return useQuery<RecentlyViewedPagesResponse, Error>({
+  return useQuery({
     queryKey: recentlyViewedKeys.all,
     queryFn: async () => {
-      const result = await apiClient.me.recentlyViewedPages();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 401: 'Failed to load recently viewed pages' },
-        fallback: 'Failed to load recently viewed pages',
-      });
+      const response = await apiClientV2.me['recently-viewed-pages'].$get();
+      if (!response.ok) {
+        throw new Error('Failed to load recently viewed pages');
+      }
+      return await response.json();
     },
     enabled: opts.enabled,
     staleTime: 30 * 1000,

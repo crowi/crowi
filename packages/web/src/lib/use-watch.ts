@@ -1,8 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 
 /**
  * Query key factory for watch (notification subscription) queries.
@@ -22,24 +21,23 @@ export const watchKeys = {
 // to survive header rerenders / window focus without re-hitting the API.
 const WATCH_STALE_TIME = 5 * 60 * 1000;
 
+/**
+ * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.{get,set}WatchStatus`
+ * (ts-rest) to `apiClientV2.pages.watch.${get,put}` (hc<AppType>). Wire
+ * payload is unchanged.
+ */
 export function useWatchStatus(pageId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: pageId ? watchKeys.detail(pageId) : watchKeys.all,
     queryFn: async (): Promise<{ watching: boolean }> => {
       if (!pageId) return { watching: false };
-      const result = await apiClient.page.getWatchStatus({
-        query: { page_id: pageId },
-      });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        // Not authenticated → surface as not watching (button hidden by caller anyway).
-        silent: { statuses: [401], value: { watching: false } },
-        errors: {
-          400: 'Failed to fetch watch status',
-          404: { message: 'Page not found', preferLocal: true },
-        },
-        fallback: 'Failed to fetch watch status',
-      });
+      const response = await apiClientV2.pages.watch.$get({ query: { page_id: pageId } });
+      // Not authenticated → surface as not watching (button hidden by caller).
+      if (response.status === 401) return { watching: false };
+      if (response.ok) {
+        return await response.json();
+      }
+      throw new Error('Failed to fetch watch status');
     },
     enabled: !!pageId && options?.enabled !== false,
     staleTime: WATCH_STALE_TIME,
@@ -64,18 +62,12 @@ export function useToggleWatch(pageId: string | undefined) {
       }
 
       const next = !watching;
-      const result = await apiClient.page.setWatchStatus({
-        body: { page_id: pageId, watching: next },
-      });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: {
-          400: 'Failed to update watch status',
-          401: { message: 'Authentication required', preferLocal: true },
-          404: { message: 'Page not found', preferLocal: true },
-        },
-        fallback: 'Failed to update watch status',
-      });
+      const response = await apiClientV2.pages.watch.$put({ json: { page_id: pageId, watching: next } });
+      if (response.status === 401) throw new Error('Authentication required');
+      if (response.ok) {
+        return await response.json();
+      }
+      throw new Error('Failed to update watch status');
     },
     onSuccess: (next) => {
       if (!pageId) return;

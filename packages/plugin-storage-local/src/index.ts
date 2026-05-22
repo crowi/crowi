@@ -3,7 +3,7 @@ import { mkdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { CrowiPlugin, StorageDriver } from '@crowi/plugin-api';
 
 const LocalStorageConfigSchema = z

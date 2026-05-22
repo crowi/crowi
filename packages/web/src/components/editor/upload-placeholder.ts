@@ -216,11 +216,12 @@ export function makeProgressUpdater(view: EditorView, uploadId: string, filename
 
 /**
  * POST a file to `/api/v2/attachments/upload` with browser-side upload
- * progress. ts-rest's `fetch` transport cannot surface upload progress,
- * so this uses `XMLHttpRequest` directly — `xhr.upload.onprogress` is
- * the only cross-browser way to observe a multipart upload streaming
- * out. The endpoint, field names, and error envelope all match the
- * `apiClient.attachment.uploadAttachment` contract.
+ * progress. Neither ts-rest nor `hc<AppType>`'s `$post` surfaces upload
+ * progress, so this uses `XMLHttpRequest` directly — `xhr.upload.
+ * onprogress` is the only cross-browser way to observe a multipart
+ * upload streaming out. The endpoint, field names, and error envelope
+ * all match the `apiClientV2.attachments.upload.$post` contract
+ * (RFC-0006 Phase 4 Batch 6 — `uploadAttachmentRoute`).
  *
  * Resolves with the `UploadOutcome` on 200; rejects with an `Error`
  * whose `.message` is the server-supplied (or generic) message on any

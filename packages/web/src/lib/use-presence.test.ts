@@ -5,10 +5,19 @@ import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import type { PresenceViewer } from '@crowi/api-contract';
 
-// Mock `apiClient` so the token query reads our fake endpoint.
+// Mock `apiClientV2` so the token query reads our fake `pages[':id']
+// ['presence-token'].$get`. RFC-0006 Batch 5 switched the hook from
+// ts-rest's `apiClient.presence.getPresenceToken` to hc<AppType>'s
+// Response-shaped fetch call.
 const { getPresenceToken } = vi.hoisted(() => ({ getPresenceToken: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClient: { presence: { getPresenceToken } },
+  apiClientV2: {
+    pages: {
+      ':id': {
+        'presence-token': { $get: getPresenceToken },
+      },
+    },
+  },
 }));
 
 import { usePresence } from './use-presence';
@@ -97,6 +106,19 @@ const TOKEN_OK = {
   expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
 };
 
+/**
+ * `Response`-shaped helpers for the hc<AppType> mock. Batch 5 switched
+ * the hook to read `response.ok` + `response.json()` directly (instead
+ * of the ts-rest `{ status, body }` envelope), so every mock here
+ * returns the shape the real `fetch` would return.
+ */
+function tokenOkResponse<T>(body: T): { ok: true; status: number; json: () => Promise<T> } {
+  return { ok: true, status: 200, json: () => Promise.resolve(body) };
+}
+function tokenErrorResponse(status: number, body: unknown): { ok: false; status: number; json: () => Promise<unknown> } {
+  return { ok: false, status, json: () => Promise.resolve(body) };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   getPresenceToken.mockReset();
@@ -116,7 +138,7 @@ describe('usePresence', () => {
   });
 
   it('fetches a token then connects to /presence/<pageId> with it', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
 
@@ -129,7 +151,7 @@ describe('usePresence', () => {
   });
 
   it('reports connected status and sends a heartbeat on open and every 15s', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
     await flush();
@@ -150,7 +172,7 @@ describe('usePresence', () => {
   });
 
   it('surfaces viewers from a broadcast after the anti-flicker delay', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
     await flush();
@@ -172,7 +194,7 @@ describe('usePresence', () => {
   });
 
   it('drops a viewer that leaves within the 3s anti-flicker window', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
     await flush();
@@ -193,7 +215,7 @@ describe('usePresence', () => {
   });
 
   it('ignores malformed and non-JSON frames', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
     await flush();
@@ -210,7 +232,7 @@ describe('usePresence', () => {
   });
 
   it('reports error status when the WebSocket closes uncleanly', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
     await flush();
@@ -225,7 +247,7 @@ describe('usePresence', () => {
   });
 
   it('reconnects after an unclean close but not after a 4403 (permission revoked)', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
     await flush();
@@ -254,7 +276,7 @@ describe('usePresence', () => {
   });
 
   it('stops reconnecting after a 4401 (expired token) close', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
     await flush();
@@ -273,7 +295,7 @@ describe('usePresence', () => {
   });
 
   it('backs off across handshake-then-close cycles (no flat 1s reconnect loop)', async () => {
-    getPresenceToken.mockResolvedValue({ status: 200, body: TOKEN_OK });
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
     await flush();
@@ -308,7 +330,7 @@ describe('usePresence', () => {
   });
 
   it('reports error status when the token request fails (no WebSocket opened)', async () => {
-    getPresenceToken.mockResolvedValue({ status: 500, body: { error: { message: 'boom' } } });
+    getPresenceToken.mockResolvedValue(tokenErrorResponse(500, { error: { message: 'boom' } }));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
 

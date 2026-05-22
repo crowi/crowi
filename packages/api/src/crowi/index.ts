@@ -5,21 +5,13 @@ import Tokens from 'csrf';
 import { createClient } from 'redis';
 import http from 'http';
 import { buildRedisOpts } from 'src/util/redis-opts';
-// import socketIO from 'socket.io'
-// import socketIORedis from 'socket.io-redis'
-import RedisStore from 'connect-redis';
-import express from 'express';
-import session from 'express-session';
-import errorHandler from 'errorhandler';
-import morgan from 'morgan';
-import dnscache from 'dnscache';
 import models from 'src/models';
 import events from 'src/events';
-import middlewares from 'src/middlewares';
-import controllers from 'src/controllers';
-import routes from '../routes';
 import { attachCollabServer, type AttachedCollab } from 'src/collab/attach';
 import { attachPresenceServer, type AttachedPresence } from 'src/presence/attach';
+import { createAdaptorServer } from '@hono/node-server';
+import { buildHonoApp } from 'src/hono';
+import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
 import { hasSlackConfig } from '../models/config';
@@ -32,17 +24,12 @@ import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runAwsConfigMigration } from 'src/util/aws-config-migration';
 import { runPageStatusMigration } from 'src/util/page-status-migration';
-import expressInit from './express-init';
 
 const pkg = require('../../package.json');
 
 type Models = { [K in keyof typeof models]: ReturnType<(typeof models)[K]> };
 
 type Events = { [K in keyof typeof events]: InstanceType<(typeof events)[K]> };
-
-type Middlewares = { [K in keyof ReturnType<typeof middlewares>]: ReturnType<typeof middlewares>[K] };
-
-export type Controllers = { [K in keyof ReturnType<typeof controllers>]: ReturnType<typeof controllers>[K] };
 
 const debug = Debug('crowi:crowi');
 
@@ -61,8 +48,6 @@ class Crowi {
 
   cacheDir: string;
 
-  app: any = null;
-
   mongoose: any = null;
 
   // FIXME after service/config typed
@@ -79,10 +64,6 @@ class Crowi {
 
   events: Events = {} as any as Events;
 
-  middlewares: Middlewares = {} as any as Middlewares;
-
-  controllers: Controllers = {} as any as Controllers;
-
   env: typeof process.env;
 
   baseUrl: string | null = null;
@@ -96,11 +77,6 @@ class Crowi {
   redisUrl: string | null;
 
   redisOpts: any;
-
-  // TODO: @types モジュール入れたらやる
-  sessionConfig: any;
-
-  // io?: socketIO.Server
 
   // FIXME: util/slack に型付けたらやる
   slack: any;
@@ -171,7 +147,6 @@ class Crowi {
     await this.setupDatabase();
     await this.setupModels();
     await this.setupRedisClient();
-    await this.setupSessionConfig();
     await this.setupConfig();
     await this.migrateConfig();
     // Must run before setupPlugins — @crowi/plugin-aws reads its config at
@@ -203,9 +178,7 @@ class Crowi {
     await this.setupPlugins();
     await this.setupMailer();
     await this.setupSlack();
-    await this.setupDNSCache();
     await this.setupLRU();
-    await this.buildServer();
 
     this.initialized = true;
   }
@@ -213,10 +186,10 @@ class Crowi {
   /**
    * Lightweight init for the `@crowi/admin-cli` operator CLI. Brings up
    * just what's needed to read Config + reach storage drivers — Redis
-   * / sessions / mailer / slack / search / DNS / LRU / express / the
-   * boot-time AWS migration are all skipped (the migration belongs to
-   * `init()` so the long-running server runs it once; the CLI shouldn't
-   * mutate Mongo as a side effect of starting up).
+   * / mailer / slack / search / LRU / the boot-time AWS migration are
+   * all skipped (the migration belongs to `init()` so the long-running
+   * server runs it once; the CLI shouldn't mutate Mongo as a side
+   * effect of starting up).
    *
    * `setupConfig` works without Redis because `service/config.ts:setupPubSub`
    * short-circuits when `redisOpts === null`.
@@ -442,30 +415,6 @@ class Crowi {
     }
   }
 
-  setupSessionConfig() {
-    const sessionAge = 1000 * 3600 * 24 * 30;
-    const sessionConfig = {
-      rolling: true,
-      secret: this.env.SECRET_TOKEN || 'this is default session secret',
-      resave: false,
-      saveUninitialized: true,
-      cookie: {
-        httpOnly: true,
-        maxAge: sessionAge,
-      },
-      store: undefined as any,
-    };
-
-    if (this.redis) {
-      sessionConfig.store = new RedisStore({
-        prefix: 'crowi:sess:',
-        client: this.redis,
-      });
-    }
-
-    this.sessionConfig = sessionConfig;
-  }
-
   async setupModels() {
     const keys = Object.keys(models) as (keyof typeof models)[];
     keys.forEach((key) => {
@@ -477,10 +426,6 @@ class Crowi {
     return Object.entries(events).forEach(([key, Event]: any[]) => {
       this.event(key, new Event(this));
     });
-  }
-
-  getApp() {
-    return this.app;
   }
 
   getMongo() {
@@ -534,18 +479,6 @@ class Crowi {
     }
   }
 
-  async setupDNSCache() {
-    /**
-     * Enable dnscache
-     * To prevent slow dns resolution in vm on linux.
-     * In December 2018, linux kernel may have race in conntrack.
-     * See: https://www.weave.works/blog/racy-conntrack-and-dns-lookup-timeouts
-     */
-    if (this.env.ENABLE_DNSCACHE !== 'true') return;
-
-    dnscache({ enable: true });
-  }
-
   setupLRU() {
     this.lru = new LRU(this);
   }
@@ -554,26 +487,47 @@ class Crowi {
     return this.tokens;
   }
 
-  start = async (): Promise<any> => {
-    if (this.app === null) {
+  start = async (): Promise<http.Server> => {
+    if (!this.initialized) {
       throw new Error('Must call init() before start().');
     }
 
-    const server = http.createServer(this.app);
+    // RFC-0006 Phase 6 Sub-batch D — Hono is the sole HTTP host.
+    //
+    // `buildHonoApp(crowi)` returns the `/api/v2/*` route surface.
+    // Routes are registered at their un-prefixed paths
+    // (`/app/info`, `/pages/:id`, ...) to keep the inferred AppType
+    // chain shallow for the `hc<AppType>` client; the `/api/v2`
+    // prefix is stripped by `stripApiV2Prefix` on the boundary so
+    // production URLs match.
+    //
+    // We use `createAdaptorServer` instead of `serve` so the
+    // WebSocket `'upgrade'` handlers (collab / presence) can be
+    // wired **before** `server.listen()` runs — the upstream
+    // `serve()` helper listens immediately, which would race the
+    // first WS client against the upgrade hook.
+    const honoApp = buildHonoApp(this);
+    const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiV2Prefix(request));
 
-    // RFC-0003 Phase 9 — attach Hocuspocus to the existing http.Server
+    const server = createAdaptorServer({
+      fetch: fetchFn,
+      createServer: http.createServer,
+      port: this.port,
+    });
+
+    // RFC-0003 Phase 9 — attach Hocuspocus to the http.Server
     // **before** `listen()` so the `'upgrade'` event handler is wired
     // when the first WebSocket client races the listen callback. The
     // attach is async because it builds the editor-cap counter
     // (Redis SCARD round-trip when configured); we await it here so
     // the boot sequence stays serial and `start()` resolves only
     // when the api is fully ready to accept WebSocket upgrades.
-    this.collabAttachment = await attachCollabServer(server, this);
+    this.collabAttachment = await attachCollabServer(server as http.Server, this);
 
     // RFC-0005 — attach the `/presence` WebSocket alongside `/collab`.
     // Same `noServer` pattern; both upgrade handlers path-filter so
     // they coexist on the one http.Server listener.
-    this.presenceAttachment = await attachPresenceServer(server, this);
+    this.presenceAttachment = await attachPresenceServer(server as http.Server, this);
 
     // Promisify `server.listen` so `start()` resolves only after the
     // socket is actually bound. Callers (the bin entry, smoke tests)
@@ -587,7 +541,7 @@ class Crowi {
       };
       const onListening = () => {
         server.off('error', onError);
-        console.log('[' + this.node_env + '] Express server listening on port ' + this.port);
+        console.log('[' + this.node_env + '] Hono server listening on port ' + this.port);
         resolveListen();
       };
       server.once('error', onError);
@@ -595,36 +549,8 @@ class Crowi {
       server.listen(this.port);
     });
 
-    return this.app;
+    return server as http.Server;
   };
-
-  buildServer() {
-    const app = express();
-    const env = this.node_env;
-
-    this.middlewares = middlewares(this, app);
-    this.controllers = controllers(this, app);
-
-    expressInit(this, app);
-    routes(this, app);
-
-    if (env == 'development') {
-      // swig.setDefaults({ cache: false });
-      app.use(errorHandler({ dumpExceptions: true, showStack: true }));
-      app.use(morgan('dev'));
-    }
-
-    if (env == 'production') {
-      app.use(morgan('combined'));
-      app.use(function (err, req, res, next) {
-        res.status(500);
-        res.json({ error: 'Internal Server Error', message: err.message });
-      });
-    }
-
-    this.app = app;
-    return app;
-  }
 
   exitOnError(err) {
     debug('Critical error occured.');

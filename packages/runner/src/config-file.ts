@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 /**
  * Schema for the project-level `crowi.config.json` that ships with a

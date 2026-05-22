@@ -2,8 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { GetSearchStatusResponse } from '@crowi/api-contract';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 
 /**
  * Query key factory for the /admin/search endpoint. Wrapped in the
@@ -22,17 +21,20 @@ export const adminSearchKeys = {
  * the `crowi-admin search rebuild` CLI subcommand. Both intentionally
  * bypass HTTP (long rebuilds shouldn't tie up an admin request, and
  * rebuild semantics are plugin-defined).
+ *
+ * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.search.*`
+ * to `apiClientV2.admin.search.$get` (hc<AppType>).
  */
 export function useAdminSearch() {
   return useQuery<GetSearchStatusResponse, Error>({
     queryKey: adminSearchKeys.status(),
     queryFn: async () => {
-      const result = await apiClient.admin.search.getSearchStatus();
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 401: 'Failed to fetch search status', 403: 'Failed to fetch search status' },
-        fallback: 'Failed to fetch search status',
-      });
+      const response = await apiClientV2.admin.search.$get();
+      if (response.status === 200) {
+        return (await response.json()) as GetSearchStatusResponse;
+      }
+      const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+      throw new Error(body?.error?.message ?? 'Failed to fetch search status');
     },
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,

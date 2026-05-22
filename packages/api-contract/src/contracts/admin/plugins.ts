@@ -1,5 +1,24 @@
-import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+/**
+ * RFC-0006 Phase 4 Batch 9 — `admin.plugins` sub-contract ported to
+ * `@hono/zod-openapi` route definitions.
+ *
+ * 5 endpoints:
+ *   GET  /admin/plugins                              (listPlugins)
+ *   GET  /admin/plugins/config?name=…                (getPluginConfig)
+ *   PUT  /admin/plugins/config?name=…                (updatePluginConfig)
+ *   POST /admin/plugins/render-cache/clear-all       (clearRenderCacheAll)
+ *   POST /admin/plugins/render-cache/clear-plugin?name=…  (clearRenderCachePlugin)
+ *
+ * Auth + install:
+ *   - The handler installs `createJwtAdminRequired(crowi)` broadly on
+ *     `/admin/plugins/*` plus the bare `/admin/plugins` path.
+ *
+ * Plugin npm names contain a `/` (e.g. `@crowi/plugin-storage-local`)
+ * which collides with the Hono router's path-segment matching, so the
+ * name is passed as a query string rather than a path parameter.
+ */
+import { createRoute, z } from '@hono/zod-openapi';
+
 import {
   ClearRenderCacheResponseSchema,
   ListPluginsResponseSchema,
@@ -9,101 +28,195 @@ import {
   UpdatePluginConfigRequestSchema,
   UpdatePluginConfigResponseSchema,
 } from '../../schemas/admin/plugins';
-import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema } from '../../schemas/common';
+import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../../schemas/common';
 
-const c = initContract();
-
-/**
- * Plugin npm names contain a `/` (e.g. `@crowi/plugin-storage-local`), which
- * collides with Express's path-segment matching when used as a path
- * param. We pass the name as a query string so ts-rest / Express
- * don't have to deal with the slash in the URL path.
- */
 const PluginNameQuerySchema = z.object({ name: z.string() });
 
-export const adminPluginsContract = c.router({
-  /**
-   * List all plugins currently loaded by the runtime PluginManager.
-   * Surfaced in the admin "Plugins" page.
-   */
-  listPlugins: {
-    method: 'GET',
-    path: '/admin/plugins',
-    responses: {
-      200: ListPluginsResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
+export const listPluginsRoute = createRoute({
+  method: 'get',
+  path: '/admin/plugins',
+  tags: ['admin.plugins'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List every plugin currently loaded',
+  responses: {
+    200: {
+      description: 'Plugin list with declared registry slots',
+      content: { 'application/json': { schema: ListPluginsResponseSchema } },
     },
-  },
-
-  /**
-   * Get a single plugin's config form schema + current values. The
-   * plaintext of any sensitive field is replaced with
-   * `{ hasValue: boolean }` so the secret never traverses the wire
-   * back to the admin form.
-   */
-  getPluginConfig: {
-    method: 'GET',
-    path: '/admin/plugins/config',
-    query: PluginNameQuerySchema,
-    responses: {
-      200: PluginConfigResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: PluginNotFoundErrorSchema,
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
-  },
-
-  /**
-   * Update a plugin's config. The request body is validated against
-   * the plugin's Zod schema before persisting; per-field errors are
-   * surfaced in the 422 response.
-   */
-  updatePluginConfig: {
-    method: 'PUT',
-    path: '/admin/plugins/config',
-    query: PluginNameQuerySchema,
-    body: UpdatePluginConfigRequestSchema,
-    responses: {
-      200: UpdatePluginConfigResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: PluginNotFoundErrorSchema,
-      422: PluginConfigValidationErrorSchema,
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
     },
-  },
-
-  /**
-   * Clear all renderer plugin cache entries. Used by the admin
-   * "Clear all render cache" button — equivalent to
-   * `MongoCacheStorage.invalidateAll()`. Returns the row delete count.
-   */
-  clearRenderCacheAll: {
-    method: 'POST',
-    path: '/admin/plugins/render-cache/clear-all',
-    body: z.object({}).optional(),
-    responses: {
-      200: ClearRenderCacheResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-    },
-  },
-
-  /**
-   * Clear renderer plugin cache entries scoped to a single plugin.
-   * Used by the per-plugin "Clear cache for this plugin" button.
-   * Returns 404 when the named plugin is not loaded.
-   */
-  clearRenderCachePlugin: {
-    method: 'POST',
-    path: '/admin/plugins/render-cache/clear-plugin',
-    query: PluginNameQuerySchema,
-    body: z.object({}).optional(),
-    responses: {
-      200: ClearRenderCacheResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: PluginNotFoundErrorSchema,
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
 });
+
+export const getPluginConfigRoute = createRoute({
+  method: 'get',
+  path: '/admin/plugins/config',
+  tags: ['admin.plugins'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Get a plugin config form schema + current values',
+  request: {
+    query: PluginNameQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Plugin config + values (secrets masked)',
+      content: { 'application/json': { schema: PluginConfigResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Plugin not loaded',
+      content: { 'application/json': { schema: PluginNotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const updatePluginConfigRoute = createRoute({
+  method: 'put',
+  path: '/admin/plugins/config',
+  tags: ['admin.plugins'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Update a plugin config (per-field validation via plugin Zod schema)',
+  request: {
+    query: PluginNameQuerySchema,
+    body: {
+      content: { 'application/json': { schema: UpdatePluginConfigRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Save succeeded; hotReloaded flag indicates live apply',
+      content: { 'application/json': { schema: UpdatePluginConfigResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Plugin not loaded',
+      content: { 'application/json': { schema: PluginNotFoundErrorSchema } },
+    },
+    422: {
+      description: 'Plugin config failed plugin-defined validation',
+      content: { 'application/json': { schema: PluginConfigValidationErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+const ClearRenderCacheBodySchema = z.object({}).optional();
+
+export const clearRenderCacheAllRoute = createRoute({
+  method: 'post',
+  path: '/admin/plugins/render-cache/clear-all',
+  tags: ['admin.plugins'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Clear every renderer plugin cache entry',
+  request: {
+    body: {
+      content: { 'application/json': { schema: ClearRenderCacheBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Cleared (count reported)',
+      content: { 'application/json': { schema: ClearRenderCacheResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const clearRenderCachePluginRoute = createRoute({
+  method: 'post',
+  path: '/admin/plugins/render-cache/clear-plugin',
+  tags: ['admin.plugins'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Clear renderer plugin cache entries scoped to a single plugin',
+  request: {
+    query: PluginNameQuerySchema,
+    body: {
+      content: { 'application/json': { schema: ClearRenderCacheBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Cleared (count reported)',
+      content: { 'application/json': { schema: ClearRenderCacheResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Plugin not loaded',
+      content: { 'application/json': { schema: PluginNotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const adminPluginsRoutes = {
+  listPluginsRoute,
+  getPluginConfigRoute,
+  updatePluginConfigRoute,
+  clearRenderCacheAllRoute,
+  clearRenderCachePluginRoute,
+};
+
+export type {
+  ClearRenderCacheResponse,
+  ListPluginsResponse,
+  PluginAdminPlacement,
+  PluginConfigResponse,
+  PluginConfigValidationError,
+  PluginField,
+  PluginInfo,
+  PluginNotFoundError,
+  UpdatePluginConfigRequest,
+  UpdatePluginConfigResponse,
+} from '../../schemas/admin/plugins';

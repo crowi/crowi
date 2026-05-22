@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
+import { apiClientV2 } from './api-client';
 import type {
   GetMailSettingsResponse,
   SendTestMailRequest,
@@ -15,13 +15,20 @@ export const adminMailSettingsKeys = {
   settings: ['admin-mail-settings'] as const,
 };
 
+/**
+ * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.mail.*`
+ * (ts-rest) to `apiClientV2.admin.mail.*.$method` (hc<AppType>). Wire
+ * payload unchanged. The 400 `MailSettingsValidationError` envelope
+ * (`{ bodyResult: { issues } }`) is still produced by the contract's
+ * per-route hook override.
+ */
 export function useMailSettings(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: adminMailSettingsKeys.settings,
     queryFn: async (): Promise<GetMailSettingsResponse | null> => {
-      const result = await apiClient.admin.mail.getMailSettings();
-      if (result.status === 200) return result.body;
-      return null;
+      const response = await apiClientV2.admin.mail.$get();
+      if (response.status !== 200) return null;
+      return (await response.json()) as GetMailSettingsResponse;
     },
     enabled: options?.enabled !== false,
     staleTime: 5 * 60 * 1000,
@@ -39,22 +46,27 @@ export class MailSettingsValidationFailure extends Error {
   }
 }
 
+interface MailSettingsValidationBody {
+  bodyResult?: { issues?: { path: (string | number)[]; message: string }[] };
+}
+
 export function useUpdateMailSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: UpdateMailSettingsRequest): Promise<UpdateMailSettingsResponse> => {
-      const result = await apiClient.admin.mail.updateMailSettings({ body });
-      if (result.status === 200) return result.body;
-      if (result.status === 400) {
+      const response = await apiClientV2.admin.mail.$put({ json: body });
+      if (response.status === 200) return (await response.json()) as UpdateMailSettingsResponse;
+      if (response.status === 400) {
+        const parsed = (await response.json().catch(() => null)) as MailSettingsValidationBody | null;
         const fieldErrors: Record<string, string> = {};
-        const issues = result.body?.bodyResult?.issues ?? [];
+        const issues = parsed?.bodyResult?.issues ?? [];
         for (const issue of issues) {
           const key = issue.path.map(String).join('.');
           if (!(key in fieldErrors)) fieldErrors[key] = issue.message;
         }
         throw new MailSettingsValidationFailure(fieldErrors);
       }
-      if (result.status === 401 || result.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         throw new Error(m['errors.unauthorized']());
       }
       throw new Error(m['admin.mail.failed_to_save']());
@@ -68,12 +80,13 @@ export function useUpdateMailSettings() {
 export function useSendTestMail() {
   return useMutation({
     mutationFn: async (body: SendTestMailRequest): Promise<SendTestMailResponse> => {
-      const result = await apiClient.admin.mail.sendTestMail({ body });
-      if (result.status === 200) return result.body;
-      if (result.status === 502) {
-        throw new Error(result.body?.error?.message ?? m['admin.mail.test_failed']());
+      const response = await apiClientV2.admin.mail.test.$post({ json: body });
+      if (response.status === 200) return (await response.json()) as SendTestMailResponse;
+      if (response.status === 502) {
+        const parsed = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+        throw new Error(parsed?.error?.message ?? m['admin.mail.test_failed']());
       }
-      if (result.status === 401 || result.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         throw new Error(m['errors.unauthorized']());
       }
       throw new Error(m['admin.mail.test_failed']());

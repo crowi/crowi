@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { AwsAccessKeyIdSchema, AwsRegionSchema } from './_aws';
 
 /**

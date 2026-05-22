@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 export const ApiErrorSchema = z.object({
   error: z.object({
@@ -73,6 +73,12 @@ export const ValidationErrorSchema = ApiErrorSchema.extend({
   error: z.object({
     code: z.literal('VALIDATION_ERROR'),
     message: z.string(),
+    details: z
+      .object({
+        fieldErrors: z.record(z.string(), z.array(z.string())),
+        formErrors: z.array(z.string()),
+      })
+      .optional(),
   }),
 });
 

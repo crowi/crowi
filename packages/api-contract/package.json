@@ -1,7 +1,7 @@
 {
   "name": "@crowi/api-contract",
   "version": "1.0.0",
-  "description": "API contract definitions for Crowi using ts-rest and zod",
+  "description": "API contract definitions for Crowi using Hono + zod-openapi",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./openapi": {
+      "types": "./dist/generated/openapi.d.ts",
+      "import": "./dist/generated/openapi.mjs",
+      "require": "./dist/generated/openapi.js"
     }
   },
   "files": [
@@ -23,11 +28,14 @@
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
-    "generate-openapi": "node scripts/generate-openapi.js"
+    "generate-openapi": "tsx scripts/generate-openapi.ts",
+    "generate-openapi-types": "tsx scripts/generate-openapi-types.ts",
+    "generate": "pnpm generate-openapi && pnpm generate-openapi-types",
+    "test": "tsx --test src/contracts/admin/index.test.ts"
   },
   "dependencies": {
-    "@ts-rest/core": "catalog:",
-    "@ts-rest/open-api": "^3.52.1",
+    "@hono/zod-openapi": "^1.4.0",
+    "hono": "^4.10.0",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -35,7 +43,9 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "catalog:",
     "js-yaml": "^4.1.0",
+    "openapi-typescript": "^7.13.0",
     "tsup": "catalog:",
+    "tsx": "^4.19.2",
     "typescript": "catalog:"
   }
 }

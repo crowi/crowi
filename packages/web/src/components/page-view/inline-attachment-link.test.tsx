@@ -6,11 +6,26 @@ import { createElement } from 'react';
 import type { AttachmentMeta } from '@crowi/api-contract';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from './inline-attachment-link';
 
-// Mock `apiClient` so the modal's `useAttachment` fetch hits our fake.
-const { getAttachmentMeta } = vi.hoisted(() => ({ getAttachmentMeta: vi.fn() }));
+// Mock `apiClientV2` so the modal's `useAttachment` fetch hits our
+// fake. The hook calls `apiClientV2.attachments[':id'].meta.$get(...)`
+// and expects a Response-shaped object (`ok` / `status` / `json`).
+const { metaGet } = vi.hoisted(() => ({ metaGet: vi.fn() }));
 vi.mock('@/lib/api-client', () => ({
-  apiClient: { attachment: { getAttachmentMeta } },
+  apiClientV2: {
+    attachments: {
+      ':id': {
+        meta: { $get: metaGet },
+      },
+    },
+  },
 }));
+
+/** Build a `Response`-shaped object matching what `hc` returns. */
+const makeResponse = <T,>(status: number, body: T) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => body,
+});
 
 const HEX = 'a'.repeat(24);
 
@@ -93,7 +108,7 @@ describe('InlineAttachmentLink — link variant', () => {
   });
 
   it('opens the detail modal on a plain left-click instead of navigating', async () => {
-    getAttachmentMeta.mockResolvedValue({ status: 200, body: makeMeta() });
+    metaGet.mockResolvedValue(makeResponse(200, makeMeta()));
     withQuery(
       <InlineAttachmentProvider>
         <InlineAttachmentLink attachmentId={HEX} variant="link" href={`/api/v2/attachments/${HEX}`}>
@@ -140,7 +155,7 @@ describe('InlineAttachmentLink — image variant', () => {
   });
 
   it('opens the modal on a plain left-click', async () => {
-    getAttachmentMeta.mockResolvedValue({ status: 200, body: makeMeta() });
+    metaGet.mockResolvedValue(makeResponse(200, makeMeta()));
     withQuery(
       <InlineAttachmentProvider>
         <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/v2/attachments/${HEX}`} alt="a diagram" />

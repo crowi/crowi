@@ -1,10 +1,22 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
-import type { RenamePageRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
+import { apiClientV2 } from './api-client';
+import type { PageWithRevision, RenamePageRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+
+/**
+ * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.*` (ts-rest)
+ * to `apiClientV2.pages.*.$method` (hc<AppType>). The legacy
+ * `unwrapResult` helper is replaced with explicit `response.ok` /
+ * `response.status` checks because hc returns a plain `Response`-shaped
+ * object rather than ts-rest's `{ status, body }` discriminated union.
+ *
+ * Error messages mirror the legacy `unwrapResult` behaviour: a
+ * resource-specific m['errors.*']() string for actionable cases and
+ * a fallback for everything else. `PageRevisionConflictError` is still
+ * thrown explicitly on 409 so callers can match on it.
+ */
 
 interface DeletePageRequest {
   page_id: string;
@@ -33,18 +45,21 @@ export function useUpdatePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: UpdatePageRequest) => {
-      const result = await apiClient.page.updatePage({ body: data });
-      return unwrapResult(result, {
-        ok: (body) => body.page,
-        errors: {
-          409: { message: m['errors.revision_conflict_edit'](), ErrorClass: PageRevisionConflictError },
-          400: m['errors.update_failed'](),
-          403: { message: m['errors.permission_denied_edit'](), preferLocal: true },
-          404: { message: m['errors.page_not_found'](), preferLocal: true },
-        },
-        fallback: m['errors.update_failed'](),
-      });
+    mutationFn: async (data: UpdatePageRequest): Promise<PageWithRevision> => {
+      const response = await apiClientV2.pages.$put({ json: data });
+      if (response.ok) {
+        const body = await response.json();
+        return body.page as PageWithRevision;
+      }
+      if (response.status === 409) {
+        throw new PageRevisionConflictError(m['errors.revision_conflict_edit']());
+      }
+      if (response.status === 404) {
+        // 404 covers both "page not found" and grant-denied (existence-leak
+        // guard in the handler collapses both to 404).
+        throw new Error(m['errors.page_not_found']());
+      }
+      throw new Error(m['errors.update_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
@@ -61,17 +76,16 @@ export function useSetPageGrant() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: SetPageGrantRequest) => {
-      const result = await apiClient.page.setPageGrant({ body: data });
-      return unwrapResult(result, {
-        ok: (body) => body.page,
-        errors: {
-          400: m['edit.grant_update_failed'](),
-          403: { message: m['errors.permission_denied_edit'](), preferLocal: true },
-          404: { message: m['errors.page_not_found'](), preferLocal: true },
-        },
-        fallback: m['edit.grant_update_failed'](),
-      });
+    mutationFn: async (data: SetPageGrantRequest): Promise<PageWithRevision> => {
+      const response = await apiClientV2.pages.grant.$put({ json: data });
+      if (response.ok) {
+        const body = await response.json();
+        return body.page as PageWithRevision;
+      }
+      if (response.status === 404) {
+        throw new Error(m['errors.page_not_found']());
+      }
+      throw new Error(m['edit.grant_update_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
@@ -90,26 +104,31 @@ export function useDeletePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: DeletePageRequest) => {
-      const result = await apiClient.page.deletePage({ body: data });
-      return unwrapResult(result, {
-        ok: (body) => body.page,
-        errors: {
-          409: { message: m['errors.revision_conflict_edit'](), ErrorClass: PageRevisionConflictError },
-          400: m['errors.delete_failed'](),
-          403: { message: m['errors.permission_denied_delete'](), preferLocal: true },
-          404: { message: m['errors.page_not_found'](), preferLocal: true },
-        },
-        fallback: m['errors.delete_failed'](),
-      });
+    mutationFn: async (data: DeletePageRequest): Promise<PageWithRevision> => {
+      const response = await apiClientV2.pages.$delete({ json: data });
+      if (response.ok) {
+        const body = await response.json();
+        return body.page as PageWithRevision;
+      }
+      if (response.status === 409) {
+        throw new PageRevisionConflictError(m['errors.revision_conflict_edit']());
+      }
+      if (response.status === 404) {
+        // 404 covers grant-denied as well (existence-leak guard).
+        throw new Error(m['errors.page_not_found']());
+      }
+      throw new Error(m['errors.delete_failed']());
     },
     onSuccess: () => {
       // Invalidate page queries so the trashed view (or 404) is reflected.
       queryClient.invalidateQueries({ queryKey: ['page'] });
       // The /trash listing must drop the just-(soft|hard)-deleted row.
       queryClient.invalidateQueries({ queryKey: ['pages'] });
-      // /user/:username/pages may surface deleted pages — refresh those too.
-      queryClient.invalidateQueries({ queryKey: ['user'] });
+      // /user/:username/pages may surface deleted pages — refresh only the
+      // user/<username>/pages keys, not every cache under `['user']`.
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'user' && query.queryKey[2] === 'pages',
+      });
     },
   });
 }
@@ -123,23 +142,25 @@ export function useRevertDeletedPage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RevertDeletedPageRequest) => {
-      const result = await apiClient.page.revertDeletedPage({ body: data });
-      return unwrapResult(result, {
-        ok: (body) => body.page,
-        errors: {
-          400: m['errors.revert_failed'](),
-          403: { message: m['errors.permission_denied_revert'](), preferLocal: true },
-          404: { message: m['errors.page_not_found'](), preferLocal: true },
-        },
-        fallback: m['errors.revert_failed'](),
-      });
+    mutationFn: async (data: RevertDeletedPageRequest): Promise<PageWithRevision> => {
+      const response = await apiClientV2.pages.revert.$post({ json: data });
+      if (response.ok) {
+        const body = await response.json();
+        return body.page as PageWithRevision;
+      }
+      if (response.status === 404) {
+        // 404 covers grant-denied as well (existence-leak guard).
+        throw new Error(m['errors.page_not_found']());
+      }
+      throw new Error(m['errors.revert_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
       // The /trash listing must drop the just-restored row.
       queryClient.invalidateQueries({ queryKey: ['pages'] });
-      queryClient.invalidateQueries({ queryKey: ['user'] });
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'user' && query.queryKey[2] === 'pages',
+      });
     },
   });
 }
@@ -152,18 +173,20 @@ export function useRenamePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RenamePageRequest) => {
-      const result = await apiClient.page.renamePage({ body: data });
-      return unwrapResult(result, {
-        ok: (body) => body.page,
-        errors: {
-          409: { message: m['errors.revision_conflict_update'](), ErrorClass: PageRevisionConflictError },
-          400: m['errors.rename_failed'](),
-          403: { message: m['errors.permission_denied_rename'](), preferLocal: true },
-          404: { message: m['errors.page_not_found'](), preferLocal: true },
-        },
-        fallback: m['errors.rename_failed'](),
-      });
+    mutationFn: async (data: RenamePageRequest): Promise<PageWithRevision> => {
+      const response = await apiClientV2.pages.rename.$post({ json: data });
+      if (response.ok) {
+        const body = await response.json();
+        return body.page as PageWithRevision;
+      }
+      if (response.status === 409) {
+        throw new PageRevisionConflictError(m['errors.revision_conflict_update']());
+      }
+      if (response.status === 404) {
+        // 404 covers grant-denied as well (existence-leak guard).
+        throw new Error(m['errors.page_not_found']());
+      }
+      throw new Error(m['errors.rename_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });

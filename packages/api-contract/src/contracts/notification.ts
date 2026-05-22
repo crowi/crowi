@@ -1,85 +1,152 @@
-import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+/**
+ * RFC-0006 Phase 4 Batch 3 — `notification` resource ported to
+ * `@hono/zod-openapi` route definitions. Four endpoints:
+ *
+ *   GET  /notifications            — paginated list for the current user
+ *   POST /notifications/read       — mark all UNREAD as UNOPENED
+ *   POST /notifications/{id}/open  — open one notification (set OPENED)
+ *   GET  /notifications/status     — unread count for the current user
+ *
+ * All endpoints require JWT authentication. The Hono handler applies
+ * `createJwtAuth(crowi)` broadly to `/notifications/*` so `c.get('user')`
+ * is populated. `markAllAsRead` and `openNotification` accept an empty
+ * body — we declare the schema as `z.unknown()` so Express body-parser's
+ * `{}`-on-empty-POST hydration validates cleanly (legacy parity).
+ *
+ * `/notifications/status` is registered BEFORE `/notifications/{id}/open`
+ * in the runtime handler chain so the literal `status` path wins over
+ * the `{id}` template — same idiom as the revision routes.
+ */
+import { createRoute, z } from '@hono/zod-openapi';
+
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 import {
   ListNotificationsRequestSchema,
   ListNotificationsResponseSchema,
   MarkAllAsReadResponseSchema,
+  NotificationNotFoundErrorSchema,
+  NotificationStatusResponseSchema,
   OpenNotificationParamSchema,
   OpenNotificationResponseSchema,
-  NotificationStatusResponseSchema,
-  NotificationNotFoundErrorSchema,
 } from '../schemas/notification';
-import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 
-const c = initContract();
+// 400 envelope for malformed notification id (parity with the ts-rest
+// handler which returned `INVALID_REQUEST`). Declared inline because no
+// other notification endpoint reuses this shape.
+const NotificationInvalidRequestErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('INVALID_REQUEST'),
+    message: z.string(),
+  }),
+});
 
-export const notificationContract = c.router({
-  /**
-   * List notifications for the current user (paginated).
-   * Equivalent to legacy GET /_api/notification.list.
-   */
-  listNotifications: {
-    method: 'GET',
-    path: '/notifications',
+export const listNotificationsRoute = createRoute({
+  method: 'get',
+  path: '/notifications',
+  tags: ['notification'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List notifications for the current user (paginated)',
+  request: {
     query: ListNotificationsRequestSchema,
-    responses: {
-      200: ListNotificationsResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: 'List notifications for the current user (paginated)',
   },
-
-  /**
-   * Mark all UNREAD notifications of the current user as UNOPENED ("read").
-   * Equivalent to legacy POST /_api/notification.read.
-   */
-  markAllAsRead: {
-    method: 'POST',
-    path: '/notifications/read',
-    // Body is intentionally empty. We use z.unknown() rather than z.undefined()
-    // because Express body-parser hydrates req.body to `{}` for empty POSTs,
-    // which would fail z.undefined() validation upstream of the handler.
-    body: z.unknown(),
-    responses: {
-      200: MarkAllAsReadResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      500: InternalServerErrorSchema,
+  responses: {
+    200: {
+      description: 'Paginated notification list (newest first)',
+      content: { 'application/json': { schema: ListNotificationsResponseSchema } },
     },
-    summary: 'Mark all unread notifications of the current user as read',
-  },
-
-  /**
-   * Open a notification: transitions its status to OPENED.
-   * Equivalent to legacy POST /_api/notification.open.
-   */
-  openNotification: {
-    method: 'POST',
-    path: '/notifications/:id/open',
-    pathParams: OpenNotificationParamSchema,
-    // See markAllAsRead for the rationale behind z.unknown().
-    body: z.unknown(),
-    responses: {
-      200: OpenNotificationResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      404: NotificationNotFoundErrorSchema,
-      500: InternalServerErrorSchema,
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
-    summary: 'Open a notification (set its status to OPENED)',
-  },
-
-  /**
-   * Get the unread notification count for the current user.
-   * Equivalent to legacy GET /_api/notification.status.
-   */
-  getUnreadCount: {
-    method: 'GET',
-    path: '/notifications/status',
-    responses: {
-      200: NotificationStatusResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      500: InternalServerErrorSchema,
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
-    summary: 'Get the unread notification count for the current user',
   },
 });
+
+export const markAllAsReadRoute = createRoute({
+  method: 'post',
+  path: '/notifications/read',
+  tags: ['notification'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Mark all unread notifications of the current user as read',
+  responses: {
+    200: {
+      description: 'All UNREAD notifications transitioned to UNOPENED',
+      content: { 'application/json': { schema: MarkAllAsReadResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const getUnreadCountRoute = createRoute({
+  method: 'get',
+  path: '/notifications/status',
+  tags: ['notification'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Get the unread notification count for the current user',
+  responses: {
+    200: {
+      description: 'Unread notification count',
+      content: { 'application/json': { schema: NotificationStatusResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const openNotificationRoute = createRoute({
+  method: 'post',
+  path: '/notifications/{id}/open',
+  tags: ['notification'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Open a notification (set its status to OPENED)',
+  request: {
+    params: OpenNotificationParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'The opened notification (status=OPENED)',
+      content: { 'application/json': { schema: OpenNotificationResponseSchema } },
+    },
+    400: {
+      description: 'Invalid notification id (malformed ObjectId)',
+      content: { 'application/json': { schema: NotificationInvalidRequestErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Notification not found or owned by another user',
+      content: { 'application/json': { schema: NotificationNotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const notificationRoutes = {
+  listNotificationsRoute,
+  markAllAsReadRoute,
+  // `/notifications/status` MUST be registered before `/notifications/{id}/open`
+  // so the literal-path route matches first; see the file header.
+  getUnreadCountRoute,
+  openNotificationRoute,
+};

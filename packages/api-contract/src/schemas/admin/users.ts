@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { UserPublicSchema } from '../userPublic';
 import { AdminPagerSchema } from './_pager';
 

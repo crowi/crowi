@@ -1,31 +1,45 @@
-import { initContract } from '@ts-rest/core';
+/**
+ * RFC-0006 Phase 4 Batch 3 — `backlink` resource ported to
+ * `@hono/zod-openapi` route definitions. Single endpoint:
+ *
+ *   GET /backlinks — list backlinks targeting a page
+ *
+ * Requires JWT authentication. The Hono handler applies
+ * `createJwtAuth(crowi)` broadly to `/backlinks/*` so `c.get('user')`
+ * is always populated. Query parameters keep their ts-rest-era shape
+ * (`page_id` is the 24-hex target page id; `limit` / `offset` are
+ * coerced from URL strings and bounds-checked).
+ */
+import { createRoute } from '@hono/zod-openapi';
+
 import { GetBacklinksRequestSchema, GetBacklinksResponseSchema } from '../schemas/backlink';
 import { AuthenticationRequiredErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
 
-const c = initContract();
-
-export const backlinkContract = c.router({
-  /**
-   * GET /api/v2/backlinks
-   * List backlinks targeting the given page.
-   *
-   * - Requires authentication (jwtAuth).
-   * - `limit` defaults to 20 (max 100); `offset` defaults to 0.
-   * - Returns `{ backlinks, hasNext }`. `hasNext` reflects whether at least
-   *   one more record exists past `offset + limit`; the server fetches
-   *   limit+1 internally and trims to `limit` before responding.
-   * - Equivalent to legacy GET /_api/backlink.list, with the addition of
-   *   `hasNext` for pagination.
-   */
-  getBacklinks: {
-    method: 'GET',
-    path: '/backlinks',
+export const getBacklinksRoute = createRoute({
+  method: 'get',
+  path: '/backlinks',
+  tags: ['backlink'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List backlinks targeting a page',
+  request: {
     query: GetBacklinksRequestSchema,
-    responses: {
-      200: GetBacklinksResponseSchema,
-      400: InvalidPageIdErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
+  },
+  responses: {
+    200: {
+      description: 'Backlinks targeting the page (trimmed to `limit`; `hasNext` flags whether more exist)',
+      content: { 'application/json': { schema: GetBacklinksResponseSchema } },
     },
-    summary: 'List backlinks targeting a page',
+    400: {
+      description: 'Invalid page_id',
+      content: { 'application/json': { schema: InvalidPageIdErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
   },
 });
+
+export const backlinkRoutes = {
+  getBacklinksRoute,
+};

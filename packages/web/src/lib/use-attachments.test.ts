@@ -4,13 +4,28 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type PropsWithChildren } from 'react';
 import type { AttachmentMeta } from '@crowi/api-contract';
 
-// Mock `apiClient` so `getAttachmentMeta` hits our fake.
-const { getAttachmentMeta } = vi.hoisted(() => ({ getAttachmentMeta: vi.fn() }));
+// Mock `apiClientV2` (hc<AppType>) so `getAttachmentMeta` hits our fake.
+// The hook calls `apiClientV2.attachments[':id'].meta.$get(...)` and
+// expects a Response-shaped object (`ok` / `status` / `json`).
+const { metaGet } = vi.hoisted(() => ({ metaGet: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClient: { attachment: { getAttachmentMeta } },
+  apiClientV2: {
+    attachments: {
+      ':id': {
+        meta: { $get: metaGet },
+      },
+    },
+  },
 }));
 
 import { useAttachment, attachmentsKeys } from './use-attachments';
+
+/** Build a `Response`-shaped object matching what `hc` returns. */
+const makeResponse = <T>(status: number, body: T) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => body,
+});
 
 function makeMeta(overrides: Partial<AttachmentMeta> = {}): AttachmentMeta {
   return {
@@ -33,7 +48,7 @@ function makeClient() {
 }
 
 beforeEach(() => {
-  getAttachmentMeta.mockReset();
+  metaGet.mockReset();
 });
 
 afterEach(() => {
@@ -42,7 +57,7 @@ afterEach(() => {
 
 describe('useAttachment', () => {
   it('fetches and returns attachment metadata for an id', async () => {
-    getAttachmentMeta.mockResolvedValue({ status: 200, body: makeMeta() });
+    metaGet.mockResolvedValue(makeResponse(200, makeMeta()));
     const client = makeClient();
     const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
 
@@ -50,7 +65,7 @@ describe('useAttachment', () => {
 
     await waitFor(() => expect(result.current.data).toBeDefined());
     expect(result.current.data?._id).toBe('att-1');
-    expect(getAttachmentMeta).toHaveBeenCalledWith({ params: { id: 'att-1' } });
+    expect(metaGet).toHaveBeenCalledWith({ param: { id: 'att-1' } });
   });
 
   it('is disabled (no fetch) when id is undefined', () => {
@@ -60,11 +75,11 @@ describe('useAttachment', () => {
     const { result } = renderHook(() => useAttachment(undefined), { wrapper });
 
     expect(result.current.fetchStatus).toBe('idle');
-    expect(getAttachmentMeta).not.toHaveBeenCalled();
+    expect(metaGet).not.toHaveBeenCalled();
   });
 
   it('caches by attachmentsKeys.detail(id) so repeated refs fetch once', async () => {
-    getAttachmentMeta.mockResolvedValue({ status: 200, body: makeMeta() });
+    metaGet.mockResolvedValue(makeResponse(200, makeMeta()));
     const client = makeClient();
     const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
 
@@ -75,12 +90,12 @@ describe('useAttachment', () => {
     const second = renderHook(() => useAttachment('att-1'), { wrapper });
     await waitFor(() => expect(second.result.current.data).toBeDefined());
 
-    expect(getAttachmentMeta).toHaveBeenCalledTimes(1);
+    expect(metaGet).toHaveBeenCalledTimes(1);
     expect(client.getQueryData(attachmentsKeys.detail('att-1'))).toBeDefined();
   });
 
   it('surfaces an error when the endpoint returns a non-200 status', async () => {
-    getAttachmentMeta.mockResolvedValue({ status: 404, body: { error: { code: 'ATTACHMENT_NOT_FOUND', message: 'nope' } } });
+    metaGet.mockResolvedValue(makeResponse(404, { error: { code: 'ATTACHMENT_NOT_FOUND', message: 'nope' } }));
     const client = makeClient();
     const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
 

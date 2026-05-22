@@ -8,6 +8,11 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
  * security) all use this exact shape; collapsing them into one factory
  * removes ~80 lines of near-duplicate hook code.
  *
+ * RFC-0006 Phase 4 Batch 9 — adapted to `hc<AppType>` (`apiClientV2`)
+ * which returns a `Response` rather than the ts-rest `{ status, body }`
+ * envelope. The factory parses the body on demand so the call sites
+ * stay declarative.
+ *
  * Notes / non-goals:
  * - The app and mail settings hooks use a *different* shape (return null on
  *   non-200, parse 400 ZodIssues into per-field errors, invalidate instead
@@ -17,13 +22,6 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
  *   security pass `mapValidationError: undefined` and the helper falls
  *   through to the generic Error.
  */
-
-/**
- * Loose envelope matching the ts-rest result shape we care about.
- * ts-rest returns a wide union over every HTTP status; we only branch on
- * 200/401/403/422 so the rest is flattened into "the unknown failure path".
- */
-type ApiResult<T> = { status: number; body: unknown } & ({ status: 200; body: T } | { status: number; body: unknown });
 
 interface ErrorBody {
   error: { message: string };
@@ -37,10 +35,10 @@ interface AdminSettingsHooksConfig<Settings, UpdateRequest> {
    *  GET and the post-PUT `setQueryData` so the form sees fresh data
    *  without a follow-up fetch. */
   queryKey: QueryKey;
-  /** API client GET method. Returns the standard ts-rest result envelope. */
-  fetch: () => Promise<ApiResult<Settings>>;
-  /** API client PUT method. */
-  update: (body: UpdateRequest) => Promise<ApiResult<Settings>>;
+  /** hc<AppType> GET method — returns a Response. */
+  fetch: () => Promise<Response>;
+  /** hc<AppType> PUT method — returns a Response. */
+  update: (body: UpdateRequest) => Promise<Response>;
   /** User-facing fallback message when fetch fails for an unknown reason. */
   fetchErrorMessage: string;
   /** User-facing fallback message when update fails for an unknown reason. */
@@ -64,6 +62,14 @@ export interface AdminSettingsHooks<Settings, UpdateRequest> {
   useUpdate: () => ReturnType<typeof useMutation<Settings, Error, UpdateRequest>>;
 }
 
+const readJson = async (response: Response): Promise<unknown> => {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
+
 export function createAdminSettingsHooks<Settings, UpdateRequest>(
   config: AdminSettingsHooksConfig<Settings, UpdateRequest>,
 ): AdminSettingsHooks<Settings, UpdateRequest> {
@@ -73,12 +79,13 @@ export function createAdminSettingsHooks<Settings, UpdateRequest>(
     return useQuery<Settings, Error>({
       queryKey,
       queryFn: async () => {
-        const result = await fetch();
-        if (result.status === 200) {
-          return result.body as Settings;
+        const response = await fetch();
+        if (response.status === 200) {
+          return (await response.json()) as Settings;
         }
-        if ((result.status === 401 || result.status === 403) && isErrorBody(result.body)) {
-          throw new Error(result.body.error.message);
+        const body = await readJson(response);
+        if ((response.status === 401 || response.status === 403) && isErrorBody(body)) {
+          throw new Error(body.error.message);
         }
         throw new Error(fetchErrorMessage);
       },
@@ -94,16 +101,17 @@ export function createAdminSettingsHooks<Settings, UpdateRequest>(
 
     return useMutation<Settings, Error, UpdateRequest>({
       mutationFn: async (data: UpdateRequest) => {
-        const result = await update(data);
-        if (result.status === 200) {
-          return result.body as Settings;
+        const response = await update(data);
+        if (response.status === 200) {
+          return (await response.json()) as Settings;
         }
-        if (result.status === 422 && mapValidationError && isErrorBody(result.body)) {
-          const mapped = mapValidationError(result.body);
+        const body = await readJson(response);
+        if (response.status === 422 && mapValidationError && isErrorBody(body)) {
+          const mapped = mapValidationError(body);
           if (mapped) throw mapped;
         }
-        if ((result.status === 401 || result.status === 403) && isErrorBody(result.body)) {
-          throw new Error(result.body.error.message);
+        if ((response.status === 401 || response.status === 403) && isErrorBody(body)) {
+          throw new Error(body.error.message);
         }
         throw new Error(updateErrorMessage);
       },

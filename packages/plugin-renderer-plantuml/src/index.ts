@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { CodeBlockInfo, CodeBlockRenderer, CrowiPlugin, RenderError, RenderResult } from '@crowi/plugin-api';
 import { encode as encodePlantUml } from './encoder';
 import { sanitizeSvg } from './sanitize';

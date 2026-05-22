@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiClient } from '@/lib/api-client';
+import { apiClientV2 } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
 import { safeContinueUrl } from '@/lib/login-redirect';
 
@@ -38,22 +38,29 @@ export function LoginForm() {
     setErrors([]);
 
     try {
-      const result = await apiClient.tokenAuth.tokenLogin({
-        body: {
+      // RFC-0006 Phase 4 Batch 1 — switched from
+      // `apiClient.tokenAuth.tokenLogin` to `apiClientV2.auth.login.$post`.
+      // Wire format unchanged: 200 + `{ accessToken, refreshToken, … }` on
+      // success; 401/403/500/503 with `{ error: { code, message } }` on
+      // failure.
+      const response = await apiClientV2.auth.login.$post({
+        json: {
           email: formData.email,
           password: formData.password,
         },
       });
 
-      if (result.status === 200) {
+      if (response.status === 200) {
+        const body = await response.json();
         // Store tokens (also mirrors access token into a cookie so
         // browser-built `<img>` requests can authenticate).
-        storeTokens(result.body);
+        storeTokens(body);
 
         // Redirect to continue URL
         router.push(continueUrl);
-      } else if (result.status === 400 || result.status === 401 || result.status === 503) {
-        setErrors([result.body.error.message || 'ログインに失敗しました']);
+      } else if (response.status === 401 || response.status === 403 || response.status === 503) {
+        const body = await response.json();
+        setErrors([body.error?.message || 'ログインに失敗しました']);
       } else {
         setErrors(['予期しないエラーが発生しました']);
       }

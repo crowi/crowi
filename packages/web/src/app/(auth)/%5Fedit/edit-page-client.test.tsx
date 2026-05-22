@@ -27,15 +27,15 @@ vi.mock('next/navigation', () => ({
 }));
 
 // --- drafts hooks ----------------------------------------------------
-const { createDraftMutate, draftsData } = vi.hoisted(() => ({
-  createDraftMutate: vi.fn(),
+const { createDraftMutateAsync, draftsData } = vi.hoisted(() => ({
+  createDraftMutateAsync: vi.fn(),
   draftsData: { value: { drafts: [] as { pageId: string; path: string }[] } },
 }));
 vi.mock('@/lib/use-drafts', async () => {
   const actual = await vi.importActual<typeof import('@/lib/use-drafts')>('@/lib/use-drafts');
   return {
     ...actual,
-    useCreateDraft: () => ({ mutate: createDraftMutate, isPending: false }),
+    useCreateDraft: () => ({ mutateAsync: createDraftMutateAsync, isPending: false }),
     useDrafts: () => ({ data: draftsData.value }),
   };
 });
@@ -71,7 +71,7 @@ beforeEach(() => {
   replace.mockReset();
   back.mockReset();
   searchParamsGet.mockReset();
-  createDraftMutate.mockReset();
+  createDraftMutateAsync.mockReset();
   draftsData.value = { drafts: [] };
   authUser.value = { id: 'me' };
   // Default: `?path=/new/page`, no `page_id`.
@@ -82,16 +82,12 @@ afterEach(() => {
   cleanup();
 });
 
-/** Drives `createDraft.mutate(input, { onSuccess, onError })`. */
+/** Drives `createDraft.mutateAsync(input)` → resolved / rejected. */
 function mutateResolvesWith(pageId: string) {
-  createDraftMutate.mockImplementation((_input, opts) => {
-    opts.onSuccess({ pageId });
-  });
+  createDraftMutateAsync.mockResolvedValue({ pageId });
 }
 function mutateRejectsWith(err: unknown) {
-  createDraftMutate.mockImplementation((_input, opts) => {
-    opts.onError(err);
-  });
+  createDraftMutateAsync.mockRejectedValue(err);
 }
 
 describe('CreatePageEditor (_edit?path=)', () => {
@@ -100,7 +96,7 @@ describe('CreatePageEditor (_edit?path=)', () => {
     render(<EditPageClient />);
 
     await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(createDraftMutate).toHaveBeenCalledWith({ path: '/new/page' }, expect.anything());
+    expect(createDraftMutateAsync).toHaveBeenCalledWith({ path: '/new/page' });
     expect(replace).toHaveBeenCalledWith('/_edit?page_id=draft-1');
   });
 
@@ -160,7 +156,7 @@ describe('CreatePageEditor (_edit?path=)', () => {
     expect(screen.getByRole('alert').textContent).toContain('A published page already exists at this path');
   });
 
-  it('does not POST a second draft under StrictMode double-invoked effects', async () => {
+  it('POSTs one draft and still navigates under StrictMode double-invoked effects', async () => {
     mutateResolvesWith('draft-1');
     render(
       <StrictMode>
@@ -168,9 +164,12 @@ describe('CreatePageEditor (_edit?path=)', () => {
       </StrictMode>,
     );
 
-    await waitFor(() => expect(replace).toHaveBeenCalled());
-    // StrictMode mounts → unmounts → remounts the effect; the
-    // `startedRef` guard keeps the POST to exactly one.
-    expect(createDraftMutate).toHaveBeenCalledTimes(1);
+    // StrictMode mounts → unmounts → remounts the effect. The
+    // `draftPromiseRef` guard keeps the POST to exactly one, and the
+    // remounted instance re-attaches to the same promise so the result
+    // still drives navigation (regression: the result used to be
+    // orphaned on the destroyed first-mount observer).
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/_edit?page_id=draft-1'));
+    expect(createDraftMutateAsync).toHaveBeenCalledTimes(1);
   });
 });

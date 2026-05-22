@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 /**
  * Mirror of the User model's status constants (`packages/api/src/models/user.ts`):

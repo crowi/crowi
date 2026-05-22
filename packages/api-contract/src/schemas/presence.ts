@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 /**
  * RFC-0005 shared schemas for the page-presence feature ("who is

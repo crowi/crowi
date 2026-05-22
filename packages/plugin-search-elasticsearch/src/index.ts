@@ -9,7 +9,7 @@
  * migrated into that namespace by `onInstall`).
  */
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { CrowiPlugin, PluginContext } from '@crowi/plugin-api';
 import {
   applyConfig,

@@ -1,5 +1,39 @@
-import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+/**
+ * RFC-0006 Phase 4 Batch 6 — `attachment` resource ported to
+ * `@hono/zod-openapi` route definitions. Six endpoints:
+ *
+ *   GET    /pages/{pageId}/attachments        — list (page-scoped)
+ *   POST   /pages/{pageId}/attachments        — add (multipart)
+ *   GET    /pages/{pageId}/attachments/usage  — usage breakdown
+ *   GET    /attachments/{id}/meta             — single attachment meta
+ *   POST   /attachments/upload                — editor paste / D&D upload (multipart)
+ *   DELETE /attachments/{id}                  — remove
+ *
+ * Note: the raw streaming routes (`GET /attachments/{id}` /
+ * `GET /attachments/by-key/{key}`) remain Express-mounted in the
+ * bridge for now — they pipe Readable bytes and Hono's typed
+ * response API does not express streaming-without-buffer cleanly.
+ * Phase 6 cleanup converts them to native Hono `Response`-stream
+ * handlers.
+ *
+ * Auth split:
+ *   - `/pages/*` (list / add / usage) reuses the `revision` handler's
+ *     broad `createJwtAuth(crowi)` apply — same shared-middleware
+ *     pattern as page / page-preview / pageCollab / presence / draft.
+ *   - `/attachments/*` (meta / upload / remove) is OUTSIDE that prefix
+ *     so the attachment handler installs `createJwtAuth(crowi)` on
+ *     `/attachments/*` itself.
+ *
+ * Multipart: `addAttachment` + `uploadAttachment` are implemented
+ * Hono-native via `c.req.parseBody()`. multer is gone from this
+ * resource (legacy `/_api/me/picture/upload` still uses it, so the
+ * package dependency is removed in Phase 6 cleanup, not here).
+ * `uploadAttachment` runs a `Content-Length` precheck BEFORE
+ * `parseBody()` so a 50 MB+ body is 413'd without being buffered.
+ */
+import { createRoute, z } from '@hono/zod-openapi';
+
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 import {
   AddAttachmentResponseSchema,
   AttachmentErrorSchema,
@@ -10,180 +44,273 @@ import {
   UploadAttachmentErrorSchema,
   UploadAttachmentResponseSchema,
 } from '../schemas/attachment';
-import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 
-const c = initContract();
+const PageIdPathParamsSchema = z.object({
+  pageId: z.string().openapi({ description: 'Page id (24-char hex ObjectId)', example: '507f1f77bcf86cd799439011' }),
+});
+
+const AttachmentIdPathParamsSchema = z.object({
+  id: z.string().openapi({ description: 'Attachment id (24-char hex ObjectId)', example: '507f1f77bcf86cd799439011' }),
+});
 
 /**
- * ts-rest contract for attachment list / add / delete.
- *
- * Note: GET-by-id (`/api/v2/attachments/:id`) and GET-by-key
- * (`/api/v2/attachments/by-key/:key`) deliver raw bytes via Readable
- * pipe. They are NOT part of this contract — wrapping a streaming
- * response in ts-rest forces a full Buffer roundtrip which would defeat
- * the streaming. Those routes are registered as plain Express handlers
- * inside the same router file (see `routes/ts-rest/attachment.ts`).
+ * Multipart body schema for the `addAttachment` / `uploadAttachment`
+ * endpoints. The file field is declared as `z.any()` because the actual
+ * payload is a Web `File` (Hono `c.req.parseBody()` surfaces it) — we
+ * only need to describe the field name + format for the OpenAPI spec
+ * and let the handler narrow at runtime.
  */
-export const attachmentContract = c.router({
-  /**
-   * List attachments for a page. Requires that the caller can view the
-   * page (`loadGrantedPage` succeeds); otherwise 404 to avoid leaking
-   * the page's existence.
-   */
-  listAttachments: {
-    method: 'GET',
-    path: '/pages/:pageId/attachments',
-    pathParams: z.object({
-      pageId: z.string(),
-    }),
-    responses: {
-      200: ListAttachmentsResponseSchema,
-      400: AttachmentErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      404: AttachmentErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: 'List attachments for a page',
-  },
+const AddAttachmentBodySchema = z.object({
+  file: z.any().openapi({ type: 'string', format: 'binary' }).optional(),
+});
 
-  /**
-   * Add an attachment to an existing page. The legacy `/_api/attachments.add`
-   * supported `page_id=0` + path to implicitly create the page; the new
-   * endpoint requires the page to exist (responsibility-separation — the
-   * client must call createPage first).
-   */
-  addAttachment: {
-    method: 'POST',
-    path: '/pages/:pageId/attachments',
-    pathParams: z.object({
-      pageId: z.string(),
-    }),
-    contentType: 'multipart/form-data',
-    body: z.object({
-      file: z.any().describe('Attachment binary'),
-    }),
-    responses: {
-      200: AddAttachmentResponseSchema,
-      400: AttachmentErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      404: AttachmentErrorSchema,
-      500: AttachmentErrorSchema,
-    },
-    summary: 'Add an attachment to a page',
-  },
+// `intent` is declared as `z.string().optional()` rather than
+// `z.enum(['paste','dnd'])` because the handler returns the legacy
+// `{ error: 'disallowed_type', ... }` envelope for a bad intent value,
+// and a strict enum here would short-circuit that path via the
+// `defaultHook` ValidationError envelope before the handler runs.
+const UploadAttachmentBodySchema = z.object({
+  file: z.any().openapi({ type: 'string', format: 'binary' }).optional(),
+  pageId: z.string().optional(),
+  intent: z
+    .string()
+    .optional()
+    .openapi({ enum: ['paste', 'dnd'] }),
+});
 
-  /**
-   * Phase 8 — full attachment usage breakdown for a page. Scans every
-   * revision body of the page to split attachments into `latest`
-   * (referenced by the current revision) and `past` (referenced only by
-   * older revisions, plus orphans). Backs the `/_attachments?pageId=`
-   * page. Same view-grant requirement as `listAttachments`.
-   */
-  getAttachmentUsage: {
-    method: 'GET',
-    path: '/pages/:pageId/attachments/usage',
-    pathParams: z.object({
-      pageId: z.string(),
-    }),
-    responses: {
-      200: AttachmentUsageResponseSchema,
-      400: AttachmentErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      404: AttachmentErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: 'Get the full attachment usage breakdown for a page',
+export const listAttachmentsRoute = createRoute({
+  method: 'get',
+  path: '/pages/{pageId}/attachments',
+  tags: ['attachment'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List attachments for a page',
+  request: {
+    params: PageIdPathParamsSchema,
   },
-
-  /**
-   * Metadata for a single attachment, keyed by its Mongo ObjectId. Backs the
-   * in-body attachment modal: a `/api/v2/attachments/<id>` link / embed in a
-   * page body carries only the id, so the modal fetches the file's metadata
-   * (name, size, type, uploader, url) here instead of full-page-navigating
-   * to the raw stream route.
-   *
-   * Authorization mirrors the streaming route `GET /api/v2/attachments/:id`:
-   * the caller must be able to view the page that owns the attachment
-   * (`loadGrantedPage` succeeds); 404 on any failure to avoid leaking the
-   * existence of a hidden page / attachment.
-   */
-  getAttachmentMeta: {
-    method: 'GET',
-    path: '/attachments/:id/meta',
-    pathParams: z.object({
-      id: z.string(),
-    }),
-    responses: {
-      200: AttachmentMetaSchema,
-      400: AttachmentErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      404: AttachmentErrorSchema,
-      500: InternalServerErrorSchema,
+  responses: {
+    200: {
+      description: 'Attachment list (with `inUse` derived from the latest revision body)',
+      content: { 'application/json': { schema: ListAttachmentsResponseSchema } },
     },
-    summary: 'Get metadata for a single attachment by id',
-  },
-
-  /**
-   * RFC-0004 Phase 6 — direct upload for the editor's paste / drag-and-drop
-   * handlers. The client POSTs the file (multipart) with the owning
-   * `pageId` (for the write-permission check) and an `intent` tag, then
-   * splices the returned canonical `url` straight into the Markdown
-   * source. Distinct from `addAttachment` in that it is rate-limited
-   * (20 uploads/min/user → 429 + `Retry-After`), enforces the editor's
-   * size / MIME caps, and returns the lean `{ url, filename, mimeType,
-   * sizeBytes }` shape the editor needs rather than the full attachment
-   * document. Browser-side upload progress is observed by the client via
-   * `XMLHttpRequest.upload.onprogress`; the server just receives the
-   * multipart body normally.
-   */
-  uploadAttachment: {
-    method: 'POST',
-    path: '/attachments/upload',
-    contentType: 'multipart/form-data',
-    // ts-rest validates `body` against the *raw* request before multer
-    // has parsed the multipart payload, so the multipart fields (`file`,
-    // `pageId`, `intent`) are not yet on `req.body`. Mirroring
-    // `addAttachment`, the body schema stays permissive and the handler
-    // validates the text fields itself after multer runs.
-    body: z.object({
-      file: z.any().describe('Attachment binary'),
-    }),
-    responses: {
-      200: UploadAttachmentResponseSchema,
-      400: UploadAttachmentErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: UploadAttachmentErrorSchema,
-      413: UploadAttachmentErrorSchema,
-      415: UploadAttachmentErrorSchema,
-      429: UploadAttachmentErrorSchema,
-      500: InternalServerErrorSchema,
+    400: {
+      description: 'Invalid page id',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
     },
-    summary: 'Upload an attachment from the editor (paste / drag-and-drop)',
-  },
-
-  /**
-   * Delete an attachment. Authorization is stricter than the legacy
-   * `/_api/attachments.remove`: only the attachment creator, an admin,
-   * or a user explicitly listed in `page.grantedUsers` can delete.
-   */
-  removeAttachment: {
-    method: 'DELETE',
-    path: '/attachments/:id',
-    pathParams: z.object({
-      id: z.string(),
-    }),
-    // ts-rest 3 runs body validation even on DELETE; Express's json middleware
-    // supplies `{}` for an empty body, so `z.undefined()` would reject every
-    // request. Relax to "any optional" — this endpoint never inspects body.
-    body: z.unknown().optional(),
-    responses: {
-      200: RemoveAttachmentResponseSchema,
-      400: AttachmentErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AttachmentErrorSchema,
-      404: AttachmentErrorSchema,
-      500: AttachmentErrorSchema,
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
-    summary: 'Remove an attachment',
+    404: {
+      description: 'Page not found or not granted',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
   },
 });
+
+export const addAttachmentRoute = createRoute({
+  method: 'post',
+  path: '/pages/{pageId}/attachments',
+  tags: ['attachment'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Add an attachment to a page (multipart/form-data)',
+  request: {
+    params: PageIdPathParamsSchema,
+    body: {
+      content: { 'multipart/form-data': { schema: AddAttachmentBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Attachment created',
+      content: { 'application/json': { schema: AddAttachmentResponseSchema } },
+    },
+    400: {
+      description: 'Missing file / invalid page id',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Page not found or not granted',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    413: {
+      description: 'Request body exceeds the multipart envelope ceiling',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    500: {
+      description: 'Upload / storage failure',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+  },
+});
+
+export const getAttachmentUsageRoute = createRoute({
+  method: 'get',
+  path: '/pages/{pageId}/attachments/usage',
+  tags: ['attachment'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Get the full attachment usage breakdown for a page (latest vs past)',
+  request: {
+    params: PageIdPathParamsSchema,
+  },
+  responses: {
+    200: {
+      description: 'Usage breakdown (latest / past split, with referencing revisions)',
+      content: { 'application/json': { schema: AttachmentUsageResponseSchema } },
+    },
+    400: {
+      description: 'Invalid page id',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Page not found or not granted',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const getAttachmentMetaRoute = createRoute({
+  method: 'get',
+  path: '/attachments/{id}/meta',
+  tags: ['attachment'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Get metadata for a single attachment by id',
+  request: {
+    params: AttachmentIdPathParamsSchema,
+  },
+  responses: {
+    200: {
+      description: 'Attachment metadata (no `inUse` — that flag is page-scoped)',
+      content: { 'application/json': { schema: AttachmentMetaSchema } },
+    },
+    400: {
+      description: 'Invalid attachment id',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Attachment not found / not granted',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const uploadAttachmentRoute = createRoute({
+  method: 'post',
+  path: '/attachments/upload',
+  tags: ['attachment'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Upload an attachment from the editor (paste / drag-and-drop)',
+  request: {
+    body: {
+      content: { 'multipart/form-data': { schema: UploadAttachmentBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Upload accepted; returns the lean { url, filename, mimeType, sizeBytes } shape the editor splices into the source',
+      content: { 'application/json': { schema: UploadAttachmentResponseSchema } },
+    },
+    400: {
+      description: 'Missing / malformed fields',
+      content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'No permission for the target page',
+      content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
+    },
+    413: {
+      description: 'Body exceeds the per-intent size cap',
+      content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
+    },
+    415: {
+      description: 'MIME type not in the per-intent allow-list',
+      content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
+    },
+    429: {
+      description: 'Per-user rate limit exceeded',
+      content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const removeAttachmentRoute = createRoute({
+  method: 'delete',
+  path: '/attachments/{id}',
+  tags: ['attachment'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Remove an attachment',
+  request: {
+    params: AttachmentIdPathParamsSchema,
+  },
+  responses: {
+    200: {
+      description: 'Attachment removed',
+      content: { 'application/json': { schema: RemoveAttachmentResponseSchema } },
+    },
+    400: {
+      description: 'Invalid attachment id',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Forbidden (kept for legacy parity; current policy only requires view-grant)',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    404: {
+      description: 'Attachment not found / page not granted',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
+  },
+});
+
+export const attachmentRoutes = {
+  // `/pages/{pageId}/attachments/usage` MUST register before
+  // `/pages/{pageId}/attachments` so the literal `/usage` suffix wins;
+  // Hono is method+path based but the no-op stub chain mirrored on the
+  // client side benefits from the same ordering convention used by
+  // revision / notification / page.
+  getAttachmentUsageRoute,
+  listAttachmentsRoute,
+  addAttachmentRoute,
+  uploadAttachmentRoute,
+  getAttachmentMetaRoute,
+  removeAttachmentRoute,
+};

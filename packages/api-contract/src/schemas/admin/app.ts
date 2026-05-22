@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 /**
  * GET response: the current `app:*` config slice (plus a few read-only
@@ -32,7 +32,7 @@ export const GetAppSettingsResponseSchema = z.object({
    * legacy admin controller exposed. Useful for the UI to render the current
    * registration mode label without knowing the internal capitalisation.
    */
-  registrationMode: z.record(z.string()),
+  registrationMode: z.record(z.string(), z.string()),
 });
 export type GetAppSettingsResponse = z.infer<typeof GetAppSettingsResponseSchema>;
 

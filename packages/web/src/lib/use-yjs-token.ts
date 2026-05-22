@@ -2,8 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { WsTokenResponse } from '@crowi/api-contract';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 
 /**
  * Fetch the short-lived wsToken JWT that the Hocuspocus client presents
@@ -22,15 +21,20 @@ import { unwrapResult } from './unwrap-result';
  * is the only refresh trigger.
  */
 export function useYjsToken(pageId: string | null | undefined) {
-  return useQuery<WsTokenResponse>({
+  return useQuery({
     queryKey: ['yjsToken', pageId],
-    queryFn: async () => {
+    queryFn: async (): Promise<WsTokenResponse> => {
       if (!pageId) throw new Error('pageId is required for useYjsToken');
-      const result = await apiClient.pageCollab.getYjsToken({ params: { id: pageId } });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        fallback: 'Failed to issue wsToken',
-      });
+      const response = await apiClientV2.pages[':id']['yjs-token'].$get({ param: { id: pageId } });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message =
+          body && typeof body === 'object' && 'error' in body && body.error && typeof body.error === 'object' && 'message' in body.error
+            ? String(body.error.message)
+            : 'Failed to issue wsToken';
+        throw new Error(message);
+      }
+      return response.json();
     },
     enabled: Boolean(pageId),
     // Schedule the next round-trip 30s before `expiresAt`; floor at 30s

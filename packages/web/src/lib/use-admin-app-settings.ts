@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
+import { apiClientV2 } from './api-client';
 import type { GetAppSettingsResponse, UpdateAppSettingsRequest, UpdateAppSettingsResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -9,14 +9,19 @@ export const adminAppSettingsKeys = {
   settings: ['admin-app-settings'] as const,
 };
 
+/**
+ * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.app.*`
+ * (ts-rest) to `apiClientV2.admin.app.$method` (hc<AppType>). Wire
+ * payload unchanged. 401 / 403 collapse to `null` so the admin layout
+ * gates the redirect.
+ */
 export function useAppSettings(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: adminAppSettingsKeys.settings,
     queryFn: async (): Promise<GetAppSettingsResponse | null> => {
-      const result = await apiClient.admin.app.getAppSettings();
-      if (result.status === 200) return result.body;
-      // 401/403: caller (admin layout) handles gating; surface as null.
-      return null;
+      const response = await apiClientV2.admin.app.$get();
+      if (response.status !== 200) return null;
+      return (await response.json()) as GetAppSettingsResponse;
     },
     enabled: options?.enabled !== false,
     // The admin form is the only writer for these values; mutation invalidates
@@ -39,22 +44,27 @@ export class AppSettingsValidationFailure extends Error {
   }
 }
 
+interface AppSettingsValidationBody {
+  bodyResult?: { issues?: { path: (string | number)[]; message: string }[] };
+}
+
 export function useUpdateAppSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: UpdateAppSettingsRequest): Promise<UpdateAppSettingsResponse> => {
-      const result = await apiClient.admin.app.updateAppSettings({ body });
-      if (result.status === 200) return result.body;
-      if (result.status === 400) {
+      const response = await apiClientV2.admin.app.$put({ json: body });
+      if (response.status === 200) return (await response.json()) as UpdateAppSettingsResponse;
+      if (response.status === 400) {
+        const parsed = (await response.json().catch(() => null)) as AppSettingsValidationBody | null;
         const fieldErrors: Record<string, string> = {};
-        const issues = result.body?.bodyResult?.issues ?? [];
+        const issues = parsed?.bodyResult?.issues ?? [];
         for (const issue of issues) {
           const key = issue.path.map(String).join('.');
           if (!(key in fieldErrors)) fieldErrors[key] = issue.message;
         }
         throw new AppSettingsValidationFailure(fieldErrors);
       }
-      if (result.status === 401 || result.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         throw new Error(m['errors.unauthorized']());
       }
       throw new Error(m['admin.app.failed_to_save']());

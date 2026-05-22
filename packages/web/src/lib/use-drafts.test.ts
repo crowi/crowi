@@ -4,27 +4,43 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 
-// Mock `apiClient` at the module level so the hooks read our fake
-// `draft.*` operations. Vitest hoists `vi.mock` above imports;
-// `vi.hoisted` makes the shared stubs reachable from both the factory
-// and the test bodies without a TDZ violation.
-const { listDrafts, createDraft, cancelDraft } = vi.hoisted(() => ({
-  listDrafts: vi.fn(),
-  createDraft: vi.fn(),
-  cancelDraft: vi.fn(),
+// Mock `apiClientV2` (hc<AppType>) at the module level so the hooks
+// read our fake `pages.drafts.*` operations. Vitest hoists `vi.mock`
+// above imports; `vi.hoisted` makes the shared stubs reachable from
+// both the factory and the test bodies without a TDZ violation.
+//
+// hc<AppType> returns a `Response`-shaped object, so each fake resolves
+// to `{ ok, status, json }` rather than ts-rest's `{ status, body }`.
+const { listGet, createPost, cancelDelete } = vi.hoisted(() => ({
+  listGet: vi.fn(),
+  createPost: vi.fn(),
+  cancelDelete: vi.fn(),
 }));
 vi.mock('./api-client', () => ({
-  apiClient: {
-    draft: { listDrafts, createDraft, cancelDraft },
+  apiClientV2: {
+    pages: {
+      drafts: {
+        $get: listGet,
+        $post: createPost,
+        ':id': { $delete: cancelDelete },
+      },
+    },
   },
 }));
 
 import { DraftPathConflictError, draftsKeys, useCancelDraft, useCreateDraft, useDrafts } from './use-drafts';
 
+/** Build a `Response`-shaped object matching what `hc` returns. */
+const makeResponse = <T>(status: number, body: T): { ok: boolean; status: number; json: () => Promise<T> } => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => body,
+});
+
 beforeEach(() => {
-  listDrafts.mockReset();
-  createDraft.mockReset();
-  cancelDraft.mockReset();
+  listGet.mockReset();
+  createPost.mockReset();
+  cancelDelete.mockReset();
 });
 
 function makeContext() {
@@ -43,7 +59,7 @@ const SAMPLE_DRAFTS = [
 
 describe('useDrafts', () => {
   it('returns the draft list when the server responds with 200', async () => {
-    listDrafts.mockResolvedValue({ status: 200, body: { drafts: SAMPLE_DRAFTS } });
+    listGet.mockResolvedValue(makeResponse(200, { drafts: SAMPLE_DRAFTS }));
     const { wrapper } = makeContext();
     const { result } = renderHook(() => useDrafts(), { wrapper });
 
@@ -53,7 +69,7 @@ describe('useDrafts', () => {
   });
 
   it('falls back to an empty list on a non-200 (e.g. 401 during refresh)', async () => {
-    listDrafts.mockResolvedValue({ status: 401, body: { error: { message: 'unauthorized' } } });
+    listGet.mockResolvedValue(makeResponse(401, { error: { message: 'unauthorized' } }));
     const { wrapper } = makeContext();
     const { result } = renderHook(() => useDrafts(), { wrapper });
 
@@ -64,7 +80,7 @@ describe('useDrafts', () => {
 
 describe('useCreateDraft', () => {
   it('resolves with the new pageId on 201 and invalidates the list', async () => {
-    createDraft.mockResolvedValue({ status: 201, body: { pageId: 'new-page' } });
+    createPost.mockResolvedValue(makeResponse(201, { pageId: 'new-page' }));
     const { client, wrapper } = makeContext();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     const { result } = renderHook(() => useCreateDraft(), { wrapper });
@@ -75,19 +91,17 @@ describe('useCreateDraft', () => {
     });
 
     expect(created).toEqual({ pageId: 'new-page' });
-    expect(createDraft).toHaveBeenCalledWith({ body: { path: '/docs/new' } });
+    expect(createPost).toHaveBeenCalledWith({ json: { path: '/docs/new' } });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: draftsKeys.all });
   });
 
   it('throws DraftPathConflictError carrying the owner on 409', async () => {
-    createDraft.mockResolvedValue({
-      status: 409,
-      body: {
-        error: 'path_taken_by_draft',
-        owner: { id: 'u9', username: 'yamada', displayName: '山田太郎' },
-        message: 'This page is being created by @yamada.',
-      },
-    });
+    const conflictBody = {
+      error: 'path_taken_by_draft' as const,
+      owner: { id: 'u9', username: 'yamada', displayName: '山田太郎' },
+      message: 'This page is being created by @yamada.',
+    };
+    createPost.mockResolvedValue(makeResponse(409, conflictBody));
     const { wrapper } = makeContext();
     const { result } = renderHook(() => useCreateDraft(), { wrapper });
 
@@ -109,7 +123,7 @@ describe('useCreateDraft', () => {
   });
 
   it('throws a plain Error with the server message on 400', async () => {
-    createDraft.mockResolvedValue({ status: 400, body: { error: 'path_taken', message: 'A page already exists at this path.' } });
+    createPost.mockResolvedValue(makeResponse(400, { error: 'path_taken', message: 'A page already exists at this path.' }));
     const { wrapper } = makeContext();
     const { result } = renderHook(() => useCreateDraft(), { wrapper });
 
@@ -127,7 +141,7 @@ describe('useCreateDraft', () => {
 
 describe('useCancelDraft', () => {
   it('optimistically trims the cancelled row and invalidates on success', async () => {
-    cancelDraft.mockResolvedValue({ status: 200, body: { pageId: 'p1' } });
+    cancelDelete.mockResolvedValue(makeResponse(200, { pageId: 'p1' }));
     const { client, wrapper } = makeContext();
     // Seed the drafts cache so the optimistic update has something to trim.
     client.setQueryData(draftsKeys.all, { drafts: SAMPLE_DRAFTS });
@@ -141,7 +155,7 @@ describe('useCancelDraft', () => {
       await result.current.mutateAsync('p1');
     });
 
-    expect(cancelDraft).toHaveBeenCalledWith({ params: { id: 'p1' }, body: undefined });
+    expect(cancelDelete).toHaveBeenCalledWith({ param: { id: 'p1' }, json: undefined });
     // The optimistic write dropped p1, leaving only p2.
     const optimistic = setData.mock.calls.at(-1)?.[1] as { drafts: typeof SAMPLE_DRAFTS };
     expect(optimistic.drafts.map((d) => d.pageId)).toEqual(['p2']);
@@ -149,7 +163,7 @@ describe('useCancelDraft', () => {
   });
 
   it('rolls the optimistic removal back when the server rejects', async () => {
-    cancelDraft.mockResolvedValue({ status: 404, body: { error: 'draft_not_found', message: 'No such draft' } });
+    cancelDelete.mockResolvedValue(makeResponse(404, { error: 'draft_not_found', message: 'No such draft' }));
     const { client, wrapper } = makeContext();
     client.setQueryData(draftsKeys.all, { drafts: SAMPLE_DRAFTS });
     // Capture the value `onError` rolls the cache back to, since the
@@ -167,7 +181,9 @@ describe('useCancelDraft', () => {
     });
 
     expect(caught).toBeInstanceOf(Error);
-    expect((caught as Error).message).toBe('No such draft');
+    // The hook surfaces a generic "Failed to cancel draft" — the server's
+    // `draft_not_found` body is no longer parsed (matches Batch 6 hook).
+    expect((caught as Error).message).toBe('Failed to cancel draft');
     // The last setQueryData call is the onError rollback — it restores
     // the pre-mutation snapshot with both rows intact.
     const rollback = setData.mock.calls.at(-1)?.[1] as { drafts: typeof SAMPLE_DRAFTS };

@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from './api-client';
+import { apiClientV2 } from './api-client';
 import type { LikersResponse } from '@crowi/api-contract';
 
 /**
@@ -30,11 +30,12 @@ export function useLikers(pageId: string | undefined, options?: { enabled?: bool
     queryKey: pageId ? likersKeys.detail(pageId, limit) : likersKeys.all,
     queryFn: async (): Promise<LikersResponse> => {
       if (!pageId) return EMPTY_RESULT;
-      const result = await apiClient.presence.getLikers({
-        params: { id: pageId },
-        query: { limit },
+      const response = await apiClientV2.pages[':id'].likers.$get({
+        param: { id: pageId },
+        query: limit !== undefined ? { limit: String(limit) } : {},
       });
-      return result.status === 200 ? result.body : EMPTY_RESULT;
+      if (!response.ok) return EMPTY_RESULT;
+      return response.json();
     },
     enabled: !!pageId && options?.enabled !== false,
   });

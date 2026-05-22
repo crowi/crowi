@@ -1,9 +1,19 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './api-client';
+import { apiClientV2, API_BASE_URL } from './api-client';
+import { getAccessToken } from './auth-token';
 import type { Attachment, AttachmentMeta, ListAttachmentsResponse } from '@crowi/api-contract';
 
+/**
+ * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.attachment.*`
+ * (ts-rest) to `apiClientV2.pages[':pageId'].attachments.*` /
+ * `apiClientV2.attachments[':id'].*` (hc<AppType>). Wire payload is
+ * unchanged. `useAddAttachment` continues to use a bare `fetch` for the
+ * multipart upload because hc<AppType>'s `$post` does not surface
+ * `XMLHttpRequest`-style upload progress and the existing code path is
+ * already a hand-rolled fetch.
+ */
 export const attachmentsKeys = {
   all: ['attachments'] as const,
   list: (pageId: string) => ['attachments', pageId] as const,
@@ -20,8 +30,11 @@ export function useAttachmentList(pageId: string | undefined) {
     queryKey: pageId ? attachmentsKeys.list(pageId) : attachmentsKeys.all,
     queryFn: async (): Promise<ListAttachmentsResponse> => {
       if (!pageId) return { attachments: [] };
-      const result = await apiClient.attachment.listAttachments({ params: { pageId } });
-      return result.status === 200 ? result.body : { attachments: [] };
+      const response = await apiClientV2.pages[':pageId'].attachments.$get({ param: { pageId } });
+      if (response.ok) {
+        return (await response.json()) as ListAttachmentsResponse;
+      }
+      return { attachments: [] };
     },
     enabled: !!pageId,
     staleTime: 30 * 1000,
@@ -46,12 +59,12 @@ export function useAttachment(id: string | undefined) {
     queryKey: attachmentsKeys.detail(id ?? ''),
     queryFn: async (): Promise<AttachmentMeta> => {
       if (!id) throw new Error('attachment id is required');
-      const result = await apiClient.attachment.getAttachmentMeta({ params: { id } });
-      if (result.status !== 200) {
-        const body = result.body as { error?: { message?: string } } | undefined;
+      const response = await apiClientV2.attachments[':id'].meta.$get({ param: { id } });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
         throw new Error(body?.error?.message ?? 'Failed to load attachment');
       }
-      return result.body;
+      return (await response.json()) as AttachmentMeta;
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
@@ -60,12 +73,11 @@ export function useAttachment(id: string | undefined) {
 }
 
 /**
- * Upload a file as an attachment of `pageId`. ts-rest's typed client does not
- * play nicely with multipart bodies, so we issue the fetch ourselves and
- * delegate auth-header / refresh to the shared apiClient by reading the
- * access token from localStorage (same source apiClient consults). We
- * prefer this over duplicating the refresh dance because uploads are rare
- * enough that an expired-token reload-and-retry is acceptable.
+ * Upload a file as an attachment of `pageId`. Hand-rolled `fetch` rather
+ * than going through the typed client because hc<AppType>'s `$post` does
+ * not currently surface upload progress; this fetch keeps the auth /
+ * refresh behaviour aligned with the rest of the app by reading the
+ * access token from `auth-token`.
  */
 export function useAddAttachment(pageId: string | undefined) {
   const queryClient = useQueryClient();
@@ -76,10 +88,8 @@ export function useAddAttachment(pageId: string | undefined) {
       const formData = new FormData();
       formData.append('file', file);
 
-      const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
-
-      const response = await fetch(`${baseUrl}/api/v2/pages/${encodeURIComponent(pageId)}/attachments`, {
+      const accessToken = getAccessToken();
+      const response = await fetch(`${API_BASE_URL}/api/v2/pages/${encodeURIComponent(pageId)}/attachments`, {
         method: 'POST',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         body: formData,
@@ -107,21 +117,24 @@ export function useRemoveAttachment(pageId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (attachmentId: string): Promise<void> => {
-      // ts-rest's typed client requires `body` in the call args even when the
-      // contract's body schema is `z.unknown().optional()`. Pass undefined
-      // explicitly — the underlying fetch sends no body for DELETE.
-      const result = await apiClient.attachment.removeAttachment({ params: { id: attachmentId }, body: undefined });
-      if (result.status !== 200) {
-        const body = result.body as { error?: { message?: string } } | undefined;
+      const response = await apiClientV2.attachments[':id'].$delete({ param: { id: attachmentId } });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
         throw new Error(body?.error?.message ?? 'Failed to remove attachment');
       }
     },
     onSuccess: () => {
       if (pageId) {
         queryClient.invalidateQueries({ queryKey: attachmentsKeys.list(pageId) });
-      } else {
-        queryClient.invalidateQueries({ queryKey: attachmentsKeys.all });
+        return;
       }
+      // pageId unknown: refresh every `['attachments', <pageId>]` list but
+      // skip the `detail(id)` and `usage(pageId)` caches (deleting an
+      // attachment doesn't change another page's usage, and a 404 on the
+      // deleted detail is the right next observation).
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === 'attachments' && typeof q.queryKey[1] === 'string' && q.queryKey[1] !== 'detail' && q.queryKey[2] !== 'usage',
+      });
     },
   });
 }

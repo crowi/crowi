@@ -1,4 +1,5 @@
 export * from './contracts';
+export * from './client';
 export * from './schemas/app';
 export * from './schemas/auth';
 export * from './schemas/installer';
@@ -29,4 +30,3 @@ export * from './schemas/admin/share';
 export * from './schemas/admin/storage';
 export * from './schemas/admin/search';
 export * from './schemas/admin/plugins';
-export * from './openapi';

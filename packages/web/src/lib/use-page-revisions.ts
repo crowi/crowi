@@ -1,10 +1,14 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 import type { Pager, Revision, RevisionMeta } from '@crowi/api-contract';
 
+/**
+ * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.revision.*`
+ * (ts-rest) to `apiClientV2.pages.*.$get` (hc<AppType>). Wire payload
+ * is unchanged.
+ */
 export interface UsePageRevisionsResult {
   revisions: RevisionMeta[];
   pager: Pager | null;
@@ -28,17 +32,16 @@ export function usePageRevisions(pageId: string | null | undefined, params: { li
       if (!pageId) {
         return { revisions: [] as RevisionMeta[], pager: null as Pager | null };
       }
-      const result = await apiClient.revision.listRevisions({
-        params: { page_id: pageId },
+      const response = await apiClientV2.pages[':page_id'].revisions.$get({
+        param: { page_id: pageId },
         query: {
-          limit: params.limit ?? 50,
-          offset: params.offset ?? 0,
+          limit: String(params.limit ?? 50),
+          offset: String(params.offset ?? 0),
         },
       });
-      return unwrapResult(result, {
-        ok: (body) => ({ revisions: body.revisions, pager: body.pager }),
-        fallback: 'Failed to fetch revisions',
-      });
+      if (!response.ok) throw new Error('Failed to fetch revisions');
+      const body = await response.json();
+      return { revisions: body.revisions, pager: body.pager };
     },
     enabled: Boolean(pageId),
   });
@@ -78,14 +81,10 @@ export function useRevisionPair(idA: string | null | undefined, idB: string | nu
     queryKey: revisionPairKey(idA ?? '', idB ?? ''),
     queryFn: async () => {
       if (!ids) return [] as Revision[];
-      const result = await apiClient.revision.getRevisions({
-        query: { ids },
-      });
-      return unwrapResult(result, {
-        ok: (body) => body.revisions,
-        errors: { 400: 'Failed to fetch revisions', 403: 'Failed to fetch revisions', 404: 'Failed to fetch revisions' },
-        fallback: 'Failed to fetch revisions',
-      });
+      const response = await apiClientV2.pages.revisions.$get({ query: { ids } });
+      if (!response.ok) throw new Error('Failed to fetch revisions');
+      const body = await response.json();
+      return body.revisions;
     },
     enabled,
   });

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 /**
  * Shared Zod schemas for AWS credentials used by both /admin/app (S3

@@ -1,9 +1,14 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from './api-client';
+import { apiClientV2 } from './api-client';
 import type { GetPageRequest, PageWithRevision } from '@crowi/api-contract';
 
+/**
+ * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.getPage`
+ * (ts-rest) to `apiClientV2.pages.$get` (hc<AppType>). Wire payload is
+ * unchanged.
+ */
 export interface PageState {
   page: PageWithRevision | null;
   isLoading: boolean;
@@ -19,17 +24,24 @@ export function usePage(params: GetPageRequest) {
   const query = useQuery({
     queryKey: ['page', params],
     queryFn: async () => {
-      const result = await apiClient.page.getPage({ query: params });
+      const response = await apiClientV2.pages.$get({
+        query: {
+          path: params.path,
+          page_id: params.page_id,
+          revision_id: params.revision_id,
+        },
+      });
 
-      if (result.status === 200) {
+      if (response.status === 200) {
+        const body = await response.json();
         return {
-          page: result.body.page,
+          page: body.page as PageWithRevision,
           notFound: false,
           notGranted: false,
         };
       }
 
-      if (result.status === 404) {
+      if (response.status === 404) {
         return {
           page: null,
           notFound: true,
@@ -37,7 +49,7 @@ export function usePage(params: GetPageRequest) {
         };
       }
 
-      if (result.status === 403) {
+      if (response.status === 403) {
         return {
           page: null,
           notFound: false,
@@ -45,21 +57,25 @@ export function usePage(params: GetPageRequest) {
         };
       }
 
-      // Handle 401 (authentication required) - throw to trigger error state
+      // 401 (authentication required) — surface as error so the UI can prompt.
       throw new Error('Failed to fetch page');
     },
-    // Don't retry on 404 or 403
+    // Don't retry on 404 or 403 (resolved inside queryFn — those don't throw).
     retry: (failureCount, error) => {
       if (error.message === 'Failed to fetch page') {
         return failureCount < 3;
       }
       return false;
     },
-    // Enable query only when we have either path or page_id
+    // Enable query only when we have either path or page_id.
     enabled: Boolean(params.path || params.page_id),
+    // Avoid refetching on every navigation / window focus — page detail
+    // mutations call `invalidateQueries({ queryKey: ['page'] })` so the
+    // cache stays correct, and a 30 s window is fine for read-only nav.
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
-  // Derive page state
   const pageState: PageState = {
     page: query.data?.page ?? null,
     isLoading: query.isLoading,

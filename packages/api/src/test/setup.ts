@@ -1,11 +1,29 @@
+/**
+ * RFC-0006 Phase 6 Sub-batch D — test harness for the Hono-only api.
+ *
+ * Express has been removed; the api now boots Hono via
+ * `@hono/node-server`'s `createAdaptorServer`. Supertest accepts any
+ * Node `RequestListener` `(req, res) => void`, so we expose one by
+ * piping through `getRequestListener(honoApp.fetch)` from
+ * `@hono/node-server`.
+ *
+ * Path rewrite: the OpenAPI contracts register every route at its
+ * **unprefixed** path (`/app/info`, `/pages/:id`, ...), and the
+ * production server reaches them via the URL rewriter in
+ * `crowi/index.ts:start()` that strips a leading `/api/v2`. Tests
+ * invariably dial `/api/v2/...`, so we install the same rewrite here
+ * — it keeps every existing supertest call site working without
+ * change.
+ */
+import { getRequestListener } from '@hono/node-server';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import Crowi from 'src/crowi';
-import { Express } from 'express';
+import { buildHonoApp } from 'src/hono';
+import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 
 // Silence boot-time noise that fires once per test file and drowns
 // the actual ✓ / ✕ output in the jest report:
 //
-//   `[ts-rest] Initialized <METHOD> <path>` — emitted by
-//   `@ts-rest/express` for every contract route (Crowi has ~150+).
 //   `[crowi] Loaded N plugin(s): ...`         — PluginManager boot log
 //   `[crowi] CROWI_ENCRYPTION_KEY is not set` — setupEncryption legacy
 //                                               fallback (the test env
@@ -18,7 +36,7 @@ import { Express } from 'express';
 // test file inherits the filter without per-test setup. Production
 // boot still emits everything.
 {
-  const QUIET_PREFIXES = ['[ts-rest] Initialized ', '[crowi] '];
+  const QUIET_PREFIXES = ['[crowi] '];
   const isQuiet = (args: unknown[]) => typeof args[0] === 'string' && QUIET_PREFIXES.some((prefix) => (args[0] as string).startsWith(prefix));
 
   const originalLog = console.log;
@@ -35,7 +53,13 @@ import { Express } from 'express';
 }
 
 export let crowi: Crowi;
-export let app: Express;
+/**
+ * Node `RequestListener` (`(req, res) => void`) backed by the Hono
+ * app. Acceptable input to `supertest(app)` — every existing
+ * `request(app).get('/api/v2/...')` call works as before because the
+ * `/api/v2` prefix is stripped inline before Hono dispatches.
+ */
+export let app: (req: IncomingMessage, res: ServerResponse) => void;
 
 // @ts-ignore
 export const ROOT_DIR = global.ROOT_DIR as string;
@@ -45,6 +69,17 @@ export const MODEL_DIR = global.MODEL_DIR as string;
 export const MONGO_URI = global.MONGO_URI as string;
 // @ts-ignore
 export const MONGO_DB_NAME = global.MONGO_DB_NAME as string;
+
+// The `beforeAll` below boots a full Crowi (`crowi.init()` — encryption,
+// DB connect, models, redis, config) and builds the Hono app, once per
+// test file. On constrained CI runners — and especially with other
+// workspaces' jest suites running concurrently — that comfortably
+// exceeds Jest's default 5s hook timeout. Raise the default for every
+// hook/test in this project's files; a genuine hang still fails, just
+// later. (A project-level `testTimeout` in jest.config.js is NOT
+// honoured for hooks registered from a setupFilesAfterEnv module, so
+// the timeout has to be set here.)
+jest.setTimeout(60000);
 
 beforeAll(async () => {
   // Spread process.env FIRST and then layer the test-harness values on
@@ -61,12 +96,18 @@ beforeAll(async () => {
     BASE_URL: 'http://localhost:13001',
   });
   await crowi.init();
-  app = crowi.getApp();
-});
+
+  const honoApp = buildHonoApp(crowi);
+  // Wrap `honoApp.fetch` so the `/api/v2` prefix in supertest URLs is
+  // stripped before Hono dispatches. Mirrors the rewrite that
+  // `crowi/index.ts:start()` applies on the production listener.
+  const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiV2Prefix(request));
+  app = getRequestListener(fetchFn);
+}, 60000);
 
 afterAll(async () => {
   await crowi.getMongo().disconnect();
-});
+}, 60000);
 
 export const Fixture = {
   async generate(model, fixture) {

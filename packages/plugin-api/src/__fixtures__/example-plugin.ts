@@ -8,20 +8,21 @@
  * Do not import from here at runtime.
  */
 
-import { z } from 'zod';
-import { initContract } from '@ts-rest/core';
+import { z } from 'zod/v3';
 import type { CrowiPlugin } from '../plugin';
 
-const c = initContract();
-
-const exampleContract = c.router({
+// RFC-0006 Phase 6 — plugin HTTP contribution is parked until a
+// follow-up RFC redesigns it on top of Hono. The legacy framework
+// dependency is gone; the contract literal below is just an opaque
+// value that the no-op `scope.register(...)` accepts as `unknown`.
+const exampleContract = {
   testConnection: {
     method: 'POST' as const,
     path: '/test',
     body: z.object({}),
     responses: { 200: z.object({ ok: z.boolean() }) },
   },
-});
+};
 
 const examplePlugin: CrowiPlugin = {
   name: '@crowi/example',

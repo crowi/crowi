@@ -1,5 +1,25 @@
-import { initContract } from '@ts-rest/core';
-import { z } from 'zod';
+/**
+ * RFC-0006 Phase 4 Batch 9 — `admin.users` sub-contract ported to
+ * `@hono/zod-openapi` route definitions.
+ *
+ * 10 endpoints:
+ *   GET    /admin/users                            (listUsers)
+ *   GET    /admin/users/search                     (searchUsersByEmail)
+ *   POST   /admin/users/invite                     (inviteUsers)
+ *   PATCH  /admin/users/{id}                       (editUser)
+ *   PUT    /admin/users/{id}/admin                 (makeAdmin)
+ *   DELETE /admin/users/{id}/admin                 (removeFromAdmin)
+ *   PUT    /admin/users/{id}/status/active         (activateUser)
+ *   PUT    /admin/users/{id}/status/suspended      (suspendUser)
+ *   POST   /admin/users/{id}/reset-password        (resetPassword)
+ *   PUT    /admin/users/{id}/email                 (updateUserEmail)
+ *
+ * Auth + install:
+ *   - The handler installs `createJwtAdminRequired(crowi)` broadly on
+ *     `/admin/users/*` plus the bare `/admin/users` path.
+ */
+import { createRoute, z } from '@hono/zod-openapi';
+
 import {
   AdminUserIdParamSchema,
   AdminUserMutationResponseSchema,
@@ -22,222 +42,397 @@ import {
   ValidationErrorSchema,
 } from '../../schemas/common';
 
-const c = initContract();
-
-/**
- * Admin → Users contract.
- *
- * Read-only endpoints replace the legacy:
- *   GET /_api/admin/users           -> Admin.api.user.index
- *   GET /_api/admin/users.search    -> Admin.api.usersSearch
- *
- * Mutating endpoints replace the legacy POST /_api/admin/user/* and
- * /_api/admin/users.* endpoints with RESTful paths under the same /admin/users
- * namespace:
- *
- *   POST   /admin/users/invite                  (User.createUsersByInvitation)
- *   PATCH  /admin/users/:id                     (name + email)
- *   PUT    /admin/users/:id/admin               (makeAdmin)
- *   DELETE /admin/users/:id/admin               (removeFromAdmin)
- *   PUT    /admin/users/:id/status/active       (statusActivate)
- *   PUT    /admin/users/:id/status/suspended    (statusSuspend)
- *   POST   /admin/users/:id/reset-password      (resetPasswordByRandomString)
- *   PUT    /admin/users/:id/email               (email-only update)
- *
- * Authorization is provided by the surrounding admin router
- * (`jwtAdminRequired`) — both 401 and 403 are produced by middleware, not by
- * the handlers themselves.
- *
- * The legacy `/_api/admin/user/*` routes are intentionally left in place for
- * backward compatibility; their removal is tracked as a separate clean-up
- * task.
- */
-export const adminUsersContract = c.router({
-  listUsers: {
-    method: 'GET',
-    path: '/admin/users',
+export const listUsersRoute = createRoute({
+  method: 'get',
+  path: '/admin/users',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List users with optional search (q) and pagination (page, limit)',
+  request: {
     query: ListAdminUsersRequestSchema,
-    responses: {
-      200: ListAdminUsersResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: 'List users with optional search (q) and pagination (page, limit)',
   },
-
-  searchUsersByEmail: {
-    method: 'GET',
-    path: '/admin/users/search',
-    query: SearchAdminUsersByEmailRequestSchema,
-    responses: {
-      200: SearchAdminUsersByEmailResponseSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      500: InternalServerErrorSchema,
+  responses: {
+    200: {
+      description: 'Paginated user list',
+      content: { 'application/json': { schema: ListAdminUsersResponseSchema } },
     },
-    summary: 'Email substring search for autocomplete-style UIs (max 51 results)',
-  },
-
-  /**
-   * POST /admin/users/invite
-   * Bulk-invite by email. Existing emails are reported as `status: 'exists'`
-   * rather than failing the whole batch.
-   */
-  inviteUsers: {
-    method: 'POST',
-    path: '/admin/users/invite',
-    body: InviteUsersRequestSchema,
-    responses: {
-      200: InviteUsersResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      500: InternalServerErrorSchema,
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
-    summary: 'Invite a batch of users by email; returns per-email status',
-  },
-
-  /**
-   * PATCH /admin/users/:id
-   * Update both name and email. Email collisions with another user yield 409.
-   */
-  editUser: {
-    method: 'PATCH',
-    path: '/admin/users/:id',
-    pathParams: AdminUserIdParamSchema,
-    body: EditAdminUserRequestSchema,
-    responses: {
-      200: AdminUserMutationResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: NotFoundErrorSchema,
-      409: ConflictErrorSchema,
-      500: InternalServerErrorSchema,
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
     },
-    summary: "Update a user's name and email",
-  },
-
-  /**
-   * PUT /admin/users/:id/admin — grant admin permission.
-   */
-  makeAdmin: {
-    method: 'PUT',
-    path: '/admin/users/:id/admin',
-    pathParams: AdminUserIdParamSchema,
-    // Empty body — Express body-parser hydrates req.body to {} for an empty
-    // POST/PUT, which would fail z.undefined(). Use z.unknown() so the schema
-    // accepts both shapes without complaining.
-    body: z.unknown(),
-    responses: {
-      200: AdminUserMutationResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: NotFoundErrorSchema,
-      500: InternalServerErrorSchema,
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
-    summary: 'Grant admin permission to a user',
-  },
-
-  /**
-   * DELETE /admin/users/:id/admin — revoke admin permission.
-   * No body; the path itself encodes the action.
-   */
-  removeFromAdmin: {
-    method: 'DELETE',
-    path: '/admin/users/:id/admin',
-    pathParams: AdminUserIdParamSchema,
-    body: z.unknown(),
-    responses: {
-      200: AdminUserMutationResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: NotFoundErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: 'Revoke admin permission from a user',
-  },
-
-  /**
-   * PUT /admin/users/:id/status/active — set status to ACTIVE.
-   * Emits the `userEvent` 'activated' side-effect (mirrors legacy).
-   */
-  activateUser: {
-    method: 'PUT',
-    path: '/admin/users/:id/status/active',
-    pathParams: AdminUserIdParamSchema,
-    body: z.unknown(),
-    responses: {
-      200: AdminUserMutationResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: NotFoundErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: 'Activate a user (status -> ACTIVE)',
-  },
-
-  /**
-   * PUT /admin/users/:id/status/suspended — set status to SUSPENDED.
-   */
-  suspendUser: {
-    method: 'PUT',
-    path: '/admin/users/:id/status/suspended',
-    pathParams: AdminUserIdParamSchema,
-    body: z.unknown(),
-    responses: {
-      200: AdminUserMutationResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: NotFoundErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: 'Suspend a user (status -> SUSPENDED)',
-  },
-
-  /**
-   * POST /admin/users/:id/reset-password
-   * Returns the generated plaintext password (legacy parity).
-   */
-  resetPassword: {
-    method: 'POST',
-    path: '/admin/users/:id/reset-password',
-    pathParams: AdminUserIdParamSchema,
-    body: z.unknown(),
-    responses: {
-      200: ResetPasswordResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: NotFoundErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: "Reset a user's password to a random value (returns plaintext)",
-  },
-
-  /**
-   * PUT /admin/users/:id/email — email-only update.
-   * Email collisions with another user yield 409.
-   */
-  updateUserEmail: {
-    method: 'PUT',
-    path: '/admin/users/:id/email',
-    pathParams: AdminUserIdParamSchema,
-    body: UpdateAdminUserEmailRequestSchema,
-    responses: {
-      200: AdminUserMutationResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      403: AdminRequiredErrorSchema,
-      404: NotFoundErrorSchema,
-      409: ConflictErrorSchema,
-      500: InternalServerErrorSchema,
-    },
-    summary: "Update a user's email address",
   },
 });
+
+export const searchUsersByEmailRoute = createRoute({
+  method: 'get',
+  path: '/admin/users/search',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Email substring search for autocomplete-style UIs (max 51 results)',
+  request: {
+    query: SearchAdminUsersByEmailRequestSchema,
+  },
+  responses: {
+    200: {
+      description: 'Matching users (capped at 51)',
+      content: { 'application/json': { schema: SearchAdminUsersByEmailResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const inviteUsersRoute = createRoute({
+  method: 'post',
+  path: '/admin/users/invite',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Invite a batch of users by email; returns per-email status',
+  request: {
+    body: {
+      content: { 'application/json': { schema: InviteUsersRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Per-email status (created / exists / failed)',
+      content: { 'application/json': { schema: InviteUsersResponseSchema } },
+    },
+    400: {
+      description: 'Validation error',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const editUserRoute = createRoute({
+  method: 'patch',
+  path: '/admin/users/{id}',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: "Update a user's name and email",
+  request: {
+    params: AdminUserIdParamSchema,
+    body: {
+      content: { 'application/json': { schema: EditAdminUserRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated user',
+      content: { 'application/json': { schema: AdminUserMutationResponseSchema } },
+    },
+    400: {
+      description: 'Validation error',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    409: {
+      description: 'Email already in use by another user',
+      content: { 'application/json': { schema: ConflictErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const makeAdminRoute = createRoute({
+  method: 'put',
+  path: '/admin/users/{id}/admin',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Grant admin permission to a user',
+  request: {
+    params: AdminUserIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Updated user',
+      content: { 'application/json': { schema: AdminUserMutationResponseSchema } },
+    },
+    400: {
+      description: 'Invalid id',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const removeFromAdminRoute = createRoute({
+  method: 'delete',
+  path: '/admin/users/{id}/admin',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Revoke admin permission from a user',
+  request: {
+    params: AdminUserIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Updated user',
+      content: { 'application/json': { schema: AdminUserMutationResponseSchema } },
+    },
+    400: {
+      description: 'Invalid id',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const activateUserRoute = createRoute({
+  method: 'put',
+  path: '/admin/users/{id}/status/active',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Activate a user (status -> ACTIVE)',
+  request: {
+    params: AdminUserIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Updated user',
+      content: { 'application/json': { schema: AdminUserMutationResponseSchema } },
+    },
+    400: {
+      description: 'Invalid id',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const suspendUserRoute = createRoute({
+  method: 'put',
+  path: '/admin/users/{id}/status/suspended',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Suspend a user (status -> SUSPENDED)',
+  request: {
+    params: AdminUserIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Updated user',
+      content: { 'application/json': { schema: AdminUserMutationResponseSchema } },
+    },
+    400: {
+      description: 'Invalid id',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const resetPasswordRoute = createRoute({
+  method: 'post',
+  path: '/admin/users/{id}/reset-password',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: "Reset a user's password to a random value (returns plaintext)",
+  request: {
+    params: AdminUserIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Updated user + new plaintext password',
+      content: { 'application/json': { schema: ResetPasswordResponseSchema } },
+    },
+    400: {
+      description: 'Invalid id',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const updateUserEmailRoute = createRoute({
+  method: 'put',
+  path: '/admin/users/{id}/email',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: "Update a user's email address",
+  request: {
+    params: AdminUserIdParamSchema,
+    body: {
+      content: { 'application/json': { schema: UpdateAdminUserEmailRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated user',
+      content: { 'application/json': { schema: AdminUserMutationResponseSchema } },
+    },
+    400: {
+      description: 'Validation error',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    409: {
+      description: 'Email already in use by another user',
+      content: { 'application/json': { schema: ConflictErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const adminUsersRoutes = {
+  listUsersRoute,
+  searchUsersByEmailRoute,
+  inviteUsersRoute,
+  editUserRoute,
+  makeAdminRoute,
+  removeFromAdminRoute,
+  activateUserRoute,
+  suspendUserRoute,
+  resetPasswordRoute,
+  updateUserEmailRoute,
+};
+
+export type {
+  AdminPager,
+  AdminUserIdParam,
+  AdminUserMutationResponse,
+  EditAdminUserRequest,
+  InvitedUserResult,
+  InviteUsersRequest,
+  InviteUsersResponse,
+  ListAdminUsersRequest,
+  ListAdminUsersResponse,
+  ResetPasswordResponse,
+  SearchAdminUsersByEmailRequest,
+  SearchAdminUsersByEmailResponse,
+  UpdateAdminUserEmailRequest,
+} from '../../schemas/admin/users';

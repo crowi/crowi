@@ -2,8 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PageWithRevision } from '@crowi/api-contract';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 import { likersKeys } from './use-likers';
 import { notify } from './notify';
 import { m } from '@paraglide/messages.js';
@@ -13,6 +12,9 @@ import { m } from '@paraglide/messages.js';
  * itself: like state is derived from `page.liker` returned by getPage. After
  * a successful toggle we invalidate the `page` query so the header refetches
  * with the updated liker / likerCount.
+ *
+ * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.{like,unlike}Page`
+ * (ts-rest) to `apiClientV2.pages.{like,unlike}.$post` (hc<AppType>).
  */
 export const likeKeys = {
   all: ['like'] as const,
@@ -76,18 +78,16 @@ export function useToggleLike(pageId: string | undefined, isLiked: boolean) {
         throw new Error('pageId is required');
       }
 
-      const endpoint = isLiked ? apiClient.page.unlikePage : apiClient.page.likePage;
-      const fallback = isLiked ? 'Failed to unlike page' : 'Failed to like page';
-      const result = await endpoint({ body: { page_id: pageId } });
-      return unwrapResult(result, {
-        ok: (body) => ({ page: body.page }),
-        errors: {
-          400: fallback,
-          401: { message: 'Authentication required', preferLocal: true },
-          404: { message: 'Page not found', preferLocal: true },
-        },
-        fallback,
-      });
+      const response = isLiked
+        ? await apiClientV2.pages.unlike.$post({ json: { page_id: pageId } })
+        : await apiClientV2.pages.like.$post({ json: { page_id: pageId } });
+
+      if (response.status === 401) throw new Error('Authentication required');
+      if (response.ok) {
+        const data = await response.json();
+        return { page: data.page };
+      }
+      throw new Error(isLiked ? 'Failed to unlike page' : 'Failed to like page');
     },
     onMutate: () => {
       if (!pageId) return { snapshots: [] };

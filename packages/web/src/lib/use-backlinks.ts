@@ -1,9 +1,14 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from './api-client';
+import { apiClientV2 } from './api-client';
 import type { GetBacklinksResponse } from '@crowi/api-contract';
 
+/**
+ * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.backlink.*`
+ * (ts-rest) to `apiClientV2.backlinks.$get` (hc<AppType>). Wire payload
+ * is unchanged.
+ */
 export const backlinksKeys = {
   all: ['backlinks'] as const,
   // `limit` and `offset` are part of the cache key so widening the limit
@@ -40,10 +45,11 @@ export function useBacklinks(pageId: string | undefined, options: UseBacklinksOp
     queryKey: pageId ? backlinksKeys.detail(pageId, limit, offset) : backlinksKeys.all,
     queryFn: async (): Promise<GetBacklinksResponse> => {
       if (!pageId) return EMPTY_RESULT;
-      const result = await apiClient.backlink.getBacklinks({
-        query: { page_id: pageId, limit, offset },
+      const response = await apiClientV2.backlinks.$get({
+        query: { page_id: pageId, limit: String(limit), offset: String(offset) },
       });
-      return result.status === 200 ? result.body : EMPTY_RESULT;
+      if (!response.ok) return EMPTY_RESULT;
+      return response.json();
     },
     enabled: !!pageId && options.enabled !== false,
     staleTime: BACKLINKS_STALE_TIME,

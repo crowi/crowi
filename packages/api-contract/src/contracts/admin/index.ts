@@ -1,29 +1,22 @@
-import { initContract } from '@ts-rest/core';
-import { adminAppContract } from './app';
-import { adminAuthContract } from './auth';
-import { adminMailContract } from './mail';
-import { adminPluginsContract } from './plugins';
-import { adminSearchContract } from './search';
-import { adminSecurityContract } from './security';
-import { adminShareContract } from './share';
-import { adminStorageContract } from './storage';
-import { adminUsersContract } from './users';
-
-const c = initContract();
-
 /**
- * Aggregate router for all admin-only endpoints. As more admin sections are
- * migrated (auth / mail / users / etc.), they should be added here so
- * the API client surfaces them under `apiClient.admin.<section>.*`.
+ * RFC-0006 Phase 4 Batch 9 — `admin.*` sub-contracts ported to
+ * `@hono/zod-openapi` route definitions.
+ *
+ * The legacy ts-rest `adminContract` aggregator (a `c.router({ app, auth,
+ * security, mail, share, storage, search, users, plugins })`) is gone.
+ * Each sub-contract now exports a `createRoute(...)` set under
+ * `adminXxxRoutes`, mirrored on the runtime side by an
+ * `hono/handlers/admin/<sub>.ts` register function.
+ *
+ * Every admin route path begins with `/admin/` — asserted by the unit
+ * test in `admin/index.test.ts` (RFC open question 4).
  */
-export const adminContract = c.router({
-  app: adminAppContract,
-  auth: adminAuthContract,
-  security: adminSecurityContract,
-  mail: adminMailContract,
-  share: adminShareContract,
-  storage: adminStorageContract,
-  search: adminSearchContract,
-  users: adminUsersContract,
-  plugins: adminPluginsContract,
-});
+export * from './app';
+export * from './auth';
+export * from './mail';
+export * from './plugins';
+export * from './search';
+export * from './security';
+export * from './share';
+export * from './storage';
+export * from './users';

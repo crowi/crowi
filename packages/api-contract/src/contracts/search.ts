@@ -1,41 +1,71 @@
-import { initContract } from '@ts-rest/core';
-import { SearchPagesRequestSchema, SearchPagesResponseSchema } from '../schemas/search';
+/**
+ * RFC-0006 Phase 4 Batch 7 — `search` resource ported to
+ * `@hono/zod-openapi` route definitions. Single endpoint:
+ *
+ *   GET /search — full-text search over indexed pages
+ *
+ * Auth + install:
+ *   - `/search` is a singleton literal path, OUTSIDE the revision-owned
+ *     `/pages/*` jwtAuth apply. The search handler installs
+ *     `createJwtAuth(crowi)` on this exact path itself — same single-route
+ *     install pattern as `autocomplete`'s `/users/autocomplete`.
+ *   - No rate limit. The legacy `/api/v2/search` had no `withRateLimit`
+ *     wrapping (search backend latency naturally throttles bursts) and the
+ *     RFC does not require one for this resource.
+ *
+ * Service-availability semantics:
+ *   - `crowi.getSearcher()` returns `null` when no
+ *     `@crowi/plugin-search-*` is installed in the runner project. The
+ *     handler returns 503 `SERVICE_UNAVAILABLE` with `feature: 'search'`
+ *     so clients can branch on the missing-subsystem case (the web app
+ *     surfaces a "search is disabled" panel).
+ *   - The driver itself runs grant-aware filtering (viewer id / username
+ *     / isAdmin are forwarded) so unauthorised hits never leak.
+ *   - `data[].snippet` carries the driver-supplied highlight string
+ *     verbatim (typically with `<mark>` tokens). The handler does NOT
+ *     escape it; web clients must sanitise before HTML render.
+ *
+ * The legacy `GET /_api/search` Express endpoint stays mounted in
+ * parallel until Phase 6 cleanup.
+ */
+import { createRoute } from '@hono/zod-openapi';
+
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, ServiceUnavailableErrorSchema, ValidationErrorSchema } from '../schemas/common';
+import { SearchPagesRequestSchema, SearchPagesResponseSchema } from '../schemas/search';
 
-const c = initContract();
-
-export const searchContract = c.router({
-  /**
-   * GET /api/v2/search
-   * Run a full-text search over indexed pages.
-   *
-   * - Requires authentication (jwtAuth). The viewer (id / username / isAdmin)
-   *   is derived from `req.user` and forwarded to the active SearchDriver,
-   *   which applies grant-aware filtering (GRANT_OWNER / GRANT_RESTRICTED /
-   *   GRANT_SPECIFIED) so unauthorised hits never leak through.
-   * - `type` is forwarded as `grants.types: [type]` to the driver. Single
-   *   value only in v0.1.
-   * - Returns 503 SERVICE_UNAVAILABLE (`feature: 'search'`) when no search
-   *   driver plugin is registered. Operators must install one of
-   *   `@crowi/plugin-search-elasticsearch` / future `@crowi/plugin-search-mongo`
-   *   in the runner project to enable this endpoint.
-   * - The `data[].snippet` field carries the driver-supplied highlight
-   *   string verbatim (typically with `<mark>` tokens). The handler does
-   *   not escape it; web clients must sanitise before HTML render.
-   * - The legacy `GET /_api/search` endpoint is left mounted in parallel;
-   *   its removal is tracked as a separate clean-up task.
-   */
-  searchPages: {
-    method: 'GET',
-    path: '/search',
+export const searchPagesRoute = createRoute({
+  method: 'get',
+  path: '/search',
+  tags: ['search'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Full-text search over pages',
+  request: {
     query: SearchPagesRequestSchema,
-    responses: {
-      200: SearchPagesResponseSchema,
-      400: ValidationErrorSchema,
-      401: AuthenticationRequiredErrorSchema,
-      500: InternalServerErrorSchema,
-      503: ServiceUnavailableErrorSchema,
+  },
+  responses: {
+    200: {
+      description: 'Ranked search hits joined with page + bookmark count metadata',
+      content: { 'application/json': { schema: SearchPagesResponseSchema } },
     },
-    summary: 'Full-text search over pages',
+    400: {
+      description: 'Validation error (e.g. empty `q`, invalid `type` enum)',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Search driver raised an unexpected error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+    503: {
+      description: 'No search driver registered (install `@crowi/plugin-search-*`)',
+      content: { 'application/json': { schema: ServiceUnavailableErrorSchema } },
+    },
   },
 });
+
+export const searchRoutes = {
+  searchPagesRoute,
+};

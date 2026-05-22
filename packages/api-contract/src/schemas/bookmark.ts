@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { PageSchema, PagerSchema } from './page';
 import { UserPublicSchema } from './userPublic';
 

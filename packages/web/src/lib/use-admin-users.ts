@@ -1,8 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { apiClient } from './api-client';
-import { unwrapResult } from './unwrap-result';
+import { apiClientV2 } from './api-client';
 import type {
   AdminUserMutationResponse,
   EditAdminUserRequest,
@@ -25,25 +24,6 @@ export const adminUsersKeys = {
   list: (params: UseAdminUsersParams) => [...adminUsersKeys.all, 'list', params.q ?? '', params.page ?? 1, params.limit ?? 50] as const,
 };
 
-export function useAdminUsers(params: UseAdminUsersParams) {
-  return useQuery({
-    queryKey: adminUsersKeys.list(params),
-    queryFn: async (): Promise<ListAdminUsersResponse> => {
-      const result = await apiClient.admin.users.listUsers({
-        query: { q: params.q, page: params.page, limit: params.limit },
-      });
-      return unwrapResult(result, {
-        ok: (body) => body,
-        errors: { 401: 'Failed to fetch users', 403: 'Failed to fetch users' },
-        fallback: 'Failed to fetch users',
-      });
-    },
-    placeholderData: keepPreviousData,
-    staleTime: 30 * 1000,
-    refetchOnWindowFocus: false,
-  });
-}
-
 /**
  * Thrown by edit / update-email hooks on 409 so the calling form can map the
  * failure onto the email field instead of a global toast.
@@ -55,29 +35,73 @@ export class EmailConflictError extends Error {
   }
 }
 
-const adminUserErrors = () =>
-  ({
-    401: m['errors.unauthorized'](),
-    403: m['errors.unauthorized'](),
-    404: m['admin.users.action.user_not_found'](),
-  }) as const;
+const readWireMessage = async (response: Response): Promise<string | undefined> => {
+  try {
+    const body = (await response.json()) as { error?: { message?: unknown } } | null;
+    const msg = body?.error?.message;
+    return typeof msg === 'string' ? msg : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
-const editConflictErrors = () => ({
-  ...adminUserErrors(),
-  409: { message: m['admin.users.action.email_conflict'](), ErrorClass: EmailConflictError },
-});
+const throwAdminUserError = async (response: Response, fallback: string): Promise<never> => {
+  const wire = await readWireMessage(response);
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(wire ?? m['errors.unauthorized']());
+  }
+  if (response.status === 404) {
+    throw new Error(wire ?? m['admin.users.action.user_not_found']());
+  }
+  throw new Error(wire ?? fallback);
+};
+
+const throwAdminUserEditError = async (response: Response, fallback: string): Promise<never> => {
+  const wire = await readWireMessage(response);
+  if (response.status === 409) {
+    throw new EmailConflictError(wire ?? m['admin.users.action.email_conflict']());
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(wire ?? m['errors.unauthorized']());
+  }
+  if (response.status === 404) {
+    throw new Error(wire ?? m['admin.users.action.user_not_found']());
+  }
+  throw new Error(wire ?? fallback);
+};
+
+/**
+ * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.users.*`
+ * (ts-rest) to `apiClientV2.admin.users.*.$method` (hc<AppType>). Wire
+ * payload byte-identical; 409 still surfaces `EmailConflictError`.
+ */
+export function useAdminUsers(params: UseAdminUsersParams) {
+  return useQuery({
+    queryKey: adminUsersKeys.list(params),
+    queryFn: async (): Promise<ListAdminUsersResponse> => {
+      const response = await apiClientV2.admin.users.$get({
+        query: {
+          q: params.q,
+          page: params.page !== undefined ? String(params.page) : undefined,
+          limit: params.limit !== undefined ? String(params.limit) : undefined,
+        },
+      });
+      if (response.status === 200) return (await response.json()) as ListAdminUsersResponse;
+      return throwAdminUserError(response, 'Failed to fetch users');
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
 
 export function useInviteAdminUsers() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: InviteUsersRequest): Promise<InviteUsersResponse> => {
-      const fallback = m['admin.users.action.invite_failed']();
-      const result = await apiClient.admin.users.inviteUsers({ body });
-      return unwrapResult(result, {
-        ok: (b) => b,
-        errors: adminUserErrors(),
-        fallback,
-      });
+      const response = await apiClientV2.admin.users.invite.$post({ json: body });
+      if (response.status === 200) return (await response.json()) as InviteUsersResponse;
+      return throwAdminUserError(response, m['admin.users.action.invite_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });
@@ -89,13 +113,12 @@ export function useEditAdminUser() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: { id: string; body: EditAdminUserRequest }): Promise<AdminUserMutationResponse> => {
-      const fallback = m['admin.users.action.edit_failed']();
-      const result = await apiClient.admin.users.editUser({ params: { id: params.id }, body: params.body });
-      return unwrapResult(result, {
-        ok: (b) => b,
-        errors: editConflictErrors(),
-        fallback,
+      const response = await apiClientV2.admin.users[':id'].$patch({
+        param: { id: params.id },
+        json: params.body,
       });
+      if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
+      return throwAdminUserEditError(response, m['admin.users.action.edit_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });
@@ -107,15 +130,11 @@ export function useToggleAdminRole() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: { id: string; nextAdmin: boolean }): Promise<AdminUserMutationResponse> => {
-      const fallback = m['admin.users.action.role_failed']();
-      const result = params.nextAdmin
-        ? await apiClient.admin.users.makeAdmin({ params: { id: params.id }, body: {} })
-        : await apiClient.admin.users.removeFromAdmin({ params: { id: params.id }, body: {} });
-      return unwrapResult(result, {
-        ok: (b) => b,
-        errors: adminUserErrors(),
-        fallback,
-      });
+      const response = params.nextAdmin
+        ? await apiClientV2.admin.users[':id'].admin.$put({ param: { id: params.id } })
+        : await apiClientV2.admin.users[':id'].admin.$delete({ param: { id: params.id } });
+      if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
+      return throwAdminUserError(response, m['admin.users.action.role_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });
@@ -127,16 +146,12 @@ export function useToggleAdminStatus() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: { id: string; nextStatus: 'active' | 'suspended' }): Promise<AdminUserMutationResponse> => {
-      const fallback = m['admin.users.action.status_failed']();
-      const result =
+      const response =
         params.nextStatus === 'active'
-          ? await apiClient.admin.users.activateUser({ params: { id: params.id }, body: {} })
-          : await apiClient.admin.users.suspendUser({ params: { id: params.id }, body: {} });
-      return unwrapResult(result, {
-        ok: (b) => b,
-        errors: adminUserErrors(),
-        fallback,
-      });
+          ? await apiClientV2.admin.users[':id'].status.active.$put({ param: { id: params.id } })
+          : await apiClientV2.admin.users[':id'].status.suspended.$put({ param: { id: params.id } });
+      if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
+      return throwAdminUserError(response, m['admin.users.action.status_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });
@@ -151,13 +166,11 @@ export function useToggleAdminStatus() {
 export function useResetAdminUserPassword() {
   return useMutation({
     mutationFn: async (params: { id: string }): Promise<ResetPasswordResponse> => {
-      const fallback = m['admin.users.action.reset_password_failed']();
-      const result = await apiClient.admin.users.resetPassword({ params: { id: params.id }, body: {} });
-      return unwrapResult(result, {
-        ok: (b) => b,
-        errors: adminUserErrors(),
-        fallback,
+      const response = await apiClientV2.admin.users[':id']['reset-password'].$post({
+        param: { id: params.id },
       });
+      if (response.status === 200) return (await response.json()) as ResetPasswordResponse;
+      return throwAdminUserError(response, m['admin.users.action.reset_password_failed']());
     },
   });
 }
@@ -166,13 +179,12 @@ export function useUpdateAdminUserEmail() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: { id: string; body: UpdateAdminUserEmailRequest }): Promise<AdminUserMutationResponse> => {
-      const fallback = m['admin.users.action.update_email_failed']();
-      const result = await apiClient.admin.users.updateUserEmail({ params: { id: params.id }, body: params.body });
-      return unwrapResult(result, {
-        ok: (b) => b,
-        errors: editConflictErrors(),
-        fallback,
+      const response = await apiClientV2.admin.users[':id'].email.$put({
+        param: { id: params.id },
+        json: params.body,
       });
+      if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
+      return throwAdminUserEditError(response, m['admin.users.action.update_email_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });

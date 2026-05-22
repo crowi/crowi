@@ -1,0 +1,140 @@
+import request from 'supertest';
+import { app, crowi } from 'src/test/setup';
+
+/**
+ * RFC-0006 Phase 4 Batch 1 — integration tests for the migrated
+ * `installer` resource (`GET /api/v2/installer`, `POST /api/v2/installer/
+ * createAdmin`).
+ *
+ * Wire-format parity with the ts-rest era is the explicit AC: the
+ * status enum stays `'installer_required' | 'already_installed'`, the
+ * create endpoint returns 200/400 with `{ status, message?, errors? }`,
+ * and the public route is reachable without an Authorization header.
+ *
+ * The shared `crowi` from `src/test/setup` boots a Mongo-Memory-Server
+ * with pre-seeded Config (so `isAppInstalled` reports `true` by
+ * default). We restore that state in `afterEach` so individual `it()`s
+ * can flip the install-flag locally without leaking state into
+ * neighbours.
+ */
+describe('GET /api/v2/installer (Hono)', () => {
+  let Config: ReturnType<typeof crowi.model<'Config'>>;
+  let User: ReturnType<typeof crowi.model<'User'>>;
+
+  beforeAll(() => {
+    Config = crowi.model('Config');
+    User = crowi.model('User');
+  });
+
+  describe('GET /installer', () => {
+    afterEach(async () => {
+      // Restore the pre-test state — strip every `{ ns: 'crowi' }` row
+      // so the next test starts from `installer_required`. The
+      // mongo-memory-server is per-worker so this can't leak across
+      // workers, but it does leak across `it()`s in the same file.
+      await Config.deleteMany({ ns: 'crowi' });
+      await crowi.getConfigService().load();
+    });
+
+    it('returns already_installed when crowi config rows exist', async () => {
+      await Config.applicationInstall();
+      await crowi.getConfigService().load();
+
+      const res = await request(app).get('/api/v2/installer');
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/application\/json/);
+      expect(res.body).toEqual({ status: 'already_installed' });
+    });
+
+    it('returns installer_required when no crowi config rows exist', async () => {
+      await Config.deleteMany({ ns: 'crowi' });
+      const res = await request(app).get('/api/v2/installer');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'installer_required' });
+    });
+
+    it('does not require authentication (public route)', async () => {
+      // No Authorization header set — would be 401 if the Hono mount
+      // accidentally fell through to ts-rest's authenticatedRouter.
+      const res = await request(app).get('/api/v2/installer');
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe('POST /installer/createAdmin', () => {
+    afterEach(async () => {
+      await Config.deleteMany({ ns: 'crowi' });
+      await crowi.getConfigService().load();
+    });
+
+    it('rejects when application is already installed (400 status=error)', async () => {
+      await Config.applicationInstall();
+      await crowi.getConfigService().load();
+
+      const res = await request(app)
+        .post('/api/v2/installer/createAdmin')
+        .send({
+          registerForm: {
+            name: 'Already Installed',
+            username: 'already-installed',
+            email: 'already-installed@example.com',
+            password: 'Password!1',
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ status: 'error', message: 'Application is already installed' });
+    });
+
+    it('creates the admin user and refreshes the install flag on success', async () => {
+      // Start from the un-installed state to exercise the happy path.
+      await Config.deleteMany({ ns: 'crowi' });
+      await User.deleteMany({ email: 'installer-happy@example.com' });
+
+      const res = await request(app)
+        .post('/api/v2/installer/createAdmin')
+        .send({
+          registerForm: {
+            name: 'Installer Happy',
+            username: 'installer-happy',
+            email: 'installer-happy@example.com',
+            password: 'Password!1',
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'ok', message: 'Admin created successfully' });
+
+      const adminUser = await User.findOne({ email: 'installer-happy@example.com' });
+      expect(adminUser).not.toBeNull();
+      expect(adminUser?.admin).toBe(true);
+
+      // Calling `/installer` again must now report `already_installed`
+      // — the handler refreshes ConfigService after writing.
+      const status = await request(app).get('/api/v2/installer');
+      expect(status.body).toEqual({ status: 'already_installed' });
+
+      await User.deleteMany({ email: 'installer-happy@example.com' });
+    });
+
+    it('returns 400 (zod validation) when registerForm is missing required fields', async () => {
+      await Config.deleteMany({ ns: 'crowi' });
+
+      // username must match the regex `[\da-zA-Z\-_.]+` — an asterisk
+      // trips zod's validation and the OpenAPIHono defaultHook turns it
+      // into a 400 `VALIDATION_ERROR` envelope.
+      const res = await request(app)
+        .post('/api/v2/installer/createAdmin')
+        .send({
+          registerForm: {
+            name: 'Bad Form',
+            username: '***bad***',
+            email: 'bad-form@example.com',
+            password: 'Password!1',
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+    });
+  });
+});
