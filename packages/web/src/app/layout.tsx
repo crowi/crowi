@@ -51,7 +51,11 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} className="scroll-smooth" data-scroll-behavior="smooth">
-      <body className={`${geistSans.variable} ${notoSansJp.variable} ${geistMono.variable} antialiased`}>
+      {/* suppressHydrationWarning: browser extensions (ColorZilla, Grammarly, …)
+          inject attributes like `cz-shortcut-listen` onto <body> before React
+          hydrates. Suppressing here only silences the one <body> node — real
+          mismatches in descendants are still reported. */}
+      <body suppressHydrationWarning className={`${geistSans.variable} ${notoSansJp.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <InstallerGate>{children}</InstallerGate>
         </Providers>
