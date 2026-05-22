@@ -813,9 +813,16 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
   // on `enterDraftEditor` below.
   const [draftPageId, setDraftPageId] = useState<string | null>(null);
 
-  // `useRef` guard: React 18 StrictMode mounts effects twice in dev,
-  // and we never want two `POST /pages/drafts` for one editor open.
-  const startedRef = useRef(false);
+  // The draft-creation POST fires exactly once; its *promise* is kept
+  // in a ref. React StrictMode (dev) mounts effects twice — the first
+  // mount issues the POST, then the component is torn down and
+  // remounted. Holding the promise (not just a "started" boolean) lets
+  // the remounted instance re-attach its own handler to the same
+  // in-flight request. Without this the first mount's react-query
+  // observer is destroyed before the POST resolves, its result
+  // callbacks are silently dropped, and the editor stays stuck on the
+  // "preparing" spinner even though the draft was created server-side.
+  const draftPromiseRef = useRef<Promise<{ pageId: string }> | null>(null);
 
   // Switch this component into the draft editor.
   //
@@ -837,38 +844,43 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
   );
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
-    createDraft.mutate(
-      { path },
-      {
-        onSuccess: ({ pageId }) => {
-          enterDraftEditor(pageId);
-        },
-        onError: (err) => {
-          if (err instanceof DraftPathConflictError) {
-            // Own existing draft → resolve its page id from the list
-            // and hop straight into its editor.
-            if (user && err.owner.id === user.id) {
-              const own = draftsData?.drafts.find((d) => d.path === path);
-              if (own) {
-                enterDraftEditor(own.pageId);
-                return;
-              }
-              // The list hasn't loaded the matching row yet (or it was
-              // cancelled between calls) — surface a recoverable error
-              // rather than spin forever.
-              setError({ kind: 'message', text: m['edit.draft_own_conflict_unresolved']() });
+    // Issue the POST once (guarded by the ref); on a StrictMode
+    // remount the ref already holds the promise, so we only re-attach
+    // a fresh handler — never re-POST. The promise settles
+    // independently of the react-query observer's lifecycle, so the
+    // surviving mount always receives the result.
+    if (!draftPromiseRef.current) {
+      draftPromiseRef.current = createDraft.mutateAsync({ path });
+    }
+    let cancelled = false;
+    draftPromiseRef.current
+      .then(({ pageId }) => {
+        if (!cancelled) enterDraftEditor(pageId);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof DraftPathConflictError) {
+          // Own existing draft → resolve its page id from the list
+          // and hop straight into its editor.
+          if (user && err.owner.id === user.id) {
+            const own = draftsData?.drafts.find((d) => d.path === path);
+            if (own) {
+              enterDraftEditor(own.pageId);
               return;
             }
-            setError({ kind: 'conflict', displayName: err.owner.displayName, username: err.owner.username });
+            // The list hasn't loaded the matching row yet — surface a
+            // recoverable error rather than spin forever.
+            setError({ kind: 'message', text: m['edit.draft_own_conflict_unresolved']() });
             return;
           }
-          setError({ kind: 'message', text: err instanceof Error ? err.message : m['edit.failed_to_create']() });
-        },
-      },
-    );
+          setError({ kind: 'conflict', displayName: err.owner.displayName, username: err.owner.username });
+          return;
+        }
+        setError({ kind: 'message', text: err instanceof Error ? err.message : m['edit.failed_to_create']() });
+      });
+    return () => {
+      cancelled = true;
+    };
     // Run exactly once on mount. `path` is stable for a given editor
     // open (a new path = a fresh navigation = a fresh component), and
     // the other deps are intentionally excluded so a `draftsData`
