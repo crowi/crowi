@@ -181,7 +181,11 @@ describe('attachCollabServer (RFC-0003 Phase 9 same-process attach)', () => {
   it('routes /collab/<pageId> upgrades into the Hocuspocus engine', async () => {
     const baseline = lastFakeHocuspocus?.handleConnection.mock.calls.length ?? 0;
     const url = `ws://127.0.0.1:${testServer.port}/collab/fake-page-id?token=ignored`;
-    const outcome = await probeWs(url);
+    // Generous ceiling: `probeWs` resolves the instant the `open` event
+    // fires, so a longer timeout never slows the happy path — it only
+    // stops a loaded CI runner (where the WS handshake can take >1s)
+    // from giving up early and reporting a false `opened: false`.
+    const outcome = await probeWs(url, 10000);
     // Upgrade reached our handler → wss.handleUpgrade accepted →
     // wireConnection called hocuspocus.handleConnection on the
     // (stub) engine. Open is observed at the ws client.

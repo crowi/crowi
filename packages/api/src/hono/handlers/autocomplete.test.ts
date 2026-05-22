@@ -186,20 +186,23 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
         email: 'ac-ratelimit@example.com',
       });
 
-      let sawRateLimit = false;
-      // 61 hits exceeds the 60-req window.
-      for (let i = 0; i < 61; i += 1) {
-        const res = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(accessToken)).query({ q: 'ac' });
-        if (res.status === 429) {
-          sawRateLimit = true;
-          expect(res.body.error).toBe('rate_limited');
-          expect(typeof res.body.retryAfterSeconds).toBe('number');
-          expect(res.headers['retry-after']).toBeDefined();
-          break;
-        }
-        expect(res.status).toBe(200);
-      }
-      expect(sawRateLimit).toBe(true);
+      // The limiter uses a fixed 60s window (`floor(now / windowMs)`).
+      // Firing exactly 61 sequential requests is flaky: a slow CI run
+      // can straddle a window boundary mid-burst, resetting the count
+      // before it ever exceeds the budget. Fire 2*budget+1 requests
+      // concurrently instead — the burst spans at most two windows, so
+      // by pigeonhole one window receives >60 hits and returns 429,
+      // wherever the boundary falls.
+      const responses = await Promise.all(
+        Array.from({ length: 121 }, () => request(app).get('/api/v2/users/autocomplete').set(authHeaders(accessToken)).query({ q: 'ac' })),
+      );
+      expect(responses.every((res) => res.status === 200 || res.status === 429)).toBe(true);
+
+      const limited = responses.find((res) => res.status === 429);
+      expect(limited).toBeDefined();
+      expect(limited?.body.error).toBe('rate_limited');
+      expect(typeof limited?.body.retryAfterSeconds).toBe('number');
+      expect(limited?.headers['retry-after']).toBeDefined();
     });
 
     it('counts the budget per-user (a second user is unaffected)', async () => {
