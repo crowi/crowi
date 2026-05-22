@@ -8,6 +8,24 @@ import { buildExtensions } from './build-extensions';
 export interface MarkdownEditorProps {
   value: string;
   /**
+   * Collab mode only. When supplied, the initial document is read from
+   * this callback **inside the mount effect** instead of from `value`.
+   *
+   * This closes a race for the realtime editor: `value` is captured at
+   * render time, but the underlying Y.Text can receive a Hocuspocus
+   * sync delta between render and the (passive) mount effect. Reading
+   * the content in the effect guarantees the `EditorState` doc matches
+   * Y.Text at the exact instant `yCollab`'s `ySyncPlugin` starts
+   * observing it — `ySyncPlugin` only applies *future* deltas, so any
+   * content already present at attach time must be in the initial doc
+   * or it never renders.
+   *
+   * Its presence also marks the document as externally owned: the
+   * `value`-sync effect is disabled so it can't clobber the shared
+   * Y.Text (yCollab owns dispatch).
+   */
+  getInitialDoc?: () => string;
+  /**
    * Document-change listener. Optional so RFC-0003 Phase 7's collab
    * wrapper can mount the editor with Y.Text-driven dispatch and skip
    * the update-listener that would otherwise fire on every yCollab
@@ -100,9 +118,15 @@ export interface MarkdownEditorHandle {
  * re-fire for our own dispatches and produce a render loop.
  */
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(props, ref) {
-  const { value, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory, paste, dnd } = props;
+  const { value, getInitialDoc, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory, paste, dnd } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+
+  // Collab mode is fixed for a mounted instance's lifetime (the collab
+  // wrapper remounts via `key` when the session swaps), so capturing
+  // `getInitialDoc` once at mount is correct — and required, since the
+  // caller passes a fresh arrow identity every render.
+  const getInitialDocRef = useRef(getInitialDoc);
 
   // Stable refs for callbacks so the mount effect can fire once. Without
   // these the editor would tear down + remount on every parent render
@@ -152,7 +176,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     // dispatches don't fan out through a no-op listener.
     const onChangeAtMount = onChangeRef.current;
     const state = EditorState.create({
-      doc: value,
+      // Collab mode reads the doc from `getInitialDoc()` here in the
+      // effect so it reflects Y.Text at the exact moment `yCollab`
+      // attaches — see the `getInitialDoc` prop docs.
+      doc: getInitialDocRef.current ? getInitialDocRef.current() : value,
       extensions: [
         buildExtensions({
           // `readonly` is intentionally omitted here — the compartment
@@ -206,6 +233,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   // racing parent-state-driven sync doesn't collapse the user's
   // current cursor / selection range.
   useEffect(() => {
+    // Collab mode: yCollab owns the document. `value` is not
+    // authoritative, and pushing it in here would clobber (or, when
+    // `value=''`, delete) the shared Y.Text content.
+    if (getInitialDocRef.current) return;
     const view = viewRef.current;
     if (!view) return;
     const current = view.state.doc.toString();

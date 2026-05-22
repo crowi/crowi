@@ -341,10 +341,24 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
 
   // No `onChange`: yCollab owns dispatch, so the inner editor skips
   // the updateListener entirely (see `build-extensions.ts`).
+  //
+  // `key` forces a fresh remount when the session becomes ready (and
+  // again if the page — hence the Y.Text — swaps in place). This is
+  // what fixes the intermittent "editor renders blank" bug: the inner
+  // editor must mount with `yCollab` *already* in its initial
+  // `EditorState` AND its doc seeded from `yText`, so `ySyncPlugin`
+  // starts observing a doc that matches Y.Text. Hot-swapping `yCollab`
+  // in via the compartment (the pre-fix path) raced the Hocuspocus
+  // sync: if the doc was seeded before `yCollab` attached, the
+  // already-present content produced no observe event and never
+  // rendered.
+  const inner = uploadPageId ?? pageId ?? 'collab';
   return (
     <MarkdownEditor
+      key={`${inner}-${yText ? 'ready' : 'pending'}`}
       ref={ref}
       value=""
+      getInitialDoc={yText ? () => yText.toString() : undefined}
       readonly={editorReadonly}
       disableHistory={Boolean(yText)}
       extraExtensions={extraExtensions}
