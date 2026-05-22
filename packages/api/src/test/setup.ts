@@ -70,6 +70,17 @@ export const MONGO_URI = global.MONGO_URI as string;
 // @ts-ignore
 export const MONGO_DB_NAME = global.MONGO_DB_NAME as string;
 
+// The `beforeAll` below boots a full Crowi (`crowi.init()` — encryption,
+// DB connect, models, redis, config) and builds the Hono app, once per
+// test file. On constrained CI runners — and especially with other
+// workspaces' jest suites running concurrently — that comfortably
+// exceeds Jest's default 5s hook timeout. Raise the default for every
+// hook/test in this project's files; a genuine hang still fails, just
+// later. (A project-level `testTimeout` in jest.config.js is NOT
+// honoured for hooks registered from a setupFilesAfterEnv module, so
+// the timeout has to be set here.)
+jest.setTimeout(60000);
+
 beforeAll(async () => {
   // Spread process.env FIRST and then layer the test-harness values on
   // top. The original order (`{ ...test, ...process.env }`) silently
@@ -92,11 +103,11 @@ beforeAll(async () => {
   // `crowi/index.ts:start()` applies on the production listener.
   const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiV2Prefix(request));
   app = getRequestListener(fetchFn);
-});
+}, 60000);
 
 afterAll(async () => {
   await crowi.getMongo().disconnect();
-});
+}, 60000);
 
 export const Fixture = {
   async generate(model, fixture) {

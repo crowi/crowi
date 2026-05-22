@@ -107,13 +107,6 @@ module.exports = {
     {
       displayName: 'server',
       preset: 'ts-jest',
-      // The `setup.ts` `beforeAll` boots a full Crowi (`crowi.init()`)
-      // and builds the Hono app per test file. On constrained CI
-      // runners — especially with other workspaces' suites running
-      // concurrently — that exceeds Jest's default 5s hook timeout.
-      // Give every hook/test in this project generous headroom; a
-      // genuine hang still fails, just later.
-      testTimeout: 30000,
       testEnvironment: './src/test/crowi-environment.js',
       setupFilesAfterEnv: ['./src/test/setup.ts'],
       testMatch: ['<rootDir>/src/**/*.test.ts'],
