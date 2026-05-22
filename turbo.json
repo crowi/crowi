@@ -28,6 +28,15 @@
         "coverage/**"
       ]
     },
+    "@crowi/collab#test": {
+      "dependsOn": [
+        "^build",
+        "@crowi/api#build"
+      ],
+      "outputs": [
+        "coverage/**"
+      ]
+    },
     "test:server": {
       "dependsOn": [
         "^build"
