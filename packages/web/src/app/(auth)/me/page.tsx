@@ -1,6 +1,7 @@
 'use client';
 
 import { useProfile } from '@/lib/use-profile';
+import { usePageTitle } from '@/lib/use-page-title';
 import { SettingsLayout } from './settings-layout';
 import { ProfileForm } from './profile-form';
 import { ProfilePicture } from './profile-picture';
@@ -13,6 +14,7 @@ import { getLocale } from '@paraglide/runtime.js';
 
 export default function SettingsPage() {
   const { data: profile, isLoading, error } = useProfile();
+  usePageTitle(m['me.heading']());
 
   if (isLoading) {
     return (

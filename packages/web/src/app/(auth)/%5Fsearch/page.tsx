@@ -14,6 +14,7 @@ import { SearchHitItem } from '@/components/search/search-hit-item';
 import { SearchPager } from '@/components/search/search-pager';
 import { ALL_TAB, type SearchTypeTabValue, SearchTypeTabs, isSearchTypeTabValue } from '@/components/search/search-type-tabs';
 import { SearchDisabledError, useSearchPages } from '@/lib/use-search';
+import { usePageTitle } from '@/lib/use-page-title';
 import { m } from '@paraglide/messages.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -48,6 +49,8 @@ function SearchPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+
+  usePageTitle(m['search.title']());
 
   const urlQ = searchParams.get('q') ?? '';
   const urlType = parseType(searchParams.get('type'));

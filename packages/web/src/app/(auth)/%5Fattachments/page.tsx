@@ -5,6 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AttachmentUsageView } from '@/components/page-view/attachment-usage-view';
+import { pageBasename } from '@/lib/page-path';
+import { usePage } from '@/lib/use-page';
+import { usePageTitle } from '@/lib/use-page-title';
 import { m } from '@paraglide/messages.js';
 
 /**
@@ -18,6 +21,9 @@ import { m } from '@paraglide/messages.js';
 function AttachmentsPageInner() {
   const searchParams = useSearchParams();
   const pageId = searchParams.get('pageId');
+
+  const { page } = usePage({ page_id: pageId ?? undefined });
+  usePageTitle(page ? m['doc_title.attachments']({ path: pageBasename(page.path) }) : null);
 
   if (!pageId) {
     return <ErrorAlert message={m['page.attachments_all_failed']()} />;

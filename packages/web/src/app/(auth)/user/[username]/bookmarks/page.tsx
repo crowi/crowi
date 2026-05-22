@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Bookmark } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserBookmarks } from '@/components/user-page';
+import { usePageTitle } from '@/lib/use-page-title';
 
 interface BookmarksPageProps {
   params: Promise<{
@@ -14,6 +15,8 @@ interface BookmarksPageProps {
 
 export default function BookmarksPage({ params }: BookmarksPageProps) {
   const { username } = use(params);
+
+  usePageTitle(username);
 
   return (
     <div className="space-y-6">

@@ -1,5 +1,10 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+  "doc_title.editing": "{path} を編集",
+  "doc_title.new_page": "新規ページ: {path}",
+  "doc_title.history": "{path} の履歴",
+  "doc_title.attachments": "添付ファイル: {path}",
+  "doc_title.trash": "ゴミ箱",
   "common.loading": "読み込み中...",
   "common.error": "エラー",
   "common.retry": "再試行",

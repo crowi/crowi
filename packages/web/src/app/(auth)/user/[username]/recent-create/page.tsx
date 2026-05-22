@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserRecentPages } from '@/components/user-page';
+import { usePageTitle } from '@/lib/use-page-title';
 
 interface RecentCreatePageProps {
   params: Promise<{
@@ -14,6 +15,8 @@ interface RecentCreatePageProps {
 
 export default function RecentCreatePage({ params }: RecentCreatePageProps) {
   const { username } = use(params);
+
+  usePageTitle(username);
 
   return (
     <div className="space-y-6">

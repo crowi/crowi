@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useMarkAllAsRead, useNotificationsInfinite, useOpenNotification, useUnreadCount } from '@/lib/use-notifications';
+import { usePageTitle } from '@/lib/use-page-title';
 import { NotificationItem } from './notification-item';
 import { m } from '@paraglide/messages.js';
 
@@ -24,6 +25,7 @@ const PAGE_SIZE = 20;
  */
 export function NotificationList() {
   const router = useRouter();
+  usePageTitle(m['notifications.title']());
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useNotificationsInfinite(PAGE_SIZE);
   const { data: unreadCount = 0 } = useUnreadCount();
   const markAllAsRead = useMarkAllAsRead();

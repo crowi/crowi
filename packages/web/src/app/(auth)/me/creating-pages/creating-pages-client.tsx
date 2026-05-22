@@ -20,10 +20,12 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { DraftPathConflictError, draftEditHref, useCancelDraft, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { notify } from '@/lib/notify';
+import { usePageTitle } from '@/lib/use-page-title';
 import type { DraftSummary } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
 export function CreatingPagesClient() {
+  usePageTitle(m['creating_pages.heading']());
   return (
     <div className="space-y-6">
       <div>

@@ -22,6 +22,8 @@ import { UnsavedChangesDialog } from '@/components/editor/UnsavedChangesDialog';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { useAuth } from '@/lib/use-auth';
 import { usePage } from '@/lib/use-page';
+import { pageBasename } from '@/lib/page-path';
+import { usePageTitle } from '@/lib/use-page-title';
 import { usePresence } from '@/lib/use-presence';
 import { PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
 import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
@@ -648,6 +650,8 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   // shows peers via `CollabPresenceAvatars`, not this row.
   usePresence(pageId);
 
+  usePageTitle(page ? m['doc_title.editing']({ path: pageBasename(page.path) }) : null);
+
   // RFC-0003 Phase 7: in realtime mode the canonical body lives in
   // Y.Text. We still keep a React-side `body` string for the preview
   // pane + the attachment-insert markdown + the (transitional) HTTP
@@ -801,6 +805,7 @@ interface CreatePageEditorProps {
 function CreatePageEditor({ path }: CreatePageEditorProps) {
   const router = useRouter();
   const { user } = useAuth();
+  usePageTitle(m['doc_title.new_page']({ path: pageBasename(path) }));
   const createDraft = useCreateDraft();
   // `useDrafts` is only consulted in the own-409 branch — it is cheap
   // (30s staleTime, shared cache) and lets us recover the page id of a

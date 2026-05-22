@@ -9,6 +9,7 @@ import { UserProfile, UserRecentPages, UserBookmarks, type UserProfileTab } from
 import { PageHeader, PageContent } from '@/components/page-view';
 import { useUserPage } from '@/lib/use-user-page';
 import { usePage } from '@/lib/use-page';
+import { usePageTitle } from '@/lib/use-page-title';
 import { m } from '@paraglide/messages.js';
 
 interface UserPageProps {
@@ -21,6 +22,8 @@ export default function UserPage({ params }: UserPageProps) {
   const { username } = use(params);
   const router = useRouter();
   const { data, isLoading, error } = useUserPage(username);
+
+  usePageTitle(username);
 
   // Crowi convention: a wiki page may live at /user/<username>. When it
   // exists, it renders below the profile cover (same path the legacy

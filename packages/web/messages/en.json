@@ -1,5 +1,10 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+  "doc_title.editing": "Editing {path}",
+  "doc_title.new_page": "New page: {path}",
+  "doc_title.history": "History: {path}",
+  "doc_title.attachments": "Attachments: {path}",
+  "doc_title.trash": "Trash",
   "common.loading": "Loading...",
   "common.error": "Error",
   "common.retry": "Retry",
