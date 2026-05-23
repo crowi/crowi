@@ -1,15 +1,16 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Breadcrumb } from '@/components/breadcrumb';
-import { ArrowUp, Lock, Edit2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { ArrowUp, Edit2, Lock } from 'lucide-react';
+import { Breadcrumb } from '@/components/breadcrumb';
+import { Button } from '@/components/ui/button';
+import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import { usePresence } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
 import { cn } from '@/lib/utils';
-import { m } from '@paraglide/messages.js';
 import { BookmarkButton } from './bookmark-button';
 import { LikeButton } from './like-button';
 import { LinkSharePopover } from './link-share-popover';
@@ -52,8 +53,7 @@ interface PageHeaderProps {
 
 function getPageTitle(path: string): string {
   if (path === '/') return 'Home';
-  const segments = path.split('/').filter(Boolean);
-  return segments[segments.length - 1] || 'Untitled';
+  return pageDisplayName(path) || 'Untitled';
 }
 
 export function PageHeader({ page, onEdit, showActions = false, showMeta = true, showTitle = true, showPresence = false, sticky = false }: PageHeaderProps) {

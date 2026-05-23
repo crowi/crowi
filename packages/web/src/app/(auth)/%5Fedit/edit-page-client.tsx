@@ -1,36 +1,36 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { m } from '@paraglide/messages.js';
 import { AlertCircle, Loader2, Save, X } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
+import type * as Y from 'yjs';
+import { CollabForceReloadDialog } from '@/components/editor/CollabForceReloadDialog';
+import { CollaborativeMarkdownEditor, type CollabSession, useCollabSession } from '@/components/editor/CollaborativeMarkdownEditor';
+import { CollabPresenceAvatars } from '@/components/editor/CollabPresenceAvatars';
+import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarning';
+import { GrantSelect } from '@/components/editor/GrantSelect';
+import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
+import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
+import { UnsavedChangesDialog } from '@/components/editor/UnsavedChangesDialog';
+import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
-import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
-import { GrantSelect } from '@/components/editor/GrantSelect';
-import type * as Y from 'yjs';
-import { CollaborativeMarkdownEditor, useCollabSession, type CollabSession } from '@/components/editor/CollaborativeMarkdownEditor';
-import { CollabForceReloadDialog } from '@/components/editor/CollabForceReloadDialog';
-import { CollabPresenceAvatars } from '@/components/editor/CollabPresenceAvatars';
-import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarning';
-import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
-import { UnsavedChangesDialog } from '@/components/editor/UnsavedChangesDialog';
 import { ErrorAlert } from '@/components/ui/error-alert';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
+import type { CollabStatus } from '@/lib/use-collab-document';
+import { useCollabSave } from '@/lib/use-collab-save';
+import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePage } from '@/lib/use-page';
-import { pageBasename } from '@/lib/page-path';
+import { PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
 import { usePageTitle } from '@/lib/use-page-title';
 import { usePresence } from '@/lib/use-presence';
-import { PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
-import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { useScrollSync } from '@/lib/use-scroll-sync';
-import { useCollabSave } from '@/lib/use-collab-save';
-import type { CollabStatus } from '@/lib/use-collab-document';
-import { m } from '@paraglide/messages.js';
 
 type Feedback = { kind: 'conflict' | 'error'; message: string };
 
@@ -650,7 +650,7 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   // shows peers via `CollabPresenceAvatars`, not this row.
   usePresence(pageId);
 
-  usePageTitle(page ? m['doc_title.editing']({ path: pageBasename(page.path) }) : null);
+  usePageTitle(page ? m['doc_title.editing']({ path: pageDisplayName(page.path) }) : null);
 
   // RFC-0003 Phase 7: in realtime mode the canonical body lives in
   // Y.Text. We still keep a React-side `body` string for the preview
@@ -805,7 +805,7 @@ interface CreatePageEditorProps {
 function CreatePageEditor({ path }: CreatePageEditorProps) {
   const router = useRouter();
   const { user } = useAuth();
-  usePageTitle(m['doc_title.new_page']({ path: pageBasename(path) }));
+  usePageTitle(m['doc_title.new_page']({ path: pageDisplayName(path) }));
   const createDraft = useCreateDraft();
   // `useDrafts` is only consulted in the own-409 branch — it is cheap
   // (30s staleTime, shared cache) and lets us recover the page id of a

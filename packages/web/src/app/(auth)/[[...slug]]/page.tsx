@@ -1,12 +1,12 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { IdRedirector } from '@/components/id-redirector';
 import { PageList } from '@/components/page-list/page-list';
 import { PageView } from '@/components/page-view';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { isObjectId } from '@/lib/object-id';
-import { pageBasename } from '@/lib/page-path';
+import { pageDisplayName } from '@/lib/page-path';
 import { usePageTitle } from '@/lib/use-page-title';
 
 export default function CatchAllPage() {
@@ -25,7 +25,7 @@ export default function CatchAllPage() {
   // Only the last path segment names the tab (e.g.
   // /crowi/rfc/0001-plugin-architecture → "0001-plugin-architecture");
   // the top page has no segment.
-  usePageTitle(pageBasename(path) || null);
+  usePageTitle(pageDisplayName(path) || null);
 
   // Single-segment 24-char hex ObjectId → resolve to the page's actual path.
   if (segments.length === 1 && isObjectId(segments[0])) {
