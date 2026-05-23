@@ -1,8 +1,8 @@
 'use client';
 
+import type { ListPagesRequest } from '@crowi/api-contract';
 import { useQuery } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import type { ListPagesRequest } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.listPages`
@@ -11,9 +11,15 @@ import type { ListPagesRequest } from '@crowi/api-contract';
  * forwards verbatim; Zod's `z.coerce.number()` / `z.coerce.boolean()`
  * on the server side handles the conversion.
  */
-export function usePageList(params: ListPagesRequest) {
+interface UsePageListOptions {
+  /** When false, skip the request entirely (react-query enabled flag). */
+  enabled?: boolean;
+}
+
+export function usePageList(params: ListPagesRequest, options: UsePageListOptions = {}) {
   return useQuery({
     queryKey: ['pages', 'list', params],
+    enabled: options.enabled ?? true,
     queryFn: async () => {
       const response = await apiClientV2.pages.list.$get({
         query: {

@@ -1,8 +1,8 @@
 'use client';
 
+import type { Pager } from '@crowi/api-contract';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { Pager } from '@crowi/api-contract';
 
 interface PaginationProps {
   pager: Pager;

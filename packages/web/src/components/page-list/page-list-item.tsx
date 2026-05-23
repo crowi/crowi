@@ -1,17 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { MessageSquare, ThumbsUp, Lock, FileText, MoreHorizontal, RotateCcw, Trash2, Loader2 } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
-import { formatDistanceToNow } from '@/lib/date-utils';
-import { m } from '@paraglide/messages.js';
 import type { Page } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { Folder, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { UserAvatar } from '@/components/user-avatar';
+import { formatDistanceToNow } from '@/lib/date-utils';
+import { pageDisplayName, pageDisplayParent } from '@/lib/page-path';
+import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
+import { cn } from '@/lib/utils';
 
 export type PageListVariant = 'default' | 'trash';
 
@@ -20,85 +22,135 @@ interface PageListItemProps {
   variant?: PageListVariant;
 }
 
+/**
+ * One row in the page list. Title-forward, two-line layout:
+ *
+ *   ◍  basename                                   ♡3  💬2
+ *      /parent/dir/ · author · 3 days ago
+ *
+ * The basename is the scannable hero; the muted directory prefix +
+ * author + timestamp sit on a quieter second line. Reaction counts
+ * (like / comment) hug the right edge so they form a tidy column down
+ * the list. The whole row is one link / hit-target.
+ */
 export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
-  // Extract user data from populated fields
-  const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
-  const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
-
-  // Determine the display user (prefer lastUpdateUser, fallback to creator)
-  const displayUser = lastUpdateUser || creator;
-
-  // Get display name with fallback to username or default
-  const displayName = displayUser?.name || displayUser?.username || '?';
-
-  // Check if page is a portal page (ends with /)
-  const isPortal = page.path.endsWith('/');
-
-  // Check if page is private
-  const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
-
   const isTrash = variant === 'trash';
 
-  return (
-    <div className="flex items-start gap-4 p-4 hover:bg-accent/50 transition-colors rounded-lg border-b last:border-0">
-      {/* User Avatar */}
-      {displayUser && (
-        <Avatar className="h-10 w-10 flex-shrink-0">
-          <AvatarImage src={displayUser.image || undefined} alt={displayName} />
-          <AvatarFallback className="bg-primary/10 text-primary">{displayName.charAt(0).toUpperCase()}</AvatarFallback>
-        </Avatar>
-      )}
+  const rowClass = 'group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50';
 
-      {/* Page Info */}
-      <div className="flex-1 min-w-0">
-        {/* Page path and icons */}
-        <div className="flex items-center gap-2 mb-1">
-          {isTrash ? (
-            <span className="font-medium text-foreground truncate" title={page.path}>
-              {page.path}
-            </span>
-          ) : (
-            <Link href={page.path} className="font-medium text-foreground hover:text-primary transition-colors truncate">
-              {page.path}
-            </Link>
-          )}
-          {isPortal && <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Portal page" />}
-          {isPrivate && <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Private page" />}
+  // Trash rows are not links — the path is dead and the row hosts a
+  // restore / delete-forever menu instead.
+  if (isTrash) {
+    return (
+      <div className={rowClass}>
+        <PageRowBody page={page} isTrash />
+        <TrashItemActions pageId={page._id} pagePath={page.path} />
+      </div>
+    );
+  }
+
+  return (
+    <Link href={page.path} className={cn(rowClass, 'focus-visible:bg-accent/50 focus-visible:outline-none')}>
+      <PageRowBody page={page} />
+    </Link>
+  );
+}
+
+function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean }) {
+  // Populated user fields may arrive as bare ObjectId strings; only the
+  // object form carries a name / avatar.
+  const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
+  const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
+  const displayUser = lastUpdateUser || creator;
+  // Preserve the legacy '?' placeholder for populated-but-empty users
+  // (e.g. legacy rows where both `name` and `username` are blank): a stray
+  // empty author column would otherwise misalign neighbouring rows.
+  const displayName = displayUser ? displayUser.name || displayUser.username || '?' : null;
+
+  const isPortal = page.path.endsWith('/');
+  const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
+
+  // `pageDisplayName` collapses a trailing date hierarchy (e.g. `/2026/05/23`)
+  // into a single readable title — so a daily-note page shows "2026/05/23"
+  // rather than just "23" while its sibling on `parentPath` stays short.
+  const basename = pageDisplayName(page.path) || page.path;
+  const parentPath = pageDisplayParent(page.path);
+  // A standalone '/' on line 2 is visual noise — the title already
+  // conveys the full path (e.g. root-level dailies '/2026/05/23'), so
+  // hide the parent slot entirely in that case.
+  const showParent = parentPath !== '/';
+
+  const likeCount = page.likerCount ?? page.liker?.length ?? 0;
+  const commentCount = page.commentCount ?? 0;
+  const hasReactions = likeCount > 0 || commentCount > 0;
+  const updatedAt = page.updatedAt || page.createdAt;
+
+  return (
+    <>
+      {displayUser ? <UserAvatar user={displayUser} size="md" className="shrink-0" /> : <div className="h-8 w-8 shrink-0 rounded-full bg-muted" aria-hidden />}
+
+      <div className="min-w-0 flex-1">
+        {/* Line 1 — title + flags, reactions pinned right */}
+        <div className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              'truncate text-[15px] font-semibold leading-snug',
+              isTrash ? 'text-foreground' : 'text-foreground transition-colors group-hover:text-primary',
+            )}
+            title={page.path}
+          >
+            {basename}
+          </span>
+          {isPortal && <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Portal page" />}
+          {isPrivate && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private page" />}
           {isTrash && (
-            <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive flex-shrink-0">
+            <span className="inline-flex shrink-0 items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
               {m['page_list.deleted_badge']()}
             </span>
           )}
+
+          {hasReactions && (
+            <div className="ml-auto flex shrink-0 items-center gap-3 pl-2 text-xs text-muted-foreground tabular-nums">
+              {likeCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <ThumbsUp className="h-3.5 w-3.5" />
+                  {likeCount}
+                </span>
+              )}
+              {commentCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  {commentCount}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* User and date info */}
-        {displayUser && (
-          <div className="text-sm text-muted-foreground">
-            <span className="font-medium">{displayName}</span>
-            {' · '}
-            <time dateTime={page.updatedAt || page.createdAt}>{formatDistanceToNow(page.updatedAt || page.createdAt)}</time>
-          </div>
-        )}
-
-        {/* Metadata (comments, likes) */}
-        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-          {page.commentCount > 0 && (
-            <div className="flex items-center gap-1">
-              <MessageSquare className="h-4 w-4" />
-              <span>{page.commentCount}</span>
-            </div>
+        {/* Line 2 — muted directory prefix · author · relative time */}
+        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          {showParent && <span className="truncate font-mono">{parentPath}</span>}
+          {displayName && (
+            <>
+              {showParent && <Dot />}
+              <span className="shrink-0">{displayName}</span>
+            </>
           )}
-          {(page.likerCount ?? page.liker?.length ?? 0) > 0 && (
-            <div className="flex items-center gap-1">
-              <ThumbsUp className="h-4 w-4" />
-              <span>{page.likerCount ?? page.liker?.length ?? 0}</span>
-            </div>
-          )}
+          {(showParent || displayName) && <Dot />}
+          <time dateTime={updatedAt} className="shrink-0">
+            {formatDistanceToNow(updatedAt)}
+          </time>
         </div>
       </div>
+    </>
+  );
+}
 
-      {isTrash && <TrashItemActions pageId={page._id} pagePath={page.path} />}
-    </div>
+function Dot() {
+  return (
+    <span aria-hidden className="shrink-0 text-border">
+      ·
+    </span>
   );
 }
 
@@ -153,7 +205,7 @@ function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
   };
 
   return (
-    <div className="flex-shrink-0">
+    <div className="shrink-0">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="sm" aria-label={m['page_list.actions_aria']()}>
