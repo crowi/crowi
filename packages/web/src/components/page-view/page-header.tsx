@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/use-auth';
 import { usePresence } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
 import { cn } from '@/lib/utils';
+import type { LucideIcon } from 'lucide-react';
 import { BookmarkButton } from './bookmark-button';
 import { LikeButton } from './like-button';
 import { LinkSharePopover } from './link-share-popover';
@@ -54,6 +55,46 @@ interface PageHeaderProps {
 function getPageTitle(path: string): string {
   if (path === '/') return 'Home';
   return pageDisplayName(path) || 'Untitled';
+}
+
+/**
+ * Resolve the icon + chip label for a page's grant. RESTRICTED uses a
+ * link icon because "anyone with the link" is the sharing posture;
+ * SPECIFIED / OWNER use the lock icon. Returns `null` for PUBLIC so
+ * callers can short-circuit rendering.
+ */
+function grantChipInfo(grant: number | undefined): { Icon: LucideIcon; label: string } | null {
+  if (grant === PageGrantEnum.RESTRICTED) {
+    return { Icon: Link2, label: m['page.grant_chip_restricted']() };
+  }
+  if (grant === PageGrantEnum.SPECIFIED) {
+    return { Icon: Lock, label: m['page.grant_chip_specified']() };
+  }
+  if (grant === PageGrantEnum.OWNER) {
+    return { Icon: Lock, label: m['page.grant_chip_owner']() };
+  }
+  return null;
+}
+
+/**
+ * Pill chip next to the page title that names the page's sharing
+ * posture and picks up `--page-grant-accent` for border + text + icon.
+ * Companion to the thin accent strip in `(auth)/layout.tsx` — both
+ * read the same CSS variable so the colour stays consistent.
+ */
+function GrantChip({ grant }: { grant: number }) {
+  const info = grantChipInfo(grant);
+  if (!info) return null;
+  const { Icon, label } = info;
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium"
+      style={{ borderColor: 'var(--page-grant-accent)', color: 'var(--page-grant-accent)' }}
+    >
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {label}
+    </span>
+  );
 }
 
 export function PageHeader({ page, onEdit, showActions = false, showMeta = true, showTitle = true, showPresence = false, sticky = false }: PageHeaderProps) {
@@ -159,15 +200,13 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
       {showTitle ? (
         <div className="flex items-center gap-3">
           <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground flex-1 min-w-0">{pageTitle}</h1>
-          {isLinkOnly && <Link2 className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Link-only sharing" />}
-          {isPrivate && <Lock className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Private page" />}
+          {page.grant != null && <GrantChip grant={page.grant} />}
           {editButton}
         </div>
       ) : (
         (isLinkOnly || isPrivate || onEdit) && (
           <div className="flex items-center justify-end gap-3">
-            {isLinkOnly && <Link2 className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Link-only sharing" />}
-            {isPrivate && <Lock className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Private page" />}
+            {page.grant != null && <GrantChip grant={page.grant} />}
             {editButton}
           </div>
         )
@@ -241,8 +280,9 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
                 <ArrowUp className="h-4 w-4" />
               </button>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
-              {isLinkOnly && <Link2 className="h-4 w-4 text-muted-foreground shrink-0" aria-label="Link-only sharing" />}
-              {isPrivate && <Lock className="h-4 w-4 text-muted-foreground shrink-0" aria-label="Private page" />}
+              {/* Compact bar keeps just the coloured icon (no chip label) for room. */}
+              {isLinkOnly && <Link2 className="h-4 w-4 shrink-0" style={{ color: 'var(--page-grant-accent)' }} aria-label="Link-only sharing" />}
+              {isPrivate && <Lock className="h-4 w-4 shrink-0" style={{ color: 'var(--page-grant-accent)' }} aria-label="Private page" />}
               <div className="flex items-center gap-1 shrink-0">
                 {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}
                 {editIconButton}

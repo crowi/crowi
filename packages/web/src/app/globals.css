@@ -136,6 +136,25 @@
   --chart-3: oklch(0.6 0.1 150);
   --chart-4: oklch(0.7 0.12 130);
   --chart-5: oklch(0.75 0.15 85);
+
+  /* Page-grant accent — applied to a thin strip under the header,
+     the lock / link icon next to the title, and the grant chip's
+     border and text. `transparent` for PUBLIC produces no visible
+     signal. PageView sets data-page-grant on <html> from
+     page.grant. */
+  --page-grant-accent: transparent;
+}
+
+/* OWNER (4) — "just me", dark cool gray.
+   SPECIFIED (3) — same tone as OWNER per the isPrivate grouping. */
+html[data-page-grant="4"],
+html[data-page-grant="3"] {
+  --page-grant-accent: oklch(0.35 0.015 250);
+}
+
+/* RESTRICTED (2) — link-only, dark purple. */
+html[data-page-grant="2"] {
+  --page-grant-accent: oklch(0.4 0.13 295);
 }
 
 .dark {
@@ -363,3 +382,4 @@
 .crowi-prose pre.shiki span {
   background-color: transparent !important;
 }
+

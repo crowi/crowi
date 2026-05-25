@@ -51,6 +51,20 @@ export function PageView({ path, revisionId }: PageViewProps) {
     }
   }, [redirectTo, path, router]);
 
+  // Mirror the page's `grant` onto `<html data-page-grant=...>` so the
+  // CSS in globals.css can tint the gutter area for restricted /
+  // specified / owner pages (see `--page-bg-frame`). Cleanup on unmount
+  // returns the frame to the default background, so navigating away
+  // from a private page or into a non-page route never leaves a stale
+  // tint behind.
+  useEffect(() => {
+    if (page?.grant == null) return;
+    document.documentElement.dataset.pageGrant = String(page.grant);
+    return () => {
+      delete document.documentElement.dataset.pageGrant;
+    };
+  }, [page?.grant]);
+
   if (isLoading) {
     return <LoadingSpinner message={m['page.loading']()} />;
   }

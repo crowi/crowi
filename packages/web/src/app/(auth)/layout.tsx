@@ -100,6 +100,17 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
 
+      {/*
+        Page-grant accent strip — a thin horizontal bar directly
+        under the header that picks up `--page-grant-accent`
+        (transparent for PUBLIC, dark gray for OWNER/SPECIFIED, dark
+        purple for RESTRICTED). Peripheral signal of the page's
+        privacy level without tinting any surface that has content
+        on it. Non-sticky on purpose: the sticky compact page header
+        carries its own lock-icon affordance once you scroll.
+      */}
+      <div aria-hidden className="h-1 transition-colors" style={{ backgroundColor: 'var(--page-grant-accent)' }} />
+
       <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
 
       {/* RFC-0003 Phase 7 — single toaster instance for collab connection
