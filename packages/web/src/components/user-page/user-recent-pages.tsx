@@ -1,85 +1,69 @@
 'use client';
 
-import Link from 'next/link';
-import { Loader2, FileText } from 'lucide-react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { ErrorAlert } from '@/components/ui/error-alert';
-import { PageListItem } from '@/components/page-list/page-list-item';
-import { useUserPagesInfinite } from '@/lib/use-user-page';
 import type { Page } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { FileText } from 'lucide-react';
+import Link from 'next/link';
+import { LoadMoreButton, PageListEmptyCard, PageListSectionHeader, PageRowsCard, PageRowsSkeleton } from '@/components/page-list/page-list-shared';
+import { Button } from '@/components/ui/button';
+import { ErrorAlert } from '@/components/ui/error-alert';
+import { useUserPagesInfinite } from '@/lib/use-user-page';
 
 interface UserRecentPagesProps {
   username: string;
-  /**
-   * If true, shows only a preview (limited items with "View all" link)
-   */
+  /** Preview mode renders only a few rows and a "View all" link. */
   preview?: boolean;
-  /**
-   * Number of items to show in preview mode
-   */
+  /** How many rows to render in preview mode. */
   previewLimit?: number;
 }
 
+// Page size for the full-mode infinite query. Bumped up from the
+// legacy 10 so the first scroll already shows a substantial chunk —
+// the redesigned dense rows can comfortably absorb the extra height.
+const DEFAULT_FULL_LIMIT = 30;
+
 export function UserRecentPages({ username, preview = false, previewLimit = 5 }: UserRecentPagesProps) {
-  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useUserPagesInfinite(username, preview ? previewLimit : 10);
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useUserPagesInfinite(
+    username,
+    preview ? previewLimit : DEFAULT_FULL_LIMIT,
+  );
 
   if (isLoading) {
-    return <LoadingSpinner message={m['user_page.recent_pages_loading']()} size="md" className="py-8" />;
+    return <PageRowsSkeleton rows={preview ? previewLimit : 6} />;
   }
 
   if (error) {
     return <ErrorAlert message={m['user_page.recent_pages_failed']()} />;
   }
 
-  // Flatten all pages
-  const allPages: Page[] = data?.pages.flatMap((page) => page.pages) ?? [];
+  // Flatten all infinite-query pages of results.
+  const allPages: Page[] = data?.pages.flatMap((p) => p.pages) ?? [];
   const total = data?.pages[0]?.total ?? 0;
 
   if (allPages.length === 0) {
-    return (
-      <Card className="p-8 text-center">
-        <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-        <p className="text-muted-foreground">{m['user_page.recent_pages_empty']()}</p>
-      </Card>
-    );
+    return <PageListEmptyCard icon={FileText} message={m['user_page.recent_pages_empty']()} />;
   }
 
-  // In preview mode, show limited items
   const displayPages = preview ? allPages.slice(0, previewLimit) : allPages;
 
   return (
-    <div className="space-y-4">
-      <Card className="divide-y">
-        {displayPages.map((page) => (
-          <PageListItem key={page._id} page={page} />
-        ))}
-      </Card>
+    <div className="space-y-2">
+      <PageListSectionHeader icon={FileText} label={m['page_list.page_count']({ count: total })} />
+      <PageRowsCard pages={displayPages} />
 
       {/* Preview mode: "View all" link */}
       {preview && total > previewLimit && (
-        <div className="text-center">
+        <div className="pt-2 text-center">
           <Button variant="outline" asChild>
             <Link href={`/user/${username}/recent-create`}>{m['user_page.view_all_pages']({ count: total })}</Link>
           </Button>
         </div>
       )}
 
-      {/* Full mode: "Load more" button */}
+      {/* Full mode: "Load more" pager */}
       {!preview && hasNextPage && (
-        <div className="text-center">
-          <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-            {isFetchingNextPage ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                {m['user_page.loading']()}
-              </>
-            ) : (
-              m['user_page.load_more']()
-            )}
-          </Button>
+        <div className="pt-2">
+          <LoadMoreButton onClick={() => fetchNextPage()} isLoading={isFetchingNextPage} />
         </div>
       )}
     </div>

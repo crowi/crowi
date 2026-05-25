@@ -81,8 +81,18 @@ export type DraftNotFoundError = z.infer<typeof DraftNotFoundErrorSchema>;
 
 /**
  * A single row in `GET /api/v2/pages/drafts` — enough for the
- * `Creating pages` view: the path, the page id (for Edit / Cancel
- * links), and the creation timestamp ("started 2 hours ago").
+ * `Creating pages` view: identifiers (`pageId`, `path`), and the two
+ * timestamps that frame "did I make progress recently or is this stale"
+ * (`createdAt`, `updatedAt`).
+ *
+ * A body preview / character count was intentionally NOT included:
+ * draft body lives in the Hocuspocus Y.Doc / `Page.yjsState` and only
+ * lands in `Page.revision.body` on explicit save, so any field derived
+ * from the revision would lag the live editor enough to mislead users
+ * (an actively-edited draft would report "0 chars" until they pressed
+ * save). Surfacing a body summary correctly requires Y.Doc
+ * reconstruction per draft, which is heavier than the listing should
+ * absorb.
  */
 export const DraftSummarySchema = z.object({
   pageId: z.string(),

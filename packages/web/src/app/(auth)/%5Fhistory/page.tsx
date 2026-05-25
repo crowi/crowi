@@ -1,13 +1,13 @@
 'use client';
 
-import { Suspense } from 'react';
+import { m } from '@paraglide/messages.js';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { PageHistoryView } from '@/components/page-history/page-history-view';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { PageHistoryView } from '@/components/page-history/page-history-view';
-import { pageBasename } from '@/lib/page-path';
+import { pageDisplayName } from '@/lib/page-path';
 import { usePageTitle } from '@/lib/use-page-title';
-import { m } from '@paraglide/messages.js';
 
 /**
  * /_history?path=<page path>
@@ -20,7 +20,7 @@ function HistoryPageInner() {
   const searchParams = useSearchParams();
   const path = searchParams.get('path');
 
-  usePageTitle(path ? m['doc_title.history']({ path: pageBasename(path) }) : null);
+  usePageTitle(path ? m['doc_title.history']({ path: pageDisplayName(path) }) : null);
 
   if (!path) {
     return <ErrorAlert message={m['page_history.failed_to_load']({ message: 'path parameter is required' })} />;

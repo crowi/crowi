@@ -1,7 +1,7 @@
-import request from 'supertest';
 import { Types } from 'mongoose';
 import { app, crowi, Fixture } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
+import request from 'supertest';
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -1369,5 +1369,143 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
       .query({ path: `/trash${PATH_PREFIX}` });
     expect(res.status).toBe(200);
     expect(res.body.portalPage).toBeNull();
+  });
+});
+
+/**
+ * Listing-handler visibility coverage for the root / no-path branch
+ * (`path === '/'` or `path` omitted). The path-based branch routes
+ * through `Page.findListByStartWith`, which uses the model's
+ * `visiblePageGrantOr` / `visiblePageStatusOr` helpers; the root branch
+ * used to hard-code `grant: { $in: [1, 2] }` which silently dropped
+ * the viewer's GRANT_OWNER / GRANT_SPECIFIED pages and leaked
+ * GRANT_RESTRICTED pages to non-members. These tests pin the fix.
+ */
+describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibility)', () => {
+  const PATH_PREFIX = '/hono-page-root-grants-test/';
+  let aliceHeaders: ReturnType<typeof authHeaders>;
+  let bobHeaders: ReturnType<typeof authHeaders>;
+
+  beforeAll(async () => {
+    const alice = await createTestUser({ name: 'Root Alice', username: 'rootGrantAlice', email: 'root-grant-alice@example.com' });
+    const bob = await createTestUser({ name: 'Root Bob', username: 'rootGrantBob', email: 'root-grant-bob@example.com' });
+    aliceHeaders = authHeaders(alice.accessToken);
+    bobHeaders = authHeaders(bob.accessToken);
+  });
+
+  afterEach(async () => {
+    await cleanupPathPrefix(PATH_PREFIX);
+  });
+
+  it("surfaces the viewer's GRANT_OWNER pages in the root listing", async () => {
+    const path = `${PATH_PREFIX}owner-only`;
+    const create = await request(app).post('/api/v2/pages').set(aliceHeaders).send({ path, body: '# private', grant: 4 });
+    expect(create.status).toBe(200);
+    const pageId = create.body.page._id as string;
+
+    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/' });
+    expect(list.status).toBe(200);
+    const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
+    expect(pageIds).toContain(pageId);
+  });
+
+  it('keeps GRANT_RESTRICTED pages hidden from non-members in the root listing', async () => {
+    const path = `${PATH_PREFIX}restricted-secret`;
+    // Restricted to Alice only (no grantedUsers carries the owner here,
+    // POST endpoint seeds it for grant=4; for grant=2 we set grantedUsers
+    // explicitly via setPageGrant to the owner alone).
+    const create = await request(app).post('/api/v2/pages').set(aliceHeaders).send({ path, body: '# secret', grant: 2 });
+    expect(create.status).toBe(200);
+    const pageId = create.body.page._id as string;
+
+    // Bob is not in the grantedUsers list, so the root listing must
+    // omit the page entirely. Previously the hard-coded
+    // `grant: { $in: [1, 2] }` would have shown it to Bob.
+    const list = await request(app).get('/api/v2/pages/list').set(bobHeaders).query({ path: '/' });
+    expect(list.status).toBe(200);
+    const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
+    expect(pageIds).not.toContain(pageId);
+  });
+
+  it("surfaces the viewer's own drafts in a path listing with status='draft'", async () => {
+    const path = `${PATH_PREFIX}my-draft`;
+    const create = await request(app).post('/api/v2/pages/drafts').set(aliceHeaders).send({ path });
+    expect(create.status).toBe(201);
+    const pageId = create.body.pageId as string;
+
+    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX });
+    expect(list.status).toBe(200);
+    const draftRow = (list.body.pages as Array<{ _id: string; status?: string }>).find((p) => p._id === pageId);
+    expect(draftRow).toBeDefined();
+    // The UI relies on `status === 'draft'` to render the draft badge —
+    // a regression that elides the status field would silently undo
+    // the visual distinction.
+    expect(draftRow?.status).toBe('draft');
+  });
+
+  it("keeps another user's draft out of the listing", async () => {
+    const path = `${PATH_PREFIX}bobs-private-draft`;
+    const create = await request(app).post('/api/v2/pages/drafts').set(bobHeaders).send({ path });
+    expect(create.status).toBe(201);
+    const pageId = create.body.pageId as string;
+
+    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX });
+    expect(list.status).toBe(200);
+    const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
+    expect(pageIds).not.toContain(pageId);
+  });
+
+  // The two tests above route through findListByStartWith (path branch).
+  // The next two pin the root / no-path branch (the else branch this
+  // describe block was created to cover) — without them a regression
+  // that re-introduces a hard-coded status filter on the else branch
+  // would still pass the suite.
+  it("surfaces the viewer's own draft in the root listing with status='draft'", async () => {
+    const path = `${PATH_PREFIX}root-my-draft`;
+    const create = await request(app).post('/api/v2/pages/drafts').set(aliceHeaders).send({ path });
+    expect(create.status).toBe(201);
+    const pageId = create.body.pageId as string;
+
+    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/' });
+    expect(list.status).toBe(200);
+    const draftRow = (list.body.pages as Array<{ _id: string; status?: string }>).find((p) => p._id === pageId);
+    expect(draftRow).toBeDefined();
+    expect(draftRow?.status).toBe('draft');
+  });
+
+  it("keeps another user's draft out of the root listing", async () => {
+    const path = `${PATH_PREFIX}root-bobs-draft`;
+    const create = await request(app).post('/api/v2/pages/drafts').set(bobHeaders).send({ path });
+    expect(create.status).toBe(201);
+    const pageId = create.body.pageId as string;
+
+    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/' });
+    expect(list.status).toBe(200);
+    const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
+    expect(pageIds).not.toContain(pageId);
+  });
+
+  it('honors include_deleted=true on the root listing (mirrors the path branch)', async () => {
+    // Create then soft-delete a page so it lands at /trash/<orig> with
+    // status='deleted'. The root branch used to silently ignore the
+    // include_deleted flag (visiblePageStatusOr never emits
+    // STATUS_DELETED), but now omits the status filter when the flag
+    // is set, mirroring findListByStartWith.
+    const path = `${PATH_PREFIX}include-deleted-root`;
+    const createRes = await request(app).post('/api/v2/pages').set(aliceHeaders).send({ path, body: '# soon-deleted' });
+    expect(createRes.status).toBe(200);
+    const pageId = createRes.body.page._id as string;
+    const delRes = await request(app).delete('/api/v2/pages').set(aliceHeaders).send({ page_id: pageId });
+    expect(delRes.status).toBe(200);
+
+    const withFlag = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/', include_deleted: 'true' });
+    expect(withFlag.status).toBe(200);
+    const withFlagPaths = (withFlag.body.pages as Array<{ path: string }>).map((p) => p.path);
+    expect(withFlagPaths).toContain(`/trash${path}`);
+
+    const withoutFlag = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/' });
+    expect(withoutFlag.status).toBe(200);
+    const withoutFlagPaths = (withoutFlag.body.pages as Array<{ path: string }>).map((p) => p.path);
+    expect(withoutFlagPaths).not.toContain(`/trash${path}`);
   });
 });

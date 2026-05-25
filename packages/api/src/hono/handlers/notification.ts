@@ -20,13 +20,13 @@
  *    without a second count query.
  */
 import {
-  type Notification,
-  type PageRef,
-  type UserPublic,
   getUnreadCountRoute,
   listNotificationsRoute,
   markAllAsReadRoute,
+  type Notification,
   openNotificationRoute,
+  type PageRef,
+  type UserPublic,
 } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
@@ -101,7 +101,7 @@ const isPopulatedActivity = (value: unknown): value is PopulatedActivityLike => 
 const toPageRef = (page: PopulatedPageLike): PageRef => ({
   _id: toStringId(page._id),
   path: page.path,
-  status: (page.status as 'wip' | 'published' | 'deleted' | 'deprecated' | null | undefined) ?? null,
+  status: (page.status as 'wip' | 'published' | 'deleted' | 'deprecated' | 'draft' | null | undefined) ?? null,
 });
 
 /**

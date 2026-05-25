@@ -11,13 +11,17 @@ export const PageGrantEnum = {
   OWNER: 4,
 } as const;
 
-// Page status enum - matches Page model constants
-export const PageStatusSchema = z.enum(['wip', 'published', 'deleted', 'deprecated']);
+// Page status enum - matches Page model constants. `'draft'` (RFC-0004)
+// surfaces on the listing when the viewer reads their own unpublished
+// drafts, so the schema must accept it or the row's `status` would be
+// elided client-side and the UI couldn't render a "draft" indicator.
+export const PageStatusSchema = z.enum(['wip', 'published', 'deleted', 'deprecated', 'draft']);
 export const PageStatusEnum = {
   WIP: 'wip',
   PUBLISHED: 'published',
   DELETED: 'deleted',
   DEPRECATED: 'deprecated',
+  DRAFT: 'draft',
 } as const;
 
 // Page type enum
