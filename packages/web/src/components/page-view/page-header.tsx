@@ -295,9 +295,6 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
                 <ArrowUp className="h-4 w-4" />
               </button>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
-              {/* Compact bar keeps just the coloured icon (no chip label) for room. */}
-              {isLinkOnly && <Link2 className="h-4 w-4 shrink-0" style={{ color: 'var(--page-grant-accent)' }} aria-label="Link-only sharing" />}
-              {isPrivate && <Lock className="h-4 w-4 shrink-0" style={{ color: 'var(--page-grant-accent)' }} aria-label="Private page" />}
               <div className="flex items-center gap-1 shrink-0">
                 {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}
                 {editIconButton}
