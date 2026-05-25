@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Bookmark, BookmarkCheck, History, Link2, MoreHorizontal, MoveRight, Trash2 } from 'lucide-react';
+import { Bell, BellOff, Bookmark, History, Link2, MoreHorizontal, MoveRight, Trash2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -80,7 +80,7 @@ function WatchMenuItem({ pageId }: { pageId: string }) {
         toggle();
       }}
     >
-      <Icon className="h-4 w-4 mr-2" />
+      <Icon className={`h-4 w-4 mr-2 ${watching ? 'fill-current' : ''}`} />
       {watching ? m['page.watch_label_done']() : m['page.watch_label']()}
     </DropdownMenuItem>
   );
@@ -89,7 +89,6 @@ function WatchMenuItem({ pageId }: { pageId: string }) {
 /** Bookmark toggle as a dropdown item (compact header). */
 function BookmarkMenuItem({ pageId }: { pageId: string }) {
   const { isBookmarked, toggle } = useToggleBookmark(pageId);
-  const Icon = isBookmarked ? BookmarkCheck : Bookmark;
   return (
     <DropdownMenuItem
       onSelect={(e) => {
@@ -97,7 +96,7 @@ function BookmarkMenuItem({ pageId }: { pageId: string }) {
         toggle();
       }}
     >
-      <Icon className="h-4 w-4 mr-2" />
+      <Bookmark className={`h-4 w-4 mr-2 ${isBookmarked ? 'fill-current' : ''}`} />
       {isBookmarked ? m['page.bookmark_label_done']() : m['page.bookmark_label']()}
     </DropdownMenuItem>
   );
