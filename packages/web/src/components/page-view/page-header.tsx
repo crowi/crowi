@@ -198,10 +198,15 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
       {showPresence && isAuthenticated && <LivePresenceRow presence={presence} />}
 
       {showTitle ? (
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground flex-1 min-w-0">{pageTitle}</h1>
-          {page.grant != null && <GrantChip grant={page.grant} />}
-          {editButton}
+        // Mobile stacks the chip + edit button onto their own row below
+        // the title and right-aligns them so the title gets the full
+        // width to wrap into; from `md` up everything sits on one row.
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+          <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground md:flex-1 md:min-w-0">{pageTitle}</h1>
+          <div className="flex shrink-0 items-center justify-end gap-3 empty:hidden">
+            {page.grant != null && <GrantChip grant={page.grant} />}
+            {editButton}
+          </div>
         </div>
       ) : (
         (isLinkOnly || isPrivate || onEdit) && (
