@@ -253,12 +253,13 @@ const components = {
         </code>
       );
     }
-    // Background-less inline code: font + foreground color do the
-    // identifying work, no muted pill. The `before/after:content-none`
+    // GitHub-style inline code pill: muted background + rounded
+    // corners + a touch of horizontal padding so backtick spans pop
+    // out of the surrounding prose. `before/after:content-none`
     // strips the default `&grave;…&grave;` decorators some prose
-    // themes inject.
+    // themes inject around the pill.
     return (
-      <code className="text-foreground font-mono text-[0.95em] before:content-none after:content-none" {...props}>
+      <code className="bg-muted text-foreground font-mono text-[0.85em] rounded-md px-1.5 py-0.5 before:content-none after:content-none" {...props}>
         {children}
       </code>
     );
