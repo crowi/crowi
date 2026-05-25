@@ -233,10 +233,20 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             // grantedUsers check was missing. Replacing both predicates
             // with the model helpers keeps the path-based and root /
             // no-path branches consistent.
-            // biome-ignore lint/suspicious/noExplicitAny: legacy Mongoose conditions shape
-            const conditions: any = {
+            //
+            // include_deleted: when set (or when isTrashPath forced it),
+            // omit the status filter entirely — mirrors
+            // `findListByStartWith`, which adds visiblePageStatusOr only
+            // in the `!includeDeletedPage` branch. Without this the root
+            // branch would silently ignore the flag (the status helper
+            // never emits STATUS_DELETED).
+            const andClauses: Record<string, unknown>[] = [{ $or: visiblePageGrantOr(user._id) }];
+            if (!includeDeletedPage) {
+              andClauses.push({ $or: visiblePageStatusOr(user._id) });
+            }
+            const conditions = {
               redirectTo: null,
-              $and: [{ $or: visiblePageStatusOr(user._id) }, { $or: visiblePageGrantOr(user._id) }],
+              $and: andClauses,
             };
 
             if (path === '/') {
