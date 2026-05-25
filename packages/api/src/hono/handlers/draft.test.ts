@@ -1,6 +1,6 @@
-import request from 'supertest';
 import { app, crowi, Fixture } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
+import request from 'supertest';
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -184,6 +184,56 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
         expect(typeof d.pageId).toBe('string');
         expect(typeof d.createdAt).toBe('string');
       }
+    });
+
+    it('surfaces bodyPreview (whitespace-collapsed, length-capped) and bodyLength per draft', async () => {
+      // Empty draft → bodyPreview '' (initial body is '\n' which trims to ''),
+      // bodyLength 1 (the seeded '\n' character).
+      const emptyRes = await request(app)
+        .post('/api/v2/pages/drafts')
+        .set(authHeaders(aliceToken))
+        .send({ path: `${PATH_PREFIX}preview-empty` });
+      expect(emptyRes.status).toBe(201);
+
+      // Short body fits entirely in the preview.
+      const shortBody = '今期の成果と説明';
+      const shortRes = await request(app)
+        .post('/api/v2/pages/drafts')
+        .set(authHeaders(aliceToken))
+        .send({ path: `${PATH_PREFIX}preview-short`, initialBody: shortBody });
+      expect(shortRes.status).toBe(201);
+
+      // Long body — preview is truncated server-side at 80 chars.
+      const longBody = `# Heading\n\n${'a'.repeat(120)}`;
+      const longRes = await request(app)
+        .post('/api/v2/pages/drafts')
+        .set(authHeaders(aliceToken))
+        .send({ path: `${PATH_PREFIX}preview-long`, initialBody: longBody });
+      expect(longRes.status).toBe(201);
+
+      const list = await request(app).get('/api/v2/pages/drafts').set(authHeaders(aliceToken));
+      expect(list.status).toBe(200);
+
+      type Row = { path: string; bodyPreview: string; bodyLength: number };
+      const byPath = (suffix: string): Row | undefined => (list.body.drafts as Row[]).find((d) => d.path === `${PATH_PREFIX}${suffix}`);
+
+      const empty = byPath('preview-empty');
+      expect(empty?.bodyPreview).toBe('');
+      // The POST handler seeds the first revision with '\n' when initialBody is
+      // missing/empty (see draft.ts line 90), so bodyLength is 1 not 0 here —
+      // an artefact the UI surfaces as "empty" via the trimmed preview.
+      expect(empty?.bodyLength).toBe(1);
+
+      const short = byPath('preview-short');
+      expect(short?.bodyPreview).toBe(shortBody);
+      expect(short?.bodyLength).toBe(shortBody.length);
+
+      const long = byPath('preview-long');
+      expect(long?.bodyPreview.length).toBeLessThanOrEqual(80);
+      // Whitespace (including the '\n\n' between heading and body) is collapsed
+      // into a single space before truncation.
+      expect(long?.bodyPreview).toMatch(/^# Heading a+$/);
+      expect(long?.bodyLength).toBe(longBody.length);
     });
   });
 
