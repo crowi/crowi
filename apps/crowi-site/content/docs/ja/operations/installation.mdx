@@ -19,16 +19,16 @@ Crowi 2.0 は Turborepo + pnpm のモノレポ構成で、API・Web フロント
 
 | ソフトウェア | バージョン | 用途 |
 | ------------ | ---------- | ---- |
-| Node.js | 22.x | API / Web の実行ランタイム |
+| Node.js | 24.x | API / Web の実行ランタイム |
 | pnpm | 9.x 以上 | パッケージマネージャ (`packageManager` は `pnpm@9.15.9`) |
 | MongoDB | 7 以降 (開発用イメージは `mongo:8`) | Wiki データの永続化 |
 | Redis | 7 以降 | セッション・リアルタイム共同編集の pub/sub |
 | Elasticsearch | 任意 | 全文検索バックエンド (プラグイン駆動) |
 | Docker / Docker Compose | 任意 | ローカルインフラの起動に利用 |
 
-Node.js のバージョンはルート `package.json` の `engines` で `22.x` に固定
+Node.js のバージョンはルート `package.json` の `engines` で `24.x` に固定
 されています。`nvm` などのバージョンマネージャを使っている場合は、Node.js
-22 系を有効にしてから作業してください。
+24 系を有効にしてから作業してください。
 
 > **Tip**: MongoDB / Redis / Elasticsearch をホストに直接インストールする
 > 必要はありません。後述の `docker compose up -d` で開発用インフラがまとめて

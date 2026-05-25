@@ -16,7 +16,7 @@
 # Operator MUST mount their own `crowi.config.json` at /app/crowi.config.json
 # (image intentionally does NOT bake this in — see spec §c).
 #
-ARG NODE_VERSION=22-bookworm-slim
+ARG NODE_VERSION=24-bookworm-slim
 
 # -----------------------------------------------------------------------------
 # Stage 1: base

@@ -70,7 +70,7 @@ in `crowi.config.json:plugins`; the api never needs to be rebuilt.
 
 ## Requirements
 
-- Node.js 22.x
+- Node.js 24.x
 - pnpm 8.x or later
 - MongoDB
 - Redis

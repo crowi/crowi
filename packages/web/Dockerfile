@@ -19,7 +19,7 @@
 # `--build-arg NEXT_PUBLIC_API_URL=...`. docker-compose passes the
 # service-name URL (`http://api:3000`) by default.
 #
-ARG NODE_VERSION=22-bookworm-slim
+ARG NODE_VERSION=24-bookworm-slim
 
 # -----------------------------------------------------------------------------
 # Stage 1: base
