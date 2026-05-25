@@ -278,6 +278,17 @@ html[data-page-grant="2"] {
  * heading is the URL fragment target. The heading itself keeps `id`,
  * which is what anchor jumps + the TOC scroll-spy resolve.
  */
+/* Long, hard-to-break tokens — commit SHAs in inline `<code>`, raw
+ * URLs in body text, etc. — used to push the article wider than the
+ * viewport, taking the header strip with them. `anywhere` is what we
+ * want here: only break a "word" when there is no other way to keep
+ * the content inside its column. `<pre>` blocks are unaffected
+ * because `white-space: pre` disables wrapping entirely (they handle
+ * overflow via their own `overflow-x: auto`). */
+.crowi-prose {
+  overflow-wrap: anywhere;
+}
+
 .crowi-prose section[data-section-id] {
   /* Each section is its own scroll target reach, but scroll-mt is already
    * on the heading inside; section is a layout container only. */
