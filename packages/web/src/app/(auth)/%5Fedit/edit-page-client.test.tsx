@@ -55,6 +55,10 @@ vi.mock('@/components/editor/MarkdownEditor', () => ({ MarkdownEditor: () => nul
 vi.mock('@/components/editor/MarkdownPreview', () => ({ MarkdownPreview: () => null }));
 vi.mock('@/lib/use-page', () => ({ usePage: () => ({ page: null, isLoading: true, isError: false }) }));
 vi.mock('@/lib/use-presence', () => ({ usePresence: () => undefined }));
+// `usePageTitle` pulls in `useAppInfo` (`useQuery`); mock to a no-op so the
+// test doesn't need a `QueryClientProvider`. Document-title behaviour is
+// covered separately and not in scope for the create-flow tests here.
+vi.mock('@/lib/use-page-title', () => ({ usePageTitle: vi.fn() }));
 // `UpdatePageEditor` mounts these unconditionally; the real hooks call
 // `useQueryClient()` and would throw without a `QueryClientProvider`.
 vi.mock('@/lib/use-page-mutations', () => ({
