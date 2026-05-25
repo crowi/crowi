@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import type { DraftSummary } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { FileText, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -13,66 +16,59 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { DraftPathConflictError, draftEditHref, useCancelDraft, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { notify } from '@/lib/notify';
+import { DraftPathConflictError, draftEditHref, useCancelDraft, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePageTitle } from '@/lib/use-page-title';
-import type { DraftSummary } from '@crowi/api-contract';
-import { m } from '@paraglide/messages.js';
+import { cn } from '@/lib/utils';
 
+/**
+ * "Pages you're creating" — your own unpublished drafts. Information
+ * design differs from the public page list on purpose: drafts are
+ * triage material ("what was I writing? is this stale? worth keeping?"),
+ * so each row leads with the path + a body preview + char count, and
+ * action buttons sit as compact icons so the metadata gets the space.
+ *
+ * The "new page" creation form is folded behind a header button that
+ * expands inline — it's used a few times a year per user, so reserving
+ * a permanent card for it would waste vertical space above the list.
+ */
 export function CreatingPagesClient() {
   usePageTitle(m['creating_pages.heading']());
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-3xl font-bold">
-          <FileText className="size-8" />
-          {m['creating_pages.heading']()}
-        </h1>
-        <p className="text-muted-foreground mt-2">{m['creating_pages.subheading']()}</p>
-      </div>
-
-      <NewPageCard />
-      <DraftsSection />
-    </div>
-  );
-}
-
-/** The user's draft list with its loading / error / empty states. */
-function DraftsSection() {
   const { data, isLoading, isError } = useDrafts();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner message={m['creating_pages.loading']()} />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return <ErrorAlert message={m['creating_pages.failed_to_load']()} />;
-  }
-
   const drafts = data?.drafts ?? [];
+
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
   return (
-    <Card>
-      <CardContent className="p-0">
-        {drafts.length === 0 ? (
-          <p className="text-muted-foreground p-6 text-sm">{m['creating_pages.empty']()}</p>
-        ) : (
-          <ul className="divide-y">
-            {drafts.map((draft) => (
-              <DraftRow key={draft.pageId} draft={draft} />
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <FileText className="size-6 text-muted-foreground" />
+            {m['creating_pages.heading']()}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{m['creating_pages.subheading']()}</p>
+        </div>
+        <Button
+          variant={isFormOpen ? 'outline' : 'default'}
+          onClick={() => setIsFormOpen((open) => !open)}
+          aria-expanded={isFormOpen}
+          aria-label={isFormOpen ? m['creating_pages.new_page_button_close_aria']() : undefined}
+          className="shrink-0"
+        >
+          {isFormOpen ? <X className="mr-1 h-4 w-4" /> : <Plus className="mr-1 h-4 w-4" />}
+          {m['creating_pages.new_page_button']()}
+        </Button>
+      </div>
+
+      {isFormOpen && <NewDraftForm onCreated={() => setIsFormOpen(false)} />}
+
+      <DraftsSection drafts={drafts} isLoading={isLoading} isError={isError} />
+    </div>
   );
 }
 
@@ -80,11 +76,11 @@ function DraftsSection() {
 type NewPageError = { kind: 'conflict'; displayName: string; username: string } | { kind: 'message'; text: string };
 
 /**
- * New page form. Submitting `POST`s a draft at the entered path:
- * 201 navigates to the draft editor; 409 (path held by another user's
- * draft) and 400 (invalid path) render an error inline.
+ * Inline expandable form panel for creating a new draft. Lives directly
+ * under the page header — no Card wrapper, no duplicated description —
+ * because the heading + subtitle already explain what this page is for.
  */
-function NewPageCard() {
+function NewDraftForm({ onCreated }: { onCreated?: () => void }) {
   const router = useRouter();
   const createDraft = useCreateDraft();
   const [path, setPath] = useState('');
@@ -102,6 +98,7 @@ function NewPageCard() {
       { path: trimmed },
       {
         onSuccess: ({ pageId }) => {
+          onCreated?.();
           router.push(draftEditHref(pageId));
         },
         onError: (err) => {
@@ -116,43 +113,117 @@ function NewPageCard() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">{m['creating_pages.new_heading']()}</CardTitle>
-        <CardDescription>{m['creating_pages.subheading']()}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder={m['creating_pages.new_path_placeholder']()}
-            aria-label={m['creating_pages.new_heading']()}
-            className="font-mono"
-            disabled={createDraft.isPending}
-          />
-          <Button type="submit" disabled={createDraft.isPending} className="shrink-0">
-            {createDraft.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
-            {createDraft.isPending ? m['creating_pages.new_submit_pending']() : m['creating_pages.new_submit']()}
-          </Button>
-        </form>
+    <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
+        <Input
+          value={path}
+          onChange={(e) => setPath(e.target.value)}
+          placeholder={m['creating_pages.new_path_placeholder']()}
+          aria-label={m['creating_pages.new_page_button']()}
+          className="font-mono"
+          autoFocus
+          disabled={createDraft.isPending}
+        />
+        <Button type="submit" disabled={createDraft.isPending} className="shrink-0">
+          {createDraft.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
+          {createDraft.isPending ? m['creating_pages.new_submit_pending']() : m['creating_pages.new_submit']()}
+        </Button>
+      </form>
 
-        {error?.kind === 'conflict' && (
-          <ErrorAlert
-            title={m['creating_pages.conflict_title']()}
-            message={m['creating_pages.conflict_message']({ displayName: error.displayName, username: error.username })}
-          />
-        )}
-        {error?.kind === 'message' && <ErrorAlert message={error.text} />}
-      </CardContent>
+      {error?.kind === 'conflict' && (
+        <ErrorAlert
+          title={m['creating_pages.conflict_title']()}
+          message={m['creating_pages.conflict_message']({ displayName: error.displayName, username: error.username })}
+        />
+      )}
+      {error?.kind === 'message' && <ErrorAlert message={error.text} />}
+    </div>
+  );
+}
+
+interface DraftsSectionProps {
+  drafts: DraftSummary[];
+  isLoading: boolean;
+  isError: boolean;
+}
+
+function DraftsSection({ drafts, isLoading, isError }: DraftsSectionProps) {
+  if (isLoading) {
+    return <DraftsSkeleton />;
+  }
+  if (isError) {
+    return <ErrorAlert message={m['creating_pages.failed_to_load']()} />;
+  }
+  if (drafts.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed py-10 text-center">
+        <p className="text-sm text-muted-foreground">{m['creating_pages.empty']()}</p>
+      </div>
+    );
+  }
+  return (
+    <Card className="gap-0 overflow-hidden p-0 py-0">
+      <ul className="divide-y">
+        {drafts.map((draft) => (
+          <DraftRow key={draft.pageId} draft={draft} />
+        ))}
+      </ul>
     </Card>
   );
+}
+
+function DraftsSkeleton() {
+  return (
+    <div role="status" aria-live="polite" aria-label={m['creating_pages.loading']()}>
+      <Card className="gap-0 overflow-hidden p-0 py-0" aria-hidden>
+        <ul className="divide-y">
+          {Array.from({ length: 3 }, (_, i) => `draft-skeleton-${i}`).map((key) => (
+            <li key={key} className="space-y-1.5 px-4 py-3">
+              <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-1/4 animate-pulse rounded bg-muted" />
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Format a character count for the right-aligned progress badge: small
+ * numbers verbatim ("523 字"), thousands collapsed with one decimal
+ * dropped when redundant ("1.2k 字", "12.3k 字", "1k 字").
+ */
+function formatCharCount(n: number): string {
+  if (n < 1000) return m['creating_pages.char_count']({ count: n });
+  const k = (n / 1000).toFixed(1).replace(/\.0$/, '');
+  return m['creating_pages.char_count_k']({ count: k });
+}
+
+/**
+ * `updatedAt === createdAt` for a draft that was created but never
+ * subsequently edited. Surfacing "edited 0 seconds after start" would
+ * be noise — only show the second timestamp when the user actually
+ * touched the draft after creation (treat anything within 1 minute as
+ * "no real edit yet").
+ */
+function hasMeaningfulEdit(createdAt: string, updatedAt: string): boolean {
+  const created = Date.parse(createdAt);
+  const updated = Date.parse(updatedAt);
+  if (Number.isNaN(created) || Number.isNaN(updated)) return false;
+  return updated - created >= 60_000;
 }
 
 function DraftRow({ draft }: { draft: DraftSummary }) {
   const router = useRouter();
   const cancelDraft = useCancelDraft();
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const editHref = draftEditHref(draft.pageId);
+  const isEmpty = draft.bodyLength === 0;
+  const showUpdated = hasMeaningfulEdit(draft.createdAt, draft.updatedAt);
+  const isTruncated = draft.bodyLength > draft.bodyPreview.length;
 
   const handleCancel = () => {
     cancelDraft.mutate(draft.pageId, {
@@ -168,42 +239,87 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   };
 
   return (
-    <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="truncate font-mono text-sm font-medium">{draft.path}</p>
-        <p className="text-muted-foreground text-xs">{m['creating_pages.started_label']({ when: formatDistanceToNow(draft.createdAt) })}</p>
+    <li className="group px-4 py-3 transition-colors hover:bg-accent/50">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          {/* Line 1 — path + char-count badge */}
+          <div className="flex items-center gap-2">
+            <Link href={editHref} className="truncate font-mono text-sm font-medium text-foreground transition-colors hover:text-primary" title={draft.path}>
+              {draft.path}
+            </Link>
+            <span className={cn('ml-auto shrink-0 text-xs tabular-nums', isEmpty ? 'text-muted-foreground/60' : 'text-muted-foreground')}>
+              {isEmpty ? m['creating_pages.preview_empty']() : formatCharCount(draft.bodyLength)}
+            </span>
+          </div>
+
+          {/* Line 2 — body preview (only meaningful when non-empty) */}
+          {!isEmpty && (
+            <p className="truncate text-xs text-muted-foreground">
+              {draft.bodyPreview}
+              {isTruncated && '…'}
+            </p>
+          )}
+
+          {/* Line 3 — start / last-edit timestamps */}
+          <p className="text-xs text-muted-foreground">
+            {m['creating_pages.started_at']({ when: formatDistanceToNow(draft.createdAt) })}
+            {showUpdated && (
+              <>
+                <span aria-hidden className="mx-2 text-border">
+                  ·
+                </span>
+                {m['creating_pages.updated_at']({ when: formatDistanceToNow(draft.updatedAt) })}
+              </>
+            )}
+          </p>
+        </div>
+
+        {/* Always-on icon action column — Edit / Cancel. Icon-only keeps
+            the row tight; aria-label + title carry the accessible label. */}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => router.push(editHref)}
+            aria-label={m['creating_pages.action_edit']()}
+            title={m['creating_pages.action_edit']()}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setConfirmOpen(true)}
+            aria-label={m['creating_pages.action_cancel']()}
+            title={m['creating_pages.action_cancel']()}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
-      <div className="flex shrink-0 gap-2">
-        <Button variant="outline" size="sm" onClick={() => router.push(draftEditHref(draft.pageId))}>
-          <Pencil className="mr-1 h-4 w-4" />
-          {m['creating_pages.action_edit']()}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setConfirmOpen(true)}>
-          <Trash2 className="mr-1 h-4 w-4" />
-          {m['creating_pages.action_cancel']()}
-        </Button>
-        {/* Controlled (no Trigger child): the row's Cancel button opens
-            it, and the mutation callbacks close it — so the dialog stays
-            open while the DELETE is in flight. */}
-        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{m['creating_pages.cancel_dialog_title']()}</AlertDialogTitle>
-              <AlertDialogDescription>{m['creating_pages.cancel_dialog_description']({ path: draft.path })}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={cancelDraft.isPending}>{m['creating_pages.cancel_dialog_keep']()}</AlertDialogCancel>
-              {/* Not an AlertDialogAction: that auto-closes the dialog
-                  on click, which would race the async mutation. We
-                  close explicitly in the mutation callbacks instead. */}
-              <Button variant="destructive" onClick={handleCancel} disabled={cancelDraft.isPending}>
-                {cancelDraft.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />}
-                {m['creating_pages.cancel_dialog_confirm']()}
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+
+      {/* Controlled (no Trigger child): we close explicitly in the
+          mutation callbacks so the dialog stays open while the DELETE
+          is in flight. */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{m['creating_pages.cancel_dialog_title']()}</AlertDialogTitle>
+            <AlertDialogDescription>{m['creating_pages.cancel_dialog_description']({ path: draft.path })}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelDraft.isPending}>{m['creating_pages.cancel_dialog_keep']()}</AlertDialogCancel>
+            {/* Not an AlertDialogAction: that auto-closes the dialog
+                on click, which would race the async mutation. We
+                close explicitly in the mutation callbacks instead. */}
+            <Button variant="destructive" onClick={handleCancel} disabled={cancelDraft.isPending}>
+              {cancelDraft.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />}
+              {m['creating_pages.cancel_dialog_confirm']()}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </li>
   );
 }

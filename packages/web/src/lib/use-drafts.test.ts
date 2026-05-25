@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock `apiClientV2` (hc<AppType>) at the module level so the hooks
 // read our fake `pages.drafts.*` operations. Vitest hoists `vi.mock`
@@ -53,8 +53,15 @@ function makeContext() {
 }
 
 const SAMPLE_DRAFTS = [
-  { pageId: 'p1', path: '/docs/api', createdAt: '2026-05-16T00:00:00Z', updatedAt: '2026-05-16T00:00:00Z' },
-  { pageId: 'p2', path: '/journal/today', createdAt: '2026-05-15T00:00:00Z', updatedAt: '2026-05-15T00:00:00Z' },
+  { pageId: 'p1', path: '/docs/api', createdAt: '2026-05-16T00:00:00Z', updatedAt: '2026-05-16T00:00:00Z', bodyPreview: '', bodyLength: 0 },
+  {
+    pageId: 'p2',
+    path: '/journal/today',
+    createdAt: '2026-05-15T00:00:00Z',
+    updatedAt: '2026-05-15T00:00:00Z',
+    bodyPreview: 'Today I learned',
+    bodyLength: 15,
+  },
 ];
 
 describe('useDrafts', () => {
