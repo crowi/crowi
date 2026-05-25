@@ -2,7 +2,7 @@
 
 import type { ListPagesRequest, PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { Compass } from 'lucide-react';
+import { Compass, Folder } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Breadcrumb } from '@/components/breadcrumb';
@@ -135,11 +135,22 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
  * Mirrors the breadcrumb + title block PageHeader provides for a real page.
  */
 function PortalFallbackHeader({ path }: { path: string }) {
+  const title = getPortalTitle(path);
+  // Trailing slash + folder icon mark this view as "the children of a
+  // folder", separating it visually from a real page view (which has
+  // neither). The breadcrumb above already encodes the full path, so
+  // we drop the redundant `<p>{path}</p>` row that used to sit here.
+  const isRoot = path === '/';
   return (
     <div className="border-b pb-4">
       <Breadcrumb path={path} />
-      <h1 className="text-3xl font-bold">{getPortalTitle(path)}</h1>
-      <p className="text-muted-foreground text-sm mt-1 font-mono">{path}</p>
+      <h1 className="text-3xl font-bold flex items-center gap-2 mt-1">
+        <Folder className="h-7 w-7 text-muted-foreground shrink-0" aria-hidden="true" />
+        <span>
+          {title}
+          {!isRoot && '/'}
+        </span>
+      </h1>
     </div>
   );
 }
