@@ -3,7 +3,7 @@
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { ArrowUp, Edit2, Lock } from 'lucide-react';
+import { ArrowUp, Edit2, Link2, Lock } from 'lucide-react';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { pageDisplayName } from '@/lib/page-path';
@@ -86,6 +86,11 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
   const presence = usePresence(showPresence && isAuthenticated ? page._id : null);
 
   const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
+  // Separate "link-only" (RESTRICTED — anyone with the URL can view)
+  // from "private" (SPECIFIED / OWNER — listed users only) so the
+  // header reflects the actual sharing posture instead of collapsing
+  // both into one Lock icon.
+  const isLinkOnly = page.grant === PageGrantEnum.RESTRICTED;
   const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
   const pageTitle = getPageTitle(page.path);
 
@@ -154,12 +159,14 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
       {showTitle ? (
         <div className="flex items-center gap-3">
           <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight leading-[1.15] text-foreground flex-1 min-w-0">{pageTitle}</h1>
+          {isLinkOnly && <Link2 className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Link-only sharing" />}
           {isPrivate && <Lock className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Private page" />}
           {editButton}
         </div>
       ) : (
-        (isPrivate || onEdit) && (
+        (isLinkOnly || isPrivate || onEdit) && (
           <div className="flex items-center justify-end gap-3">
+            {isLinkOnly && <Link2 className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Link-only sharing" />}
             {isPrivate && <Lock className="h-5 w-5 text-muted-foreground shrink-0" aria-label="Private page" />}
             {editButton}
           </div>
@@ -234,6 +241,7 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
                 <ArrowUp className="h-4 w-4" />
               </button>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
+              {isLinkOnly && <Link2 className="h-4 w-4 text-muted-foreground shrink-0" aria-label="Link-only sharing" />}
               {isPrivate && <Lock className="h-4 w-4 text-muted-foreground shrink-0" aria-label="Private page" />}
               <div className="flex items-center gap-1 shrink-0">
                 {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}

@@ -3,7 +3,7 @@
 import type { Page } from '@crowi/api-contract';
 import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { Folder, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
+import { Folder, Link2, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,11 @@ function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean 
   const displayName = displayUser ? displayUser.name || displayUser.username || '?' : null;
 
   const isPortal = page.path.endsWith('/');
+  // RESTRICTED = "anyone with the link can view"; SPECIFIED / OWNER =
+  // limited to listed users / the owner. Separating the two visually
+  // matters because the privacy implications differ: a link-only page
+  // is sharable, a private page is not.
+  const isLinkOnly = page.grant === PageGrantEnum.RESTRICTED;
   const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
   // Drafts only surface in the listing for the creator themselves
   // (RFC-0004 visibility), so showing the badge to whoever sees the row
@@ -106,6 +111,7 @@ function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean 
             {basename}
           </span>
           {isPortal && <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Portal page" />}
+          {isLinkOnly && <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Link-only sharing" />}
           {isPrivate && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private page" />}
           {isDraft && (
             <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
