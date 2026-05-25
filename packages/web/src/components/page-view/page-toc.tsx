@@ -84,7 +84,10 @@ export function PageToc({ toc }: PageTocProps) {
   const minLevel = toc.reduce((min, e) => Math.min(min, e.level), 6);
 
   return (
-    <aside aria-label="Table of contents" className="hidden min-[1440px]:block fixed top-24 right-6 w-56 max-h-[calc(100vh-7rem)] overflow-y-auto z-30">
+    <aside
+      aria-label="Table of contents"
+      className="hidden min-[1440px]:block fixed top-24 left-[calc(50%+28rem+1.5rem)] w-56 max-h-[calc(100vh-7rem)] overflow-y-auto z-30"
+    >
       <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">On this page</div>
       <ul className="space-y-0.5 text-sm border-l border-border/60">
         {toc.map((entry) => {
