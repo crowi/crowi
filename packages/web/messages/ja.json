@@ -190,6 +190,7 @@
   "page_list.empty_default": "ページが見つかりません。",
   "page_list.empty_trash": "削除済みページはありません。",
   "page_list.deleted_badge": "削除済み",
+  "page_list.draft_badge": "下書き",
   "page_list.actions_aria": "ゴミ箱ページの操作",
   "page_list.action_restore": "復元",
   "page_list.action_delete_forever": "完全に削除",

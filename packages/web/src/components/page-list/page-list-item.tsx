@@ -1,7 +1,7 @@
 'use client';
 
 import type { Page } from '@crowi/api-contract';
-import { PageGrantEnum } from '@crowi/api-contract';
+import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Folder, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -69,6 +69,10 @@ function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean 
 
   const isPortal = page.path.endsWith('/');
   const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
+  // Drafts only surface in the listing for the creator themselves
+  // (RFC-0004 visibility), so showing the badge to whoever sees the row
+  // is safe and signals "this is mine and not yet public".
+  const isDraft = page.status === PageStatusEnum.DRAFT;
 
   // `pageDisplayName` collapses a trailing date hierarchy (e.g. `/2026/05/23`)
   // into a single readable title — so a daily-note page shows "2026/05/23"
@@ -103,6 +107,11 @@ function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean 
           </span>
           {isPortal && <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Portal page" />}
           {isPrivate && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private page" />}
+          {isDraft && (
+            <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              {m['page_list.draft_badge']()}
+            </span>
+          )}
           {isTrash && (
             <span className="inline-flex shrink-0 items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
               {m['page_list.deleted_badge']()}

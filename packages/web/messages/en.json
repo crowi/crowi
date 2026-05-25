@@ -190,6 +190,7 @@
   "page_list.empty_default": "No pages found.",
   "page_list.empty_trash": "No deleted pages.",
   "page_list.deleted_badge": "Deleted",
+  "page_list.draft_badge": "Draft",
   "page_list.actions_aria": "Trash page actions",
   "page_list.action_restore": "Restore",
   "page_list.action_delete_forever": "Delete forever",
