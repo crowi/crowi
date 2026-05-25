@@ -32,6 +32,19 @@ type Models = { [K in keyof typeof models]: ReturnType<(typeof models)[K]> };
 type Events = { [K in keyof typeof events]: InstanceType<(typeof events)[K]> };
 
 const debug = Debug('crowi:crowi');
+const bootDebug = Debug('crowi:boot');
+
+/**
+ * Emit a `crowi:boot` log after each init phase so we can tell which step
+ * dominates a slow dev startup. Per-phase duration is read off `debug`'s
+ * built-in `+Xms` (gap to the previous log on the same namespace); we
+ * only need to name the phase here.
+ */
+async function step<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+  const result = await fn();
+  bootDebug(name);
+  return result;
+}
 
 class Crowi {
   version: string;
@@ -143,29 +156,34 @@ class Crowi {
   }
 
   async init() {
-    this.setupEncryption();
-    await this.setupDatabase();
-    await this.setupModels();
-    await this.setupRedisClient();
-    await this.setupConfig();
-    await this.migrateConfig();
+    const initStart = Date.now();
+    // Baseline log so the first phase's `+Xms` measures its own duration
+    // rather than reading +0ms (debug's default when there's no prior log
+    // on the namespace).
+    bootDebug('init start');
+    await step('setupEncryption', () => this.setupEncryption());
+    await step('setupDatabase', () => this.setupDatabase());
+    await step('setupModels', () => this.setupModels());
+    await step('setupRedisClient', () => this.setupRedisClient());
+    await step('setupConfig', () => this.setupConfig());
+    await step('migrateConfig', () => this.migrateConfig());
     // Must run before setupPlugins — @crowi/plugin-aws reads its config at
     // register time. Idempotent (write-only-when-target-empty); a failure
     // here can leak plaintext secrets, so let it bubble out instead of
     // continuing boot.
-    await runAwsConfigMigration(this);
+    await step('runAwsConfigMigration', () => runAwsConfigMigration(this));
     // RFC-0004: backfill `status='published'` on legacy pages that
     // predate the `Page.status` field. Idempotent — only matches rows
     // where `status` is still null/missing. Runs after setupModels so
     // the Page model is available; ordering vs the aws migration is
     // irrelevant (disjoint collections).
-    await runPageStatusMigration(this);
+    await step('runPageStatusMigration', () => runPageStatusMigration(this));
     // Renderer must boot BEFORE plugins so PluginManager.activate()
     // can hand plugins a registry that already has the core 4
     // transforms (TOC / wikilinks / mentions / codeBlockLanguages)
     // registered. External plugins append; they cannot insert before
     // core in v2.1 phase 2.
-    this.setupRenderer();
+    await step('setupRenderer', () => this.setupRenderer());
     // RFC-0003 Phase 9 (same-process attach): the cross-process
     // pageEvent subscriber that used to fan collab saves into the
     // api event loop is gone — the embedded Hocuspocus engine (see
@@ -175,11 +193,12 @@ class Crowi {
     // can read config and access models) but BEFORE the legacy
     // mailer / slack initialisers — those are migrating to
     // plugin-provided drivers and any conflict should fail noisily here.
-    await this.setupPlugins();
-    await this.setupMailer();
-    await this.setupSlack();
-    await this.setupLRU();
+    await step('setupPlugins', () => this.setupPlugins());
+    await step('setupMailer', () => this.setupMailer());
+    await step('setupSlack', () => this.setupSlack());
+    await step('setupLRU', () => this.setupLRU());
 
+    bootDebug(`init complete in ${Date.now() - initStart}ms`);
     this.initialized = true;
   }
 
