@@ -30,7 +30,7 @@
  *    draft", "not a draft", "not your draft", and malformed id into
  *    one response (existence leak guard).
  */
-import { cancelDraftRoute, createDraftRoute, DRAFT_BODY_PREVIEW_MAX_CHARS, listDraftsRoute } from '@crowi/api-contract';
+import { cancelDraftRoute, createDraftRoute, listDraftsRoute } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
@@ -45,17 +45,6 @@ const debug = Debug('crowi:hono:handlers:draft');
 
 /** MongoDB duplicate-key error code, raised by the unique `Page.path` index. */
 const isDuplicateKeyError = (err: unknown): boolean => typeof err === 'object' && err !== null && (err as { code?: number }).code === 11000;
-
-/**
- * Collapse whitespace + truncate a draft body into the inline preview
- * shown next to each draft row. The newline / tab squash keeps a
- * multi-paragraph body legible on one line of UI; the slice cap stops
- * a long draft from inflating the listing payload.
- */
-function buildBodyPreview(body: string): string {
-  const normalised = body.replace(/\s+/g, ' ').trim();
-  return normalised.length <= DRAFT_BODY_PREVIEW_MAX_CHARS ? normalised : normalised.slice(0, DRAFT_BODY_PREVIEW_MAX_CHARS);
-}
 
 const DRAFT_NOT_FOUND_BODY = {
   error: 'draft_not_found' as const,
@@ -166,38 +155,20 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         const user = c.get('user');
         debug('listDrafts called', { userId: user._id.toString() });
 
-        // Populate the latest revision's body so we can build the
-        // bodyPreview / bodyLength fields the redesigned drafts UI
-        // shows for recall and progress hints. `.select` is used on
-        // the populated revision too — the body alone is plenty,
-        // pulling the full revision doc would blow up the payload
-        // for users with long-running drafts.
         const drafts = (await Page.find({ status: STATUS_DRAFT, creator: user._id })
           .sort({ createdAt: -1 })
-          .select('_id path createdAt updatedAt revision')
-          .populate({ path: 'revision', select: 'body' })
+          .select('_id path createdAt updatedAt')
           .lean()
-          .exec()) as Array<{
-          _id: { toString(): string };
-          path: string;
-          createdAt?: Date;
-          updatedAt?: Date;
-          revision?: { body?: string } | null;
-        }>;
+          .exec()) as Array<{ _id: { toString(): string }; path: string; createdAt?: Date; updatedAt?: Date }>;
 
         return c.json(
           {
-            drafts: drafts.map((d) => {
-              const body = d.revision?.body ?? '';
-              return {
-                pageId: d._id.toString(),
-                path: d.path,
-                createdAt: toISOStringOrNull(d.createdAt) ?? new Date().toISOString(),
-                updatedAt: toISOStringOrNull(d.updatedAt) ?? toISOStringOrNull(d.createdAt) ?? new Date().toISOString(),
-                bodyPreview: buildBodyPreview(body),
-                bodyLength: body.length,
-              };
-            }),
+            drafts: drafts.map((d) => ({
+              pageId: d._id.toString(),
+              path: d.path,
+              createdAt: toISOStringOrNull(d.createdAt) ?? new Date().toISOString(),
+              updatedAt: toISOStringOrNull(d.updatedAt) ?? toISOStringOrNull(d.createdAt) ?? new Date().toISOString(),
+            })),
           },
           200,
         );

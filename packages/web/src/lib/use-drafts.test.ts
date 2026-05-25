@@ -53,15 +53,8 @@ function makeContext() {
 }
 
 const SAMPLE_DRAFTS = [
-  { pageId: 'p1', path: '/docs/api', createdAt: '2026-05-16T00:00:00Z', updatedAt: '2026-05-16T00:00:00Z', bodyPreview: '', bodyLength: 0 },
-  {
-    pageId: 'p2',
-    path: '/journal/today',
-    createdAt: '2026-05-15T00:00:00Z',
-    updatedAt: '2026-05-15T00:00:00Z',
-    bodyPreview: 'Today I learned',
-    bodyLength: 15,
-  },
+  { pageId: 'p1', path: '/docs/api', createdAt: '2026-05-16T00:00:00Z', updatedAt: '2026-05-16T00:00:00Z' },
+  { pageId: 'p2', path: '/journal/today', createdAt: '2026-05-15T00:00:00Z', updatedAt: '2026-05-15T00:00:00Z' },
 ];
 
 describe('useDrafts', () => {

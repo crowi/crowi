@@ -79,30 +79,26 @@ export const DraftNotFoundErrorSchema = z.object({
 });
 export type DraftNotFoundError = z.infer<typeof DraftNotFoundErrorSchema>;
 
-/** Max characters of body returned as `bodyPreview` on the drafts list. */
-export const DRAFT_BODY_PREVIEW_MAX_CHARS = 80;
-
 /**
  * A single row in `GET /api/v2/pages/drafts` — enough for the
- * `Creating pages` view to triage: identifiers (`pageId`, `path`), the
- * two timestamps that frame "did I make progress recently or is this
- * stale" (`createdAt`, `updatedAt`), and a body summary so the user
- * recognises what they were writing without opening every draft
- * (`bodyPreview`, `bodyLength`).
+ * `Creating pages` view: identifiers (`pageId`, `path`), and the two
+ * timestamps that frame "did I make progress recently or is this stale"
+ * (`createdAt`, `updatedAt`).
  *
- * `bodyPreview` is whitespace-collapsed and truncated to
- * `DRAFT_BODY_PREVIEW_MAX_CHARS` server-side. `bodyLength` is the raw
- * character count of the latest revision's body (`''` empty draft → 0)
- * — the client uses it to render an "empty" vs "1.2k chars" progress
- * hint and to suppress the preview line when there's nothing to show.
+ * A body preview / character count was intentionally NOT included:
+ * draft body lives in the Hocuspocus Y.Doc / `Page.yjsState` and only
+ * lands in `Page.revision.body` on explicit save, so any field derived
+ * from the revision would lag the live editor enough to mislead users
+ * (an actively-edited draft would report "0 chars" until they pressed
+ * save). Surfacing a body summary correctly requires Y.Doc
+ * reconstruction per draft, which is heavier than the listing should
+ * absorb.
  */
 export const DraftSummarySchema = z.object({
   pageId: z.string(),
   path: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  bodyPreview: z.string(),
-  bodyLength: z.number().int().min(0),
 });
 export type DraftSummary = z.infer<typeof DraftSummarySchema>;
 

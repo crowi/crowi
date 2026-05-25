@@ -23,14 +23,13 @@ import { formatDistanceToNow } from '@/lib/date-utils';
 import { notify } from '@/lib/notify';
 import { DraftPathConflictError, draftEditHref, useCancelDraft, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePageTitle } from '@/lib/use-page-title';
-import { cn } from '@/lib/utils';
 
 /**
  * "Pages you're creating" — your own unpublished drafts. Information
  * design differs from the public page list on purpose: drafts are
  * triage material ("what was I writing? is this stale? worth keeping?"),
- * so each row leads with the path + a body preview + char count, and
- * action buttons sit as compact icons so the metadata gets the space.
+ * so each row leads with the path and the two timestamps that frame
+ * progress, with compact icon actions on the right.
  *
  * The "new page" creation form is folded behind a header button that
  * expands inline — it's used a few times a year per user, so reserving
@@ -180,7 +179,6 @@ function DraftsSkeleton() {
           {Array.from({ length: 3 }, (_, i) => `draft-skeleton-${i}`).map((key) => (
             <li key={key} className="space-y-1.5 px-4 py-3">
               <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
-              <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
               <div className="h-3 w-1/4 animate-pulse rounded bg-muted" />
             </li>
           ))}
@@ -191,22 +189,12 @@ function DraftsSkeleton() {
 }
 
 /**
- * Format a character count for the right-aligned progress badge: small
- * numbers verbatim ("523 字"), thousands collapsed with one decimal
- * dropped when redundant ("1.2k 字", "12.3k 字", "1k 字").
- */
-function formatCharCount(n: number): string {
-  if (n < 1000) return m['creating_pages.char_count']({ count: n });
-  const k = (n / 1000).toFixed(1).replace(/\.0$/, '');
-  return m['creating_pages.char_count_k']({ count: k });
-}
-
-/**
  * `updatedAt === createdAt` for a draft that was created but never
- * subsequently edited. Surfacing "edited 0 seconds after start" would
- * be noise — only show the second timestamp when the user actually
- * touched the draft after creation (treat anything within 1 minute as
- * "no real edit yet").
+ * subsequently touched. Surfacing "edited 0 seconds after start" would
+ * be noise — only show the second timestamp when the page has had
+ * meaningful activity (treat anything within 1 minute as "no real edit
+ * yet"). `Page.updatedAt` is bumped by the collab compaction store,
+ * so it does reflect Yjs editing — unlike the revision body.
  */
 function hasMeaningfulEdit(createdAt: string, updatedAt: string): boolean {
   const created = Date.parse(createdAt);
@@ -221,9 +209,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const editHref = draftEditHref(draft.pageId);
-  const isEmpty = draft.bodyLength === 0;
   const showUpdated = hasMeaningfulEdit(draft.createdAt, draft.updatedAt);
-  const isTruncated = draft.bodyLength > draft.bodyPreview.length;
 
   const handleCancel = () => {
     cancelDraft.mutate(draft.pageId, {
@@ -240,27 +226,18 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
 
   return (
     <li className="group px-4 py-3 transition-colors hover:bg-accent/50">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
-          {/* Line 1 — path + char-count badge */}
-          <div className="flex items-center gap-2">
-            <Link href={editHref} className="truncate font-mono text-sm font-medium text-foreground transition-colors hover:text-primary" title={draft.path}>
-              {draft.path}
-            </Link>
-            <span className={cn('ml-auto shrink-0 text-xs tabular-nums', isEmpty ? 'text-muted-foreground/60' : 'text-muted-foreground')}>
-              {isEmpty ? m['creating_pages.preview_empty']() : formatCharCount(draft.bodyLength)}
-            </span>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          {/* Line 1 — path (links to the editor) */}
+          <Link
+            href={editHref}
+            className="block truncate font-mono text-sm font-medium text-foreground transition-colors hover:text-primary"
+            title={draft.path}
+          >
+            {draft.path}
+          </Link>
 
-          {/* Line 2 — body preview (only meaningful when non-empty) */}
-          {!isEmpty && (
-            <p className="truncate text-xs text-muted-foreground">
-              {draft.bodyPreview}
-              {isTruncated && '…'}
-            </p>
-          )}
-
-          {/* Line 3 — start / last-edit timestamps */}
+          {/* Line 2 — start / last-edit timestamps */}
           <p className="text-xs text-muted-foreground">
             {m['creating_pages.started_at']({ when: formatDistanceToNow(draft.createdAt) })}
             {showUpdated && (
@@ -274,8 +251,8 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
           </p>
         </div>
 
-        {/* Always-on icon action column — Edit / Cancel. Icon-only keeps
-            the row tight; aria-label + title carry the accessible label. */}
+        {/* Icon action column — Edit / Cancel. Icon-only keeps the row
+            tight; aria-label + title carry the accessible label. */}
         <div className="flex shrink-0 items-center gap-1">
           <Button
             variant="ghost"
