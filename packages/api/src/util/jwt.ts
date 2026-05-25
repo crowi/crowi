@@ -10,9 +10,16 @@ interface TokenPayload {
   type: 'access' | 'refresh';
 }
 
-// Token expiration times
-const ACCESS_TOKEN_EXPIRES_IN = '15m'; // 15 minutes
-const REFRESH_TOKEN_EXPIRES_IN = '30d'; // 30 days
+/**
+ * Access / refresh token lifetimes in seconds. Env-overridable; the
+ * 1h default for access tokens is long enough that brief idle periods
+ * don't churn the refresh endpoint and short enough that a leaked
+ * token stays useful for at most an hour. The client's 401 interceptor
+ * (see `packages/web/src/lib/api-client.ts`) trades the refresh token
+ * for a fresh access token whenever a request lands a 401.
+ */
+const ACCESS_TOKEN_TTL_SEC = Number(process.env.JWT_ACCESS_TOKEN_TTL_SECONDS) || 60 * 60; // 1 hour
+const REFRESH_TOKEN_TTL_SEC = Number(process.env.JWT_REFRESH_TOKEN_TTL_SECONDS) || 30 * 24 * 60 * 60; // 30 days
 
 export function createJwtUtil(crowi: Crowi) {
   const config = crowi.getConfig();
@@ -28,22 +35,19 @@ export function createJwtUtil(crowi: Crowi) {
     };
 
     const accessToken = jwt.sign({ ...payload, type: 'access' }, secret, {
-      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+      expiresIn: ACCESS_TOKEN_TTL_SEC,
       issuer: 'crowi',
     });
 
     const refreshToken = jwt.sign({ ...payload, type: 'refresh' }, secret, {
-      expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+      expiresIn: REFRESH_TOKEN_TTL_SEC,
       issuer: 'crowi',
     });
-
-    // Calculate expiration time in seconds
-    const expiresIn = 15 * 60; // 15 minutes in seconds
 
     return {
       accessToken,
       refreshToken,
-      expiresIn,
+      expiresIn: ACCESS_TOKEN_TTL_SEC,
     };
   }
 

@@ -25,8 +25,11 @@ const isBrowser = (): boolean => typeof window !== 'undefined';
 
 /**
  * Persist a freshly-minted access + refresh pair on login / refresh.
- * `accessTokenTtlSeconds` is best-effort cookie max-age; defaulting to
- * 1 hour matches the api's typical `JWT_EXPIRATION` env var.
+ * `accessTokenTtlSeconds` is the cookie max-age — callers should pass
+ * the `expiresIn` from the `/auth/login` / `/auth/refresh` response so
+ * the cookie expires together with the JWT it carries (`<img>` requests
+ * cannot re-authenticate via the refresh interceptor). The 1h default
+ * matches the api's default `JWT_ACCESS_TOKEN_TTL_SECONDS`.
  */
 export function storeTokens(tokens: { accessToken: string; refreshToken?: string }, accessTokenTtlSeconds: number = 60 * 60): void {
   if (!isBrowser()) return;

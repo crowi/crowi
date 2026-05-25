@@ -27,11 +27,9 @@ async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
 
   const refreshToken = localStorage.getItem('refreshToken');
-  console.log('[api-client] refreshAccessToken called, hasRefreshToken:', !!refreshToken);
   if (!refreshToken) return null;
 
   try {
-    console.log('[api-client] Attempting token refresh...');
     const response = await fetch(`${API_BASE_URL}/api/v2/auth/refresh`, {
       method: 'POST',
       headers: {
@@ -40,25 +38,17 @@ async function refreshAccessToken(): Promise<string | null> {
       body: JSON.stringify({ refreshToken }),
     });
 
-    console.log('[api-client] Refresh response status:', response.status);
-
     if (response.ok) {
       const data = await response.json();
-      console.log('[api-client] Refresh successful, storing new tokens');
-      storeTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+      storeTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken }, data.expiresIn);
       return data.accessToken;
-    } else {
-      const errorBody = await response.text();
-      console.log('[api-client] Refresh failed:', response.status, errorBody);
-      clearTokens();
-      // カスタムイベントを発行してReact側でナビゲーションを処理
-      window.dispatchEvent(new CustomEvent('auth:session-expired'));
-      return null;
     }
-  } catch (err) {
-    console.log('[api-client] Refresh error:', err);
     clearTokens();
-    // カスタムイベントを発行してReact側でナビゲーションを処理
+    // `(auth)/layout.tsx` listens for this and redirects to /login.
+    window.dispatchEvent(new CustomEvent('auth:session-expired'));
+    return null;
+  } catch {
+    clearTokens();
     window.dispatchEvent(new CustomEvent('auth:session-expired'));
     return null;
   }

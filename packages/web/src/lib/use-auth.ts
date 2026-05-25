@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, useContext, createContext } from 'react';
 import { useRouter } from 'next/navigation';
-import { clearTokens } from './auth-token';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
+import { apiClientV2 } from './api-client';
+import { clearTokens, getRefreshToken } from './auth-token';
 
 // ネットワークエラーかどうかを判定
 function isNetworkError(error: unknown): boolean {
@@ -87,11 +86,11 @@ export function useAuth() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v2/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      // Use apiClientV2 (`hc<AppType>`) so the 401 → /auth/refresh → retry
+      // interceptor in `api-client.ts` runs. Raw `fetch` here used to
+      // bypass it and log the user out as soon as the 15-minute access
+      // token expired — even when a fresh refresh token was available.
+      const response = await apiClientV2.auth.me.$get();
 
       if (response.ok) {
         const data = await response.json();
@@ -143,23 +142,17 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    const accessToken = localStorage.getItem('accessToken');
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = getRefreshToken();
 
-    // Call logout API if we have a token
-    if (accessToken) {
-      try {
-        await fetch(`${API_BASE_URL}/api/v2/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ refreshToken }),
-        });
-      } catch {
-        // Ignore errors, we'll clear tokens anyway
-      }
+    // Call logout API if we have a token. `apiClientV2` attaches the
+    // Authorization header and refreshes on 401 transparently; logout
+    // failures are non-fatal — we clear tokens locally regardless.
+    try {
+      await apiClientV2.auth.logout.$post({
+        json: refreshToken ? { refreshToken } : {},
+      });
+    } catch {
+      // Ignore — local cleanup happens below either way.
     }
 
     // Clear tokens

@@ -51,7 +51,7 @@ export function RegisterForm() {
         const body = await response.json();
         // Store tokens (also mirrors access token into a cookie so
         // browser-built `<img>` requests can authenticate).
-        storeTokens(body);
+        storeTokens(body, body.expiresIn);
 
         // Redirect to home
         router.push('/');
