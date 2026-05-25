@@ -167,7 +167,7 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 min-h-9">
         <Breadcrumb path={page.path} />
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 self-end md:self-auto">
           {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} />}
           {/* watch / bookmark / link are hidden on mobile in the
               expanded header — they fold into the dotmenu instead. */}
