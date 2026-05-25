@@ -3,7 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { TocEntryResponse } from '@crowi/api-contract';
-import { Loader2, Trash2, FilePlus2 } from 'lucide-react';
+import { PageStatusEnum } from '@crowi/api-contract';
+import { FilePlus2, Info, Loader2, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -171,6 +172,11 @@ export function PageView({ path, revisionId }: PageViewProps) {
   if (page) {
     const toc = page.revision?.meta?.toc ?? EMPTY_TOC;
     const isStaleRevision = Boolean(page.latestRevision && page.revision?._id && page.latestRevision !== page.revision._id);
+    // Drafts are creator-only and unpublished — strip the "social" affordances
+    // (presence, comments) and swap the comments slot for an info notice that
+    // tells the author the page isn't published yet. PageHeader / PageActionsMenu
+    // independently hide like / watch / bookmark / link-share for the same reason.
+    const isDraft = page.status === PageStatusEnum.DRAFT;
     return (
       <>
         <article className="space-y-12">
@@ -181,7 +187,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
               router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
             }}
             showActions={!isStaleRevision}
-            showPresence={!isStaleRevision}
+            showPresence={!isStaleRevision && !isDraft}
             sticky={!isStaleRevision}
           />
           <PageContent page={page} />
@@ -189,7 +195,15 @@ export function PageView({ path, revisionId }: PageViewProps) {
             <>
               <BacklinkList pageId={page._id} />
               <AttachmentList pageId={page._id} />
-              <PageComments page={page} />
+              {isDraft ? (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>{m['page.draft_notice_title']()}</AlertTitle>
+                  <AlertDescription>{m['page.draft_notice_body']()}</AlertDescription>
+                </Alert>
+              ) : (
+                <PageComments page={page} />
+              )}
             </>
           )}
         </article>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, BellOff, Bookmark, History, Link2, MoreHorizontal, MoveRight, Trash2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
+import { PageStatusEnum } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToggleBookmark } from '@/lib/use-bookmark';
@@ -28,6 +29,10 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
   const router = useRouter();
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  // Drafts hide the social affordances (watch / bookmark / copy-link)
+  // that the compact dropdown otherwise folds in. The page-level
+  // history / rename / delete actions still apply to the draft.
+  const isDraft = page.status === PageStatusEnum.DRAFT;
 
   return (
     <>
@@ -38,7 +43,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {compact && (
+          {compact && !isDraft && (
             <>
               {isAuthenticated && <WatchMenuItem pageId={page._id} />}
               <BookmarkMenuItem pageId={page._id} />

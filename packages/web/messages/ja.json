@@ -293,6 +293,8 @@
   "page.grant_chip_owner": "自分のみ",
   "page.grant_chip_restricted": "リンクのみ",
   "page.grant_chip_specified": "指定ユーザー",
+  "page.draft_notice_title": "下書きページ",
+  "page.draft_notice_body": "このページはまだ公開されていません。編集して保存すると公開されます。",
   "collab.save_success": "保存しました",
   "collab.save_failed": "保存に失敗しました: {message}",
   "collab.force_reload_title": "外部からの変更を検出しました",

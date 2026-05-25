@@ -1,7 +1,7 @@
 'use client';
 
 import type { PageWithRevision } from '@crowi/api-contract';
-import { PageGrantEnum } from '@crowi/api-contract';
+import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
 import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
 import { ArrowUp, Edit2, Link2, Lock } from 'lucide-react';
@@ -134,6 +134,11 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
   // both into one Lock icon.
   const isLinkOnly = isLinkOnlyGrant(page.grant);
   const isPrivate = isPrivateGrant(page.grant);
+  // Drafts (creator-only, unpublished) hide the social interactions
+  // — like / watch / bookmark / link-share have no audience yet. The
+  // dotmenu and edit button stay so the creator can still operate on
+  // the draft.
+  const isDraft = page.status === PageStatusEnum.DRAFT;
   const pageTitle = getPageTitle(page.path);
 
   const editButton = onEdit && (
@@ -178,18 +183,22 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
               <GrantChip grant={page.grant} />
             </span>
           )}
-          {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} />}
-          {isAuthenticated && (
+          {!isDraft && isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} />}
+          {!isDraft && isAuthenticated && (
             <span className="hidden md:inline-flex">
               <WatchButton pageId={page._id} />
             </span>
           )}
-          <span className="hidden md:inline-flex">
-            <BookmarkButton pageId={page._id} />
-          </span>
-          <span className="hidden md:inline-flex">
-            <LinkSharePopover page={page} />
-          </span>
+          {!isDraft && (
+            <span className="hidden md:inline-flex">
+              <BookmarkButton pageId={page._id} />
+            </span>
+          )}
+          {!isDraft && (
+            <span className="hidden md:inline-flex">
+              <LinkSharePopover page={page} />
+            </span>
+          )}
           {editButton && <span className="md:hidden">{editButton}</span>}
           {showActions && (
             <>
@@ -297,7 +306,7 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
               </button>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
               <div className="flex items-center gap-1 shrink-0">
-                {isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}
+                {!isDraft && isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}
                 {editIconButton}
                 {showActions && <PageActionsMenu page={page} compact isAuthenticated={isAuthenticated} />}
               </div>
