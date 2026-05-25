@@ -21,8 +21,6 @@
  *   Express bridge is removed.
  */
 import {
-  PageGrantEnum,
-  type UserPublic,
   createPageRoute,
   deletePageRoute,
   getPageRoute,
@@ -30,11 +28,13 @@ import {
   getWatchStatusRoute,
   likePageRoute,
   listPagesRoute,
+  PageGrantEnum,
   renamePageRoute,
   revertDeletedPageRoute,
   seenPageRoute,
   setPageGrantRoute,
   setWatchStatusRoute,
+  type UserPublic,
   unlikePageRoute,
   updatePageRoute,
 } from '@crowi/api-contract';
@@ -42,7 +42,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { type PageDocument, visiblePageStatusOr } from 'src/models/page';
+import { type PageDocument, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import { isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
@@ -219,11 +219,24 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             ])) as [PageDocument | null, PageDocument[]];
           } else {
             // List all pages the user can access (including path='/').
+            //
+            // Both visibility predicates come from the Page model:
+            //   visiblePageStatusOr — published + the viewer's own drafts
+            //   visiblePageGrantOr  — public + restricted/specified/owner
+            //                         pages where the viewer is in
+            //                         grantedUsers
+            //
+            // Previously this branch hard-coded `grant: { $in: [1, 2] }`,
+            // which (a) silently dropped GRANT_OWNER and GRANT_SPECIFIED
+            // pages the viewer creates or is granted, and (b) leaked
+            // GRANT_RESTRICTED pages to non-members because the
+            // grantedUsers check was missing. Replacing both predicates
+            // with the model helpers keeps the path-based and root /
+            // no-path branches consistent.
             // biome-ignore lint/suspicious/noExplicitAny: legacy Mongoose conditions shape
             const conditions: any = {
               redirectTo: null,
-              $or: visiblePageStatusOr(user._id),
-              grant: { $in: [1, 2] }, // PUBLIC or RESTRICTED
+              $and: [{ $or: visiblePageStatusOr(user._id) }, { $or: visiblePageGrantOr(user._id) }],
             };
 
             if (path === '/') {

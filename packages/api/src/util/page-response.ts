@@ -1,10 +1,10 @@
-import { Types } from 'mongoose';
 import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
+import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import { metadataToRevisionMeta, type RevisionMetaContent } from 'src/models/revision';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
-import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId } from './ts-rest-helpers';
+import { isPopulatedUser, type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from './ts-rest-helpers';
 
 /**
  * Shape of a populated `revision` field as it appears on Mongoose documents
@@ -212,7 +212,7 @@ export const pageToResponse = (page: PageDocument | PageLike, options: PageToRes
         ? toRevisionResponse(pageObj.revision, { withMeta: options.withMeta, withRenderedAst: options.withRenderedAst })
         : undefined,
     redirectTo: pageObj.redirectTo || null,
-    status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated') || undefined,
+    status: (pageObj.status as 'wip' | 'published' | 'deleted' | 'deprecated' | 'draft') || undefined,
     grant: pageObj.grant,
     grantedUsers: pageObj.grantedUsers?.map(toStringId) || [],
     creator: pageObj.creator && isPopulatedUser(pageObj.creator) ? toPageUser(pageObj.creator) : null,
