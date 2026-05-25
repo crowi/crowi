@@ -172,14 +172,28 @@ function DraftsSection({ drafts, isLoading, isError }: DraftsSectionProps) {
 }
 
 function DraftsSkeleton() {
+  // Mirrors the real DraftRow geometry so the layout doesn't jump when
+  // data lands:
+  //   • outer is `flex items-center gap-3` to leave room for the right-
+  //     hand action column,
+  //   • inner content uses `space-y-0.5` (same as DraftRow) with h-4 for
+  //     the path line and h-3 for the timestamps line,
+  //   • the right column holds two icon-button placeholders sized to
+  //     the Pencil / Trash ghost buttons.
   return (
     <div role="status" aria-live="polite" aria-label={m['creating_pages.loading']()}>
       <Card className="gap-0 overflow-hidden p-0 py-0" aria-hidden>
         <ul className="divide-y">
           {Array.from({ length: 3 }, (_, i) => `draft-skeleton-${i}`).map((key) => (
-            <li key={key} className="space-y-1.5 px-4 py-3">
-              <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
-              <div className="h-3 w-1/4 animate-pulse rounded bg-muted" />
+            <li key={key} className="flex items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <div className="h-7 w-7 animate-pulse rounded-md bg-muted" />
+                <div className="h-7 w-7 animate-pulse rounded-md bg-muted" />
+              </div>
             </li>
           ))}
         </ul>
