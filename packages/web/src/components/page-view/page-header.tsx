@@ -2,6 +2,7 @@
 
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageGrantEnum } from '@crowi/api-contract';
+import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
 import { ArrowUp, Edit2, Link2, Lock } from 'lucide-react';
 import { Breadcrumb } from '@/components/breadcrumb';
@@ -131,8 +132,8 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
   // from "private" (SPECIFIED / OWNER — listed users only) so the
   // header reflects the actual sharing posture instead of collapsing
   // both into one Lock icon.
-  const isLinkOnly = page.grant === PageGrantEnum.RESTRICTED;
-  const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
+  const isLinkOnly = isLinkOnlyGrant(page.grant);
+  const isPrivate = isPrivateGrant(page.grant);
   const pageTitle = getPageTitle(page.path);
 
   const editButton = onEdit && (

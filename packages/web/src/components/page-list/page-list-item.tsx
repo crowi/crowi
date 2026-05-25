@@ -1,7 +1,8 @@
 'use client';
 
 import type { Page } from '@crowi/api-contract';
-import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
+import { PageStatusEnum } from '@crowi/api-contract';
+import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
 import { Folder, Link2, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -72,8 +73,8 @@ function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean 
   // limited to listed users / the owner. Separating the two visually
   // matters because the privacy implications differ: a link-only page
   // is sharable, a private page is not.
-  const isLinkOnly = page.grant === PageGrantEnum.RESTRICTED;
-  const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
+  const isLinkOnly = isLinkOnlyGrant(page.grant);
+  const isPrivate = isPrivateGrant(page.grant);
   // Drafts only surface in the listing for the creator themselves
   // (RFC-0004 visibility), so showing the badge to whoever sees the row
   // is safe and signals "this is mine and not yet public".

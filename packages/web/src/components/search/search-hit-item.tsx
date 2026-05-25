@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Bookmark, FileText, Lock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { SearchHit } from '@crowi/api-contract';
-import { PageGrantEnum } from '@crowi/api-contract';
+import { isPrivateGrant } from '@/lib/page-grant';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { SearchHitSnippet } from './search-hit-snippet';
 
@@ -21,7 +21,7 @@ export const SearchHitItem = memo(function SearchHitItem({ hit }: SearchHitItemP
   const displayName = displayUser?.name || displayUser?.username || '?';
 
   const isPortal = page.path.endsWith('/');
-  const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
+  const isPrivate = isPrivateGrant(page.grant);
 
   return (
     <div className="flex items-start gap-4 p-4 hover:bg-accent/50 transition-colors rounded-lg border-b last:border-0">

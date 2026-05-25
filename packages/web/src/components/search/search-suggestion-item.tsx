@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FileText, Lock } from 'lucide-react';
 import type { Page } from '@crowi/api-contract';
-import { PageGrantEnum } from '@crowi/api-contract';
+import { isPrivateGrant } from '@/lib/page-grant';
 import { SearchHitSnippet } from './search-hit-snippet';
 
 interface SearchSuggestionItemProps {
@@ -22,7 +22,7 @@ interface SearchSuggestionItemProps {
  */
 export function SearchSuggestionItem({ href, page, snippet, onClick }: SearchSuggestionItemProps) {
   const isPortal = page.path.endsWith('/');
-  const isPrivate = page.grant === PageGrantEnum.OWNER || page.grant === PageGrantEnum.SPECIFIED;
+  const isPrivate = isPrivateGrant(page.grant);
 
   return (
     <Link href={href} onClick={onClick} className="block rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors">
