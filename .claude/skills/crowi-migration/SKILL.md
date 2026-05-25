@@ -1,18 +1,22 @@
 ---
 name: crowi-migration
 description: |
-  Crowi 2.0 移行ワークフロー。Express/Swig から Next.js + ts-rest への移行時に自動適用。
+  Crowi 2.0 移行ワークフロー。Express/Swig から Next.js + Hono への移行時に自動適用。
   キーワード: migrate, 移行, Express, Swig, legacy, 旧実装
 globs:
-  - "packages/api/src/controllers/**"
-  - "packages/api/src/routes/**"
-  - "packages/api/views/**"
+  - "packages/api/src/hono/**"
+  - "packages/api-contract/src/**"
+  - "packages/web/src/app/**"
 ---
 
 # Crowi 2.0 Migration Skill
 
-Crowi の旧 Express + Swig + jQuery を、新 ts-rest API + Next.js に段階的に置き換える。
+Crowi の旧 Express + Swig + jQuery を、新 Hono API + Next.js に段階的に置き換える。
 1人開発・main 直コミット運用が前提。
+
+> 注: 旧 Express/Swig レイヤーと中間の ts-rest 実装は RFC-0006 (2026-05-22 main マージ)
+> で完全撤去済み。core wiki 機能の移行はほぼ完了しており、この skill は主に残作業・
+> 新規エンドポイント追加の参照用。
 
 ## 実態のアーキテクチャ
 
@@ -22,19 +26,13 @@ crowi/                            # Turborepo + pnpm workspace
 ├── crowi.config.json             # dev runner config (plugins + active drivers)
 ├── .env(.example)                # dev runtime env (repo root で読まれる)
 └── packages/
-    ├── api/                      # Express + ts-rest API (port 4301)
-    │   ├── src/
-    │   │   ├── controllers/      # 旧実装 (Swig render)
-    │   │   ├── routes/
-    │   │   │   ├── api/          # 旧 /_api/* (HTTP RPC)
-    │   │   │   ├── admin.ts      # 旧管理画面
-    │   │   │   ├── login.ts      # 旧ログインフォーム
-    │   │   │   ├── me.ts         # 旧マイページ
-    │   │   │   └── ts-rest/      # ★ 新実装はここ
-    │   │   ├── models/           # Mongoose
-    │   │   └── middlewares/
-    │   └── views/                # ★ 旧 Swig テンプレート (置き換え対象)
-    ├── api-contract/             # ts-rest + Zod 契約 (src/{contracts,schemas})
+    ├── api/                      # Hono API (port 4301)
+    │   └── src/
+    │       ├── hono/             # ★ Hono app: handlers/ (admin/ 含む) + middleware/ + app.ts
+    │       ├── models/           # Mongoose
+    │       ├── crowi/            # boot sequence
+    │       └── util/             # helpers
+    ├── api-contract/             # Hono (@hono/zod-openapi) + Zod 契約 (src/{contracts,schemas})
     ├── web/                      # Next.js 16 App Router (port 4302)
     │   └── src/app/
     │       ├── (public)/         # ログイン前
@@ -46,40 +44,45 @@ crowi/                            # Turborepo + pnpm workspace
     └── plugin-*/                 # storage / renderer / search プラグイン
 ```
 
-旧実装と新実装は同じ `packages/api` パッケージ内に同居している。lib/ ディレクトリは存在しない。
+エンドポイントは `packages/api/src/hono/handlers/` に集約。旧 `controllers/` / `routes/`
+/ `views/` は撤去済みで存在しない。
 
 ## 技術スタック
 
-- API: **Express** v4 + ts-rest v3 + Mongoose + JWT (jwtAuth middleware)
+- API: **Hono** v4 + `@hono/zod-openapi` + Mongoose + JWT (jwtAuth middleware)
 - Web: **Next.js 16** (App Router, Turbopack) + React 19 + Tailwind v4 + shadcn/ui + tanstack/react-query
 - 共通: TypeScript 5.x strict, pnpm workspace, Turborepo
 
 ## 移行パターン
 
-### 旧 Express controller → ts-rest
+### 旧 Express controller → Hono ハンドラ
 
-旧 `controllers/page.ts` の `actions.api.create` を例に:
+ページ作成 (`POST /api/v2/pages`) を例に:
 
 ```typescript
-// 旧: packages/api/src/routes/api/page.ts
-router.post('/pages.create', AccessTokenParser, LoginRequired, csrf, Page.api.create);
-
-// 新: packages/api-contract/src/contracts/page.ts (既存に追加)
-export const pageContract = c.router({
-  createPage: {
-    method: 'POST',
-    path: '/pages',
-    body: CreatePageRequestSchema,
-    responses: { 200: PageWithRevisionSchema, 400: ApiErrorSchema },
+// packages/api-contract/src/contracts/page.ts — @hono/zod-openapi の route 定義
+export const createPageRoute = createRoute({
+  method: 'post',
+  path: '/pages',
+  tags: ['page'],
+  security: [{ bearerAuth: [] }],
+  request: { body: { content: { 'application/json': { schema: CreatePageRequestSchema } } } },
+  responses: {
+    200: { description: 'Created page', content: { 'application/json': { schema: PageWithRevisionSchema } } },
+    400: { description: 'Bad request', content: { 'application/json': { schema: ApiErrorSchema } } },
   },
 });
 
-// 新: packages/api/src/routes/ts-rest/page.ts
-createPage: async ({ body, req }) => {
-  const user = req.user;
-  const created = await Page.createPage(body.path, body.body, user, { grant: body.grant });
-  return { status: 200, body: { page: pageToResponse(created) } };
-},
+// packages/api/src/hono/handlers/page.ts — route を openapi() で登録
+export const registerPageRoutes = (app, crowi) => {
+  app.use('/pages/*', createJwtAuth(crowi));
+  return app.openapi(createPageRoute, async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+    const created = await Page.createPage(body.path, body.body, user, { grant: body.grant });
+    return c.json({ page: pageToResponse(created) }, 200);
+  });
+};
 ```
 
 ### 旧 Swig → Next.js
@@ -108,7 +111,7 @@ planner ──→ implementer ──→ simplify ──→ reviewer ─┬→ co
 
 各 phase の責務:
 
-- **planner**: 旧実装の場所特定、既存の ts-rest 契約の有無を必ず確認、task ファイル作成
+- **planner**: 旧実装の場所特定、既存の Hono 契約の有無を必ず確認、task ファイル作成
 - **implementer**: 実装 + テスト、最後に必須チェック (type-check / test / lint / format) を全部走らせる
 - **simplify**: `simplify` skill を呼び、reuse / quality / efficiency を整える
 - **reviewer**: 契約整合・旧実装互換・テスト網羅・セキュリティを確認
@@ -150,7 +153,7 @@ planner ──→ implementer ──→ simplify ──→ reviewer ─┬→ co
       "packages/api/src/routes/api/page.ts:10"
     ],
     "newImpl": [
-      "packages/api/src/routes/ts-rest/page.ts (createPage)"
+      "packages/api/src/hono/handlers/page.ts (createPage)"
     ],
     "contracts": [
       "packages/api-contract/src/contracts/page.ts (createPage)",

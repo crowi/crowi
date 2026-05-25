@@ -97,7 +97,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ### 例
 
 ```
-feat(api): implement ts-rest POST /api/v2/pages for page creation
+feat(api): implement Hono POST /api/v2/pages for page creation
 
 Replace the createPage stub with a full implementation backed by
 Page.createPage. Maps model errors to 400 responses and shapes
@@ -135,8 +135,8 @@ Branch: main (main-direct mode)
 Commit: abc1234 — feat(api): ...
 
 Files:
-- packages/api/src/routes/ts-rest/page.ts
-- packages/api/src/routes/ts-rest/page.test.ts
+- packages/api/src/hono/handlers/page.ts
+- packages/api/src/hono/handlers/page.test.ts
 
 Pre-commit checks: PASS
 

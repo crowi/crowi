@@ -47,7 +47,7 @@ points.
 | Auth | `registerAuth` | (for external OAuth providers; expanding) |
 | Notifier | `registerNotifier` | (for notification sinks such as Slack; expanding) |
 | Base (config-only) | (no register) | `@crowi/plugin-aws` — shares credentials with downstream AWS plugins |
-| Routes | `registerRoutes` | ts-rest contracts for "Test connection" buttons or OAuth callbacks |
+| Routes | `registerRoutes` | Plugin HTTP routes — **currently a no-op stub**, pending a Hono-based redesign (see Developing plugins) |
 
 Storage and search each select a "driver" via `storage.driver` /
 `search.driver` in `crowi.config.json`. You can install several driver

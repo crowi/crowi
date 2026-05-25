@@ -41,7 +41,7 @@ context 完備の task 定義を作成する。
      - `packages/api-contract/src/contracts/` — 既存契約に追加できないか
      - `packages/api-contract/src/schemas/` — 既存 schema を拡張できないか
      - `packages/api/src/util/` — admin-config / ts-rest-helpers / pageToResponse 等の helper
-     - `packages/api/src/routes/ts-rest/` — 隣接ハンドラのパターン
+     - `packages/api/src/hono/handlers/` — 隣接ハンドラのパターン
    - **Web**:
      - `packages/web/src/lib/` — useXxx hook (admin-settings-factory / unwrap-result 等)
      - `packages/web/src/components/ui/` — shadcn primitive
@@ -52,7 +52,7 @@ context 完備の task 定義を作成する。
 3. **新規ファイルの置き場所決定**
    - 契約: `packages/api-contract/src/contracts/{feature}.ts`
    - スキーマ: `packages/api-contract/src/schemas/{feature}.ts`
-   - API: `packages/api/src/routes/ts-rest/{feature}.ts`
+   - API: `packages/api/src/hono/handlers/{feature}.ts`
    - UI: `packages/web/src/app/(auth or admin)/...`
    - util: `packages/api/src/util/{name}.ts` または `packages/web/src/lib/{name}.ts`
 
@@ -73,7 +73,7 @@ context 完備の task 定義を作成する。
 ## 重要な前提
 
 - **state ディレクトリは `.feature-state/` (root)** ※ `.claude/feature-state/` ではない
-- ts-rest ルートは `authenticatedRouter` 配下で `jwtAuth` 自動適用、CSRF 不要
+- Hono ルートは `authenticatedRouter` 配下で `jwtAuth` 自動適用、CSRF 不要
 - 新契約は `pnpm --filter @crowi/api-contract build` 必須 (implementer が走らせる)
 - main 直コミット運用 (queue.json `commitStrategy: main-direct`)
 
@@ -82,14 +82,14 @@ context 完備の task 定義を作成する。
 ```
 # 既存資産 (再利用候補)
 packages/api/src/util/
-packages/api/src/routes/ts-rest/
+packages/api/src/hono/handlers/
 packages/api/src/models/
 packages/web/src/lib/
 packages/web/src/components/{ui,admin,page-view}/
 packages/api-contract/src/{contracts,schemas}/
 
 # 新規実装の置き場所
-packages/api/src/routes/ts-rest/{feature}.ts
+packages/api/src/hono/handlers/{feature}.ts
 packages/web/src/app/(auth|admin)/...
 packages/api-contract/src/contracts/{feature}.ts
 ```
@@ -113,7 +113,7 @@ packages/api-contract/src/contracts/{feature}.ts
       "packages/web/src/lib/admin-settings-factory.ts (createAdminSettingsHooks)"
     ],
     "newFiles": [
-      "packages/api/src/routes/ts-rest/{feature}.ts",
+      "packages/api/src/hono/handlers/{feature}.ts",
       "packages/api-contract/src/contracts/{feature}.ts",
       "packages/api-contract/src/schemas/{feature}.ts"
     ],
@@ -132,7 +132,7 @@ packages/api-contract/src/contracts/{feature}.ts
   ],
   "commitPlan": [
     {"type": "feat", "scope": "api-contract", "title": "add {feature} contracts + schemas"},
-    {"type": "feat", "scope": "api", "title": "implement {feature} ts-rest handler"},
+    {"type": "feat", "scope": "api", "title": "implement {feature} Hono handler"},
     {"type": "feat", "scope": "web", "title": "add {feature} UI"},
     {"type": "test", "scope": "api", "title": "cover {feature} edge cases"},
     {"type": "docs", "scope": "todo", "title": "mark {feature} done"}

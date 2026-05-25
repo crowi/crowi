@@ -32,11 +32,11 @@ implementer + simplify を経た実装を、本番品質に乗せられるか判
 
 ### 必須 (1 つでも不合格なら NEEDS_WORK)
 
-1. **契約整合**: ts-rest 契約 (request body / response / error shape) と実装が完全一致
+1. **契約整合**: Hono (`@hono/zod-openapi`) 契約 (request body / response / error shape) と実装が完全一致
 2. **認証**: 必要なエンドポイントが `jwtAuth` 配下にある、未認証で 401 が返るテストあり
 3. **旧実装互換**: 旧 controller との挙動差異がない (差異がある場合は task の `openQuestions` で明示済み)
 4. **エラーマッピング**: 旧 throw → 新 ApiError の対応が妥当、HTTP ステータスが意味論的に正しい
-5. **トランザクション境界**: モデル層の整合性が保たれている、ts-rest 層で勝手なロジックを足していない
+5. **トランザクション境界**: モデル層の整合性が保たれている、Hono ハンドラ層で勝手なロジックを足していない
 6. **テストカバレッジ**: 受け入れ基準の最低限 (正常 / 異常 / 認証) を網羅
 
 ### 望ましい (指摘するが NEEDS_WORK にはしない)

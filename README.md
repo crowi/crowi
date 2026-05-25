@@ -22,8 +22,8 @@
 
 Crowi is a **Markdown Wiki** for team knowledge sharing. URL paths *are* the
 page hierarchy, so `/team/handbook/onboarding` reads exactly the way it's
-written. v2 ("Reignite") rebuilds the frontend from Express + Swig + jQuery
-to **Next.js 16 (App Router) + React 19 + ts-rest 3**, while keeping v1's
+written. v2 ("Reignite") rebuilds the stack from Express + Swig + jQuery
+to a **Hono API + Next.js 16 (App Router) + React 19**, while keeping v1's
 MongoDB data shape intact — your existing wiki migrates over.
 
 ## Monorepo layout
@@ -37,8 +37,8 @@ crowi/
 ├── crowi.config.json      # Dev runner config: plugins + active driver names
 ├── .env.example           # Dev runtime env template (copy to .env)
 └── packages/
-    ├── api/                          # Express 4 + ts-rest 3 API library (port 4301)
-    ├── api-contract/                  # Shared ts-rest contracts + Zod schemas
+    ├── api/                          # Hono 4 API library (port 4301)
+    ├── api-contract/                  # Shared Hono (@hono/zod-openapi) contracts + Zod schemas
     ├── web/                           # Next.js 16 frontend (port 4302)
     ├── runner/                        # Config loader + plugin resolver (used by @crowi/api boot)
     ├── plugin-api/                    # Plugin SDK (CrowiPlugin / registries / context)
@@ -61,7 +61,7 @@ in `crowi.config.json:plugins`; the api never needs to be rebuilt.
 
 ## Tech stack
 
-- **API**: Express 4 + ts-rest 3 + Mongoose + JWT auth (`jwtAuth` middleware)
+- **API**: Hono 4 + `@hono/zod-openapi` + Mongoose + JWT auth (`jwtAuth` middleware)
 - **Web**: Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS v4 + shadcn/ui + @tanstack/react-query
 - **Site**: Next.js 16 (static export) + Fumadocs UI + i18n (ja / en)
 - **Shared**: TypeScript 5.x strict, pnpm workspaces, Turborepo

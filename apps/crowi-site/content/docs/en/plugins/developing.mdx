@@ -125,7 +125,7 @@ what the plugin contributes.
 | `registerAuth` | An authentication provider |
 | `registerNotifier` | A notification sink |
 | `registerRenderer` | Markdown renderer extensions |
-| `registerRoutes` | The plugin's own ts-rest endpoints (`/api/v2/plugins/<name>/*`) |
+| `registerRoutes` | The plugin's own HTTP endpoints — **currently a no-op stub**: RFC-0006 removed the old ts-rest route surface, and plugin HTTP contribution will be redesigned on Hono in a follow-up RFC. A `registerRoutes` callback is accepted but not mounted today. |
 | `registerHooks` | Event subscription (internal-only in v2.0; not yet a stable extension point) |
 
 You can also declare lifecycle hooks:

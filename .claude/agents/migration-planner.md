@@ -2,7 +2,7 @@
 name: migration-planner
 description: |
   Crowi移行タスクの計画立案。Express/Swig の機能を分析し、
-  Next.js + ts-rest への移行計画を作成する。use proactively
+  Next.js + Hono への移行計画を作成する。use proactively
 tools:
   - Read
   - Grep
@@ -21,13 +21,13 @@ Crowi 2.0 移行プロジェクトの **プランナー**。
 ## 責務
 
 1. **既存資産の確認 (必須・最優先)**
-   既存の ts-rest 契約 / 実装 / Schema が存在しないか **必ず先にチェック** する。
+   既存の Hono 契約 / 実装 / Schema が存在しないか **必ず先にチェック** する。
    過去のフェーズで契約だけ用意され実装はスタブ、というケースが多い。
 
    ```bash
    # 例: pages.create の場合
    grep -rn "createPage\|CreatePageRequest" packages/api-contract/src/
-   grep -rn "createPage" packages/api/src/routes/ts-rest/
+   grep -rn "createPage" packages/api/src/hono/handlers/
    ```
 
 2. **旧実装の場所と挙動の特定**
@@ -40,7 +40,7 @@ Crowi 2.0 移行プロジェクトの **プランナー**。
 3. **新側の置き場所の決定**
    - 契約: `packages/api-contract/src/contracts/{feature}.ts`
    - スキーマ: `packages/api-contract/src/schemas/{feature}.ts`
-   - API: `packages/api/src/routes/ts-rest/{feature}.ts`
+   - API: `packages/api/src/hono/handlers/{feature}.ts`
    - UI: `packages/web/src/app/(auth or public)/...`
 
 4. **task ファイルの作成**
@@ -53,7 +53,7 @@ Crowi 2.0 移行プロジェクトの **プランナー**。
 ## 重要な前提
 
 - **state ディレクトリは `.migration-state/` (root)** ※ `.claude/migration-state/` ではない
-- ts-rest ルートは `authenticatedRouter` 配下なら `jwtAuth` が自動適用、CSRF は不要
+- Hono ルートは `authenticatedRouter` 配下なら `jwtAuth` が自動適用、CSRF は不要
 - 旧 `/_api/*` は新 `/api/v2/*` に対応する (path 衝突回避)
 - ブランチは feature branch ではなく **main 直コミット運用** がデフォルト
   (queue.json の `commitStrategy: main-direct`)
@@ -68,9 +68,9 @@ packages/api/views/            # Swig テンプレート
 packages/api/src/models/       # Mongoose
 
 # 新実装
-packages/api/src/routes/ts-rest/   # ts-rest 実装
+packages/api/src/hono/handlers/    # Hono ハンドラ実装
 packages/web/src/app/              # Next.js App Router
-packages/api-contract/src/           # ts-rest 契約 + Zod スキーマ
+packages/api-contract/src/           # Hono (@hono/zod-openapi) 契約 + Zod スキーマ
 ```
 
 ## task ファイルスキーマ
@@ -90,7 +90,7 @@ packages/api-contract/src/           # ts-rest 契約 + Zod スキーマ
       "packages/api/src/routes/api/page.ts:10"
     ],
     "newImpl": [
-      "packages/api/src/routes/ts-rest/page.ts (createPage stub)"
+      "packages/api/src/hono/handlers/page.ts (createPage stub)"
     ],
     "contracts": [
       "packages/api-contract/src/contracts/page.ts:60 (createPage)",

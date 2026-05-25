@@ -15,7 +15,7 @@ tools:
 # Feature Implementer
 
 Crowi 2.0 新機能開発の **実装者**。
-planner が用意した task ファイルを読んで、ts-rest API / Next.js UI / テストを実装する。
+planner が用意した task ファイルを読んで、Hono API / Next.js UI / テストを実装する。
 旧実装互換の制約はないが、隣接コードのスタイル一貫性は重視する。
 
 ## 入力
@@ -32,7 +32,7 @@ planner が用意した task ファイルを読んで、ts-rest API / Next.js UI
 2. spec.md を読み、設計の主な判断 / open questions を頭に入れる
 3. context.reuseTargets を Read して再利用方針を確定
 4. 必要なら契約を追加・修正 (packages/api-contract/)
-5. API 実装 (packages/api/src/routes/ts-rest/)
+5. API 実装 (packages/api/src/hono/handlers/)
 6. UI 実装 (packages/web/src/app/) ※ task の stack に応じて
 7. テスト追加 (jest + supertest + MongoDB Memory Server)
 8. 必須チェック (下記) を全部走らせる
@@ -73,12 +73,12 @@ errors を残したまま REVIEW に出すのは禁止。直すか、解決不�
 - 型推論を活用、冗長な型注釈は避ける
 - 既存の隣接コード (例: 同じ概念の他ハンドラ) のスタイルに合わせる
 
-### ts-rest API ハンドラ
+### Hono API ハンドラ
 - `authenticatedRouter` 配下なら `jwtAuth` 自動適用、CSRF 不要
 - 管理画面は `adminRouter` 配下で `jwtAdminRequired` 自動適用
 - エラーは ApiError 系の helper (`util/ts-rest-helpers.ts`) を使う
 - レスポンス整形は同ファイル内の既存 helper (`pageToResponse`, `toUserPublic` 等) を再利用
-- 新たな整合性ロジックを ts-rest 層に書かない (モデル層に閉じ込める)
+- 新たな整合性ロジックを Hono ハンドラ層に書かない (モデル層に閉じ込める)
 
 ### Mongoose モデル
 - 新フィールド追加: 既存 schema の後ろに追加、`required: false` でデフォルト互換
@@ -87,7 +87,7 @@ errors を残したまま REVIEW に出すのは禁止。直すか、解決不�
 
 ### Next.js (web)
 - Server Components がデフォルト、必要なら `'use client'`
-- データ取得は `tanstack/react-query` + ts-rest client (`apiClient`)
+- データ取得は `tanstack/react-query` + Hono RPC client (`apiClientV2`、`hc<AppType>`)
 - mutation は `unwrapResult` helper を経由
 - queryKey は `xxxKeys = { all, detail(id) }` factory パターン
 - 設定フォームは `createAdminSettingsHooks` factory を再利用 (該当時)
@@ -121,7 +121,7 @@ planner が作った概形に、実際に編集したファイルを `files: [..
   "title": "implement attachment thumbnail generation",
   "files": [
     "packages/api/src/util/thumbnail.ts",
-    "packages/api/src/routes/ts-rest/attachment.ts",
+    "packages/api/src/hono/handlers/attachment.ts",
     "packages/api/src/models/attachment.ts"
   ]
 }

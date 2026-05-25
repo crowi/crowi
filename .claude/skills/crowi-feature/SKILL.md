@@ -5,7 +5,7 @@ description: |
   spec → planner → implementer → simplify → reviewer → committer まで自動で進める。
   キーワード: feature, 新機能, 開発, build, 設計, spec
 globs:
-  - "packages/api/src/routes/ts-rest/**"
+  - "packages/api/src/hono/handlers/**"
   - "packages/web/src/app/**"
   - "packages/api-contract/src/**"
 ---
@@ -402,7 +402,7 @@ migration skill と同じパターン。
 
 - **state ディレクトリは `.feature-state/` (root)** ※ `.claude/feature-state/` ではない
 - **main 直コミット運用** がデフォルト (queue.json `commitStrategy: main-direct`)
-- ts-rest ルートは `authenticatedRouter` 配下なら `jwtAuth` が自動適用、CSRF 不要
+- 認証が要るエンドポイントは Hono の認証ミドルウェア (`createJwtAuth(crowi)`) 配下に置く。CSRF 不要
 - 新契約は `packages/api-contract/src/contracts/{feature}.ts` に追加、build 必須
   (`pnpm --filter @crowi/api-contract build`)
 - 新 UI は `packages/web/src/app/(auth or admin)/...` 配下、shadcn/ui + tanstack/react-query

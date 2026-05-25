@@ -125,7 +125,7 @@ import してはいけません。
 | `registerAuth` | 認証プロバイダ |
 | `registerNotifier` | 通知シンク |
 | `registerRenderer` | Markdown レンダラ拡張 |
-| `registerRoutes` | プラグイン独自の ts-rest エンドポイント (`/api/v2/plugins/<name>/*`) |
+| `registerRoutes` | プラグイン独自の HTTP エンドポイント — **現在は no-op スタブ**: RFC-0006 で旧 ts-rest ルート基盤が撤去され、プラグインの HTTP 提供は後続 RFC で Hono ベースに再設計予定。`registerRoutes` コールバックは受け付けますが、現状はマウントされません。 |
 | `registerHooks` | イベント購読 (v2.0 では内部利用のみ、まだ安定拡張ポイントではない) |
 
 ライフサイクルフックも宣言できます。

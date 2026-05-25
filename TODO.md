@@ -1,6 +1,6 @@
 # TODO List
 
-Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
+Crowi 2.0 移行 (Express + Swig → Next.js + Hono)。フェーズ別。
 ロードマップの詳細は project memory (`migration_roadmap.md`) を参照。
 
 ## High Priority — フェーズ 1 残 (ページ機能の完成)
@@ -347,7 +347,7 @@ Crowi 2.0 移行 (Express + Swig → Next.js + ts-rest)。フェーズ別。
 
 - **運用方針**: main 直コミット (`commitStrategy: main-direct`)、push と PR は明示指示待ち
 - **並行作業**: `gw start <name>` で worktree を作成、終わったら `/integrate-worktree <name>` で合流
-- **ts-rest routes**: `/api/v2` prefix
+- **API routes**: Hono、`/api/v2` prefix
 - **api-contract build**: `pnpm --filter @crowi/api-contract build` (dev では `^build` 依存で自動)
 - **state ディレクトリ**: `.migration-state/` (root、gitignore 済) — `.claude/migration-state/` ではない
 - **format / lint**: pre-commit で biome format、pre-push で `pnpm lint` (errors=0)

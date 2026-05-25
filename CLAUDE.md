@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Crowi is a Markdown-based Wiki application for team knowledge sharing. The
 codebase is mid-migration from a legacy Express + Swig + jQuery monolith to a
-modern Express + ts-rest API plus a Next.js 16 (App Router) frontend.
+modern Hono API plus a Next.js 16 (App Router) frontend.
 
 **Current Status (Crowi 2.0)**: Turborepo monorepo with two apps and one
 shared contract package. Most core wiki features (page CRUD / list / portal /
@@ -23,8 +23,8 @@ crowi/
 ├── crowi.config.json         # dev runner config (plugins + active drivers)
 ├── .env(.sample)             # dev runtime env (loaded at CWD by packages/api)
 └── packages/
-    ├── api/                  # Express + ts-rest API (:4301)
-    ├── api-contract/         # ts-rest contracts + Zod schemas
+    ├── api/                  # Hono API (:4301)
+    ├── api-contract/         # Hono (@hono/zod-openapi) contracts + Zod schemas
     ├── web/                  # Next.js 16 App Router (:4302)
     ├── runner/               # config loader + plugin resolver (used by api boot)
     ├── tsconfig/             # shared library/app-node/app-web tsconfig presets
@@ -35,7 +35,7 @@ crowi/
 `ls packages/` and `tree -L 2 packages/api/src` give the rest. Highlights
 worth knowing without reading code:
 
-- `packages/api/src/routes/ts-rest/` — new endpoints; `routes/api/` + `controllers/` are legacy
+- `packages/api/src/hono/` — the Hono app: `handlers/` (endpoint handlers; `handlers/admin/` for admin), `middleware/`, `app.ts`
 - `packages/api/src/crowi/index.ts` — boot sequence (encryption → DB → config → plugins → server)
 - Plugin resolution: `@crowi/runner` reads `crowi.config.json` + uses
   `createRequire(<projectDir>/package.json)` to load plugin npm packages from
@@ -46,7 +46,7 @@ worth knowing without reading code:
 
 ## Tech Stack
 
-- **API**: Express 4 + ts-rest 3 + Mongoose + JWT auth (`jwtAuth` middleware)
+- **API**: Hono 4 + `@hono/zod-openapi` + Mongoose + JWT auth (`jwtAuth` middleware)
 - **Web**: Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS v4 + shadcn/ui + @tanstack/react-query
 - **Shared**: TypeScript 5.x strict, pnpm workspaces, Turborepo
 - **Format / Lint**: Biome (format) + ESLint (lint), lefthook hooks
@@ -78,11 +78,10 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 
 ### API server (`packages/api`)
 - **Boot**: `Crowi.init()` runs `setupEncryption` → `setupDatabase` → `setupModels` → `setupRedisClient` → `setupSessionConfig` → `setupConfig` → `migrateConfig` → `setupSearcher` → `setupMailer` → `setupSlack` → `buildServer`.
-- **Routing**:
-  - Public ts-rest routes (no auth)
-  - Authenticated ts-rest routes under `jwtAuth(crowi)` (most page / user / comment / etc. endpoints)
-  - Admin ts-rest routes under `jwtAdminRequired(crowi)` (= JWT + `user.admin === true`)
-  - Legacy Express routes still mounted at `/_api/*`, `/login`, `/register`, etc. for back-compat
+- **Routing** (all Hono, mounted under `/api/v2`):
+  - Public routes (no auth)
+  - Authenticated routes under `createJwtAuth(crowi)` (most page / user / comment / etc. endpoints)
+  - Admin routes under `createJwtAdminRequired(crowi)` (= JWT + `user.admin === true`)
 - **Auth**: JWT (access + refresh tokens). `req.user` is augmented to `UserDocument` via `packages/api/src/types/express.ts`.
 - **Models** (Mongoose):
   - Page (with grant), Revision, User, Comment, Bookmark, Like (on Page), Watcher, Notification, Activity, Config, Backlink, Share, Attachment.
@@ -94,13 +93,13 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
   - `(public)/`: login / register / installer
   - `(auth)/`: gated by `useAuth` redirect; mounts shared header (NotificationBell + admin shortcut + user dropdown)
   - `(admin)/`: gated by `user.admin === true`; renders sidebar + breadcrumb. Non-admin sees `AccessDeniedCard`.
-- **Data fetching**: `@tanstack/react-query` everywhere. `apiClient` (initContract → ts-rest client) is created from the shared contracts. Hooks live in `src/lib/use-*.ts`. Convention: `xxxKeys = { all, detail(id) }` query-key factories; mutations invalidate or `setQueryData` on success.
+- **Data fetching**: `@tanstack/react-query` everywhere. `apiClientV2` (a `hc<AppType>` Hono RPC client) is created from the shared `AppType`. Hooks live in `src/lib/use-*.ts`. Convention: `xxxKeys = { all, detail(id) }` query-key factories; mutations invalidate or `setQueryData` on success.
 - **Shared UI**: `components/ui/` (shadcn) + cross-cutting primitives `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard`.
 - **Auth state**: `useAuth` (JWT in client cookie / context).
 
-### ts-rest Contracts (`packages/api-contract`)
+### API Contracts (`packages/api-contract`)
 - All API contracts and Zod schemas live here, built with tsup (CJS + ESM + .d.ts).
-- Mounted under `/api/v2`. Each top-level namespace (`page`, `user`, `bookmark`, `notification`, `admin`, `adminCrypto`, ...) is a `c.router(...)` and exported via `apiContract`.
+- Contracts are `@hono/zod-openapi` `createRoute(...)` route definitions, grouped per namespace (`page`, `user`, `bookmark`, `notification`, `admin`, `adminCrypto`, ...). `client.ts` composes them into the exported `AppType` (split into several `OpenAPIHono` chains, intersected — see the TS2589 note there).
 - Common error schemas in `schemas/common.ts`: `AuthenticationRequiredError`, `AdminRequiredError`, `UserStatusError`, etc. Middlewares return these as JSON instead of redirecting.
 - Build after editing: `pnpm --filter @crowi/api-contract build` (turbo pipeline auto-runs `^build` for `dev`, but standalone scripts may need it manually).
 
@@ -147,15 +146,12 @@ in the runner.
 ## Crowi 2.0 Migration Strategy
 
 The migration is feature-by-feature: a legacy Express controller + Swig view
-gets re-implemented as a ts-rest endpoint + Next.js page, then the legacy
-route is left in place until the new path is verified. Old routes are removed
-in a separate clean-up phase.
+gets re-implemented as a Hono handler + Next.js page. The legacy Express /
+ts-rest layers have since been fully removed (RFC-0006).
 
 - Don't touch unrelated legacy code in a migration commit.
-- Maintain wire-format / behaviour parity with the legacy endpoint where
-  practical so ongoing deployments can switch incrementally.
-- New code goes under `routes/ts-rest/`, `(auth)/` / `(admin)/`, `lib/`,
-  `components/`. Legacy code lives in `controllers/`, `routes/api/`, etc.
+- New code goes under `hono/handlers/`, `(auth)/` / `(admin)/`, `lib/`,
+  `components/`.
 
 Detailed phase status lives in `TODO.md`.
 
@@ -226,7 +222,7 @@ Phase 9 で `@changesets/cli` を導入済み。v2 開発中も `pnpm changeset 
 - API 振る舞いを変えた → `@crowi/api`
 - Web UI を変えた → `@crowi/web` (private なので登録しても publish はされない
   が、CHANGELOG.md は生成される)
-- ts-rest contract を変えた → `@crowi/api-contract` (linked group なので
+- API contract を変えた → `@crowi/api-contract` (linked group なので
   api / web も同時 bump される)
 - Plugin SDK を拡張した → `@crowi/plugin-api` + 影響する個別 plugin
 - Plugin 1 つだけ更新 → その plugin のみ

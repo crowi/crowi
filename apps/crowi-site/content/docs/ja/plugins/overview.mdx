@@ -45,7 +45,7 @@ Crowi のプラグインは、貢献する拡張ポイントによっておお�
 | 認証 | `registerAuth` | (外部 OAuth プロバイダ向け、今後拡充予定) |
 | 通知 | `registerNotifier` | (Slack などの通知シンク向け、今後拡充予定) |
 | ベース (設定のみ) | (register なし) | `@crowi/plugin-aws` — 後続の AWS 系プラグインに資格情報を共有 |
-| ルート | `registerRoutes` | 「接続テスト」ボタンや OAuth コールバック用の ts-rest 契約 |
+| ルート | `registerRoutes` | プラグインの HTTP ルート — **現在は no-op スタブ**、Hono ベースの再設計待ち (「プラグイン開発」を参照) |
 
 ストレージと検索は、それぞれ「ドライバ」を `crowi.config.json` の
 `storage.driver` / `search.driver` で選択する形になっています。複数の

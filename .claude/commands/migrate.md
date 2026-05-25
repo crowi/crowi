@@ -71,7 +71,7 @@ Use the migration-implementer subagent to implement the task: {task-id}
 ```
 
 実装者が以下を行います：
-- ts-rest 契約を定義
+- Hono (`@hono/zod-openapi`) 契約を定義
 - API エンドポイントを実装
 - フロントエンドを実装
 - ステータスを `REVIEW` に更新

@@ -1,7 +1,7 @@
 ---
 name: migration-implementer
 description: |
-  移行タスクの実装を行う。ts-rest 契約に従い API/フロントエンドを実装。
+  移行タスクの実装を行う。Hono 契約に従い API/フロントエンドを実装。
   PLANNED または NEEDS_WORK ステータスのタスクを処理する。use proactively
 tools:
   - Read
@@ -15,7 +15,7 @@ tools:
 # Migration Implementer
 
 Crowi 2.0 移行プロジェクトの **実装者**。
-planner が用意した task ファイルを読んで、ts-rest API / Next.js UI / テストを実装する。
+planner が用意した task ファイルを読んで、Hono API / Next.js UI / テストを実装する。
 
 ## 入力
 
@@ -30,7 +30,7 @@ planner が用意した task ファイルを読んで、ts-rest API / Next.js UI
 2. context.oldImpl の実装を Read して挙動を完全把握
 3. context.contracts の状態を確認 (契約あり/なし、スタブのみ等)
 4. 必要なら契約を追加・修正 (packages/api-contract/)
-5. API 実装 (packages/api/src/routes/ts-rest/)
+5. API 実装 (packages/api/src/hono/handlers/)
 6. UI 実装 (packages/web/src/app/) ※ task の scope に応じて
 7. テスト追加 (jest + supertest + MongoDB Memory Server)
 8. 必須チェック (下記) を全部走らせる
@@ -70,18 +70,18 @@ errors を残したまま REVIEW に出すのは禁止。直すか、lint 観点
 - 型推論を活用、冗長な型注釈は避ける
 - 既存の隣接コード (例: 同じルートの他ハンドラ) のスタイルに合わせる
 
-### ts-rest API ハンドラ
+### Hono API ハンドラ
 - `authenticatedRouter` 配下なら `jwtAuth` が自動適用、CSRF 不要
 - エラーハンドリングは旧実装互換を優先、独自意味論を入れない
 - レスポンス整形は同ファイル内の既存 helper (`pageToResponse` 等) を再利用
 
 ### Mongoose モデル呼び出し
 - 既存モデル関数 (`Page.createPage` 等) に委譲。同じトランザクション境界を保つ
-- 新たな整合性ロジックを ts-rest 層に書かない (モデル層に閉じ込める)
+- 新たな整合性ロジックを Hono ハンドラ層に書かない (モデル層に閉じ込める)
 
 ### Next.js (web)
 - Server Components がデフォルト、必要なら `'use client'`
-- データ取得は `tanstack/react-query` + ts-rest client
+- データ取得は `tanstack/react-query` + Hono RPC client (`apiClientV2`、`hc<AppType>`)
 - Tailwind v4 + shadcn/ui、Crowi テーマ変数を使う
 
 ## 旧実装互換の優先順位

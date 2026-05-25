@@ -28,7 +28,7 @@ Scripts are defined in the repo root and per-package `package.json`.
 To run just one package, filter with
 `pnpm --filter @crowi/api <script>`.
 
-> **Tip**: After editing the ts-rest contracts
+> **Tip**: After editing the API contracts
 > (`packages/api-contract`), regenerate the dts with
 > `pnpm --filter @crowi/api-contract build`. The turbo pipeline runs
 > `^build` automatically for `dev` / `build` / `test`, but standalone
@@ -105,15 +105,14 @@ pnpm changeset status     # list accumulated, unpublished changesets
 ## Changes involving migration
 
 The migration to Crowi 2.0 proceeds feature by feature: a legacy Express
-controller + Swig view is re-implemented as a ts-rest endpoint + Next.js
+controller + Swig view is re-implemented as a Hono handler + Next.js
 page.
 
 - In a migration commit, do not touch unrelated legacy code.
 - Maintain wire-format / behaviour parity with the legacy endpoint where
   practical, so ongoing deployments can switch incrementally.
-- New code goes under `routes/ts-rest/`, `(auth)/` / `(admin)/`,
-  `lib/`, and `components/`. Legacy code stays in `controllers/`,
-  `routes/api/`, etc.
+- New code goes under `hono/handlers/`, `(auth)/` / `(admin)/`,
+  `lib/`, and `components/`.
 
 The current phase status is recorded in the repository's `TODO.md`.
 

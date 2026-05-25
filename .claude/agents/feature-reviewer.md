@@ -37,11 +37,11 @@ implementer + simplify を経た実装を、本番品質に乗せられるか判
 
 1. **AC 達成**: `acceptanceCriteria` の各項目に対応する実装 + テストがある
 2. **設計合意整合**: spec.md `## 設計の主な判断` の方針通りに実装されている
-3. **契約整合**: ts-rest 契約 (request body / response / error shape) と実装が完全一致
+3. **契約整合**: Hono (`@hono/zod-openapi`) 契約 (request body / response / error shape) と実装が完全一致
 4. **認証・認可**: 必要なエンドポイントが `jwtAuth` / `jwtAdminRequired` 配下にある、
    未認証で 401 / 認可不足で 403 が返るテストあり
 5. **エラーマッピング**: throw → ApiError の対応が妥当、HTTP ステータスが意味論的に正しい
-6. **トランザクション境界**: モデル層の整合性が保たれている、ts-rest 層で勝手なロジックを足していない
+6. **トランザクション境界**: モデル層の整合性が保たれている、Hono ハンドラ層で勝手なロジックを足していない
 7. **セキュリティ**: 入力検証 (Zod) / SQL/NoSQL injection / XSS / 認可漏れ / シークレット露出
    をひと通り走査して懸念がない
 
