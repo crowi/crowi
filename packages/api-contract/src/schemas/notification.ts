@@ -101,3 +101,57 @@ export const NotificationNotFoundErrorSchema = z.object({
   }),
 });
 export type NotificationNotFoundError = z.infer<typeof NotificationNotFoundErrorSchema>;
+
+/**
+ * Response body of `GET /api/v2/notifications/token`.
+ *
+ * Used by the browser to authenticate the `/notifications/<userId>` WebSocket
+ * handshake that fans out per-user notification invalidation signals
+ * (the spec's "data is still fetched via REST, only the *invalidation
+ * signal* is pushed" design). Same shape as `PresenceTokenResponse`
+ * minus the page scoping — notifications are scoped to the requesting
+ * user instead.
+ *
+ *   - `token`      — short-lived JWT (60s) the browser presents on the
+ *                    WebSocket connect (`?token=<jwt>`).
+ *   - `selfUserId` — the requesting user's `_id`. The handshake rejects
+ *                    a token whose `selfUserId` does not match the
+ *                    `/notifications/<userId>` path segment.
+ *   - `expiresAt`  — ISO 8601 timestamp; clients refresh proactively
+ *                    before the WebSocket would otherwise be torn down.
+ */
+export const NotificationsTokenResponseSchema = z.object({
+  token: z.string(),
+  selfUserId: z.string(),
+  expiresAt: z.string(),
+});
+export type NotificationsTokenResponse = z.infer<typeof NotificationsTokenResponseSchema>;
+
+/**
+ * Decoded payload of the short-lived notifications token JWT. The api
+ * signs this with `WS_TOKEN_SECRET` (shared with collab + presence) but
+ * uses a distinct `iss` claim (`crowi-notifications`) so a leaked
+ * collab/presence token can never be replayed against the notifications
+ * channel and vice versa.
+ */
+export const NotificationsTokenPayloadSchema = z.object({
+  selfUserId: z.string(),
+  iat: z.number().int(),
+  exp: z.number().int(),
+});
+export type NotificationsTokenPayload = z.infer<typeof NotificationsTokenPayloadSchema>;
+
+/**
+ * Server → client message on `/notifications/<userId>`. The only
+ * message kind is a `changed` signal — the browser uses it to invalidate
+ * its `notificationKeys.all` react-query cache, then re-fetches via the
+ * existing REST endpoints. The payload itself carries no notification
+ * data, keeping the message size constant regardless of unread count.
+ */
+export const NotificationsChangedMessageSchema = z.object({
+  type: z.literal('changed'),
+});
+export type NotificationsChangedMessage = z.infer<typeof NotificationsChangedMessageSchema>;
+
+export const NotificationsServerMessageSchema = NotificationsChangedMessageSchema;
+export type NotificationsServerMessage = z.infer<typeof NotificationsServerMessageSchema>;

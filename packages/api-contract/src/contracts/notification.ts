@@ -26,6 +26,7 @@ import {
   MarkAllAsReadResponseSchema,
   NotificationNotFoundErrorSchema,
   NotificationStatusResponseSchema,
+  NotificationsTokenResponseSchema,
   OpenNotificationParamSchema,
   OpenNotificationResponseSchema,
 } from '../schemas/notification';
@@ -142,9 +143,54 @@ export const openNotificationRoute = createRoute({
   },
 });
 
+/**
+ * GET /api/v2/notifications/token
+ *
+ * Mints the short-lived JWT a browser presents on the
+ * `/notifications/<userId>` WebSocket handshake. The notifications
+ * WebSocket fans out per-user invalidation signals from
+ * Redis-published `Notification.upsert` / `mark*Read*` events so the
+ * web client can drop its 30-second `useUnreadCount` polling loop.
+ *
+ * Authorisation:
+ *   - 401 if the caller is unauthenticated.
+ *   - 500 on signing exception.
+ *
+ * Distinct from `getPresenceTokenRoute` because the notifications
+ * channel is scoped to a single user (not a page) and the WebSocket
+ * carries no read-permission re-check — invalidation signals never
+ * contain notification content, just a "your notifications changed"
+ * tick the client uses to invalidate its react-query cache.
+ */
+export const getNotificationsTokenRoute = createRoute({
+  method: 'get',
+  path: '/notifications/token',
+  tags: ['notification'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Issue a short-lived notifications token (JWT) for the realtime-invalidation WebSocket',
+  responses: {
+    200: {
+      description: 'Signed notifications token + selfUserId + expiresAt',
+      content: { 'application/json': { schema: NotificationsTokenResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Token signing exception',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
 export const notificationRoutes = {
   listNotificationsRoute,
   markAllAsReadRoute,
+  // `/notifications/token` is a literal path — register before
+  // `/notifications/{id}/open` so the template never shadows it. Same
+  // first-match-wins ordering reason as `/notifications/status`.
+  getNotificationsTokenRoute,
   // `/notifications/status` MUST be registered before `/notifications/{id}/open`
   // so the literal-path route matches first; see the file header.
   getUnreadCountRoute,
