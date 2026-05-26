@@ -50,15 +50,36 @@ export interface SignNotificationsTokenResult {
 }
 
 /**
- * Resolve the signing secret once per util instance.
+ * Module-load time warning when `WS_TOKEN_SECRET` is unset. Emitted once
+ * per process rather than per-`createNotificationsTokenUtil()` call so
+ * the dev console does not get spammed every time the handler / model
+ * code constructs a fresh util.
  *
- * Notifications token reuses `WS_TOKEN_SECRET` rather than introducing a
- * new env: the three WS token kinds are isolated by their `iss` claim,
- * so sharing the key material is safe and keeps operators from having
- * to distribute another secret. When `WS_TOKEN_SECRET` is unset we
- * generate a random in-memory secret and warn — single-instance dev
- * still works, but process restarts invalidate outstanding tokens and
- * multi-instance deployments cannot cross-verify.
+ * Silenced under `NODE_ENV === 'test'` because the api test setup
+ * imports the model layer (and transitively this module) before each
+ * test file's top-of-file env stub runs, which would otherwise spam
+ * one warn per Jest worker. Tests that actually exercise the
+ * env-missing path can verify the runtime behaviour separately.
+ *
+ * The fallback random secret itself is generated lazily inside
+ * `buildNotificationsTokenUtil` so a test that injects `WS_TOKEN_SECRET`
+ * before importing the consumer still picks up the env value.
+ */
+if ((!process.env.WS_TOKEN_SECRET || process.env.WS_TOKEN_SECRET.length === 0) && process.env.NODE_ENV !== 'test') {
+  console.warn(
+    '[crowi] WS_TOKEN_SECRET is not set — notifications tokens will be signed with a random in-memory secret. ' +
+      'Process restarts will invalidate outstanding notifications tokens, and multi-instance deployments ' +
+      'will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded 32-byte ' +
+      'value (`openssl rand -base64 32`) in production.',
+  );
+}
+
+/**
+ * Resolve the signing secret. Reads `WS_TOKEN_SECRET` per call so a test
+ * that mutates the env between imports / util constructions still picks
+ * up the latest value. The fallback random secret is generated silently
+ * here — the load-time warn above tells the operator about the env miss
+ * exactly once.
  */
 const resolveNotificationsTokenSecret = (): string => {
   const fromEnv = process.env.WS_TOKEN_SECRET;
@@ -66,27 +87,18 @@ const resolveNotificationsTokenSecret = (): string => {
     debug('notifications token secret resolved from WS_TOKEN_SECRET');
     return fromEnv;
   }
-  const generated = crypto.randomBytes(32).toString('base64');
-  console.warn(
-    '[crowi] WS_TOKEN_SECRET is not set — generated a random in-memory secret for notifications tokens. ' +
-      'Process restarts will invalidate outstanding notifications tokens, and multi-instance deployments ' +
-      'will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded 32-byte ' +
-      'value (`openssl rand -base64 32`) in production.',
-  );
-  return generated;
+  return crypto.randomBytes(32).toString('base64');
 };
 
 /**
- * Build a sign / verify pair bound to a single resolved secret.
- *
- * Memoised for the same reason `createWsTokenUtil` / `createPresenceTokenUtil`
- * are: when `WS_TOKEN_SECRET` is unset, `resolveNotificationsTokenSecret`
- * mints a fresh random secret per call. Two `createNotificationsTokenUtil()`
- * calls would otherwise close over different secrets and the
- * HTTP-sign / WebSocket-verify pair would silently break in dev.
+ * Build a sign / verify pair bound to a freshly resolved secret. Each
+ * `createNotificationsTokenUtil()` call returns a new instance — the
+ * util's surface (sign / verify) is cheap (a single jsonwebtoken call)
+ * so memoising is unnecessary, and the previous cached-singleton
+ * implementation pinned the secret to whatever env state existed at the
+ * first call (a problem for test / boot ordering: a `WS_TOKEN_SECRET`
+ * set after first util construction would be ignored).
  */
-let cachedUtil: ReturnType<typeof buildNotificationsTokenUtil> | null = null;
-
 function buildNotificationsTokenUtil() {
   const secret = resolveNotificationsTokenSecret();
 
@@ -94,6 +106,14 @@ function buildNotificationsTokenUtil() {
    * Sign a notifications token for the given claims. Returns the
    * compact JWT plus the absolute expiry; the handler serialises the
    * timestamp into `NotificationsTokenResponseSchema.expiresAt`.
+   *
+   * A fresh `jti` (random UUID) is mixed into the payload so two
+   * tokens minted within the same second are byte-different. The
+   * browser uses the token string as a react `useEffect` dependency
+   * (it dials the WebSocket whenever the token changes) — without a
+   * `jti`, the iat/exp pair is identical and the dep stays stable, so
+   * a re-mint at the same second does not trigger the effect. The
+   * verifier ignores `jti`, keeping the token stateless.
    */
   function signNotificationsToken(claims: NotificationsTokenClaims): SignNotificationsTokenResult {
     // Pin `iat` ourselves so the response's `expiresAt` is exactly the
@@ -101,7 +121,8 @@ function buildNotificationsTokenUtil() {
     // collab / presence token utils).
     const iat = Math.floor(Date.now() / 1000);
     const exp = iat + NOTIFICATIONS_TOKEN_TTL_SECONDS;
-    const token = jwt.sign({ ...claims, iat, exp }, secret, {
+    const jti = crypto.randomUUID();
+    const token = jwt.sign({ ...claims, jti, iat, exp }, secret, {
       issuer: NOTIFICATIONS_TOKEN_ISSUER,
       algorithm: 'HS256',
     });
@@ -143,8 +164,5 @@ function buildNotificationsTokenUtil() {
 export type NotificationsTokenUtil = ReturnType<typeof buildNotificationsTokenUtil>;
 
 export function createNotificationsTokenUtil(): NotificationsTokenUtil {
-  if (cachedUtil === null) {
-    cachedUtil = buildNotificationsTokenUtil();
-  }
-  return cachedUtil;
+  return buildNotificationsTokenUtil();
 }

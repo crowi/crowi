@@ -1,7 +1,7 @@
 // Pin a stable WS_TOKEN_SECRET *before* the util module loads. The
-// `createNotificationsTokenUtil` factory captures the resolved secret
-// at first call and memoises the closure, so a later `process.env`
-// mutation would not take effect.
+// secret is now resolved per `createNotificationsTokenUtil()` call (no
+// cached singleton), but the module-load-time warn check still reads
+// the env at import time, so we set it before importing.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import jwt from 'jsonwebtoken';
@@ -96,7 +96,7 @@ describe('createNotificationsTokenUtil', () => {
     // Synthesise an already-expired token directly so we don't have to
     // wait 60 seconds — the verifier delegates expiry to jsonwebtoken.
     const expired = jwt.sign(
-      { selfUserId: 'user-1', iat: Math.floor(Date.now() / 1000) - 120, exp: Math.floor(Date.now() / 1000) - 60 },
+      { selfUserId: 'user-1', jti: '11111111-1111-4111-8111-111111111111', iat: Math.floor(Date.now() / 1000) - 120, exp: Math.floor(Date.now() / 1000) - 60 },
       process.env.WS_TOKEN_SECRET as string,
       {
         issuer: 'crowi-notifications',
@@ -105,5 +105,46 @@ describe('createNotificationsTokenUtil', () => {
     );
 
     expect(util.verifyNotificationsToken(expired)).toBeNull();
+  });
+
+  it('mints a fresh `jti` per sign so two same-second tokens are byte-different', () => {
+    // Without `jti`, two `signNotificationsToken` calls inside one
+    // second produce identical iat/exp pairs and therefore byte-
+    // identical JWT strings — which breaks the browser's react
+    // `useEffect` dependency on the token (a stable string does not
+    // re-trigger the WebSocket reconnect). The fix is a random `jti`
+    // mixed into every payload; verify the two outputs differ.
+    const util = createNotificationsTokenUtil();
+    const a = util.signNotificationsToken({ selfUserId: 'user-1' });
+    const b = util.signNotificationsToken({ selfUserId: 'user-1' });
+    expect(a.token).not.toBe(b.token);
+
+    // Both tokens must still verify (the verifier doesn't inspect jti
+    // beyond schema validation).
+    expect(util.verifyNotificationsToken(a.token)).not.toBeNull();
+    expect(util.verifyNotificationsToken(b.token)).not.toBeNull();
+
+    // Decode both payloads and assert the `jti` differs.
+    const decode = (token: string): Record<string, unknown> => JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    const payloadA = decode(a.token);
+    const payloadB = decode(b.token);
+    expect(typeof payloadA.jti).toBe('string');
+    expect(typeof payloadB.jti).toBe('string');
+    expect(payloadA.jti).not.toBe(payloadB.jti);
+  });
+
+  it('returns a new util instance per call (no cached singleton)', () => {
+    // The previous implementation memoised a singleton across calls,
+    // which pinned the secret to whatever env state existed at the
+    // first call — a problem for boot / test ordering. The fix makes
+    // each call build a fresh util; verify the two refs are distinct.
+    const a = createNotificationsTokenUtil();
+    const b = createNotificationsTokenUtil();
+    expect(a).not.toBe(b);
+
+    // Crucially, tokens minted by one must still verify against the
+    // other (because both resolve `WS_TOKEN_SECRET` from the same env).
+    const { token } = a.signNotificationsToken({ selfUserId: 'user-roundtrip' });
+    expect(b.verifyNotificationsToken(token)?.selfUserId).toBe('user-roundtrip');
   });
 });
