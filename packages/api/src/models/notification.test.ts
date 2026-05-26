@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { crowi } from 'src/test/setup';
+import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/attach';
 
 describe('Notification', function () {
   let Notification;
@@ -107,6 +108,103 @@ describe('Notification', function () {
         const notification = await Notification.open({ _id: user }, notificationId);
         expect(notification.status).toBe(Notification.STATUS_OPENED);
       });
+    });
+  });
+
+  describe('realtime invalidation publish (Notification model -> Redis)', () => {
+    /**
+     * The Notification model registers a `notificationEvent.on('update', ...)`
+     * listener that publishes a `{type:'changed'}` tick on the user's
+     * per-user Redis channel. Hits all the mutation paths the spec lists
+     * (`upsertByActivity`, `open`, `read`) and asserts the publish reaches
+     * a mocked Redis client; degrade mode (`crowi.redis === null`) skips
+     * the publish without throwing.
+     */
+    type PublishCall = [channel: string, message: string];
+
+    const restoreRedis = (originalRedis: unknown) => {
+      // `crowi.redis` is `any` on the Crowi class; cast through unknown
+      // so the test can swap in a stub without leaking the `any`.
+      (crowi as unknown as { redis: unknown }).redis = originalRedis;
+    };
+
+    let originalRedis: unknown;
+    let publishSpy: jest.Mock<Promise<number>, PublishCall>;
+
+    beforeEach(() => {
+      originalRedis = (crowi as unknown as { redis: unknown }).redis;
+      publishSpy = jest.fn().mockResolvedValue(1);
+      (crowi as unknown as { redis: { publish: jest.Mock } }).redis = { publish: publishSpy };
+    });
+
+    afterEach(() => {
+      restoreRedis(originalRedis);
+    });
+
+    /**
+     * The model's notificationEvent listener publishes inside a
+     * `Promise.resolve().then(...)` so the publish enqueues as a
+     * microtask. Flush microtasks twice before asserting — once for the
+     * model's `then` queue entry, once for any chained handlers (warn
+     * path etc.).
+     */
+    const flushMicrotasks = async () => {
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+    };
+
+    it('publishes on the user channel after upsertByActivity', async () => {
+      const recipient = new ObjectId();
+      const target = new ObjectId();
+      const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target, action: 'COMMENT' };
+      await Notification.upsertByActivity(recipient, activity);
+      await flushMicrotasks();
+
+      const matching = publishSpy.mock.calls.filter(([channel]) => channel === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipient.toString()}`);
+      expect(matching.length).toBeGreaterThanOrEqual(1);
+      expect(JSON.parse(matching[0][1])).toEqual({ type: 'changed' });
+    });
+
+    it('publishes on the user channel after mark-as-read (Notification.read)', async () => {
+      const recipient = new ObjectId();
+      const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target: new ObjectId(), action: 'COMMENT' };
+      await Notification.upsertByActivity(recipient, activity);
+      publishSpy.mockClear();
+
+      // Simulate the HTTP handler call site, which passes a user-like
+      // object with `_id` (not a bare ObjectId).
+      await Notification.read({ _id: recipient });
+      await flushMicrotasks();
+
+      const matching = publishSpy.mock.calls.filter(([channel]) => channel === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipient.toString()}`);
+      expect(matching.length).toBeGreaterThanOrEqual(1);
+      expect(JSON.parse(matching[0][1])).toEqual({ type: 'changed' });
+    });
+
+    it('publishes on the user channel after Notification.open', async () => {
+      const recipient = new ObjectId();
+      const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target: new ObjectId(), action: 'COMMENT' };
+      const created = await Notification.upsertByActivity(recipient, activity);
+      publishSpy.mockClear();
+
+      await Notification.open({ _id: recipient }, created._id);
+      await flushMicrotasks();
+
+      const matching = publishSpy.mock.calls.filter(([channel]) => channel === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipient.toString()}`);
+      expect(matching.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('publishes nothing when crowi.redis is null (degrade mode)', async () => {
+      // Swap in null AFTER the beforeEach mock so the mutation runs
+      // against the degrade path.
+      (crowi as unknown as { redis: unknown }).redis = null;
+
+      const recipient = new ObjectId();
+      const activity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target: new ObjectId(), action: 'COMMENT' };
+      await Notification.upsertByActivity(recipient, activity);
+      await flushMicrotasks();
+
+      expect(publishSpy).not.toHaveBeenCalled();
     });
   });
 
