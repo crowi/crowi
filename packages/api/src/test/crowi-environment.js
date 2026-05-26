@@ -69,12 +69,35 @@ class CrowiEnvironment extends NodeEnvironment {
       this.mongoUri = url.toString();
       this.dbName = dbName;
       this.usingMemoryServer = false;
+    } else if (process.env.CI === 'true') {
+      // Fail fast: CI is supposed to provide a real mongo via the
+      // workflow's services.mongo + env.MONGO_URI. If we reach this
+      // branch in CI, env propagation broke for this jest worker —
+      // silently falling back to mongodb-memory-server here races on
+      // a shared binary-download lockfile under --maxWorkers=N and
+      // shows up as the cryptic "Cannot unlock file ... not locked
+      // by this process". Surface the actual missing-env state
+      // instead.
+      const envKeys = Object.keys(process.env).sort();
+      // Print the actual value (or `null` for unset) so we can tell
+      // "key propagated but blank" from "key didn't propagate at all"
+      // — same surface error for both, but very different root causes.
+      throw new Error(
+        'crowi-environment: MONGO_URI was empty inside a CI run. ' +
+          'mongodb-memory-server is intentionally not a CI fallback ' +
+          '(see services.mongo + env.MONGO_URI in .github/workflows/ci.yml). ' +
+          `Diagnostic: workerId=${process.env.JEST_WORKER_ID || '(none)'} ` +
+          `MONGO_URI=${JSON.stringify(process.env.MONGO_URI ?? null)} ` +
+          `CI=${JSON.stringify(process.env.CI ?? null)} ` +
+          `envCount=${envKeys.length} envMongoKeys=${envKeys.filter((k) => k.startsWith('MONGO')).join(',') || '(none)'}.`,
+      );
     } else {
-      // memory-server fallback. Pin to 8.0.4 so the binary matches the
-      // `mongo:8.0.4` docker image used in CI's `services` block — keeps
-      // wire-protocol + index behaviour byte-identical between the two
-      // execution paths so we don't get "passes locally, fails in CI"
-      // mismatches from minor MongoDB version drift.
+      // memory-server fallback for local development only. Pin to
+      // 8.0.4 so the binary matches the `mongo:8.0.4` docker image
+      // used in CI's `services` block — keeps wire-protocol + index
+      // behaviour byte-identical between the two execution paths so
+      // we don't get "passes locally, fails in CI" mismatches from
+      // minor MongoDB version drift.
       const { MongoMemoryServer } = require('mongodb-memory-server');
       this.memory = await MongoMemoryServer.create({ binary: { version: '8.0.4' } });
       const url = new URL(this.memory.getUri());
