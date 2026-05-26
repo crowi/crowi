@@ -2,7 +2,7 @@ import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import Debug from 'debug';
 import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
-import { NotificationsChangedMessageSchema, NotificationsServerMessageSchema } from '@crowi/api-contract';
+import { NotificationsServerMessageSchema } from '@crowi/api-contract';
 import type Crowi from 'src/crowi';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
 
