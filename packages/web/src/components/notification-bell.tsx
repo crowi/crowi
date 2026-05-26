@@ -49,10 +49,13 @@ function NotificationRow({ notification, onOpen }: NotificationRowProps) {
 }
 
 /**
- * Header notification bell with unread count badge and a dropdown showing the
- * latest notifications. Polls the unread count every 30s while the tab is
- * active. The notification list query is only triggered when the dropdown is
- * opened.
+ * Header notification bell with unread count badge and a dropdown showing
+ * the latest notifications. The unread count refreshes from
+ * server-pushed `changed` ticks (via the `useNotificationsSocket` hook
+ * mounted in `(auth)/layout.tsx`) — the 30-second polling loop that
+ * used to back it was removed when the realtime invalidation channel
+ * landed. The notification list query is only triggered when the
+ * dropdown is opened.
  */
 export function NotificationBell() {
   const router = useRouter();

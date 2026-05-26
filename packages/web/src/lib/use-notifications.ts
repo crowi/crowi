@@ -22,12 +22,6 @@ export const notificationKeys = {
   infinite: (limit: number) => ['notifications', 'list', 'infinite', limit] as const,
 };
 
-/**
- * Polling interval for the unread count (in ms).
- * Refetch is disabled while the tab is inactive to avoid unnecessary traffic.
- */
-const UNREAD_COUNT_POLL_INTERVAL_MS = 30_000;
-
 const EMPTY_LIST = {
   notifications: [] as Notification[],
   pager: { prev: null, next: null, offset: 0 },
@@ -35,7 +29,15 @@ const EMPTY_LIST = {
 
 /**
  * Hook to fetch the unread notification count for the current user.
- * Polls every 30s while the tab is active.
+ *
+ * Polling was removed in favour of a `/notifications/<userId>`
+ * WebSocket invalidation channel — `useNotificationsSocket()`,
+ * mounted once in `(auth)/layout.tsx`, listens for server-pushed
+ * `changed` ticks and invalidates `notificationKeys.all`, which
+ * re-runs this query through the normal react-query refetch path.
+ * Without the WebSocket the query still works; users just see the
+ * count update on next interaction (mutation invalidate, window
+ * focus, or an explicit refetch) instead of every 30s.
  */
 export function useUnreadCount() {
   return useQuery({
@@ -47,8 +49,6 @@ export function useUnreadCount() {
       const body = await response.json();
       return body.count;
     },
-    refetchInterval: UNREAD_COUNT_POLL_INTERVAL_MS,
-    refetchIntervalInBackground: false,
   });
 }
 
