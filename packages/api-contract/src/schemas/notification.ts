@@ -136,6 +136,12 @@ export type NotificationsTokenResponse = z.infer<typeof NotificationsTokenRespon
  */
 export const NotificationsTokenPayloadSchema = z.object({
   selfUserId: z.string(),
+  // Random UUID mixed into every signed token so two tokens minted
+  // within the same second still produce byte-different JWT strings.
+  // The browser uses the token as a React effect dependency to drive
+  // the WebSocket reconnect — without `jti`, the iat/exp pair is
+  // identical at second granularity and the dep stays stable.
+  jti: z.string().uuid(),
   iat: z.number().int(),
   exp: z.number().int(),
 });
