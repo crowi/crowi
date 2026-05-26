@@ -159,6 +159,46 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   //  - the shutdown drain (iterate every socket once).
   const connectionsByUser = new Map<string, Set<NotificationsConnection>>();
 
+  /**
+   * Per-user serialisation chain for Redis subscribe / unsubscribe.
+   *
+   * Race scenario we are guarding against:
+   *   1. User A's last tab closes → handleClose schedules an async
+   *      `unsubscribe`.
+   *   2. Before that unsubscribe completes, user A's NEW tab opens →
+   *      wireConnection sees an empty set and schedules a `subscribe`.
+   *   3. The two ops can land in any order on the Redis subscriber;
+   *      if unsubscribe wins, the new tab is left without a live
+   *      subscription and silently misses every invalidation.
+   *
+   * Fix: chain every subscribe/unsubscribe for a given userId through
+   * a single promise so they run FIFO. The chain entry is deleted
+   * after the op resolves and the chain is empty, so the map does
+   * not leak. We do not care about retaining the resolved value —
+   * `.then(() => actualOp())` is enough to ensure ordering.
+   */
+  const channelOps = new Map<string, Promise<void>>();
+  const chainChannelOp = (userId: string, op: () => Promise<void>): Promise<void> => {
+    const prev = channelOps.get(userId) ?? Promise.resolve();
+    // `.then(op)` schedules `op` after `prev` settles successfully;
+    // since every chain link below catches its own errors, the
+    // previous link always resolves, so the next link always runs.
+    const next = prev.then(op).catch(() => {
+      // Errors are already logged inside ensureSubscribed /
+      // ensureUnsubscribed — swallow here so a single failure does
+      // not break the chain for subsequent ops on the same user.
+    });
+    channelOps.set(userId, next);
+    void next.finally(() => {
+      // Best-effort cleanup so a long-lived process does not retain
+      // a settled promise per user forever.
+      if (channelOps.get(userId) === next) {
+        channelOps.delete(userId);
+      }
+    });
+    return next;
+  };
+
   /** Send a JSON message to one socket; ignore a dead socket. */
   const sendJson = (ws: WsWebSocket, payload: unknown): void => {
     if (ws.readyState !== ws.OPEN) return;
@@ -199,31 +239,42 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   /**
    * Subscribe this process to a user's channel on first connection.
    * No-ops when the subscriber is unavailable (degrade mode).
+   *
+   * Serialised through the per-user `channelOps` chain so a pending
+   * unsubscribe completes before we attempt the subscribe — see the
+   * `channelOps` block above for the race rationale.
    */
-  const ensureSubscribed = async (userId: string): Promise<void> => {
-    if (subscriber === null) return;
-    try {
-      await subscriber.subscribe(channelForUser(userId), (message: string) => {
-        handleRedisMessage(userId, message);
-      });
-      debug('subscribed user %s channel', userId);
-    } catch (err) {
-      console.warn(`[crowi:notifications] subscribe failed for user ${userId}:`, (err as Error).message);
-    }
+  const ensureSubscribed = (userId: string): Promise<void> => {
+    if (subscriber === null) return Promise.resolve();
+    return chainChannelOp(userId, async () => {
+      try {
+        await subscriber!.subscribe(channelForUser(userId), (message: string) => {
+          handleRedisMessage(userId, message);
+        });
+        debug('subscribed user %s channel', userId);
+      } catch (err) {
+        console.warn(`[crowi:notifications] subscribe failed for user ${userId}:`, (err as Error).message);
+      }
+    });
   };
 
   /**
    * Unsubscribe a user's channel when the last connection closes.
    * No-ops when the subscriber is unavailable (degrade mode).
+   *
+   * Serialised through the per-user `channelOps` chain (see
+   * `ensureSubscribed`).
    */
-  const ensureUnsubscribed = async (userId: string): Promise<void> => {
-    if (subscriber === null) return;
-    try {
-      await subscriber.unsubscribe(channelForUser(userId));
-      debug('unsubscribed user %s channel', userId);
-    } catch (err) {
-      debug('unsubscribe failed for user %s: %s', userId, (err as Error).message);
-    }
+  const ensureUnsubscribed = (userId: string): Promise<void> => {
+    if (subscriber === null) return Promise.resolve();
+    return chainChannelOp(userId, async () => {
+      try {
+        await subscriber!.unsubscribe(channelForUser(userId));
+        debug('unsubscribed user %s channel', userId);
+      } catch (err) {
+        debug('unsubscribe failed for user %s: %s', userId, (err as Error).message);
+      }
+    });
   };
 
   /**

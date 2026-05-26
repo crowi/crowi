@@ -1,8 +1,6 @@
-// Pin a stable WS_TOKEN_SECRET *before* the attach module loads. The
-// `createNotificationsTokenUtil` factory captures the resolved secret
-// at first call and memoises the closure, so a later `process.env`
-// mutation would not take effect — same caveat as presence-token /
-// ws-token.
+// Pin a stable WS_TOKEN_SECRET *before* the attach module loads.
+// The util now reads the env per-call, but the module-load-time
+// missing-secret warn still inspects it at import time.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import http from 'node:http';
@@ -397,5 +395,80 @@ describe('attachNotificationsServer — degraded mode (no Redis)', () => {
     expect(result.opened).toBe(true);
 
     await stopTestServer(server);
+  }, 15000);
+});
+
+describe('attachNotificationsServer — subscribe/unsubscribe race serialisation (#3)', () => {
+  /**
+   * Without the per-user channel-op chain, a close-then-immediate-
+   * reconnect on the same userId could race: the close handler's
+   * async `unsubscribe` lands after the new connection's `subscribe`,
+   * leaving the new socket without an active Redis subscription. The
+   * chain forces FIFO ordering so the final state is `subscribed`.
+   */
+  let server: TestServer;
+  beforeAll(async () => {
+    server = await startTestServer();
+  }, 15000);
+  afterAll(async () => {
+    await stopTestServer(server);
+  }, 15000);
+
+  it('serialises last-close / immediate-reconnect so the final Redis state is subscribed (FIFO)', async () => {
+    const userId = 'user-race';
+    const token = validTokenFor(userId);
+    const channel = channelForUserId(userId);
+
+    const eventsFor = () => server.primary!.events.filter((e) => e.channel === channel);
+    const baseline = eventsFor().length;
+
+    // 1. Open a tab + wait for the first subscribe.
+    const ws1 = new WebSocket(`ws://127.0.0.1:${server.port}/notifications/${userId}?token=${token}`);
+    await new Promise<void>((resolve) => ws1.on('open', () => resolve()));
+    const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
+      const start = Date.now();
+      while (!predicate()) {
+        if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    };
+    await waitUntil(() => eventsFor().some((e) => e.kind === 'subscribe'));
+
+    // 2. Close + reconnect immediately. The server's handleClose runs
+    //    async; if we don't await the close → reconnect ordering, the
+    //    second connection's subscribe and the first connection's
+    //    unsubscribe can land in arbitrary order without the chain.
+    const closeP = new Promise<void>((resolve) => ws1.on('close', () => resolve()));
+    ws1.close();
+    await closeP;
+
+    const ws2 = new WebSocket(`ws://127.0.0.1:${server.port}/notifications/${userId}?token=${token}`);
+    await new Promise<void>((resolve) => ws2.on('open', () => resolve()));
+
+    // 3. Wait until the chain settles — once it does, the final
+    //    recorded event for this channel must be `subscribe`, not
+    //    `unsubscribe`. That assertion is the FIFO ordering guarantee:
+    //    a subscribe queued AFTER an unsubscribe always wins.
+    await waitUntil(() => {
+      const evts = eventsFor();
+      return evts.length >= baseline + 3 && evts[evts.length - 1].kind === 'subscribe';
+    });
+    const finalEvents = eventsFor();
+    expect(finalEvents[finalEvents.length - 1].kind).toBe('subscribe');
+
+    // 4. Sanity check: a publish on the channel should reach the new
+    //    socket (the subscription is live).
+    const messages: string[] = [];
+    ws2.on('message', (data: Buffer | string) => {
+      messages.push(typeof data === 'string' ? data : data.toString('utf8'));
+    });
+    await server.primary!.publish(channel, JSON.stringify({ type: 'changed' }));
+    await waitUntil(() => messages.length >= 1);
+    expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
+
+    await new Promise<void>((resolve) => {
+      ws2.on('close', () => resolve());
+      ws2.close();
+    });
   }, 15000);
 });
