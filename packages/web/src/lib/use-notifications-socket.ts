@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { NotificationsServerMessageSchema, type NotificationsTokenResponse } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
+import { useAuth } from './use-auth';
 import { notificationKeys } from './use-notifications';
 
 /**
@@ -111,10 +112,15 @@ function resolveNotificationsUrl(): string {
  * Disabled until `enabled` is true so the (public) login screen
  * doesn't blast `/notifications/token` requests at an unauthed
  * server.
+ *
+ * The query key is scoped by `authedUserId` so a logout → re-login as
+ * a different user does NOT serve user A's cached token to user B's
+ * handshake. When `authedUserId` is null the query is gated off, so
+ * the null-key branch never runs `queryFn`.
  */
-function useNotificationsToken(enabled: boolean) {
+function useNotificationsToken(enabled: boolean, authedUserId: string | null) {
   return useQuery({
-    queryKey: ['notificationsToken'],
+    queryKey: ['notificationsToken', authedUserId],
     queryFn: async (): Promise<NotificationsTokenResponse> => {
       const response = await apiClientV2.notifications.token.$get();
       if (!response.ok) {
@@ -127,7 +133,7 @@ function useNotificationsToken(enabled: boolean) {
       }
       return response.json();
     },
-    enabled,
+    enabled: enabled && authedUserId !== null,
     refetchOnWindowFocus: false,
     // Notifications realtime is auxiliary — one failed token request
     // just keeps the bell on its REST baseline, no need to hammer.
@@ -154,7 +160,13 @@ export interface UseNotificationsSocketOptions {
 export function useNotificationsSocket(options: UseNotificationsSocketOptions = {}): void {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
-  const { data: tokenData, isError: tokenError } = useNotificationsToken(enabled);
+  // Scope the token cache by the *authed* user id (not the token's
+  // `selfUserId`, which would be circular). On logout → re-login as a
+  // different user, the key flips and user A's token cannot be served
+  // to user B's effect run.
+  const { user } = useAuth();
+  const authedUserId = user?.id ?? null;
+  const { data: tokenData, isError: tokenError } = useNotificationsToken(enabled, authedUserId);
 
   const token = tokenData?.token ?? null;
   const selfUserId = tokenData?.selfUserId ?? null;
@@ -228,7 +240,7 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
         // effect re-run is the only path that resolves the stale
         // credential.
         if (event.code === NOTIFICATIONS_CLOSE_INVALID_TOKEN) {
-          queryClient.invalidateQueries({ queryKey: ['notificationsToken'] });
+          queryClient.invalidateQueries({ queryKey: ['notificationsToken', authedUserId] });
           return;
         }
         // 4403 (forbidden): a bug-shaped state (we always sign with the
@@ -257,5 +269,5 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
         socket.close();
       }
     };
-  }, [enabled, token, selfUserId, tokenError, queryClient]);
+  }, [enabled, token, selfUserId, authedUserId, tokenError, queryClient]);
 }

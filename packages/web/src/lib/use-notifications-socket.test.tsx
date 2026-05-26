@@ -16,6 +16,17 @@ vi.mock('./api-client', () => ({
   },
 }));
 
+// Mock `useAuth` so the hook can read an authed user id without
+// dragging in next/navigation's router and the real /auth/me fetch.
+// The token cache key is scoped by `authedUserId` (regression guard
+// against a logout→re-login leak), so each test sets the mock return
+// in its arrange step.
+const { useAuthMock } = vi.hoisted(() => {
+  type AuthSlice = { user: { id: string } | null };
+  return { useAuthMock: vi.fn<() => AuthSlice>(() => ({ user: { id: 'me' } })) };
+});
+vi.mock('./use-auth', () => ({ useAuth: useAuthMock }));
+
 import { useNotificationsSocket } from './use-notifications-socket';
 import { notificationKeys } from './use-notifications';
 
@@ -97,6 +108,8 @@ async function flush() {
 beforeEach(() => {
   vi.useFakeTimers();
   getNotificationsToken.mockReset();
+  useAuthMock.mockReset();
+  useAuthMock.mockReturnValue({ user: { id: 'me' } });
   FakeWebSocket.instances.length = 0;
   vi.stubGlobal('WebSocket', FakeWebSocket);
 });
@@ -237,8 +250,9 @@ describe('useNotificationsSocket', () => {
       FakeWebSocket.instances[0].fail(4401);
     });
     // 4401 must mark the token query stale so a fresh token gets
-    // refetched and a new handshake is attempted.
-    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notificationsToken'] });
+    // refetched and a new handshake is attempted. Key is scoped by
+    // authed user id so user A's stale token cannot be served to user B.
+    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notificationsToken', 'me'] });
 
     // No exponential-backoff timer should be running — reconnect is
     // gated on the token effect re-running with a new token.
@@ -317,5 +331,42 @@ describe('useNotificationsSocket', () => {
       await vi.advanceTimersByTimeAsync(600);
     });
     expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it('scopes the token cache by authed user id (no cross-user leak after re-login)', async () => {
+    // Regression guard: previously the key was `['notificationsToken']`
+    // with no user dimension, so logging out and back in as a different
+    // user could replay user A's still-cached token through user B's
+    // handshake. The key is now `['notificationsToken', authedUserId]`,
+    // so a different `useAuth().user.id` forces a fresh fetch.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    useAuthMock.mockReturnValue({ user: { id: 'user-a' } });
+    const h = makeHarness();
+
+    const { rerender } = h.render();
+    await flush();
+    expect(getNotificationsToken).toHaveBeenCalledTimes(1);
+
+    // Switch to a different signed-in user — the key changes so a
+    // fresh fetch must run.
+    useAuthMock.mockReturnValue({ user: { id: 'user-b' } });
+    rerender();
+    await flush();
+    expect(getNotificationsToken).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not connect or fetch a token when no user is authed', async () => {
+    // Even with `enabled: true` (e.g. a brief mid-logout render), a
+    // null user id keeps both the token query and the socket effect
+    // idle so we don't blast unauthed requests at `/notifications/token`.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    useAuthMock.mockReturnValue({ user: null });
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+
+    expect(getNotificationsToken).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
   });
 });
