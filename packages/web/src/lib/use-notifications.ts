@@ -28,6 +28,36 @@ const EMPTY_LIST = {
 };
 
 /**
+ * Default react-query options shared by all notification REST hooks.
+ * Notifications can fall back to a pure-REST baseline (when the
+ * `/notifications/<userId>` WebSocket never connects or stays down),
+ * so we deliberately opt-in to the two event-driven refetch triggers
+ * that the QueryClient default disables:
+ *
+ *   - `refetchOnWindowFocus` — the user returning to the tab is a
+ *     strong "now please be fresh" signal and refetches only when the
+ *     data is `stale` (so a focus while a query is still fresh is a
+ *     cheap no-op).
+ *   - `refetchOnReconnect` — same idea for `online` after a network
+ *     blip. Without this, a tab that lost the WebSocket mid-blip
+ *     would never refresh its bell.
+ *
+ * `staleTime` is intentionally short (30s) so focus / reconnect
+ * actually fire a refetch — the QueryClient default `staleTime: 0`
+ * already triggers them, but a small window matches the cadence the
+ * old 30s polling loop used to give the UI and rules out flap.
+ *
+ * This is NOT a return of the 30s polling loop: `refetchInterval` is
+ * still unset, so a backgrounded / focused-but-idle tab makes zero
+ * requests.
+ */
+const NOTIFICATION_QUERY_DEFAULTS = {
+  staleTime: 30_000,
+  refetchOnWindowFocus: true,
+  refetchOnReconnect: true,
+} as const;
+
+/**
  * Hook to fetch the unread notification count for the current user.
  *
  * Polling was removed in favour of a `/notifications/<userId>`
@@ -35,9 +65,10 @@ const EMPTY_LIST = {
  * mounted once in `(auth)/layout.tsx`, listens for server-pushed
  * `changed` ticks and invalidates `notificationKeys.all`, which
  * re-runs this query through the normal react-query refetch path.
- * Without the WebSocket the query still works; users just see the
- * count update on next interaction (mutation invalidate, window
- * focus, or an explicit refetch) instead of every 30s.
+ * When the WebSocket never connects (handler not deployed, network)
+ * the bell falls back to focus/reconnect-driven refetches — see
+ * `NOTIFICATION_QUERY_DEFAULTS` — so a backgrounded tab with a dead
+ * socket isn't stuck on a stale count forever.
  */
 export function useUnreadCount() {
   return useQuery({
@@ -49,6 +80,7 @@ export function useUnreadCount() {
       const body = await response.json();
       return body.count;
     },
+    ...NOTIFICATION_QUERY_DEFAULTS,
   });
 }
 
@@ -80,6 +112,7 @@ export function useNotifications({ limit = 10, offset = 0, enabled = false }: Us
       return await response.json();
     },
     enabled,
+    ...NOTIFICATION_QUERY_DEFAULTS,
   });
 }
 
@@ -107,6 +140,7 @@ export function useNotificationsInfinite(limit: number = 20) {
       }
       return undefined;
     },
+    ...NOTIFICATION_QUERY_DEFAULTS,
   });
 }
 
