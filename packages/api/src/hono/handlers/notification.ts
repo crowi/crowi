@@ -20,6 +20,7 @@
  *    without a second count query.
  */
 import {
+  getNotificationsTokenRoute,
   getUnreadCountRoute,
   listNotificationsRoute,
   markAllAsReadRoute,
@@ -34,6 +35,7 @@ import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
 import type { NotificationDocument } from 'src/models/notification';
+import { createNotificationsTokenUtil } from 'src/util/notifications-token';
 import { isValidObjectId, toISOStringOrNull, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -166,6 +168,11 @@ const notificationToResponse = (doc: NotificationDocument): Notification => {
 export const registerNotificationRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Notification = crowi.model('Notification');
 
+  // Resolve / sign helper once per server (closure-captures the secret).
+  // Same construction-time-capture caveat as `presence.ts`: tests pin
+  // `WS_TOKEN_SECRET` before importing `src/test/setup`.
+  const notificationsTokenUtil = createNotificationsTokenUtil();
+
   app.use('/notifications/*', createJwtAuth(crowi));
   app.use('/notifications', createJwtAuth(crowi));
 
@@ -208,6 +215,31 @@ export const registerNotificationRoutes = <E extends OpenAPIHono<CrowiHonoBindin
           return c.json({ ok: true as const }, 200);
         } catch (err) {
           debug('Error marking notifications as read:', (err as Error).message);
+          return c.json(INTERNAL_ERROR_BODY, 500);
+        }
+      })
+      // `/notifications/token` is another literal path that MUST
+      // register before `/notifications/:id/open` so the template
+      // never shadows it. Same first-match-wins ordering as
+      // `/notifications/status`.
+      .openapi(getNotificationsTokenRoute, async (c) => {
+        const user = c.get('user');
+        const userId = user._id.toString();
+
+        debug('getNotificationsToken called by:', { userId });
+
+        try {
+          const { token, expiresAt } = notificationsTokenUtil.signNotificationsToken({ selfUserId: userId });
+          return c.json(
+            {
+              token,
+              selfUserId: userId,
+              expiresAt: expiresAt.toISOString(),
+            },
+            200,
+          );
+        } catch (err) {
+          debug('notifications token signing failed:', (err as Error).message);
           return c.json(INTERNAL_ERROR_BODY, 500);
         }
       })
