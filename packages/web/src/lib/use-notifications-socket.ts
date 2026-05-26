@@ -135,9 +135,18 @@ function useNotificationsToken(enabled: boolean, authedUserId: string | null) {
     },
     enabled: enabled && authedUserId !== null,
     refetchOnWindowFocus: false,
-    // Notifications realtime is auxiliary — one failed token request
-    // just keeps the bell on its REST baseline, no need to hammer.
-    retry: 1,
+    // The browser firing `online` after a network blip is the cheapest
+    // signal that a previously-failed token mint might now succeed —
+    // retry then so the bell can resume real-time pushes without a
+    // page reload.
+    refetchOnReconnect: true,
+    // Notifications realtime is auxiliary, but a single failure used
+    // to latch the bell into REST-only mode for the rest of the tab's
+    // lifetime. A short capped exponential backoff (≤ 15s × 3) gives
+    // the connection a fair chance to recover from a transient blip
+    // without hammering the server.
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 15_000),
   });
 }
 
@@ -200,11 +209,16 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
 
       ws.onopen = () => {
         if (disposed) return;
-        // (Re)connect catch-up: fire one invalidate so any change
-        // that landed while we were disconnected is picked up.
-        // Goes through the debounce window so a fast
-        // open→message→open cycle still collapses to one invalidate.
-        scheduleInvalidate();
+        // Catch-up invalidate only on a *real* reconnect (i.e. after at
+        // least one backoff-scheduled attempt). The initial connect at
+        // mount time is redundant — `useUnreadCount` / `useNotifications`
+        // have already fired a fresh REST fetch — and firing it here
+        // turns a broken handshake (open → server-reject → close) into
+        // an infinite `/notifications/status` storm: every doomed
+        // reconnect re-opens, invalidates, refetches, then drops.
+        if (reconnectAttempts > 0) {
+          scheduleInvalidate();
+        }
       };
 
       ws.onmessage = (event) => {
@@ -238,14 +252,28 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
         // token flips the effect's `token` dep, which re-runs the
         // effect and handshakes anew. We do NOT reconnect inline — the
         // effect re-run is the only path that resolves the stale
-        // credential.
+        // credential. Cancel any in-flight debounced invalidate first
+        // so a pending tick from just-before-close doesn't fire after
+        // this branch's queryClient.invalidate (same effect run, same
+        // closure — the trailing timer would still hold a live ref).
         if (event.code === NOTIFICATIONS_CLOSE_INVALID_TOKEN) {
+          if (debounceTimer !== null) {
+            clearTimeout(debounceTimer);
+            debounceTimer = null;
+          }
           queryClient.invalidateQueries({ queryKey: ['notificationsToken', authedUserId] });
           return;
         }
         // 4403 (forbidden): a bug-shaped state (we always sign with the
         // authed user id). Looping would just churn the server, so stop.
-        if (event.code === NOTIFICATIONS_CLOSE_FORBIDDEN) return;
+        // Same debounce-cancel rationale as 4401.
+        if (event.code === NOTIFICATIONS_CLOSE_FORBIDDEN) {
+          if (debounceTimer !== null) {
+            clearTimeout(debounceTimer);
+            debounceTimer = null;
+          }
+          return;
+        }
         // Otherwise reconnect with capped exponential backoff.
         const delay = Math.min(RECONNECT_BASE_MS * 2 ** reconnectAttempts, RECONNECT_MAX_MS);
         reconnectAttempts += 1;

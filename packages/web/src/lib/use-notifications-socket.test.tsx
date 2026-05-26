@@ -157,12 +157,15 @@ describe('useNotificationsSocket', () => {
 
     act(() => {
       ws.open();
-      // Open already schedules a catch-up invalidate; advance past the
-      // debounce window so it lands before we start counting again.
+      // The initial connect deliberately does NOT fire a catch-up
+      // invalidate — the REST queries already fetched on mount, and
+      // an open-time invalidate would turn a broken handshake (open →
+      // server-reject → close → reconnect) into an infinite refetch
+      // storm. Advance past the debounce window to prove nothing was
+      // scheduled.
       vi.advanceTimersByTime(200);
     });
-    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: notificationKeys.all });
-    h.invalidateSpy.mockClear();
+    expect(h.invalidateSpy).not.toHaveBeenCalled();
 
     // A burst of `changed` ticks within the debounce window collapses
     // to a single invalidate call.
@@ -181,6 +184,27 @@ describe('useNotificationsSocket', () => {
     });
     expect(h.invalidateSpy).toHaveBeenCalledTimes(1);
     expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: notificationKeys.all });
+  });
+
+  it('does NOT catch-up invalidate on the very first connect (open only fires it on reconnect)', async () => {
+    // Regression guard for the handshake-storm bug: when the server
+    // rejects the upgrade right after the upgrade succeeds (e.g. token
+    // race), an `open → invalidate → close → backoff → open → invalidate`
+    // loop hammered `/notifications/status` on every cycle. The fix is
+    // to skip catch-up on the initial connect (`reconnectAttempts === 0`).
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    h.invalidateSpy.mockClear();
+
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(h.invalidateSpy).not.toHaveBeenCalledWith({ queryKey: notificationKeys.all });
   });
 
   it('fires a catch-up invalidate on reconnect open', async () => {
@@ -333,6 +357,34 @@ describe('useNotificationsSocket', () => {
     expect(FakeWebSocket.instances).toHaveLength(2);
   });
 
+  it('catches up via invalidate on the *second* open (true reconnect)', async () => {
+    // The mirror of "does NOT catch-up on first connect": once a
+    // backoff-scheduled reconnect succeeds, we DO want a catch-up
+    // invalidate so any change that landed while the socket was down
+    // is picked up.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(1006);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    h.invalidateSpy.mockClear();
+
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      vi.advanceTimersByTime(200);
+    });
+    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: notificationKeys.all });
+  });
+
   it('scopes the token cache by authed user id (no cross-user leak after re-login)', async () => {
     // Regression guard: previously the key was `['notificationsToken']`
     // with no user dimension, so logging out and back in as a different
@@ -368,5 +420,79 @@ describe('useNotificationsSocket', () => {
 
     expect(getNotificationsToken).not.toHaveBeenCalled();
     expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it('cancels a pending debounced invalidate when the socket closes with 4401', async () => {
+    // Regression guard: the 4401 path used to early-return without
+    // clearing `debounceTimer`, so a `changed` tick that fired in the
+    // ~milliseconds before close would still run an extra (and now
+    // pointless) `invalidateQueries(notificationKeys.all)` 200ms later.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+      // Queue a debounced invalidate, then immediately tear down with
+      // 4401 — the trailing timer must NOT run.
+      ws.emitChanged();
+      ws.fail(4401);
+    });
+    h.invalidateSpy.mockClear();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(h.invalidateSpy).not.toHaveBeenCalledWith({ queryKey: notificationKeys.all });
+  });
+
+  it('cancels a pending debounced invalidate when the socket closes with 4403', async () => {
+    // Same rationale as the 4401 guard above, for the forbidden path.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+      ws.emitChanged();
+      ws.fail(4403);
+    });
+    h.invalidateSpy.mockClear();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(h.invalidateSpy).not.toHaveBeenCalledWith({ queryKey: notificationKeys.all });
+  });
+
+  it('retries the token query with exponential backoff on transient failure', async () => {
+    // Regression guard: `retry: 1` used to latch the bell into REST-only
+    // mode for the rest of the tab lifetime after a single hiccup. We
+    // now allow up to 3 retries with capped exponential backoff so a
+    // transient blip recovers automatically.
+    let attempt = 0;
+    getNotificationsToken.mockImplementation(async () => {
+      attempt += 1;
+      if (attempt < 3) throw new Error('flaky');
+      return tokenOkResponse(TOKEN_OK);
+    });
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    expect(getNotificationsToken).toHaveBeenCalledTimes(1);
+
+    // Drain react-query's retry timers (1s, then 2s — capped at 15s).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(getNotificationsToken).toHaveBeenCalledTimes(3);
+    expect(FakeWebSocket.instances).toHaveLength(1);
   });
 });
