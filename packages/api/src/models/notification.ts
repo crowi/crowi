@@ -3,6 +3,7 @@ import { Types, Document, Model, Schema, Query, model } from 'mongoose';
 import Debug from 'debug';
 import { subDays } from 'date-fns';
 import type { NotificationPayload } from '@crowi/plugin-api';
+import { NotificationsChangedMessageSchema } from '@crowi/api-contract';
 import ActivityDefine from 'src/util/activityDefine';
 import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/attach';
 import { ActivityDocument } from './activity';
@@ -147,9 +148,26 @@ export default (crowi: Crowi) => {
     const query = { target, action };
     const parameters = { $pull: { activities: _id } };
 
+    // Capture the set of recipient users BEFORE the update so we can
+    // emit a per-user `update` tick afterwards — once the $pull has
+    // emptied the `activities` array, `removeEmpty()` will delete the
+    // row and we'd lose the userId. The notifications affected by a
+    // single un-comment / un-like can span multiple recipients (one
+    // per watcher), so we dedup with a Set and emit once per user.
+    const affected = await Notification.find(query, { user: 1 }).lean<{ user: Types.ObjectId }[]>();
+
     const result = await Notification.updateMany(query, parameters);
 
     await Notification.removeEmpty();
+
+    const recipientIds = new Set<string>();
+    for (const row of affected) {
+      if (row?.user != null) recipientIds.add(row.user.toString());
+    }
+    for (const userId of recipientIds) {
+      notificationEvent.emit('update', userId);
+    }
+
     return result;
   };
 
@@ -260,7 +278,12 @@ function publishNotificationsChange(crowi: Crowi, userId: string): void {
   const redis = crowi.redis as { publish?: (channel: string, message: string) => Promise<number> } | null | undefined;
   if (!redis || typeof redis.publish !== 'function') return;
   const channel = `${NOTIFICATIONS_CHANNEL_PREFIX}${userId}`;
-  const message = JSON.stringify({ type: 'changed' });
+  // Build the payload through the shared schema rather than as a hand-
+  // rolled literal so a future evolution of the message contract is
+  // caught at compile / parse time on both the publisher and the
+  // subscriber. The attach handler validates the inbound side with the
+  // same schema (`NotificationsServerMessageSchema`).
+  const message = JSON.stringify(NotificationsChangedMessageSchema.parse({ type: 'changed' }));
   Promise.resolve()
     .then(() => redis.publish!(channel, message))
     .catch((err: unknown) => {

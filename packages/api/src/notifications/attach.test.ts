@@ -445,6 +445,60 @@ describe('attachNotificationsServer — path handling edge cases', () => {
   });
 });
 
+describe('attachNotificationsServer — schema-guarded fan-out (#14)', () => {
+  /**
+   * `handleRedisMessage` now schema-validates incoming Redis payloads
+   * against `NotificationsServerMessageSchema` and drops anything that
+   * does not match. Defence in depth: a foreign / malformed publish on
+   * the user's channel must never reach the browser.
+   */
+  let server: TestServer;
+  beforeAll(async () => {
+    server = await startTestServer();
+  }, 15000);
+  afterAll(async () => {
+    await stopTestServer(server);
+  }, 15000);
+
+  const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
+    const start = Date.now();
+    while (!predicate()) {
+      if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  };
+
+  it('drops a schema-invalid Redis publish and never forwards it to the WS client', async () => {
+    const userId = 'user-schema-drop';
+    const token = validTokenFor(userId);
+
+    const ws = new WebSocket(`ws://127.0.0.1:${server.port}/notifications/${userId}?token=${token}`);
+    const messages: string[] = [];
+    ws.on('message', (data: Buffer | string) => {
+      messages.push(typeof data === 'string' ? data : data.toString('utf8'));
+    });
+    await new Promise<void>((resolve) => ws.on('open', () => resolve()));
+    await waitUntil(() => server.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUserId(userId)));
+
+    // Foreign-shaped payload that JSON-parses but fails schema.
+    await server.primary!.publish(channelForUserId(userId), JSON.stringify({ type: 'other', data: 'spam' }));
+    // Wait a beat for the (non-)delivery, then assert nothing reached us.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(messages).toEqual([]);
+
+    // A subsequent well-formed payload still gets through — proves the
+    // drop is selective, not a global silence.
+    await server.primary!.publish(channelForUserId(userId), JSON.stringify({ type: 'changed' }));
+    await waitUntil(() => messages.length >= 1);
+    expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
+
+    await new Promise<void>((resolve) => {
+      ws.on('close', () => resolve());
+      ws.close();
+    });
+  });
+});
+
 describe('attachNotificationsServer — subscribe/unsubscribe race serialisation (#3)', () => {
   /**
    * Without the per-user channel-op chain, a close-then-immediate-

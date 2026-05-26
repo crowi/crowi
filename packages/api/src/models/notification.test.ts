@@ -206,6 +206,40 @@ describe('Notification', function () {
 
       expect(publishSpy).not.toHaveBeenCalled();
     });
+
+    it('publishes per affected recipient (deduped) after removeActivity', async () => {
+      // un-comment / un-like delete the originating activity, which
+      // calls `Notification.removeActivity`. Previously this only
+      // pulled the activity from the `activities` array (and dropped
+      // the row when empty), but never emitted — leaving the bell
+      // stale for every recipient. The fix collects affected
+      // recipient userIds and emits `update` per unique user.
+      const recipientA = new ObjectId();
+      const recipientB = new ObjectId();
+      const target = new ObjectId();
+      const sharedActivity = { _id: new ObjectId(), user: new ObjectId(), targetModel: 'Page', target, action: 'COMMENT' };
+
+      // Seed one notification per recipient that points at the same
+      // activity — simulates the "watcher A and watcher B both got
+      // notified about user X's comment" case.
+      await Notification.upsertByActivity(recipientA, sharedActivity);
+      await Notification.upsertByActivity(recipientB, sharedActivity);
+      publishSpy.mockClear();
+
+      await Notification.removeActivity(sharedActivity);
+      await flushMicrotasks();
+
+      // The publish targets must include both recipients exactly once
+      // (Set dedupe in the implementation).
+      const channels = publishSpy.mock.calls.map(([channel]) => channel);
+      expect(channels).toEqual(
+        expect.arrayContaining([`${NOTIFICATIONS_CHANNEL_PREFIX}${recipientA.toString()}`, `${NOTIFICATIONS_CHANNEL_PREFIX}${recipientB.toString()}`]),
+      );
+      const channelsForA = channels.filter((c) => c === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipientA.toString()}`);
+      const channelsForB = channels.filter((c) => c === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipientB.toString()}`);
+      expect(channelsForA).toHaveLength(1);
+      expect(channelsForB).toHaveLength(1);
+    });
   });
 
   describe('.getUnreadCountByUser', () => {

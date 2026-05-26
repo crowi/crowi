@@ -2,6 +2,7 @@ import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import Debug from 'debug';
 import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
+import { NotificationsChangedMessageSchema, NotificationsServerMessageSchema } from '@crowi/api-contract';
 import type Crowi from 'src/crowi';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
 
@@ -215,9 +216,10 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
    * payload from Redis is the JSON `{type:'changed'}` string the
    * model layer publishes; we parse it once as a JSON-validation gate
    * (a non-JSON publish is necessarily not ours and is dropped) and
-   * then re-serialise via `sendJson` for each receiver — the wire
-   * format the browser sees is still the same `{type:'changed'}`
-   * shape, just normalised through `JSON.stringify`.
+   * then schema-validate against `NotificationsServerMessageSchema`
+   * before re-serialising via `sendJson` for each receiver. Defence
+   * in depth: a foreign / malformed publish on the channel never
+   * reaches the browser, regardless of what put it there.
    */
   const handleRedisMessage = (userId: string, message: string): void => {
     const sockets = connectionsByUser.get(userId);
@@ -231,8 +233,16 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
       debug('drop non-JSON publish on user %s channel', userId);
       return;
     }
+    const parsed = NotificationsServerMessageSchema.safeParse(payload);
+    if (!parsed.success) {
+      // A shape that doesn't match the contract is necessarily not the
+      // model layer's publish — drop it rather than leaking arbitrary
+      // JSON to the browser.
+      debug('drop schema-invalid publish on user %s channel: %s', userId, parsed.error.issues.map((i) => i.message).join('; '));
+      return;
+    }
     for (const conn of sockets) {
-      sendJson(conn.ws, payload);
+      sendJson(conn.ws, parsed.data);
     }
   };
 
