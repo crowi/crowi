@@ -27,7 +27,7 @@ const { useAuthMock } = vi.hoisted(() => {
 });
 vi.mock('./use-auth', () => ({ useAuth: useAuthMock }));
 
-import { useNotificationsSocket } from './use-notifications-socket';
+import { useNotificationsSocket, resolveNotificationsUrl } from './use-notifications-socket';
 import { notificationKeys } from './use-notifications';
 
 /**
@@ -494,5 +494,58 @@ describe('useNotificationsSocket', () => {
     });
     expect(getNotificationsToken).toHaveBeenCalledTimes(3);
     expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+});
+
+describe('resolveNotificationsUrl', () => {
+  const originalCollab = process.env.NEXT_PUBLIC_COLLAB_URL;
+  const originalApi = process.env.NEXT_PUBLIC_API_URL;
+
+  afterEach(() => {
+    if (originalCollab === undefined) delete process.env.NEXT_PUBLIC_COLLAB_URL;
+    else process.env.NEXT_PUBLIC_COLLAB_URL = originalCollab;
+    if (originalApi === undefined) delete process.env.NEXT_PUBLIC_API_URL;
+    else process.env.NEXT_PUBLIC_API_URL = originalApi;
+  });
+
+  it('falls back to localhost when neither env var is set', () => {
+    delete process.env.NEXT_PUBLIC_COLLAB_URL;
+    delete process.env.NEXT_PUBLIC_API_URL;
+    expect(resolveNotificationsUrl()).toBe('ws://localhost:4301/notifications');
+  });
+
+  it('uses NEXT_PUBLIC_API_URL as-is when no collab override is set', () => {
+    delete process.env.NEXT_PUBLIC_COLLAB_URL;
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.example.com';
+    expect(resolveNotificationsUrl()).toBe('wss://api.example.com/notifications');
+  });
+
+  it('strips a trailing slash on NEXT_PUBLIC_API_URL so the URL is never `//notifications`', () => {
+    // Regression guard: a trailing `/` on the api base used to produce
+    // `wss://api.example.com//notifications`, which most proxies
+    // rewrite or 404.
+    delete process.env.NEXT_PUBLIC_COLLAB_URL;
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.example.com/';
+    expect(resolveNotificationsUrl()).toBe('wss://api.example.com/notifications');
+  });
+
+  it('strips a `/collab` suffix on NEXT_PUBLIC_COLLAB_URL (with and without trailing slash)', () => {
+    process.env.NEXT_PUBLIC_COLLAB_URL = 'https://api.example.com/collab';
+    expect(resolveNotificationsUrl()).toBe('wss://api.example.com/notifications');
+
+    process.env.NEXT_PUBLIC_COLLAB_URL = 'https://api.example.com/collab/';
+    expect(resolveNotificationsUrl()).toBe('wss://api.example.com/notifications');
+  });
+
+  it('strips a `/notifications` suffix on NEXT_PUBLIC_COLLAB_URL so operators can point all three namespaces at the same env', () => {
+    // Regression guard: if an operator sets NEXT_PUBLIC_COLLAB_URL to
+    // `https://api.example.com/notifications` thinking it's a per-namespace
+    // base, we'd produce `wss://.../notifications/notifications` —
+    // strip the suffix so the URL still resolves to one canonical path.
+    process.env.NEXT_PUBLIC_COLLAB_URL = 'https://api.example.com/notifications';
+    expect(resolveNotificationsUrl()).toBe('wss://api.example.com/notifications');
+
+    process.env.NEXT_PUBLIC_COLLAB_URL = 'https://api.example.com/notifications/';
+    expect(resolveNotificationsUrl()).toBe('wss://api.example.com/notifications');
   });
 });

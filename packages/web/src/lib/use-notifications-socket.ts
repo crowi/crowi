@@ -86,10 +86,21 @@ const NOTIFICATIONS_CLOSE_FORBIDDEN = 4403;
  * `http.Server`. We deliberately do NOT use `window.location` — the
  * Next.js dev split's HTTP rewrites silently drop WebSocket upgrade
  * events.
+ *
+ * The base value is normalised so the resulting URL never has a
+ * double slash (`/notifications` is always appended fresh):
+ *   - any trailing slash is stripped (`http://api/` → `http://api`)
+ *   - a `/collab` or `/notifications` suffix (with or without trailing
+ *     slash) is stripped so operators can point all three namespaces
+ *     at the same env var without producing
+ *     `/notifications/notifications` or `/collab/notifications`.
+ *
+ * Exported for unit testing — internal otherwise.
  */
-function resolveNotificationsUrl(): string {
+export function resolveNotificationsUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_COLLAB_URL;
-  const base = fromEnv && fromEnv.length > 0 ? fromEnv.replace(/\/collab$/, '') : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
+  const raw = fromEnv && fromEnv.length > 0 ? fromEnv : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
+  const base = raw.replace(/\/(collab|notifications)\/?$/, '').replace(/\/$/, '');
   return `${base.replace(/^http/, 'ws')}/notifications`;
 }
 
