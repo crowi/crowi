@@ -398,6 +398,53 @@ describe('attachNotificationsServer — degraded mode (no Redis)', () => {
   }, 15000);
 });
 
+describe('attachNotificationsServer — path handling edge cases', () => {
+  /**
+   * Cover the path-normalisation rules added for review items #10 / #11:
+   *   - decodeURIComponent the path segment so encoded userIds (SSO
+   *     ids with `@` etc.) still match the token's `selfUserId`,
+   *   - trailing slash is tolerated (proxies sometimes normalise),
+   *   - extra path segment (`/notifications/<id>/extra`) is rejected.
+   */
+  let server: TestServer;
+  beforeAll(async () => {
+    server = await startTestServer();
+  }, 15000);
+  afterAll(async () => {
+    await stopTestServer(server);
+  }, 15000);
+
+  it('accepts a URL-encoded userId in the path (decodeURIComponent before compare)', async () => {
+    const userId = 'user@foo';
+    const token = validTokenFor(userId);
+    const encoded = encodeURIComponent(userId); // `user%40foo`
+    const url = `ws://127.0.0.1:${server.port}/notifications/${encoded}?token=${token}`;
+    const result = await probeWs(url);
+    expect(result.opened).toBe(true);
+  });
+
+  it('accepts a trailing slash on the path', async () => {
+    const userId = 'user-trailing';
+    const token = validTokenFor(userId);
+    const url = `ws://127.0.0.1:${server.port}/notifications/${userId}/?token=${token}`;
+    const result = await probeWs(url);
+    expect(result.opened).toBe(true);
+  });
+
+  it('rejects an extra path segment after the userId with WS close 4403', async () => {
+    const userId = 'user-extra';
+    const token = validTokenFor(userId);
+    const url = `ws://127.0.0.1:${server.port}/notifications/${userId}/extra?token=${token}`;
+    const result = await probeWs(url);
+    // Note: we don't assert `opened === false` — the underlying WS
+    // upgrade handshake succeeds (HTTP 101 returned by `ws`), so the
+    // browser's `open` event still fires; the server then closes with
+    // the application code 4403 a tick later. The mismatch-token test
+    // uses the same shape.
+    expect(result.closeCode).toBe(4403);
+  });
+});
+
 describe('attachNotificationsServer — subscribe/unsubscribe race serialisation (#3)', () => {
   /**
    * Without the per-user channel-op chain, a close-then-immediate-

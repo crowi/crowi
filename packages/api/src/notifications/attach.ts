@@ -298,7 +298,38 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
     // 2. `/notifications/<userId>` path segment, when present, must
     //    match the token. The bare `/notifications` form is also
     //    accepted (the token is the authoritative userId source).
-    const pathSegment = pathname.startsWith(`${NOTIFICATIONS_PATH}/`) ? pathname.slice(NOTIFICATIONS_PATH.length + 1) : '';
+    //
+    //    Path handling:
+    //      - decodeURIComponent on the raw segment so a userId that
+    //        contains URI-reserved characters (e.g. SSO ids like
+    //        `user%40foo`) is compared to `selfUserId` in its decoded
+    //        form (otherwise an encoded form would never match a
+    //        plain-text token claim).
+    //      - Strip a trailing slash so `/notifications/<id>/` (some
+    //        reverse proxies normalise to this) is accepted as
+    //        equivalent to `/notifications/<id>`.
+    //      - Reject any extra path segment (`/notifications/<id>/...`)
+    //        — it is outside the spec and we'd rather be explicit
+    //        than silently accept whatever a misbehaving proxy sends.
+    const rawSegment = pathname.startsWith(`${NOTIFICATIONS_PATH}/`) ? pathname.slice(NOTIFICATIONS_PATH.length + 1) : '';
+    let pathSegment = '';
+    if (rawSegment.length > 0) {
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(rawSegment);
+      } catch {
+        debug('reject: malformed percent-encoding in path segment %s', rawSegment);
+        ws.close(WS_CLOSE.FORBIDDEN, 'forbidden');
+        return;
+      }
+      const normalised = decoded.replace(/\/+$/, '');
+      if (normalised.includes('/')) {
+        debug('reject: extra path segment after userId: %s', normalised);
+        ws.close(WS_CLOSE.FORBIDDEN, 'forbidden');
+        return;
+      }
+      pathSegment = normalised;
+    }
     if (pathSegment.length > 0 && pathSegment !== claims.selfUserId) {
       debug('reject: path userId %s != token selfUserId %s', pathSegment, claims.selfUserId);
       ws.close(WS_CLOSE.FORBIDDEN, 'forbidden');
