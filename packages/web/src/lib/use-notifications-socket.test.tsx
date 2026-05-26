@@ -223,18 +223,25 @@ describe('useNotificationsSocket', () => {
     expect(h.invalidateSpy).not.toHaveBeenCalled();
   });
 
-  it('stops reconnecting after a 4401 close (token expired)', async () => {
+  it('does not auto-reconnect after a 4401 close but invalidates the token query so a fresh token reconnects', async () => {
     getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
     const h = makeHarness();
 
     h.render();
     await flush();
     expect(FakeWebSocket.instances).toHaveLength(1);
+    h.invalidateSpy.mockClear();
 
     act(() => {
       FakeWebSocket.instances[0].open();
       FakeWebSocket.instances[0].fail(4401);
     });
+    // 4401 must mark the token query stale so a fresh token gets
+    // refetched and a new handshake is attempted.
+    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notificationsToken'] });
+
+    // No exponential-backoff timer should be running — reconnect is
+    // gated on the token effect re-running with a new token.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
@@ -255,6 +262,35 @@ describe('useNotificationsSocket', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it('does not refetch the token on a schedule (no proactive reconnect)', async () => {
+    // Regression guard: a `refetchInterval` on the token query would
+    // re-mint the token every ~30s, which flips the effect's `token`
+    // dep, tears the socket down, and re-handshakes — and the
+    // `onopen` catch-up invalidate would then fire
+    // `notifications.status.$get` on the same cadence, restoring the
+    // 30s polling pattern we removed.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    expect(getNotificationsToken).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // Hold the socket open and let several minutes of wall time pass.
+    // No additional token fetches and no additional sockets should
+    // appear — the connection is sticky once handshaken.
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      vi.advanceTimersByTime(200);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+    });
+    expect(getNotificationsToken).toHaveBeenCalledTimes(1);
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 

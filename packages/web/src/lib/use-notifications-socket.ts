@@ -18,15 +18,22 @@ import { notificationKeys } from './use-notifications';
  * queries (`useUnreadCount`, `useNotifications*`) refetch.
  *
  * Lifecycle:
- *   1. fetch a short-lived JWT (`GET /notifications/token`)
- *   2. open `wss://<host>/notifications/<userId>?token=<token>`
+ *   1. fetch a short-lived JWT (`GET /notifications/token`) once.
+ *      The token is a handshake-only credential — the server does NOT
+ *      re-verify it after upgrade, mirroring presence / collab — so we
+ *      never refetch on a schedule. A fresh token is only needed when
+ *      the existing socket dies and we have to handshake again.
+ *   2. open `wss://<host>/notifications/<userId>?token=<token>` and
+ *      hold the socket open indefinitely
  *   3. on `changed`, debounce 200ms and invalidate
  *      `notificationKeys.all` so every notification query refetches
  *   4. on (re)connect open, fire a one-shot invalidate to catch up
  *      any change that landed while we were disconnected
  *   5. on unclean close, exponential backoff reconnect (1s → 15s);
- *      4401 (expired token) / 4403 (forbidden) stop reconnecting and
- *      wait for the token query to refetch a fresh one
+ *      4401 (expired token) reactively invalidates the
+ *      `notificationsToken` query so the next refetch yields a fresh
+ *      token + a new effect run + a new handshake; 4403 (forbidden) is
+ *      a bug-shaped state and we just stop
  *
  * Failure is non-fatal: when the WebSocket never connects (handler
  * not deployed, network) the hook stays silent and the UI keeps
@@ -57,7 +64,8 @@ const INVALIDATE_DEBOUNCE_MS = 200;
  * Close code for an invalid / expired notifications token (the
  * notifications attach handler's `WS_CLOSE.INVALID_TOKEN`). The token
  * in hand is stale, so an immediate retry with the same token loops —
- * stop and wait for the token query to refetch.
+ * reactively invalidate the `notificationsToken` query to force a
+ * fresh refetch, which re-runs the effect with the new token.
  */
 const NOTIFICATIONS_CLOSE_INVALID_TOKEN = 4401;
 /**
@@ -85,11 +93,20 @@ function resolveNotificationsUrl(): string {
 }
 
 /**
- * Fetch the short-lived notifications token. Refetches ~30s before
- * expiry so the WebSocket can be reconnected with a fresh token
- * before the server would otherwise reject it (mirrors
- * `usePresenceToken`). The 60s server-side TTL leaves a 30s refresh
- * cadence in practice.
+ * Fetch the short-lived notifications token. The token is only used
+ * during the WebSocket handshake — once upgraded, the server does not
+ * re-verify it (same contract as presence / collab). So we deliberately
+ * do NOT set `refetchInterval`: a proactive periodic refetch would flip
+ * the `token` dep on the consuming effect, tear the socket down, and
+ * re-handshake on every cycle. That cycle also triggers the `onopen`
+ * catch-up invalidate, which would in turn fire
+ * `notifications.status.$get` on the same cadence — effectively
+ * restoring the 30s polling we just removed.
+ *
+ * Instead we mint the token once and rely on a reactive refetch: when
+ * the WebSocket closes with 4401 (stale / expired token), the
+ * connection effect invalidates this query, which causes a refetch,
+ * which yields a new token + a new effect run + a new handshake.
  *
  * Disabled until `enabled` is true so the (public) login screen
  * doesn't blast `/notifications/token` requests at an unauthed
@@ -111,15 +128,6 @@ function useNotificationsToken(enabled: boolean) {
       return response.json();
     },
     enabled,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return false;
-      const msUntilRefresh = Date.parse(data.expiresAt) - Date.now() - 30_000;
-      // Token TTL is 60s, so msUntilRefresh is typically ~30s. Clamp
-      // to a 10s floor as a safety net in case clock skew / a late
-      // queryFn settle pushes the math negative.
-      return Math.max(10_000, msUntilRefresh);
-    },
     refetchOnWindowFocus: false,
     // Notifications realtime is auxiliary — one failed token request
     // just keeps the bell on its REST baseline, no need to hammer.
@@ -214,10 +222,18 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
 
       ws.onclose = (event) => {
         if (disposed) return;
-        // 4401 (stale token) / 4403 (forbidden) just loop on an
-        // immediate retry — stop and let `useNotificationsToken`
-        // refetch trigger a fresh effect run.
-        if (event.code === NOTIFICATIONS_CLOSE_INVALID_TOKEN || event.code === NOTIFICATIONS_CLOSE_FORBIDDEN) return;
+        // 4401 (stale token): kick the token query to refetch. The new
+        // token flips the effect's `token` dep, which re-runs the
+        // effect and handshakes anew. We do NOT reconnect inline — the
+        // effect re-run is the only path that resolves the stale
+        // credential.
+        if (event.code === NOTIFICATIONS_CLOSE_INVALID_TOKEN) {
+          queryClient.invalidateQueries({ queryKey: ['notificationsToken'] });
+          return;
+        }
+        // 4403 (forbidden): a bug-shaped state (we always sign with the
+        // authed user id). Looping would just churn the server, so stop.
+        if (event.code === NOTIFICATIONS_CLOSE_FORBIDDEN) return;
         // Otherwise reconnect with capped exponential backoff.
         const delay = Math.min(RECONNECT_BASE_MS * 2 ** reconnectAttempts, RECONNECT_MAX_MS);
         reconnectAttempts += 1;
