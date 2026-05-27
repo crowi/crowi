@@ -7,20 +7,23 @@ Major design decisions for Crowi 2.0 are documented as **RFCs (Request
 for Comments)** under `docs/rfcs/` in the repository. This page lists
 and summarises the RFCs that currently exist.
 
-> **Caution**: The `Status` of every RFC is Draft. Crowi v2 is under
-> active alpha development, and RFC content may be revised as
-> implementation progresses. The "round" label on each RFC indicates how
-> many revisions that document has been through.
+> **Note**: Crowi v2 is under active alpha development. RFC content may
+> still be revised as implementation progresses — the "round" label on
+> each RFC indicates how many revisions that document has been through —
+> but most of the proposals below have already shipped in the codebase.
+> The Status column reflects the implementation state, not the document
+> state.
 
 ## RFC list
 
 | Number | Title | Target | Status |
 | ------ | ----- | ------ | ------ |
-| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | Plugin Architecture | Crowi 2.0 | Draft (round 2) |
-| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | Renderer Plugin Architecture | Crowi 2.1 | Draft (round 3.1), Phase 1–6 landed |
-| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | Real-time Collaborative Editing | Crowi 2.1 | Draft (round 2) |
-| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | Editor UX Enhancement | Crowi 2.2 | Draft (round 2) |
-| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | Page Presence & Header UI | Crowi 2.2 | Draft (round 2) |
+| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | Plugin Architecture | Crowi 2.0 | Landed |
+| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | Renderer Plugin Architecture | Crowi 2.1 | Phase 1–6 landed; Phase 7+ pending |
+| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | Real-time Collaborative Editing | Crowi 2.1 | Landed |
+| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | Editor UX Enhancement | Crowi 2.2 | Landed |
+| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | Page Presence & Header UI | Crowi 2.2 | Landed |
+| [RFC-0006](https://github.com/crowi/crowi/blob/main/docs/rfcs/0006-hono-integration.md) | HTTP API: Express + ts-rest → Hono | Crowi 2.2 | Landed (2026-05-22) |
 
 ## RFC-0001: Plugin Architecture
 
@@ -61,8 +64,8 @@ for operators, see [Operating real-time collaboration](../operations/realtime-co
 A proposal to add four editor productivity features on top of the
 minimal CodeMirror 6 editor from RFC-0003: autocomplete for `@user`
 mentions and `[[Page` wikilinks, paste handling for URLs / images,
-drag-and-drop upload, and a management view for draft pages. It targets
-Crowi 2.2 (after v2.1 stabilisation).
+drag-and-drop upload, and a management view for draft pages
+(`/me/creating-pages`). Landed for Crowi 2.2.
 
 ## RFC-0005: Page Presence & Header UI
 
@@ -76,6 +79,18 @@ presence WebSocket attaches to the same api process as RFC-0003's
 `/collab`, so it adds no dedicated infrastructure.
 
 → For a user-facing explanation, see [Working with pages](../guide/pages).
+
+## RFC-0006: HTTP API — Express + ts-rest → Hono
+
+A proposal to replace the Express + ts-rest stack with Hono +
+`@hono/zod-openapi` as the framework backing the `/api/v2/*` HTTP
+layer. Zod schemas under `packages/api-contract/src/schemas/` move
+over essentially unchanged; ts-rest contracts are rewritten as
+`createRoute` route definitions; the api app exposes a Scalar API
+Reference at `/api/v2/docs`. The legacy `/api/*` Express mount is
+also retired as part of the cutover. Landed on 2026-05-22.
+
+→ For the resulting architecture, see [Architecture](./architecture).
 
 ## How to read the RFCs
 

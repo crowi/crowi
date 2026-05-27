@@ -20,7 +20,7 @@ description: Crowi 2.0 の開発に参加するための開発フロー・規約
 | -------- | ---- |
 | `pnpm dev` | api + web + プラグインを並行起動 |
 | `pnpm dev:api` / `pnpm dev:web` | 片側だけ起動 |
-| `pnpm test` | 全パッケージのテスト (api は Jest + supertest + mongodb-memory-server) |
+| `pnpm test` | 全パッケージのテスト (api は Jest + supertest。CI では `services.mongo` コンテナを利用、ローカル開発時は `mongodb-memory-server` にフォールバック) |
 | `pnpm type-check` | 型チェック (api + web + site) |
 | `pnpm lint` | Lint。**errors=0 が必須** (warning は許容) |
 | `pnpm format` | Biome によるフォーマット |
@@ -103,18 +103,23 @@ pnpm changeset status     # 蓄積された未公開 changeset 一覧
 - Mongoose ドキュメントの型は `models/xxx.ts` の `XxxDocument` を import
   します。
 
-## 移行を伴う変更
+## 新しいエンドポイントを追加するには
 
-Crowi 2.0 への移行は機能単位で進みます。レガシーの Express コントローラ +
-Swig ビューを Hono ハンドラ + Next.js ページとして再実装します。
+レガシーの Express + ts-rest スタックは RFC-0006 で完全に廃止されました
+(2026-05-22 完了)。新しいエンドポイントを追加するときは以下の手順に
+従ってください。
 
-- 移行コミットでは無関係なレガシーコードに触れないでください。
-- 既存のデプロイが段階的に切り替えられるよう、可能な範囲でレガシー
-  エンドポイントとのワイヤフォーマット / 挙動の互換を保ってください。
-- 新しいコードは `hono/handlers/`、`(auth)/` / `(admin)/`、`lib/`、
-  `components/` の下に置きます。
+- `packages/api-contract/src/` 配下に Zod スキーマと `createRoute`
+  定義 (`@hono/zod-openapi`) を追加します。
+- `packages/api/src/hono/handlers/` 配下にハンドラを実装します (管理系
+  は `hono/handlers/admin/` 配下)。
+- `hono/app.ts` でハンドラを Hono アプリに組み込み、必要なミドルウェアを
+  `hono/middleware/` に追加します。
+- Web 側からは、契約から生成された `apiClientV2` (Hono RPC クライアント、
+  `hc<AppType>`) 経由でエンドポイントを呼び出します。
 
-現状のフェーズ状況はリポジトリの `TODO.md` に記載されています。
+Crowi 2.0 全体のフェーズ状況はリポジトリの `TODO.md` に記載されて
+います。
 
 ## 関連ページ
 

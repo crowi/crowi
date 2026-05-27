@@ -7,19 +7,21 @@ Crowi 2.0 の大きな設計判断は **RFC (Request for Comments)** として
 リポジトリの `docs/rfcs/` に文書化されています。このページは、現時点で
 存在する RFC の一覧と概要をまとめたものです。
 
-> **注意**: 各 RFC の `Status` はいずれも Draft です。Crowi v2 は alpha
-> 開発中であり、RFC の内容は実装の進行に合わせて改訂されることがあります。
-> 各 RFC の「round」表記は、その文書が何回目の改訂かを示します。
+> **Note**: Crowi v2 は alpha 開発中で、RFC の内容は実装の進行に合わせて
+> 改訂されることがあります (各 RFC の「round」表記はその文書が何回目の
+> 改訂かを示します) が、下記の提案の多くはすでにコードベースへ取り込み
+> 済みです。「状態」欄は文書ではなく実装の進捗を示します。
 
 ## RFC 一覧
 
 | 番号 | タイトル | ターゲット | 状態 |
 | ---- | -------- | ---------- | ---- |
-| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | プラグインアーキテクチャ | Crowi 2.0 | Draft (round 2) |
-| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | レンダラプラグインアーキテクチャ | Crowi 2.1 | Draft (round 3.1)・Phase 1–6 実装済み |
-| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | リアルタイム共同編集 | Crowi 2.1 | Draft (round 2) |
-| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | エディタ UX の強化 | Crowi 2.2 | Draft (round 2) |
-| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | ページプレゼンスとヘッダー UI | Crowi 2.2 | Draft (round 2) |
+| [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | プラグインアーキテクチャ | Crowi 2.0 | 実装済み |
+| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | レンダラプラグインアーキテクチャ | Crowi 2.1 | Phase 1–6 実装済み / Phase 7 以降は継続中 |
+| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | リアルタイム共同編集 | Crowi 2.1 | 実装済み |
+| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | エディタ UX の強化 | Crowi 2.2 | 実装済み |
+| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | ページプレゼンスとヘッダー UI | Crowi 2.2 | 実装済み |
+| [RFC-0006](https://github.com/crowi/crowi/blob/main/docs/rfcs/0006-hono-integration.md) | HTTP API: Express + ts-rest → Hono | Crowi 2.2 | 実装済み (2026-05-22) |
 
 ## RFC-0001: プラグインアーキテクチャ
 
@@ -57,8 +59,8 @@ WebSocket バックエンドに Hocuspocus を使います。複数ユーザー�
 RFC-0003 の最小限の CodeMirror 6 エディタの上に、4 つの編集生産性機能を
 追加する提案です。`@user` メンションと `[[Page` wikilink のオートコン
 プリート、URL / 画像のペースト処理、ドラッグ&ドロップアップロード、
-そして下書きページの管理ビューです。Crowi 2.2 (v2.1 安定化後) を
-ターゲットにしています。
+そして下書きページの管理ビュー (`/me/creating-pages`) です。Crowi 2.2
+で実装済みです。
 
 ## RFC-0005: ページプレゼンスとヘッダー UI
 
@@ -71,6 +73,18 @@ RFC-0003 の最小限の CodeMirror 6 エディタの上に、4 つの編集生�
 同じ api プロセスに同居 attach され、専用インフラを増やしません。
 
 → 利用者向けの解説は [ページの基本操作](../guide/pages)。
+
+## RFC-0006: HTTP API — Express + ts-rest → Hono
+
+`/api/v2/*` HTTP レイヤーのフレームワークを Express + ts-rest から
+Hono + `@hono/zod-openapi` へ置き換える提案です。`packages/api-contract/
+src/schemas/` 配下の Zod スキーマはほぼそのまま移行し、ts-rest の
+contract は `createRoute` のルート定義として書き直されます。api アプリ
+は `/api/v2/docs` で Scalar API リファレンスを公開します。レガシーの
+`/api/*` Express マウントもあわせて廃止されます。2026-05-22 に実装
+完了しました。
+
+→ 移行後のアーキテクチャは [アーキテクチャ](./architecture) を参照。
 
 ## RFC を読むには
 

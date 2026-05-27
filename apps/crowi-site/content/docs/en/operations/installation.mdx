@@ -19,8 +19,8 @@ you need the following.
 
 | Software | Version | Purpose |
 | -------- | ------- | ------- |
-| Node.js | 22.x | Runtime for the API / web |
-| pnpm | 9.x or later | Package manager (`packageManager` is `pnpm@9.15.9`) |
+| Node.js | 24.x | Runtime for the API / web |
+| pnpm | 9.15.9 (via corepack) | Package manager (`packageManager` is `pnpm@9.15.9`) |
 | MongoDB | 7+ (the dev image is `mongo:8`) | Persists wiki data |
 | Redis | 7+ | Sessions and realtime-collab pub/sub |
 | Elasticsearch | Optional | Full-text search backend (plugin-driven) |
@@ -59,9 +59,10 @@ cp .env.example .env
 pnpm dev
 ```
 
-Once it is running, open `http://localhost:4302` in a browser to see the
-installer screen. Create the first administrator account to start using
-the wiki.
+The api boots through `tsx watch`, so the first start completes in
+about a second. Once it is running, open `http://localhost:4302` in a
+browser to see the installer screen. Create the first administrator
+account to start using the wiki.
 
 ### Ports
 

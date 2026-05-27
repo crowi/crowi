@@ -9,18 +9,20 @@ such as your display name and avatar.
 
 ## User pages
 
-Every user has a user page at `/user/<username>`. It shows the following:
+Every user has a user page at `/user/<username>`. The page is laid
+out as follows:
 
-- The profile (display name, introduction, avatar)
-- Statistics about pages the user has been involved with
-- A tab-switchable list of activity
-  - **Created pages** — pages the user recently created
-  - **Bookmarks** — pages the user has bookmarked
+- A **cover** section at the top — a coloured cover band with the
+  user's avatar, display name, `@username`, introduction, and a pair
+  of stat pills (created pages count, bookmarks count).
+- A pair of **tabs** below the cover:
+  - **Pages** — pages the user has recently created.
+  - **Bookmarks** — pages the user has bookmarked.
 
-In addition, by Crowi convention the path `/user/<username>` itself also
-works as a **wiki page**. If you create a page at this path, its body is
-rendered below the profile card. This is useful when you want to write a
-longer self-introduction in Markdown.
+In addition, by Crowi convention the path `/user/<username>` itself
+also works as a **wiki page**. If a page exists at this path, its body
+is rendered **below the cover** alongside the tabs. This is useful when
+you want to write a longer self-introduction in Markdown.
 
 ## Profile settings
 

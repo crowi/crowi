@@ -36,6 +36,8 @@ cp .env.example .env
 | `CLIENT_URL` | 本番では必須 | CORS の許可オリジン。開発環境では localhost が自動許可される |
 | `CROWI_ENCRYPTION_KEY` | 推奨 | 機密 Config を AES-256-GCM で暗号化する 32 バイトのマスターキー (base64)。未設定時は平文保存にフォールバック。詳細は [機密設定の暗号化](./encryption) |
 | `ELASTICSEARCH_URI` | 任意 | 全文検索バックエンド。`@crowi/plugin-search-elasticsearch` と組み合わせる |
+| `JWT_ACCESS_TOKEN_TTL_SECONDS` | いいえ (デフォルト `3600` = 1 時間) | api が JWT アクセストークンを発行するときの TTL |
+| `JWT_REFRESH_TOKEN_TTL_SECONDS` | いいえ (デフォルト `2592000` = 30 日) | api が JWT リフレッシュトークンを発行するときの TTL |
 | `SECRET_TOKEN` | いいえ | セッション関連のシークレット |
 
 ### リアルタイム共同編集まわりの変数

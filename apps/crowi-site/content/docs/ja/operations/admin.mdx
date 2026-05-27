@@ -70,19 +70,19 @@ Elasticsearch 検索プラグインや AWS 認証情報プラグインは、対�
 
 ## Authentication
 
-認証方式そのものの切り替えです。`GET/PUT /admin/auth` に対応します。
+認証方式そのものの切り替えと、サインイン時に使う OAuth プロバイダの
+設定を行います。`GET/PUT /admin/auth` に対応します。
 
 - **requireThirdPartyAuth**: サードパーティ認証 (OAuth) を必須にします。
 - **disablePasswordAuth**: パスワードによるログインを無効化します。
+- **Google / GitHub OAuth**: 各プロバイダの clientId と client secret を
+  入力します。secret は機密扱い (入力時にマスクされ、`CROWI_ENCRYPTION_KEY`
+  が設定されていれば保存時に自動で暗号化されます)。
 
-> **Caution**: パスワード認証を無効化したまま OAuth も未設定にすると、
-> 誰もログインできなくなります。Crowi はあなた自身を締め出す設定変更を
-> 422 エラーで拒否しますが、設定変更時は別ブラウザでログイン状態を
-> 保ったまま行うと安全です。
-
-OAuth プロバイダ (Google / GitHub) の clientId / secret 設定は **進行中**
-です。現時点では管理画面からの OAuth 設定 UI は未提供で、今後 OAuth は
-認証プラグインとして切り出される予定です。
+> **Caution**: パスワード認証を無効化したまま OAuth プロバイダがどれも
+> 完全に設定されていないと、誰もログインできなくなります。Crowi は
+> あなた自身を締め出す設定変更を 422 エラーで拒否しますが、設定変更時は
+> 別ブラウザでログイン状態を保ったまま行うと安全です。
 
 ## Mail
 
@@ -164,8 +164,6 @@ OAuth プロバイダ (Google / GitHub) の clientId / secret 設定は **進行
 
 - **Notification (通知)** — Slack 連携を含むグローバル通知設定の管理画面は
   進行中です。サイドバーに項目は表示されますが、機能は順次実装されます。
-- **Google / GitHub OAuth 設定** — 認証プロバイダの clientId / secret を
-  管理画面から設定する UI は進行中です。
 
 Crowi 2.0 (Reignite) は alpha 開発中のため、管理画面の構成は今後も
 変化します。最新の状況はリポジトリの `TODO.md` を参照してください。

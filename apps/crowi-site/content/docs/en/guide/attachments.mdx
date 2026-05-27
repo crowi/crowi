@@ -32,12 +32,20 @@ single `Attachment` document is created.
 For choosing a storage backend, see
 [Storage configuration](../operations/storage).
 
-## Inline image previews
+## The attachment grid
 
-When an attachment is an image (PNG / JPEG / GIF / WebP, etc.), the
-attachment list shows an **inline thumbnail preview** instead of a
-download link. Non-image files (PDFs, zips, text, etc.) are shown as
-download links.
+The Attachments section in the page footer renders attachments as a
+**uniform tile grid**. Each tile shows either the image thumbnail (for
+PNG / JPEG / GIF / WebP, etc.) or a file-type icon stacked above the
+filename (for PDFs, zips, text, and other non-image files).
+
+- Clicking a tile opens a **modal preview** in-page — you do not
+  navigate away from the page.
+- The modal includes an "Open original" link that opens the raw file
+  in a new tab.
+- The list shows only attachments referenced by the page's **latest
+  revision**. A "view all attachments" link at the bottom routes to a
+  dedicated listing (see below).
 
 Each attachment is assigned a URL of the form `/api/v2/attachments/<id>`.
 Hitting that URL delivers the actual file: images are served `inline` in
@@ -48,6 +56,20 @@ filename.
 > if someone knows an attachment's URL, the file is not delivered to a
 > user who cannot view the owning page (a 404 is returned to hide its
 > existence).
+
+### The "All attachments" page
+
+`/_attachments?pageId=<id>` opens the dedicated listing for a page,
+split into two sections:
+
+- **Used in the latest revision** — files actually embedded in the
+  current page content.
+- **Used only in past revisions** — files no longer referenced by the
+  latest revision but still present in older history entries (or
+  orphaned by edits).
+
+This view is useful when you need to inspect or clean up attachments
+that the page footer no longer surfaces.
 
 ### Images in the page body
 
@@ -66,9 +88,10 @@ URL with image syntax.
 
 ## Removing an attachment
 
-You can remove an attachment from each item in the attachment list.
-Removing it deletes both the `Attachment` document and the actual file in
-storage.
+Removal happens from inside the **detail modal** — there is no inline
+delete button on each tile. Click an attachment to open its modal, then
+remove it from there. Removing an attachment deletes both the
+`Attachment` document and the actual file in storage.
 
 Only users matching one of the following can remove an attachment:
 

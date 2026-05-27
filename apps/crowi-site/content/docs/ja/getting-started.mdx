@@ -18,15 +18,15 @@ description: Crowi 2.0 をローカルで動かすまでの 5 分間クイック
 
 | ソフトウェア | バージョン | 用途 |
 | ------------ | ---------- | ---- |
-| Node.js | 22.x | ランタイム (リポジトリの `.nvmrc` / `engines` で固定) |
-| pnpm | 9.x 以上 | パッケージマネージャ (monorepo は pnpm workspaces) |
+| Node.js | 24.x | ランタイム (リポジトリの `.nvmrc` / `engines` で固定) |
+| pnpm | 9.15.9 (corepack 経由) | パッケージマネージャ (monorepo は pnpm workspaces) |
 | Docker / Docker Compose | 最新 | MongoDB / Redis / Elasticsearch / PlantUML をコンテナで起動 |
 
 Crowi 本体が必要とするミドルウェア (MongoDB / Redis / Elasticsearch /
 PlantUML) は、リポジトリ同梱の `docker-compose.yml` でまとめて立ち上げる
 ため、個別にインストールする必要はありません。
 
-> **Tip**: Node.js のバージョンは `.nvmrc` に `22` と記載されています。
+> **Tip**: Node.js のバージョンは `.nvmrc` に `24` と記載されています。
 > `nvm` を使っているなら、リポジトリのルートで `nvm use` を実行すると
 > 正しいバージョンに切り替わります。
 
@@ -93,7 +93,9 @@ pnpm dev
 ```
 
 `pnpm dev` は Turborepo 経由で api・web・各プラグインを並行起動します。
-起動後、以下の URL でアクセスできます。
+api は `tsx watch` で起動するため、初回起動はおよそ 1 秒で完了します
+(以前の `ts-node + nodemon` 構成では約 30 秒かかっていました)。起動後、
+以下の URL でアクセスできます。
 
 | サービス | URL |
 | -------- | --- |

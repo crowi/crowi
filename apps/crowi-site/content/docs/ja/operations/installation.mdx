@@ -20,7 +20,7 @@ Crowi 2.0 は Turborepo + pnpm のモノレポ構成で、API・Web フロント
 | ソフトウェア | バージョン | 用途 |
 | ------------ | ---------- | ---- |
 | Node.js | 24.x | API / Web の実行ランタイム |
-| pnpm | 9.x 以上 | パッケージマネージャ (`packageManager` は `pnpm@9.15.9`) |
+| pnpm | 9.15.9 (corepack 経由) | パッケージマネージャ (`packageManager` は `pnpm@9.15.9`) |
 | MongoDB | 7 以降 (開発用イメージは `mongo:8`) | Wiki データの永続化 |
 | Redis | 7 以降 | セッション・リアルタイム共同編集の pub/sub |
 | Elasticsearch | 任意 | 全文検索バックエンド (プラグイン駆動) |
@@ -59,6 +59,7 @@ cp .env.example .env
 pnpm dev
 ```
 
+api は `tsx watch` で起動するため、初回起動はおよそ 1 秒で完了します。
 起動後、ブラウザで `http://localhost:4302` を開くとインストーラ画面が
 表示されます。最初の管理者アカウントを作成すると Wiki が使えるように
 なります。

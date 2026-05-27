@@ -19,7 +19,7 @@ Scripts are defined in the repo root and per-package `package.json`.
 | ------- | ------- |
 | `pnpm dev` | Start api + web + plugins concurrently |
 | `pnpm dev:api` / `pnpm dev:web` | Start just one side |
-| `pnpm test` | Tests for all packages (api uses Jest + supertest + mongodb-memory-server) |
+| `pnpm test` | Tests for all packages (api uses Jest + supertest; CI runs against a `services.mongo` container, local dev falls back to `mongodb-memory-server`) |
 | `pnpm type-check` | Type-check (api + web + site) |
 | `pnpm lint` | Lint. **errors=0 is required** (warnings tolerated) |
 | `pnpm format` | Formatting via Biome |
@@ -102,19 +102,22 @@ pnpm changeset status     # list accumulated, unpublished changesets
 - Prefer `Pick<>` / `Omit<>` over re-typing fields.
 - For Mongoose document types, import `XxxDocument` from `models/xxx.ts`.
 
-## Changes involving migration
+## Adding new endpoints
 
-The migration to Crowi 2.0 proceeds feature by feature: a legacy Express
-controller + Swig view is re-implemented as a Hono handler + Next.js
-page.
+The legacy Express + ts-rest stack was fully retired by RFC-0006
+(landed 2026-05-22). New endpoints are added by:
 
-- In a migration commit, do not touch unrelated legacy code.
-- Maintain wire-format / behaviour parity with the legacy endpoint where
-  practical, so ongoing deployments can switch incrementally.
-- New code goes under `hono/handlers/`, `(auth)/` / `(admin)/`,
-  `lib/`, and `components/`.
+- Adding a Zod schema and a `createRoute` definition in
+  `packages/api-contract/src/` (`@hono/zod-openapi`).
+- Implementing the handler under `packages/api/src/hono/handlers/`
+  (admin endpoints under `hono/handlers/admin/`).
+- Wiring the handler into the Hono app in `hono/app.ts`, and adding
+  any required middleware under `hono/middleware/`.
+- On the web side, consume the endpoint through the `apiClientV2`
+  Hono RPC client (`hc<AppType>`) generated from the contracts.
 
-The current phase status is recorded in the repository's `TODO.md`.
+The current phase status of the wider Crowi 2.0 work is recorded in
+the repository's `TODO.md`.
 
 ## Related pages
 

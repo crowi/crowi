@@ -58,6 +58,18 @@ On the history screen you can pick any two revisions and view the **diff**.
 - For a page with only one revision (a page that has never been updated since
   creation), the single first revision is shown.
 
+## Viewing a specific revision
+
+You can open a specific past revision directly with the query string
+`?revision_id=<revisionId>` on a page URL. When the revision shown is
+**not the latest revision** for that page, a **stale-revision banner**
+appears at the top of the page view, warning that you are looking at
+an older snapshot and offering a link back to the latest version.
+
+The stale-revision banner also suppresses social affordances such as
+the presence row and the page-action toolbar, since those operations
+only make sense against the latest revision.
+
 ## Rolling back to a past version
 
 When you want to return to the content of a past revision, perform a

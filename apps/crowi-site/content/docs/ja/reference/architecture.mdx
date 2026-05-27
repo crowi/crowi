@@ -4,9 +4,9 @@ description: Crowi 2.0 のモノレポ構成と API + Web の全体像
 ---
 
 このページは、Crowi 2.0 (コードネーム *Reignite*) のコードベース全体の
-構造を俯瞰します。Crowi は現在、Express + Swig + jQuery のレガシー
-モノリスから、Hono API と Next.js 16 フロントエンドへの
-リビルドの途上にあります。
+構造を俯瞰します。Crowi は Express + Swig + jQuery のレガシーモノリス
+から、Hono API + Next.js 16 フロントエンドへとリビルドされました
+(RFC-0006、2026-05-22 に完了)。
 
 ## モノレポ構成
 
@@ -47,7 +47,7 @@ crowi/
 | Site | Next.js 16 (静的エクスポート) + Fumadocs UI + i18n (ja / en) |
 | 共通 | TypeScript 5.x strict、pnpm workspaces、Turborepo |
 | Lint / Format | Biome (format) + ESLint (lint)、lefthook フック |
-| テスト | Jest + supertest + mongodb-memory-server (API) |
+| テスト | Jest + supertest (API)。CI では `services.mongo` コンテナを使い、`mongodb-memory-server` はローカル開発専用のフォールバック |
 
 ## API サーバ (`packages/api`)
 
@@ -100,7 +100,8 @@ Attachment などがあります。
 
 Hocuspocus は別プロセスではなく、`@crowi/collab` ライブラリとして api
 プロセス内に attach されます。api の `http.Server` を `ws noServer`
-モードで使い、`/collab/*` のアップグレードを処理します。詳細は
+モードで使い、`/collab/*` (共同編集) と `/presence/*` (RFC-0005 のページ
+プレゼンス) のアップグレードを処理します。詳細は
 [リアルタイム共同編集の運用](../operations/realtime-collab) を参照。
 
 ## Web フロントエンド (`packages/web`)
@@ -133,12 +134,13 @@ Next.js 16 App Router を採用し、`src/app/` 配下を 3 つの Route Group �
 同じ型に対して整合します。契約を編集したら
 `pnpm --filter @crowi/api-contract build` で dts を再生成してください。
 
-## 移行戦略
+## 移行の経緯
 
-Crowi 2.0 への移行は機能単位で進められます。レガシーの Express
-コントローラ + Swig ビューを、Hono ハンドラ + Next.js ページとして
-再実装します。現状のフェーズ状況は
-リポジトリの `TODO.md` に記載されています。
+Crowi 2.0 への移行は機能単位で進められました。レガシーの Express
+コントローラ + Swig ビューを Hono ハンドラ + Next.js ページとして再
+実装し、レガシーの Express マウント (`/_api/*`、`/login` など) は
+RFC-0006 の切り替えにあわせて 2026-05-22 に完全廃止されました。
+現状のフェーズ状況はリポジトリの `TODO.md` に記載されています。
 
 ## 関連ページ
 

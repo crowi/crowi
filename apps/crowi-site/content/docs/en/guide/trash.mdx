@@ -31,19 +31,21 @@ Visiting `/trash/` shows a list of deleted pages. The path hierarchy is
 preserved, so you can also follow sub-paths such as `/trash/team/eng/` to
 narrow down what you see inside the trash.
 
-Each item in the trash offers two actions:
+Each row links to the deleted page's view (still under its `/trash/...`
+path). The deleted page view itself surfaces the recovery and removal
+controls:
 
-| Action | Description |
-| ------ | ----------- |
-| Restore | Returns the page to its original path and sets its status back to published |
-| Delete forever | Permanently removes the page from the database (cannot be undone) |
+- A red **Alert** at the top of the page explains that this page is in
+  the trash, and offers a **Restore Page** button to recover it.
+- The page's regular dotmenu still exposes **Delete forever**, which
+  permanently removes the page after a confirmation dialog.
 
 ## Restoring a page
 
-Choosing "Restore" from the trash list returns the page to its original
-pre-deletion path and makes it viewable and editable as usual. On restore,
-the redirect page that was created at the original path during deletion is
-removed.
+Pressing **Restore Page** from a trashed page view returns the page to
+its original pre-deletion path and makes it viewable and editable as
+usual. On restore, the redirect page that was created at the original
+path during deletion is removed.
 
 > **Note**: If another page already exists at the restore target path and
 > it is not the redirect page created during deletion, Crowi detects the
@@ -52,9 +54,9 @@ removed.
 
 ## Permanently deleting a page
 
-Choosing "Delete forever" from the trash list shows a confirmation
-dialog. When executed, the following data related to the page is deleted
-all together:
+Choosing **Delete forever** from the deleted page's dotmenu shows a
+confirmation dialog. When executed, the following data related to the
+page is deleted all together:
 
 - The page document itself
 - All revisions (history)

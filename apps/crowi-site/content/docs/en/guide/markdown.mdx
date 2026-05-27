@@ -35,6 +35,16 @@ code blocks, and so on — works as-is.
 - A **table of contents (TOC)** is generated automatically from headings,
   and each heading gets a stable anchor ID. Duplicate heading texts are
   numbered automatically, and CJK headings can be used as anchors too.
+- Each heading shows a small **anchor copy button** on hover. The
+  default icon is `Link2`; once clicked it briefly switches to a
+  `Check`, confirming the section URL has been copied to the
+  clipboard.
+- Inline `` `code` `` renders as a **GitHub-style muted pill** —
+  monospaced text on a muted background with rounded corners.
+- Long unbreakable tokens (commit SHAs, raw URLs) wrap inside
+  paragraphs and list items rather than pushing the article past the
+  viewport. Fenced `<pre>` code blocks are exempt and keep their
+  horizontal scroll.
 
 ## Crowi core extensions
 

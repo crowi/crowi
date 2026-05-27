@@ -34,6 +34,14 @@ A path ending with `/` (for example `/dev/`) is a special page called a
 - A portal page's grant is always forced to **Public**. Because it exposes
   the list of child pages, it cannot be made restricted.
 
+When a portal path exists implicitly (it has child pages but **no
+portal document of its own**), the list view shows a folder icon next
+to the title with a trailing `/` (e.g. `📁 awards /`). The breadcrumb
+above already encodes the rest of the path, so no duplicate subtitle
+is rendered. When a portal document _does_ exist at the path, it is
+rendered inside a dedicated "Portal page" card with full page actions,
+above the child list.
+
 > **Tip**: Preparing one portal page such as `/team-a/` per team or project
 > gives new members a starting point from which to follow related pages.
 
@@ -58,6 +66,54 @@ paths cannot be created:
 
 These constraints exist to avoid collisions with internal routes and files.
 You are unlikely to hit them with normal documentation paths.
+
+## Draft pages
+
+In Crowi 2.x, a newly created page starts in the **draft** state — a
+"not-yet-published, still-being-written" page.
+
+- Creating a page from "New page" (or similar) immediately materialises
+  the page as a draft. A draft has a real `pageId`, so you can
+  upload [attachments](./attachments) to it while still writing.
+- A draft is **only visible to its creator**. It is excluded from page
+  lists, search results, and backlinks for everyone else, and realtime
+  collaborative-editing connections from non-creators are rejected.
+- Drafts hide their social affordances. The page view has no like /
+  watch / bookmark / link-share / comments / presence row, and a small
+  info notice tells the author "this page is not yet published; edit and
+  save it to publish." Edit and the dotmenu (history / rename / delete)
+  still work.
+- Pressing **Save** in the editor flips the page from draft to
+  **published**, making it visible to everyone who has the right to view
+  it.
+- This transition is **one-way**. Once a page is published it cannot be
+  returned to the draft state.
+
+> **Note**: Crowi 1.x had an implicit "create a hidden page when you
+> start editing" behaviour; in v2 the draft state plays that role
+> instead. See [RFC-0004](../reference/rfcs) for details.
+
+### Conflicts on the same path
+
+While someone is drafting at `/docs/api`, another user trying to create
+a new page at the same path is rejected with a message saying that the
+path is being authored by someone else. There is no override or
+takeover; coordinate with the listed author directly. Once they cancel
+or publish the draft, the conflict clears on its own.
+
+### Creating pages view (`/me/creating-pages`)
+
+Drafts you are currently authoring are listed in the **Creating pages**
+view (`/me/creating-pages`). Each row shows when authoring started and
+offers two actions:
+
+- **Edit** — jump back into the draft's editor.
+- **Cancel** — delete the draft (with a confirmation dialog). The
+  path becomes available again for someone else to use.
+
+Drafts are never auto-deleted. They survive until you explicitly
+publish or cancel them, so you will not lose work-in-progress — but you
+should tidy up unwanted drafts from this view.
 
 ## Editing a page
 
@@ -210,6 +266,25 @@ Grants behave as follows.
 
 The grant can be changed while editing a page. Switching from Public to a
 restricted grant registers the acting user as a granted user.
+
+### Visual grant signal
+
+Pages whose grant is not Public are tagged with two complementary
+visual cues, so the sharing posture is obvious at a glance:
+
+- A thin **accent strip** (4px) sits just below the screen header.
+  Restricted (link-only) pages get a dark-purple tint; Just-me /
+  Specified pages get a dark-cool-gray tint. Public pages show no
+  strip.
+- Next to the page title, a small **grant chip** displays the icon and
+  label — 🔗 "Link only" for Restricted, 🔒 "Just me" / "Specified"
+  for Owner / Specified. The chip's border and text colour pick up the
+  same accent.
+
+The two cues use the same `--page-grant-accent` token, so the strip
+and chip always agree on tint. Public pages intentionally have no
+signal — a wiki page being publicly readable inside the team is the
+default state and does not need decoration.
 
 ## Related pages
 

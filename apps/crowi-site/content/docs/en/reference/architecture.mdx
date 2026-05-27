@@ -4,9 +4,9 @@ description: Crowi 2.0 monorepo layout and the API + Web overview
 ---
 
 This page gives a bird's-eye view of the entire Crowi 2.0 (codename
-*Reignite*) codebase structure. Crowi is currently mid-rebuild from a
-legacy Express + Swig + jQuery monolith to a Hono API plus
-a Next.js 16 frontend.
+*Reignite*) codebase structure. Crowi has been rebuilt from a legacy
+Express + Swig + jQuery monolith into a Hono API plus a Next.js 16
+frontend (RFC-0006, landed 2026-05-22).
 
 ## Monorepo layout
 
@@ -48,7 +48,7 @@ runner around them.
 | Site | Next.js 16 (static export) + Fumadocs UI + i18n (ja / en) |
 | Shared | TypeScript 5.x strict, pnpm workspaces, Turborepo |
 | Lint / Format | Biome (format) + ESLint (lint), lefthook hooks |
-| Tests | Jest + supertest + mongodb-memory-server (API) |
+| Tests | Jest + supertest (API). CI uses a `services.mongo` container; `mongodb-memory-server` is a local-dev fallback only |
 
 ## API server (`packages/api`)
 
@@ -101,7 +101,8 @@ for details.
 
 Hocuspocus is not a separate process — it is attached inside the api
 process as the `@crowi/collab` library. It uses the api's `http.Server`
-in `ws noServer` mode to handle `/collab/*` upgrades. See
+in `ws noServer` mode to handle `/collab/*` upgrades (collab) and
+`/presence/*` upgrades (RFC-0005 page presence). See
 [Operating real-time collaboration](../operations/realtime-collab) for
 details.
 
@@ -119,9 +120,8 @@ Groups.
 Data fetching uses `@tanstack/react-query` throughout. `apiClientV2`
 (the Hono RPC client, `hc<AppType>`) is generated from the shared
 contracts, and hooks live in `src/lib/use-*.ts`. Shared UI consists of
-`components/ui/` (shadcn)
-plus cross-cutting primitives like `LoadingSpinner` / `ErrorAlert` /
-`AccessDeniedCard` / `NotFoundCard`.
+`components/ui/` (shadcn) plus cross-cutting primitives like
+`LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard`.
 
 ## API contracts (`packages/api-contract`)
 
@@ -137,12 +137,13 @@ Web client calls aligned against the same types. After editing
 contracts, regenerate the dts with
 `pnpm --filter @crowi/api-contract build`.
 
-## Migration strategy
+## Migration history
 
-The migration to Crowi 2.0 proceeds feature by feature. A legacy Express
-controller + Swig view is re-implemented as a Hono handler + Next.js
-page. The current phase status is recorded in the repository's
-`TODO.md`.
+The migration to Crowi 2.0 proceeded feature by feature. Legacy Express
+controllers + Swig views were re-implemented as Hono handlers + Next.js
+pages, and the legacy Express mount (`/_api/*`, `/login`, etc.) was
+fully retired as part of the RFC-0006 cutover on 2026-05-22. The
+current phase status is recorded in the repository's `TODO.md`.
 
 ## Related pages
 

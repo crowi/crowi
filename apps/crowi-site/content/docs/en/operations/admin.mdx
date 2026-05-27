@@ -75,19 +75,20 @@ Sign-up and access control settings. Maps to `GET/PUT /admin/security`.
 
 ## Authentication
 
-Switches the authentication method itself. Maps to `GET/PUT /admin/auth`.
+Switches the authentication method itself, and configures the OAuth
+providers used for sign-in. Maps to `GET/PUT /admin/auth`.
 
 - **requireThirdPartyAuth**: Makes third-party auth (OAuth) mandatory.
 - **disablePasswordAuth**: Disables password-based login.
+- **Google / GitHub OAuth**: Enter the provider's clientId and client
+  secret. The secret is treated as sensitive (masked on input,
+  auto-encrypted at rest when `CROWI_ENCRYPTION_KEY` is set).
 
-> **Caution**: If you disable password auth while OAuth is not configured,
-> nobody can log in. Crowi rejects a settings change that would lock you
-> out with a 422 error, but it is safest to make this change while keeping
-> a logged-in session open in a separate browser.
-
-OAuth provider (Google / GitHub) clientId / secret configuration is
-**in progress**. There is currently no OAuth settings UI in the admin
-panel; OAuth is planned to be split out into an authentication plugin.
+> **Caution**: If you disable password auth while no OAuth provider is
+> fully configured, nobody can log in. Crowi rejects a settings change
+> that would lock you out with a 422 error, but it is safest to make
+> this change while keeping a logged-in session open in a separate
+> browser.
 
 ## Mail
 
@@ -170,8 +171,6 @@ The following are not yet complete as of the v2 alpha.
 - **Notification** — The admin page for global notification settings,
   including Slack integration, is in progress. The sidebar entry appears,
   but the functionality is being implemented incrementally.
-- **Google / GitHub OAuth settings** — The UI for configuring auth
-  provider clientId / secret from the admin panel is in progress.
 
 Crowi 2.0 (Reignite) is under active alpha development, so the structure
 of the admin panel will continue to change. See `TODO.md` in the

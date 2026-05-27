@@ -35,6 +35,8 @@ cp .env.example .env
 | `CLIENT_URL` | Required in production | CORS allowlist origin. Localhost origins are allowed automatically in development |
 | `CROWI_ENCRYPTION_KEY` | Recommended | Base64-encoded 32-byte master key used to encrypt sensitive Config with AES-256-GCM. Falls back to plaintext when unset. See [Encrypting sensitive config](./encryption) |
 | `ELASTICSEARCH_URI` | Optional | Full-text search backend. Pair it with `@crowi/plugin-search-elasticsearch` |
+| `JWT_ACCESS_TOKEN_TTL_SECONDS` | No (default `3600` = 1 hour) | TTL the api uses when signing JWT access tokens |
+| `JWT_REFRESH_TOKEN_TTL_SECONDS` | No (default `2592000` = 30 days) | TTL the api uses when signing JWT refresh tokens |
 | `SECRET_TOKEN` | No | Session-related secret |
 
 ### Realtime collaboration variables

@@ -17,15 +17,15 @@ Local development needs the following:
 
 | Software | Version | Purpose |
 | -------- | ------- | ------- |
-| Node.js | 22.x | Runtime (pinned by the repo's `.nvmrc` / `engines`) |
-| pnpm | 9.x or later | Package manager (the monorepo uses pnpm workspaces) |
+| Node.js | 24.x | Runtime (pinned by the repo's `.nvmrc` / `engines`) |
+| pnpm | 9.15.9 (via corepack) | Package manager (the monorepo uses pnpm workspaces) |
 | Docker / Docker Compose | latest | Runs MongoDB / Redis / Elasticsearch / PlantUML in containers |
 
 The middleware Crowi depends on (MongoDB / Redis / Elasticsearch /
 PlantUML) is started together by the bundled `docker-compose.yml`, so
 you do not need to install them individually.
 
-> **Tip**: The Node.js version is recorded as `22` in `.nvmrc`. If you
+> **Tip**: The Node.js version is recorded as `24` in `.nvmrc`. If you
 > use `nvm`, run `nvm use` at the repo root to switch to the correct
 > version.
 
@@ -96,7 +96,9 @@ pnpm dev
 ```
 
 `pnpm dev` starts api, web, and all plugins concurrently through
-Turborepo. Once running, the following URLs are available:
+Turborepo. The api boots via `tsx watch`, so the first start takes
+about a second (down from ~30s on the previous `ts-node + nodemon`
+setup). Once running, the following URLs are available:
 
 | Service | URL |
 | ------- | --- |
