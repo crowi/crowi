@@ -1,0 +1,39 @@
+{
+  "settings": {
+    "analysis": {
+      "tokenizer": {
+        "sudachi_tokenizer": {
+          "type": "sudachi_tokenizer",
+          "mode": "search"
+        }
+      },
+      "analyzer": {
+        "sudachi_analyzer": {
+          "filter": [],
+          "tokenizer": "sudachi_tokenizer",
+          "type": "custom"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "path": {
+        "fields": {
+          "ja": {
+            "type": "text",
+            "analyzer": "sudachi_analyzer"
+          }
+        }
+      },
+      "body": {
+        "fields": {
+          "ja": {
+            "type": "text",
+            "analyzer": "sudachi_analyzer"
+          }
+        }
+      }
+    }
+  }
+}
