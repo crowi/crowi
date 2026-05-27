@@ -129,7 +129,10 @@ See `.env.example` at the repo root. Required / commonly-set:
   When unset, the web app derives it from `window.location.host` and
   `NEXT_PUBLIC_API_URL`, so leave it blank if `/collab/*` is reverse-proxied
   to the same host as the api.
-- `ELASTICSEARCH_URI` — optional, search backend
+
+Search backend connection settings (Elasticsearch / OpenSearch URL, index
+name, analyzer, etc.) live in the plugin Config namespace and are edited
+from the admin UI (`/admin/plugins`). No env variable.
 
 Storage backend selection moved from a `FILE_UPLOAD` env to the
 runner's `crowi.config.json` (`storage.driver: 'local' | 's3' | …`)

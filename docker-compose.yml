@@ -84,7 +84,6 @@ services:
       PORT: 3000
       MONGO_URI: mongodb://mongodb:27017/crowi
       REDIS_URL: redis://redis:6379
-      ELASTICSEARCH_URI: http://elasticsearch:9200/crowi
       CLIENT_URL: http://localhost:4302
     ports:
       # Host 4301 -> container 3000. 4301 is Crowi's canonical api port
