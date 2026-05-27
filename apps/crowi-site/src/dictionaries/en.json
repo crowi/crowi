@@ -65,24 +65,25 @@
     "chapter": "Ch. 03",
     "kicker": "Where we are",
     "title": "Where we are",
-    "description": "Active development on main. Core features have all migrated to the new stack. Admin section and search are next.",
+    "description": "Active development on main. Core features, realtime collab, editor UX, and the admin section have all migrated to the new stack (Hono + Next.js 16). What's left is realtime notification push, the external Share link, and the v2.0 stable release.",
     "completedLabel": "Migrated",
     "completed": [
-      "Page CRUD",
-      "List / portal",
-      "Revisions",
-      "Comments / notifications",
-      "Bookmarks / likes",
+      "Page CRUD / revisions / diff",
+      "List / portal (folder view)",
+      "Comments / mentions",
+      "Likes / bookmarks / watch / seen-by",
       "Trash / backlinks",
-      "User pages",
-      "Watch / seen-by"
+      "Attachments (grid + modal)",
+      "Visibility (Public / Restricted / Owner)",
+      "Realtime collab + live presence",
+      "Editor UX (drafts, mentions, wikilinks, paste)",
+      "User pages / admin / search"
     ],
     "upcomingLabel": "In progress",
     "upcoming": [
-      "Admin",
-      "Search (Elasticsearch)",
-      "Page share",
-      "Editor refresh"
+      "Realtime notification push (WebSocket)",
+      "External page share link",
+      "v2.0 stable release"
     ],
     "ctaGithub": "Browse the code",
     "ctaIssues": "Open issues"
@@ -92,7 +93,7 @@
     "items": [
       { "k": "Runtime", "v": "Node.js 24.x" },
       { "k": "Web", "v": "Next.js 16" },
-      { "k": "API", "v": "v1 compatible" },
+      { "k": "API", "v": "Hono 4" },
       { "k": "DB", "v": "MongoDB" },
       { "k": "Search", "v": "Elasticsearch (opt.)" },
       { "k": "License", "v": "MIT" }

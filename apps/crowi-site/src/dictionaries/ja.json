@@ -65,24 +65,25 @@
     "chapter": "Ch. 03",
     "kicker": "Where we are",
     "title": "現在の状況",
-    "description": "main ブランチで継続的に開発中です。コア機能はすでに新スタックへ移行済み。管理画面と検索周りを進めています。",
+    "description": "main ブランチで継続的に開発中です。コア機能・リアルタイム共同編集・編集 UX・管理画面まで新スタック (Hono + Next.js 16) に移行済み。残りは通知のリアルタイム push と外部公開 Share、v2.0 安定版リリースに向けた最終調整です。",
     "completedLabel": "移行済み",
     "completed": [
-      "ページ CRUD",
-      "一覧 / portal",
-      "履歴 (revisions)",
-      "コメント / 通知",
-      "ブックマーク / お気に入り",
+      "ページ CRUD / 履歴 / 差分",
+      "一覧 / portal (フォルダ表示)",
+      "コメント / メンション",
+      "いいね / ブックマーク / ウォッチ / 既読",
       "ゴミ箱 / バックリンク",
-      "ユーザーページ",
-      "ウォッチ / 既読"
+      "添付ファイル (グリッド + モーダル)",
+      "公開範囲 (Public / Restricted / Owner)",
+      "リアルタイム共同編集 + ライブプレゼンス",
+      "編集 UX (下書き / mention / wikilink / ペースト)",
+      "ユーザーページ / 管理画面 / 全文検索"
     ],
     "upcomingLabel": "進行中・予定",
     "upcoming": [
-      "管理画面",
-      "検索 (Elasticsearch)",
-      "ページ共有 (Share)",
-      "エディタ刷新"
+      "通知のリアルタイム push (WebSocket)",
+      "ページ共有 (Share、外部公開 link)",
+      "v2.0 安定版リリース"
     ],
     "ctaGithub": "コードを見る",
     "ctaIssues": "Issues を見る"
@@ -92,7 +93,7 @@
     "items": [
       { "k": "Runtime", "v": "Node.js 24.x" },
       { "k": "Web", "v": "Next.js 16" },
-      { "k": "API", "v": "v1 互換" },
+      { "k": "API", "v": "Hono 4" },
       { "k": "DB", "v": "MongoDB" },
       { "k": "Search", "v": "Elasticsearch (opt.)" },
       { "k": "License", "v": "MIT" }
