@@ -5,8 +5,7 @@
  * Activation: add this plugin to the runner's `crowi.config.json`
  * `plugins` array and set `search.driver: 'elasticsearch'`. Configure
  * via the Mongo Config namespace `plugin:@crowi/plugin-search-elasticsearch:*`
- * (the legacy `ELASTICSEARCH_URI` / `BONSAI_URL` env values are
- * migrated into that namespace by `onInstall`).
+ * — operators set the connection URL exclusively from the admin UI.
  */
 
 import { z } from 'zod/v3';
@@ -135,28 +134,6 @@ const plugin: CrowiPlugin = {
       });
     }
     ctx.log.debug('reconfigured elasticsearch search driver (node=%s, index=%s, analyzer=%s)', state.node || '<unset>', state.baseIndexName, config.analyzer);
-  },
-
-  onInstall: async (ctx) => {
-    // Migrate legacy env-based URL into the plugin namespace so this
-    // plugin is the single source of truth for ES connection info.
-    const env = process.env;
-    const fromEnv = env.ELASTICSEARCH_URI ?? env.BONSAI_URL ?? '';
-    if (!fromEnv) return;
-
-    let current: ElasticsearchConfig;
-    try {
-      current = ctx.config<ElasticsearchConfig>();
-    } catch (err) {
-      ctx.log.warn('config not yet readable during onInstall: %s', (err as Error).message);
-      return;
-    }
-    if (current.url) {
-      // Already configured via DB — don't overwrite.
-      return;
-    }
-    await ctx.setConfig('url', fromEnv);
-    ctx.log.info('migrated legacy ES URL from env into plugin config namespace.');
   },
 };
 

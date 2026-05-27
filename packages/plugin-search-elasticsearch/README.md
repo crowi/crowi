@@ -33,8 +33,7 @@ Open `/admin/plugins` and edit `@crowi/plugin-search-elasticsearch`:
 
 - **`url`** — `https://[user:pass@]host[:port][/indexName]`. The URL
   embeds the cluster password (Bonsai-style), so it is encrypted at
-  rest with `CROWI_ENCRYPTION_KEY`. The legacy `ELASTICSEARCH_URI` /
-  `BONSAI_URL` env values are migrated into this field on first install.
+  rest with `CROWI_ENCRYPTION_KEY`.
 - **`indexName`** — base index name (default `crowi`). The driver
   reads / writes the `<indexName>-current` alias.
 - **`requestTimeout`** — per-request timeout in ms (default `5000`).

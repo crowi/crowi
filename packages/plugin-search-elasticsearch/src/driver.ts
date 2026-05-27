@@ -349,7 +349,7 @@ function clampLimit(limit: number | undefined): number {
 }
 
 /**
- * `BONSAI_URL` / `ELASTICSEARCH_URI` follow the format
+ * A Bonsai-style URL follows the format
  * `https://{ID}:{PASSWORD}@{HOST}[/{indexName}]`. Returns the node
  * URL for the SDK and the base index name.
  */
