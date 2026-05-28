@@ -405,36 +405,75 @@ export function PageContent({ page }: PageContentProps) {
 
   // Initial scroll. The browser's native anchor jump fires before
   // React commits, so the heading isn't there yet. Watch the document
-  // with a MutationObserver until it appears, then scroll. Bound by a
-  // 5s safety timeout.
+  // with a MutationObserver until it appears, then scroll — and keep
+  // re-scrolling on every subsequent mutation, because later page
+  // content (async-loaded comments / attachments, images resolving
+  // their intrinsic size) reflows the document and pushes the target
+  // heading out of view if we only scrolled once. The observer stops
+  // as soon as the user interacts with the page (so we don't fight
+  // their own scroll) and otherwise self-disarms after 5s.
   useEffect(() => {
     if (typeof window === 'undefined' || !targetHash) return;
 
+    let observer: MutationObserver | null = null;
+    let settleTimeout: number | null = null;
+    let safetyTimeout: number | null = null;
+    let disposed = false;
+    // Track the heading's absolute Y to skip redundant `scrollIntoView`
+    // calls. `html { scroll-behavior: smooth }` (Tailwind's
+    // `scroll-smooth`) silently converts every scroll request into a
+    // smooth animation, and re-issuing on every mutation cancels the
+    // in-flight animation and restarts it from 0 — leaving the
+    // viewport pinned near the top on pages with chatty mutation
+    // streams. Only re-issue when the target *actually* moved.
+    let lastTargetTop = Number.NaN;
+
     const tryScroll = () => {
+      if (disposed) return false;
       const target = document.getElementById(targetHash);
       if (!target) return false;
+      const top = Math.round(target.getBoundingClientRect().top + window.scrollY);
+      if (top === lastTargetTop) return true;
+      lastTargetTop = top;
       target.scrollIntoView({ behavior: 'auto', block: 'start' });
       return true;
     };
 
-    if (tryScroll()) return;
-
-    let observer: MutationObserver | null = new MutationObserver(() => {
-      if (tryScroll()) {
-        observer?.disconnect();
-        observer = null;
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    const timeoutId = window.setTimeout(() => {
+    const stop = () => {
+      disposed = true;
       observer?.disconnect();
       observer = null;
-    }, 5000);
-
-    return () => {
-      observer?.disconnect();
-      window.clearTimeout(timeoutId);
+      if (settleTimeout !== null) window.clearTimeout(settleTimeout);
+      settleTimeout = null;
+      if (safetyTimeout !== null) window.clearTimeout(safetyTimeout);
+      safetyTimeout = null;
     };
+
+    // Refresh the settle timer on every mutation. 500ms of quiet ⇒ the
+    // page has stopped reflowing and we no longer need to track it.
+    // We intentionally do NOT listen for wheel / touch / keydown — the
+    // browser already cancels an in-flight smooth scroll when the user
+    // scrolls, and external listeners (a) misfire on Trackpad inertia
+    // events that fire as part of the click itself, killing our scroll
+    // before it ever starts, and (b) add no behaviour the browser
+    // doesn't already provide for free.
+    const scheduleSettle = () => {
+      if (settleTimeout !== null) window.clearTimeout(settleTimeout);
+      settleTimeout = window.setTimeout(stop, 500);
+    };
+
+    tryScroll();
+    scheduleSettle();
+
+    observer = new MutationObserver(() => {
+      tryScroll();
+      scheduleSettle();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    safetyTimeout = window.setTimeout(stop, 5000);
+
+    return stop;
   }, [body, targetHash]);
 
   if (!body) {

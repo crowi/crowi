@@ -12,6 +12,9 @@ import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 import { useUnreadCount, useNotifications, useMarkAllAsRead, useOpenNotification } from '@/lib/use-notifications';
 import { formatRelativeTime, buildNotificationMessage, isUnopenedNotification } from '@/lib/notification-format';
+import { resolveNotificationHref } from '@/lib/notification-href';
+import { scrollToSectionWhenReady, SCROLL_TARGETS } from '@/lib/scroll-to-section';
+import { NotificationActionEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
 interface NotificationRowProps {
@@ -78,7 +81,20 @@ export function NotificationBell() {
       // the user is not blocked by a transient error.
     }
     setOpen(false);
-    router.push(notification.target.path);
+    // `scroll: false` so Next.js doesn't jump-to-top while the target
+    // heading is still being rendered; page-content's hash-watching
+    // MutationObserver does the in-page scroll once the AST lands.
+    router.push(resolveNotificationHref(notification), { scroll: false });
+    // page-content's hash-watch effect only re-runs when the URL hash
+    // actually changes — same-pathname/same-hash navigations (e.g.
+    // re-clicking the same notification, or opening a comment
+    // notification on the page already in view) wouldn't trigger it.
+    // Drive the scroll manually for COMMENT actions so those cases
+    // still land on the comments section. Idempotent with the
+    // page-content path for cross-page navigations.
+    if (notification.action === NotificationActionEnum.COMMENT) {
+      scrollToSectionWhenReady(SCROLL_TARGETS.COMMENTS);
+    }
   };
 
   const handleMarkAllAsRead = () => {

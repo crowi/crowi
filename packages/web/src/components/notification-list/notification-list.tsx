@@ -8,6 +8,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useMarkAllAsRead, useNotificationsInfinite, useOpenNotification, useUnreadCount } from '@/lib/use-notifications';
+import { resolveNotificationHref } from '@/lib/notification-href';
+import { scrollToSectionWhenReady, SCROLL_TARGETS } from '@/lib/scroll-to-section';
+import { NotificationActionEnum } from '@crowi/api-contract';
 import { usePageTitle } from '@/lib/use-page-title';
 import { NotificationItem } from './notification-item';
 import { m } from '@paraglide/messages.js';
@@ -41,7 +44,16 @@ export function NotificationList() {
       // Even if marking as opened failed, still navigate to the target page so
       // the user is not blocked by a transient error (parity with bell dropdown).
     }
-    router.push(notification.target.path);
+    // `scroll: false` so Next.js doesn't jump-to-top while the target
+    // heading is still being rendered; page-content's hash-watching
+    // MutationObserver does the in-page scroll once the AST lands.
+    router.push(resolveNotificationHref(notification), { scroll: false });
+    // Same caveat as notification-bell: hash-watch only re-runs on
+    // an actual hashchange; drive the scroll manually for COMMENT
+    // actions so same-pathname/same-hash clicks still land properly.
+    if (notification.action === NotificationActionEnum.COMMENT) {
+      scrollToSectionWhenReady(SCROLL_TARGETS.COMMENTS);
+    }
   };
 
   const handleMarkAllAsRead = () => {
