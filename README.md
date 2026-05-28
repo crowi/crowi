@@ -113,7 +113,6 @@ pnpm dev:site      # crowi.wiki LP + docs (port 4303)
 | `PASSWORD_SEED` | Legacy password hashing seed (still used for fallback verification) |
 | `CLIENT_URL` | CORS allowlist origin in production (defaults allow localhost in dev) |
 | `CROWI_ENCRYPTION_KEY` | Base64-encoded 32-byte AES-256 key for sensitive Config encryption. Generate via `openssl rand -base64 32` or `pnpm --filter @crowi/api crypto:gen-key`. Strongly recommended to set; missing key falls back to plaintext (legacy behaviour) with a startup warning. |
-| `ELASTICSEARCH_URI` | Optional search backend (paired with `@crowi/plugin-search-elasticsearch`) |
 | `PORT` | API server port (default `4301`) |
 | `NODE_ENV` | `production` or `development` |
 

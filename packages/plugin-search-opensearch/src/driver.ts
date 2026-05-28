@@ -1,14 +1,23 @@
 /**
- * Elasticsearch 9 driver implementing the `SearchDriver` contract.
- * Owns the Client, the `${indexName}-current` alias (legacy ops
- * compat), single-doc index / remove, query against the alias, and
- * rebuild-from-scratch in 2k-doc bulk batches with bookmark counts
- * pre-fetched in one aggregate. Document field shape (path / body /
- * username / grant / granted_users / *_count / *_at) matches the
- * legacy ES7 indexer for reindex-free migration.
+ * OpenSearch driver implementing the `SearchDriver` contract. Owns
+ * the Client, the `${indexName}-current` alias (legacy ops compat),
+ * single-doc index / remove, query against the alias, and rebuild-
+ * from-scratch in 2k-doc bulk batches with bookmark counts pre-fetched
+ * in one aggregate. Document field shape (path / body / username /
+ * grant / granted_users / *_count / *_at) matches the ES plugin's
+ * shape so a cluster migration is a re-point + rebuild rather than a
+ * mapping rewrite.
+ *
+ * SDK note: `@opensearch-project/opensearch` 3.x returns
+ * `{ body, statusCode, ... }` wrappers around every API response (the
+ * shape inherited from the old `elasticsearch-js` 7.x line). The
+ * Elasticsearch 9 client we use for `@crowi/plugin-search-elasticsearch`
+ * collapsed those wrappers — so every call site here unwraps `body`
+ * explicitly. Bulk requests likewise take `{ body: operations }`, not
+ * the ES 9 `{ operations }` keyword.
  */
 
-import { Client } from '@elastic/elasticsearch';
+import { Client } from '@opensearch-project/opensearch';
 
 type ClientOptions = NonNullable<ConstructorParameters<typeof Client>[0]>;
 import type { SearchDriver, SearchHits, SearchQuery, SearchableDoc, PluginLogger } from '@crowi/plugin-api';
@@ -20,14 +29,14 @@ import sudachiOverlay from './mappings/sudachi.json';
 
 export type Analyzer = 'default' | 'kuromoji' | 'sudachi';
 
-export interface ElasticsearchDriverConfig {
+export interface OpenSearchDriverConfig {
   url: string;
   indexName: string;
   requestTimeout: number;
   analyzer: Analyzer;
 }
 
-export interface ElasticsearchDriverDeps {
+export interface OpenSearchDriverDeps {
   log?: PluginLogger;
   /**
    * Iterate every page in the Mongo Page collection in cursor-style.
@@ -66,10 +75,10 @@ export interface PageStreamDoc {
   updatedAt?: Date;
 }
 
-export interface ElasticsearchDriver extends SearchDriver {
+export interface OpenSearchDriver extends SearchDriver {
   /** Currently-targeted alias name (`<indexName>-current`). Exposed for tests / admin UI. */
   readonly aliasName: string;
-  /** ES node URI parsed out of `config.url`. */
+  /** OpenSearch node URI parsed out of `config.url`. */
   readonly node: string;
   /** Base index name (without timestamp / `-current` suffix). */
   readonly baseIndexName: string;
@@ -78,7 +87,7 @@ export interface ElasticsearchDriver extends SearchDriver {
 }
 
 /**
- * Mutable driver state. `createElasticsearchDriver` receives a ref to
+ * Mutable driver state. `createOpenSearchDriver` receives a ref to
  * this; each driver method snapshots the fields it needs *once at the
  * top* of the call, so a concurrent `reconfigure` cannot swap the
  * client / index name mid-operation. `reconfigure` mutates the fields
@@ -87,10 +96,10 @@ export interface ElasticsearchDriver extends SearchDriver {
  * throw a `Search not configured` error rather than touching a stale
  * client.
  */
-export interface ESDriverState {
+export interface OSDriverState {
   /** `null` when `url` is empty (driver configured-but-disabled). */
   client: Client | null;
-  /** ES node URI parsed out of `config.url`; empty string when `url` is empty. */
+  /** OpenSearch node URI parsed out of `config.url`; empty string when `url` is empty. */
   node: string;
   /** Base index name (without timestamp / `-current` suffix). */
   baseIndexName: string;
@@ -101,12 +110,12 @@ export interface ESDriverState {
 }
 
 /**
- * Build a fresh {@link ESDriverState} from a config. An empty `url`
+ * Build a fresh {@link OSDriverState} from a config. An empty `url`
  * yields a disabled state (`client: null`) instead of throwing — the
  * driver stays registered but every method rejects with a
  * `Search not configured` error.
  */
-export function applyConfig(config: ElasticsearchDriverConfig): ESDriverState {
+export function applyConfig(config: OpenSearchDriverConfig): OSDriverState {
   if (!config.url) {
     return {
       client: null,
@@ -138,9 +147,9 @@ export function applyConfig(config: ElasticsearchDriverConfig): ESDriverState {
  * (fire-and-forget) once the swap is done — inflight operations have
  * already snapshotted the old client and will run to completion.
  */
-export function applyConfigInPlace(target: ESDriverState, config: ElasticsearchDriverConfig): { oldClient: Client | null } {
+export function applyConfigInPlace(target: OSDriverState, config: OpenSearchDriverConfig): { oldClient: Client | null } {
   const oldClient = target.client;
-  // Assign over the freshly-built state so a new ESDriverState field
+  // Assign over the freshly-built state so a new OSDriverState field
   // propagates through reconfigure automatically — no manual field
   // list here to fall out of sync with applyConfig.
   Object.assign(target, applyConfig(config));
@@ -151,12 +160,12 @@ export function applyConfigInPlace(target: ESDriverState, config: ElasticsearchD
 const USER_COUNT_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Build the search driver around a {@link ESDriverState} ref. Methods
+ * Build the search driver around an {@link OSDriverState} ref. Methods
  * snapshot `state` *once at the top* — a `reconfigure` running
  * concurrently with an inflight call cannot swap the client mid-call;
  * the next call sees the new client / index name.
  */
-export function createElasticsearchDriver(state: ESDriverState, deps: ElasticsearchDriverDeps = {}): ElasticsearchDriver {
+export function createOpenSearchDriver(state: OSDriverState, deps: OpenSearchDriverDeps = {}): OpenSearchDriver {
   const log = deps.log;
 
   // Cached user count: refreshed on miss, every USER_COUNT_TTL_MS.
@@ -175,7 +184,7 @@ export function createElasticsearchDriver(state: ESDriverState, deps: Elasticsea
     return value;
   };
 
-  const driver: ElasticsearchDriver = {
+  const driver: OpenSearchDriver = {
     // Getters off the state ref: `reconfigure` makes these mutable, so
     // they must always reflect the *current* state, not a boot-time
     // literal. Tests read `driver.client` to install fakes — since the
@@ -200,7 +209,7 @@ export function createElasticsearchDriver(state: ESDriverState, deps: Elasticsea
       await client.index({
         index: aliasName,
         id: doc.id,
-        document: source as unknown as Record<string, unknown>,
+        body: source as unknown as Record<string, unknown>,
       });
     },
 
@@ -209,9 +218,9 @@ export function createElasticsearchDriver(state: ESDriverState, deps: Elasticsea
       try {
         await client.delete({ index: aliasName, id });
       } catch (err) {
-        // Idempotent: a missing doc is fine. ES9 throws a
-        // `ResponseError` with statusCode 404 when the id doesn't
-        // exist; swallow only that case.
+        // Idempotent: a missing doc is fine. The OpenSearch client
+        // throws a `ResponseError` with statusCode 404 when the id
+        // doesn't exist; swallow only that case.
         if (isNotFoundError(err)) return;
         throw err;
       }
@@ -243,18 +252,19 @@ export function createElasticsearchDriver(state: ESDriverState, deps: Elasticsea
         size: limit,
       });
 
-      // ES9 client narrows SearchRequest types (esp. `highlight.fields`)
-      // beyond what `buildSearchBody` returns; the runtime shape is correct,
-      // so cast through `unknown` to the SearchRequest shape.
+      // OpenSearch 3.x SDK takes the request body under the `body` key
+      // (unlike ES 9 which inlines the body fields). The SDK's TS types
+      // for `body` are very loose, so cast through `unknown`.
       const response = await client.search({
         index: aliasName,
-        ...body,
+        body: body as unknown as Record<string, unknown>,
       } as unknown as Parameters<Client['search']>[0]);
 
-      const totalRaw = response.hits?.total;
+      const payload = (response.body ?? {}) as unknown as OsSearchResponseBody;
+      const totalRaw = payload.hits?.total;
       const total = typeof totalRaw === 'number' ? totalRaw : (totalRaw?.value ?? 0);
 
-      const rawHits = (response.hits?.hits ?? []) as unknown as EsHit[];
+      const rawHits = (payload.hits?.hits ?? []) as unknown as OsHit[];
       const hits = rawHits.map((h) => {
         const source = (h._source ?? {}) as { path?: string };
         const snippet = pickSnippet(h.highlight);
@@ -275,14 +285,14 @@ export function createElasticsearchDriver(state: ESDriverState, deps: Elasticsea
       // it runs to completion against the cluster it started on.
       const { client, aliasName, baseIndexName, analyzer } = snapshot(state);
       if (!deps.iteratePages || !deps.countAllPages || !deps.getBookmarkCountsBulk) {
-        throw new Error('@crowi/plugin-search-elasticsearch: rebuild() requires iteratePages / countAllPages / getBookmarkCountsBulk deps.');
+        throw new Error('@crowi/plugin-search-opensearch: rebuild() requires iteratePages / countAllPages / getBookmarkCountsBulk deps.');
       }
 
       const newIndexName = createTimestampedIndexName(baseIndexName);
       log?.info('rebuild: creating index %s', newIndexName);
 
       const mapping = loadMapping(analyzer);
-      await client.indices.create({ index: newIndexName, ...mapping });
+      await client.indices.create({ index: newIndexName, body: mapping as unknown as Record<string, unknown> });
 
       log?.info('rebuild: prefetching bookmark counts');
       const bookmarkCounts = await deps.getBookmarkCountsBulk();
@@ -311,9 +321,9 @@ export function createElasticsearchDriver(state: ESDriverState, deps: Elasticsea
 /**
  * Thrown by every driver method when `url` is empty (the driver is
  * registered-but-disabled). Surfaces to the search route as a clear
- * "configure Elasticsearch" error rather than a `TypeError` on `null`.
+ * "configure OpenSearch" error rather than a `TypeError` on `null`.
  */
-const SEARCH_NOT_CONFIGURED = '@crowi/plugin-search-elasticsearch: Search not configured (Elasticsearch url is empty).';
+const SEARCH_NOT_CONFIGURED = '@crowi/plugin-search-opensearch: Search not configured (OpenSearch url is empty).';
 
 function requireClient(client: Client | null): Client {
   if (!client) {
@@ -327,7 +337,7 @@ function requireClient(client: Client | null): Client {
  * `state` exactly once per call is what makes a concurrent
  * `reconfigure` race-safe.
  */
-function snapshot(state: ESDriverState): { client: Client; aliasName: string; baseIndexName: string; analyzer: Analyzer } {
+function snapshot(state: OSDriverState): { client: Client; aliasName: string; baseIndexName: string; analyzer: Analyzer } {
   return {
     client: requireClient(state.client),
     aliasName: state.aliasName,
@@ -355,13 +365,13 @@ function clampLimit(limit: number | undefined): number {
  */
 export function parseUri(uri: string): { node: string; indexName: string } {
   if (!uri.startsWith('http')) {
-    throw new Error('URL for Elasticsearch should starts with http/https');
+    throw new Error('URL for OpenSearch should starts with http/https');
   }
 
-  const esUrl = new URL(uri);
-  const auth = esUrl.username && esUrl.password ? `${esUrl.username}:${esUrl.password}@` : '';
-  const node = `${esUrl.protocol}//${auth}${esUrl.host}`;
-  const indexName = esUrl.pathname && esUrl.pathname !== '/' ? esUrl.pathname.substring(1) : 'crowi';
+  const osUrl = new URL(uri);
+  const auth = osUrl.username && osUrl.password ? `${osUrl.username}:${osUrl.password}@` : '';
+  const node = `${osUrl.protocol}//${auth}${osUrl.host}`;
+  const indexName = osUrl.pathname && osUrl.pathname !== '/' ? osUrl.pathname.substring(1) : 'crowi';
 
   return { node, indexName };
 }
@@ -392,7 +402,7 @@ type Mapping = Record<string, unknown>;
  * the base; `kuromoji.json` / `sudachi.json` are overlays that add
  * the `*.ja` analyzer fields (and sudachi additionally registers the
  * `sudachi_*` analyzer / tokenizer in `settings.analysis`). The merge
- * is a small deep-merge of plain JSON objects — adequate for ES
+ * is a small deep-merge of plain JSON objects — adequate for the
  * mapping shapes which are nested-object-only.
  */
 function loadMapping(analyzer: Analyzer): Mapping {
@@ -428,8 +438,8 @@ interface BulkOp {
 interface PageRebuildContext {
   client: Client;
   indexTarget: string;
-  iteratePages: NonNullable<ElasticsearchDriverDeps['iteratePages']>;
-  countAllPages: NonNullable<ElasticsearchDriverDeps['countAllPages']>;
+  iteratePages: NonNullable<OpenSearchDriverDeps['iteratePages']>;
+  countAllPages: NonNullable<OpenSearchDriverDeps['countAllPages']>;
   bookmarkCounts: Map<string, number>;
   log?: PluginLogger;
 }
@@ -443,12 +453,15 @@ async function indexAllPages(ctx: PageRebuildContext): Promise<void> {
   const flush = async (): Promise<void> => {
     if (operations.length === 0) return;
     try {
+      // OpenSearch 3.x SDK: bulk operations go under `body`, not
+      // `operations`. The response is `{ body: { errors, took, items, ... } }`.
       const response = await ctx.client.bulk({
-        operations,
+        body: operations,
         timeout: '1d',
       });
-      if (response.errors) {
-        ctx.log?.warn('rebuild: bulk had item-level errors (took=%dms)', response.took);
+      const payload = (response.body ?? {}) as { errors?: boolean; took?: number };
+      if (payload.errors) {
+        ctx.log?.warn('rebuild: bulk had item-level errors (took=%dms)', payload.took);
       }
     } catch (err) {
       ctx.log?.error('rebuild: bulk failed: %o', err);
@@ -499,18 +512,20 @@ async function switchAlias(client: Client, aliasName: string, newIndex: string):
     actions.push({ remove: { index: aliasInfo.index, alias: aliasName } });
   }
 
-  await client.indices.updateAliases({ actions });
+  await client.indices.updateAliases({ body: { actions } });
 }
 
 async function getCurrentAliasInfo(client: Client, aliasName: string): Promise<{ alias: string; index: string } | null> {
   try {
     const exists = await client.indices.existsAlias({ name: aliasName });
-    if (!exists) return null;
+    // SDK 3.x: existsAlias returns `{ body: boolean, statusCode, ... }`.
+    // Treat anything that doesn't unwrap to `true` as "not present".
+    if (!exists.body) return null;
   } catch {
     return null;
   }
   const aliases = await client.cat.aliases({ name: aliasName, format: 'json' });
-  const list = aliases as unknown as Array<{ alias: string; index: string }>;
+  const list = (aliases.body ?? []) as unknown as Array<{ alias: string; index: string }>;
   return list.length > 0 ? { alias: list[0].alias, index: list[0].index } : null;
 }
 
@@ -518,7 +533,7 @@ async function deleteOldIndices(client: Client, baseIndexName: string, keepIndex
   // Server-side prefix filter so we don't pull every index in the
   // cluster — a Crowi cluster can be shared with other apps.
   const indices = await client.cat.indices({ index: `${baseIndexName}-*`, format: 'json' });
-  const list = indices as unknown as Array<{ index: string }>;
+  const list = (indices.body ?? []) as unknown as Array<{ index: string }>;
   // Belt-and-braces: also enforce the timestamp format on the client
   // side. Anything matching `<base>-*` but lacking the 17-digit
   // timestamp + 4-char random suffix is left alone (could be a
@@ -539,9 +554,12 @@ function isNotFoundError(err: unknown): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Single source of truth for the ES doc field names. `query-builder.ts`
- * uses these too where applicable; bringing them onto one constant
- * makes a future rename / extension a single-file change.
+ * Single source of truth for the search-doc field names. We keep the
+ * `ES_FIELDS` identifier verbatim from the ES plugin: these field
+ * names go on the wire to OpenSearch but they are also identical to
+ * what the ES plugin writes, by design — a re-point + rebuild between
+ * the two backends needs no mapping rewrite. Renaming the constant
+ * would obscure that invariant.
  */
 export const ES_FIELDS = {
   path: 'path',
@@ -556,7 +574,7 @@ export const ES_FIELDS = {
   updatedAt: 'updated_at',
 } as const;
 
-interface EsPageSource {
+interface OsPageSource {
   path: string;
   body: string;
   username?: string;
@@ -570,14 +588,14 @@ interface EsPageSource {
 }
 
 /**
- * SearchableDoc -> ES page source. Plugin-API only mandates id / path
- * / body; everything else we look up in `meta.*` for the keys the
- * legacy indexer produced. Unknown / missing keys are simply omitted
- * (mapping is non-strict, so ES tolerates that).
+ * SearchableDoc -> OpenSearch page source. Plugin-API only mandates
+ * id / path / body; everything else we look up in `meta.*` for the
+ * keys the legacy indexer produced. Unknown / missing keys are simply
+ * omitted (mapping is non-strict, so OpenSearch tolerates that).
  */
-export function docToEsSource(doc: SearchableDoc): EsPageSource {
+export function docToEsSource(doc: SearchableDoc): OsPageSource {
   const meta = (doc.meta ?? {}) as Record<string, unknown>;
-  const source: EsPageSource = {
+  const source: OsPageSource = {
     path: doc.path,
     body: doc.body,
   };
@@ -605,7 +623,7 @@ export function docToEsSource(doc: SearchableDoc): EsPageSource {
  * and route through the canonical `docToEsSource`. Centralises
  * the meta key vocabulary so we have one place to evolve.
  */
-function pageStreamDocToEsSource(doc: PageStreamDoc, bookmarkCount: number): EsPageSource {
+function pageStreamDocToEsSource(doc: PageStreamDoc, bookmarkCount: number): OsPageSource {
   const grantedUsers = (doc.grantedUsers ?? []).map((u) => (typeof u === 'string' ? u : u.toString()));
   const searchable: SearchableDoc = {
     id: typeof doc._id === 'string' ? doc._id : doc._id.toString(),
@@ -625,18 +643,25 @@ function pageStreamDocToEsSource(doc: PageStreamDoc, bookmarkCount: number): EsP
   return docToEsSource(searchable);
 }
 
-interface EsHit {
+interface OsHit {
   _id: unknown;
   _score?: number;
   _source?: unknown;
   highlight?: Record<string, string[]>;
 }
 
+interface OsSearchResponseBody {
+  hits?: {
+    total?: number | { value: number };
+    hits?: OsHit[];
+  };
+}
+
 function pickSnippet(highlight: Record<string, string[]> | undefined): string | undefined {
   if (!highlight) return undefined;
   // Prefer Japanese body, then English body, then path. Pick the first
-  // fragment for each — ES sorts within a field by score so the first
-  // is the most relevant.
+  // fragment for each — OpenSearch sorts within a field by score so
+  // the first is the most relevant.
   for (const field of ['body.ja', 'body', 'path.ja', 'body.en', 'path.en']) {
     const fragments = highlight[field];
     if (fragments && fragments.length > 0) return fragments[0];

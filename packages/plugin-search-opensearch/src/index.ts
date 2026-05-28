@@ -1,10 +1,10 @@
 /**
- * @crowi/plugin-search-elasticsearch — search driver registering
- * `'elasticsearch'` against the SearchRegistry.
+ * @crowi/plugin-search-opensearch — search driver registering
+ * `'opensearch'` against the SearchRegistry.
  *
  * Activation: add this plugin to the runner's `crowi.config.json`
- * `plugins` array and set `search.driver: 'elasticsearch'`. Configure
- * via the Mongo Config namespace `plugin:@crowi/plugin-search-elasticsearch:*`
+ * `plugins` array and set `search.driver: 'opensearch'`. Configure
+ * via the Mongo Config namespace `plugin:@crowi/plugin-search-opensearch:*`
  * — operators set the connection URL exclusively from the admin UI.
  */
 
@@ -13,20 +13,20 @@ import type { CrowiPlugin, PluginContext } from '@crowi/plugin-api';
 import {
   applyConfig,
   applyConfigInPlace,
-  createElasticsearchDriver,
+  createOpenSearchDriver,
   type Analyzer,
-  type ElasticsearchDriver,
-  type ElasticsearchDriverConfig,
-  type ESDriverState,
+  type OpenSearchDriver,
+  type OpenSearchDriverConfig,
+  type OSDriverState,
   type PageStreamDoc,
 } from './driver';
 
-export { applyConfig, applyConfigInPlace, createElasticsearchDriver } from './driver';
-export type { ElasticsearchDriver, ElasticsearchDriverConfig, ElasticsearchDriverDeps, ESDriverState, PageStreamDoc, Analyzer } from './driver';
+export { applyConfig, applyConfigInPlace, createOpenSearchDriver } from './driver';
+export type { OpenSearchDriver, OpenSearchDriverConfig, OpenSearchDriverDeps, OSDriverState, PageStreamDoc, Analyzer } from './driver';
 export { parseQuery } from './parse-query';
 export { buildSearchBody } from './query-builder';
 
-export const ElasticsearchConfigSchema = z
+export const OpenSearchConfigSchema = z
   .object({
     /**
      * `https://[user:pass@]host[:port][/indexName]`. Empty string keeps
@@ -37,7 +37,7 @@ export const ElasticsearchConfigSchema = z
      * (Bonsai-style `https://USER:PASS@HOST/INDEX`); we don't want
      * Mongo to keep it in plaintext.
      */
-    url: z.string().describe('@sensitive Elasticsearch endpoint (https://USER:PASS@HOST/INDEX format).').default(''),
+    url: z.string().describe('@sensitive OpenSearch endpoint (https://USER:PASS@HOST/INDEX format).').default(''),
     /**
      * Base index name. Used as the `indexName` if not provided in the
      * URL path. The runtime alias `${indexName}-current` is what the
@@ -47,12 +47,14 @@ export const ElasticsearchConfigSchema = z
     requestTimeout: z.number().int().positive().default(5000),
     /**
      * Mapping flavour. Cluster requirements:
-     *   - `default`: no extra ES plugin.
-     *   - `kuromoji`: `analysis-kuromoji` plugin (Elastic-distributed).
-     *     The dev image (`elasticsearch.Dockerfile`) preinstalls it.
-     *   - `sudachi`: third-party `analysis-sudachi` plugin + dictionary.
-     *     NOT bundled in the dev image; operators must build a derived
-     *     image. Picking this without the plugin makes `rebuild()` fail.
+     *   - `default`: no extra OpenSearch plugin.
+     *   - `kuromoji`: `analysis-kuromoji` plugin (Apache 2.0, a
+     *     separate distribution from OpenSearch core — install via
+     *     `bin/opensearch-plugin install analysis-kuromoji`).
+     *   - `sudachi`: `analysis-sudachi` (OpenSearch-compatible fork
+     *     from WorksApplications) + dictionary; operators must build
+     *     a derived image. Picking this without the plugin makes
+     *     `rebuild()` fail.
      */
     analyzer: z
       .enum(['default', 'kuromoji', 'sudachi'])
@@ -61,9 +63,9 @@ export const ElasticsearchConfigSchema = z
   })
   .strict();
 
-export type ElasticsearchConfig = z.infer<typeof ElasticsearchConfigSchema>;
+export type OpenSearchConfig = z.infer<typeof OpenSearchConfigSchema>;
 
-const PLUGIN_NAME = '@crowi/plugin-search-elasticsearch';
+const PLUGIN_NAME = '@crowi/plugin-search-opensearch';
 
 /**
  * Module-scope driver state ref. `registerSearch` initialises it from
@@ -71,12 +73,12 @@ const PLUGIN_NAME = '@crowi/plugin-search-elasticsearch';
  * methods snapshot from it on every call; `reconfigure` mutates its
  * fields in place when admin saves new connection / index / analyzer /
  * requestTimeout values. The single-instance assumption is fine — the
- * plugin registers exactly one `'elasticsearch'` driver, owned by this
+ * plugin registers exactly one `'opensearch'` driver, owned by this
  * module. `null` before `registerSearch` runs.
  */
-let state: ESDriverState | null = null;
+let state: OSDriverState | null = null;
 
-function toDriverConfig(config: ElasticsearchConfig): ElasticsearchDriverConfig {
+function toDriverConfig(config: OpenSearchConfig): OpenSearchDriverConfig {
   return {
     url: config.url,
     indexName: config.indexName,
@@ -88,18 +90,18 @@ function toDriverConfig(config: ElasticsearchConfig): ElasticsearchDriverConfig 
 const plugin: CrowiPlugin = {
   name: PLUGIN_NAME,
   version: '0.1.0-dev',
-  configSchema: ElasticsearchConfigSchema,
+  configSchema: OpenSearchConfigSchema,
   adminPlacement: {
-    label: 'Elasticsearch',
+    label: 'OpenSearch',
     icon: 'search',
     // section omitted: derived from registerSearch -> 'shared' fallback
   },
 
   registerSearch: (registry, ctx) => {
-    const config = ctx.config<ElasticsearchConfig>();
+    const config = ctx.config<OpenSearchConfig>();
 
     if (!config.url) {
-      ctx.log.warn('url is empty; the elasticsearch search driver is disabled until configured.');
+      ctx.log.warn('url is empty; the opensearch search driver is disabled until configured.');
       // NOTE: empty-url -> configured-url is restart-only. The driver
       // is not registered here, so `reconfigure` has nothing to mutate
       // back into; the operator restarts after first configuring a url.
@@ -108,32 +110,32 @@ const plugin: CrowiPlugin = {
 
     state = applyConfig(toDriverConfig(config));
     const driver = buildDriver(state, ctx);
-    registry.register('elasticsearch', driver);
-    ctx.log.debug('registered elasticsearch search driver (node=%s, indexName=%s, analyzer=%s)', driver.node, driver.baseIndexName, config.analyzer);
+    registry.register('opensearch', driver);
+    ctx.log.debug('registered opensearch search driver (node=%s, indexName=%s, analyzer=%s)', driver.node, driver.baseIndexName, config.analyzer);
   },
 
   reconfigure: (ctx) => {
     if (!state) {
       // registerSearch skipped (boot-time url was empty). Configuring a
       // url now needs a restart — see the registerSearch note above.
-      ctx.log.warn('reconfigure: driver was not registered at boot (url was empty); a server restart is required to enable Elasticsearch search.');
+      ctx.log.warn('reconfigure: driver was not registered at boot (url was empty); a server restart is required to enable OpenSearch search.');
       return;
     }
-    const config = ctx.config<ElasticsearchConfig>();
+    const config = ctx.config<OpenSearchConfig>();
     if (!config.url) {
       ctx.log.warn('reconfigure: url cleared; search requests will fail with a "Search not configured" error until a url is set.');
     }
     const { oldClient } = applyConfigInPlace(state, toDriverConfig(config));
-    // Fire-and-forget: the ES Client keeps an HTTP keep-alive pool, so
-    // the old one must be closed — but awaiting it would block the
-    // admin save response. Inflight requests already snapshotted the
-    // old client and drain to completion regardless.
+    // Fire-and-forget: the OpenSearch Client keeps an HTTP keep-alive
+    // pool, so the old one must be closed — but awaiting it would block
+    // the admin save response. Inflight requests already snapshotted
+    // the old client and drain to completion regardless.
     if (oldClient) {
       void oldClient.close().catch((err: unknown) => {
-        ctx.log.warn('reconfigure: closing the previous Elasticsearch client failed: %o', err);
+        ctx.log.warn('reconfigure: closing the previous OpenSearch client failed: %o', err);
       });
     }
-    ctx.log.debug('reconfigured elasticsearch search driver (node=%s, index=%s, analyzer=%s)', state.node || '<unset>', state.baseIndexName, config.analyzer);
+    ctx.log.debug('reconfigured opensearch search driver (node=%s, index=%s, analyzer=%s)', state.node || '<unset>', state.baseIndexName, config.analyzer);
   },
 };
 
@@ -163,12 +165,12 @@ interface UserModelLike {
   countDocuments: (q?: unknown) => { exec: () => Promise<number> };
 }
 
-function buildDriver(driverState: ESDriverState, ctx: PluginContext): ElasticsearchDriver {
+function buildDriver(driverState: OSDriverState, ctx: PluginContext): OpenSearchDriver {
   const Page = ctx.model('Page') as PageModelLike;
   const Bookmark = ctx.model('Bookmark') as BookmarkModelLike;
   const User = ctx.model('User') as UserModelLike;
 
-  return createElasticsearchDriver(driverState, {
+  return createOpenSearchDriver(driverState, {
     log: ctx.log,
     iteratePages: async (handler) => {
       const cursor = Page.getStreamOfFindAll({ publicOnly: false });
@@ -176,9 +178,10 @@ function buildDriver(driverState: ESDriverState, ctx: PluginContext): Elasticsea
     },
     countAllPages: () => Page.allPageCount(),
     getBookmarkCountsBulk: async () => {
-      // One Mongo aggregate -> Map<pageId, count>. Replaces the
-      // legacy per-doc `Bookmark.countByPageId` lookup that was
-      // O(N) round-trips during a full rebuild.
+      // One Mongo aggregate -> Map<pageId, count>. Same shape as the
+      // ES plugin uses; replaces the legacy per-doc
+      // `Bookmark.countByPageId` lookup that was O(N) round-trips
+      // during a full rebuild.
       const rows = await Bookmark.aggregate([{ $group: { _id: '$page', n: { $sum: 1 } } }]);
       const map = new Map<string, number>();
       for (const row of rows) {

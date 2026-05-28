@@ -34,7 +34,6 @@ cp .env.example .env
 | `PASSWORD_SEED` | Yes | Legacy password hashing seed (still used for fallback verification) |
 | `CLIENT_URL` | Required in production | CORS allowlist origin. Localhost origins are allowed automatically in development |
 | `CROWI_ENCRYPTION_KEY` | Recommended | Base64-encoded 32-byte master key used to encrypt sensitive Config with AES-256-GCM. Falls back to plaintext when unset. See [Encrypting sensitive config](./encryption) |
-| `ELASTICSEARCH_URI` | Optional | Full-text search backend. Pair it with `@crowi/plugin-search-elasticsearch` |
 | `JWT_ACCESS_TOKEN_TTL_SECONDS` | No (default `3600` = 1 hour) | TTL the api uses when signing JWT access tokens |
 | `JWT_REFRESH_TOKEN_TTL_SECONDS` | No (default `2592000` = 30 days) | TTL the api uses when signing JWT refresh tokens |
 | `SECRET_TOKEN` | No | Session-related secret |
@@ -60,11 +59,10 @@ details.
 
 When running the full stack with `docker compose --profile app`, the
 `api` service reads `.env` as an `env_file`. However, the
-container-network URIs (`MONGO_URI` / `REDIS_URL` / `ELASTICSEARCH_URI` /
-`CLIENT_URL`) are overridden by the `environment` entries in
-`docker-compose.yml`. Secrets such as `CROWI_ENCRYPTION_KEY` and
-`WS_TOKEN_SECRET` are passed through as long as they are present in
-`.env`.
+container-network URIs (`MONGO_URI` / `REDIS_URL` / `CLIENT_URL`) are
+overridden by the `environment` entries in `docker-compose.yml`.
+Secrets such as `CROWI_ENCRYPTION_KEY` and `WS_TOKEN_SECRET` are passed
+through as long as they are present in `.env`.
 
 ## crowi.config.json
 

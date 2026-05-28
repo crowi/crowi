@@ -1,0 +1,22 @@
+{
+  "mappings": {
+    "properties": {
+      "path": {
+        "fields": {
+          "ja": {
+            "type": "text",
+            "analyzer": "kuromoji"
+          }
+        }
+      },
+      "body": {
+        "fields": {
+          "ja": {
+            "type": "text",
+            "analyzer": "kuromoji"
+          }
+        }
+      }
+    }
+  }
+}

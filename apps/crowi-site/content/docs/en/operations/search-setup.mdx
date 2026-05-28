@@ -24,10 +24,9 @@ the index.
 - Which driver is used is specified by `search.driver` in
   `crowi.config.json`.
 - The Elasticsearch driver's connection settings are stored in the Mongo
-  Config namespace `plugin:@crowi/plugin-search-elasticsearch:*`. The
-  legacy `ELASTICSEARCH_URI` / `BONSAI_URL` environment variables are
-  automatically migrated into this namespace the first time the plugin is
-  installed (`onInstall`).
+  Config namespace `plugin:@crowi/plugin-search-elasticsearch:*`.
+  Configure them exclusively from the admin UI plugin settings page —
+  there is no environment-variable fallback.
 
 ## Enabling the plugin
 
@@ -73,10 +72,8 @@ Bonsai, etc.) or a self-operated Elasticsearch cluster.
 
 ## Configuring the connection
 
-Connection settings are configured either from the plugin settings page
-in the admin panel
-(`/admin/plugins/edit?name=@crowi/plugin-search-elasticsearch`) or via the
-initial migration from environment variables.
+Connection settings are configured from the plugin settings page in the
+admin panel (`/admin/plugins/edit?name=@crowi/plugin-search-elasticsearch`).
 
 | Config key | Description |
 | ---------- | ----------- |
@@ -84,18 +81,6 @@ initial migration from environment variables.
 | `indexName` | The base index name (default `crowi`). Used when not specified in the URL path. |
 | `requestTimeout` | Request timeout in milliseconds (default `5000`). |
 | `analyzer` | The mapping flavour. Choose from `default` / `kuromoji` / `sudachi`. |
-
-To configure via environment variable, set the following in the `.env`
-at the repository root.
-
-```bash
-ELASTICSEARCH_URI=http://localhost:9200/crowi
-```
-
-This value is automatically migrated into the `url` key of the plugin
-config namespace the first time the plugin is installed. After migration,
-the plugin config is the single source of truth and can be changed from
-the admin panel.
 
 ## Choosing the analyzer
 
@@ -152,9 +137,9 @@ general, see [Admin panel](./admin).
 ## Troubleshooting
 
 - **Driver disabled because `url` is empty**: The connection settings are
-  not configured. Set them in the plugin config or via
-  `ELASTICSEARCH_URI`. When `url` is empty, `query()` throws an error and
-  `index()` becomes a no-op.
+  not configured. Set `url` from the plugin settings page in the admin
+  panel. When `url` is empty, `query()` throws an error and `index()`
+  becomes a no-op.
 - **`rebuild` fails**: You may have picked `kuromoji` / `sudachi` without
   the matching ES plugin installed on the cluster. `crowi-admin search
   rebuild` prints the ES cluster's response body on failure, so check its

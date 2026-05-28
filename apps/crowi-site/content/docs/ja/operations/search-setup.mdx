@@ -24,8 +24,8 @@ Crowi の全文検索は **検索ドライバ** という差し替え可能な�
   します。
 - Elasticsearch ドライバの接続情報は、Mongo の Config 名前空間
   `plugin:@crowi/plugin-search-elasticsearch:*` に保存されます。
-  レガシーの `ELASTICSEARCH_URI` / `BONSAI_URL` 環境変数は、プラグインの
-  初回インストール時 (`onInstall`) にこの名前空間へ自動移行されます。
+  設定は管理画面のプラグイン設定画面からのみ行います (環境変数からの
+  自動移行は行いません)。
 
 ## プラグインの有効化
 
@@ -71,8 +71,8 @@ Elasticsearch に `analysis-kuromoji` プラグインをプリインストール
 
 ## 接続情報を設定する
 
-接続情報は管理画面のプラグイン設定画面 (`/admin/plugins/edit?name=@crowi/plugin-search-elasticsearch`)、
-もしくは環境変数からの初回移行で設定します。
+接続情報は管理画面のプラグイン設定画面 (`/admin/plugins/edit?name=@crowi/plugin-search-elasticsearch`)
+から設定します。
 
 | 設定キー | 説明 |
 | -------- | ---- |
@@ -80,16 +80,6 @@ Elasticsearch に `analysis-kuromoji` プラグインをプリインストール
 | `indexName` | ベースとなるインデックス名 (デフォルト `crowi`)。URL のパスで指定しない場合に使われます。 |
 | `requestTimeout` | リクエストタイムアウト (ミリ秒、デフォルト `5000`)。 |
 | `analyzer` | マッピングの種類。`default` / `kuromoji` / `sudachi` から選択。 |
-
-環境変数から設定する場合は、リポジトリルートの `.env` に以下を記述します。
-
-```bash
-ELASTICSEARCH_URI=http://localhost:9200/crowi
-```
-
-この値はプラグインの初回インストール時に、プラグイン設定名前空間の
-`url` キーへ自動移行されます。移行後はプラグイン設定が唯一の真実の源と
-なり、管理画面から変更できます。
 
 ## アナライザーの選択
 
@@ -146,8 +136,8 @@ api 再起動で行います。管理画面全般については [管理画面](
 
 ## トラブルシューティング
 
-- **`url` が空でドライバが無効**: 接続情報が未設定です。プラグイン設定
-  または `ELASTICSEARCH_URI` を設定してください。`url` が空のときは
+- **`url` が空でドライバが無効**: 接続情報が未設定です。管理画面の
+  プラグイン設定で `url` を設定してください。`url` が空のときは
   `query()` がエラーを投げ、`index()` は no-op になります。
 - **`rebuild` が失敗する**: `kuromoji` / `sudachi` を選んでいるのに対応
   する ES プラグインがクラスタに入っていない可能性があります。`crowi-admin
