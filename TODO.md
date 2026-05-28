@@ -190,6 +190,9 @@ Crowi 2.0 移行 (Express + Swig → Next.js + Hono)。フェーズ別。
 - [x] **simplify (9-angle review)** — 5 correctness + 3 cleanup + 1 altitude angle で uncommitted 差分をレビュー。新規バグ 0 件 (1:1 コピー由来の既知 advisory は spec out-of-scope で skip、`indices.delete({ index: array })` は SDK の `encodeURIComponent('a,b')==='a%2Cb'` で server-side decode され ES と挙動同一と verify されて REFUTED)。env 削除の取りこぼし (root README / CLAUDE.md / docker-compose / .env.test / api devDeps / changeset) を検出して fix 適用。
 - [x] **検証** — OpenSearch 47 tests + ES regression 44 tests / workspace type-check 31 tasks / lint 0 errors / format clean / build OK。
 - [ ] **advisory (後続)** — (1) ES / OpenSearch の parse-query / query-builder / mappings の共通化 RFC (3 つめの search driver 登場時)、(2) AWS SigV4 認証 follow-up RFC、(3) `@opensearch-project/opensearch` 4.x 追随 (body wrap 仕様変更見込み) の dependency-update PR、(4) `compose.override.yml` の opensearch サービス例を dev infra に統合するか判断 (現在 README で operator 任せ)。
+- [ ] **advisory (後続、merge `35fc866c` simplify 由来 — ES + OpenSearch 両方が対象の robustness)** — どちらも 1:1 コピー由来で両 driver に同居するため共通化 RFC ((1)) と同時に直すのが妥当: (a) **rebuild の bulk item-level error 握り潰し** — `bulk` 応答の `errors:true` を warn ログするだけで rebuild は success 扱い。部分失敗 (例: 半分だけ index 済み) でも「成功」と返るので、`errors` 時は throw して呼び出し側 (`crowi-admin search rebuild`) に失敗を伝えるべき。(b) **alias atomic-swap の順序** — 現状 (1) alias を新 index に張り替え → (2) 旧 index 削除。(2) が crash すると dangling alias が削除予定/済みの index を指し、cleanup 中の concurrent query が stale index に当たりうる。delete を swap 前に寄せるか try/finally で明示。
+
+
 
 ### feature-page-view-attachment-overhaul (page-view まわりの一括改善)
 - [x] **全 8 phase 完了** — page-view メタ情報のリンク化 (Phase 1) / 存在しない `@mention` を非リンク化 (Phase 2) / 削除済み添付ファイル参照に file-not-found 画像を返す (Phase 3) / page header の sticky 化 + レイアウト再編 (Phase 4) / 添付ファイル一覧 UI の刷新 (Phase 5) / 添付ファイル詳細 modal (Phase 6) / 添付ファイル一覧の in-use 分離 (Phase 7) / `/_attachments?pageId=` 全ファイル一覧ページ (Phase 8)。
