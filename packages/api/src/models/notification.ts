@@ -3,7 +3,9 @@ import { Types, Document, Model, Schema, Query, model } from 'mongoose';
 import Debug from 'debug';
 import { subDays } from 'date-fns';
 import type { NotificationPayload } from '@crowi/plugin-api';
+import { NotificationsChangedMessageSchema } from '@crowi/api-contract';
 import ActivityDefine from 'src/util/activityDefine';
+import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/attach';
 import { ActivityDocument } from './activity';
 import { UserDocument } from './user';
 
@@ -146,9 +148,26 @@ export default (crowi: Crowi) => {
     const query = { target, action };
     const parameters = { $pull: { activities: _id } };
 
+    // Capture the set of recipient users BEFORE the update so we can
+    // emit a per-user `update` tick afterwards — once the $pull has
+    // emptied the `activities` array, `removeEmpty()` will delete the
+    // row and we'd lose the userId. The notifications affected by a
+    // single un-comment / un-like can span multiple recipients (one
+    // per watcher), so we dedup with a Set and emit once per user.
+    const affected = await Notification.find(query, { user: 1 }).lean<{ user: Types.ObjectId }[]>();
+
     const result = await Notification.updateMany(query, parameters);
 
     await Notification.removeEmpty();
+
+    const recipientIds = new Set<string>();
+    for (const row of affected) {
+      if (row?.user != null) recipientIds.add(row.user.toString());
+    }
+    for (const userId of recipientIds) {
+      notificationEvent.emit('update', userId);
+    }
+
     return result;
   };
 
@@ -160,7 +179,12 @@ export default (crowi: Crowi) => {
     const query = { user, status: STATUS_UNREAD };
     const parameters = { status: STATUS_UNOPENED };
 
-    return Notification.updateMany(query, parameters);
+    const result = await Notification.updateMany(query, parameters);
+    // Emit even when `modifiedCount === 0` — the realtime invalidation
+    // tick is cheap and a mark-all-as-read with nothing to flip should
+    // still tell any other tab "your notifications view is fresh now".
+    notificationEvent.emit('update', user._id);
+    return result;
   };
 
   notificationSchema.statics.open = async function (user, id) {
@@ -189,12 +213,22 @@ export default (crowi: Crowi) => {
   };
 
   notificationEvent.on('update', (user) => {
-    /*
-    const io = crowi.getIo()
-    if (io) {
-      io.sockets.emit('notification updated', { user })
-    }
-    */
+    // Realtime invalidation fan-out: publish a per-user "changed" tick
+    // on the user's notifications Redis channel so the browser's
+    // `/notifications/<userId>` WebSocket can drop its 30-second
+    // `useUnreadCount` polling loop. Subscribers (this process and
+    // every other api replica) wake any locally-connected sockets;
+    // the browser invalidates `notificationKeys.all` in react-query
+    // and refetches via the existing REST endpoints.
+    //
+    // The `user` argument is whatever the caller emitted —
+    // `Notification.upsertByActivity` and `Notification.read` pass an
+    // ObjectId / UserDocument, depending on the call site — so we
+    // normalise to a string id here before building the channel name.
+    if (!user) return;
+    const userId = userIdOf(user);
+    if (!userId) return;
+    publishNotificationsChange(crowi, userId);
   });
 
   const Notification = model<NotificationDocument, NotificationModel>('Notification', notificationSchema);
@@ -206,6 +240,57 @@ export default (crowi: Crowi) => {
 
   return Notification;
 };
+
+/**
+ * Normalise the `user` argument that `notificationEvent.emit('update', ...)`
+ * receives into a string id. Different call sites historically passed
+ * different shapes — an ObjectId, a UserDocument, or a populated user
+ * subdocument — so we accept whichever and pick the canonical id.
+ * Returns `null` if no usable id can be derived (defensive: never crash
+ * the model on a malformed emit).
+ */
+function userIdOf(user: unknown): string | null {
+  if (!user) return null;
+  if (typeof user === 'string') return user;
+  if (user instanceof Types.ObjectId) return user.toString();
+  if (typeof user === 'object' && '_id' in user) {
+    const id = (user as { _id: unknown })._id;
+    if (typeof id === 'string') return id;
+    if (id instanceof Types.ObjectId) return id.toString();
+  }
+  return null;
+}
+
+/**
+ * Publish a `{type:'changed'}` invalidation tick on the user's
+ * notifications channel. No-op when `crowi.redis` is null (degrade
+ * mode: single-instance dev with `REDIS_URL` unset). Failures are
+ * warn-only — the polling-removed UI degrades gracefully (the next
+ * user action triggers a react-query refetch).
+ *
+ * The publish is fire-and-forget on purpose: the model statics that
+ * invoke `notificationEvent.emit('update', ...)` are awaited by their
+ * REST handlers, and we do not want a transient Redis publish failure
+ * to surface as a 500 on the user's write request — the notification
+ * itself succeeded.
+ */
+function publishNotificationsChange(crowi: Crowi, userId: string): void {
+  const redis = crowi.redis as { publish?: (channel: string, message: string) => Promise<number> } | null | undefined;
+  if (!redis || typeof redis.publish !== 'function') return;
+  const channel = `${NOTIFICATIONS_CHANNEL_PREFIX}${userId}`;
+  // Build the payload through the shared schema rather than as a hand-
+  // rolled literal so a future evolution of the message contract is
+  // caught at compile / parse time on both the publisher and the
+  // subscriber. The attach handler validates the inbound side with the
+  // same schema (`NotificationsServerMessageSchema`).
+  const message = JSON.stringify(NotificationsChangedMessageSchema.parse({ type: 'changed' }));
+  Promise.resolve()
+    .then(() => redis.publish!(channel, message))
+    .catch((err: unknown) => {
+      const m = err instanceof Error ? err.message : String(err);
+      console.warn(`[crowi:notifications] publish failed for user ${userId}: ${m}`);
+    });
+}
 
 /**
  * RFC-0002 Phase 8: forward an upserted notification to every active

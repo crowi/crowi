@@ -22,20 +22,53 @@ export const notificationKeys = {
   infinite: (limit: number) => ['notifications', 'list', 'infinite', limit] as const,
 };
 
-/**
- * Polling interval for the unread count (in ms).
- * Refetch is disabled while the tab is inactive to avoid unnecessary traffic.
- */
-const UNREAD_COUNT_POLL_INTERVAL_MS = 30_000;
-
 const EMPTY_LIST = {
   notifications: [] as Notification[],
   pager: { prev: null, next: null, offset: 0 },
 };
 
 /**
+ * Default react-query options shared by all notification REST hooks.
+ * Notifications can fall back to a pure-REST baseline (when the
+ * `/notifications/<userId>` WebSocket never connects or stays down),
+ * so we deliberately opt-in to the two event-driven refetch triggers
+ * that the QueryClient default disables:
+ *
+ *   - `refetchOnWindowFocus` — the user returning to the tab is a
+ *     strong "now please be fresh" signal and refetches only when the
+ *     data is `stale` (so a focus while a query is still fresh is a
+ *     cheap no-op).
+ *   - `refetchOnReconnect` — same idea for `online` after a network
+ *     blip. Without this, a tab that lost the WebSocket mid-blip
+ *     would never refresh its bell.
+ *
+ * `staleTime` is intentionally short (30s) so focus / reconnect
+ * actually fire a refetch — the QueryClient default `staleTime: 0`
+ * already triggers them, but a small window matches the cadence the
+ * old 30s polling loop used to give the UI and rules out flap.
+ *
+ * This is NOT a return of the 30s polling loop: `refetchInterval` is
+ * still unset, so a backgrounded / focused-but-idle tab makes zero
+ * requests.
+ */
+const NOTIFICATION_QUERY_DEFAULTS = {
+  staleTime: 30_000,
+  refetchOnWindowFocus: true,
+  refetchOnReconnect: true,
+} as const;
+
+/**
  * Hook to fetch the unread notification count for the current user.
- * Polls every 30s while the tab is active.
+ *
+ * Polling was removed in favour of a `/notifications/<userId>`
+ * WebSocket invalidation channel — `useNotificationsSocket()`,
+ * mounted once in `(auth)/layout.tsx`, listens for server-pushed
+ * `changed` ticks and invalidates `notificationKeys.all`, which
+ * re-runs this query through the normal react-query refetch path.
+ * When the WebSocket never connects (handler not deployed, network)
+ * the bell falls back to focus/reconnect-driven refetches — see
+ * `NOTIFICATION_QUERY_DEFAULTS` — so a backgrounded tab with a dead
+ * socket isn't stuck on a stale count forever.
  */
 export function useUnreadCount() {
   return useQuery({
@@ -47,8 +80,7 @@ export function useUnreadCount() {
       const body = await response.json();
       return body.count;
     },
-    refetchInterval: UNREAD_COUNT_POLL_INTERVAL_MS,
-    refetchIntervalInBackground: false,
+    ...NOTIFICATION_QUERY_DEFAULTS,
   });
 }
 
@@ -80,6 +112,7 @@ export function useNotifications({ limit = 10, offset = 0, enabled = false }: Us
       return await response.json();
     },
     enabled,
+    ...NOTIFICATION_QUERY_DEFAULTS,
   });
 }
 
@@ -107,6 +140,7 @@ export function useNotificationsInfinite(limit: number = 20) {
       }
       return undefined;
     },
+    ...NOTIFICATION_QUERY_DEFAULTS,
   });
 }
 

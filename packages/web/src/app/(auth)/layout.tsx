@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/use-auth';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
+import { useNotificationsSocket } from '@/lib/use-notifications-socket';
 import { useConnection } from '@/lib/connection-context';
 import { m } from '@paraglide/messages.js';
 import { UserMenuItems } from '@/components/user-menu-items';
@@ -25,6 +26,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
+
+  // Realtime notification invalidation. The hook is idle until auth
+  // resolves (`enabled: isAuthenticated`) so the unauthed login screen
+  // does not blast `/notifications/token` at the server. Mounted once
+  // here so the entire (auth) shell — including NotificationBell —
+  // shares one WebSocket per tab, not one per render scope.
+  useNotificationsSocket({ enabled: isAuthenticated });
 
   useEffect(() => {
     // 接続エラー中はリダイレクトしない

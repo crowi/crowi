@@ -12,6 +12,9 @@ import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 import { useUnreadCount, useNotifications, useMarkAllAsRead, useOpenNotification } from '@/lib/use-notifications';
 import { formatRelativeTime, buildNotificationMessage, isUnopenedNotification } from '@/lib/notification-format';
+import { resolveNotificationHref } from '@/lib/notification-href';
+import { scrollToSectionWhenReady, SCROLL_TARGETS } from '@/lib/scroll-to-section';
+import { NotificationActionEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
 interface NotificationRowProps {
@@ -49,10 +52,13 @@ function NotificationRow({ notification, onOpen }: NotificationRowProps) {
 }
 
 /**
- * Header notification bell with unread count badge and a dropdown showing the
- * latest notifications. Polls the unread count every 30s while the tab is
- * active. The notification list query is only triggered when the dropdown is
- * opened.
+ * Header notification bell with unread count badge and a dropdown showing
+ * the latest notifications. The unread count refreshes from
+ * server-pushed `changed` ticks (via the `useNotificationsSocket` hook
+ * mounted in `(auth)/layout.tsx`) — the 30-second polling loop that
+ * used to back it was removed when the realtime invalidation channel
+ * landed. The notification list query is only triggered when the
+ * dropdown is opened.
  */
 export function NotificationBell() {
   const router = useRouter();
@@ -75,7 +81,20 @@ export function NotificationBell() {
       // the user is not blocked by a transient error.
     }
     setOpen(false);
-    router.push(notification.target.path);
+    // `scroll: false` so Next.js doesn't jump-to-top while the target
+    // heading is still being rendered; page-content's hash-watching
+    // MutationObserver does the in-page scroll once the AST lands.
+    router.push(resolveNotificationHref(notification), { scroll: false });
+    // page-content's hash-watch effect only re-runs when the URL hash
+    // actually changes — same-pathname/same-hash navigations (e.g.
+    // re-clicking the same notification, or opening a comment
+    // notification on the page already in view) wouldn't trigger it.
+    // Drive the scroll manually for COMMENT actions so those cases
+    // still land on the comments section. Idempotent with the
+    // page-content path for cross-page navigations.
+    if (notification.action === NotificationActionEnum.COMMENT) {
+      scrollToSectionWhenReady(SCROLL_TARGETS.COMMENTS);
+    }
   };
 
   const handleMarkAllAsRead = () => {

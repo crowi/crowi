@@ -9,6 +9,7 @@ import models from 'src/models';
 import events from 'src/events';
 import { attachCollabServer, type AttachedCollab } from 'src/collab/attach';
 import { attachPresenceServer, type AttachedPresence } from 'src/presence/attach';
+import { attachNotificationsServer, type AttachedNotifications } from 'src/notifications/attach';
 import { createAdaptorServer } from '@hono/node-server';
 import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
@@ -127,6 +128,16 @@ class Crowi {
    * of the running server.
    */
   presenceAttachment: AttachedPresence | null = null;
+
+  /**
+   * Notifications realtime invalidation WebSocket attach handle. Built
+   * in `start()` next to `collabAttachment` / `presenceAttachment`;
+   * wires the `/notifications/<userId>` ws noServer handler so the
+   * NotificationBell can drop its 30-second polling loop in favour of
+   * Redis-pub/sub-driven invalidation. `null` outside of the running
+   * server.
+   */
+  notificationsAttachment: AttachedNotifications | null = null;
 
   initialized = false;
 
@@ -547,6 +558,14 @@ class Crowi {
     // Same `noServer` pattern; both upgrade handlers path-filter so
     // they coexist on the one http.Server listener.
     this.presenceAttachment = await attachPresenceServer(server as http.Server, this);
+
+    // Notifications realtime invalidation — third `ws noServer`
+    // handler alongside collab + presence. Path-filters on
+    // `/notifications/*`, so it coexists with the other two on the
+    // same http.Server listener. Redis subscriber is built lazily
+    // inside; when `crowi.redis === null` the handler still attaches
+    // and accepts connections but no pub/sub fan-out runs.
+    this.notificationsAttachment = await attachNotificationsServer(server as http.Server, this);
 
     // Promisify `server.listen` so `start()` resolves only after the
     // socket is actually bound. Callers (the bin entry, smoke tests)

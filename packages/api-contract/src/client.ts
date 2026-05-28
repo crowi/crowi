@@ -110,6 +110,7 @@ import type {
   ListNotificationsResponseSchema,
   MarkAllAsReadResponseSchema,
   NotificationStatusResponseSchema,
+  NotificationsTokenResponseSchema,
   OpenNotificationResponseSchema,
 } from './schemas/notification';
 import type { WsTokenResponseSchema } from './schemas/collab';
@@ -181,6 +182,7 @@ type ReencryptResponse = z.infer<typeof ReencryptResponseSchema>;
 type ListNotificationsResponse = z.infer<typeof ListNotificationsResponseSchema>;
 type MarkAllAsReadResponse = z.infer<typeof MarkAllAsReadResponseSchema>;
 type NotificationStatusResponse = z.infer<typeof NotificationStatusResponseSchema>;
+type NotificationsTokenResponse = z.infer<typeof NotificationsTokenResponseSchema>;
 type OpenNotificationResponse = z.infer<typeof OpenNotificationResponseSchema>;
 type Page = z.infer<typeof PageSchema>;
 type GetPageResponse = z.infer<typeof GetPageResponseSchema>;
@@ -325,6 +327,11 @@ const stubGetRevisions: GetRevisionsResponse = { revisions: [] };
 const stubListNotifications: ListNotificationsResponse = { notifications: [], pager: stubPager };
 const stubMarkAllAsRead: MarkAllAsReadResponse = { ok: true };
 const stubNotificationStatus: NotificationStatusResponse = { count: 0 };
+const stubNotificationsToken: NotificationsTokenResponse = {
+  token: '',
+  selfUserId: '',
+  expiresAt: '',
+};
 const stubOpenNotification: OpenNotificationResponse = {
   notification: {
     _id: '',
@@ -590,8 +597,11 @@ const lateContractApp = new OpenAPIHono()
   .openapi(adminCryptoRoutes.reencryptAllRoute, (c) => c.json(stubReencrypt, 200))
   .openapi(notificationRoutes.listNotificationsRoute, (c) => c.json(stubListNotifications, 200))
   .openapi(notificationRoutes.markAllAsReadRoute, (c) => c.json(stubMarkAllAsRead, 200))
-  // `/notifications/status` registers before `/notifications/{id}/open`
-  // for the same literal-vs-template reason as the revision chain.
+  // `/notifications/token` + `/notifications/status` are literal paths
+  // and MUST register before `/notifications/{id}/open` so the template
+  // route never shadows them (same first-match-wins reason as the
+  // revision chain).
+  .openapi(notificationRoutes.getNotificationsTokenRoute, (c) => c.json(stubNotificationsToken, 200))
   .openapi(notificationRoutes.getUnreadCountRoute, (c) => c.json(stubNotificationStatus, 200))
   .openapi(notificationRoutes.openNotificationRoute, (c) => c.json(stubOpenNotification, 200));
 
