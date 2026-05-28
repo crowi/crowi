@@ -10,7 +10,7 @@ import WebSocket from 'ws';
 import type Crowi from 'src/crowi';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
 
-import { attachNotificationsServer, channelForUserId, type AttachedNotifications, type NotificationsRedisClient } from './attach';
+import { attachNotificationsServer, channelForUser, type AttachedNotifications, type NotificationsRedisClient } from './attach';
 
 /**
  * Tests for `attachNotificationsServer` — the third `ws noServer`
@@ -225,7 +225,7 @@ describe('attachNotificationsServer — Redis-backed', () => {
     // on the shared backing store rather than the primary's own
     // `subscribedChannels` (which is the per-instance set).
     expect(testServer.primary).not.toBeNull();
-    await waitUntil(() => testServer.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUserId(userId)));
+    await waitUntil(() => testServer.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUser(userId)));
 
     // Close from the client side so the server's last-close path runs.
     await new Promise<void>((resolve) => {
@@ -266,8 +266,8 @@ describe('attachNotificationsServer — Redis-backed', () => {
   it('subscribes once for multiple tabs of the same user and unsubscribes only on the last close', async () => {
     const userId = 'user-multi';
     const token = validTokenFor(userId);
-    const subscribeCount = () => testServer.primary!.events.filter((e) => e.kind === 'subscribe' && e.channel === channelForUserId(userId)).length;
-    const unsubscribeCount = () => testServer.primary!.events.filter((e) => e.kind === 'unsubscribe' && e.channel === channelForUserId(userId)).length;
+    const subscribeCount = () => testServer.primary!.events.filter((e) => e.kind === 'subscribe' && e.channel === channelForUser(userId)).length;
+    const unsubscribeCount = () => testServer.primary!.events.filter((e) => e.kind === 'unsubscribe' && e.channel === channelForUser(userId)).length;
     const baselineSubscribes = subscribeCount();
     const baselineUnsubscribes = unsubscribeCount();
 
@@ -321,10 +321,10 @@ describe('attachNotificationsServer — Redis-backed', () => {
     });
     await new Promise<void>((resolve) => ws.on('open', () => resolve()));
     // Wait for the subscribe so the publish below actually reaches us.
-    await waitUntil(() => testServer.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUserId(userId)));
+    await waitUntil(() => testServer.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUser(userId)));
 
     // Simulate the model layer publishing a "changed" tick.
-    await testServer.primary!.publish(channelForUserId(userId), JSON.stringify({ type: 'changed' }));
+    await testServer.primary!.publish(channelForUser(userId), JSON.stringify({ type: 'changed' }));
     // Settle the WS frame onto the client.
     await waitUntil(() => messages.length >= 1);
     expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
@@ -346,10 +346,10 @@ describe('attachNotificationsServer — Redis-backed', () => {
       messages.push(typeof data === 'string' ? data : data.toString('utf8'));
     });
     await new Promise<void>((resolve) => ws.on('open', () => resolve()));
-    await waitUntil(() => testServer.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUserId(userA)));
+    await waitUntil(() => testServer.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUser(userA)));
 
     // Publish on user B's channel — A's socket must remain quiet.
-    await testServer.primary!.publish(channelForUserId(userB), JSON.stringify({ type: 'changed' }));
+    await testServer.primary!.publish(channelForUser(userB), JSON.stringify({ type: 'changed' }));
     // Give a generous beat for the (non-)delivery — `waitUntil`
     // would loop until timeout here, so we just sleep briefly.
     await new Promise((r) => setTimeout(r, 100));
@@ -478,17 +478,17 @@ describe('attachNotificationsServer — schema-guarded fan-out (#14)', () => {
       messages.push(typeof data === 'string' ? data : data.toString('utf8'));
     });
     await new Promise<void>((resolve) => ws.on('open', () => resolve()));
-    await waitUntil(() => server.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUserId(userId)));
+    await waitUntil(() => server.primary!.events.some((e) => e.kind === 'subscribe' && e.channel === channelForUser(userId)));
 
     // Foreign-shaped payload that JSON-parses but fails schema.
-    await server.primary!.publish(channelForUserId(userId), JSON.stringify({ type: 'other', data: 'spam' }));
+    await server.primary!.publish(channelForUser(userId), JSON.stringify({ type: 'other', data: 'spam' }));
     // Wait a beat for the (non-)delivery, then assert nothing reached us.
     await new Promise((r) => setTimeout(r, 100));
     expect(messages).toEqual([]);
 
     // A subsequent well-formed payload still gets through — proves the
     // drop is selective, not a global silence.
-    await server.primary!.publish(channelForUserId(userId), JSON.stringify({ type: 'changed' }));
+    await server.primary!.publish(channelForUser(userId), JSON.stringify({ type: 'changed' }));
     await waitUntil(() => messages.length >= 1);
     expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
 
@@ -518,7 +518,7 @@ describe('attachNotificationsServer — subscribe/unsubscribe race serialisation
   it('serialises last-close / immediate-reconnect so the final Redis state is subscribed (FIFO)', async () => {
     const userId = 'user-race';
     const token = validTokenFor(userId);
-    const channel = channelForUserId(userId);
+    const channel = channelForUser(userId);
 
     const eventsFor = () => server.primary!.events.filter((e) => e.channel === channel);
     const baseline = eventsFor().length;

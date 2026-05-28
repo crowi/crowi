@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { crowi } from 'src/test/setup';
-import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/attach';
+import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/channel';
 
 describe('Notification', function () {
   let Notification;

@@ -5,7 +5,7 @@ import { subDays } from 'date-fns';
 import type { NotificationPayload } from '@crowi/plugin-api';
 import { NotificationsChangedMessageSchema } from '@crowi/api-contract';
 import ActivityDefine from 'src/util/activityDefine';
-import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/attach';
+import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/channel';
 import { ActivityDocument } from './activity';
 import { UserDocument } from './user';
 

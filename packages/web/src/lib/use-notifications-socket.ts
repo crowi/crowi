@@ -212,6 +212,13 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
       }, INVALIDATE_DEBOUNCE_MS);
     };
 
+    const clearDebounce = () => {
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+    };
+
     const connect = () => {
       if (disposed) return;
       const url = `${resolveNotificationsUrl()}/${encodeURIComponent(selfUserId)}?token=${encodeURIComponent(token)}`;
@@ -268,10 +275,7 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
         // this branch's queryClient.invalidate (same effect run, same
         // closure — the trailing timer would still hold a live ref).
         if (event.code === NOTIFICATIONS_CLOSE_INVALID_TOKEN) {
-          if (debounceTimer !== null) {
-            clearTimeout(debounceTimer);
-            debounceTimer = null;
-          }
+          clearDebounce();
           queryClient.invalidateQueries({ queryKey: ['notificationsToken', authedUserId] });
           return;
         }
@@ -279,10 +283,7 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
         // authed user id). Looping would just churn the server, so stop.
         // Same debounce-cancel rationale as 4401.
         if (event.code === NOTIFICATIONS_CLOSE_FORBIDDEN) {
-          if (debounceTimer !== null) {
-            clearTimeout(debounceTimer);
-            debounceTimer = null;
-          }
+          clearDebounce();
           return;
         }
         // Otherwise reconnect with capped exponential backoff.
@@ -297,7 +298,7 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
     return () => {
       disposed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (debounceTimer) clearTimeout(debounceTimer);
+      clearDebounce();
       if (socket) {
         // Drop the lifecycle handlers before close so the teardown
         // close doesn't trigger a reconnect.

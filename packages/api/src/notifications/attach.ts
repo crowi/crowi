@@ -5,6 +5,7 @@ import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
 import { NotificationsServerMessageSchema } from '@crowi/api-contract';
 import type Crowi from 'src/crowi';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
+import { NOTIFICATIONS_CHANNEL_PREFIX, channelForUser } from './channel';
 
 const debug = Debug('crowi:notifications:attach');
 
@@ -17,18 +18,6 @@ const debug = Debug('crowi:notifications:attach');
  * http.Server listener).
  */
 const NOTIFICATIONS_PATH = '/notifications';
-
-/**
- * Redis pub/sub channel prefix for per-user notification invalidation
- * signals. Channel names are `crowi:notifications:user:<userId>`; one
- * channel per recipient so a publish only reaches instances that
- * actually have that user connected (and the WebSocket fan-out stays
- * bounded). The model layer's `notificationEvent` listener (see
- * `models/notification.ts`) is what publishes to these channels.
- */
-const CHANNEL_PREFIX = 'crowi:notifications:user:';
-
-const channelForUser = (userId: string): string => `${CHANNEL_PREFIX}${userId}`;
 
 /**
  * WebSocket close codes the notifications handler uses. 4401 / 4403
@@ -477,10 +466,4 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   };
 }
 
-/**
- * Re-export for test fixtures + the model-layer publisher (which uses
- * the same prefix). Bundled here so a future channel-name change
- * touches one constant.
- */
-export const NOTIFICATIONS_CHANNEL_PREFIX = CHANNEL_PREFIX;
-export const channelForUserId = channelForUser;
+export { NOTIFICATIONS_CHANNEL_PREFIX, channelForUser } from './channel';
