@@ -53,10 +53,14 @@ export function usePageCommentsList(pageId: string | null | undefined) {
       throw new Error(await extractErrorMessage(response, 'Failed to fetch comments'));
     },
     enabled: Boolean(pageId),
-    // Comments rarely change after a page is rendered; avoid the focus-refetch
-    // storm by holding the cache for 30s. Mutations invalidate explicitly.
+    // Hold the cache for 30s to dedupe observers within a single page
+    // view, but always refetch when the component remounts: revisiting a
+    // page (e.g. via a comment notification after navigating away) must
+    // show comments added in the meantime, which a stale cache hit would
+    // hide. Window-focus refetch stays off to avoid a refetch storm.
     staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
+    refetchOnMount: 'always',
   });
 
   return {
