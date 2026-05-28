@@ -3,6 +3,23 @@
   "globalDependencies": [
     "**/.env.*local"
   ],
+  "globalPassThroughEnv": [
+    "BASE_URL",
+    "CLIENT_URL",
+    "COLLAB_MAX_EDITORS_PER_PAGE",
+    "CROWI_ENCRYPTION_KEY",
+    "HOSTNAME",
+    "JWT_ACCESS_TOKEN_TTL_SECONDS",
+    "JWT_REFRESH_TOKEN_TTL_SECONDS",
+    "MONGO_URI",
+    "PASSWORD_SEED",
+    "PORT",
+    "REDISTOGO_URL",
+    "REDIS_REJECT_UNAUTHORIZED",
+    "REDIS_TLS_URL",
+    "REDIS_URL",
+    "WS_TOKEN_SECRET"
+  ],
   "tasks": {
     "build": {
       "dependsOn": [
