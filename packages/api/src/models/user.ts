@@ -29,7 +29,6 @@ export interface UserDocument extends Document {
   email: string;
   introduction: string;
   password: string;
-  apiToken: string;
   lang: 'en' | 'en-US' | 'en-GB' | 'ja';
   status: number;
   createdAt: Date;
@@ -40,7 +39,6 @@ export interface UserDocument extends Document {
   setPassword(password: string): this;
   isEmailSet(): boolean;
   updatePassword(password: string, callback: (err: Error, userData: UserDocument) => void): any;
-  updateApiToken(): Promise<UserDocument>;
   updateImage(image, callback: (err: Error, userData: UserDocument) => void): any;
   updateEmail(email: string): any;
   updateNameAndEmail(name: string, email: string): any;
@@ -104,7 +102,6 @@ export interface UserModel extends Model<UserDocument> {
   findUsersWithPagination(options, query, callback): any;
   findUsersByPartOfEmail(emailPart, options): any;
   findUserByUsername(username): Promise<UserDocument | null>;
-  findUserByApiToken(apiToken): Promise<UserDocument | null>;
   findUserByGoogleId(googleId): Promise<UserDocument | null>;
   findUserByGitHubId(githubId): Promise<UserDocument | null>;
   findUserByEmail(email): Promise<UserDocument | null>;
@@ -145,7 +142,6 @@ export default (crowi: Crowi) => {
     email: { type: String, required: true, index: true },
     introduction: { type: String },
     password: { type: String, select: false },
-    apiToken: { type: String, select: false },
     lang: {
       type: String,
       enum: Object.values(getLanguageLabels()),
@@ -220,13 +216,6 @@ export default (crowi: Crowi) => {
     return hash && (hash.startsWith('$2a$') || hash.startsWith('$2b$'));
   }
 
-  function generateApiToken(user) {
-    const hasher = crypto.createHash('sha256');
-    hasher.update(new Date().getTime() + user._id);
-
-    return hasher.digest('base64');
-  }
-
   function getLanguageLabels() {
     const lang = {
       LANG_EN,
@@ -280,11 +269,6 @@ export default (crowi: Crowi) => {
     this.save(function (err, userData) {
       return callback(err, userData);
     });
-  };
-
-  userSchema.methods.updateApiToken = function () {
-    this.apiToken = generateApiToken(this);
-    return this.save();
   };
 
   userSchema.methods.updateImage = function (image, callback) {
@@ -413,7 +397,7 @@ export default (crowi: Crowi) => {
   };
 
   userSchema.methods.populateSecrets = async function () {
-    return User.findById(this._id, '+password +apiToken').exec();
+    return User.findById(this._id, '+password').exec();
   };
 
   userSchema.statics.getLanguageLabels = getLanguageLabels;
@@ -513,7 +497,7 @@ export default (crowi: Crowi) => {
         // Drop secret fields at the Mongo layer instead of stripping them
         // client-side via toUserPublic. Saves bandwidth between Mongo and
         // Node and ensures no admin handler accidentally leaks a hash.
-        select: '-password -apiToken -googleId -githubId',
+        select: '-password -googleId -githubId',
       },
       function (err, result) {
         if (err) {
@@ -541,10 +525,6 @@ export default (crowi: Crowi) => {
 
   userSchema.statics.findUserByUsername = function (username) {
     return User.findOne({ username }).exec();
-  };
-
-  userSchema.statics.findUserByApiToken = function (apiToken) {
-    return User.findOne({ apiToken }).exec();
   };
 
   userSchema.statics.findUserByGoogleId = function (googleId) {

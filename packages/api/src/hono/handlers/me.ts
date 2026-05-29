@@ -9,9 +9,10 @@
  *   POST   /me/picture               — upload picture (Hono-native multipart)
  *   DELETE /me/picture               — clear picture
  *   PUT    /me/password              — change password
- *   GET    /me/apiToken              — read API token
- *   POST   /me/apiToken              — regenerate API token
  *   GET    /me/recently-viewed-pages — recently-viewed pages (capped at 5)
+ *
+ * Personal access token management (RFC-0010, replacing the legacy
+ * `GET/POST /me/apiToken`) lives in `./access-token.ts`.
  *
  * Wire-format parity is preserved with the ts-rest era. Notable points:
  *
@@ -34,10 +35,8 @@ import { mkdirSync, createWriteStream, createReadStream, unlink } from 'node:fs'
 import path from 'node:path';
 
 import {
-  getApiTokenRoute,
   getProfileRoute,
   recentlyViewedPagesRoute,
-  resetApiTokenRoute,
   updatePasswordRoute,
   updateProfileRoute,
   uploadPictureRoute,
@@ -134,17 +133,15 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
   // in this group needs the same guard).
   app.use('/me/*', createJwtAuth(crowi));
 
-  // RFC-0010 — profile scopes. The legacy apiToken endpoints
-  // (get/reset) are removed in Phase 2; until then they carry profile
-  // scopes so the catalog covers every live route.
+  // RFC-0010 — profile scopes. PAT management (`/me/access-tokens`) is
+  // web-session only and registered in `./access-token.ts`, so it carries
+  // no scope guard here.
   applyScope(app, getProfileRoute, 'profile:read');
   applyScope(app, recentlyViewedPagesRoute, 'profile:read');
-  applyScope(app, getApiTokenRoute, 'profile:read');
   applyScope(app, updateProfileRoute, 'profile:write');
   applyScope(app, uploadPictureRoute, 'profile:write');
   applyScope(app, deletePictureRoute, 'profile:write');
   applyScope(app, updatePasswordRoute, 'profile:write');
-  applyScope(app, resetApiTokenRoute, 'profile:write');
 
   return app
     .openapi(getProfileRoute, async (c) => {
@@ -357,34 +354,6 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
           resolve(c.json({ status: 'ok' as const, message: 'Password updated' }, 200));
         });
       });
-    })
-    .openapi(getApiTokenRoute, async (c) => {
-      const user = c.get('user');
-      try {
-        // `apiToken` is `select: false`, so populate explicitly.
-        const userWithSecrets = await user.populateSecrets();
-        const apiToken = userWithSecrets.apiToken;
-
-        if (!apiToken) {
-          const updated = await userWithSecrets.updateApiToken();
-          return c.json({ status: 'ok' as const, apiToken: updated.apiToken }, 200);
-        }
-        return c.json({ status: 'ok' as const, apiToken }, 200);
-      } catch (err) {
-        debug('Error getting API token:', err);
-        return c.json({ status: 'error' as const, message: 'Failed to get API token' }, 500);
-      }
-    })
-    .openapi(resetApiTokenRoute, async (c) => {
-      const user = c.get('user');
-      try {
-        const userWithSecrets = await user.populateSecrets();
-        const updated = await userWithSecrets.updateApiToken();
-        return c.json({ status: 'ok' as const, apiToken: updated.apiToken }, 200);
-      } catch (err) {
-        debug('Error resetting API token:', err);
-        return c.json({ status: 'error' as const, message: 'Failed to update API token' }, 500);
-      }
     })
     .openapi(recentlyViewedPagesRoute, async (c) => {
       const user = c.get('user');

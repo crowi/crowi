@@ -29,7 +29,7 @@ import { INTERNAL_ERROR_BODY } from '../_helpers/errors';
 const debug = Debug('crowi:hono:handlers:admin:users');
 
 const ADMIN_PAGINATE_SORT = { status: 1, username: 1, createdAt: 1 } as const;
-const ADMIN_PAGINATE_SELECT = '-password -apiToken -googleId -githubId';
+const ADMIN_PAGINATE_SELECT = '-password -googleId -githubId';
 const REGEX_META = /[-/\\^$*+?.()|[\]{}]/g;
 const escapeRegex = (s: string): string => s.replace(REGEX_META, '\\$&');
 
