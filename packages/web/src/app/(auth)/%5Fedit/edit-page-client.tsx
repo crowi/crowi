@@ -15,6 +15,7 @@ import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/M
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { UnsavedChangesDialog } from '@/components/editor/UnsavedChangesDialog';
 import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
+import { DraftConflictAlert } from '@/components/page-edit/draft-conflict-alert';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -909,14 +910,7 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
             <CardDescription className="font-mono">{path}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {error.kind === 'conflict' ? (
-              <ErrorAlert
-                title={m['creating_pages.conflict_title']()}
-                message={m['creating_pages.conflict_message']({ displayName: error.displayName, username: error.username })}
-              />
-            ) : (
-              <ErrorAlert message={error.text} />
-            )}
+            {error.kind === 'conflict' ? <DraftConflictAlert displayName={error.displayName} username={error.username} /> : <ErrorAlert message={error.text} />}
             <Button variant="outline" onClick={() => router.back()}>
               {m['common.go_back']()}
             </Button>

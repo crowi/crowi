@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DraftConflictAlert } from '@/components/page-edit/draft-conflict-alert';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { formatDistanceToNow } from '@/lib/date-utils';
@@ -129,12 +130,7 @@ function NewDraftForm({ onCreated }: { onCreated?: () => void }) {
         </Button>
       </form>
 
-      {error?.kind === 'conflict' && (
-        <ErrorAlert
-          title={m['creating_pages.conflict_title']()}
-          message={m['creating_pages.conflict_message']({ displayName: error.displayName, username: error.username })}
-        />
-      )}
+      {error?.kind === 'conflict' && <DraftConflictAlert displayName={error.displayName} username={error.username} />}
       {error?.kind === 'message' && <ErrorAlert message={error.text} />}
     </div>
   );
