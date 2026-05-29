@@ -48,6 +48,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
   const Code = () => crowi.model('OAuthAuthorizationCode');
   const Refresh = () => crowi.model('OAuthRefreshToken');
   const PAT = () => crowi.model('PersonalAccessToken');
+  const Device = () => crowi.model('OAuthDeviceCode');
 
   const EMAIL = 'oauth-user@example.com';
   const REDIRECT = 'http://127.0.0.1:51234/callback';
@@ -70,12 +71,14 @@ describe('Routes /api/v2/oauth (Hono)', () => {
     await Code().deleteMany({ userId: user._id });
     await Refresh().deleteMany({ userId: user._id });
     await PAT().deleteMany({ userId: user._id });
+    await Device().deleteMany({ clientId: 'crowi-cli' });
   });
 
   beforeEach(async () => {
     await Code().deleteMany({ userId: user._id });
     await Refresh().deleteMany({ userId: user._id });
     await PAT().deleteMany({ userId: user._id });
+    await Device().deleteMany({ clientId: 'crowi-cli' });
   });
 
   const authorize = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/authorize').set('Authorization', `Bearer ${webToken}`).send(body);
@@ -358,16 +361,163 @@ describe('Routes /api/v2/oauth (Hono)', () => {
     });
   });
 
+  const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
+
+  describe('Device Authorization Grant (RFC 8628)', () => {
+    const deviceAuthorize = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/device/authorize').send(body);
+    const token = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/token').send(body);
+    const deviceVerify = (body: Record<string, unknown>, bearer = webToken) =>
+      request(app).post('/api/v2/oauth/device/verify').set('Authorization', `Bearer ${bearer}`).send(body);
+
+    const startDevice = async (scope = 'pages:read pages:write') => {
+      const res = await deviceAuthorize({ client_id: 'crowi-cli', scope });
+      expect(res.status).toBe(200);
+      return res.body as {
+        device_code: string;
+        user_code: string;
+        verification_uri: string;
+        verification_uri_complete: string;
+        expires_in: number;
+        interval: number;
+      };
+    };
+
+    it('issues a device_code + user_code with verification URIs', async () => {
+      const body = await startDevice();
+      expect(body.device_code).toEqual(expect.any(String));
+      expect(body.user_code).toMatch(/^[BCDFGHJKMNPQRSTVWXZ]{4}-[0-9]{4}$/);
+      expect(body.verification_uri).toContain('/oauth/device');
+      expect(body.verification_uri_complete).toContain(`user_code=${encodeURIComponent(body.user_code)}`);
+      expect(body.interval).toBe(5);
+      expect(body.expires_in).toBeGreaterThan(0);
+    });
+
+    it('rejects a scope outside the client allowed set (400 invalid_scope)', async () => {
+      const res = await deviceAuthorize({ client_id: 'crowi-cli', scope: 'admin:read' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_scope');
+    });
+
+    it('rejects an unknown client (400 invalid_client)', async () => {
+      const res = await deviceAuthorize({ client_id: 'no-such', scope: 'pages:read' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_client');
+    });
+
+    it('end-to-end: pending → authorization_pending, approve → tokens → scoped API works', async () => {
+      const dev = await startDevice('profile:read');
+
+      // Before approval the poll returns authorization_pending.
+      const pending = await token({ grant_type: DEVICE_GRANT, device_code: dev.device_code, client_id: 'crowi-cli' });
+      expect(pending.status).toBe(400);
+      expect(pending.body.error).toBe('authorization_pending');
+
+      // GET /oauth/device surfaces the requesting client + scopes.
+      const info = await request(app).get('/api/v2/oauth/device').query({ user_code: dev.user_code });
+      expect(info.status).toBe(200);
+      expect(info.body.client_id).toBe('crowi-cli');
+      expect(info.body.scopes).toEqual(['profile:read']);
+
+      // Approve from the web session.
+      const verify = await deviceVerify({ user_code: dev.user_code, action: 'approve' });
+      expect(verify.status).toBe(200);
+      expect(verify.body.status).toBe('approved');
+
+      // Force lastPolledAt back so the next poll is not slow_down-throttled.
+      await Device().updateOne({ userCode: dev.user_code }, { lastPolledAt: new Date(Date.now() - 10_000) });
+
+      const issued = await token({ grant_type: DEVICE_GRANT, device_code: dev.device_code, client_id: 'crowi-cli' });
+      expect(issued.status).toBe(200);
+      expect(issued.body.token_type).toBe('Bearer');
+      expect(issued.body.refresh_token.startsWith('crowi_rt_')).toBe(true);
+      expect(issued.body.scope).toBe('profile:read');
+
+      // The issued access token reaches a profile:read-scoped API.
+      const api = await request(app).get('/api/v2/me/recently-viewed-pages').set('Authorization', `Bearer ${issued.body.access_token}`);
+      expect(api.status).toBe(200);
+
+      // Single-use: a second exchange of the same (now consumed) device_code fails.
+      const second = await token({ grant_type: DEVICE_GRANT, device_code: dev.device_code, client_id: 'crowi-cli' });
+      expect(second.status).toBe(400);
+    });
+
+    it('returns slow_down when polled faster than the interval', async () => {
+      const dev = await startDevice('pages:read');
+      const first = await token({ grant_type: DEVICE_GRANT, device_code: dev.device_code, client_id: 'crowi-cli' });
+      expect(first.body.error).toBe('authorization_pending');
+      // Immediate re-poll (< interval) → slow_down.
+      const second = await token({ grant_type: DEVICE_GRANT, device_code: dev.device_code, client_id: 'crowi-cli' });
+      expect(second.status).toBe(400);
+      expect(second.body.error).toBe('slow_down');
+    });
+
+    it('returns access_denied after the user denies', async () => {
+      const dev = await startDevice('pages:read');
+      const verify = await deviceVerify({ user_code: dev.user_code, action: 'deny' });
+      expect(verify.status).toBe(200);
+      expect(verify.body.status).toBe('denied');
+
+      const res = await token({ grant_type: DEVICE_GRANT, device_code: dev.device_code, client_id: 'crowi-cli' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('access_denied');
+    });
+
+    it('returns expired_token for an expired device_code', async () => {
+      const { deviceCode, deviceCodeHash } = Device().generateDeviceCode();
+      await Device().create({
+        deviceCodeHash,
+        userCode: 'ZZZZ-0000',
+        clientId: 'crowi-cli',
+        requestedScopes: ['pages:read'],
+        status: 'approved',
+        userId: user._id,
+        grantedScopes: ['pages:read'],
+        expiresAt: new Date(Date.now() - 1000),
+        interval: 5,
+      });
+      const res = await token({ grant_type: DEVICE_GRANT, device_code: deviceCode, client_id: 'crowi-cli' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('expired_token');
+    });
+
+    it('matches a normalized user_code (lower-case, no dash)', async () => {
+      const dev = await startDevice('pages:read');
+      const verify = await deviceVerify({ user_code: dev.user_code.replace('-', '').toLowerCase(), action: 'approve' });
+      expect(verify.status).toBe(200);
+      expect(verify.body.status).toBe('approved');
+    });
+
+    it('GET /oauth/device 404s for an unknown user_code', async () => {
+      const res = await request(app).get('/api/v2/oauth/device').query({ user_code: 'ZZZZ-9999' });
+      expect(res.status).toBe(404);
+    });
+
+    it('device/verify is web-session only — an OAuth bearer is rejected (403)', async () => {
+      const dev = await startDevice('pages:read');
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user, scopes: ['pages:read'], clientId: 'crowi-cli' });
+      const res = await deviceVerify({ user_code: dev.user_code, action: 'approve' }, oauthToken);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    it('device/verify requires authentication (401 without bearer)', async () => {
+      const dev = await startDevice('pages:read');
+      const res = await request(app).post('/api/v2/oauth/device/verify').send({ user_code: dev.user_code, action: 'approve' });
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe('GET /.well-known/oauth-authorization-server', () => {
-    it('returns RFC 8414 discovery metadata', async () => {
+    it('returns RFC 8414 discovery metadata (incl. device grant)', async () => {
       const res = await request(app).get('/api/v2/.well-known/oauth-authorization-server');
       expect(res.status).toBe(200);
       expect(res.body.issuer).toEqual(expect.any(String));
       expect(res.body.token_endpoint).toContain('/api/v2/oauth/token');
       expect(res.body.revocation_endpoint).toContain('/api/v2/oauth/revoke');
       expect(res.body.authorization_endpoint).toContain('/oauth/authorize');
+      expect(res.body.device_authorization_endpoint).toContain('/api/v2/oauth/device/authorize');
       expect(res.body.code_challenge_methods_supported).toEqual(['S256']);
-      expect(res.body.grant_types_supported).toEqual(expect.arrayContaining(['authorization_code', 'refresh_token']));
+      expect(res.body.grant_types_supported).toEqual(expect.arrayContaining(['authorization_code', 'refresh_token', DEVICE_GRANT]));
       expect(res.body.response_types_supported).toEqual(['code']);
       expect(res.body.scopes_supported).toEqual(expect.arrayContaining(['pages:read', 'pages:write']));
       expect(res.body.scopes_supported).not.toContain('admin:read');
