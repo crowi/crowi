@@ -108,7 +108,15 @@ import type {
   UserProfileResponseSchema,
 } from './schemas/me';
 import type { AccessTokenSchema, CreateAccessTokenResponseSchema, ListAccessTokensResponseSchema } from './schemas/access-token';
-import type { AuthorizeResponseSchema, DiscoveryResponseSchema, RevokeResponseSchema, TokenResponseSchema } from './schemas/oauth-endpoints';
+import type {
+  AuthorizeResponseSchema,
+  DeviceAuthorizeResponseSchema,
+  DeviceInfoResponseSchema,
+  DeviceVerifyResponseSchema,
+  DiscoveryResponseSchema,
+  RevokeResponseSchema,
+  TokenResponseSchema,
+} from './schemas/oauth-endpoints';
 import type {
   ListNotificationsResponseSchema,
   MarkAllAsReadResponseSchema,
@@ -171,6 +179,9 @@ type AuthorizeResponse = z.infer<typeof AuthorizeResponseSchema>;
 type TokenResponse = z.infer<typeof TokenResponseSchema>;
 type RevokeResponse = z.infer<typeof RevokeResponseSchema>;
 type DiscoveryResponse = z.infer<typeof DiscoveryResponseSchema>;
+type DeviceAuthorizeResponse = z.infer<typeof DeviceAuthorizeResponseSchema>;
+type DeviceInfoResponse = z.infer<typeof DeviceInfoResponseSchema>;
+type DeviceVerifyResponse = z.infer<typeof DeviceVerifyResponseSchema>;
 type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;
 type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
 type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
@@ -306,6 +317,17 @@ const stubDiscovery: DiscoveryResponse = {
   code_challenge_methods_supported: [],
   token_endpoint_auth_methods_supported: [],
 };
+// OAuth device-grant stubs (RFC-0010 Phase 4 / RFC 8628).
+const stubDeviceAuthorize: DeviceAuthorizeResponse = {
+  device_code: '',
+  user_code: '',
+  verification_uri: '',
+  verification_uri_complete: '',
+  expires_in: 0,
+  interval: 0,
+};
+const stubDeviceInfo: DeviceInfoResponse = { client_id: '', scopes: [] };
+const stubDeviceVerify: DeviceVerifyResponse = { status: 'approved' };
 
 const stubUserPublic = {
   _id: '',
@@ -709,7 +731,10 @@ const oauthContractApp = new OpenAPIHono()
   .openapi(oauthRoutes.authorizeRoute, (c) => c.json(stubAuthorize, 200))
   .openapi(oauthRoutes.tokenRoute, (c) => c.json(stubToken, 200))
   .openapi(oauthRoutes.revokeRoute, (c) => c.json(stubRevoke, 200))
-  .openapi(oauthRoutes.discoveryRoute, (c) => c.json(stubDiscovery, 200));
+  .openapi(oauthRoutes.discoveryRoute, (c) => c.json(stubDiscovery, 200))
+  .openapi(oauthRoutes.deviceAuthorizeRoute, (c) => c.json(stubDeviceAuthorize, 200))
+  .openapi(oauthRoutes.deviceInfoRoute, (c) => c.json(stubDeviceInfo, 200))
+  .openapi(oauthRoutes.deviceVerifyRoute, (c) => c.json(stubDeviceVerify, 200));
 
 /**
  * Per-chain type aliases. These are **exported** so the dts bundler

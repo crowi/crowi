@@ -17,9 +17,11 @@ import { ISSUABLE_SCOPES } from './oauth';
  */
 
 /**
- * RFC 6749 §5.2 OAuth error codes the token / authorize endpoints emit.
- * Kept as a const tuple so the same values drive both the Zod enum and any
- * exhaustive handler-side switch.
+ * RFC 6749 §5.2 OAuth error codes the token / authorize endpoints emit, plus
+ * the RFC 8628 §3.5 device-grant polling codes (`authorization_pending`,
+ * `slow_down`, `expired_token`; `access_denied` is shared with §5.2). Kept as
+ * a const tuple so the same values drive both the Zod enum and any exhaustive
+ * handler-side switch.
  */
 export const OAUTH_ERROR_CODES = [
   'invalid_request',
@@ -29,6 +31,10 @@ export const OAUTH_ERROR_CODES = [
   'unsupported_grant_type',
   'invalid_scope',
   'access_denied',
+  // RFC 8628 §3.5 — device authorization grant polling errors (all 400).
+  'authorization_pending',
+  'slow_down',
+  'expired_token',
 ] as const;
 export type OAuthErrorCode = (typeof OAUTH_ERROR_CODES)[number];
 
@@ -99,8 +105,18 @@ export const TokenRequestSchema = z.discriminatedUnion('grant_type', [
     client_id: z.string().min(1),
     scope: z.string().optional(),
   }),
+  // RFC 8628 §3.4 — device authorization grant. The client polls with the
+  // opaque `device_code` returned by `/oauth/device/authorize`.
+  z.object({
+    grant_type: z.literal('urn:ietf:params:oauth:grant-type:device_code'),
+    device_code: z.string().min(1),
+    client_id: z.string().min(1),
+  }),
 ]);
 export type TokenRequest = z.infer<typeof TokenRequestSchema>;
+
+/** RFC 8628 §3.4 device-code grant_type URN (shared by schema + handler). */
+export const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 
 /**
  * `POST /oauth/token` success response (RFC 6749 §5.1). `access_token` is a
@@ -132,12 +148,67 @@ export const RevokeResponseSchema = z.object({});
 export type RevokeResponse = z.infer<typeof RevokeResponseSchema>;
 
 /**
- * Grant types the server advertises in discovery. Phase 3 ships
- * `authorization_code` + `refresh_token`; Phase 4 appends the device-code
- * grant URN here (a single-element push, no other change needed —
- * RFC-0010, PHASE3-Q10).
+ * `POST /oauth/device/authorize` request (RFC 8628 §3.1). A headless client
+ * (no browser) starts the device flow with its `client_id` and the
+ * space-delimited `scope` it wants. Public endpoint — no PKCE, no
+ * redirect_uri (the user verifies out-of-band at `verification_uri`).
  */
-export const GRANT_TYPES_SUPPORTED = ['authorization_code', 'refresh_token'] as const;
+export const DeviceAuthorizeRequestSchema = z.object({
+  client_id: z.string().min(1),
+  scope: z.string().min(1),
+});
+export type DeviceAuthorizeRequest = z.infer<typeof DeviceAuthorizeRequestSchema>;
+
+/**
+ * `POST /oauth/device/authorize` response (RFC 8628 §3.2). `device_code` is
+ * the opaque secret the client polls with; `user_code` is the human-typed
+ * handle; `verification_uri(_complete)` is where the user approves; `interval`
+ * is the minimum poll spacing in seconds; `expires_in` is the code lifetime.
+ */
+export const DeviceAuthorizeResponseSchema = z.object({
+  device_code: z.string(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+  verification_uri_complete: z.string(),
+  expires_in: z.number(),
+  interval: z.number(),
+});
+export type DeviceAuthorizeResponse = z.infer<typeof DeviceAuthorizeResponseSchema>;
+
+/**
+ * `POST /oauth/device/verify` request — the web consent screen approves or
+ * denies a `user_code`. `user_code` is normalised (case / dash insensitive)
+ * server-side before lookup.
+ */
+export const DeviceVerifyRequestSchema = z.object({
+  user_code: z.string().min(1),
+  action: z.enum(['approve', 'deny']),
+});
+export type DeviceVerifyRequest = z.infer<typeof DeviceVerifyRequestSchema>;
+
+/** `POST /oauth/device/verify` response — the resulting device-code status. */
+export const DeviceVerifyResponseSchema = z.object({
+  status: z.enum(['approved', 'denied']),
+});
+export type DeviceVerifyResponse = z.infer<typeof DeviceVerifyResponseSchema>;
+
+/**
+ * `GET /oauth/device` lookup response (PHASE4-Q9 option A). The web consent
+ * screen reads this *before* approving to show the requesting client + the
+ * scopes it asked for — the same transparency the authorize-code consent
+ * screen gives. Carries only non-secret metadata.
+ */
+export const DeviceInfoResponseSchema = z.object({
+  client_id: z.string(),
+  scopes: z.array(z.string()),
+});
+export type DeviceInfoResponse = z.infer<typeof DeviceInfoResponseSchema>;
+
+/**
+ * Grant types the server advertises in discovery — `authorization_code` +
+ * `refresh_token` (Phase 3) and the device-code grant URN (Phase 4, RFC 8628).
+ */
+export const GRANT_TYPES_SUPPORTED = ['authorization_code', 'refresh_token', DEVICE_CODE_GRANT_TYPE] as const;
 
 /**
  * `GET /.well-known/oauth-authorization-server` response (RFC 8414). Lets

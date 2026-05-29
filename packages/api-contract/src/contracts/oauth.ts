@@ -16,12 +16,17 @@
  * validating (so the OpenAPI doc stays single-shape while the runtime is
  * spec-compliant).
  */
-import { createRoute } from '@hono/zod-openapi';
+import { createRoute, z } from '@hono/zod-openapi';
 
-import { ForbiddenErrorSchema, InternalServerErrorSchema } from '../schemas/common';
+import { ForbiddenErrorSchema, InternalServerErrorSchema, NotFoundErrorSchema } from '../schemas/common';
 import {
   AuthorizeRequestSchema,
   AuthorizeResponseSchema,
+  DeviceAuthorizeRequestSchema,
+  DeviceAuthorizeResponseSchema,
+  DeviceInfoResponseSchema,
+  DeviceVerifyRequestSchema,
+  DeviceVerifyResponseSchema,
   DiscoveryResponseSchema,
   OAuthErrorSchema,
   RevokeResponseSchema,
@@ -126,9 +131,95 @@ export const discoveryRoute = createRoute({
   },
 });
 
+export const deviceAuthorizeRoute = createRoute({
+  method: 'post',
+  path: '/oauth/device/authorize',
+  tags: ['oauth'],
+  summary: 'Start a device authorization grant — issue device_code + user_code (RFC 8628)',
+  // Public, no PKCE / redirect_uri. JSON body is validated (CLIs post JSON,
+  // mirroring PHASE3-Q3); the device grant on /oauth/token still parses form
+  // bodies itself.
+  request: {
+    body: {
+      content: { 'application/json': { schema: DeviceAuthorizeRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Device + user code issued (RFC 8628 §3.2)',
+      content: { 'application/json': { schema: DeviceAuthorizeResponseSchema } },
+    },
+    400: {
+      description: 'invalid_client / invalid_scope (RFC 6749 §5.2)',
+      content: { 'application/json': { schema: OAuthErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const deviceInfoRoute = createRoute({
+  method: 'get',
+  path: '/oauth/device',
+  tags: ['oauth'],
+  summary: 'Look up a pending device authorization by user_code (consent screen)',
+  // Public + lightweight: returns only the requesting client + requested
+  // scopes so the web consent screen can show them before approval. Reveals
+  // no secret. Unknown / expired / non-pending → 404 (PHASE4-Q9 option A).
+  request: {
+    query: z.object({ user_code: z.string().min(1) }),
+  },
+  responses: {
+    200: {
+      description: 'Pending device authorization metadata',
+      content: { 'application/json': { schema: DeviceInfoResponseSchema } },
+    },
+    404: {
+      description: 'No pending device authorization for this user_code',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+  },
+});
+
+export const deviceVerifyRoute = createRoute({
+  method: 'post',
+  path: '/oauth/device/verify',
+  tags: ['oauth'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Approve or deny a device authorization by user_code (web session only)',
+  request: {
+    body: {
+      content: { 'application/json': { schema: DeviceVerifyRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Device authorization approved or denied',
+      content: { 'application/json': { schema: DeviceVerifyResponseSchema } },
+    },
+    403: {
+      description: 'Device approvals can only come from a web session',
+      content: { 'application/json': { schema: ForbiddenErrorSchema } },
+    },
+    404: {
+      description: 'No pending device authorization for this user_code',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
 export const oauthRoutes = {
   authorizeRoute,
   tokenRoute,
   revokeRoute,
   discoveryRoute,
+  deviceAuthorizeRoute,
+  deviceInfoRoute,
+  deviceVerifyRoute,
 };

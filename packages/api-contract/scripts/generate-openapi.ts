@@ -109,6 +109,11 @@ import {
   MentionSchema,
   AuthorizeRequestSchema,
   AuthorizeResponseSchema,
+  DeviceAuthorizeRequestSchema,
+  DeviceAuthorizeResponseSchema,
+  DeviceInfoResponseSchema,
+  DeviceVerifyRequestSchema,
+  DeviceVerifyResponseSchema,
   DiscoveryResponseSchema,
   OAuthErrorSchema,
   RevokeRequestSchema,
@@ -196,6 +201,13 @@ const schemas = [
   ['TokenResponse', TokenResponseSchema],
   ['RevokeRequest', RevokeRequestSchema],
   ['DiscoveryResponse', DiscoveryResponseSchema],
+
+  // oauth device grant (RFC-0010 Phase 4 / RFC 8628)
+  ['DeviceAuthorizeRequest', DeviceAuthorizeRequestSchema],
+  ['DeviceAuthorizeResponse', DeviceAuthorizeResponseSchema],
+  ['DeviceInfoResponse', DeviceInfoResponseSchema],
+  ['DeviceVerifyRequest', DeviceVerifyRequestSchema],
+  ['DeviceVerifyResponse', DeviceVerifyResponseSchema],
 
   // user / shared
   ['UserPublic', UserPublicSchema],

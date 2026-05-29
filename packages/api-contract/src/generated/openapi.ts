@@ -1616,7 +1616,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @enum {string} */
-                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied";
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
                             error_description?: string;
                         };
                     };
@@ -1703,7 +1703,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @enum {string} */
-                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied";
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
                             error_description?: string;
                         };
                     };
@@ -1716,7 +1716,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @enum {string} */
-                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied";
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
                             error_description?: string;
                         };
                     };
@@ -1838,6 +1838,234 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/device/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a device authorization grant — issue device_code + user_code (RFC 8628) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        client_id: string;
+                        scope: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Device + user code issued (RFC 8628 §3.2) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            device_code: string;
+                            user_code: string;
+                            verification_uri: string;
+                            verification_uri_complete: string;
+                            expires_in: number;
+                            interval: number;
+                        };
+                    };
+                };
+                /** @description invalid_client / invalid_scope (RFC 6749 §5.2) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
+                            error_description?: string;
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Look up a pending device authorization by user_code (consent screen) */
+        get: {
+            parameters: {
+                query: {
+                    user_code: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Pending device authorization metadata */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            client_id: string;
+                            scopes: string[];
+                        };
+                    };
+                };
+                /** @description No pending device authorization for this user_code */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/device/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or deny a device authorization by user_code (web session only) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        user_code: string;
+                        /** @enum {string} */
+                        action: "approve" | "deny";
+                    };
+                };
+            };
+            responses: {
+                /** @description Device authorization approved or denied */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "approved" | "denied";
+                        };
+                    };
+                };
+                /** @description Device approvals can only come from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description No pending device authorization for this user_code */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -12168,7 +12396,7 @@ export interface components {
         };
         OAuthError: {
             /** @enum {string} */
-            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied";
+            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
             error_description?: string;
         };
         AuthorizeRequest: {
@@ -12196,6 +12424,11 @@ export interface components {
             refresh_token: string;
             client_id: string;
             scope?: string;
+        } | {
+            /** @enum {string} */
+            grant_type: "urn:ietf:params:oauth:grant-type:device_code";
+            device_code: string;
+            client_id: string;
         };
         TokenResponse: {
             access_token: string;
@@ -12220,6 +12453,31 @@ export interface components {
             grant_types_supported: string[];
             code_challenge_methods_supported: string[];
             token_endpoint_auth_methods_supported: string[];
+        };
+        DeviceAuthorizeRequest: {
+            client_id: string;
+            scope: string;
+        };
+        DeviceAuthorizeResponse: {
+            device_code: string;
+            user_code: string;
+            verification_uri: string;
+            verification_uri_complete: string;
+            expires_in: number;
+            interval: number;
+        };
+        DeviceInfoResponse: {
+            client_id: string;
+            scopes: string[];
+        };
+        DeviceVerifyRequest: {
+            user_code: string;
+            /** @enum {string} */
+            action: "approve" | "deny";
+        };
+        DeviceVerifyResponse: {
+            /** @enum {string} */
+            status: "approved" | "denied";
         };
         UserPublic: {
             _id: string;
