@@ -12,7 +12,7 @@
  *   - On success, the resolved `UserDocument` is exposed via `c.get('user')`.
  */
 import type { AuthenticationRequiredErrorSchema, Scope, UserStatusErrorSchema } from '@crowi/api-contract';
-import { ALL_SCOPES, parseScopeClaim } from '@crowi/api-contract';
+import { ALL_SCOPES, isScope, parseScopeClaim } from '@crowi/api-contract';
 import Debug from 'debug';
 import { getCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
@@ -44,8 +44,12 @@ export const AUTH_REQUIRED_BODY: AuthenticationRequiredError = {
  *  - `oauth`: an OAuth access token (`type: 'oauth_access'`). Scopes are
  *    limited to the token's `scope` claim and `clientId` identifies the
  *    issuing client.
+ *  - `pat`: a Personal Access Token (`crowi_pat_…` opaque Bearer,
+ *    RFC-0010 Phase 2). Scopes are the stored token's `scopes`; `tokenId`
+ *    is the PAT document id. Handlers that must stay web-session-only
+ *    (e.g. PAT management) branch on `kind !== 'web'`.
  */
-export type AuthContext = { kind: 'web' } | { kind: 'oauth'; clientId: string };
+export type AuthContext = { kind: 'web' } | { kind: 'oauth'; clientId: string } | { kind: 'pat'; tokenId: string };
 
 export interface HonoAuthVariables {
   user: UserDocument;
@@ -58,6 +62,7 @@ export interface HonoAuthVariables {
 export const createJwtAuth = (crowi: Crowi) => {
   const debug = Debug('crowi:hono:middleware:auth');
   const User = crowi.model('User');
+  const PersonalAccessToken = crowi.model('PersonalAccessToken');
   const jwtUtil = createJwtUtil(crowi);
 
   return createMiddleware<{ Variables: HonoAuthVariables }>(async (c, next) => {
@@ -81,16 +86,64 @@ export const createJwtAuth = (crowi: Crowi) => {
       return c.json(AUTH_REQUIRED_BODY, 401);
     }
 
-    // Bearer: accept both web-session (`access`) and OAuth
-    // (`oauth_access`) tokens. PAT (`crowi_pat_` opaque tokens) land in
-    // Phase 2. Cookie: web-session only.
-    const payload = fromCookie ? jwtUtil.verifyToken(token, 'access') : jwtUtil.verifyToken(token, ['access', 'oauth_access'] as const);
-    if (!payload) {
-      return c.json(AUTH_REQUIRED_BODY, 401);
+    // Resolve the request's principal up front. Three credential shapes:
+    //   - `crowi_pat_…` opaque Bearer → Personal Access Token (RFC-0010
+    //     Phase 2): looked up by SHA-256 hash, scopes from the stored row.
+    //   - JWT `access` (Bearer or cookie) → web session, all scopes.
+    //   - JWT `oauth_access` (Bearer only) → OAuth token, claim scopes.
+    // `resolved` carries the user plus a deferred scope/context applier so
+    // the shared status check below runs once for every credential shape.
+    let resolved: { userId: string; apply: () => Promise<void> } | null = null;
+
+    const isPat = !fromCookie && token.startsWith(PersonalAccessToken.TOKEN_PREFIX);
+
+    if (isPat) {
+      const record = await PersonalAccessToken.findActiveByHash(PersonalAccessToken.hashToken(token));
+      // A missing / revoked / expired PAT is filtered out by
+      // `findActiveByHash`'s query, so a null result is an ordinary 401.
+      if (!record) {
+        return c.json(AUTH_REQUIRED_BODY, 401);
+      }
+      const tokenId = record._id.toString();
+      resolved = {
+        userId: record.userId.toString(),
+        apply: async () => {
+          const scopes = new Set<Scope>();
+          for (const s of record.scopes) {
+            if (isScope(s)) scopes.add(s);
+          }
+          c.set('authScopes', scopes);
+          c.set('authContext', { kind: 'pat', tokenId });
+          // Best-effort last-used bump; never blocks the request.
+          await record.touchLastUsed();
+        },
+      };
+    } else {
+      // Bearer: accept both web-session (`access`) and OAuth
+      // (`oauth_access`) tokens. Cookie: web-session only.
+      const payload = fromCookie ? jwtUtil.verifyToken(token, 'access') : jwtUtil.verifyToken(token, ['access', 'oauth_access'] as const);
+      if (!payload) {
+        return c.json(AUTH_REQUIRED_BODY, 401);
+      }
+      resolved = {
+        userId: payload.userId,
+        apply: async () => {
+          // Web sessions (`access`, or the cookie fallback) get every scope
+          // so `requireScope` always passes and UI behaviour is unchanged.
+          // OAuth tokens are limited to their parsed `scope` claim.
+          if (payload.type === 'oauth_access') {
+            c.set('authScopes', parseScopeClaim(payload.scope));
+            c.set('authContext', { kind: 'oauth', clientId: payload.client_id });
+          } else {
+            c.set('authScopes', ALL_SCOPES);
+            c.set('authContext', { kind: 'web' });
+          }
+        },
+      };
     }
 
     try {
-      const user = await User.findById(payload.userId);
+      const user = await User.findById(resolved.userId);
       if (!user) {
         return c.json(AUTH_REQUIRED_BODY, 401);
       }
@@ -122,17 +175,11 @@ export const createJwtAuth = (crowi: Crowi) => {
 
       c.set('user', user as UserDocument);
 
-      // RFC-0010 scope resolution. Web sessions (`access`, or the cookie
-      // fallback) get every scope so `requireScope` always passes and UI
-      // behaviour is unchanged. OAuth tokens are limited to their parsed
-      // `scope` claim.
-      if (payload.type === 'oauth_access') {
-        c.set('authScopes', parseScopeClaim(payload.scope));
-        c.set('authContext', { kind: 'oauth', clientId: payload.client_id });
-      } else {
-        c.set('authScopes', ALL_SCOPES);
-        c.set('authContext', { kind: 'web' });
-      }
+      // RFC-0010 scope resolution — deferred to the credential-specific
+      // applier so this status-check path is shared across web / OAuth /
+      // PAT. Sets `authScopes` + `authContext` (and, for PATs, bumps
+      // `lastUsedAt`).
+      await resolved.apply();
 
       await next();
     } catch (error) {
