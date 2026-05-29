@@ -5,6 +5,7 @@ export * from './schemas/auth';
 export * from './schemas/installer';
 export * from './schemas/common';
 export * from './schemas/oauth';
+export * from './schemas/oauth-endpoints';
 export * from './schemas/me';
 export * from './schemas/access-token';
 export * from './schemas/page';

@@ -265,6 +265,175 @@ components:
             - message
       required:
         - error
+    OAuthError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum:
+            - invalid_request
+            - invalid_client
+            - invalid_grant
+            - unauthorized_client
+            - unsupported_grant_type
+            - invalid_scope
+            - access_denied
+        error_description:
+          type: string
+      required:
+        - error
+    AuthorizeRequest:
+      type: object
+      properties:
+        client_id:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+        scope:
+          type: string
+          minLength: 1
+        code_challenge:
+          type: string
+          minLength: 1
+        code_challenge_method:
+          type: string
+          enum:
+            - S256
+        state:
+          type: string
+      required:
+        - client_id
+        - redirect_uri
+        - scope
+        - code_challenge
+        - code_challenge_method
+    AuthorizeResponse:
+      type: object
+      properties:
+        redirectUri:
+          type: string
+      required:
+        - redirectUri
+    TokenRequest:
+      oneOf:
+        - type: object
+          properties:
+            grant_type:
+              type: string
+              enum:
+                - authorization_code
+            code:
+              type: string
+              minLength: 1
+            code_verifier:
+              type: string
+              minLength: 1
+            redirect_uri:
+              type: string
+              minLength: 1
+            client_id:
+              type: string
+              minLength: 1
+          required:
+            - grant_type
+            - code
+            - code_verifier
+            - redirect_uri
+            - client_id
+        - type: object
+          properties:
+            grant_type:
+              type: string
+              enum:
+                - refresh_token
+            refresh_token:
+              type: string
+              minLength: 1
+            client_id:
+              type: string
+              minLength: 1
+            scope:
+              type: string
+          required:
+            - grant_type
+            - refresh_token
+            - client_id
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum:
+            - Bearer
+        expires_in:
+          type: number
+        refresh_token:
+          type: string
+        scope:
+          type: string
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - refresh_token
+        - scope
+    RevokeRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+        token_type_hint:
+          type: string
+      required:
+        - token
+    DiscoveryResponse:
+      type: object
+      properties:
+        issuer:
+          type: string
+        authorization_endpoint:
+          type: string
+        token_endpoint:
+          type: string
+        revocation_endpoint:
+          type: string
+        device_authorization_endpoint:
+          type: string
+        scopes_supported:
+          type: array
+          items:
+            type: string
+        response_types_supported:
+          type: array
+          items:
+            type: string
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+        code_challenge_methods_supported:
+          type: array
+          items:
+            type: string
+        token_endpoint_auth_methods_supported:
+          type: array
+          items:
+            type: string
+      required:
+        - issuer
+        - authorization_endpoint
+        - token_endpoint
+        - revocation_endpoint
+        - scopes_supported
+        - response_types_supported
+        - grant_types_supported
+        - code_challenge_methods_supported
+        - token_endpoint_auth_methods_supported
     UserPublic:
       type: object
       properties:
@@ -6246,6 +6415,307 @@ paths:
                       - message
                 required:
                   - error
+  /oauth/authorize:
+    post:
+      tags:
+        - oauth
+      security:
+        - bearerAuth: []
+      summary: Issue an authorization code for the consenting web user (PKCE)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client_id:
+                  type: string
+                  minLength: 1
+                redirect_uri:
+                  type: string
+                  minLength: 1
+                scope:
+                  type: string
+                  minLength: 1
+                code_challenge:
+                  type: string
+                  minLength: 1
+                code_challenge_method:
+                  type: string
+                  enum:
+                    - S256
+                state:
+                  type: string
+              required:
+                - client_id
+                - redirect_uri
+                - scope
+                - code_challenge
+                - code_challenge_method
+      responses:
+        '200':
+          description: Authorization code issued; `redirectUri` carries `code` + `state`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirectUri:
+                    type: string
+                required:
+                  - redirectUri
+        '400':
+          description: Invalid request / scope / client (RFC 6749 §4.1.2.1)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - invalid_request
+                      - invalid_client
+                      - invalid_grant
+                      - unauthorized_client
+                      - unsupported_grant_type
+                      - invalid_scope
+                      - access_denied
+                  error_description:
+                    type: string
+                required:
+                  - error
+        '403':
+          description: Authorization codes can only be issued from a web session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - FORBIDDEN
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /oauth/token:
+    post:
+      tags:
+        - oauth
+      summary: Exchange an authorization code or refresh token for an access token
+      responses:
+        '200':
+          description: Access + refresh token issued (RFC 6749 §5.1)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    enum:
+                      - Bearer
+                  expires_in:
+                    type: number
+                  refresh_token:
+                    type: string
+                  scope:
+                    type: string
+                required:
+                  - access_token
+                  - token_type
+                  - expires_in
+                  - refresh_token
+                  - scope
+        '400':
+          description: >-
+            invalid_grant / invalid_request / unsupported_grant_type (RFC 6749
+            §5.2)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - invalid_request
+                      - invalid_client
+                      - invalid_grant
+                      - unauthorized_client
+                      - unsupported_grant_type
+                      - invalid_scope
+                      - access_denied
+                  error_description:
+                    type: string
+                required:
+                  - error
+        '401':
+          description: invalid_client (RFC 6749 §5.2)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - invalid_request
+                      - invalid_client
+                      - invalid_grant
+                      - unauthorized_client
+                      - unsupported_grant_type
+                      - invalid_scope
+                      - access_denied
+                  error_description:
+                    type: string
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /oauth/revoke:
+    post:
+      tags:
+        - oauth
+      summary: Revoke a refresh token or personal access token (RFC 7009)
+      responses:
+        '200':
+          description: Revocation processed (200 even for unknown tokens, RFC 7009)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /.well-known/oauth-authorization-server:
+    get:
+      tags:
+        - oauth
+      summary: OAuth 2.0 authorization-server metadata (RFC 8414)
+      responses:
+        '200':
+          description: Authorization-server metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issuer:
+                    type: string
+                  authorization_endpoint:
+                    type: string
+                  token_endpoint:
+                    type: string
+                  revocation_endpoint:
+                    type: string
+                  device_authorization_endpoint:
+                    type: string
+                  scopes_supported:
+                    type: array
+                    items:
+                      type: string
+                  response_types_supported:
+                    type: array
+                    items:
+                      type: string
+                  grant_types_supported:
+                    type: array
+                    items:
+                      type: string
+                  code_challenge_methods_supported:
+                    type: array
+                    items:
+                      type: string
+                  token_endpoint_auth_methods_supported:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - issuer
+                  - authorization_endpoint
+                  - token_endpoint
+                  - revocation_endpoint
+                  - scopes_supported
+                  - response_types_supported
+                  - grant_types_supported
+                  - code_challenge_methods_supported
+                  - token_endpoint_auth_methods_supported
   /user/{username}:
     get:
       tags:

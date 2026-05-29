@@ -1566,6 +1566,284 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue an authorization code for the consenting web user (PKCE) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        client_id: string;
+                        redirect_uri: string;
+                        scope: string;
+                        code_challenge: string;
+                        /** @enum {string} */
+                        code_challenge_method: "S256";
+                        state?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Authorization code issued; `redirectUri` carries `code` + `state` */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            redirectUri: string;
+                        };
+                    };
+                };
+                /** @description Invalid request / scope / client (RFC 6749 §4.1.2.1) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied";
+                            error_description?: string;
+                        };
+                    };
+                };
+                /** @description Authorization codes can only be issued from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exchange an authorization code or refresh token for an access token */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Access + refresh token issued (RFC 6749 §5.1) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            access_token: string;
+                            /** @enum {string} */
+                            token_type: "Bearer";
+                            expires_in: number;
+                            refresh_token: string;
+                            scope: string;
+                        };
+                    };
+                };
+                /** @description invalid_grant / invalid_request / unsupported_grant_type (RFC 6749 §5.2) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied";
+                            error_description?: string;
+                        };
+                    };
+                };
+                /** @description invalid_client (RFC 6749 §5.2) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied";
+                            error_description?: string;
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a refresh token or personal access token (RFC 7009) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Revocation processed (200 even for unknown tokens, RFC 7009) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Record<string, never>;
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** OAuth 2.0 authorization-server metadata (RFC 8414) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Authorization-server metadata */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issuer: string;
+                            authorization_endpoint: string;
+                            token_endpoint: string;
+                            revocation_endpoint: string;
+                            device_authorization_endpoint?: string;
+                            scopes_supported: string[];
+                            response_types_supported: string[];
+                            grant_types_supported: string[];
+                            code_challenge_methods_supported: string[];
+                            token_endpoint_auth_methods_supported: string[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/{username}": {
         parameters: {
             query?: never;
@@ -11887,6 +12165,61 @@ export interface components {
                 feature: string;
                 message: string;
             };
+        };
+        OAuthError: {
+            /** @enum {string} */
+            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied";
+            error_description?: string;
+        };
+        AuthorizeRequest: {
+            client_id: string;
+            redirect_uri: string;
+            scope: string;
+            code_challenge: string;
+            /** @enum {string} */
+            code_challenge_method: "S256";
+            state?: string;
+        };
+        AuthorizeResponse: {
+            redirectUri: string;
+        };
+        TokenRequest: {
+            /** @enum {string} */
+            grant_type: "authorization_code";
+            code: string;
+            code_verifier: string;
+            redirect_uri: string;
+            client_id: string;
+        } | {
+            /** @enum {string} */
+            grant_type: "refresh_token";
+            refresh_token: string;
+            client_id: string;
+            scope?: string;
+        };
+        TokenResponse: {
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            expires_in: number;
+            refresh_token: string;
+            scope: string;
+        };
+        RevokeRequest: {
+            token: string;
+            token_type_hint?: string;
+        };
+        DiscoveryResponse: {
+            issuer: string;
+            authorization_endpoint: string;
+            token_endpoint: string;
+            revocation_endpoint: string;
+            device_authorization_endpoint?: string;
+            scopes_supported: string[];
+            response_types_supported: string[];
+            grant_types_supported: string[];
+            code_challenge_methods_supported: string[];
+            token_endpoint_auth_methods_supported: string[];
         };
         UserPublic: {
             _id: string;

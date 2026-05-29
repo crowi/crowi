@@ -55,6 +55,7 @@ import {
   installerRoutes,
   meRoutes,
   accessTokenRoutes,
+  oauthRoutes,
   notificationRoutes,
   pageCollabRoutes,
   pagePreviewRoutes,
@@ -106,6 +107,13 @@ import {
   ListPluginsResponseSchema,
   MailSettingsValidationErrorSchema,
   MentionSchema,
+  AuthorizeRequestSchema,
+  AuthorizeResponseSchema,
+  DiscoveryResponseSchema,
+  OAuthErrorSchema,
+  RevokeRequestSchema,
+  TokenRequestSchema,
+  TokenResponseSchema,
   NotFoundErrorSchema,
   PageNotFoundErrorSchema,
   PageNotGrantedErrorSchema,
@@ -179,6 +187,15 @@ const schemas = [
   ['NotFoundError', NotFoundErrorSchema],
   ['ConflictError', ConflictErrorSchema],
   ['ServiceUnavailableError', ServiceUnavailableErrorSchema],
+
+  // oauth (RFC-0010 Phase 3)
+  ['OAuthError', OAuthErrorSchema],
+  ['AuthorizeRequest', AuthorizeRequestSchema],
+  ['AuthorizeResponse', AuthorizeResponseSchema],
+  ['TokenRequest', TokenRequestSchema],
+  ['TokenResponse', TokenResponseSchema],
+  ['RevokeRequest', RevokeRequestSchema],
+  ['DiscoveryResponse', DiscoveryResponseSchema],
 
   // user / shared
   ['UserPublic', UserPublicSchema],
@@ -282,6 +299,10 @@ const routeGroups = [
   // RFC-0010 Phase 2 — PAT management rides the `/me/*` apply; registered
   // right after meRoutes to mirror the buildHonoApp chain.
   accessTokenRoutes,
+  // RFC-0010 Phase 3 — OAuth authorization-server endpoints (authorize /
+  // token / revoke / discovery). Registered after access-token to mirror
+  // the buildHonoApp chain.
+  oauthRoutes,
   userRoutes,
   bookmarkRoutes,
   backlinkRoutes,
