@@ -5,6 +5,7 @@ export * from './app';
 export * from './installer';
 export * from './tokenAuth';
 export * from './me';
+export * from './access-token';
 export * from './user';
 export * from './bookmark';
 export * from './backlink';

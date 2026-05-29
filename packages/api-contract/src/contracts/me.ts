@@ -7,9 +7,10 @@
  *   POST   /me/picture                 — upload profile picture (multipart)
  *   DELETE /me/picture                 — clear profile picture
  *   PUT    /me/password                — change password (or set initial)
- *   GET    /me/apiToken                — read API token (generated lazily)
- *   POST   /me/apiToken                — regenerate API token
  *   GET    /me/recently-viewed-pages   — recently viewed page list
+ *
+ * Personal access token management (RFC-0010, replacing the legacy
+ * `GET/POST /me/apiToken`) lives in `./access-token.ts`.
  *
  * All endpoints require JWT authentication. The handler applies the
  * shared `createJwtAuth(crowi)` middleware to `/me/*` (broad apply) so
@@ -23,8 +24,6 @@
 import { createRoute, z } from '@hono/zod-openapi';
 
 import {
-  ApiTokenErrorResponseSchema,
-  ApiTokenResponseSchema,
   PasswordErrorResponseSchema,
   PasswordUpdateSuccessSchema,
   PictureUploadResponseSchema,
@@ -164,50 +163,6 @@ export const updatePasswordRoute = createRoute({
   },
 });
 
-export const getApiTokenRoute = createRoute({
-  method: 'get',
-  path: '/me/apiToken',
-  tags: ['me'],
-  security: [{ bearerAuth: [] }],
-  summary: 'Get current API token',
-  responses: {
-    200: {
-      description: 'Current API token',
-      content: { 'application/json': { schema: ApiTokenResponseSchema } },
-    },
-    401: {
-      description: 'Authentication required',
-      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
-    },
-    500: {
-      description: 'Internal server error',
-      content: { 'application/json': { schema: ApiTokenErrorResponseSchema } },
-    },
-  },
-});
-
-export const resetApiTokenRoute = createRoute({
-  method: 'post',
-  path: '/me/apiToken',
-  tags: ['me'],
-  security: [{ bearerAuth: [] }],
-  summary: 'Regenerate API token',
-  responses: {
-    200: {
-      description: 'Regenerated API token',
-      content: { 'application/json': { schema: ApiTokenResponseSchema } },
-    },
-    401: {
-      description: 'Authentication required',
-      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
-    },
-    500: {
-      description: 'Internal server error',
-      content: { 'application/json': { schema: ApiTokenErrorResponseSchema } },
-    },
-  },
-});
-
 export const recentlyViewedPagesRoute = createRoute({
   method: 'get',
   path: '/me/recently-viewed-pages',
@@ -236,7 +191,5 @@ export const meRoutes = {
   uploadPictureRoute,
   deletePictureRoute,
   updatePasswordRoute,
-  getApiTokenRoute,
-  resetApiTokenRoute,
   recentlyViewedPagesRoute,
 };

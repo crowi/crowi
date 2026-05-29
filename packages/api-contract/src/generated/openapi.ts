@@ -1090,130 +1090,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/me/apiToken": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get current API token */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Current API token */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status: "ok";
-                            apiToken: string;
-                        };
-                    };
-                };
-                /** @description Authentication required */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "AUTHENTICATION_REQUIRED";
-                                /** @enum {string} */
-                                message: "Authentication is required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status: "error";
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        /** Regenerate API token */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Regenerated API token */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status: "ok";
-                            apiToken: string;
-                        };
-                    };
-                };
-                /** @description Authentication required */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "AUTHENTICATION_REQUIRED";
-                                /** @enum {string} */
-                                message: "Authentication is required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status: "error";
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/me/recently-viewed-pages": {
         parameters: {
             query?: never;
@@ -1303,7 +1179,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -1381,6 +1257,310 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/access-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's personal access tokens (metadata only) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Personal access token list (no secrets) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            accessTokens: {
+                                id: string;
+                                name: string;
+                                scopes: string[];
+                                expiresAt: string | null;
+                                lastUsedAt: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Personal access tokens can only be managed from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Issue a personal access token (plaintext returned once) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        scopes: string[];
+                        /** Format: date-time */
+                        expiresAt?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Token issued; `token` holds the one-time plaintext secret */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            scopes: string[];
+                            expiresAt: string | null;
+                            lastUsedAt: string | null;
+                            createdAt: string;
+                            token: string;
+                        };
+                    };
+                };
+                /** @description One or more requested scopes are not issuable */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INVALID_SCOPE";
+                                message: string;
+                                details?: {
+                                    invalidScopes: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Personal access tokens can only be managed from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/access-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a personal access token */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Token revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            scopes: string[];
+                            expiresAt: string | null;
+                            lastUsedAt: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Personal access tokens can only be managed from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description No such token belonging to the current user */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -1493,7 +1673,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -1597,7 +1777,7 @@ export interface paths {
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                     grant?: number;
                                     grantedUsers?: string[];
                                     creator?: string | {
@@ -1808,7 +1988,7 @@ export interface paths {
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                     grant?: number;
                                     grantedUsers?: string[];
                                     creator?: string | {
@@ -2023,7 +2203,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -2221,7 +2401,7 @@ export interface paths {
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                     grant?: number;
                                     grantedUsers?: string[];
                                     creator?: string | {
@@ -2418,7 +2598,7 @@ export interface paths {
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                     grant?: number;
                                     grantedUsers?: string[];
                                     creator?: string | {
@@ -2701,7 +2881,7 @@ export interface paths {
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                     grant?: number;
                                     grantedUsers?: string[];
                                     creator?: string | {
@@ -3705,7 +3885,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: {
@@ -3887,7 +4067,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -4081,7 +4261,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -4244,7 +4424,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -4448,7 +4628,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -4555,7 +4735,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -4719,7 +4899,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -5121,7 +5301,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -5314,7 +5494,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -5672,7 +5852,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -5867,7 +6047,7 @@ export interface paths {
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
-                                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 grant?: number;
                                 grantedUsers?: string[];
                                 creator?: string | {
@@ -7747,7 +7927,7 @@ export interface paths {
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                     grant?: number;
                                     grantedUsers?: string[];
                                     creator?: string | {
@@ -11179,7 +11359,7 @@ export interface paths {
                                     _id: string;
                                     path: string;
                                     /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 };
                                 /** @enum {string} */
                                 action: "COMMENT" | "LIKE" | "MENTION";
@@ -11324,6 +11504,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Issue a short-lived notifications token (JWT) for the realtime-invalidation WebSocket */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Signed notifications token + selfUserId + expiresAt */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            selfUserId: string;
+                            expiresAt: string;
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Token signing exception */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/status": {
         parameters: {
             query?: never;
@@ -11432,7 +11685,7 @@ export interface paths {
                                     _id: string;
                                     path: string;
                                     /** @enum {string|null} */
-                                    status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                                    status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 };
                                 /** @enum {string} */
                                 action: "COMMENT" | "LIKE" | "MENTION";
@@ -11724,7 +11977,7 @@ export interface components {
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
-            status?: "wip" | "published" | "deleted" | "deprecated" | null;
+            status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
             grant?: number;
             grantedUsers?: string[];
             creator?: string | {
@@ -11826,7 +12079,7 @@ export interface components {
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
-            status?: "wip" | "published" | "deleted" | "deprecated" | null;
+            status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
             grant?: number;
             grantedUsers?: string[];
             creator?: {
@@ -12033,7 +12286,7 @@ export interface components {
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
-                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                 grant?: number;
                 grantedUsers?: string[];
                 creator?: string | {
@@ -12140,7 +12393,7 @@ export interface components {
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
-                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                 grant?: number;
                 grantedUsers?: string[];
                 creator?: string | {
@@ -12244,7 +12497,7 @@ export interface components {
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
-                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                 grant?: number;
                 grantedUsers?: string[];
                 creator?: {
@@ -12398,7 +12651,7 @@ export interface components {
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
-                status?: "wip" | "published" | "deleted" | "deprecated" | null;
+                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                 grant?: number;
                 grantedUsers?: string[];
                 creator?: string | {

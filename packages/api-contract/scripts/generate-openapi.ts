@@ -54,6 +54,7 @@ import {
   draftRoutes,
   installerRoutes,
   meRoutes,
+  accessTokenRoutes,
   notificationRoutes,
   pageCollabRoutes,
   pagePreviewRoutes,
@@ -278,6 +279,9 @@ const routeGroups = [
   installerRoutes,
   tokenAuthRoutes,
   meRoutes,
+  // RFC-0010 Phase 2 — PAT management rides the `/me/*` apply; registered
+  // right after meRoutes to mirror the buildHonoApp chain.
+  accessTokenRoutes,
   userRoutes,
   bookmarkRoutes,
   backlinkRoutes,

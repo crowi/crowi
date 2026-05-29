@@ -49,6 +49,26 @@ export type Scope = (typeof SCOPES)[number];
 /** Every catalog scope as a `Set`, used to grant web sessions all scopes. */
 export const ALL_SCOPES: ReadonlySet<Scope> = new Set(SCOPES);
 
+/**
+ * RFC-0010 §Security — scopes a Personal Access Token may be issued with.
+ *
+ * Every catalog scope **except** the reserved `admin:*` (OQ-C resolved:
+ * admin API is web-session-only in v1, so an `admin:*` PAT must never be
+ * mintable). The umbrella `read` / `write` are issuable (PHASE2-Q1): a CLI
+ * legitimately wants an "all read" token, and `scopeSatisfies` already
+ * models umbrella implication. `POST /me/access-tokens` validates the
+ * requested scopes against this set; anything outside it (including
+ * catalog-unknown strings) is a 400.
+ */
+export const ISSUABLE_SCOPES: readonly Scope[] = SCOPES.filter((s) => !s.startsWith('admin:'));
+
+const ISSUABLE_SCOPE_SET: ReadonlySet<string> = new Set(ISSUABLE_SCOPES);
+
+/** Type guard: may `value` be issued to a PAT? (catalog scope, non-`admin:*`) */
+export function isIssuableScope(value: string): value is Scope {
+  return ISSUABLE_SCOPE_SET.has(value);
+}
+
 const SCOPE_SET: ReadonlySet<string> = new Set(SCOPES);
 
 /** Type guard: is `value` a known catalog scope? */

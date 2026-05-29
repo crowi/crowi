@@ -83,6 +83,7 @@ import { commentRoutes } from './contracts/comment';
 import { draftRoutes } from './contracts/draft';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
+import { accessTokenRoutes } from './contracts/access-token';
 import { notificationRoutes } from './contracts/notification';
 import { pageCollabRoutes } from './contracts/page-collab';
 import { pageRoutes } from './contracts/page';
@@ -99,13 +100,13 @@ import type { BookmarkResponseSchema, ListMyBookmarksResponseSchema, RemoveBookm
 import type { AddCommentResponseSchema, DeleteCommentResponseSchema, ListCommentsResponseSchema } from './schemas/comment';
 import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
 import type {
-  ApiTokenResponseSchema,
   PasswordUpdateSuccessSchema,
   PictureUploadResponseSchema,
   RecentlyViewedPagesResponseSchema,
   SuccessResponseSchema,
   UserProfileResponseSchema,
 } from './schemas/me';
+import type { AccessTokenSchema, CreateAccessTokenResponseSchema, ListAccessTokensResponseSchema } from './schemas/access-token';
 import type {
   ListNotificationsResponseSchema,
   MarkAllAsReadResponseSchema,
@@ -161,7 +162,9 @@ type UserProfileResponse = z.infer<typeof UserProfileResponseSchema>;
 type PictureUploadResponse = z.infer<typeof PictureUploadResponseSchema>;
 type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
 type PasswordUpdateSuccess = z.infer<typeof PasswordUpdateSuccessSchema>;
-type ApiTokenResponse = z.infer<typeof ApiTokenResponseSchema>;
+type AccessToken = z.infer<typeof AccessTokenSchema>;
+type ListAccessTokensResponse = z.infer<typeof ListAccessTokensResponseSchema>;
+type CreateAccessTokenResponse = z.infer<typeof CreateAccessTokenResponseSchema>;
 type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;
 type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
 type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
@@ -264,6 +267,17 @@ const stubProfile: UserProfileResponse = {
   hasPassword: false,
   createdAt: '',
 };
+
+const stubAccessToken: AccessToken = {
+  id: '',
+  name: '',
+  scopes: [],
+  expiresAt: null,
+  lastUsedAt: null,
+  createdAt: '',
+};
+
+const stubCreateAccessToken: CreateAccessTokenResponse = { ...stubAccessToken, token: '' };
 
 const stubUserPublic = {
   _id: '',
@@ -503,9 +517,10 @@ const appAuthMeUserChain = new OpenAPIHono()
   .openapi(meRoutes.uploadPictureRoute, (c) => c.json({ status: true } satisfies PictureUploadResponse, 200))
   .openapi(meRoutes.deletePictureRoute, (c) => c.json({ status: 'ok' } satisfies SuccessResponse, 200))
   .openapi(meRoutes.updatePasswordRoute, (c) => c.json({ status: 'ok', message: '' } satisfies PasswordUpdateSuccess, 200))
-  .openapi(meRoutes.getApiTokenRoute, (c) => c.json({ status: 'ok', apiToken: '' } satisfies ApiTokenResponse, 200))
-  .openapi(meRoutes.resetApiTokenRoute, (c) => c.json({ status: 'ok', apiToken: '' } satisfies ApiTokenResponse, 200))
   .openapi(meRoutes.recentlyViewedPagesRoute, (c) => c.json({ pages: [] } satisfies RecentlyViewedPagesResponse, 200))
+  .openapi(accessTokenRoutes.listAccessTokensRoute, (c) => c.json({ accessTokens: [] } satisfies ListAccessTokensResponse, 200))
+  .openapi(accessTokenRoutes.createAccessTokenRoute, (c) => c.json(stubCreateAccessToken, 201))
+  .openapi(accessTokenRoutes.deleteAccessTokenRoute, (c) => c.json(stubAccessToken, 200))
   .openapi(userRoutes.getUserPageRoute, (c) => c.json(stubUserPage, 200))
   .openapi(userRoutes.getUserBookmarksRoute, (c) => c.json(stubUserBookmarks, 200))
   .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200));
