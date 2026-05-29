@@ -207,6 +207,8 @@
   "page_list.loading_more": "Loading…",
   "page_list.portal_label": "Portal",
   "page_list.create_portal": "Create Portal",
+  "page_list.portal_draft_notice": "A portal is being created here (draft).",
+  "page_list.continue_portal_draft": "Continue editing",
   "page_list.what_is_portal": "What is Portal?",
   "page_list.portal_help_title": "What is Portal?",
   "page_list.portal_help_intro": "A portal is a special page that lives at a path ending with a trailing slash (\"/\"). It is shown together with the list of pages under that path and acts as the top page (index / guide) for that folder.",

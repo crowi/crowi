@@ -2,7 +2,7 @@
 
 import { type ListPagesRequest, PageStatusEnum, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { Compass, Folder, HelpCircle, Plus } from 'lucide-react';
+import { Compass, Folder, HelpCircle, Pencil, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Breadcrumb } from '@/components/breadcrumb';
@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ErrorAlert } from '@/components/ui/error-alert';
+import { useAuth } from '@/lib/use-auth';
+import { draftEditHref } from '@/lib/use-drafts';
 import { pageDisplayName } from '@/lib/page-path';
 import { usePageList } from '@/lib/use-page-list';
 import type { PageListVariant } from './page-list-item';
@@ -47,6 +49,7 @@ function formatPageCount(count: number, pager: { offset: number; next: number | 
 
 export function PageList({ initialParams = {}, variant = 'default' }: PageListProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [params, setParams] = useState<ListPagesRequest>({
     limit: DEFAULT_PAGE_LIMIT,
     offset: 0,
@@ -83,22 +86,26 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
     return <ErrorAlert message={m['page_list.failed_to_load']()} />;
   }
 
-  // Resolve the portal document to actually render. Two cases are
-  // treated as "no portal":
-  //   - trash subtrees: the server forces portalPage=null, but suppress
-  //     here too so the legacy isTrashPage UI is preserved even if the
-  //     API ever returns one.
-  //   - draft portals: a portal the current user started but hasn't
-  //     published yet is visible to its creator (RFC-0004), but it has
-  //     no committed revision to render (shows a perpetual "Rendering…"),
-  //     so we don't surface it as the portal. The folder falls back to
-  //     the "Create Portal" header instead.
+  // Resolve the portal document to actually render. A draft portal is
+  // never rendered as the portal card (it has no committed revision —
+  // it showed a perpetual "Rendering…"); trash subtrees never render a
+  // portal either (the server forces portalPage=null, but suppress here
+  // too so the legacy isTrashPage UI is preserved).
   const rawPortalPage = isTrash ? undefined : (data?.portalPage as PageWithRevision | undefined);
-  const portalPage = rawPortalPage && rawPortalPage.status !== PageStatusEnum.DRAFT ? rawPortalPage : undefined;
+  const isDraftPortal = rawPortalPage?.status === PageStatusEnum.DRAFT;
+  const portalPage = rawPortalPage && !isDraftPortal ? rawPortalPage : undefined;
 
-  // Empty: no (renderable) portal document and no children. Show a minimal
-  // header so the user still sees breadcrumb / title, plus a "no pages" hint.
-  if (!data || (data.pages.length === 0 && !portalPage)) {
+  // A draft portal the *current user* started: surface a "portal in
+  // progress" header with a "continue editing" CTA into its draft editor.
+  // Drafts created by someone else (only visible to admins, RFC-0004)
+  // fall through to the normal "Create Portal" CTA — they aren't the
+  // viewer's to continue.
+  const portalCreatorId = typeof rawPortalPage?.creator === 'string' ? rawPortalPage.creator : rawPortalPage?.creator?._id;
+  const ownDraftPortalId = isDraftPortal && user && portalCreatorId === user.id ? rawPortalPage?._id : undefined;
+
+  // Empty: nothing to render in the portal slot and no children. Show a
+  // minimal header so the user still sees breadcrumb / title + "no pages".
+  if (!data || (data.pages.length === 0 && !portalPage && !ownDraftPortalId)) {
     return (
       <div className="space-y-6">
         {portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash} />}
@@ -124,7 +131,7 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
           </div>
         </Card>
       ) : (
-        portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash} />
+        portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash && !ownDraftPortalId} draftPortalId={ownDraftPortalId} />
       )}
 
       {/* Children list */}
@@ -140,16 +147,21 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
 }
 
 /**
- * Header shown when listing children of a path that has no portal document of
- * its own (e.g. `/foo/` exists implicitly because `/foo/bar` does).
- * Mirrors the breadcrumb + title block PageHeader provides for a real page.
+ * Header shown when listing children of a path that has no (renderable)
+ * portal document of its own (e.g. `/foo/` exists implicitly because
+ * `/foo/bar` does). Mirrors the breadcrumb + title block PageHeader
+ * provides for a real page.
  *
- * When `showCreatePortal` is set, a "Create Portal" action + a "What is
- * Portal?" help dialog are offered — this is the entry point for turning
- * an implicit folder into a real portal page (the legacy `page_list.html`
- * "Create Portal" side button). Suppressed for the trash variant.
+ * Right-side action depends on state:
+ *   - `draftPortalId` set → the current user already has a draft portal
+ *     in progress here; show a "portal in progress" caption + a
+ *     "Continue editing" CTA into its draft editor.
+ *   - else `showCreatePortal` → a "Create Portal" action + a "What is
+ *     Portal?" help dialog (the legacy `page_list.html` side button).
+ *     Suppressed for the trash variant.
  */
-function PortalFallbackHeader({ path, showCreatePortal = false }: { path: string; showCreatePortal?: boolean }) {
+function PortalFallbackHeader({ path, showCreatePortal = false, draftPortalId }: { path: string; showCreatePortal?: boolean; draftPortalId?: string }) {
+  const router = useRouter();
   const title = getPortalTitle(path);
   // Trailing slash + folder icon mark this view as "the children of a
   // folder", separating it visually from a real page view (which has
@@ -160,14 +172,24 @@ function PortalFallbackHeader({ path, showCreatePortal = false }: { path: string
     <div className="border-b pb-4">
       <Breadcrumb path={path} />
       <div className="mt-1 flex items-start justify-between gap-4">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Folder className="h-7 w-7 text-muted-foreground shrink-0" aria-hidden="true" />
-          <span>
-            {title}
-            {!isRoot && '/'}
-          </span>
-        </h1>
-        {showCreatePortal && <CreatePortalActions path={path} />}
+        <div className="min-w-0">
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Folder className="h-7 w-7 text-muted-foreground shrink-0" aria-hidden="true" />
+            <span>
+              {title}
+              {!isRoot && '/'}
+            </span>
+          </h1>
+          {draftPortalId && <p className="mt-1 text-sm text-muted-foreground">{m['page_list.portal_draft_notice']()}</p>}
+        </div>
+        {draftPortalId ? (
+          <Button size="sm" className="shrink-0" onClick={() => router.push(draftEditHref(draftPortalId))}>
+            <Pencil className="mr-1 h-4 w-4" />
+            {m['page_list.continue_portal_draft']()}
+          </Button>
+        ) : (
+          showCreatePortal && <CreatePortalActions path={path} />
+        )}
       </div>
     </div>
   );

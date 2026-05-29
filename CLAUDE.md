@@ -189,6 +189,8 @@ go to `TODO.md`.
 - Installed during `pnpm install`.
 
 ### Commit messages
+- **Always write commit messages in English** (subject + body), even when
+  the working conversation is in Japanese.
 - Conventional Commits: `feat(api): ...`, `feat(web): ...`,
   `feat(api-contract): ...`, `fix(...)`, `refactor(...)`, `chore(...)`,
   `docs(todo): ...`.
@@ -201,6 +203,9 @@ go to `TODO.md`.
 Phase 9 で `@changesets/cli` を導入済み。v2 開発中も `pnpm changeset add`
 で各リリース対象の変更を `.changeset/*.md` として **蓄積していく** ことで、
 2.0.0-alpha1 / 安定版リリース時に過去変更のリリースノートが自動生成される。
+
+**changeset 本文も英語で書く** (commit message と同様、リリースノートに
+そのまま載るため)。会話が日本語でも changeset の要約は英語。
 
 **Add のタイミング — 「ユーザー価値の単位」で 1 つ**:
 - ✅ 機能追加・バグ修正・破壊的変更 → 1 changeset

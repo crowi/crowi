@@ -207,6 +207,8 @@
   "page_list.loading_more": "読み込み中...",
   "page_list.portal_label": "ポータル",
   "page_list.create_portal": "ポータルを作成",
+  "page_list.portal_draft_notice": "作成中のポータルがあります (下書き)。",
+  "page_list.continue_portal_draft": "編集を続ける",
   "page_list.what_is_portal": "ポータルとは?",
   "page_list.portal_help_title": "ポータルとは?",
   "page_list.portal_help_intro": "ポータルは、末尾が「/」で終わるパスに作られる特別なページです。そのパス配下のページ一覧と一緒に表示され、フォルダのトップページ (索引や案内) として機能します。",
