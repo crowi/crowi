@@ -40,6 +40,7 @@ import { pageToResponse } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:search');
@@ -67,6 +68,9 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
   // `/search`, so this is a single-route install with no double-apply
   // risk.
   app.use('/search', createJwtAuth(crowi));
+
+  // RFC-0010 — search is a page read.
+  applyScope(app, searchPagesRoute, 'pages:read');
 
   return app.openapi(searchPagesRoute, async (c) => {
     const user = c.get('user');

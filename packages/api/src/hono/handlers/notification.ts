@@ -40,6 +40,7 @@ import { isValidObjectId, toISOStringOrNull, toStringId, toUserPublic } from 'sr
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 
@@ -175,6 +176,14 @@ export const registerNotificationRoutes = <E extends OpenAPIHono<CrowiHonoBindin
 
   app.use('/notifications/*', createJwtAuth(crowi));
   app.use('/notifications', createJwtAuth(crowi));
+
+  // RFC-0010 — mark-read / open mutate read-state, so they are
+  // notifications:write; listing / count / token are read.
+  applyScope(app, listNotificationsRoute, 'notifications:read');
+  applyScope(app, getUnreadCountRoute, 'notifications:read');
+  applyScope(app, getNotificationsTokenRoute, 'notifications:read');
+  applyScope(app, markAllAsReadRoute, 'notifications:write');
+  applyScope(app, openNotificationRoute, 'notifications:write');
 
   return (
     app

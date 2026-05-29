@@ -54,6 +54,7 @@ import { pageToResponse } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 
 const debug = Debug('crowi:hono:handlers:me');
 
@@ -132,6 +133,18 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
   // Batch 1's per-path approach but applied broadly because every route
   // in this group needs the same guard).
   app.use('/me/*', createJwtAuth(crowi));
+
+  // RFC-0010 — profile scopes. The legacy apiToken endpoints
+  // (get/reset) are removed in Phase 2; until then they carry profile
+  // scopes so the catalog covers every live route.
+  applyScope(app, getProfileRoute, 'profile:read');
+  applyScope(app, recentlyViewedPagesRoute, 'profile:read');
+  applyScope(app, getApiTokenRoute, 'profile:read');
+  applyScope(app, updateProfileRoute, 'profile:write');
+  applyScope(app, uploadPictureRoute, 'profile:write');
+  applyScope(app, deletePictureRoute, 'profile:write');
+  applyScope(app, updatePasswordRoute, 'profile:write');
+  applyScope(app, resetApiTokenRoute, 'profile:write');
 
   return app
     .openapi(getProfileRoute, async (c) => {

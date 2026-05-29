@@ -39,6 +39,7 @@ import { toISOStringOrNull } from 'src/util/ts-rest-helpers';
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 import { withRateLimit } from '../middleware/rate-limit';
+import { applyScope } from '../middleware/require-scope';
 
 const debug = Debug('crowi:hono:handlers:autocomplete');
 
@@ -79,6 +80,10 @@ export const registerAutocompleteRoutes = <E extends OpenAPIHono<CrowiHonoBindin
   // path AFTER jwtAuth so `c.get('user')` is populated).
   app.use('/users/autocomplete', rateLimitMiddleware);
   app.use('/pages/autocomplete', rateLimitMiddleware);
+
+  // RFC-0010 — autocomplete (page + mention pickers) is a page read.
+  applyScope(app, autocompleteUsersRoute, 'pages:read');
+  applyScope(app, autocompletePagesRoute, 'pages:read');
 
   return (
     app

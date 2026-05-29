@@ -31,6 +31,7 @@ import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 
 import { PAGE_NOT_FOUND_BODY, invalidRequestBody } from './_helpers/errors';
 
@@ -81,6 +82,11 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
 
   app.use('/comments/*', createJwtAuth(crowi));
   app.use('/comments', createJwtAuth(crowi));
+
+  // RFC-0010 — comment scopes.
+  applyScope(app, listCommentsRoute, 'comments:read');
+  applyScope(app, addCommentRoute, 'comments:write');
+  applyScope(app, deleteCommentRoute, 'comments:write');
 
   return app
     .openapi(listCommentsRoute, async (c) => {

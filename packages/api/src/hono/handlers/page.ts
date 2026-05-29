@@ -48,6 +48,7 @@ import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToRespons
 import { isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
+import { applyScope } from '../middleware/require-scope';
 
 import { INVALID_PAGE_ID_BODY, PAGE_NOT_FOUND_BODY } from './_helpers/errors';
 
@@ -81,6 +82,29 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   const Page = crowi.model('Page');
   const User = crowi.model('User');
   const Watcher = crowi.model('Watcher');
+
+  // RFC-0010 — per-route scope guards (web sessions hold all scopes, so
+  // these only narrow OAuth tokens). Registered before the openapi
+  // handlers below so the guard runs first on a matching method + path.
+  //
+  // `seen` is a *view* side-effect (recording who looked at a page), so
+  // it is `pages:read`, not write — matching the read-oriented intent of
+  // marking a page seen. `like` / `unlike` / `watch` mutate per-user
+  // page relations and are `pages:write`.
+  applyScope(app, getPageRoute, 'pages:read');
+  applyScope(app, listPagesRoute, 'pages:read');
+  applyScope(app, getSeenUsersRoute, 'pages:read');
+  applyScope(app, getWatchStatusRoute, 'pages:read');
+  applyScope(app, seenPageRoute, 'pages:read');
+  applyScope(app, createPageRoute, 'pages:write');
+  applyScope(app, updatePageRoute, 'pages:write');
+  applyScope(app, setPageGrantRoute, 'pages:write');
+  applyScope(app, likePageRoute, 'pages:write');
+  applyScope(app, unlikePageRoute, 'pages:write');
+  applyScope(app, setWatchStatusRoute, 'pages:write');
+  applyScope(app, deletePageRoute, 'pages:write');
+  applyScope(app, revertDeletedPageRoute, 'pages:write');
+  applyScope(app, renamePageRoute, 'pages:write');
 
   /**
    * Build the seen-users response. `seenUsersCount` reflects the full

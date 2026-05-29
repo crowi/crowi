@@ -36,6 +36,7 @@ import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 
 import { PAGE_NOT_FOUND_BODY, invalidRequestBody } from './_helpers/errors';
 
@@ -92,6 +93,11 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
   // factory output.
   app.use('/pages/*', createJwtAuth(crowi));
   app.use('/pages', createJwtAuth(crowi));
+
+  // RFC-0010 — revision reads are page reads.
+  applyScope(app, listRevisionsRoute, 'pages:read');
+  applyScope(app, getRevisionsRoute, 'pages:read');
+  applyScope(app, getRevisionRoute, 'pages:read');
 
   return (
     app
