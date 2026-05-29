@@ -6,7 +6,7 @@ import { SettingsLayout } from './settings-layout';
 import { ProfileForm } from './profile-form';
 import { ProfilePicture } from './profile-picture';
 import { PasswordForm } from './password-form';
-import { ApiTokenSection } from './api-token-section';
+import { AccessTokensSection } from './access-tokens-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { m } from '@paraglide/messages.js';
@@ -103,11 +103,11 @@ export default function SettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>{m['me.api_token.heading']()}</CardTitle>
-              <CardDescription>{m['me.api_token.lead']()}</CardDescription>
+              <CardTitle>{m['me.access_tokens.heading']()}</CardTitle>
+              <CardDescription>{m['me.access_tokens.lead']()}</CardDescription>
             </CardHeader>
             <CardContent>
-              <ApiTokenSection />
+              <AccessTokensSection />
             </CardContent>
           </Card>
         </div>
