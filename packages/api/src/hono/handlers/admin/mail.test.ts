@@ -63,7 +63,7 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
       expect(res.status).toBe(200);
       // The default-on @crowi/plugin-mail-smtp registers the 'smtp' driver,
       // selected by the default mail.driver. No crowi.config.json in tests.
-      expect(res.body).toEqual({ from: 'noreply@example.com', activeDriver: 'smtp' });
+      expect(res.body).toEqual({ from: 'noreply@example.com', activeDriver: 'smtp', activePlugin: '@crowi/plugin-mail-smtp' });
     });
 
     it('returns an empty from when unset', async () => {

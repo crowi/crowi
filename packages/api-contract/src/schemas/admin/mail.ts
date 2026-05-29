@@ -12,6 +12,9 @@ import { z } from '@hono/zod-openapi';
 export const GetMailSettingsResponseSchema = z.object({
   from: z.string(),
   activeDriver: z.string(),
+  /** npm name of the plugin that registered the active driver, for
+   * linking to its config page. Empty when no sender is active. */
+  activePlugin: z.string(),
 });
 export type GetMailSettingsResponse = z.infer<typeof GetMailSettingsResponseSchema>;
 

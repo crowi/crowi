@@ -440,6 +440,7 @@ const stubSecuritySettings: GetSecuritySettingsResponse = {
 const stubMailSettings: GetMailSettingsResponse = {
   from: '',
   activeDriver: '',
+  activePlugin: '',
 };
 const stubUpdateMailSettings: UpdateMailSettingsResponse = { ok: true };
 const stubSendTestMail: SendTestMailResponse = { ok: true, to: '' };

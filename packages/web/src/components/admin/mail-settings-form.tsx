@@ -79,6 +79,9 @@ export function MailSettingsForm() {
 
   const fromError = fieldErrors.from;
   const activeDriver = data.activeDriver;
+  // Link straight to the active sender's config page when we know which
+  // plugin registered it; otherwise fall back to the plugin list.
+  const pluginSettingsHref = data.activePlugin ? `/admin/plugins/edit?name=${encodeURIComponent(data.activePlugin)}` : '/admin/plugins';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
@@ -124,7 +127,7 @@ export function MailSettingsForm() {
             )}
           </div>
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link href="/admin/plugins">{m['admin.mail.plugins_link']()}</Link>
+            <Link href={pluginSettingsHref}>{m['admin.mail.plugins_link']()}</Link>
           </Button>
         </CardContent>
       </Card>

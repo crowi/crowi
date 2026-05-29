@@ -30,11 +30,12 @@ const debug = Debug('crowi:hono:handlers:admin:mail');
 
 const KEY_FROM = 'mail:from';
 
-/** Resolve the registered name of the currently-active mail sender. */
-const resolveActiveDriverName = (crowi: Crowi): string => {
+/** Resolve the registered driver + plugin name of the active mail sender. */
+const resolveActiveSender = (crowi: Crowi): { driver: string; plugin: string } => {
   const plugins = crowi.getPlugins();
   const active = plugins.active.mail;
-  return active ? (plugins.mail.entryOf(active)?.driverName ?? '') : '';
+  const entry = active ? plugins.mail.entryOf(active) : undefined;
+  return { driver: entry?.driverName ?? '', plugin: entry?.plugin ?? '' };
 };
 
 export const registerAdminMailRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
@@ -44,10 +45,12 @@ export const registerAdminMailRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
   return app
     .openapi(adminMailRoutes.getMailSettingsRoute, async (c) => {
       const ns = getCrowiConfigNamespace(crowi);
+      const active = resolveActiveSender(crowi);
       return c.json(
         {
           from: coerceString(ns[KEY_FROM]),
-          activeDriver: resolveActiveDriverName(crowi),
+          activeDriver: active.driver,
+          activePlugin: active.plugin,
         },
         200,
       );
