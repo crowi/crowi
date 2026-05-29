@@ -33,9 +33,13 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
   `requireScope(scope)` middleware を page/revision/draft/backlink/search/
   autocomplete/comment/bookmark/attachment/notification/me/user の各ルートに
   method 別付与。不足時 403 `INSUFFICIENT_SCOPE` + `WWW-Authenticate`
-- [ ] **Phase 2: Personal Access Token + legacy apiToken 廃止** — `PersonalAccessToken`
-  model + `/me/access-tokens` + web UI、`createJwtAuth` の `crowi_pat_` 受理、
-  legacy `User.apiToken` / `/me/apiToken` 完全削除
+- [x] **Phase 2: Personal Access Token + legacy apiToken 廃止** — `PersonalAccessToken`
+  model (SHA-256 hash 保存 / scope / 期限 / 失効) + `GET/POST/DELETE /me/access-tokens`
+  (発行時のみ平文 `crowi_pat_…` を返す) + 設定画面の PAT 発行/一覧/失効 UI、
+  `createJwtAuth` の `crowi_pat_` 受理 (scope 適用 / 期限切れ・失効を弾く / `lastUsedAt` 更新)。
+  発行可能 scope は `admin:*` を除外、PAT 管理 API は web セッション専用 (403 `FORBIDDEN`)。
+  legacy `User.apiToken` / `generateApiToken` / `findUserByApiToken` / 未使用
+  `accessTokenParser` / `GET/POST /me/apiToken` を fallback なしで完全削除
 - [ ] **Phase 3: Authorization Code + PKCE + discovery** — `OAuthClient` /
   `OAuthAuthorizationCode` / `OAuthRefreshToken` model、`/oauth/token` /
   `/oauth/authorize` / `/oauth/revoke`、`.well-known/oauth-authorization-server`、
