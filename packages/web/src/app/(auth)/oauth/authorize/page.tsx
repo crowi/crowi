@@ -4,16 +4,8 @@ import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { m } from '@paraglide/messages.js';
 import { apiClientV2 } from '@/lib/api-client';
+import { clientDisplayName } from '@/lib/oauth-clients';
 import { ConsentCard } from './consent-card';
-
-/** First-party client display names (v1 has only `crowi-cli`, PHASE3-Q11). */
-const CLIENT_NAMES: Record<string, string> = {
-  'crowi-cli': 'Crowi CLI',
-};
-
-function clientDisplayName(clientId: string): string {
-  return CLIENT_NAMES[clientId] ?? clientId;
-}
 
 /**
  * RFC-0010 Phase 3 — OAuth consent screen.
