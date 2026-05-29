@@ -41,7 +41,7 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
     await Config.deleteMany({
       $or: [
         { ns: 'crowi', key: 'google:clientSecret' },
-        { ns: 'crowi', key: 'mail:smtpPassword' },
+        { ns: 'crowi', key: 'upload:aws:secretAccessKey' },
         { ns: 'notification', key: 'slack:token' },
       ],
     });
@@ -71,8 +71,8 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
     it('reports plaintext + encrypted counts and the per-entry status', async () => {
       // Seed: one plaintext (legacy) sensitive value and one already-encrypted via updateConfig.
       await Config.findOneAndUpdate(
-        { ns: 'crowi', key: 'mail:smtpPassword' },
-        { ns: 'crowi', key: 'mail:smtpPassword', value: JSON.stringify('legacy-plain') },
+        { ns: 'crowi', key: 'upload:aws:secretAccessKey' },
+        { ns: 'crowi', key: 'upload:aws:secretAccessKey', value: JSON.stringify('legacy-plain') },
         { upsert: true },
       ).exec();
       await Config.updateConfig('notification', 'slack:token', 'live-token-value');
@@ -87,7 +87,7 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
       const byKey = new Map<string, { present: boolean; encrypted: boolean }>(
         (res.body.entries as Array<{ ns: string; key: string; present: boolean; encrypted: boolean }>).map((e) => [`${e.ns}:${e.key}`, e]),
       );
-      expect(byKey.get('crowi:mail:smtpPassword')).toEqual(expect.objectContaining({ present: true, encrypted: false }));
+      expect(byKey.get('crowi:upload:aws:secretAccessKey')).toEqual(expect.objectContaining({ present: true, encrypted: false }));
       expect(byKey.get('notification:slack:token')).toEqual(expect.objectContaining({ present: true, encrypted: true }));
       expect(byKey.get('crowi:google:clientSecret')).toEqual(expect.objectContaining({ present: false, encrypted: false }));
     });
@@ -108,8 +108,8 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
     it('rewrites plaintext sensitive rows in place and skips already-encrypted ones', async () => {
       // Plaintext (legacy) row
       await Config.findOneAndUpdate(
-        { ns: 'crowi', key: 'mail:smtpPassword' },
-        { ns: 'crowi', key: 'mail:smtpPassword', value: JSON.stringify('legacy-plain') },
+        { ns: 'crowi', key: 'upload:aws:secretAccessKey' },
+        { ns: 'crowi', key: 'upload:aws:secretAccessKey', value: JSON.stringify('legacy-plain') },
         { upsert: true },
       ).exec();
       // Already encrypted row
@@ -123,12 +123,12 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
       // Other registry entries (e.g. google:clientSecret, AWS keys) absent → counted as missing
       expect(res.body.missing).toBeGreaterThan(0);
 
-      // Storage check: smtpPassword now starts with the prefix and decrypts back.
-      const stored = await Config.findOne({ ns: 'crowi', key: 'mail:smtpPassword' }).exec();
+      // Storage check: the secret now starts with the prefix and decrypts back.
+      const stored = await Config.findOne({ ns: 'crowi', key: 'upload:aws:secretAccessKey' }).exec();
       expect(isEncrypted(stored.value)).toBe(true);
 
       const config = await Config.loadAllConfig();
-      expect(config.crowi['mail:smtpPassword']).toBe('legacy-plain');
+      expect(config.crowi['upload:aws:secretAccessKey']).toBe('legacy-plain');
       expect(config.notification['slack:token']).toBe('live-token');
     });
 

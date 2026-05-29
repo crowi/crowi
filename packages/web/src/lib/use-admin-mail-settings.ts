@@ -2,13 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import type {
-  GetMailSettingsResponse,
-  SendTestMailRequest,
-  SendTestMailResponse,
-  UpdateMailSettingsRequest,
-  UpdateMailSettingsResponse,
-} from '@crowi/api-contract';
+import type { GetMailSettingsResponse, SendTestMailResponse, UpdateMailSettingsRequest, UpdateMailSettingsResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
 export const adminMailSettingsKeys = {
@@ -79,8 +73,8 @@ export function useUpdateMailSettings() {
 
 export function useSendTestMail() {
   return useMutation({
-    mutationFn: async (body: SendTestMailRequest): Promise<SendTestMailResponse> => {
-      const response = await apiClientV2.admin.mail.test.$post({ json: body });
+    mutationFn: async (): Promise<SendTestMailResponse> => {
+      const response = await apiClientV2.admin.mail.test.$post({ json: {} });
       if (response.status === 200) return (await response.json()) as SendTestMailResponse;
       if (response.status === 502) {
         const parsed = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;

@@ -1,97 +1,18 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { CheckCircle2, Loader2, Send } from 'lucide-react';
-import type { GetMailSettingsResponse, SendTestMailRequest, UpdateMailSettingsRequest } from '@crowi/api-contract';
+import type { UpdateMailSettingsRequest } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { SecretField } from '@/components/admin/secret-field';
 import { useAuth } from '@/lib/use-auth';
 import { MailSettingsValidationFailure, useMailSettings, useSendTestMail, useUpdateMailSettings } from '@/lib/use-admin-mail-settings';
 import { m } from '@paraglide/messages.js';
-
-interface FormState {
-  from: string;
-  smtpHost: string;
-  /** Empty string here means "not set" — converted to/from the wire's number 0. */
-  smtpPort: string;
-  smtpUser: string;
-  smtpPassword: string;
-  awsRegion: string;
-  awsAccessKeyId: string;
-  awsSecretAccessKey: string;
-}
-
-function toFormState(data: GetMailSettingsResponse): FormState {
-  return {
-    from: data.from,
-    smtpHost: data.smtpHost,
-    smtpPort: data.smtpPort > 0 ? String(data.smtpPort) : '',
-    smtpUser: data.smtpUser,
-    smtpPassword: '',
-    awsRegion: data.aws.region,
-    awsAccessKeyId: data.aws.accessKeyId,
-    awsSecretAccessKey: '',
-  };
-}
-
-interface SecretFlags {
-  smtpPasswordDirty: boolean;
-  smtpPasswordClearRequested: boolean;
-  awsSecretDirty: boolean;
-  awsSecretClearRequested: boolean;
-}
-
-function buildUpdateBody(state: FormState, initial: FormState, flags: SecretFlags): UpdateMailSettingsRequest {
-  const body: UpdateMailSettingsRequest = {};
-
-  if (state.from !== initial.from) body.from = state.from;
-  if (state.smtpHost !== initial.smtpHost) body.smtpHost = state.smtpHost;
-  if (state.smtpPort !== initial.smtpPort) {
-    const n = state.smtpPort === '' ? NaN : Number(state.smtpPort);
-    if (Number.isFinite(n)) body.smtpPort = n;
-  }
-  if (state.smtpUser !== initial.smtpUser) body.smtpUser = state.smtpUser;
-
-  if (flags.smtpPasswordClearRequested) {
-    body.smtpPassword = '';
-  } else if (flags.smtpPasswordDirty && state.smtpPassword !== '') {
-    body.smtpPassword = state.smtpPassword;
-  }
-
-  const aws: NonNullable<UpdateMailSettingsRequest['aws']> = {};
-  if (state.awsRegion !== initial.awsRegion) aws.region = state.awsRegion;
-  if (state.awsAccessKeyId !== initial.awsAccessKeyId) aws.accessKeyId = state.awsAccessKeyId;
-  if (flags.awsSecretClearRequested) {
-    aws.secretAccessKey = '';
-  } else if (flags.awsSecretDirty && state.awsSecretAccessKey !== '') {
-    aws.secretAccessKey = state.awsSecretAccessKey;
-  }
-  if (Object.keys(aws).length > 0) body.aws = aws;
-
-  return body;
-}
-
-/**
- * Build the body for POST /admin/mail/test from the current form state. Only
- * the SMTP-relevant fields are included; the test endpoint also falls back to
- * saved values for any field omitted here.
- */
-function buildTestBody(state: FormState, smtpPasswordDirty: boolean): SendTestMailRequest {
-  const body: NonNullable<SendTestMailRequest> = {};
-  if (state.smtpHost !== '') body.smtpHost = state.smtpHost;
-  if (state.smtpPort !== '') {
-    const n = Number(state.smtpPort);
-    if (Number.isFinite(n)) body.smtpPort = n;
-  }
-  if (state.smtpUser !== '') body.smtpUser = state.smtpUser;
-  if (smtpPasswordDirty && state.smtpPassword !== '') body.smtpPassword = state.smtpPassword;
-  return body;
-}
 
 export function MailSettingsForm() {
   const { data, isLoading, isError, refetch } = useMailSettings();
@@ -99,39 +20,20 @@ export function MailSettingsForm() {
   const sendTest = useSendTestMail();
   const { user } = useAuth();
 
-  const [state, setState] = useState<FormState | null>(null);
-  const [initial, setInitial] = useState<FormState | null>(null);
-  const [hydratedFrom, setHydratedFrom] = useState<GetMailSettingsResponse | null>(null);
-  const [smtpPasswordDirty, setSmtpPasswordDirty] = useState(false);
-  const [smtpPasswordClearRequested, setSmtpPasswordClearRequested] = useState(false);
-  const [awsSecretDirty, setAwsSecretDirty] = useState(false);
-  const [awsSecretClearRequested, setAwsSecretClearRequested] = useState(false);
+  const [from, setFrom] = useState<string | null>(null);
+  const [initialFrom, setInitialFrom] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [testSentAt, setTestSentAt] = useState<{ at: number; to: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  if (data && hydratedFrom === null) {
-    const next = toFormState(data);
-    setState(next);
-    setInitial(next);
-    setHydratedFrom(data);
+  if (data && initialFrom === null) {
+    setFrom(data.from);
+    setInitialFrom(data.from);
   }
 
-  const isDirty = useMemo(() => {
-    if (!state || !initial) return false;
-    if (smtpPasswordDirty || smtpPasswordClearRequested) return true;
-    if (awsSecretDirty || awsSecretClearRequested) return true;
-    return (
-      state.from !== initial.from ||
-      state.smtpHost !== initial.smtpHost ||
-      state.smtpPort !== initial.smtpPort ||
-      state.smtpUser !== initial.smtpUser ||
-      state.awsRegion !== initial.awsRegion ||
-      state.awsAccessKeyId !== initial.awsAccessKeyId
-    );
-  }, [state, initial, smtpPasswordDirty, smtpPasswordClearRequested, awsSecretDirty, awsSecretClearRequested]);
+  const isDirty = useMemo(() => from !== null && initialFrom !== null && from !== initialFrom, [from, initialFrom]);
 
-  if (isLoading || !data || !state || !initial) {
+  if (isLoading || !data || from === null) {
     return <LoadingSpinner message={m['admin.common.loading']()} size="sm" className="py-4" />;
   }
 
@@ -148,29 +50,15 @@ export function MailSettingsForm() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!state || !initial) return;
+    if (!isDirty) return;
 
     setFieldErrors({});
     setTestSentAt(null);
 
-    const body = buildUpdateBody(state, initial, {
-      smtpPasswordDirty,
-      smtpPasswordClearRequested,
-      awsSecretDirty,
-      awsSecretClearRequested,
-    });
-
-    if (Object.keys(body).length === 0) return;
-
+    const body: UpdateMailSettingsRequest = { from };
     try {
       await update.mutateAsync(body);
-      const cleared: FormState = { ...state, smtpPassword: '', awsSecretAccessKey: '' };
-      setState(cleared);
-      setInitial(cleared);
-      setSmtpPasswordDirty(false);
-      setSmtpPasswordClearRequested(false);
-      setAwsSecretDirty(false);
-      setAwsSecretClearRequested(false);
+      setInitialFrom(from);
       setSavedAt(Date.now());
     } catch (err) {
       if (err instanceof MailSettingsValidationFailure) {
@@ -180,19 +68,17 @@ export function MailSettingsForm() {
   };
 
   const handleTestSend = async () => {
-    if (!state) return;
     setTestSentAt(null);
     try {
-      const result = await sendTest.mutateAsync(buildTestBody(state, smtpPasswordDirty));
+      const result = await sendTest.mutateAsync();
       setTestSentAt({ at: Date.now(), to: result.to });
     } catch {
       // surfaced via sendTest.error below
     }
   };
 
-  const errorOf = (key: string) => fieldErrors[key];
-  const hasSmtpPassword = data.smtpPassword.hasValue;
-  const hasAwsSecret = data.aws.secretAccessKey.hasValue;
+  const fromError = fieldErrors.from;
+  const activeDriver = data.activeDriver;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
@@ -207,16 +93,16 @@ export function MailSettingsForm() {
             <Input
               id="mail-from"
               type="email"
-              value={state.from}
-              onChange={(e) => setState({ ...state, from: e.target.value })}
-              aria-invalid={Boolean(errorOf('from'))}
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              aria-invalid={Boolean(fromError)}
               placeholder={m['admin.mail.field_from_placeholder']()}
               autoComplete="off"
               maxLength={254}
             />
-            {errorOf('from') && (
+            {fromError && (
               <p className="text-xs text-destructive" role="alert">
-                {errorOf('from')}
+                {fromError}
               </p>
             )}
           </div>
@@ -225,150 +111,21 @@ export function MailSettingsForm() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{m['admin.mail.section_smtp_heading']()}</CardTitle>
-          <CardDescription>{m['admin.mail.section_smtp_lead']()}</CardDescription>
+          <CardTitle>{m['admin.mail.section_sender_heading']()}</CardTitle>
+          <CardDescription>{m['admin.mail.section_sender_lead']()}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="space-y-1.5 md:col-span-2">
-              <Label htmlFor="smtp-host">{m['admin.mail.field_smtp_host_label']()}</Label>
-              <Input
-                id="smtp-host"
-                value={state.smtpHost}
-                onChange={(e) => setState({ ...state, smtpHost: e.target.value })}
-                aria-invalid={Boolean(errorOf('smtpHost'))}
-                placeholder={m['admin.mail.field_smtp_host_placeholder']()}
-                autoComplete="off"
-                maxLength={255}
-              />
-              {errorOf('smtpHost') && (
-                <p className="text-xs text-destructive" role="alert">
-                  {errorOf('smtpHost')}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="smtp-port">{m['admin.mail.field_smtp_port_label']()}</Label>
-              <Input
-                id="smtp-port"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={65535}
-                value={state.smtpPort}
-                onChange={(e) => setState({ ...state, smtpPort: e.target.value })}
-                aria-invalid={Boolean(errorOf('smtpPort'))}
-                placeholder="587"
-                autoComplete="off"
-              />
-              {errorOf('smtpPort') && (
-                <p className="text-xs text-destructive" role="alert">
-                  {errorOf('smtpPort')}
-                </p>
-              )}
-            </div>
-          </div>
-
+        <CardContent className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="smtp-user">{m['admin.mail.field_smtp_user_label']()}</Label>
-            <Input
-              id="smtp-user"
-              value={state.smtpUser}
-              onChange={(e) => setState({ ...state, smtpUser: e.target.value })}
-              aria-invalid={Boolean(errorOf('smtpUser'))}
-              autoComplete="off"
-              maxLength={255}
-            />
-            {errorOf('smtpUser') && (
-              <p className="text-xs text-destructive" role="alert">
-                {errorOf('smtpUser')}
-              </p>
+            <Label>{m['admin.mail.active_driver_label']()}</Label>
+            {activeDriver ? (
+              <code className="inline-flex rounded bg-muted px-2 py-1 text-sm">{activeDriver}</code>
+            ) : (
+              <p className="text-sm text-destructive">{m['admin.mail.no_active_driver']()}</p>
             )}
           </div>
-
-          <SecretField
-            id="smtp-password"
-            label={m['admin.mail.field_smtp_password_label']()}
-            value={state.smtpPassword}
-            hasValue={hasSmtpPassword}
-            dirty={smtpPasswordDirty}
-            clearRequested={smtpPasswordClearRequested}
-            onChange={(value) => {
-              setState({ ...state, smtpPassword: value });
-              setSmtpPasswordDirty(true);
-              setSmtpPasswordClearRequested(false);
-            }}
-            onClearRequested={() => {
-              setSmtpPasswordClearRequested(true);
-              setSmtpPasswordDirty(false);
-              setState({ ...state, smtpPassword: '' });
-            }}
-            onUndoClear={() => setSmtpPasswordClearRequested(false)}
-            error={errorOf('smtpPassword')}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{m['admin.mail.section_ses_heading']()}</CardTitle>
-          <CardDescription>{m['admin.mail.section_ses_lead']()}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="ses-region">{m['admin.mail.field_region_label']()}</Label>
-              <Input
-                id="ses-region"
-                value={state.awsRegion}
-                onChange={(e) => setState({ ...state, awsRegion: e.target.value })}
-                aria-invalid={Boolean(errorOf('aws.region'))}
-                placeholder={m['admin.mail.field_region_placeholder']()}
-                autoComplete="off"
-              />
-              {errorOf('aws.region') && (
-                <p className="text-xs text-destructive" role="alert">
-                  {errorOf('aws.region')}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ses-access-key">{m['admin.mail.field_access_key_label']()}</Label>
-              <Input
-                id="ses-access-key"
-                value={state.awsAccessKeyId}
-                onChange={(e) => setState({ ...state, awsAccessKeyId: e.target.value })}
-                aria-invalid={Boolean(errorOf('aws.accessKeyId'))}
-                autoComplete="off"
-              />
-              {errorOf('aws.accessKeyId') && (
-                <p className="text-xs text-destructive" role="alert">
-                  {errorOf('aws.accessKeyId')}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <SecretField
-            id="ses-secret-key"
-            label={m['admin.mail.field_secret_label']()}
-            value={state.awsSecretAccessKey}
-            hasValue={hasAwsSecret}
-            dirty={awsSecretDirty}
-            clearRequested={awsSecretClearRequested}
-            onChange={(value) => {
-              setState({ ...state, awsSecretAccessKey: value });
-              setAwsSecretDirty(true);
-              setAwsSecretClearRequested(false);
-            }}
-            onClearRequested={() => {
-              setAwsSecretClearRequested(true);
-              setAwsSecretDirty(false);
-              setState({ ...state, awsSecretAccessKey: '' });
-            }}
-            onUndoClear={() => setAwsSecretClearRequested(false)}
-            error={errorOf('aws.secretAccessKey')}
-          />
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link href="/admin/plugins">{m['admin.mail.plugins_link']()}</Link>
+          </Button>
         </CardContent>
       </Card>
 

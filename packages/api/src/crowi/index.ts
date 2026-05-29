@@ -16,7 +16,7 @@ import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
 import { hasSlackConfig } from '../models/config';
-import mailer from 'src/util/mailer';
+import { MailService } from 'src/service/mail';
 import slack from 'src/util/slack';
 import { resetKeyProvider } from 'src/util/crypto';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
@@ -67,7 +67,7 @@ class Crowi {
   // FIXME after service/config typed
   config: any;
 
-  mailer: any = {};
+  mailer: MailService | null = null;
 
   lru: any = {};
 
@@ -478,7 +478,10 @@ class Crowi {
     return this.pluginRegistries.active.search;
   }
 
-  getMailer() {
+  getMailer(): MailService {
+    if (!this.mailer) {
+      this.mailer = new MailService(this);
+    }
     return this.mailer;
   }
 
@@ -496,7 +499,11 @@ class Crowi {
   }
 
   setupMailer() {
-    this.mailer = mailer(this);
+    // The MailService resolves the active sender lazily from the plugin
+    // registry on each send, so there is no transport state to build
+    // here — just construct the service. Kept as a boot step so the
+    // boot sequence reads uniformly and future eager checks have a home.
+    this.mailer = new MailService(this);
   }
 
   setupSlack() {

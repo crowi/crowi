@@ -111,9 +111,6 @@ describe('Config model test', () => {
       expect(config.crowi).toHaveProperty('upload:aws:region', region);
       expect(config.crowi).toHaveProperty('upload:aws:accessKeyId', accessKeyId);
       expect(config.crowi).toHaveProperty('upload:aws:secretAccessKey', secretAccessKey);
-      expect(config.crowi).toHaveProperty('mail:aws:region', region);
-      expect(config.crowi).toHaveProperty('mail:aws:accessKeyId', accessKeyId);
-      expect(config.crowi).toHaveProperty('mail:aws:secretAccessKey', secretAccessKey);
     });
   });
 });

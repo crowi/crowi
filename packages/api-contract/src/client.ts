@@ -439,11 +439,7 @@ const stubSecuritySettings: GetSecuritySettingsResponse = {
 };
 const stubMailSettings: GetMailSettingsResponse = {
   from: '',
-  smtpHost: '',
-  smtpPort: 0,
-  smtpUser: '',
-  smtpPassword: { hasValue: false },
-  aws: { region: '', accessKeyId: '', secretAccessKey: { hasValue: false } },
+  activeDriver: '',
 };
 const stubUpdateMailSettings: UpdateMailSettingsResponse = { ok: true };
 const stubSendTestMail: SendTestMailResponse = { ok: true, to: '' };

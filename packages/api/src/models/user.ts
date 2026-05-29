@@ -718,8 +718,8 @@ export default (crowi: Crowi) => {
                 return next();
               }
 
-              mailer.send(
-                {
+              mailer
+                .send({
                   to: user.email,
                   subject: 'Invitation to ' + config.crowi['app:title'],
                   template: 'admin/userInvitation.txt',
@@ -729,12 +729,12 @@ export default (crowi: Crowi) => {
                     url: config.crowi['app:url'],
                     appTitle: config.crowi['app:title'],
                   },
-                },
-                function (err, s) {
-                  debug('completed to send email: ', err, s);
-                  next();
-                },
-              );
+                })
+                // A send failure must not abort user creation — log and
+                // continue so the remaining invitations still go out.
+                .then(() => debug('completed to send email to', user.email))
+                .catch((err) => debug('failed to send invitation email: ', err))
+                .finally(() => next());
             },
             function (err) {
               debug('Sending invitation email completed.', err);
