@@ -3,7 +3,9 @@
  * `@hono/zod-openapi` route definitions. Five endpoints:
  *
  *   POST /auth/login    — public, returns access/refresh tokens
- *   POST /auth/register — public, returns access/refresh tokens
+ *   POST /auth/register — public, creates a pending account and returns
+ *                          `{ status }` (email confirmation / admin approval);
+ *                          no auth tokens until activated
  *   POST /auth/refresh  — public, exchanges a refresh token for new tokens
  *   POST /auth/logout   — auth required (server-side is stateless; the
  *                          client discards tokens — this is just an ACK)
