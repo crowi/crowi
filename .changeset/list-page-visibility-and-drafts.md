@@ -4,16 +4,7 @@
 '@crowi/web': minor
 ---
 
-ページ一覧 (`/...slug.../`, `/`) の可視性と表示を 2 点修正:
+Two fixes to the visibility and display of the page list (`/...slug.../`, `/`):
 
-- **root / no-path 分岐の grant フィルタを修正**: 旧実装は
-  `grant: { $in: [1, 2] }` でハードコードしており、(a) 閲覧者自身の
-  GRANT_OWNER / GRANT_SPECIFIED ページが落ち、(b) grantedUsers 未チェック
-  のため GRANT_RESTRICTED ページが非メンバーにも漏れる懸念があった。
-  Page model の `visiblePageGrantOr` / `visiblePageStatusOr` を `$and` で
-  組み合わせる形に揃え、path 系の listing と振る舞いを統一。
-- **draft ページの視覚的識別**: `PageStatusSchema` に `'draft'` を追加
-  (path 系 listing には RFC-0004 で閲覧者自身の draft が含まれていたが、
-  contract enum に無いため status フィールドが TypeScript 上で表現できず
-  バッジを出せなかった)。`PageListItem` に amber の「下書き」バッジを
-  追加。これで自分の draft が published と並んでいても一目で区別できる。
+- **Fixed the grant filter on the root / no-path branch**: the old implementation hard-coded `grant: { $in: [1, 2] }`, which (a) dropped the viewer's own GRANT_OWNER / GRANT_SPECIFIED pages, and (b) risked leaking GRANT_RESTRICTED pages to non-members because grantedUsers was not checked. Aligned it to combine the Page model's `visiblePageGrantOr` / `visiblePageStatusOr` with `$and`, unifying the behaviour with the path-based listings.
+- **Visual identification of draft pages**: added `'draft'` to `PageStatusSchema` (path-based listings already included the viewer's own drafts via RFC-0004, but the status field couldn't be represented in TypeScript without the enum value, so the badge couldn't be shown). Added an amber "Draft" badge to `PageListItem`, so your own drafts are distinguishable at a glance even when sitting next to published pages.

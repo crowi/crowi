@@ -2,30 +2,12 @@
 '@crowi/web': minor
 ---
 
-ページ一覧 (`/` 終端のリストページ) を一覧性重視で再設計。各行を
-タイトル前置きの 2 行レイアウトに変更し、末尾セグメントをページ名として
-前面に出し、ディレクトリパス・作成者・更新日時を淡色の 2 行目にまとめた。
-いいね / コメント数は右端に整列して列を成すため、行をまたいだ比較が
-しやすい。読み込み中はレイアウトに合わせたスケルトンを表示する。
+Redesigned the page list (the list page at trailing-`/` paths) for scannability. Each row is now a title-first two-line layout that brings the last path segment forward as the page name and groups the directory path, author, and updated time into a muted second line. Like / comment counts are right-aligned so they form columns, making cross-row comparison easy. A layout-matching skeleton is shown while loading.
 
-ポータルページがある場合は従来どおり本文とページ操作 (リネーム / 削除 /
-いいね / ブックマーク / ウォッチ) を表示し、「ポータル」ラベルで明示する。
+When a portal page exists, its body and page actions (rename / delete / like / bookmark / watch) are shown as before, marked with a "Portal" label.
 
-リネームダイアログに、配下のサブページをまとめて移動する renameTree の
-UI (サブツリーの件数表示・移動プレビュー) を追加した。一括移動の実行は
-バックエンド対応までの間ガードしてあり、現状は単一ページのみ移動できる。
+Added a renameTree UI to the rename dialog for moving the subpages underneath as a batch (subtree count display + move preview). Executing the batch move is guarded until the backend supports it; for now only a single page can be moved.
 
-ページ名の表示ロジックを日付階層に対応させた。`/user/foo/日報/2026/05/23`
-のように末尾が連続する数値セグメントになっているパスは、リスト・ページ
-ヘッダー H1・ブラウザタブのタイトルすべてで「23」ではなく「2026/05/23」を
-ページ名として表示する。これは path-based page name を採用した Crowi の
-特徴 ―― `/日報/2026/` で年単位、`/日報/2026/05/` で月単位の一覧が見える
-構造 ―― を表示側でも素直に表現したもの。
+Made the page-name display logic date-hierarchy aware. A path whose tail is consecutive numeric segments, like `/user/foo/diary/2026/05/23`, displays "2026/05/23" rather than "23" as the page name everywhere — in the list, the page-header H1, and the browser tab title. This is a faithful display-side expression of Crowi's path-based page-name design — the structure where `/diary/2026/` shows a per-year list and `/diary/2026/05/` a per-month one.
 
-ユーザープロフィールの「作成したページ」「ブックマーク」一覧 (`/user/<name>` の
-タブ・`/user/<name>/recent-create`・`/user/<name>/bookmarks`) を、リストページ
-と同じ共通プリミティブ (`PageRowsCard` / `PageRowsSkeleton` /
-`PageListSectionHeader` / `PageListEmptyCard` / `LoadMoreButton`) で
-書き直し、行・カード余白・スケルトン・件数表示・空状態の見た目をすべて
-揃えた。同時に、表示件数のデフォルトをリスト 50 → 100、ユーザー系
-一覧 10 → 30 に引き上げ、再設計後の密度に合わせて初期表示量を増やした。
+Rewrote the user-profile "created pages" / "bookmarks" listings (the `/user/<name>` tabs, `/user/<name>/recent-create`, `/user/<name>/bookmarks`) on the same shared primitives as the list page (`PageRowsCard` / `PageRowsSkeleton` / `PageListSectionHeader` / `PageListEmptyCard` / `LoadMoreButton`), unifying the look of rows, card padding, skeletons, count display, and empty states. At the same time the default page sizes were raised — list 50 → 100, user listings 10 → 30 — to match the post-redesign density.

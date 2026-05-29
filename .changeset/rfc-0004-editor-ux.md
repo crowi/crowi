@@ -4,37 +4,16 @@
 '@crowi/api-contract': minor
 ---
 
-Editor UX enhancement (RFC-0004) v2.2 が利用可能に。RFC-0003 で導入した
-最小構成の CodeMirror 6 エディタに、エディタを「使える」から「生産的」へ
-引き上げる 4 機能を追加した。
+Editor UX enhancement (RFC-0004) v2.2 is now available. Four features were added on top of the minimal CodeMirror 6 editor introduced in RFC-0003, lifting the editor from "usable" to "productive".
 
-主な機能:
+Main features:
 
-- **入力補完 (autocomplete)**: `@` + 文字でユーザー、`[[` + 文字で
-  ページの候補ドロップダウンが cursor 下に出る。display / insert / view
-  の 3 分離 (挿入は `@username` / `[[/full/path]]` の正規形)、100ms
-  debounce、LRU キャッシュ + footer の Refresh、コードブロック / 数式 /
-  リンク構文内とモバイル幅では抑制
-- **paste ハンドラ**: 単一 URL の paste を `[text](url)` / autolink へ
-  smart 変換、画像 blob は `pasted-<ts>.<ext>` 自動命名で
-  `POST /api/v2/attachments/upload` へアップロード、`![Uploading…(%)…]()`
-  プレースホルダを Yjs トランザクションで in-place 進捗更新
-- **ドラッグ&ドロップアップロード**: ファイルドロップでカーソル位置に
-  進捗付きアップロード + 参照挿入 (画像 `![](url)` / その他 `[](url)`)、
-  複数ファイル直列処理、read-only モードでは無効化
-- **下書き (draft) ページ**: 新規ページが `Page.status: 'draft'` で始まり
-  保存で `'published'` へ一方向遷移。`POST/GET/DELETE /api/v2/pages/drafts`、
-  同一パス競合は 409 + owner 情報、`/me/creating-pages` 管理ビュー。
-  draft は author 限定で listing / search / collab から除外
-- **toast 通知ユーティリティ**: 上記が共有する `notify.info/warn/error`
-  の最小実装
+- **Autocomplete**: `@` + characters suggests users, `[[` + characters suggests pages, in a dropdown under the cursor. Three-way separation of display / insert / view (insertion uses the canonical `@username` / `[[/full/path]]` forms), 100ms debounce, LRU cache + a footer Refresh, suppressed inside code blocks / math / link syntax and at mobile widths.
+- **Paste handler**: smart-converts a single pasted URL to `[text](url)` / autolink, uploads image blobs to `POST /api/v2/attachments/upload` with auto-naming `pasted-<ts>.<ext>`, and updates an `![Uploading…(%)…]()` placeholder in-place via a Yjs transaction.
+- **Drag & drop upload**: dropping files uploads with progress at the cursor position and inserts a reference (images `![](url)` / others `[](url)`), processes multiple files serially, and is disabled in read-only mode.
+- **Draft pages**: a new page starts as `Page.status: 'draft'` and transitions one-way to `'published'` on save. `POST/GET/DELETE /api/v2/pages/drafts`, same-path conflicts return 409 + owner info, with a `/me/creating-pages` management view. Drafts are author-only and excluded from listing / search / collab.
+- **Toast notification utility**: a minimal `notify.info/warn/error` shared by the above.
 
-`@crowi/api-contract` の minor bump は autocomplete / drafts /
-attachment-upload の新契約と、`Page` schema への `status` field 追加に
-よるもの。アップロードはレート制限 20/min/user・サイズ上限
-(paste 10MB / D&D 50MB)・ファイル種別 allow-list を強制する。
+The `@crowi/api-contract` minor bump is for the new autocomplete / drafts / attachment-upload contracts and the added `status` field on the `Page` schema. Uploads enforce a 20/min/user rate limit, size caps (paste 10MB / D&D 50MB), and a file-type allow-list.
 
-利用者向けの使い方は `apps/crowi-site/content/docs/ja/guide/`
-(`attachments.mdx` / `pages.mdx` / `markdown.mdx`)、運用者向けの
-アップロード制限は `apps/crowi-site/content/docs/ja/operations/storage.mdx`、
-設計判断は `docs/rfcs/0004-editor-ux-enhancement.md` を参照。
+See `apps/crowi-site/content/docs/ja/guide/` (`attachments.mdx` / `pages.mdx` / `markdown.mdx`) for the user-facing guide, `apps/crowi-site/content/docs/ja/operations/storage.mdx` for operator upload limits, and `docs/rfcs/0004-editor-ux-enhancement.md` for the design rationale.

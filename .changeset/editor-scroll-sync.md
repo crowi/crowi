@@ -3,16 +3,6 @@
 '@crowi/web': minor
 ---
 
-`/_edit` ページが viewport 全体に貼り付く layout になり、 編集 header と
-保存 footer が画面に固定された状態で editor と preview がそれぞれ独立に
-内部スクロールするようになった。
+The `/_edit` page now uses a layout that fills the whole viewport, with the editing header and save footer pinned to the screen while the editor and preview each scroll independently inside.
 
-加えて、 editor と preview の **双方向 scroll sync** を実装。 旧 Crowi
-の単純な scrollTop 比例ではなく、 行 + ブロック内オフセット ratio を
-組み合わせた fractional-line interpolation で同期するため、 code fence や
-list のような長いブロック内でも連続的に追従し、 line の頭にガクッと
-ジャンプしない。 サーバ側で preview 用 mdast の top-level 各ノードに
-`data-source-line` を埋め込み (`POST /api/v2/pages/preview`)、 web 側の
-`useScrollSync` hook がその marker と CodeMirror の line block 情報を
-線形補間でつなぐ。 editor → preview / preview → editor の round-trip は
-bijection になっており、 操作を行き来しても位置が drift しない。
+In addition, **bidirectional scroll sync** between editor and preview is implemented. Rather than legacy Crowi's simple proportional scrollTop, it syncs via fractional-line interpolation combining line + in-block offset ratio, so it follows continuously even inside long blocks like code fences or lists instead of snapping to the top of a line. The server embeds `data-source-line` on each top-level node of the preview mdast (`POST /api/v2/pages/preview`), and the web-side `useScrollSync` hook bridges those markers to CodeMirror's line-block info with linear interpolation. The editor → preview / preview → editor round-trip is a bijection, so the position doesn't drift as you move back and forth.
