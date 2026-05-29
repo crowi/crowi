@@ -40,10 +40,14 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
   発行可能 scope は `admin:*` を除外、PAT 管理 API は web セッション専用 (403 `FORBIDDEN`)。
   legacy `User.apiToken` / `generateApiToken` / `findUserByApiToken` / 未使用
   `accessTokenParser` / `GET/POST /me/apiToken` を fallback なしで完全削除
-- [ ] **Phase 3: Authorization Code + PKCE + discovery** — `OAuthClient` /
-  `OAuthAuthorizationCode` / `OAuthRefreshToken` model、`/oauth/token` /
-  `/oauth/authorize` / `/oauth/revoke`、`.well-known/oauth-authorization-server`、
-  Next.js 同意画面
+- [x] **Phase 3: Authorization Code + PKCE + discovery** — `OAuthClient` /
+  `OAuthAuthorizationCode` (TTL) / `OAuthRefreshToken` (rotation + reuse 検知)
+  model、first-party `crowi-cli` の boot 冪等 seed、`POST /oauth/authorize`
+  (web セッション限定・PKCE S256・loopback redirect 任意ポート許可) /
+  `POST /oauth/token` (authorization_code + refresh_token rotation、form +
+  JSON 受理) / `POST /oauth/revoke` (refresh / PAT、RFC 7009) /
+  `GET /.well-known/oauth-authorization-server` (RFC 8414 discovery)、
+  Next.js 同意画面 `(auth)/oauth/authorize` (all-or-nothing consent)
 - [ ] **Phase 4: Device Authorization Grant** — `OAuthDeviceCode` model、
   `/oauth/device/authorize` + device grant + `/oauth/device/verify` + web 入力画面
 
