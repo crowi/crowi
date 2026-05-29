@@ -22,6 +22,27 @@ Crowi 2.0 移行 (Express + Swig → Next.js + Hono)。フェーズ別。
 - [ ] **Step 10: auth provider plugin 化** — Google / GitHub OAuth を plugin に切り出し (フェーズ 4 の admin OAuth 設定と一緒に)
 - [ ] **将来**: encryption KeyProvider plugin (KMS 系)、attachment storage の S3 以外プロバイダ
 
+## High Priority — OAuth 2.0 & Scoped API Access (RFC-0010)
+
+`docs/rfcs/0010-oauth-and-api-access.md`。Crowi 自身を OAuth プロバイダ化し、
+CLI/SDK がスコープ付きトークンで API を叩けるようにする multi-phase 機能。
+
+- [x] **Phase 1: scope 基盤** — `SCOPES` catalog + `scopeSatisfies` (含意ルール) を
+  `@crowi/api-contract` に集約、`util/jwt.ts` を `oauth_access` claim 対応に拡張、
+  `createJwtAuth` を scope-aware 化 (web セッション = 全 scope で挙動不変)、
+  `requireScope(scope)` middleware を page/revision/draft/backlink/search/
+  autocomplete/comment/bookmark/attachment/notification/me/user の各ルートに
+  method 別付与。不足時 403 `INSUFFICIENT_SCOPE` + `WWW-Authenticate`
+- [ ] **Phase 2: Personal Access Token + legacy apiToken 廃止** — `PersonalAccessToken`
+  model + `/me/access-tokens` + web UI、`createJwtAuth` の `crowi_pat_` 受理、
+  legacy `User.apiToken` / `/me/apiToken` 完全削除
+- [ ] **Phase 3: Authorization Code + PKCE + discovery** — `OAuthClient` /
+  `OAuthAuthorizationCode` / `OAuthRefreshToken` model、`/oauth/token` /
+  `/oauth/authorize` / `/oauth/revoke`、`.well-known/oauth-authorization-server`、
+  Next.js 同意画面
+- [ ] **Phase 4: Device Authorization Grant** — `OAuthDeviceCode` model、
+  `/oauth/device/authorize` + device grant + `/oauth/device/verify` + web 入力画面
+
 ## High Priority — 横断的 advisory (累積)
 
 - [x] **UI 共通化** (`2c390a55`): `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出。9 ファイル / 13 サイトで重複削減
