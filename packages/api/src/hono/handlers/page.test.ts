@@ -1485,6 +1485,24 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
     expect(pageIds).not.toContain(pageId);
   });
 
+  it("keeps another user's draft out when include_deleted is sent as the string 'false'", async () => {
+    // Regression: the web client serialises every query param to a
+    // string, so `include_deleted: false` goes on the wire as `"false"`.
+    // The schema used `z.coerce.boolean()` (= JS `Boolean("false")` ===
+    // true), which flipped include_deleted on and skipped the
+    // draft/status filter — leaking other users' drafts into the root
+    // listing. Sending the literal string here pins that path.
+    const path = `${PATH_PREFIX}root-bobs-draft-falsestr`;
+    const create = await request(app).post('/api/v2/pages/drafts').set(bobHeaders).send({ path });
+    expect(create.status).toBe(201);
+    const pageId = create.body.pageId as string;
+
+    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/', include_deleted: 'false' });
+    expect(list.status).toBe(200);
+    const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
+    expect(pageIds).not.toContain(pageId);
+  });
+
   it('honors include_deleted=true on the root listing (mirrors the path branch)', async () => {
     // Create then soft-delete a page so it lands at /trash/<orig> with
     // status='deleted'. The root branch used to silently ignore the

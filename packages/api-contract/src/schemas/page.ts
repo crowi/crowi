@@ -179,7 +179,17 @@ export const ListPagesRequestSchema = z.object({
   user: z.string().optional(),
   limit: z.coerce.number().optional().default(50),
   offset: z.coerce.number().optional().default(0),
-  include_deleted: z.coerce.boolean().optional().default(false),
+  // NOT `z.coerce.boolean()`: that uses JS `Boolean(v)`, so the string
+  // `"false"` (which is how the web client serialises `false` on the
+  // query string) coerces to `true`. That silently flipped
+  // `include_deleted` on, which made the listing skip the draft/status
+  // filter and leak other users' drafts. Parse the string explicitly so
+  // only `"true"` / `true` is truthy; anything else (incl. `"false"`,
+  // absent) is `false`.
+  include_deleted: z
+    .preprocess((v) => v === true || v === 'true' || v === '1', z.boolean())
+    .optional()
+    .default(false),
 });
 export type ListPagesRequest = z.infer<typeof ListPagesRequestSchema>;
 
