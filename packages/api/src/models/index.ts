@@ -6,6 +6,9 @@ import Comment from './comment';
 // import with allow-js flag
 import Config from './config';
 import Notification from './notification';
+import OAuthAuthorizationCode from './oauth-authorization-code';
+import OAuthClient from './oauth-client';
+import OAuthRefreshToken from './oauth-refresh-token';
 import Page from './page';
 import PageYjsUpdate from './page-yjs-update';
 import PersonalAccessToken from './personal-access-token';
@@ -37,4 +40,7 @@ export default {
   PluginRenderCache,
   PageYjsUpdate,
   PersonalAccessToken,
+  OAuthClient,
+  OAuthAuthorizationCode,
+  OAuthRefreshToken,
 };
