@@ -48,8 +48,22 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
   JSON 受理) / `POST /oauth/revoke` (refresh / PAT、RFC 7009) /
   `GET /.well-known/oauth-authorization-server` (RFC 8414 discovery)、
   Next.js 同意画面 `(auth)/oauth/authorize` (all-or-nothing consent)
-- [ ] **Phase 4: Device Authorization Grant** — `OAuthDeviceCode` model、
-  `/oauth/device/authorize` + device grant + `/oauth/device/verify` + web 入力画面
+- [x] **Phase 4: Device Authorization Grant (RFC 8628)** — `OAuthDeviceCode`
+  model (TTL ~10min / `deviceCodeHash` + `userCode` unique index / status
+  pending→approved|denied / atomic single-use `consume`)、`user_code` ジェネレータ
+  (`BCDFGHJKMNPQRSTVWXZ` + 数字、`ABCD-1234`、紛らわしい文字除外 + normalize)、
+  公開 `POST /oauth/device/authorize` (client+scope 検証は authorize と共通化) /
+  `POST /oauth/token` の `urn:ietf:params:oauth:grant-type:device_code` grant
+  (pending→authorization_pending / 早ポーリング→slow_down / denied→access_denied /
+  expired→expired_token / approved→単回消費して issueTokens) / 公開
+  `GET /oauth/device` (user_code→client+requestedScopes lookup) /
+  web セッション限定 `POST /oauth/device/verify` (approve/deny)、discovery に
+  device grant URN + `device_authorization_endpoint` 追加、Next.js
+  `(auth)/oauth/device` 入力 + 同意画面 (Phase 3 `ConsentCard` 再利用、
+  `verification_uri_complete` から prefill、完了後 CLI 復帰案内)
+- [x] **OAuth 基盤 (RFC-0010 Phase 1-4) 全体完了** — scope 基盤 / PAT + legacy
+  apiToken 廃止 / Authorization Code + PKCE + discovery / Device Authorization
+  Grant。admin による任意 OAuth クライアント登録 UI (将来 Phase 5) のみ未着手
 
 ## High Priority — 横断的 advisory (累積)
 
