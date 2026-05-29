@@ -8,6 +8,7 @@ import Config from './config';
 import Notification from './notification';
 import OAuthAuthorizationCode from './oauth-authorization-code';
 import OAuthClient from './oauth-client';
+import OAuthDeviceCode from './oauth-device-code';
 import OAuthRefreshToken from './oauth-refresh-token';
 import Page from './page';
 import PageYjsUpdate from './page-yjs-update';
@@ -42,5 +43,6 @@ export default {
   PersonalAccessToken,
   OAuthClient,
   OAuthAuthorizationCode,
+  OAuthDeviceCode,
   OAuthRefreshToken,
 };
