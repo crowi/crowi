@@ -274,7 +274,26 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           }
 
           const pageResponses = pages.map((page) => pageToResponse(page));
-          const portalPageResponse = portalPage ? pageToResponse(portalPage) : null;
+          // The portal document is rendered as a full page (PageContent)
+          // by the web client, so — unlike the list rows — it needs
+          // `renderedAst`. Mirror the getPage detail path: emit meta +
+          // renderedAst and run the on-the-fly fallback so legacy /
+          // version-mismatched revisions still render instead of getting
+          // stuck on the "Rendering…" placeholder. List rows stay lean
+          // (no renderedAst) as before.
+          const portalPageResponse = portalPage ? pageToResponse(portalPage, { withMeta: true, withRenderedAst: true }) : null;
+          if (portalPageResponse?.revision && portalPage && isPopulatedRevision(portalPage.revision)) {
+            const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(
+              crowi,
+              portalPage.revision.meta,
+              portalPage.revision.renderedAst,
+              portalPage.revision.body,
+              portalPage.revision.rendererVersion,
+              portalPage._id?.toString(),
+            );
+            portalPageResponse.revision.meta = meta;
+            portalPageResponse.revision.renderedAst = renderedAst;
+          }
 
           const prev = offset > 0 ? Math.max(0, offset - limit) : null;
           const next = pages.length === limit ? offset + limit : null;

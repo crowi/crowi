@@ -1370,6 +1370,24 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
     expect(res.status).toBe(200);
     expect(res.body.portalPage).toBeNull();
   });
+
+  it('includes renderedAst on the portal document so it renders (not stuck on "Rendering…")', async () => {
+    // Regression: listPages projected the portal with the lean
+    // pageToResponse(portalPage) (no withRenderedAst), so the web
+    // PageContent had no AST and showed "Rendering…" forever. The portal
+    // is a full page in the UI, so it must carry renderedAst like the
+    // getPage detail path.
+    const portalPath = `${PATH_PREFIX}portal-render/`;
+    const headers = authHeaders(accessToken);
+
+    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: portalPath, body: '# Portal heading' });
+    expect(createRes.status).toBe(200);
+
+    const res = await request(app).get('/api/v2/pages/list').set(headers).query({ path: portalPath });
+    expect(res.status).toBe(200);
+    expect(res.body.portalPage).not.toBeNull();
+    expect(res.body.portalPage.revision.renderedAst).toBeTruthy();
+  });
 });
 
 /**
