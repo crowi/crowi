@@ -131,6 +131,12 @@ export function LoginForm() {
           </Button>
         </form>
 
+        <div className="mt-4 text-center">
+          <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-primary hover:underline">
+            パスワードをお忘れですか?
+          </Link>
+        </div>
+
         <div className="mt-6 pt-6 border-t text-center">
           <Link href="/register" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <PenLine className="h-4 w-4" />

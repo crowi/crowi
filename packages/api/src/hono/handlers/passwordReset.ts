@@ -1,0 +1,101 @@
+/**
+ * Public self-service password-reset handler.
+ *
+ *   POST /auth/forgot-password — email a reset link (always 200)
+ *   GET  /auth/reset-password?token= — validate token for the page
+ *   POST /auth/reset-password  — set a new password; sign the user in
+ *
+ * The signed reset token (purpose `'reset'`) is the credential, so all
+ * routes are public.
+ */
+import { passwordResetRoutes } from '@crowi/api-contract';
+import type { OpenAPIHono } from '@hono/zod-openapi';
+import Debug from 'debug';
+
+import type Crowi from 'src/crowi';
+import { createJwtUtil } from 'src/util/jwt';
+import { createMailTokenUtil } from 'src/util/mail-token';
+
+import type { CrowiHonoBindings } from '../app';
+
+import { INTERNAL_ERROR_BODY } from './_helpers/errors';
+import { toAuthUser } from './_helpers/user-shape';
+
+const debug = Debug('crowi:hono:handlers:passwordReset');
+
+const INVALID_TOKEN_BODY = {
+  error: { code: 'INVALID_RESET_TOKEN' as const, message: 'Reset token is invalid or expired' as const },
+};
+
+export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
+  const User = crowi.model('User');
+  const jwtUtil = createJwtUtil(crowi);
+  const mailTokenUtil = createMailTokenUtil();
+
+  return app
+    .openapi(passwordResetRoutes.forgotPasswordRoute, async (c) => {
+      const { email } = c.req.valid('json');
+
+      try {
+        const user = await User.findOne({ email });
+        // Only active accounts can self-reset. We always return 200
+        // regardless (anti-enumeration): the caller cannot tell whether
+        // the email maps to an account.
+        if (user && user.status === User.STATUS_ACTIVE) {
+          const config = crowi.getConfig();
+          const appTitle = config.crowi['app:title'];
+          const baseUrl = crowi.getBaseUrl() || config.crowi['app:url'] || '';
+          const logoUrl = baseUrl ? `${baseUrl}/logo/500w.png` : '';
+          const { token } = mailTokenUtil.signMailToken({ purpose: 'reset', userId: user._id.toString(), email });
+          const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+          await crowi
+            .getMailer()
+            .send({
+              to: email,
+              htmlTemplate: 'passwordReset',
+              lang: user.lang,
+              vars: { resetUrl, appTitle, appUrl: baseUrl, logoUrl },
+            })
+            .catch((err) => debug('failed to send password-reset email:', err));
+        }
+
+        return c.json({ ok: true as const }, 200);
+      } catch (error) {
+        debug('forgot-password error:', error);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(passwordResetRoutes.validateResetTokenRoute, async (c) => {
+      const { token } = c.req.valid('query');
+      const payload = mailTokenUtil.verifyMailToken(token, 'reset');
+      if (!payload) {
+        return c.json(INVALID_TOKEN_BODY, 401);
+      }
+      return c.json({ ok: true as const }, 200);
+    })
+    .openapi(passwordResetRoutes.selfResetPasswordRoute, async (c) => {
+      const { token, password } = c.req.valid('json');
+
+      try {
+        const payload = mailTokenUtil.verifyMailToken(token, 'reset');
+        if (!payload) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
+
+        const user = await User.findById(payload.userId);
+        if (!user) {
+          return c.json({ error: { code: 'USER_NOT_FOUND', message: 'User no longer exists' } }, 404);
+        }
+
+        user.setPassword(password);
+        const saved = await user.save();
+
+        const tokens = jwtUtil.generateTokens(saved);
+        return c.json({ ...tokens, user: toAuthUser(saved) }, 200);
+      } catch (error) {
+        debug('reset-password error:', error);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    });
+};
