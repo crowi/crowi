@@ -2,6 +2,8 @@ export * from './contracts';
 export * from './client';
 export * from './schemas/app';
 export * from './schemas/auth';
+export * from './schemas/mail-token';
+export * from './schemas/inviteAccept';
 export * from './schemas/installer';
 export * from './schemas/common';
 export * from './schemas/me';

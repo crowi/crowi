@@ -94,3 +94,50 @@ describe('MailService', () => {
     expect(sender.sent[0]).toEqual(expect.objectContaining({ to: ['admin@example.com'], from: 'f@example.com' }));
   });
 });
+
+describe('MailService HTML (MJML) templates', () => {
+  // Real MJML templates live under packages/api/views/mail; point rootDir there.
+  const apiRoot = path.join(__dirname, '..', '..');
+
+  it('renders the invite html with the CTA link, app title, and English copy', async () => {
+    const sender = fakeSender();
+    const svc = new MailService(makeCrowi({ from: 'noreply@example.com', appTitle: 'MyWiki', mail: sender, rootDir: apiRoot }));
+
+    await svc.send({
+      to: 'invitee@example.com',
+      htmlTemplate: 'invite',
+      vars: {
+        inviteUrl: 'https://wiki.example.com/invite/accept?token=abc',
+        appTitle: 'MyWiki',
+        appUrl: 'https://wiki.example.com',
+        logoUrl: 'https://wiki.example.com/logo.png',
+      },
+    });
+
+    const msg = sender.sent[0];
+    expect(msg.html).toBeDefined();
+    expect(msg.html).toContain('https://wiki.example.com/invite/accept?token=abc');
+    expect(msg.html).toContain("You've been invited");
+    expect(msg.html).toContain('MyWiki');
+    // text part is non-empty and carries the URL
+    expect(msg.text).toContain('https://wiki.example.com/invite/accept?token=abc');
+    // subject pulled from the catalog with appTitle interpolated
+    expect(msg.subject).toBe("You're invited to MyWiki");
+  });
+
+  it('localizes to Japanese when lang=ja', async () => {
+    const sender = fakeSender();
+    const svc = new MailService(makeCrowi({ from: 'f@example.com', appTitle: 'MyWiki', mail: sender, rootDir: apiRoot }));
+    await svc.send({ to: 'x@example.com', htmlTemplate: 'invite', lang: 'ja', vars: { inviteUrl: 'https://w/i', appTitle: 'MyWiki', appUrl: 'https://w' } });
+    const msg = sender.sent[0];
+    expect(msg.html).toContain('招待が届いています');
+    expect(msg.subject).toBe('MyWiki への招待');
+  });
+
+  it("falls back to English for regional variants ('en-US')", async () => {
+    const sender = fakeSender();
+    const svc = new MailService(makeCrowi({ from: 'f@example.com', appTitle: 'W', mail: sender, rootDir: apiRoot }));
+    await svc.send({ to: 'x@example.com', htmlTemplate: 'invite', lang: 'en-US', vars: { inviteUrl: 'https://w/i', appTitle: 'W', appUrl: 'https://w' } });
+    expect(sender.sent[0].html).toContain("You've been invited");
+  });
+});

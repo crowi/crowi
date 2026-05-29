@@ -3,26 +3,48 @@ import path from 'node:path';
 import Debug from 'debug';
 import type { EmailMessage, MailSender } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
+import { getMailCatalog } from 'src/mail/i18n';
 
 const debug = Debug('crowi:service:mail');
 
 /**
+ * HTML email types. Each maps 1:1 to a MJML body template
+ * (`views/mail/<name>.mjml` + `<name>.text`) AND to a catalog section
+ * (`MailCatalog[<name>]`), so the name alone resolves both the template
+ * files and the i18n strings — no mapping table.
+ */
+export type MailTemplateName = 'invite' | 'activation' | 'passwordReset';
+
+/**
  * High-level send options accepted by the core. The MailService resolves
- * everything sender-independent here — `from`, the default subject, and
- * the rendered body — so every mail sender driver receives an identical
- * `EmailMessage` and produces the same email regardless of transport.
+ * everything sender-independent here — `from`, the subject, and the
+ * rendered body (text + optional html) — so every mail sender driver
+ * receives an identical `EmailMessage` and produces the same email
+ * regardless of transport.
  */
 export interface SendMailOptions {
   to: string | string[];
-  /** Defaults to "<app:title>からのメール" when omitted. */
+  /**
+   * Subject. When omitted: for `htmlTemplate` the localized
+   * `MailCatalog[name].subject` is used, otherwise "<app:title>からのメール".
+   */
   subject?: string;
   /**
-   * Template path relative to `views/mail/` (e.g.
-   * `'admin/userInvitation.txt'`). When set, the rendered template
-   * becomes the body and `text` is ignored.
+   * MJML HTML email. Renders `views/mail/<name>.mjml` (wrapped in
+   * `layout.mjml`) to html plus `<name>.text` to the text part, and
+   * auto-injects the localized catalog as `vars.t`. Takes precedence
+   * over `template` / `text`.
+   */
+  htmlTemplate?: MailTemplateName;
+  /** Recipient language for `htmlTemplate` i18n (falls back to English). */
+  lang?: string;
+  /**
+   * Legacy plain-text template path relative to `views/mail/` (e.g.
+   * `'admin/userInvitation.txt'`). When set (and `htmlTemplate` is not),
+   * the rendered template becomes the text body.
    */
   template?: string;
-  /** Plain-text body, used when `template` is not given. */
+  /** Plain-text body, used when neither `htmlTemplate` nor `template` is given. */
   text?: string;
   /** Variables interpolated into the template (`{{ key }}` / `{{ a.b }}`). */
   vars?: Record<string, unknown>;
@@ -30,6 +52,31 @@ export interface SendMailOptions {
   replyTo?: string;
   cc?: string | string[];
   bcc?: string | string[];
+}
+
+/**
+ * `mjml2html` as actually shipped by mjml v4: synchronous, returning
+ * `{ html, errors }`. Typed locally because `@types/mjml` models the
+ * signature differently across versions; this matches the runtime.
+ */
+type Mjml2Html = (
+  input: string,
+  options?: { validationLevel?: 'strict' | 'soft' | 'skip' },
+) => { html: string; errors: Array<{ message?: string; formattedMessage?: string }> };
+
+/**
+ * Lazily-loaded `mjml`. It pulls in a large dependency tree, so we defer
+ * the require to the first HTML render rather than paying it at module
+ * load (which happens during api boot and in every jest file touching
+ * the model layer). The CJS module default-exports the function.
+ */
+let mjml2htmlFn: Mjml2Html | null = null;
+async function loadMjml(): Promise<Mjml2Html> {
+  if (!mjml2htmlFn) {
+    const mod = (await import('mjml')) as unknown as Mjml2Html | { default: Mjml2Html };
+    mjml2htmlFn = typeof mod === 'function' ? mod : mod.default;
+  }
+  return mjml2htmlFn;
 }
 
 /**
@@ -97,13 +144,44 @@ export class MailService {
     return `${appTitle}からのメール`;
   }
 
-  async renderTemplate(template: string, vars: Record<string, unknown> = {}): Promise<string> {
-    let raw = this.templateSourceCache.get(template);
+  /** Read a template file (relative to `views/mail/`), caching the source. */
+  private async loadTemplateSource(relativePath: string): Promise<string> {
+    let raw = this.templateSourceCache.get(relativePath);
     if (raw === undefined) {
-      raw = await fs.readFile(path.join(this.templateDir, template), 'utf-8');
-      this.templateSourceCache.set(template, raw);
+      raw = await fs.readFile(path.join(this.templateDir, relativePath), 'utf-8');
+      this.templateSourceCache.set(relativePath, raw);
     }
-    return renderTemplateString(raw, vars);
+    return raw;
+  }
+
+  async renderTemplate(template: string, vars: Record<string, unknown> = {}): Promise<string> {
+    return renderTemplateString(await this.loadTemplateSource(template), vars);
+  }
+
+  /**
+   * Render a MJML email to `{ html, text }`. Order is strict: inject the
+   * body template into the layout (plain marker replace) → expand
+   * `{{ vars }}` over the merged source → `mjml2html`. Variable expansion
+   * must happen on the MJML *source* (not the output HTML) so `mjml`
+   * sees only valid markup. The `.text` sibling is expanded separately.
+   */
+  private async renderMjml(name: MailTemplateName, vars: Record<string, unknown>): Promise<{ html: string; text: string }> {
+    const [layout, body, textSource] = await Promise.all([
+      this.loadTemplateSource('layout.mjml'),
+      this.loadTemplateSource(`${name}.mjml`),
+      this.loadTemplateSource(`${name}.text`),
+    ]);
+    const mergedSource = renderTemplateString(layout.replace('<!--BODY-->', body), vars);
+    const mjml2html = await loadMjml();
+    const { html, errors } = mjml2html(mergedSource, { validationLevel: 'soft' });
+    if (errors && errors.length > 0) {
+      debug(
+        'mjml warnings for %s: %o',
+        name,
+        errors.map((e) => e.formattedMessage ?? e.message),
+      );
+    }
+    return { html, text: renderTemplateString(textSource, vars) };
   }
 
   /**
@@ -114,14 +192,30 @@ export class MailService {
    */
   async send(options: SendMailOptions): Promise<void> {
     const from = this.getFrom();
-    const text = options.template ? await this.renderTemplate(options.template, options.vars) : (options.text ?? '');
+
+    let subject = options.subject;
+    let text: string;
+    let html = options.html;
+
+    if (options.htmlTemplate) {
+      const catalog = getMailCatalog(options.lang);
+      const vars = { ...(options.vars ?? {}), t: catalog };
+      const rendered = await this.renderMjml(options.htmlTemplate, vars);
+      html = rendered.html;
+      text = rendered.text;
+      // Subject lives in the catalog and may itself reference {{ appTitle }},
+      // so render it standalone against the same vars.
+      subject = subject ?? renderTemplateString(catalog[options.htmlTemplate].subject, vars);
+    } else {
+      text = options.template ? await this.renderTemplate(options.template, options.vars) : (options.text ?? '');
+    }
 
     const message: EmailMessage = {
       to: toArray(options.to) ?? [],
       from,
-      subject: options.subject || this.defaultSubject(),
+      subject: subject || this.defaultSubject(),
       text,
-      html: options.html,
+      html,
       replyTo: options.replyTo,
       cc: toArray(options.cc),
       bcc: toArray(options.bcc),

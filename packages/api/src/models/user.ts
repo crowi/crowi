@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import async from 'async';
 import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth } from 'src/models/config';
+import { createMailTokenUtil } from 'src/util/mail-token';
 
 const STATUS_REGISTERED = 1;
 const STATUS_ACTIVE = 2;
@@ -710,29 +711,39 @@ export default (crowi: Crowi) => {
         }
 
         if (toSendEmail) {
-          // TODO: メール送信部分のロジックをサービス化する
+          const mailTokenUtil = createMailTokenUtil();
+          const appTitle = config.crowi['app:title'];
+          // Absolute base for the invite link + logo. getBaseUrl() reads
+          // BASE_URL → app:url; fall back to the config value directly.
+          const baseUrl = crowi.getBaseUrl() || config.crowi['app:url'] || '';
+          const logoUrl = baseUrl ? `${baseUrl}/logo/500w.png` : '';
+
           async.each(
             createdUserList,
-            function (user, next) {
-              if (user.password === null) {
+            function (item, next) {
+              // Skip rows that already existed or failed to save.
+              if (!item.user) {
                 return next();
               }
 
+              // Token-based invite link — no plaintext password is ever
+              // emailed; the invitee sets their own credentials on accept.
+              const { token } = mailTokenUtil.signMailToken({
+                purpose: 'invite',
+                userId: item.user._id.toString(),
+                email: item.email,
+              });
+              const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
+
               mailer
                 .send({
-                  to: user.email,
-                  subject: 'Invitation to ' + config.crowi['app:title'],
-                  template: 'admin/userInvitation.txt',
-                  vars: {
-                    email: user.email,
-                    password: user.password,
-                    url: config.crowi['app:url'],
-                    appTitle: config.crowi['app:title'],
-                  },
+                  to: item.email,
+                  htmlTemplate: 'invite',
+                  vars: { inviteUrl, appTitle, appUrl: baseUrl, logoUrl, email: item.email },
                 })
                 // A send failure must not abort user creation — log and
                 // continue so the remaining invitations still go out.
-                .then(() => debug('completed to send email to', user.email))
+                .then(() => debug('completed to send invitation to', item.email))
                 .catch((err) => debug('failed to send invitation email: ', err))
                 .finally(() => next());
             },

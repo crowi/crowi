@@ -1,0 +1,36 @@
+<mjml>
+  <mj-head>
+    <mj-title>{{ subject }}</mj-title>
+    <mj-preview>{{ preheader }}</mj-preview>
+    <mj-attributes>
+      <mj-all font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans JP',Helvetica,Arial,sans-serif" />
+      <mj-text font-size="15px" line-height="1.7" color="#2b2f33" />
+    </mj-attributes>
+    <mj-style>
+      .crowi-footer a { color: #6b7280 !important; }
+    </mj-style>
+  </mj-head>
+  <mj-body background-color="#f4f5f7">
+    <mj-section padding="24px 0 8px">
+      <mj-column>
+        <mj-image src="{{ logoUrl }}" alt="{{ appTitle }}" width="132px" align="center" padding="0" />
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" border-radius="12px" padding="8px 8px">
+      <mj-column>
+        <!--BODY-->
+      </mj-column>
+    </mj-section>
+
+    <mj-section padding="16px 0 32px">
+      <mj-column>
+        <mj-text css-class="crowi-footer" align="center" font-size="12px" color="#6b7280" line-height="1.6">
+          <strong>{{ appTitle }}</strong><br />
+          {{ t.common.footerTagline }}<br />
+          <a href="{{ appUrl }}">{{ appUrl }}</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>
