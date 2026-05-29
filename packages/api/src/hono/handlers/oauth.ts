@@ -1,17 +1,21 @@
 /**
- * RFC-0010 Phase 3 — OAuth 2.0 authorization-server endpoints.
+ * RFC-0010 Phase 3+4 — OAuth 2.0 authorization-server endpoints.
  *
  *   POST /oauth/authorize                          — JWT (web session only)
- *   POST /oauth/token                              — public (RFC 6749)
+ *   POST /oauth/token                              — public (RFC 6749 / 8628)
  *   POST /oauth/revoke                             — public (RFC 7009)
  *   GET  /.well-known/oauth-authorization-server   — public (RFC 8414)
+ *   POST /oauth/device/authorize                   — public (RFC 8628 §3.1)
+ *   GET  /oauth/device                             — public (consent lookup)
+ *   POST /oauth/device/verify                      — JWT (web session only)
  *
- * `/oauth/authorize` rides a per-path `createJwtAuth(crowi)` apply (no
- * other handler owns `/oauth/*`, so the apply is self-contained, mirroring
- * `tokenAuth`'s `/auth/logout` install). It is **web-session only**
- * (PHASE3-Q9): minting an authorization code from a PAT / OAuth token
- * would let a token spawn a fresh, possibly broader token — a privilege
- * escalation — so a non-`web` `authContext` is rejected with 403.
+ * `/oauth/authorize` and `/oauth/device/verify` ride per-path
+ * `createJwtAuth(crowi)` applies (no other handler owns `/oauth/*`, so the
+ * applies are self-contained, mirroring `tokenAuth`'s `/auth/logout`
+ * install). Both are **web-session only** (PHASE3-Q9 / PHASE4-Q5): minting
+ * an authorization code or approving a device authorization from a PAT /
+ * OAuth token would let a token spawn a fresh, possibly broader token — a
+ * privilege escalation — so a non-`web` `authContext` is rejected with 403.
  *
  * `/oauth/token` + `/oauth/revoke` are public. They accept
  * `application/x-www-form-urlencoded` (RFC 6749 / 7009) **and** JSON, and
@@ -26,9 +30,9 @@
  * (same model as PATs). Access tokens are stateless scope-bearing JWTs
  * (`signOauthAccessToken`).
  */
-import type { ForbiddenError, OAuthError } from '@crowi/api-contract';
+import type { ForbiddenError, NotFoundError, OAuthError } from '@crowi/api-contract';
 import { DISCOVERY_SCOPES_SUPPORTED, GRANT_TYPES_SUPPORTED, TokenRequestSchema, isScope, scopeSatisfies } from '@crowi/api-contract';
-import { authorizeRoute, discoveryRoute, revokeRoute, tokenRoute } from '@crowi/api-contract';
+import { authorizeRoute, deviceAuthorizeRoute, deviceInfoRoute, deviceVerifyRoute, discoveryRoute, revokeRoute, tokenRoute } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import Debug from 'debug';
@@ -37,6 +41,7 @@ import type Crowi from 'src/crowi';
 import { createJwtUtil } from 'src/util/jwt';
 import { isRedirectUriAllowed } from 'src/util/oauth-redirect-uri';
 import { verifyPkceS256 } from 'src/util/pkce';
+import { normalizeUserCode } from 'src/util/user-code';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -50,11 +55,29 @@ const AUTH_CODE_TTL_MS = 60 * 1000;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Access token TTL (seconds), echoed in `expires_in` + the JWT lifetime. */
 const ACCESS_TOKEN_TTL_SEC = Number(process.env.JWT_ACCESS_TOKEN_TTL_SECONDS) || 60 * 60;
+/** Device codes live ~10min (RFC 8628 general value). */
+const DEVICE_CODE_TTL_MS = 10 * 60 * 1000;
+/** Default minimum poll spacing for the device grant (seconds, RFC 8628 §3.2). */
+const DEVICE_POLL_INTERVAL_SEC = 5;
 
 const FORBIDDEN_BODY: ForbiddenError = {
   error: {
     code: 'FORBIDDEN',
     message: 'Authorization codes can only be issued from a web session.',
+  },
+};
+
+const DEVICE_FORBIDDEN_BODY: ForbiddenError = {
+  error: {
+    code: 'FORBIDDEN',
+    message: 'Device authorizations can only be approved from a web session.',
+  },
+};
+
+const DEVICE_NOT_FOUND_BODY: NotFoundError = {
+  error: {
+    code: 'NOT_FOUND',
+    message: 'No pending device authorization for this code.',
   },
 };
 
@@ -87,14 +110,39 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
   const OAuthClient = crowi.model('OAuthClient');
   const OAuthAuthorizationCode = crowi.model('OAuthAuthorizationCode');
   const OAuthRefreshToken = crowi.model('OAuthRefreshToken');
+  const OAuthDeviceCode = crowi.model('OAuthDeviceCode');
   const PersonalAccessToken = crowi.model('PersonalAccessToken');
   const User = crowi.model('User');
   const jwtUtil = createJwtUtil(crowi);
 
-  // `/oauth/authorize` requires an authenticated web session. The other
-  // three routes are public, so we install jwtAuth on the single literal
-  // path only (same per-path install as `tokenAuth`'s `/auth/logout`).
+  // `/oauth/authorize` and `/oauth/device/verify` both require an
+  // authenticated web session. The other routes are public, so we install
+  // jwtAuth on each literal path only (same per-path install as `tokenAuth`'s
+  // `/auth/logout`). `/oauth/device/authorize`, `/oauth/device` (lookup) and
+  // `/oauth/token` (incl. the device grant) stay public.
   app.use('/oauth/authorize', createJwtAuth(crowi));
+  app.use('/oauth/device/verify', createJwtAuth(crowi));
+
+  /**
+   * Validate a client + space-delimited scope string (shared by the
+   * authorize-code and device-code authorization endpoints). Returns the
+   * granted scope list, or an `oauthError` envelope describing the failure.
+   * `redirect_uri` validation is authorize-specific and intentionally not
+   * handled here (the device flow has no redirect_uri).
+   */
+  const validateClientAndScopes = async (clientId: string, scopeStr: string): Promise<{ granted: string[] } | { error: OAuthError }> => {
+    const client = await OAuthClient.findByClientId(clientId);
+    if (!client) {
+      return { error: oauthError('invalid_client', 'Unknown client') };
+    }
+    const requested = scopeStr.split(/\s+/).filter((s) => s.length > 0);
+    const allowed = new Set(client.allowedScopes);
+    const granted = requested.filter((s) => isScope(s) && allowed.has(s));
+    if (granted.length === 0 || granted.length !== requested.length) {
+      return { error: oauthError('invalid_scope', 'One or more requested scopes are not permitted for this client') };
+    }
+    return { granted };
+  };
 
   /**
    * Build the issuer base URL for discovery. Prefers the configured
@@ -140,13 +188,12 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         }
 
         // Requested scopes must be catalog scopes AND within the client's
-        // allowed set.
-        const requested = scope.split(/\s+/).filter((s) => s.length > 0);
-        const allowed = new Set(client.allowedScopes);
-        const granted = requested.filter((s) => isScope(s) && allowed.has(s));
-        if (granted.length === 0 || granted.length !== requested.length) {
-          return c.json(oauthError('invalid_scope', 'One or more requested scopes are not permitted for this client'), 400);
+        // allowed set (shared with the device-authorize endpoint).
+        const scopeCheck = await validateClientAndScopes(client_id, scope);
+        if ('error' in scopeCheck) {
+          return c.json(scopeCheck.error, 400);
         }
+        const { granted } = scopeCheck;
 
         const { code, codeHash } = OAuthAuthorizationCode.generateCode();
         await OAuthAuthorizationCode.create({
@@ -251,6 +298,53 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           return c.json(issued, 200);
         }
 
+        if (body.grant_type === 'urn:ietf:params:oauth:grant-type:device_code') {
+          const hash = OAuthDeviceCode.hashDeviceCode(body.device_code);
+          const record = await OAuthDeviceCode.findByDeviceCodeHash(hash);
+          // findByDeviceCodeHash filters consumed + expired, so a null here
+          // means the code is unknown, already consumed, or past its TTL —
+          // RFC 8628 §3.5 wants `expired_token` for the timeout case, which is
+          // the common one for a long-lived poll loop.
+          if (!record) {
+            return c.json(oauthError('expired_token', 'Device code is invalid, expired, or already used'), 400);
+          }
+          if (record.clientId !== body.client_id) {
+            return c.json(oauthError('invalid_grant', 'client_id mismatch'), 400);
+          }
+
+          // slow_down (RFC 8628 §3.5): the client polled again sooner than the
+          // advertised interval. We bump lastPolledAt on every poll so the
+          // window slides forward; the first poll (lastPolledAt == null) is
+          // always allowed.
+          const now = Date.now();
+          if (record.lastPolledAt && now - record.lastPolledAt.getTime() < record.interval * 1000) {
+            await OAuthDeviceCode.touchPolled(hash);
+            return c.json(oauthError('slow_down', 'Polling too frequently; slow down'), 400);
+          }
+          await OAuthDeviceCode.touchPolled(hash);
+
+          if (record.status === 'denied') {
+            return c.json(oauthError('access_denied', 'The user denied the device authorization'), 400);
+          }
+          if (record.status === 'pending') {
+            return c.json(oauthError('authorization_pending', 'The user has not yet completed the authorization'), 400);
+          }
+
+          // status === 'approved' — atomically consume (single use) so two
+          // concurrent polls cannot both mint tokens.
+          const consumed = await OAuthDeviceCode.consume(hash);
+          if (!consumed) {
+            return c.json(oauthError('expired_token', 'Device code is invalid, expired, or already used'), 400);
+          }
+
+          const user = await User.findById(consumed.userId);
+          if (!user || user.status !== User.STATUS_ACTIVE) {
+            return c.json(oauthError('invalid_grant', 'User is no longer active'), 400);
+          }
+
+          return c.json(await issueTokens(user, consumed.clientId, consumed.grantedScopes), 200);
+        }
+
         // discriminatedUnion already constrains grant_type; this is
         // unreachable but keeps the contract explicit for SDKs.
         return c.json(oauthError('unsupported_grant_type', 'Unsupported grant_type'), 400);
@@ -297,6 +391,7 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           authorization_endpoint: `${issuer}/oauth/authorize`,
           token_endpoint: `${apiBase}/oauth/token`,
           revocation_endpoint: `${apiBase}/oauth/revoke`,
+          device_authorization_endpoint: `${apiBase}/oauth/device/authorize`,
           scopes_supported: [...DISCOVERY_SCOPES_SUPPORTED],
           response_types_supported: ['code'],
           grant_types_supported: [...GRANT_TYPES_SUPPORTED],
@@ -305,6 +400,87 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         },
         200,
       );
+    })
+    .openapi(deviceAuthorizeRoute, async (c) => {
+      // Public (RFC 8628 §3.1) — a headless client starts the device flow.
+      const { client_id, scope } = c.req.valid('json');
+      try {
+        const scopeCheck = await validateClientAndScopes(client_id, scope);
+        if ('error' in scopeCheck) {
+          return c.json(scopeCheck.error, 400);
+        }
+
+        const { doc, deviceCode } = await OAuthDeviceCode.createPending({
+          clientId: client_id,
+          requestedScopes: scopeCheck.granted,
+          expiresAt: new Date(Date.now() + DEVICE_CODE_TTL_MS),
+          interval: DEVICE_POLL_INTERVAL_SEC,
+        });
+
+        // verification_uri is the *web* consent screen origin (same origin
+        // rule as authorization_endpoint); the API lives under /api/v2.
+        const verificationUri = `${issuerBaseUrl(c)}/oauth/device`;
+        const verificationUriComplete = `${verificationUri}?user_code=${encodeURIComponent(doc.userCode)}`;
+
+        return c.json(
+          {
+            device_code: deviceCode,
+            user_code: doc.userCode,
+            verification_uri: verificationUri,
+            verification_uri_complete: verificationUriComplete,
+            expires_in: Math.floor(DEVICE_CODE_TTL_MS / 1000),
+            interval: DEVICE_POLL_INTERVAL_SEC,
+          },
+          200,
+        );
+      } catch (err) {
+        debug('device/authorize failed:', err);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(deviceInfoRoute, async (c) => {
+      // Public, lightweight lookup (PHASE4-Q9 option A): the consent screen
+      // reads the requesting client + requested scopes before approving. Only
+      // a *pending* row is surfaced — already-handled / expired / unknown
+      // codes return 404 (no secret is ever returned).
+      const { user_code } = c.req.valid('query');
+      const record = await OAuthDeviceCode.findByUserCode(normalizeUserCode(user_code));
+      if (!record || record.status !== 'pending') {
+        return c.json(DEVICE_NOT_FOUND_BODY, 404);
+      }
+      return c.json({ client_id: record.clientId, scopes: record.requestedScopes }, 200);
+    })
+    .openapi(deviceVerifyRoute, async (c) => {
+      // Web-session only — a token must never approve its own (or a broader)
+      // device authorization (privilege escalation), mirroring /oauth/authorize.
+      if (c.get('authContext').kind !== 'web') {
+        return c.json(DEVICE_FORBIDDEN_BODY, 403);
+      }
+      const user = c.get('user');
+      const { user_code, action } = c.req.valid('json');
+
+      try {
+        const record = await OAuthDeviceCode.findByUserCode(normalizeUserCode(user_code));
+        if (!record || record.status !== 'pending') {
+          return c.json(DEVICE_NOT_FOUND_BODY, 404);
+        }
+
+        if (action === 'approve') {
+          // v1 consent is all-or-nothing (PHASE4-Q3): the requested scopes
+          // become the granted set, matching the authorize-code consent.
+          record.status = 'approved';
+          record.userId = user._id;
+          record.grantedScopes = record.requestedScopes;
+        } else {
+          record.status = 'denied';
+        }
+        await record.save();
+
+        return c.json({ status: record.status === 'approved' ? ('approved' as const) : ('denied' as const) }, 200);
+      } catch (err) {
+        debug('device/verify failed:', err);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
     });
 
   /** Mint a fresh access (JWT) + refresh (DB-backed) pair for a grant. */
