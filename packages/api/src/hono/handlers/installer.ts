@@ -78,6 +78,10 @@ export const registerInstallerRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
           });
         });
 
+        // The installer admin sets the instance up; no email confirmation.
+        userData.emailConfirmedAt = new Date();
+        await userData.save();
+
         await Config.applicationInstall();
         await crowi.getConfigService().load();
 

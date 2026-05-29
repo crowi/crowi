@@ -51,6 +51,8 @@ describe('Routes /api/v2/invite/accept (Hono)', () => {
       const reloaded = await User.findById(user._id);
       expect(reloaded?.status).toBe(User.STATUS_ACTIVE);
       expect(reloaded?.name).toBe('Accepted User');
+      // Clicking the invite link counts as email confirmation.
+      expect(reloaded?.emailConfirmedAt).toBeTruthy();
     });
 
     it('rejects an invalid / expired token with 401', async () => {

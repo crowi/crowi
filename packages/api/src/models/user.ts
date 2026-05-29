@@ -35,6 +35,14 @@ export interface UserDocument extends Document {
   status: number;
   createdAt: Date;
   admin: boolean;
+  /**
+   * When the user confirmed control of their email address. Set on
+   * self-registration activation, invite acceptance, and for admin /
+   * installer-created accounts. `null` = unconfirmed (self-registered,
+   * pending the activation-link click). Login gates on `status`, not on
+   * this field, so existing ACTIVE users are unaffected.
+   */
+  emailConfirmedAt: Date | null;
 
   isPasswordSet(): boolean;
   isPasswordValid(password: string): boolean;
@@ -155,6 +163,7 @@ export default (crowi: Crowi) => {
     status: { type: Number, required: true, default: STATUS_ACTIVE, index: true },
     createdAt: { type: Date, default: Date.now },
     admin: { type: Boolean, default: false, index: true },
+    emailConfirmedAt: { type: Date, default: null },
   });
   userSchema.plugin(mongoosePaginate);
 
@@ -350,6 +359,8 @@ export default (crowi: Crowi) => {
     this.name = name;
     this.username = username;
     this.status = STATUS_ACTIVE;
+    // Clicking the invite link proves control of the email address.
+    this.emailConfirmedAt = new Date();
     this.save(function (err, userData) {
       userEvent.emit('activated', userData);
       return callback(err, userData);

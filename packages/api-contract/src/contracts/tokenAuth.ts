@@ -17,7 +17,13 @@
  */
 import { createRoute, z } from '@hono/zod-openapi';
 
-import { RefreshTokenRequestSchema, TokenAuthLoginRequestSchema, TokenAuthRegisterRequestSchema, TokenAuthResponseSchema } from '../schemas/auth';
+import {
+  RefreshTokenRequestSchema,
+  RegisterPendingResponseSchema,
+  TokenAuthLoginRequestSchema,
+  TokenAuthRegisterRequestSchema,
+  TokenAuthResponseSchema,
+} from '../schemas/auth';
 import { ApiErrorSchema, ApplicationNotInstalledErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 
 const TokenLogoutResponseSchema = z.object({ message: z.string() });
@@ -77,7 +83,7 @@ export const tokenRegisterRoute = createRoute({
   method: 'post',
   path: '/auth/register',
   tags: ['tokenAuth'],
-  summary: 'Register new user and receive tokens',
+  summary: 'Register a new user; sends an activation email or queues for admin approval',
   request: {
     body: {
       content: {
@@ -88,9 +94,9 @@ export const tokenRegisterRoute = createRoute({
     },
   },
   responses: {
-    201: {
-      description: 'Successful registration',
-      content: { 'application/json': { schema: TokenAuthResponseSchema } },
+    200: {
+      description: 'Registration accepted; activation pending (email confirmation or admin approval)',
+      content: { 'application/json': { schema: RegisterPendingResponseSchema } },
     },
     400: {
       description: 'Registration failed (validation)',

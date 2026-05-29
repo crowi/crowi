@@ -94,6 +94,7 @@ import { searchRoutes } from './contracts/search';
 import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { inviteAcceptRoutes } from './contracts/inviteAccept';
 import { passwordResetRoutes } from './contracts/passwordReset';
+import { activationRoutes } from './contracts/activation';
 import { userRoutes } from './contracts/user';
 import type { AppInfoResponseSchema } from './schemas/app';
 import type { GetBacklinksResponseSchema } from './schemas/backlink';
@@ -478,12 +479,14 @@ const appAuthMeUserChain = new OpenAPIHono()
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
   .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200))
   .openapi(tokenAuthRoutes.tokenLoginRoute, (c) => c.json(stubTokens, 200))
-  .openapi(tokenAuthRoutes.tokenRegisterRoute, (c) => c.json(stubTokens, 201))
+  .openapi(tokenAuthRoutes.tokenRegisterRoute, (c) => c.json({ status: 'confirmation_required' as const }, 200))
   .openapi(inviteAcceptRoutes.invitePreviewRoute, (c) => c.json({ email: 'stub@example.com' }, 200))
   .openapi(inviteAcceptRoutes.acceptInviteRoute, (c) => c.json(stubTokens, 200))
   .openapi(passwordResetRoutes.forgotPasswordRoute, (c) => c.json({ ok: true as const }, 200))
   .openapi(passwordResetRoutes.validateResetTokenRoute, (c) => c.json({ ok: true as const }, 200))
   .openapi(passwordResetRoutes.selfResetPasswordRoute, (c) => c.json(stubTokens, 200))
+  .openapi(activationRoutes.validateActivationTokenRoute, (c) => c.json({ ok: true as const }, 200))
+  .openapi(activationRoutes.activateAccountRoute, (c) => c.json(stubTokens, 200))
   .openapi(tokenAuthRoutes.tokenRefreshRoute, (c) => c.json(stubTokens, 200))
   .openapi(tokenAuthRoutes.tokenLogoutRoute, (c) => c.json({ message: '' }, 200))
   .openapi(tokenAuthRoutes.tokenMeRoute, (c) =>

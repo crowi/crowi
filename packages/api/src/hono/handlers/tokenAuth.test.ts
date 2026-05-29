@@ -106,17 +106,27 @@ describe('Routes /api/v2/auth (Hono)', () => {
       await User().deleteMany({ $or: [{ email: NEW_EMAIL }, { username: 'register-tester' }] });
     });
 
-    it('creates a new active user and returns 201 + tokens', async () => {
+    it('creates a registered (email-unconfirmed) user pending confirmation, without auto-login', async () => {
       const res = await request(app)
         .post('/api/v2/auth/register')
         .send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
 
-      expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({
-        accessToken: expect.any(String),
-        refreshToken: expect.any(String),
-        user: { email: NEW_EMAIL, username: 'register-tester' },
-      });
+      // No tokens: the account must confirm its email first.
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'confirmation_required' });
+      expect(res.body.accessToken).toBeUndefined();
+
+      const created = await User().findOne({ email: NEW_EMAIL });
+      expect(created?.status).toBe(User().STATUS_REGISTERED);
+      expect(created?.emailConfirmedAt ?? null).toBeNull();
+    });
+
+    it('blocks login with EMAIL_NOT_CONFIRMED until the account is activated', async () => {
+      await request(app).post('/api/v2/auth/register').send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
+
+      const res = await request(app).post('/api/v2/auth/login').send({ email: NEW_EMAIL, password: 'Password!1' });
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('EMAIL_NOT_CONFIRMED');
     });
 
     it('returns 409 USER_EXISTS when the email is already taken', async () => {

@@ -31,6 +31,7 @@ import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
+import { createMailTokenUtil } from 'src/util/mail-token';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -92,8 +93,14 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
           let code = 'USER_NOT_ACTIVE';
           let message = 'User account is not active';
           if (user.status === User.STATUS_REGISTERED) {
-            code = 'USER_REGISTERED';
-            message = 'User registration is not complete';
+            if (user.emailConfirmedAt == null) {
+              // Self-registered, awaiting email confirmation.
+              code = 'EMAIL_NOT_CONFIRMED';
+              message = 'Please confirm your email address — check your inbox for the activation link.';
+            } else {
+              code = 'USER_REGISTERED';
+              message = 'User registration is not complete';
+            }
           } else if (user.status === User.STATUS_SUSPENDED) {
             code = 'USER_SUSPENDED';
             message = 'User account is suspended';
@@ -146,8 +153,38 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
           return c.json({ error: { code: 'REGISTRATION_FAILED', message: 'Failed to create user' } }, 400);
         }
 
-        const tokens = jwtUtil.generateTokens(newUser);
-        return c.json({ ...tokens, user: toAuthUser(newUser) }, 201);
+        // Self-registration no longer auto-signs-in. A would-be-active
+        // account (open registration) must confirm its email first; a
+        // restricted-mode account stays REGISTERED awaiting admin approval.
+        if (newUser.status === User.STATUS_ACTIVE) {
+          newUser.status = User.STATUS_REGISTERED;
+          newUser.emailConfirmedAt = null;
+          await newUser.save();
+
+          const baseUrl = crowi.getBaseUrl() || String(config.crowi['app:url'] ?? '');
+          const { token } = createMailTokenUtil().signMailToken({ purpose: 'activate', userId: newUser._id.toString(), email });
+          const activationUrl = `${baseUrl}/activate?token=${token}`;
+          await crowi
+            .getMailer()
+            .send({
+              to: email,
+              htmlTemplate: 'activation',
+              lang: newUser.lang,
+              vars: {
+                activationUrl,
+                appTitle: String(config.crowi['app:title'] ?? ''),
+                appUrl: baseUrl,
+                logoUrl: baseUrl ? `${baseUrl}/logo/500w.png` : '',
+              },
+            })
+            // A send failure must not fail the registration — the account
+            // exists and the user can request a fresh activation link.
+            .catch((err) => debug('failed to send activation email:', err));
+
+          return c.json({ status: 'confirmation_required' as const }, 200);
+        }
+
+        return c.json({ status: 'approval_required' as const }, 200);
       } catch (error) {
         debug('Registration error:', error);
         return c.json(INTERNAL_ERROR_BODY, 500);

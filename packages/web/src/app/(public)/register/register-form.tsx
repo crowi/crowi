@@ -1,22 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AtSign, User, Mail, KeyRound, LogIn } from 'lucide-react';
+import { AtSign, User, Mail, KeyRound, LogIn, MailCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
-import { storeTokens } from '@/lib/auth-token';
 
 export function RegisterForm() {
-  const router = useRouter();
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [pending, setPending] = useState<'confirmation_required' | 'approval_required' | null>(null);
   const [formData, setFormData] = useState({
     username: '',
     name: '',
@@ -47,14 +44,11 @@ export function RegisterForm() {
         },
       });
 
-      if (response.status === 201) {
+      if (response.status === 200) {
+        // Self-registration no longer auto-signs-in: the account is
+        // pending email confirmation (open) or admin approval (restricted).
         const body = await response.json();
-        // Store tokens (also mirrors access token into a cookie so
-        // browser-built `<img>` requests can authenticate).
-        storeTokens(body, body.expiresIn);
-
-        // Redirect to home
-        router.push('/');
+        setPending(body.status);
       } else if (response.status === 400 || response.status === 403 || response.status === 409 || response.status === 503) {
         const body = await response.json();
         setErrors([body.error?.message || '登録に失敗しました']);
@@ -67,6 +61,30 @@ export function RegisterForm() {
       setIsSubmitting(false);
     }
   };
+
+  if (pending) {
+    return (
+      <Card className="shadow-2xl">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl text-center">{pending === 'confirmation_required' ? 'メールを確認してください' : '登録を受け付けました'}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <MailCheck className="h-4 w-4" />
+            <AlertDescription>
+              {pending === 'confirmation_required'
+                ? `${formData.email} 宛にアカウント有効化のメールを送信しました。メール内のリンクをクリックして登録を完了してください。`
+                : '管理者の承認後にサインインできるようになります。'}
+            </AlertDescription>
+          </Alert>
+          <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+            <LogIn className="h-4 w-4" />
+            サインインに戻る
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="shadow-2xl">

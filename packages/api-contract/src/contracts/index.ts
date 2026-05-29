@@ -6,6 +6,7 @@ export * from './installer';
 export * from './tokenAuth';
 export * from './inviteAccept';
 export * from './passwordReset';
+export * from './activation';
 export * from './me';
 export * from './user';
 export * from './bookmark';
