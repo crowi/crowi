@@ -8,6 +8,7 @@ import Config from './config';
 import Notification from './notification';
 import Page from './page';
 import PageYjsUpdate from './page-yjs-update';
+import PersonalAccessToken from './personal-access-token';
 import PluginRenderCache from './plugin-render-cache';
 import Revision from './revision';
 import Share from './share';
@@ -35,4 +36,5 @@ export default {
   Config,
   PluginRenderCache,
   PageYjsUpdate,
+  PersonalAccessToken,
 };
