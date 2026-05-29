@@ -39,6 +39,7 @@ import { registerDraftRoutes } from './handlers/draft';
 import { registerInstallerRoutes } from './handlers/installer';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notification';
+import { registerOAuthRoutes } from './handlers/oauth';
 import { registerPageRoutes } from './handlers/page';
 import { registerPageCollabRoutes } from './handlers/page-collab';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
@@ -83,7 +84,12 @@ export const buildHonoApp = (crowi: Crowi) => {
   // `registerMeRoutes`: it rides that handler's broad `/me/*` jwtAuth
   // apply rather than installing its own (avoids a second User.findById).
   const withAccessToken = registerAccessTokenRoutes(withMe, crowi);
-  const withUser = registerUserRoutes(withAccessToken, crowi);
+  // RFC-0010 Phase 3 — OAuth authorization-server endpoints. `/oauth/token`,
+  // `/oauth/revoke`, `/.well-known/oauth-authorization-server` are public;
+  // `/oauth/authorize` installs its own per-path `createJwtAuth` (no prefix
+  // overlap with any other handler's broad apply, so it is self-contained).
+  const withOAuth = registerOAuthRoutes(withAccessToken, crowi);
+  const withUser = registerUserRoutes(withOAuth, crowi);
   const withBookmark = registerBookmarkRoutes(withUser, crowi);
   const withBacklink = registerBacklinkRoutes(withBookmark, crowi);
   const withComment = registerCommentRoutes(withBacklink, crowi);
