@@ -157,37 +157,8 @@ describe('Routes /api/v2/me (Hono)', () => {
     });
   });
 
-  describe('GET / POST /me/apiToken', () => {
-    const EMAIL = 'me-apitoken@example.com';
-    let accessToken: string;
-
-    beforeAll(async () => {
-      const seeded = await seedActiveUser({ name: 'Me Tok', username: 'me-tok', email: EMAIL, password: 'Password!1' });
-      accessToken = seeded.accessToken;
-    });
-    afterAll(async () => {
-      await User().deleteMany({ email: EMAIL });
-    });
-
-    it('lazily generates an API token on first GET and is stable across reads', async () => {
-      const first = await request(app).get('/api/v2/me/apiToken').set('Authorization', `Bearer ${accessToken}`);
-      expect(first.status).toBe(200);
-      expect(first.body.status).toBe('ok');
-      expect(first.body.apiToken).toEqual(expect.any(String));
-      expect(first.body.apiToken.length).toBeGreaterThan(0);
-
-      const second = await request(app).get('/api/v2/me/apiToken').set('Authorization', `Bearer ${accessToken}`);
-      expect(second.body.apiToken).toBe(first.body.apiToken);
-    });
-
-    it('rotates the API token on POST', async () => {
-      const before = await request(app).get('/api/v2/me/apiToken').set('Authorization', `Bearer ${accessToken}`);
-      const rotated = await request(app).post('/api/v2/me/apiToken').set('Authorization', `Bearer ${accessToken}`);
-      expect(rotated.status).toBe(200);
-      expect(rotated.body.status).toBe('ok');
-      expect(rotated.body.apiToken).not.toBe(before.body.apiToken);
-    });
-  });
+  // Personal access token management (`/me/access-tokens`, replacing the
+  // legacy `/me/apiToken`) is covered in `access-token.test.ts`.
 
   describe('GET /me/recently-viewed-pages', () => {
     const EMAIL = 'me-rvp@example.com';
@@ -259,12 +230,6 @@ describe('Routes /api/v2/me (Hono)', () => {
   });
 
   describe('auth boundary', () => {
-    it('returns 401 AUTHENTICATION_REQUIRED for /me/apiToken without a bearer token', async () => {
-      const res = await request(app).get('/api/v2/me/apiToken');
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
-    });
-
     it('returns 401 AUTHENTICATION_REQUIRED for PUT /me/password without a bearer token', async () => {
       const res = await request(app).put('/api/v2/me/password').send({ newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
       expect(res.status).toBe(401);
