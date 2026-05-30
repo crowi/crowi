@@ -150,6 +150,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         return c.json(
           {
             status: 'error' as const,
+            code: 'EMAIL_NOT_ALLOWED' as const,
             message: "You can't update to that email address",
             errors: ["You can't update to that email address"],
           },
@@ -163,6 +164,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         return c.json(
           {
             status: 'error' as const,
+            code: 'EMAIL_TAKEN' as const,
             message: 'It can not be changed to that mail address',
             errors: ['It can not be changed to that mail address'],
           },

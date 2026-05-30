@@ -44,13 +44,14 @@ export function useUpdateProfile() {
       if (response.status === 200) {
         return response.json();
       }
-      // 400 surfaces a `{ status: 'error', errors: string[], message? }`
-      // body; lift the first error to the thrown message so callers can
-      // toast it without further parsing.
+      // 400 surfaces a `{ status: 'error', code?, errors: string[], message? }`
+      // body; carry the `code` on the thrown error so the form can show a
+      // localized message (the server `message` is English).
       if (response.status === 400) {
-        const body = (await response.json()) as { errors?: string[]; message?: string };
-        const errors = body.errors || [];
-        throw new Error(errors[0] || body.message || 'Failed to update profile');
+        const body = (await response.json()) as { code?: string; errors?: string[]; message?: string };
+        const err = new Error(body.errors?.[0] || body.message || 'Failed to update profile') as Error & { code?: string };
+        err.code = body.code;
+        throw err;
       }
       throw new Error('Failed to update profile');
     },

@@ -55,6 +55,8 @@ export type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
 // Error response schema for profile operations
 export const ProfileErrorResponseSchema = z.object({
   status: z.literal('error'),
+  /** Stable code so the web can localize the message (e.g. EMAIL_TAKEN). */
+  code: z.string().optional(),
   message: z.string().optional(),
   errors: z.array(z.string()).optional(),
 });
