@@ -69,5 +69,27 @@ describe('Routes /api/v2/auth/confirm-email-change (Hono)', () => {
       const res = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: resetToken });
       expect(res.status).toBe(401);
     });
+
+    it('is single-use: a token bound to the old email is rejected after the address changes (no revert replay)', async () => {
+      const user = await createActiveUser('su-a@example.com');
+      // Token bound to the current address (fromEmail) targeting B.
+      const tokenAtoB = createMailTokenUtil().signMailToken({
+        purpose: 'email-change',
+        userId: user._id.toString(),
+        email: 'su-b@example.com',
+        fromEmail: 'su-a@example.com',
+      }).token;
+      // Apply A -> B.
+      const apply = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: tokenAtoB });
+      expect(apply.status).toBe(200);
+
+      // Replaying the same (now stale) token must NOT revert B -> ... ;
+      // fromEmail no longer matches the current address.
+      const replay = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: tokenAtoB });
+      expect(replay.status).toBe(401);
+
+      const reloaded = await crowi.model('User').findById(user._id);
+      expect(reloaded?.email).toBe('su-b@example.com');
+    });
   });
 });

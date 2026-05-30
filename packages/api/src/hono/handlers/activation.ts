@@ -12,6 +12,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
+import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
 import { createMailTokenUtil } from 'src/util/mail-token';
 
@@ -58,10 +59,19 @@ export const registerActivationRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         if (user.emailConfirmedAt == null) {
           user.emailConfirmedAt = new Date();
         }
+
+        // Becoming ACTIVE must go through statusActivate so the 'activated'
+        // event fires and the user's wiki page is created at confirmation
+        // time (the same hook admin approval uses). A plain save() would
+        // skip it, leaving confirmed users without a user page.
+        let saved: UserDocument;
         if (user.status === User.STATUS_REGISTERED) {
-          user.status = User.STATUS_ACTIVE;
+          saved = await new Promise<UserDocument>((resolve, reject) => {
+            user.statusActivate((err: Error | null, userData: UserDocument) => (err ? reject(err) : resolve(userData)));
+          });
+        } else {
+          saved = await user.save();
         }
-        const saved = await user.save();
 
         const tokens = jwtUtil.generateTokens(saved);
         return c.json({ ...tokens, user: toAuthUser(saved) }, 200);

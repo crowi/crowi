@@ -723,10 +723,9 @@ export default (crowi: Crowi) => {
 
         if (toSendEmail) {
           const mailTokenUtil = createMailTokenUtil();
-          const appTitle = config.crowi['app:title'];
-          // Absolute base for the invite link + logo (CLIENT_URL).
+          const brand = mailer.brandVars();
+          // Absolute base for the invite link (CLIENT_URL).
           const baseUrl = crowi.getBaseUrl() || '';
-          const logoUrl = baseUrl ? `${baseUrl}/logo/500w.png` : '';
 
           async.each(
             createdUserList,
@@ -749,7 +748,7 @@ export default (crowi: Crowi) => {
                 .send({
                   to: item.email,
                   htmlTemplate: 'invite',
-                  vars: { inviteUrl, appTitle, appUrl: baseUrl, logoUrl, email: item.email },
+                  vars: { ...brand, inviteUrl, email: item.email },
                 })
                 // A send failure must not abort user creation — log and
                 // continue so the remaining invitations still go out.

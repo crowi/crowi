@@ -16,7 +16,14 @@ export type MailTokenPurpose = z.infer<typeof MailTokenPurposeSchema>;
 export const MailTokenPayloadSchema = z.object({
   purpose: MailTokenPurposeSchema,
   userId: z.string(),
+  /** Target address. For `email-change` this is the NEW address. */
   email: z.string().email(),
+  /**
+   * For `email-change`: the account's email at issue time. The confirm
+   * endpoint rejects the token unless it still matches, making the token
+   * single-use (a stale token cannot revert a later change).
+   */
+  fromEmail: z.string().email().optional(),
   // iat / exp are injected and verified by the JWT layer.
   iat: z.number().optional(),
   exp: z.number().optional(),

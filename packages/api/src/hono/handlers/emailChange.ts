@@ -52,6 +52,14 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
           return c.json({ error: { code: 'USER_NOT_FOUND', message: 'User no longer exists' } }, 404);
         }
 
+        // Single-use binding: the token carries the account's email at
+        // issue time. If the address has since changed (already confirmed
+        // once, or a newer request was made), this token is stale —
+        // reject it so an old link cannot revert the address.
+        if (payload.fromEmail && payload.fromEmail !== user.email) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
+
         // The new address may have been claimed by someone else between
         // the request and the confirmation.
         const clash = await User.findOne({ email: payload.email });

@@ -37,6 +37,8 @@ export interface MailTokenClaims {
   purpose: MailTokenPurpose;
   userId: string;
   email: string;
+  /** email-change only: the account's email at issue time (single-use binding). */
+  fromEmail?: string;
 }
 
 export interface SignMailTokenResult {
@@ -59,16 +61,30 @@ if ((!process.env.WS_TOKEN_SECRET || process.env.WS_TOKEN_SECRET.length === 0) &
 }
 
 /**
- * Resolve the signing secret per call so a test mutating the env between
- * imports still picks up the latest value. Falls back to a random
- * per-process secret (the load-time warn above reports the env miss).
+ * Process-wide random fallback secret, generated at most once. Must NOT
+ * be per-call: a mail token is signed in one request (e.g. the invite
+ * email) and verified in a later, separate request (the accept link) —
+ * often by a different `createMailTokenUtil()` instance. If each call
+ * minted its own random secret, every cross-handler token would fail
+ * verification whenever WS_TOKEN_SECRET is unset.
+ */
+let fallbackSecret: string | null = null;
+
+/**
+ * Resolve the signing secret. Reads WS_TOKEN_SECRET per call so a test
+ * mutating the env between imports still picks up the latest value; the
+ * random fallback is memoized process-wide (the load-time warn above
+ * reports the env miss).
  */
 const resolveMailTokenSecret = (): string => {
   const fromEnv = process.env.WS_TOKEN_SECRET;
   if (fromEnv && fromEnv.length > 0) {
     return fromEnv;
   }
-  return crypto.randomBytes(32).toString('base64');
+  if (!fallbackSecret) {
+    fallbackSecret = crypto.randomBytes(32).toString('base64');
+  }
+  return fallbackSecret;
 };
 
 function buildMailTokenUtil() {

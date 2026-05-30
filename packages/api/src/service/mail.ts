@@ -3,7 +3,7 @@ import path from 'node:path';
 import Debug from 'debug';
 import type { EmailMessage, MailSender } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
-import { getMailCatalog } from 'src/mail/i18n';
+import { type MailCatalog, getMailCatalog } from 'src/mail/i18n';
 
 const debug = Debug('crowi:service:mail');
 
@@ -11,9 +11,10 @@ const debug = Debug('crowi:service:mail');
  * HTML email types. Each maps 1:1 to a MJML body template
  * (`views/mail/<name>.mjml` + `<name>.text`) AND to a catalog section
  * (`MailCatalog[<name>]`), so the name alone resolves both the template
- * files and the i18n strings — no mapping table.
+ * files and the i18n strings — no mapping table. Derived from the catalog
+ * keys so a new section automatically extends this union.
  */
-export type MailTemplateName = 'invite' | 'activation' | 'passwordReset' | 'test' | 'passwordChanged' | 'adminApprovalPending' | 'emailChange';
+export type MailTemplateName = Exclude<keyof MailCatalog, 'common'>;
 
 /**
  * High-level send options accepted by the core. The MailService resolves

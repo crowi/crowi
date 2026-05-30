@@ -42,21 +42,17 @@ export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindi
         // regardless (anti-enumeration): the caller cannot tell whether
         // the email maps to an account.
         if (user && user.status === User.STATUS_ACTIVE) {
-          const config = crowi.getConfig();
-          const appTitle = config.crowi['app:title'];
-          const baseUrl = crowi.getBaseUrl() || '';
-          const logoUrl = baseUrl ? `${baseUrl}/logo/500w.png` : '';
+          const mailer = crowi.getMailer();
           const { token } = mailTokenUtil.signMailToken({ purpose: 'reset', userId: user._id.toString(), email });
+          const baseUrl = crowi.getBaseUrl() || '';
           const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
-          await crowi
-            .getMailer()
-            .send({
-              to: email,
-              htmlTemplate: 'passwordReset',
-              lang: user.lang,
-              vars: { resetUrl, appTitle, appUrl: baseUrl, logoUrl },
-            })
+          // Fire-and-forget: do NOT await. Awaiting only on the
+          // account-exists branch would make it slower than the
+          // unknown-email branch, leaking a timing side-channel that
+          // defeats the always-200 anti-enumeration response.
+          void mailer
+            .send({ to: email, htmlTemplate: 'passwordReset', lang: user.lang, vars: { ...mailer.brandVars(), resetUrl } })
             .catch((err) => debug('failed to send password-reset email:', err));
         }
 
@@ -87,12 +83,18 @@ export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindi
         if (!user) {
           return c.json({ error: { code: 'USER_NOT_FOUND', message: 'User no longer exists' } }, 404);
         }
+        // Re-check status at consume time: the account may have been
+        // suspended after the link was minted. login enforces this gate,
+        // so the reset endpoint (which also signs the user in) must too.
+        if (user.status !== User.STATUS_ACTIVE) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
 
         user.setPassword(password);
         const saved = await user.save();
 
-        // Security notification — best-effort, never fails the reset.
-        await crowi
+        // Security notification — best-effort, never blocks/fails the reset.
+        void crowi
           .getMailer()
           .sendPasswordChangedNotice(saved.email, saved.lang)
           .catch((err) => debug('failed to send password-changed notice:', err));
