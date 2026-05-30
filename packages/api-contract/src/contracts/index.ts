@@ -7,6 +7,7 @@ export * from './tokenAuth';
 export * from './inviteAccept';
 export * from './passwordReset';
 export * from './activation';
+export * from './emailChange';
 export * from './me';
 export * from './user';
 export * from './bookmark';

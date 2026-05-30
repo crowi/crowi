@@ -48,6 +48,7 @@ import { registerTokenAuthRoutes } from './handlers/tokenAuth';
 import { registerInviteAcceptRoutes } from './handlers/inviteAccept';
 import { registerPasswordResetRoutes } from './handlers/passwordReset';
 import { registerActivationRoutes } from './handlers/activation';
+import { registerEmailChangeRoutes } from './handlers/emailChange';
 import { registerUserRoutes } from './handlers/user';
 
 export { createHonoApp, createJwtAdminRequired, createJwtAuth, defaultHook, honoOnError } from './app';
@@ -87,7 +88,9 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withPasswordReset = registerPasswordResetRoutes(withInviteAccept, crowi);
   // Public account activation (email confirmation; token is the credential).
   const withActivation = registerActivationRoutes(withPasswordReset, crowi);
-  const withMe = registerMeRoutes(withActivation, crowi);
+  // Public email-change confirmation (token is the credential).
+  const withEmailChange = registerEmailChangeRoutes(withActivation, crowi);
+  const withMe = registerMeRoutes(withEmailChange, crowi);
   const withUser = registerUserRoutes(withMe, crowi);
   const withBookmark = registerBookmarkRoutes(withUser, crowi);
   const withBacklink = registerBacklinkRoutes(withBookmark, crowi);

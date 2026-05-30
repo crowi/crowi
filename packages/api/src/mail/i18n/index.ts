@@ -14,7 +14,11 @@
 import { en } from './en';
 import { ja } from './ja';
 
-/** Strings for one email type. */
+/**
+ * Strings for one email type. `subject` / `preheader` / `heading` /
+ * `intro` are shared by all; the link-related fields are optional so
+ * pure notification mails (no CTA) can omit them.
+ */
 export interface MailMessageStrings {
   /** Subject line. MAY contain `{{ appTitle }}` (rendered standalone). */
   subject: string;
@@ -24,18 +28,26 @@ export interface MailMessageStrings {
   heading: string;
   /** Lead paragraph. */
   intro: string;
-  /** Call-to-action button label. */
-  cta: string;
+  /** Call-to-action button label (omit for notification-only mails). */
+  cta?: string;
   /** Note about the link's expiry. */
-  expiresNote: string;
+  expiresNote?: string;
   /** "If you didn't expect this, ignore it" note. */
-  ignoreNote: string;
+  ignoreNote?: string;
 }
 
 export interface MailCatalog {
   invite: MailMessageStrings;
   activation: MailMessageStrings;
   passwordReset: MailMessageStrings;
+  /** Test mail from the admin mail settings page. */
+  test: MailMessageStrings;
+  /** Security notification: the account's password was changed. */
+  passwordChanged: MailMessageStrings;
+  /** Admin notification: a self-registered user is awaiting approval. */
+  adminApprovalPending: MailMessageStrings;
+  /** Confirm a requested email-address change (link sent to the new address). */
+  emailChange: MailMessageStrings;
   common: {
     /** Small line under the footer logo. */
     footerTagline: string;

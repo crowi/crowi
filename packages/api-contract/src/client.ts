@@ -95,6 +95,7 @@ import { tokenAuthRoutes } from './contracts/tokenAuth';
 import { inviteAcceptRoutes } from './contracts/inviteAccept';
 import { passwordResetRoutes } from './contracts/passwordReset';
 import { activationRoutes } from './contracts/activation';
+import { emailChangeRoutes } from './contracts/emailChange';
 import { userRoutes } from './contracts/user';
 import type { AppInfoResponseSchema } from './schemas/app';
 import type { GetBacklinksResponseSchema } from './schemas/backlink';
@@ -487,6 +488,8 @@ const appAuthMeUserChain = new OpenAPIHono()
   .openapi(passwordResetRoutes.selfResetPasswordRoute, (c) => c.json(stubTokens, 200))
   .openapi(activationRoutes.validateActivationTokenRoute, (c) => c.json({ ok: true as const }, 200))
   .openapi(activationRoutes.activateAccountRoute, (c) => c.json(stubTokens, 200))
+  .openapi(emailChangeRoutes.validateEmailChangeTokenRoute, (c) => c.json({ ok: true as const, email: 'stub@example.com' }, 200))
+  .openapi(emailChangeRoutes.confirmEmailChangeRoute, (c) => c.json({ ok: true as const, email: 'stub@example.com' }, 200))
   .openapi(tokenAuthRoutes.tokenRefreshRoute, (c) => c.json(stubTokens, 200))
   .openapi(tokenAuthRoutes.tokenLogoutRoute, (c) => c.json({ message: '' }, 200))
   .openapi(tokenAuthRoutes.tokenMeRoute, (c) =>

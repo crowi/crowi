@@ -91,6 +91,12 @@ export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindi
         user.setPassword(password);
         const saved = await user.save();
 
+        // Security notification — best-effort, never fails the reset.
+        await crowi
+          .getMailer()
+          .sendPasswordChangedNotice(saved.email, saved.lang)
+          .catch((err) => debug('failed to send password-changed notice:', err));
+
         const tokens = jwtUtil.generateTokens(saved);
         return c.json({ ...tokens, user: toAuthUser(saved) }, 200);
       } catch (error) {

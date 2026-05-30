@@ -29,6 +29,7 @@ const MAIL_TOKEN_TTL_SECONDS: Record<MailTokenPurpose, number> = {
   invite: 7 * 24 * 60 * 60, // 7 days
   activate: 24 * 60 * 60, // 1 day
   reset: 60 * 60, // 1 hour
+  'email-change': 24 * 60 * 60, // 1 day
 };
 
 /** Claims the caller supplies; `iat` / `exp` are added by `signMailToken`. */

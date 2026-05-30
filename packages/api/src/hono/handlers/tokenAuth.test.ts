@@ -141,6 +141,32 @@ describe('Routes /api/v2/auth (Hono)', () => {
       await User().deleteMany({ username: 'duplicate-user' });
     });
 
+    it('returns approval_required (no auto-login) under restricted registration', async () => {
+      const original = (await Config().loadAllConfig()) as { crowi: Record<string, unknown> };
+      const prev = original.crowi['security:registrationMode'];
+      await Config().updateConfig('crowi', 'security:registrationMode', Config().SECURITY_REGISTRATION_MODE_RESTRICTED);
+      await crowi.getConfigService().load();
+
+      try {
+        const res = await request(app)
+          .post('/api/v2/auth/register')
+          .send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ status: 'approval_required' });
+        expect(res.body.accessToken).toBeUndefined();
+
+        const created = await User().findOne({ email: NEW_EMAIL });
+        expect(created?.status).toBe(User().STATUS_REGISTERED);
+      } finally {
+        if (prev !== undefined) {
+          await Config().updateConfig('crowi', 'security:registrationMode', prev);
+        } else {
+          await Config().deleteOne({ ns: 'crowi', key: 'security:registrationMode' });
+        }
+        await crowi.getConfigService().load();
+      }
+    });
+
     it('returns 403 REGISTRATION_CLOSED when admin has restricted signups', async () => {
       const original = (await Config().loadAllConfig()) as { crowi: Record<string, unknown> };
       const prev = original.crowi['security:registrationMode'];

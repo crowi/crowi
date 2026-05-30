@@ -184,6 +184,29 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
           return c.json({ status: 'confirmation_required' as const }, 200);
         }
 
+        // Restricted mode: awaiting admin approval. Notify every active
+        // admin (best-effort, per recipient in their own language).
+        const baseUrl = crowi.getBaseUrl() || String(config.crowi['app:url'] ?? '');
+        const brand = {
+          appTitle: String(config.crowi['app:title'] ?? ''),
+          appUrl: baseUrl,
+          logoUrl: baseUrl ? `${baseUrl}/logo/500w.png` : '',
+        };
+        const admins = (await User.find({ admin: true, status: User.STATUS_ACTIVE })) as UserDocument[];
+        await Promise.all(
+          admins.map((admin) =>
+            crowi
+              .getMailer()
+              .send({
+                to: admin.email,
+                htmlTemplate: 'adminApprovalPending',
+                lang: admin.lang,
+                vars: { ...brand, createdUserName: newUser.name, createdUserEmail: email, adminUsersUrl: `${baseUrl}/admin/users` },
+              })
+              .catch((err) => debug('failed to send admin approval-pending notice:', err)),
+          ),
+        );
+
         return c.json({ status: 'approval_required' as const }, 200);
       } catch (error) {
         debug('Registration error:', error);

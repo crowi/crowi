@@ -23,7 +23,8 @@ function fakeSender(): MailSender & { sent: EmailMessage[] } {
 function makeCrowi(opts: { from?: string; appTitle?: string; mail: MailSender | null; rootDir?: string }): any {
   return {
     rootDir: opts.rootDir ?? '/tmp',
-    getConfig: () => ({ crowi: { 'mail:from': opts.from ?? '', 'app:title': opts.appTitle ?? '' } }),
+    getConfig: () => ({ crowi: { 'mail:from': opts.from ?? '', 'app:title': opts.appTitle ?? '', 'app:url': 'https://wiki.example.com' } }),
+    getBaseUrl: () => 'https://wiki.example.com',
     getPlugins: () => ({ active: { mail: opts.mail } }),
   };
 }
@@ -87,11 +88,14 @@ describe('MailService', () => {
     await expect(svc.send({ to: 'u@example.com', text: 'x' })).rejects.toThrow(/Mail sender not registered/);
   });
 
-  it('sendTest dispatches a fixed message to the given address', async () => {
+  it('sendTest dispatches the branded HTML test mail to the given address', async () => {
     const sender = fakeSender();
-    const svc = new MailService(makeCrowi({ from: 'f@example.com', mail: sender }));
+    const svc = new MailService(makeCrowi({ from: 'f@example.com', appTitle: 'W', mail: sender, rootDir: path.join(__dirname, '..', '..') }));
     await svc.sendTest('admin@example.com');
-    expect(sender.sent[0]).toEqual(expect.objectContaining({ to: ['admin@example.com'], from: 'f@example.com' }));
+    const msg = sender.sent[0];
+    expect(msg).toEqual(expect.objectContaining({ to: ['admin@example.com'], from: 'f@example.com' }));
+    expect(msg.html).toContain('Your mail settings are working');
+    expect(msg.text.length).toBeGreaterThan(0);
   });
 });
 
@@ -139,5 +143,33 @@ describe('MailService HTML (MJML) templates', () => {
     const svc = new MailService(makeCrowi({ from: 'f@example.com', appTitle: 'W', mail: sender, rootDir: apiRoot }));
     await svc.send({ to: 'x@example.com', htmlTemplate: 'invite', lang: 'en-US', vars: { inviteUrl: 'https://w/i', appTitle: 'W', appUrl: 'https://w' } });
     expect(sender.sent[0].html).toContain("You've been invited");
+  });
+
+  it.each([
+    ['test', {}, 'Your mail settings are working'],
+    ['passwordChanged', {}, 'Your password was changed'],
+    ['adminApprovalPending', { createdUserName: 'New User', createdUserEmail: 'new@example.com', adminUsersUrl: 'https://w/admin/users' }, 'awaiting approval'],
+    ['emailChange', { confirmUrl: 'https://w/confirm-email?token=abc' }, 'Confirm your new email'],
+  ])('renders the %s template to html + text', async (template, extraVars, needle) => {
+    const sender = fakeSender();
+    const svc = new MailService(makeCrowi({ from: 'f@example.com', appTitle: 'W', mail: sender, rootDir: apiRoot }));
+    // biome-ignore lint/suspicious/noExplicitAny: template name is parameterized in the test
+    await svc.send({ to: 'x@example.com', htmlTemplate: template as any, vars: { appTitle: 'W', appUrl: 'https://w', ...extraVars } });
+    const msg = sender.sent[0];
+    expect(msg.html).toContain(needle);
+    expect(msg.text.length).toBeGreaterThan(0);
+    expect(msg.subject.length).toBeGreaterThan(0);
+  });
+
+  it('embeds the link in the adminApprovalPending and emailChange templates', async () => {
+    const sender = fakeSender();
+    const svc = new MailService(makeCrowi({ from: 'f@example.com', appTitle: 'W', mail: sender, rootDir: apiRoot }));
+    await svc.send({
+      to: 'admin@example.com',
+      htmlTemplate: 'adminApprovalPending',
+      vars: { appTitle: 'W', appUrl: 'https://w', createdUserName: 'New User', createdUserEmail: 'new@example.com', adminUsersUrl: 'https://w/admin/users' },
+    });
+    expect(sender.sent[0].html).toContain('https://w/admin/users');
+    expect(sender.sent[0].html).toContain('new@example.com');
   });
 });

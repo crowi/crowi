@@ -18,6 +18,12 @@ export const UserProfileResponseSchema = z.object({
   githubId: z.string().nullable().optional(),
   hasPassword: z.boolean(),
   createdAt: z.string(),
+  /**
+   * True when the profile update requested a new email that is awaiting
+   * confirmation: the stored `email` is unchanged and a confirmation
+   * link was sent to the new address.
+   */
+  emailChangePending: z.boolean().optional(),
 });
 export type UserProfileResponse = z.infer<typeof UserProfileResponseSchema>;
 

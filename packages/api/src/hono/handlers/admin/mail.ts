@@ -72,7 +72,7 @@ export const registerAdminMailRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
       }
 
       try {
-        await crowi.getMailer().sendTest(user.email);
+        await crowi.getMailer().sendTest(user.email, user.lang);
       } catch (err) {
         const error = err as Error;
         debug('sendTestMail failed: %s', error.message);

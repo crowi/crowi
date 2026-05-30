@@ -13,7 +13,7 @@ const debug = Debug('crowi:service:mail');
  * (`MailCatalog[<name>]`), so the name alone resolves both the template
  * files and the i18n strings — no mapping table.
  */
-export type MailTemplateName = 'invite' | 'activation' | 'passwordReset';
+export type MailTemplateName = 'invite' | 'activation' | 'passwordReset' | 'test' | 'passwordChanged' | 'adminApprovalPending' | 'emailChange';
 
 /**
  * High-level send options accepted by the core. The MailService resolves
@@ -226,16 +226,32 @@ export class MailService {
   }
 
   /**
-   * Send a fixed test message to `to` through the active sender. Used by
-   * the admin mail settings page to verify the currently-configured
-   * sender end-to-end.
+   * Send the branded HTML test message to `to` through the active
+   * sender. Used by the admin mail settings page to verify the
+   * currently-configured sender — and that every sender renders the
+   * same template — end-to-end.
    */
-  async sendTest(to: string): Promise<void> {
-    await this.activeSender().send({
-      to: [to],
-      from: this.getFrom(),
-      subject: 'Crowi: test mail',
-      text: 'This is a test message dispatched from the Crowi admin mail settings page.',
-    });
+  async sendTest(to: string, lang?: string): Promise<void> {
+    await this.send({ to, htmlTemplate: 'test', lang, vars: this.brandVars() });
+  }
+
+  /**
+   * Security notification that the recipient's password was changed.
+   * Fire-and-forget at the call site (a notification failure must not
+   * fail the password change itself).
+   */
+  async sendPasswordChangedNotice(to: string, lang?: string): Promise<void> {
+    await this.send({ to, htmlTemplate: 'passwordChanged', lang, vars: this.brandVars() });
+  }
+
+  /** Brand vars (appTitle / appUrl / logoUrl) shared by every template. */
+  brandVars(): Record<string, unknown> {
+    const config = this.crowi.getConfig();
+    const appUrl = this.crowi.getBaseUrl() || config?.crowi?.['app:url'] || '';
+    return {
+      appTitle: config?.crowi?.['app:title'] || 'Crowi',
+      appUrl,
+      logoUrl: appUrl ? `${appUrl}/logo/500w.png` : '',
+    };
   }
 }

@@ -6,6 +6,7 @@ export * from './schemas/mail-token';
 export * from './schemas/inviteAccept';
 export * from './schemas/passwordReset';
 export * from './schemas/activation';
+export * from './schemas/emailChange';
 export * from './schemas/installer';
 export * from './schemas/common';
 export * from './schemas/me';

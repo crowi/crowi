@@ -10,7 +10,7 @@
  */
 import { z } from '@hono/zod-openapi';
 
-export const MailTokenPurposeSchema = z.enum(['invite', 'activate', 'reset']);
+export const MailTokenPurposeSchema = z.enum(['invite', 'activate', 'reset', 'email-change']);
 export type MailTokenPurpose = z.infer<typeof MailTokenPurposeSchema>;
 
 export const MailTokenPayloadSchema = z.object({
