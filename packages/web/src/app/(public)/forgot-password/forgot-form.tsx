@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
+import { m } from '@paraglide/messages.js';
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState('');
@@ -27,10 +28,10 @@ export function ForgotPasswordForm() {
       if (res.status === 200) {
         setDone(true);
       } else {
-        setError('リクエストの送信に失敗しました');
+        setError(m['auth.forgot.error']());
       }
     } catch {
-      setError('サーバーとの通信中にエラーが発生しました');
+      setError(m['auth.common.server_error']());
     } finally {
       setIsSubmitting(false);
     }
@@ -40,18 +41,16 @@ export function ForgotPasswordForm() {
     return (
       <Card className="shadow-2xl">
         <CardHeader>
-          <CardTitle className="text-xl text-center">メールを確認してください</CardTitle>
+          <CardTitle className="text-xl text-center">{m['auth.forgot.check_email_title']()}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert>
             <CheckCircle2 className="h-4 w-4" />
-            <AlertDescription>
-              入力されたメールアドレスのアカウントが存在する場合、パスワード再設定用のリンクを送信しました。メールをご確認ください。
-            </AlertDescription>
+            <AlertDescription>{m['auth.forgot.check_email_body']()}</AlertDescription>
           </Alert>
           <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <ArrowLeft className="h-4 w-4" />
-            サインインに戻る
+            {m['auth.common.back_to_signin']()}
           </Link>
         </CardContent>
       </Card>
@@ -61,8 +60,8 @@ export function ForgotPasswordForm() {
   return (
     <Card className="shadow-2xl">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-xl text-center">パスワードの再設定</CardTitle>
-        <CardDescription className="text-center">登録済みのメールアドレスに再設定リンクを送信します。</CardDescription>
+        <CardTitle className="text-xl text-center">{m['auth.forgot.title']()}</CardTitle>
+        <CardDescription className="text-center">{m['auth.forgot.lead']()}</CardDescription>
       </CardHeader>
       <CardContent>
         {error && (
@@ -72,7 +71,7 @@ export function ForgotPasswordForm() {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">メールアドレス</Label>
+            <Label htmlFor="email">{m['auth.forgot.email_label']()}</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -89,13 +88,13 @@ export function ForgotPasswordForm() {
             </div>
           </div>
           <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-            {isSubmitting ? '送信中...' : '再設定リンクを送信'}
+            {isSubmitting ? m['auth.forgot.submitting']() : m['auth.forgot.submit']()}
           </Button>
         </form>
         <div className="mt-6 pt-6 border-t text-center">
           <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <ArrowLeft className="h-4 w-4" />
-            サインインに戻る
+            {m['auth.common.back_to_signin']()}
           </Link>
         </div>
       </CardContent>

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
+import { m } from '@paraglide/messages.js';
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -53,10 +54,10 @@ export function ResetPasswordForm() {
         router.push('/');
       } else {
         const body = await res.json();
-        setErrors([('error' in body && body.error?.message) || 'パスワードの再設定に失敗しました']);
+        setErrors([('error' in body && body.error?.message) || m['auth.reset.error']()]);
       }
     } catch {
-      setErrors(['サーバーとの通信中にエラーが発生しました']);
+      setErrors([m['auth.common.server_error']()]);
     } finally {
       setIsSubmitting(false);
     }
@@ -66,15 +67,15 @@ export function ResetPasswordForm() {
     return (
       <Card className="shadow-2xl">
         <CardHeader>
-          <CardTitle className="text-xl text-center">リンクが無効です</CardTitle>
+          <CardTitle className="text-xl text-center">{m['auth.reset.invalid_title']()}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert variant="destructive">
-            <AlertDescription>このパスワード再設定リンクは無効か、有効期限が切れています。お手数ですが再度お試しください。</AlertDescription>
+            <AlertDescription>{m['auth.reset.invalid_body']()}</AlertDescription>
           </Alert>
           <Link href="/forgot-password" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <ArrowLeft className="h-4 w-4" />
-            再設定リンクを再送する
+            {m['auth.reset.resend_link']()}
           </Link>
         </CardContent>
       </Card>
@@ -84,7 +85,7 @@ export function ResetPasswordForm() {
   return (
     <Card className="shadow-2xl">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-xl text-center">新しいパスワード</CardTitle>
+        <CardTitle className="text-xl text-center">{m['auth.reset.heading']()}</CardTitle>
       </CardHeader>
       <CardContent>
         {errors.length > 0 && (
@@ -100,7 +101,7 @@ export function ResetPasswordForm() {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="password">新しいパスワード</Label>
+            <Label htmlFor="password">{m['auth.reset.password_label']()}</Label>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -118,7 +119,7 @@ export function ResetPasswordForm() {
             </div>
           </div>
           <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-            {isSubmitting ? '設定中...' : 'パスワードを再設定'}
+            {isSubmitting ? m['auth.reset.submitting']() : m['auth.reset.submit']()}
           </Button>
         </form>
       </CardContent>

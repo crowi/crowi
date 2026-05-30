@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
+import { m } from '@paraglide/messages.js';
 
 type Phase = 'confirming' | 'done' | 'error';
 
@@ -40,15 +41,15 @@ export function ConfirmEmailForm() {
     return (
       <Card className="shadow-2xl">
         <CardHeader>
-          <CardTitle className="text-xl text-center">リンクが無効です</CardTitle>
+          <CardTitle className="text-xl text-center">{m['auth.confirm_email.invalid_title']()}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert variant="destructive">
-            <AlertDescription>この確認リンクは無効か、有効期限が切れています。設定画面からもう一度お試しください。</AlertDescription>
+            <AlertDescription>{m['auth.confirm_email.invalid_body']()}</AlertDescription>
           </Alert>
           <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <ArrowLeft className="h-4 w-4" />
-            サインインに戻る
+            {m['auth.common.back_to_signin']()}
           </Link>
         </CardContent>
       </Card>
@@ -59,16 +60,16 @@ export function ConfirmEmailForm() {
     return (
       <Card className="shadow-2xl">
         <CardHeader>
-          <CardTitle className="text-xl text-center">メールアドレスを変更しました</CardTitle>
+          <CardTitle className="text-xl text-center">{m['auth.confirm_email.done_title']()}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert>
             <CheckCircle2 className="h-4 w-4" />
-            <AlertDescription>メールアドレスを{email ? ` ${email} ` : ''}に変更しました。次回から新しいアドレスでサインインできます。</AlertDescription>
+            <AlertDescription>{email ? m['auth.confirm_email.done_body']({ email }) : m['auth.confirm_email.done_body_no_email']()}</AlertDescription>
           </Alert>
           <Link href="/" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <ArrowLeft className="h-4 w-4" />
-            ホームへ戻る
+            {m['auth.confirm_email.back_home']()}
           </Link>
         </CardContent>
       </Card>
@@ -80,7 +81,7 @@ export function ConfirmEmailForm() {
       <CardContent className="py-10">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <p>メールアドレスを確認しています...</p>
+          <p>{m['auth.confirm_email.loading']()}</p>
         </div>
       </CardContent>
     </Card>

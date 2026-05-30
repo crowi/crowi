@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
 import { safeContinueUrl } from '@/lib/login-redirect';
+import { m } from '@paraglide/messages.js';
 
 export function LoginForm() {
   const router = useRouter();
@@ -60,12 +61,12 @@ export function LoginForm() {
         router.push(continueUrl);
       } else if (response.status === 401 || response.status === 403 || response.status === 503) {
         const body = await response.json();
-        setErrors([body.error?.message || 'ログインに失敗しました']);
+        setErrors([body.error?.message || m['auth.login.error']()]);
       } else {
-        setErrors(['予期しないエラーが発生しました']);
+        setErrors([m['auth.login.unexpected_error']()]);
       }
     } catch {
-      setErrors(['サーバーとの通信中にエラーが発生しました']);
+      setErrors([m['auth.common.server_error']()]);
     } finally {
       setIsSubmitting(false);
     }
@@ -74,7 +75,7 @@ export function LoginForm() {
   return (
     <Card className="shadow-2xl">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-xl text-center">サインイン</CardTitle>
+        <CardTitle className="text-xl text-center">{m['auth.login.title']()}</CardTitle>
       </CardHeader>
       <CardContent>
         {errors.length > 0 && (
@@ -91,7 +92,7 @@ export function LoginForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">メールアドレス</Label>
+            <Label htmlFor="email">{m['auth.login.email_label']()}</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -109,7 +110,7 @@ export function LoginForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">パスワード</Label>
+            <Label htmlFor="password">{m['auth.login.password_label']()}</Label>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -127,20 +128,20 @@ export function LoginForm() {
           </div>
 
           <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-            {isSubmitting ? 'サインイン中...' : 'サインイン'}
+            {isSubmitting ? m['auth.login.submitting']() : m['auth.login.submit']()}
           </Button>
         </form>
 
         <div className="mt-4 text-center">
           <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-primary hover:underline">
-            パスワードをお忘れですか?
+            {m['auth.login.forgot_link']()}
           </Link>
         </div>
 
         <div className="mt-6 pt-6 border-t text-center">
           <Link href="/register" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <PenLine className="h-4 w-4" />
-            新規登録はこちら
+            {m['auth.login.register_link']()}
           </Link>
         </div>
       </CardContent>

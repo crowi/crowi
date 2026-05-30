@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
+import { m } from '@paraglide/messages.js';
 
 type Phase = 'activating' | 'error';
 
@@ -43,15 +44,15 @@ export function ActivateForm() {
     return (
       <Card className="shadow-2xl">
         <CardHeader>
-          <CardTitle className="text-xl text-center">リンクが無効です</CardTitle>
+          <CardTitle className="text-xl text-center">{m['auth.activate.invalid_title']()}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert variant="destructive">
-            <AlertDescription>この有効化リンクは無効か、有効期限が切れています。お手数ですが再度ご登録ください。</AlertDescription>
+            <AlertDescription>{m['auth.activate.invalid_body']()}</AlertDescription>
           </Alert>
           <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <ArrowLeft className="h-4 w-4" />
-            サインインに戻る
+            {m['auth.common.back_to_signin']()}
           </Link>
         </CardContent>
       </Card>
@@ -63,7 +64,7 @@ export function ActivateForm() {
       <CardContent className="py-10">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <p>アカウントを有効化しています...</p>
+          <p>{m['auth.activate.loading']()}</p>
         </div>
       </CardContent>
     </Card>

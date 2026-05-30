@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
+import { m } from '@paraglide/messages.js';
 
 export function AcceptInviteForm() {
   const router = useRouter();
@@ -68,10 +69,10 @@ export function AcceptInviteForm() {
         router.push('/');
       } else {
         const body = await response.json();
-        setErrors([('error' in body && body.error?.message) || '招待の受諾に失敗しました']);
+        setErrors([('error' in body && body.error?.message) || m['auth.invite_accept.error']()]);
       }
     } catch {
-      setErrors(['サーバーとの通信中にエラーが発生しました']);
+      setErrors([m['auth.common.server_error']()]);
     } finally {
       setIsSubmitting(false);
     }
@@ -81,11 +82,11 @@ export function AcceptInviteForm() {
     return (
       <Card className="shadow-2xl">
         <CardHeader>
-          <CardTitle className="text-xl text-center">招待リンクが無効です</CardTitle>
+          <CardTitle className="text-xl text-center">{m['auth.invite_accept.invalid_title']()}</CardTitle>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
-            <AlertDescription>この招待リンクは無効か、有効期限が切れています。管理者に再送を依頼してください。</AlertDescription>
+            <AlertDescription>{m['auth.invite_accept.invalid_body']()}</AlertDescription>
           </Alert>
         </CardContent>
       </Card>
@@ -95,8 +96,8 @@ export function AcceptInviteForm() {
   return (
     <Card className="shadow-2xl">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-xl text-center">アカウントを設定</CardTitle>
-        {invitedEmail && <CardDescription className="text-center">{invitedEmail} として参加します</CardDescription>}
+        <CardTitle className="text-xl text-center">{m['auth.invite_accept.heading']()}</CardTitle>
+        {invitedEmail && <CardDescription className="text-center">{m['auth.invite_accept.joining_as']({ email: invitedEmail })}</CardDescription>}
       </CardHeader>
       <CardContent>
         {errors.length > 0 && (
@@ -113,7 +114,7 @@ export function AcceptInviteForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="username">ユーザー名</Label>
+            <Label htmlFor="username">{m['auth.invite_accept.username_label']()}</Label>
             <div className="relative">
               <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input id="username" name="username" value={formData.username} onChange={handleChange} className="pl-10" required autoComplete="username" />
@@ -121,7 +122,7 @@ export function AcceptInviteForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="name">表示名</Label>
+            <Label htmlFor="name">{m['auth.invite_accept.name_label']()}</Label>
             <div className="relative">
               <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input id="name" name="name" value={formData.name} onChange={handleChange} className="pl-10" required autoComplete="name" />
@@ -129,7 +130,7 @@ export function AcceptInviteForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">パスワード</Label>
+            <Label htmlFor="password">{m['auth.invite_accept.password_label']()}</Label>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -147,7 +148,7 @@ export function AcceptInviteForm() {
           </div>
 
           <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-            {isSubmitting ? '設定中...' : 'アカウントを作成して開始'}
+            {isSubmitting ? m['auth.invite_accept.submitting']() : m['auth.invite_accept.submit']()}
           </Button>
         </form>
       </CardContent>
