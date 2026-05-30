@@ -161,7 +161,7 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
           newUser.emailConfirmedAt = null;
           await newUser.save();
 
-          const baseUrl = crowi.getBaseUrl() || String(config.crowi['app:url'] ?? '');
+          const baseUrl = crowi.getBaseUrl() || '';
           const { token } = createMailTokenUtil().signMailToken({ purpose: 'activate', userId: newUser._id.toString(), email });
           const activationUrl = `${baseUrl}/activate?token=${token}`;
           await crowi
@@ -186,7 +186,7 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
 
         // Restricted mode: awaiting admin approval. Notify every active
         // admin (best-effort, per recipient in their own language).
-        const baseUrl = crowi.getBaseUrl() || String(config.crowi['app:url'] ?? '');
+        const baseUrl = crowi.getBaseUrl() || '';
         const brand = {
           appTitle: String(config.crowi['app:title'] ?? ''),
           appUrl: baseUrl,

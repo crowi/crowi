@@ -247,7 +247,7 @@ export class MailService {
   /** Brand vars (appTitle / appUrl / logoUrl) shared by every template. */
   brandVars(): Record<string, unknown> {
     const config = this.crowi.getConfig();
-    const appUrl = this.crowi.getBaseUrl() || config?.crowi?.['app:url'] || '';
+    const appUrl = this.crowi.getBaseUrl() || '';
     return {
       appTitle: config?.crowi?.['app:title'] || 'Crowi',
       appUrl,

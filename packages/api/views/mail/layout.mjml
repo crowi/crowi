@@ -11,7 +11,7 @@
     </mj-style>
   </mj-head>
   <mj-body background-color="#f4f5f7">
-    <mj-section padding="24px 0 8px">
+    <mj-section padding="50px 0 40px">
       <mj-column>
         <mj-image src="{{ logoUrl }}" alt="{{ appTitle }}" width="132px" align="center" padding="0" />
       </mj-column>

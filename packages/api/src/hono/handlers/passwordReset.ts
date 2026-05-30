@@ -44,7 +44,7 @@ export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindi
         if (user && user.status === User.STATUS_ACTIVE) {
           const config = crowi.getConfig();
           const appTitle = config.crowi['app:title'];
-          const baseUrl = crowi.getBaseUrl() || config.crowi['app:url'] || '';
+          const baseUrl = crowi.getBaseUrl() || '';
           const logoUrl = baseUrl ? `${baseUrl}/logo/500w.png` : '';
           const { token } = mailTokenUtil.signMailToken({ purpose: 'reset', userId: user._id.toString(), email });
           const resetUrl = `${baseUrl}/reset-password?token=${token}`;

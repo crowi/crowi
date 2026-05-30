@@ -724,9 +724,8 @@ export default (crowi: Crowi) => {
         if (toSendEmail) {
           const mailTokenUtil = createMailTokenUtil();
           const appTitle = config.crowi['app:title'];
-          // Absolute base for the invite link + logo. getBaseUrl() reads
-          // BASE_URL → app:url; fall back to the config value directly.
-          const baseUrl = crowi.getBaseUrl() || config.crowi['app:url'] || '';
+          // Absolute base for the invite link + logo (CLIENT_URL).
+          const baseUrl = crowi.getBaseUrl() || '';
           const logoUrl = baseUrl ? `${baseUrl}/logo/500w.png` : '';
 
           async.each(
