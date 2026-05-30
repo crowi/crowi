@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { Upload, Trash2, User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -8,7 +9,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUploadPicture, useDeletePicture } from '@/lib/use-profile';
 import type { UserProfileResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { AvatarCropDialog } from './avatar-crop-dialog';
+
+// react-easy-crop is only needed once the user opens the crop dialog, so
+// keep it (and its ~tens-of-KB) out of the profile page's initial bundle.
+const AvatarCropDialog = dynamic(() => import('./avatar-crop-dialog').then((mod) => mod.AvatarCropDialog), { ssr: false });
 
 interface ProfilePictureProps {
   profile: UserProfileResponse;
@@ -24,10 +28,12 @@ export function ProfilePicture({ profile }: ProfilePictureProps) {
   const uploadPicture = useUploadPicture();
   const deletePicture = useDeletePicture();
 
+  // Revoke the previous object URL whenever cropSrc changes (new pick, close,
+  // or unmount) so the blob is freed exactly once. This is the single owner
+  // of revocation — callers just setCropSrc(null) to close.
   useEffect(() => {
-    return () => {
-      if (cropSrc) URL.revokeObjectURL(cropSrc);
-    };
+    if (!cropSrc) return;
+    return () => URL.revokeObjectURL(cropSrc);
   }, [cropSrc]);
 
   const handleUploadClick = () => {
@@ -57,17 +63,15 @@ export function ProfilePicture({ profile }: ProfilePictureProps) {
     setCropSrc(URL.createObjectURL(file));
   };
 
-  const closeCrop = () => {
-    if (cropSrc) URL.revokeObjectURL(cropSrc);
-    setCropSrc(null);
-  };
+  // Closing just clears cropSrc; the useEffect above revokes the object URL.
+  const closeCrop = () => setCropSrc(null);
 
   const handleCropped = async (file: File) => {
     try {
       await uploadPicture.mutateAsync(file);
-      closeCrop();
     } catch (err) {
       setError(err instanceof Error ? err.message : m['me.profile_picture.error_upload']());
+    } finally {
       closeCrop();
     }
   };
