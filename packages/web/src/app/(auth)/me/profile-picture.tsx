@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Upload, Trash2, User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUploadPicture, useDeletePicture } from '@/lib/use-profile';
 import type { UserProfileResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { AvatarCropDialog } from './avatar-crop-dialog';
 
 interface ProfilePictureProps {
   profile: UserProfileResponse;
@@ -16,16 +17,30 @@ interface ProfilePictureProps {
 export function ProfilePicture({ profile }: ProfilePictureProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // Object URL of the picked source image while the crop dialog is open.
+  // Revoked on close so we don't leak the blob.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
 
   const uploadPicture = useUploadPicture();
   const deletePicture = useDeletePicture();
+
+  useEffect(() => {
+    return () => {
+      if (cropSrc) URL.revokeObjectURL(cropSrc);
+    };
+  }, [cropSrc]);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Pick → validate → open the crop dialog with an object URL of the
+  // source. The actual upload happens in `handleCropped` with the
+  // cropped + downscaled file, so a huge original never reaches the API.
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset the input so picking the same file again re-triggers change.
+    e.target.value = '';
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
@@ -39,10 +54,21 @@ export function ProfilePicture({ profile }: ProfilePictureProps) {
     }
 
     setError(null);
+    setCropSrc(URL.createObjectURL(file));
+  };
+
+  const closeCrop = () => {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+  };
+
+  const handleCropped = async (file: File) => {
     try {
       await uploadPicture.mutateAsync(file);
+      closeCrop();
     } catch (err) {
       setError(err instanceof Error ? err.message : m['me.profile_picture.error_upload']());
+      closeCrop();
     }
   };
 
@@ -102,6 +128,18 @@ export function ProfilePicture({ profile }: ProfilePictureProps) {
         className="hidden"
         aria-label={m['me.profile_picture.aria_select']()}
       />
+
+      {cropSrc && (
+        <AvatarCropDialog
+          imageSrc={cropSrc}
+          open={cropSrc !== null}
+          onOpenChange={(next) => {
+            if (!next) closeCrop();
+          }}
+          onCropped={handleCropped}
+          isUploading={uploadPicture.isPending}
+        />
+      )}
     </div>
   );
 }

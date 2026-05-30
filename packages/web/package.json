@@ -47,6 +47,7 @@
     "react": "19.2.3",
     "react-diff-viewer-continued": "^4.2.2",
     "react-dom": "19.2.3",
+    "react-easy-crop": "^5.5.7",
     "sonner": "^2.0.0",
     "tailwind-merge": "^3.4.0",
     "y-codemirror.next": "^0.3.5",
