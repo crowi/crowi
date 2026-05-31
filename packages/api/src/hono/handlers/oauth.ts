@@ -60,6 +60,28 @@ const DEVICE_CODE_TTL_MS = 10 * 60 * 1000;
 /** Default minimum poll spacing for the device grant (seconds, RFC 8628 §3.2). */
 const DEVICE_POLL_INTERVAL_SEC = 5;
 
+/** Dev fallback web origin when `CLIENT_URL` is unset (matches `.env.example`). */
+const DEV_CLIENT_BASE_URL = 'http://localhost:4302';
+
+/**
+ * Public base URL of the trusted web client (`CLIENT_URL`). Every
+ * browser-facing OAuth URL (the discovery `issuer`, the authorize / device
+ * consent pages) and every advertised API endpoint is built from this one
+ * trusted origin.
+ *
+ * It is deliberately **not** derived from the request `Host` /
+ * `X-Forwarded-Host` header: those are attacker-controllable, and a forged
+ * Host would otherwise poison the discovery document and the device
+ * `verification_uri` (sending a victim to an attacker's origin). RFC-0010's
+ * earlier `app:url` was Host-derived and is no longer trusted — `CLIENT_URL`
+ * is the single trusted client base URL. Falls back to the dev web origin
+ * when unset; production deployments set `CLIENT_URL`.
+ */
+const clientBaseUrl = (): string => {
+  const configured = process.env.CLIENT_URL?.trim();
+  return (configured || DEV_CLIENT_BASE_URL).replace(/\/$/, '');
+};
+
 const FORBIDDEN_BODY: ForbiddenError = {
   error: {
     code: 'FORBIDDEN',
@@ -142,21 +164,6 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
       return { error: oauthError('invalid_scope', 'One or more requested scopes are not permitted for this client') };
     }
     return { granted };
-  };
-
-  /**
-   * Build the issuer base URL for discovery. Prefers the configured
-   * `app:url`; falls back to the request's Host (honouring a reverse
-   * proxy's `X-Forwarded-*`). Trailing slash trimmed.
-   */
-  const issuerBaseUrl = (c: Context): string => {
-    const configured = crowi.getConfig()?.crowi?.['app:url'];
-    if (configured && typeof configured === 'string') {
-      return configured.replace(/\/$/, '');
-    }
-    const proto = c.req.header('x-forwarded-proto') ?? 'http';
-    const host = c.req.header('x-forwarded-host') ?? c.req.header('host') ?? 'localhost';
-    return `${proto}://${host}`;
   };
 
   return app
@@ -380,10 +387,12 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
       }
     })
     .openapi(discoveryRoute, async (c) => {
-      // authorization_endpoint is the *web* consent screen (browser
-      // destination); token / revocation are the /api/v2 API (RFC-0010,
-      // PHASE3-Q6). Both share the same origin in the default deployment.
-      const issuer = issuerBaseUrl(c);
+      // Every URL derives from the trusted CLIENT_URL origin, never the
+      // request Host. authorization_endpoint / device consent are *web*
+      // pages on CLIENT_URL; token / revocation / device-authorize are the
+      // /api/v2 API (reverse-proxied to the same origin in the default
+      // deployment — RFC-0010, PHASE3-Q6).
+      const issuer = clientBaseUrl();
       const apiBase = `${issuer}/api/v2`;
       return c.json(
         {
@@ -417,9 +426,10 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           interval: DEVICE_POLL_INTERVAL_SEC,
         });
 
-        // verification_uri is the *web* consent screen origin (same origin
-        // rule as authorization_endpoint); the API lives under /api/v2.
-        const verificationUri = `${issuerBaseUrl(c)}/oauth/device`;
+        // verification_uri is the *web* device-consent page on the trusted
+        // CLIENT_URL origin (never the request Host — a forged Host would
+        // otherwise send the user to an attacker's site).
+        const verificationUri = `${clientBaseUrl()}/oauth/device`;
         const verificationUriComplete = `${verificationUri}?user_code=${encodeURIComponent(doc.userCode)}`;
 
         return c.json(

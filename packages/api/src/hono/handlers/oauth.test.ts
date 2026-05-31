@@ -523,5 +523,30 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       expect(res.body.scopes_supported).not.toContain('admin:read');
       expect(res.body.token_endpoint_auth_methods_supported).toContain('none');
     });
+
+    it('pins every URL to CLIENT_URL and ignores a forged Host header', async () => {
+      // RFC-0010: the discovery / device URLs must come from the trusted
+      // CLIENT_URL origin, never the request Host (`app:url` was Host-derived
+      // and is no longer trusted). A forged Host must not leak into issuer /
+      // endpoints, otherwise a client could be steered to an attacker origin.
+      const prev = process.env.CLIENT_URL;
+      process.env.CLIENT_URL = 'https://wiki.example.com/';
+      try {
+        const res = await request(app)
+          .get('/api/v2/.well-known/oauth-authorization-server')
+          .set('Host', 'evil.example.com')
+          .set('X-Forwarded-Host', 'evil.example.com')
+          .set('X-Forwarded-Proto', 'https');
+        expect(res.status).toBe(200);
+        // Trailing slash trimmed; built from CLIENT_URL, not the Host header.
+        expect(res.body.issuer).toBe('https://wiki.example.com');
+        expect(res.body.authorization_endpoint).toBe('https://wiki.example.com/oauth/authorize');
+        expect(res.body.token_endpoint).toBe('https://wiki.example.com/api/v2/oauth/token');
+        expect(res.body.device_authorization_endpoint).toBe('https://wiki.example.com/api/v2/oauth/device/authorize');
+        expect(JSON.stringify(res.body)).not.toContain('evil.example.com');
+      } finally {
+        process.env.CLIENT_URL = prev;
+      }
+    });
   });
 });

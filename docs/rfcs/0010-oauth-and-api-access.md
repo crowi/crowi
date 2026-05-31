@@ -257,6 +257,15 @@ save が前 body との diff を取るだけで特別扱い不要 (RFC-0009 OQ-F
 - token は全て保存時ハッシュ化。発行時平文は一度だけ返す。
 - consent 画面で scope を read/write 単位で明示。
 - `INSUFFICIENT_SCOPE` は 403 + `WWW-Authenticate` で返す。
+- **公開 URL は `CLIENT_URL` 起点に固定**: discovery の `issuer` /
+  `authorization_endpoint` / token・revocation・device endpoint、および
+  device flow の `verification_uri` は、信頼できる `CLIENT_URL` (web
+  クライアントの公開オリジン) から組み立てる。リクエストの `Host` /
+  `X-Forwarded-Host` ヘッダからは導出しない — Host は攻撃者が操作でき、
+  forged Host で discovery / `verification_uri` を汚染して被害者を攻撃者
+  オリジンへ誘導できてしまうため。`app:url` は Host 由来で信頼しない
+  (廃止)。API endpoint (`token` 等) は既定構成で `/api/v2` が同一オリジンに
+  reverse-proxy される前提で `{CLIENT_URL}/api/v2/...`。
 
 ## Implementation phases
 
