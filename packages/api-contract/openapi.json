@@ -774,6 +774,7 @@
               "published",
               "deleted",
               "deprecated",
+              "draft",
               null
             ]
           },
@@ -1204,6 +1205,7 @@
               "published",
               "deleted",
               "deprecated",
+              "draft",
               null
             ]
           },
@@ -2061,6 +2063,7 @@
                     "published",
                     "deleted",
                     "deprecated",
+                    "draft",
                     null
                   ]
                 },
@@ -2527,6 +2530,7 @@
                   "published",
                   "deleted",
                   "deprecated",
+                  "draft",
                   null
                 ]
               },
@@ -2966,6 +2970,7 @@
                   "published",
                   "deleted",
                   "deprecated",
+                  "draft",
                   null
                 ]
               },
@@ -3588,6 +3593,7 @@
                     "published",
                     "deleted",
                     "deprecated",
+                    "draft",
                     null
                   ]
                 },
@@ -5561,63 +5567,17 @@
           "from": {
             "type": "string"
           },
-          "smtpHost": {
+          "activeDriver": {
             "type": "string"
           },
-          "smtpPort": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          "smtpUser": {
+          "activePlugin": {
             "type": "string"
-          },
-          "smtpPassword": {
-            "type": "object",
-            "properties": {
-              "hasValue": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "hasValue"
-            ]
-          },
-          "aws": {
-            "type": "object",
-            "properties": {
-              "region": {
-                "type": "string"
-              },
-              "accessKeyId": {
-                "type": "string"
-              },
-              "secretAccessKey": {
-                "type": "object",
-                "properties": {
-                  "hasValue": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "hasValue"
-                ]
-              }
-            },
-            "required": [
-              "region",
-              "accessKeyId",
-              "secretAccessKey"
-            ]
           }
         },
         "required": [
           "from",
-          "smtpHost",
-          "smtpPort",
-          "smtpUser",
-          "smtpPassword",
-          "aws"
+          "activeDriver",
+          "activePlugin"
         ]
       },
       "UpdateMailSettingsRequest": {
@@ -5626,36 +5586,6 @@
           "from": {
             "type": "string",
             "maxLength": 254
-          },
-          "smtpHost": {
-            "type": "string",
-            "maxLength": 255
-          },
-          "smtpPort": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 65535
-          },
-          "smtpUser": {
-            "type": "string",
-            "maxLength": 255
-          },
-          "smtpPassword": {
-            "type": "string"
-          },
-          "aws": {
-            "type": "object",
-            "properties": {
-              "region": {
-                "type": "string"
-              },
-              "accessKeyId": {
-                "type": "string"
-              },
-              "secretAccessKey": {
-                "type": "string"
-              }
-            }
           }
         }
       },
@@ -5675,24 +5605,7 @@
       },
       "SendTestMailRequest": {
         "type": "object",
-        "properties": {
-          "smtpHost": {
-            "type": "string",
-            "maxLength": 255
-          },
-          "smtpPort": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 65535
-          },
-          "smtpUser": {
-            "type": "string",
-            "maxLength": 255
-          },
-          "smtpPassword": {
-            "type": "string"
-          }
-        }
+        "properties": {}
       },
       "SendTestMailResponse": {
         "type": "object",
@@ -6744,7 +6657,7 @@
         "tags": [
           "tokenAuth"
         ],
-        "summary": "Register new user and receive tokens",
+        "summary": "Register a new user; sends an activation email or queues for admin approval",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6777,58 +6690,23 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Successful registration",
+          "200": {
+            "description": "Registration accepted; activation pending (email confirmation or admin approval)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "accessToken": {
-                      "type": "string"
-                    },
-                    "refreshToken": {
-                      "type": "string"
-                    },
-                    "expiresIn": {
-                      "type": "number"
-                    },
-                    "user": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "username": {
-                          "type": "string"
-                        },
-                        "email": {
-                          "type": "string",
-                          "format": "email"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "image": {
-                          "type": "string"
-                        },
-                        "admin": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "username",
-                        "email",
-                        "name"
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "confirmation_required",
+                        "approval_required"
                       ]
                     }
                   },
                   "required": [
-                    "accessToken",
-                    "refreshToken",
-                    "expiresIn",
-                    "user"
+                    "status"
                   ]
                 }
               }
@@ -7562,6 +7440,9 @@
                     },
                     "createdAt": {
                       "type": "string"
+                    },
+                    "emailChangePending": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -7726,6 +7607,9 @@
                     },
                     "createdAt": {
                       "type": "string"
+                    },
+                    "emailChangePending": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -7754,6 +7638,9 @@
                       "enum": [
                         "error"
                       ]
+                    },
+                    "code": {
+                      "type": "string"
                     },
                     "message": {
                       "type": "string"
@@ -7877,6 +7764,9 @@
                         "error"
                       ]
                     },
+                    "code": {
+                      "type": "string"
+                    },
                     "message": {
                       "type": "string"
                     },
@@ -7982,6 +7872,9 @@
                       "enum": [
                         "error"
                       ]
+                    },
+                    "code": {
+                      "type": "string"
                     },
                     "message": {
                       "type": "string"
@@ -8689,6 +8582,7 @@
                               "published",
                               "deleted",
                               "deprecated",
+                              "draft",
                               null
                             ]
                           },
@@ -9303,6 +9197,7 @@
                               "published",
                               "deleted",
                               "deprecated",
+                              "draft",
                               null
                             ]
                           },
@@ -9749,6 +9644,7 @@
                                   "published",
                                   "deleted",
                                   "deprecated",
+                                  "draft",
                                   null
                                 ]
                               },
@@ -10443,6 +10339,7 @@
                                   "published",
                                   "deleted",
                                   "deprecated",
+                                  "draft",
                                   null
                                 ]
                               },
@@ -11159,6 +11056,7 @@
                               "published",
                               "deleted",
                               "deprecated",
+                              "draft",
                               null
                             ]
                           },
@@ -11787,6 +11685,7 @@
                                 "published",
                                 "deleted",
                                 "deprecated",
+                                "draft",
                                 null
                               ]
                             },
@@ -12457,6 +12356,7 @@
                                 "published",
                                 "deleted",
                                 "deprecated",
+                                "draft",
                                 null
                               ]
                             },
@@ -13296,6 +13196,7 @@
                                   "published",
                                   "deleted",
                                   "deprecated",
+                                  "draft",
                                   null
                                 ]
                               },
@@ -15997,6 +15898,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -16584,6 +16486,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -17145,6 +17048,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -17771,6 +17675,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -18432,6 +18337,7 @@
                               "published",
                               "deleted",
                               "deprecated",
+                              "draft",
                               null
                             ]
                           },
@@ -18898,6 +18804,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -19426,6 +19333,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -20447,6 +20355,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -21039,6 +20948,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -21942,6 +21852,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -22541,6 +22452,7 @@
                             "published",
                             "deleted",
                             "deprecated",
+                            "draft",
                             null
                           ]
                         },
@@ -26819,6 +26731,7 @@
                                   "published",
                                   "deleted",
                                   "deprecated",
+                                  "draft",
                                   null
                                 ]
                               },
@@ -28601,7 +28514,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Read the current Mail settings (SMTP + AWS SES, with secret masking)",
+        "summary": "Read the sender-independent mail settings (from + active sender driver)",
         "responses": {
           "200": {
             "description": "Current mail settings",
@@ -28613,63 +28526,17 @@
                     "from": {
                       "type": "string"
                     },
-                    "smtpHost": {
+                    "activeDriver": {
                       "type": "string"
                     },
-                    "smtpPort": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 65535
-                    },
-                    "smtpUser": {
+                    "activePlugin": {
                       "type": "string"
-                    },
-                    "smtpPassword": {
-                      "type": "object",
-                      "properties": {
-                        "hasValue": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "hasValue"
-                      ]
-                    },
-                    "aws": {
-                      "type": "object",
-                      "properties": {
-                        "region": {
-                          "type": "string"
-                        },
-                        "accessKeyId": {
-                          "type": "string"
-                        },
-                        "secretAccessKey": {
-                          "type": "object",
-                          "properties": {
-                            "hasValue": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "hasValue"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "region",
-                        "accessKeyId",
-                        "secretAccessKey"
-                      ]
                     }
                   },
                   "required": [
                     "from",
-                    "smtpHost",
-                    "smtpPort",
-                    "smtpUser",
-                    "smtpPassword",
-                    "aws"
+                    "activeDriver",
+                    "activePlugin"
                   ]
                 }
               }
@@ -28764,7 +28631,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Update Mail settings — partial updates, secret masking on input",
+        "summary": "Update the sender-independent mail settings (from address)",
         "requestBody": {
           "content": {
             "application/json": {
@@ -28774,36 +28641,6 @@
                   "from": {
                     "type": "string",
                     "maxLength": 254
-                  },
-                  "smtpHost": {
-                    "type": "string",
-                    "maxLength": 255
-                  },
-                  "smtpPort": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 65535
-                  },
-                  "smtpUser": {
-                    "type": "string",
-                    "maxLength": 255
-                  },
-                  "smtpPassword": {
-                    "type": "string"
-                  },
-                  "aws": {
-                    "type": "object",
-                    "properties": {
-                      "region": {
-                        "type": "string"
-                      },
-                      "accessKeyId": {
-                        "type": "string"
-                      },
-                      "secretAccessKey": {
-                        "type": "string"
-                      }
-                    }
                   }
                 }
               }
@@ -28977,30 +28814,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Send a test mail to the calling admin (req.user.email) using SMTP",
+        "summary": "Send a test mail to the calling admin (req.user.email) via the active sender",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-                  "smtpHost": {
-                    "type": "string",
-                    "maxLength": 255
-                  },
-                  "smtpPort": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 65535
-                  },
-                  "smtpUser": {
-                    "type": "string",
-                    "maxLength": 255
-                  },
-                  "smtpPassword": {
-                    "type": "string"
-                  }
-                }
+                "properties": {}
               }
             }
           }
@@ -34063,6 +33883,7 @@
                                   "published",
                                   "deleted",
                                   "deprecated",
+                                  "draft",
                                   null
                                 ]
                               }
@@ -34383,6 +34204,122 @@
         }
       }
     },
+    "/notifications/token": {
+      "get": {
+        "tags": [
+          "notification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Issue a short-lived notifications token (JWT) for the realtime-invalidation WebSocket",
+        "responses": {
+          "200": {
+            "description": "Signed notifications token + selfUserId + expiresAt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "selfUserId": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "selfUserId",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Token signing exception",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/notifications/status": {
       "get": {
         "tags": [
@@ -34554,6 +34491,7 @@
                                 "published",
                                 "deleted",
                                 "deprecated",
+                                "draft",
                                 null
                               ]
                             }
