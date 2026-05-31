@@ -15,3 +15,6 @@ pre-push:
   jobs:
     - name: lint
       run: pnpm lint
+    - name: openapi-fresh
+      glob: "packages/api-contract/**"
+      run: pnpm check:openapi

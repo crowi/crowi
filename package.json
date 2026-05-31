@@ -34,6 +34,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "check:workspace": "node scripts/check-workspace-protocol.mjs",
+    "check:openapi": "node scripts/check-openapi-fresh.mjs",
     "clean": "turbo run clean",
     "changelog": "conventional-changelog -p conventionalcommits -i CHANGES.md -s"
   },
