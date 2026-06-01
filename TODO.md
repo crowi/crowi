@@ -86,6 +86,10 @@ Crowi 2.0 移行 (Express + Swig → Next.js + Hono)。フェーズ別。
   - **Quality (LOW)**: `VALIDATION_ERROR` の `details.fieldErrors` を使ったフィールド単位のフォーム表示 (現状 `errorMessage()` は汎用文言のみ返す)
   - **Reuse (LOW)**: admin 保存系フォーム (mail / plugins / users) の web 表示も `errorMessage()` 経由へ横展開 (本 AC 範囲外、規約として TODO 化)
   - **Quality (LOW)**: ハンドラ側の英語 fallback message (`INVALID_CREDENTIALS_BODY` 等) と paraglide 文言が別管理 (code 一致時は paraglide が勝つため画面表示には影響なし)。fallback 英語更新時に ja 別途要更新
+- [ ] **feature-editor-session-reauth follow-up (reviewer advisory 由来、non-blocking)** — エディタ画面のセッション切れインライン再認証の堅牢化:
+  - **Quality (LOW)**: `session-reauth-context.tsx` の `refetchTokens` コメント (および `(auth)/layout.tsx` の redirect 抑止コメント) を実態に合わせて修正。`use-collab-document.ts` / `use-presence.ts` は provider / 接続を `[pageId, wsToken]` / `[pageId, token]` の **値変化** でのみ再構築するため、collab / presence の再接続は `invalidateQueries(refetchType:'active')` が effect を再走させる事実ではなく **token 値が変わる** ことに依存する。コメントの根拠を「token 値変化に依存」に直す
+  - **Quality (LOW, future hardening)**: `wsToken` / `presence-token` の `iat` が `Math.floor(Date.now()/1000)` の秒粒度のため、同一秒内に refetch すると byte-identical な token が返り reconnect が skip され得るエッジ。現実の再認証 (パスワード入力 + 往復で >1s) では token 値が必ず変わるので AC5 は満たされるが、`onAuthenticationFailed` (terminal auth-failed) 後に同値 token が返ると provider が terminal に留まる理論リスクがある。token query に世代カウンタ / nonce を混ぜて強制再構築する or wsToken に jti を付与して堅牢化する (実用上 reauth は >1s で問題化しないので優先度低)
+  - **Quality (LOW, UX)**: `session-reauth-modal` の `handleDiscard` は dirty 状態に関わらず即 `clearTokens` + 遷移する。discard ボタン自体が破壊的導線で warning 文言を伴うため AC は満たすが、`UnsavedChangesDialog` 相当の二段確認 (discard の二段確認 UX) を将来検討余地
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 
