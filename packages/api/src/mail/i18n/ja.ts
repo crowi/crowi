@@ -58,7 +58,7 @@ export const ja: MailCatalog = {
     ignoreNote: 'この変更に心当たりがない場合は、このメールを無視してください。メールアドレスは変更されません。',
   },
   common: {
-    footerTagline: 'チームのナレッジ共有のための Markdown Wiki',
+    footerTagline: 'Empower the team with sharing your knowledge.',
     linkFallback: '上のボタンが動作しない場合は、次の URL をブラウザに貼り付けてください:',
   },
 };

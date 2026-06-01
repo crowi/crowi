@@ -58,7 +58,7 @@ export const en: MailCatalog = {
     ignoreNote: "If you didn't request this change, you can safely ignore this email — your address will stay the same.",
   },
   common: {
-    footerTagline: 'Markdown wiki for team knowledge sharing',
+    footerTagline: 'Empower the team with sharing your knowledge.',
     linkFallback: "If the button above doesn't work, copy and paste this URL into your browser:",
   },
 };
