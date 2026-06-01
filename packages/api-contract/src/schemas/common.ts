@@ -1,8 +1,9 @@
 import { z } from '@hono/zod-openapi';
+import { ErrorCodeSchema } from '../errors/codes';
 
 export const ApiErrorSchema = z.object({
   error: z.object({
-    code: z.string(),
+    code: ErrorCodeSchema,
     message: z.string(),
     details: z.any().optional(),
   }),
