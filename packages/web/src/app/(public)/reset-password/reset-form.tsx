@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FormErrorList } from '@/components/ui/form-error-list';
 import { apiClientV2 } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
 import { m } from '@paraglide/messages.js';
@@ -88,17 +89,7 @@ export function ResetPasswordForm() {
         <CardTitle className="text-xl text-center">{m['auth.reset.heading']()}</CardTitle>
       </CardHeader>
       <CardContent>
-        {errors.length > 0 && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>
-              <ul className="list-disc list-inside space-y-1">
-                {errors.map((error, index) => (
-                  <li key={index}>{error}</li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
+        <FormErrorList errors={errors} />
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="password">{m['auth.reset.password_label']()}</Label>

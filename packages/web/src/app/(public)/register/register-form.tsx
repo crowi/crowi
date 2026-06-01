@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FormErrorList } from '@/components/ui/form-error-list';
 import { apiClientV2 } from '@/lib/api-client';
 import { m } from '@paraglide/messages.js';
 
@@ -96,17 +97,7 @@ export function RegisterForm() {
         <CardDescription className="text-center">{m['auth.register.lead']()}</CardDescription>
       </CardHeader>
       <CardContent>
-        {errors.length > 0 && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>
-              <ul className="list-disc list-inside space-y-1">
-                {errors.map((error, index) => (
-                  <li key={index}>{error}</li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
+        <FormErrorList errors={errors} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
