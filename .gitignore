@@ -36,15 +36,11 @@ packages/web/paraglide/
 .migration-state/tasks/*
 !.migration-state/tasks/.gitkeep
 
-# feature state (mirrors migration-state for the new-feature workflow)
-.feature-state/*
-!.feature-state/.gitkeep
-!.feature-state/tasks/
-.feature-state/tasks/*
-!.feature-state/tasks/.gitkeep
-!.feature-state/specs/
-.feature-state/specs/*
-!.feature-state/specs/.gitkeep
+# feature state (new-feature workflow) — fully untracked. The directory is not
+# tracked at all (no .gitkeep) so `gw` worktrees can replace it with a symlink
+# back to the main worktree's copy via ~/.gw/hooks/feature-state-link.sh,
+# keeping a single shared store in the root repo.
+.feature-state/
 
 # Guard against accidental writes to the legacy nested path
 .claude/migration-state/
