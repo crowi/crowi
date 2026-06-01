@@ -15953,10 +15953,14 @@
                         "comment",
                         "createdAt"
                       ]
+                    },
+                    "newlyWatching": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "comment"
+                    "comment",
+                    "newlyWatching"
                   ]
                 }
               }
