@@ -119,6 +119,11 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
   - **Quality (LOW)**: `hono/handlers/notification.ts` の serialize で `obj.action as 'COMMENT'|...` 等の stringly-typed cast。`NotificationActionSchema` / `NotificationStatusSchema` (zod) があるが、Mongoose doc 由来の信頼データで response schema 側でも検証されるため `.parse()` 化は throw リスクとのトレードオフ。共通化のついでに判断
   - **Quality (LOW)**: `notifications/attach.ts` の subscribe race (同一 user の near-simultaneous open 2 本が両方 first と判定し subscribe 2 回) — `channelOps` 直列化で実害なし (duplicate subscribe は no-op)、event log に 2 回出るだけ。chaos 耐性を上げるなら await 後に set を再チェック
   - **Test (LOW)**: `notifications/attach.test.ts` に「subscribe 中に socket が close する」race を `subscriber.subscribe()` 遅延で明示的に exercise するテストを追加
+- [ ] **email-plugin merge simplify advisory (`a5d21ce4` PR #905 マージ後の 4-agent レビュー由来)** — 統合時に `FormErrorList` 抽出のみ適用 (`refactor(merge)`)、以下は別タスク:
+  - **Altitude / Simplification (HIGH, simpl + altitude 両エージェントが #1 指摘)**: `hono/handlers/{activation,emailChange,inviteAccept,passwordReset}.ts` + `me.ts` が「mail token verify → 401 / `User.findById` → 404」の前段を 4〜5 重に持つ。共通の `verifyAndLoadUserByMailToken(token, purpose) → { user, payload } | Response` ヘルパに括る (status gate 等の後段は handler 固有なので残す)。altitude エージェント曰く「post-merge の refactoring opportunity であり design defect ではない」ので別タスク化
+  - **Simplification (MEDIUM)**: web 認証フォームの重複 — (a) token を searchParams から取り token 有無で初期 state を derive するパターンが activate/confirm/reset/accept で重複 → `useTokenFromUrl()` hook、(b) activate/confirm の「mount で auto-POST + `useRef(started)` で StrictMode 二重実行ガード」が重複 → `useAsyncOnce(token, fn)` hook
+  - **Reuse (LOW)**: `installer-form.tsx` も同じ error-list markup を持つ。今回 merge 非対象なので触らず据え置き。`FormErrorList` に寄せれば 5 フォーム完全統一
+  - **Skip 済み (micro-opt / 実コストなし、記録のみ)**: `createMailTokenUtil()` の per-request 生成 (tokenAuth/me) は fallback secret が process-wide memoize 済みで実害なし。`service/mail.ts` の `send()` が `getFrom`/`defaultSubject`/`brandVars` で `crowi.getConfig()` を 3 回読むのは in-memory cache なので I/O 無し。`LoadingSpinner`/`ErrorAlert` への置換は「ページ読込失敗/中」用プリミティブでフォーム submit 状態とは意味が異なり mismatch のため見送り
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 

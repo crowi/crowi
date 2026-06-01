@@ -4,7 +4,7 @@ import type { Page } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
-import { Folder, Link2, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
+import { Compass, Link2, Loader2, Lock, MessageSquare, MoreHorizontal, RotateCcw, ThumbsUp, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -111,7 +111,7 @@ function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean 
           >
             {basename}
           </span>
-          {isPortal && <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Portal page" />}
+          {isPortal && <Compass className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Portal page" />}
           {isLinkOnly && <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Link-only sharing" />}
           {isPrivate && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private page" />}
           {isDraft && (
