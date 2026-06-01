@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, MessageSquare } from 'lucide-react';
+import { Eye, Loader2, MessageSquare, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/use-auth';
 import { useAddComment, useDeleteComment, usePageCommentsList } from '@/lib/use-page-comments';
+import { useToggleWatch } from '@/lib/use-watch';
 import { SCROLL_TARGETS } from '@/lib/scroll-to-section';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { CommentItem } from './comment-item';
@@ -30,12 +32,22 @@ export function PageComments({ page }: PageCommentsProps) {
   const { comments, isLoading, isError, error } = usePageCommentsList(pageId);
   const { addComment, isPending: isAdding, error: addError } = useAddComment(pageId);
   const { deleteComment, isPending: isDeleting } = useDeleteComment(pageId);
+  const { toggle: toggleWatch } = useToggleWatch(pageId);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  // Shown once after a comment auto-creates a fresh WATCH row. Hidden again
+  // when the user dismisses it or chooses to stop watching from here.
+  const [showWatchHint, setShowWatchHint] = useState(false);
 
   const handleSubmit = async (commentBody: string) => {
     if (!revisionId) return;
-    await addComment({ revisionId, comment: commentBody });
+    const { newlyWatching } = await addComment({ revisionId, comment: commentBody });
+    setShowWatchHint(newlyWatching);
+  };
+
+  const handleStopWatching = () => {
+    setShowWatchHint(false);
+    toggleWatch();
   };
 
   const handleDelete = async (commentId: string) => {
@@ -60,6 +72,23 @@ export function PageComments({ page }: PageCommentsProps) {
         <div className="mb-4">
           <CommentForm isSubmitting={isAdding} error={addError} onSubmit={handleSubmit} />
         </div>
+      )}
+
+      {showWatchHint && (
+        <Alert className="mb-4">
+          <Eye className="h-4 w-4" />
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{m['page_comments.now_watching']()}</span>
+            <span className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={handleStopWatching}>
+                {m['page_comments.now_watching_undo']()}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" aria-label={m['page_comments.now_watching_dismiss']()} onClick={() => setShowWatchHint(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </span>
+          </AlertDescription>
+        </Alert>
       )}
 
       {isLoading && (
