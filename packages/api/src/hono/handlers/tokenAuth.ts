@@ -25,6 +25,7 @@
  * now branch on `response.status === 401` instead of the inner code.
  */
 import { tokenLoginRoute, tokenLogoutRoute, tokenMeRoute, tokenRefreshRoute, tokenRegisterRoute } from '@crowi/api-contract';
+import type { ErrorCode } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
@@ -90,7 +91,7 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
         }
 
         if (user.status !== User.STATUS_ACTIVE) {
-          let code = 'USER_NOT_ACTIVE';
+          let code: ErrorCode = 'USER_NOT_ACTIVE';
           let message = 'User account is not active';
           if (user.status === User.STATUS_REGISTERED) {
             // REGISTERED covers two distinct gates. In restricted mode the
@@ -137,13 +138,13 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
 
         const config = (await Config.loadAllConfig()) as { crowi: Record<string, unknown> };
         if (config.crowi['security:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_CLOSED) {
-          return c.json({ error: { code: 'REGISTRATION_CLOSED', message: 'User registration is closed' } }, 403);
+          return c.json({ error: { code: 'REGISTRATION_CLOSED' as const, message: 'User registration is closed' } }, 403);
         }
 
         const existingUser = await User.findOne({ $or: [{ email }, { username }] });
         if (existingUser) {
           const message = existingUser.email === email ? 'Email already registered' : 'Username already taken';
-          return c.json({ error: { code: 'USER_EXISTS', message } }, 409);
+          return c.json({ error: { code: 'USER_EXISTS' as const, message } }, 409);
         }
 
         // Create the account directly as REGISTERED. We intentionally do
@@ -206,7 +207,7 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
       const { refreshToken } = c.req.valid('json');
 
       if (!refreshToken) {
-        return c.json({ error: { code: 'REFRESH_TOKEN_REQUIRED', message: 'Refresh token is required' } }, 400);
+        return c.json({ error: { code: 'REFRESH_TOKEN_REQUIRED' as const, message: 'Refresh token is required' } }, 400);
       }
 
       try {

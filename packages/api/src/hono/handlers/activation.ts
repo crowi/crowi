@@ -52,7 +52,7 @@ export const registerActivationRoutes = <E extends OpenAPIHono<CrowiHonoBindings
 
         const user = await User.findById(payload.userId);
         if (!user) {
-          return c.json({ error: { code: 'USER_NOT_FOUND', message: 'User no longer exists' } }, 404);
+          return c.json({ error: { code: 'USER_NOT_FOUND' as const, message: 'User no longer exists' } }, 404);
         }
 
         // Idempotent: a second click on a still-valid link just signs in.

@@ -81,7 +81,7 @@ export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindi
 
         const user = await User.findById(payload.userId);
         if (!user) {
-          return c.json({ error: { code: 'USER_NOT_FOUND', message: 'User no longer exists' } }, 404);
+          return c.json({ error: { code: 'USER_NOT_FOUND' as const, message: 'User no longer exists' } }, 404);
         }
         // Re-check status at consume time: the account may have been
         // suspended after the link was minted. login enforces this gate,
