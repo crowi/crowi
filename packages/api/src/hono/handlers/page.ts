@@ -562,17 +562,12 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           return c.json(PAGE_NOT_FOUND_BODY, 404);
         }
 
+        // feature-watch-autosubscribe — watch state is now exactly the
+        // presence of a WATCH watcher row. Participation auto-creates one
+        // (events/page.ts + comment handler), so the previous derive-from-
+        // getNotificationTargetUsers fallback is no longer needed.
         const watcher = await Watcher.findByUserIdAndTargetId(user._id, loaded.page._id);
-        if (watcher) {
-          return c.json({ watching: watcher.isWatching() }, 200);
-        }
-
-        // Default: derive from getNotificationTargetUsers (creator +
-        // comment authors + revision authors).
-        const targetUsers = await loaded.page.getNotificationTargetUsers();
-        const userIdStr = user._id.toString();
-        const watching = targetUsers.some((id) => id.toString() === userIdStr);
-        return c.json({ watching }, 200);
+        return c.json({ watching: watcher ? watcher.isWatching() : false }, 200);
       })
       // --------------------------------------------------------------
       // PUT /pages/watch — setWatchStatus (2-state: WATCH / IGNORE)

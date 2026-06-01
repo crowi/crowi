@@ -204,14 +204,25 @@ export default (crowi: Crowi) => {
     return activities.map(({ user }) => user).filter((user, i, self) => self.indexOf(user) === i);
   };
 
+  /**
+   * feature-watch-autosubscribe — watcher-only notification fan-out.
+   *
+   * The notification audience is now exactly the explicit WATCH watchers
+   * minus the IGNORE opt-outs, minus the action user, minus inactive
+   * users. The legacy implicit set (page creator + comment authors +
+   * revision authors via `Page.getNotificationTargetUsers()`) is no
+   * longer mixed in — participation now materialises a real WATCH row
+   * via `autoWatchPage` (events/page.ts + comment handler), so the
+   * watcher collection is the single source of truth for "who gets
+   * notified". This makes `getWatchStatus` exact and lets anyone
+   * plainly unwatch.
+   */
   activitySchema.methods.getNotificationTargetUsers = async function () {
     const User = crowi.model('User');
     const Watcher = crowi.model('Watcher');
-    const { user: actionUser, targetModel, target } = this;
+    const { user: actionUser, target } = this;
 
-    const model: any = await this.model(targetModel).findById(target);
-    const [targetUsers, watchUsers, ignoreUsers] = await Promise.all([
-      model.getNotificationTargetUsers(),
+    const [watchUsers, ignoreUsers] = await Promise.all([
       Watcher.getWatchers(target as any as Types.ObjectId),
       Watcher.getIgnorers(target as any as Types.ObjectId),
     ]);
@@ -221,7 +232,7 @@ export default (crowi: Crowi) => {
       const ids = pull.map((object) => object.toString());
       return array.filter((object) => !ids.includes(object.toString()));
     };
-    const notificationUsers = filter(unique([...targetUsers, ...watchUsers]), [...ignoreUsers, actionUser]);
+    const notificationUsers = filter(unique(watchUsers), [...ignoreUsers, actionUser]);
     const activeNotificationUsers = await User.find({
       _id: { $in: notificationUsers },
       status: User.STATUS_ACTIVE,
