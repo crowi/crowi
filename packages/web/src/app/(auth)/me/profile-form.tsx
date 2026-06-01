@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUpdateProfile } from '@/lib/use-profile';
+import { errorMessage } from '@/lib/error-message';
 import type { UserProfileResponse, Language } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -86,16 +87,12 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         setSuccessMessage(m['me.profile.success_save']());
       }
     } catch (err) {
+      // The server returns a stable `ErrorCode` (carried on the thrown error);
+      // localize it via the shared map, falling back to the server English
+      // message and finally a generic "save failed" string.
       const code = (err as { code?: string })?.code;
-      let message: string;
-      if (code === 'EMAIL_TAKEN') {
-        message = m['me.profile.error_email_taken']();
-      } else if (code === 'EMAIL_NOT_ALLOWED') {
-        message = m['me.profile.error_email_not_allowed']();
-      } else {
-        message = err instanceof Error ? err.message : m['me.profile.error_save']();
-      }
-      setErrors([message]);
+      const fallback = err instanceof Error ? err.message : m['me.profile.error_save']();
+      setErrors([errorMessage(code, fallback)]);
     }
   };
 

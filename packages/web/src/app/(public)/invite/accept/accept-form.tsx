@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormErrorList } from '@/components/ui/form-error-list';
 import { apiClientV2 } from '@/lib/api-client';
+import { errorMessage } from '@/lib/error-message';
 import { storeTokens } from '@/lib/auth-token';
 import { m } from '@paraglide/messages.js';
 
@@ -70,7 +71,8 @@ export function AcceptInviteForm() {
         router.push('/');
       } else {
         const body = await response.json();
-        setErrors([('error' in body && body.error?.message) || m['auth.invite_accept.error']()]);
+        const error = 'error' in body ? body.error : undefined;
+        setErrors([errorMessage(error?.code, error?.message || m['auth.invite_accept.error']())]);
       }
     } catch {
       setErrors([m['auth.common.server_error']()]);

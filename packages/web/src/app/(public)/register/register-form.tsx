@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormErrorList } from '@/components/ui/form-error-list';
 import { apiClientV2 } from '@/lib/api-client';
+import { errorMessage } from '@/lib/error-message';
 import { m } from '@paraglide/messages.js';
 
 export function RegisterForm() {
@@ -53,7 +54,7 @@ export function RegisterForm() {
         setPending(body.status);
       } else if (response.status === 400 || response.status === 403 || response.status === 409 || response.status === 503) {
         const body = await response.json();
-        setErrors([body.error?.message || m['auth.register.error']()]);
+        setErrors([errorMessage(body.error?.code, body.error?.message || m['auth.register.error']())]);
       } else {
         setErrors([m['auth.register.unexpected_error']()]);
       }

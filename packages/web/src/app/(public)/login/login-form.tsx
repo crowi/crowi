@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormErrorList } from '@/components/ui/form-error-list';
 import { apiClientV2 } from '@/lib/api-client';
+import { errorMessage } from '@/lib/error-message';
 import { storeTokens } from '@/lib/auth-token';
 import { safeContinueUrl } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
@@ -61,7 +62,7 @@ export function LoginForm() {
         router.push(continueUrl);
       } else if (response.status === 401 || response.status === 403 || response.status === 503) {
         const body = await response.json();
-        setErrors([body.error?.message || m['auth.login.error']()]);
+        setErrors([errorMessage(body.error?.code, body.error?.message || m['auth.login.error']())]);
       } else {
         setErrors([m['auth.login.unexpected_error']()]);
       }
