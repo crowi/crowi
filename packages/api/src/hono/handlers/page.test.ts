@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import { app, crowi, Fixture } from 'src/test/setup';
+import { waitForModel } from 'src/test/wait-for-model';
 import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
 
@@ -1130,6 +1131,11 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
     return res.body.page as { _id: string; path: string };
   };
 
+  // Auto-watch fires from the (fire-and-forget) pageEvent listener, so the
+  // Watcher row may not exist yet when the create response returns. Poll on
+  // the event loop (shared `waitForModel`) instead of a fixed delay.
+  const waitForWatcher = (uid: string, pageId: string) => waitForModel(Watcher, { user: uid, target: new Types.ObjectId(pageId) });
+
   describe('GET /api/v2/pages/watch', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app).get('/api/v2/pages/watch').query({ page_id: '000000000000000000000000' });
@@ -1156,11 +1162,15 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
 
-    it('returns watching=true by default for the page creator (no Watcher record)', async () => {
-      // Default watching is derived from getNotificationTargetUsers, which
-      // includes the creator. The owner therefore appears as watching=true
-      // even without an explicit Watcher row.
+    it('returns watching=true for the page creator (auto-watch materialises a WATCH row on create)', async () => {
+      // feature-watch-autosubscribe — creating a page auto-creates an
+      // explicit WATCH watcher row for the creator (events/page.ts), so
+      // getWatchStatus reports watching=true from a real row (no derive-
+      // from-getNotificationTargetUsers fallback anymore).
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}default-creator`, '# hi');
+      const watcher = await waitForWatcher(userId, page._id);
+      expect(watcher).not.toBeNull();
+      expect(watcher.status).toBe(Watcher.STATUS_WATCH);
 
       const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: page._id });
 
@@ -1168,7 +1178,7 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
       expect(res.body.watching).toBe(true);
     });
 
-    it('returns watching=false by default for an unrelated reader (no Watcher record)', async () => {
+    it('returns watching=false for an unrelated reader (no Watcher record)', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}default-other`, '# hi');
 
       const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
@@ -1189,8 +1199,10 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
 
     it('returns watching=false when an explicit IGNORE Watcher record exists, even for the creator', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}explicit-ignore`, '# i');
-      // Creator is in getNotificationTargetUsers by default but an explicit
-      // IGNORE record must override the default.
+      // Let the create auto-watch settle first (avoids racing the explicit
+      // IGNORE write against the fire-and-forget listener), then flip the
+      // creator's row to IGNORE: an explicit opt-out must win.
+      await waitForWatcher(userId, page._id);
       await Watcher.watchByPageId(new Types.ObjectId(userId), new Types.ObjectId(page._id), Watcher.STATUS_IGNORE);
 
       const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: page._id });
