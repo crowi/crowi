@@ -146,6 +146,36 @@ describe('Activity', function () {
         expect(notificationUsers).not.toContain(String(userIds[1]));
       });
     });
+
+    // feature-watch-autosubscribe — fan-out is now watcher-only. The
+    // implicit set (page creator + past comment authors + revision
+    // authors) is gone: only explicit WATCH watchers are notified.
+    describe('Watcher-only fan-out (no implicit set)', () => {
+      beforeEach(async () => {
+        await Watcher.deleteMany({});
+      });
+
+      it('notifies nobody when there are no WATCH watchers, even though all users commented', async () => {
+        // userIds[0..2] all have Comment rows on the page (see fixtures),
+        // and userIds[0] is the page creator — under the legacy implicit
+        // set they would be notified. Watcher-only fan-out returns empty.
+        const activity = await Activity.createByParameters({ user: userIds[0], target: pageId, targetModel: 'Page', action: 'COMMENT' });
+        const notificationUsers = (await activity.getNotificationTargetUsers()).map(String);
+
+        expect(notificationUsers).toHaveLength(0);
+      });
+
+      it('notifies only explicit WATCH watchers (not implicit comment authors)', async () => {
+        // Only userIds[1] explicitly watches; userIds[0] (creator + action
+        // user) and userIds[2] (comment author) do not.
+        await Watcher.watchByPageId(userIds[1], pageId, Watcher.STATUS_WATCH);
+
+        const activity = await Activity.createByParameters({ user: userIds[0], target: pageId, targetModel: 'Page', action: 'COMMENT' });
+        const notificationUsers = (await activity.getNotificationTargetUsers()).map(String);
+
+        expect(notificationUsers).toEqual([String(userIds[1])]);
+      });
+    });
   });
 
   // RFC-0002 Phase 8: createByPageMention + MENTION skip-fan-out guard.
