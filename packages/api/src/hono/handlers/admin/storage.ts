@@ -27,17 +27,9 @@ export const registerAdminStorageRoutes = <E extends OpenAPIHono<CrowiHonoBindin
     const activeDriver = plugins.active.storage;
     const list = plugins.storage.list();
 
-    let activeName: string | null = null;
-    let activePlugin: string | null = null;
-    if (activeDriver) {
-      for (const entry of list) {
-        if (plugins.storage.get(entry.driverName) === activeDriver) {
-          activeName = entry.driverName;
-          activePlugin = entry.plugin;
-          break;
-        }
-      }
-    }
+    const activeEntry = activeDriver ? plugins.storage.entryOf(activeDriver) : undefined;
+    const activeName = activeEntry?.driverName ?? null;
+    const activePlugin = activeEntry?.plugin ?? null;
 
     const drivers: StorageDriverEntry[] = list.map((entry) => ({
       driverName: entry.driverName,

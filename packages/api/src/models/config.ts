@@ -111,14 +111,11 @@ export default (crowi: Crowi) => {
       'upload:aws:accessKeyId': '',
       'upload:aws:secretAccessKey': '',
 
+      // The sender-independent "from" address stays in core config; each
+      // sender's transport credentials (SMTP host/auth, Resend API key,
+      // SES via @crowi/plugin-aws) live in their plugin's config
+      // namespace (`plugin:@crowi/plugin-mail-*:*`).
       'mail:from': '',
-      'mail:smtpHost': '',
-      'mail:smtpPort': '',
-      'mail:smtpUser': '',
-      'mail:smtpPassword': '',
-      'mail:aws:region': 'ap-northeast-1',
-      'mail:aws:accessKeyId': '',
-      'mail:aws:secretAccessKey': '',
 
       'google:clientId': '',
       'google:clientSecret': '',
@@ -226,9 +223,6 @@ export default (crowi: Crowi) => {
         ['aws:region', 'upload:aws:region'],
         ['aws:accessKeyId', 'upload:aws:accessKeyId'],
         ['aws:secretAccessKey', 'upload:aws:secretAccessKey'],
-        ['aws:region', 'mail:aws:region'],
-        ['aws:accessKeyId', 'mail:aws:accessKeyId'],
-        ['aws:secretAccessKey', 'mail:aws:secretAccessKey'],
       ],
     };
 

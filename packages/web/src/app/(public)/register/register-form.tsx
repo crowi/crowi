@@ -1,22 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AtSign, User, Mail, KeyRound, LogIn } from 'lucide-react';
+import { AtSign, User, Mail, KeyRound, LogIn, MailCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
-import { storeTokens } from '@/lib/auth-token';
+import { m } from '@paraglide/messages.js';
 
 export function RegisterForm() {
-  const router = useRouter();
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [pending, setPending] = useState<'confirmation_required' | 'approval_required' | null>(null);
   const [formData, setFormData] = useState({
     username: '',
     name: '',
@@ -47,32 +45,55 @@ export function RegisterForm() {
         },
       });
 
-      if (response.status === 201) {
+      if (response.status === 200) {
+        // Self-registration no longer auto-signs-in: the account is
+        // pending email confirmation (open) or admin approval (restricted).
         const body = await response.json();
-        // Store tokens (also mirrors access token into a cookie so
-        // browser-built `<img>` requests can authenticate).
-        storeTokens(body, body.expiresIn);
-
-        // Redirect to home
-        router.push('/');
+        setPending(body.status);
       } else if (response.status === 400 || response.status === 403 || response.status === 409 || response.status === 503) {
         const body = await response.json();
-        setErrors([body.error?.message || '登録に失敗しました']);
+        setErrors([body.error?.message || m['auth.register.error']()]);
       } else {
-        setErrors(['予期しないエラーが発生しました']);
+        setErrors([m['auth.register.unexpected_error']()]);
       }
     } catch {
-      setErrors(['サーバーとの通信中にエラーが発生しました']);
+      setErrors([m['auth.common.server_error']()]);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (pending) {
+    return (
+      <Card className="shadow-2xl">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl text-center">
+            {pending === 'confirmation_required' ? m['auth.register.pending_confirm_title']() : m['auth.register.pending_approval_title']()}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <MailCheck className="h-4 w-4" />
+            <AlertDescription>
+              {pending === 'confirmation_required'
+                ? m['auth.register.pending_confirm_body']({ email: formData.email })
+                : m['auth.register.pending_approval_body']()}
+            </AlertDescription>
+          </Alert>
+          <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+            <LogIn className="h-4 w-4" />
+            {m['auth.common.back_to_signin']()}
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="shadow-2xl">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-xl text-center">新規登録</CardTitle>
-        <CardDescription className="text-center">アカウントを作成してください</CardDescription>
+        <CardTitle className="text-xl text-center">{m['auth.register.title']()}</CardTitle>
+        <CardDescription className="text-center">{m['auth.register.lead']()}</CardDescription>
       </CardHeader>
       <CardContent>
         {errors.length > 0 && (
@@ -89,14 +110,14 @@ export function RegisterForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="username">ユーザーID</Label>
+            <Label htmlFor="username">{m['auth.register.userid_label']()}</Label>
             <div className="relative">
               <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 id="username"
                 name="username"
                 type="text"
-                placeholder="記入例: taroyama"
+                placeholder={m['auth.register.userid_placeholder']()}
                 value={formData.username}
                 onChange={handleChange}
                 className="pl-10"
@@ -104,18 +125,18 @@ export function RegisterForm() {
                 autoComplete="username"
               />
             </div>
-            <p className="text-xs text-muted-foreground">ユーザーIDは、ユーザーページのURLなどに利用されます。半角英数字と一部の記号のみ利用できます。</p>
+            <p className="text-xs text-muted-foreground">{m['auth.register.userid_help']()}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="name">名前</Label>
+            <Label htmlFor="name">{m['auth.register.name_label']()}</Label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 id="name"
                 name="name"
                 type="text"
-                placeholder="記入例: 山田 太郎"
+                placeholder={m['auth.register.name_placeholder']()}
                 value={formData.name}
                 onChange={handleChange}
                 className="pl-10"
@@ -126,7 +147,7 @@ export function RegisterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">メールアドレス</Label>
+            <Label htmlFor="email">{m['auth.register.email_label']()}</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -144,7 +165,7 @@ export function RegisterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">パスワード</Label>
+            <Label htmlFor="password">{m['auth.register.password_label']()}</Label>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -160,18 +181,18 @@ export function RegisterForm() {
                 autoComplete="new-password"
               />
             </div>
-            <p className="text-xs text-muted-foreground">パスワードは6文字以上の半角英数字または記号</p>
+            <p className="text-xs text-muted-foreground">{m['auth.register.password_help']()}</p>
           </div>
 
           <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-            {isSubmitting ? '登録中...' : '新規登録'}
+            {isSubmitting ? m['auth.register.submitting']() : m['auth.register.submit']()}
           </Button>
         </form>
 
         <div className="mt-6 pt-6 border-t text-center">
           <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <LogIn className="h-4 w-4" />
-            サインインはこちら
+            {m['auth.register.to_signin']()}
           </Link>
         </div>
       </CardContent>

@@ -1,0 +1,13 @@
+{{ t.emailChange.heading }}
+
+{{ t.emailChange.intro }}
+
+{{ t.emailChange.cta }}: {{ confirmUrl }}
+
+{{ t.emailChange.expiresNote }}
+
+{{ t.emailChange.ignoreNote }}
+
+--
+{{ appTitle }}
+{{ appUrl }}

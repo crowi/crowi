@@ -1,0 +1,13 @@
+{{ t.activation.heading }}
+
+{{ t.activation.intro }}
+
+{{ t.activation.cta }}: {{ activationUrl }}
+
+{{ t.activation.expiresNote }}
+
+{{ t.activation.ignoreNote }}
+
+--
+{{ appTitle }}
+{{ appUrl }}

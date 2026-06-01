@@ -52,7 +52,7 @@ export const getMailSettingsRoute = createRoute({
   path: '/admin/mail',
   tags: ['admin.mail'],
   security: [{ bearerAuth: [] }],
-  summary: 'Read the current Mail settings (SMTP + AWS SES, with secret masking)',
+  summary: 'Read the sender-independent mail settings (from + active sender driver)',
   responses: {
     200: {
       description: 'Current mail settings',
@@ -74,7 +74,7 @@ export const updateMailSettingsRoute = createRoute({
   path: '/admin/mail',
   tags: ['admin.mail'],
   security: [{ bearerAuth: [] }],
-  summary: 'Update Mail settings — partial updates, secret masking on input',
+  summary: 'Update the sender-independent mail settings (from address)',
   hook: mailSettingsValidationHook,
   request: {
     body: {
@@ -106,7 +106,7 @@ export const sendTestMailRoute = createRoute({
   path: '/admin/mail/test',
   tags: ['admin.mail'],
   security: [{ bearerAuth: [] }],
-  summary: 'Send a test mail to the calling admin (req.user.email) using SMTP',
+  summary: 'Send a test mail to the calling admin (req.user.email) via the active sender',
   hook: mailSettingsValidationHook,
   request: {
     body: {
