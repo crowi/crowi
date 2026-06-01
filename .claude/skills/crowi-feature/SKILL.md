@@ -363,6 +363,9 @@ spec phase でユーザー承認を取った後 (= skill 起動時の **唯一**
 ### 4. 完了
 
 `task.status = COMMITTED`、`queue.currentTask = null`。
+committer は実装完了済み spec (`.feature-state/specs/{id}.md`) を **削除する**
+(残 phase / 残タスクが無く task 全体が COMMITTED のときだけ。multi-phase で未完 phase
+が残る / PARTIALLY_COMMITTED のときは保持)。詳細は feature-committer の「spec の後始末」。
 push / PR 作成は **明示指示があるまで行わない**。
 
 ## ステータス遷移
