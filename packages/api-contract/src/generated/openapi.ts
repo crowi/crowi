@@ -3030,6 +3030,7 @@ export interface paths {
                                 commentPosition: number;
                                 createdAt: string;
                             };
+                            newlyWatching: boolean;
                         };
                     };
                 };

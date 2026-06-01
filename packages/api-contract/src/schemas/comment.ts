@@ -38,8 +38,14 @@ export const AddCommentRequestSchema = z.object({
 export type AddCommentRequest = z.infer<typeof AddCommentRequestSchema>;
 
 // Add comment response schema
+//
+// feature-watch-autosubscribe — `newlyWatching` is true only when this
+// comment auto-created a brand-new WATCH watcher row for the commenter
+// (they were not already watching / ignoring). The web client uses it to
+// show a one-shot "now watching this page" hint with an unwatch action.
 export const AddCommentResponseSchema = z.object({
   comment: CommentSchema,
+  newlyWatching: z.boolean(),
 });
 export type AddCommentResponse = z.infer<typeof AddCommentResponseSchema>;
 

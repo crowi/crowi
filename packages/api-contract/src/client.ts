@@ -315,7 +315,7 @@ const stubComment = {
   commentPosition: -1,
   createdAt: '',
 };
-const stubAddComment: AddCommentResponse = { comment: stubComment };
+const stubAddComment: AddCommentResponse = { comment: stubComment, newlyWatching: false };
 const stubDeleteComment: DeleteCommentResponse = { ok: true };
 const stubListRevisions: ListRevisionsResponse = { revisions: [], pager: stubPager };
 const stubRevision = {
