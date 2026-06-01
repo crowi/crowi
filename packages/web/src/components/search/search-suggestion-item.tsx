@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Lock } from 'lucide-react';
+import { Compass, Lock } from 'lucide-react';
 import type { Page } from '@crowi/api-contract';
 import { isPrivateGrant } from '@/lib/page-grant';
 import { SearchHitSnippet } from './search-hit-snippet';
@@ -28,7 +28,7 @@ export function SearchSuggestionItem({ href, page, snippet, onClick }: SearchSug
     <Link href={href} onClick={onClick} className="block rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors">
       <div className="flex items-center gap-2 min-w-0">
         <span className="font-medium text-foreground truncate">{page.path}</span>
-        {isPortal && <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-label="Portal page" />}
+        {isPortal && <Compass className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-label="Portal page" />}
         {isPrivate && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-label="Private page" />}
       </div>
       {snippet && (

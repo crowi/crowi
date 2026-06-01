@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import Link from 'next/link';
-import { Bookmark, FileText, Lock } from 'lucide-react';
+import { Bookmark, Compass, Lock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { SearchHit } from '@crowi/api-contract';
 import { isPrivateGrant } from '@/lib/page-grant';
@@ -37,7 +37,7 @@ export const SearchHitItem = memo(function SearchHitItem({ hit }: SearchHitItemP
           <Link href={page.path} className="font-medium text-foreground hover:text-primary transition-colors truncate">
             {page.path}
           </Link>
-          {isPortal && <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Portal page" />}
+          {isPortal && <Compass className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Portal page" />}
           {isPrivate && <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Private page" />}
         </div>
 
