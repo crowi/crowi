@@ -81,6 +81,11 @@ Crowi 2.0 移行 (Express + Swig → Next.js + Hono)。フェーズ別。
   - **Simplification (MEDIUM)**: web 認証フォームの重複 — (a) token を searchParams から取り token 有無で初期 state を derive するパターンが activate/confirm/reset/accept で重複 → `useTokenFromUrl()` hook、(b) activate/confirm の「mount で auto-POST + `useRef(started)` で StrictMode 二重実行ガード」が重複 → `useAsyncOnce(token, fn)` hook
   - **Reuse (LOW)**: `installer-form.tsx` も同じ error-list markup を持つ。今回 merge 非対象なので触らず据え置き。`FormErrorList` に寄せれば 5 フォーム完全統一
   - **Skip 済み (micro-opt / 実コストなし、記録のみ)**: `createMailTokenUtil()` の per-request 生成 (tokenAuth/me) は fallback secret が process-wide memoize 済みで実害なし。`service/mail.ts` の `send()` が `getFrom`/`defaultSubject`/`brandVars` で `crowi.getConfig()` を 3 回読むのは in-memory cache なので I/O 無し。`LoadingSpinner`/`ErrorAlert` への置換は「ページ読込失敗/中」用プリミティブでフォーム submit 状態とは意味が異なり mismatch のため見送り
+- [ ] **feature-shared-error-codes-i18n follow-up (reviewer/simplify deferred)** — 共有 ErrorCode 台帳 + web `errorMessage()` 規約導入時の積み残し:
+  - **Reuse (LOW)**: `schemas/common.ts` の各 `*ErrorSchema` の `z.literal(...)` が台帳 `ERROR_CODES` と型リンクされず二重管理。`z.literal` を `ErrorCode` メンバから導出する形へ single-source 化 (構造変更のため別タスク)
+  - **Quality (LOW)**: `VALIDATION_ERROR` の `details.fieldErrors` を使ったフィールド単位のフォーム表示 (現状 `errorMessage()` は汎用文言のみ返す)
+  - **Reuse (LOW)**: admin 保存系フォーム (mail / plugins / users) の web 表示も `errorMessage()` 経由へ横展開 (本 AC 範囲外、規約として TODO 化)
+  - **Quality (LOW)**: ハンドラ側の英語 fallback message (`INVALID_CREDENTIALS_BODY` 等) と paraglide 文言が別管理 (code 一致時は paraglide が勝つため画面表示には影響なし)。fallback 英語更新時に ja 別途要更新
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 
