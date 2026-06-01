@@ -40,6 +40,18 @@ export const CrowiConfigFileSchema = z.object({
       driver: z.string().default('mongo'),
     })
     .default({ driver: 'mongo' }),
+
+  mail: z
+    .object({
+      /**
+       * Driver name the mail service should use to deliver email.
+       * Defaults to `'smtp'` (provided by the default-on
+       * `@crowi/plugin-mail-smtp`). Set to `'resend'` / `'ses'` after
+       * installing the matching `@crowi/plugin-mail-*` plugin.
+       */
+      driver: z.string().default('smtp'),
+    })
+    .default({ driver: 'smtp' }),
 });
 
 export type CrowiConfigFile = z.infer<typeof CrowiConfigFileSchema>;
@@ -53,7 +65,7 @@ export type CrowiConfigFile = z.infer<typeof CrowiConfigFileSchema>;
  *
  * `@crowi/plugin-search-mongo` is added in a follow-up step.
  */
-export const IMPLICIT_DEFAULT_PLUGINS: readonly string[] = ['@crowi/plugin-storage-local'];
+export const IMPLICIT_DEFAULT_PLUGINS: readonly string[] = ['@crowi/plugin-storage-local', '@crowi/plugin-mail-smtp'];
 
 /**
  * Read and validate `crowi.config.json` from the given project

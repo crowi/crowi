@@ -40,6 +40,7 @@ const collectRegistrySlots = (plugin: CrowiPlugin): string[] => {
   if (plugin.registerSearch) slots.push('search');
   if (plugin.registerAuth) slots.push('auth');
   if (plugin.registerNotifier) slots.push('notifier');
+  if (plugin.registerMailSender) slots.push('mail');
   return slots;
 };
 
@@ -47,6 +48,7 @@ const deriveSectionFromHooks = (plugin: CrowiPlugin): PluginInfo['adminPlacement
   if (plugin.registerStorage) return 'storage';
   if (plugin.registerAuth) return 'auth';
   if (plugin.registerNotifier) return 'notification';
+  if (plugin.registerMailSender) return 'mail';
   return undefined;
 };
 

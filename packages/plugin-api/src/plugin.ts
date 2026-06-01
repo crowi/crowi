@@ -4,6 +4,7 @@ import type { StorageRegistry } from './registries/storage';
 import type { SearchRegistry } from './registries/search';
 import type { AuthRegistry } from './registries/auth';
 import type { NotifierRegistry } from './registries/notifier';
+import type { MailSenderRegistry } from './registries/mail';
 import type { EventBus } from './events';
 import type { RendererRegistry } from './renderer';
 import type { PluginRouterScope } from './routes';
@@ -97,6 +98,14 @@ export interface CrowiPlugin {
 
   /** Notification sink registration. Called once at boot. */
   registerNotifier?: (registry: NotifierRegistry, ctx: PluginContext) => void;
+
+  /**
+   * Mail sender (transport) registration. Called once at boot. Exactly
+   * one registered driver is active, selected by
+   * `crowi.config.json:mail.driver` (default `'smtp'`). The core
+   * assembles the message; the driver only delivers it.
+   */
+  registerMailSender?: (registry: MailSenderRegistry, ctx: PluginContext) => void;
 
   /**
    * Renderer extension registration. Called once at boot, AFTER the

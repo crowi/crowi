@@ -1,6 +1,8 @@
 import type {
   AuthDriver,
   AuthRegistry,
+  MailSender,
+  MailSenderRegistry,
   NotifierDriver,
   NotifierRegistry,
   SearchDriver,
@@ -36,6 +38,18 @@ export class DriverRegistry<T> {
     return this.drivers.has(driverName);
   }
 
+  /**
+   * Reverse lookup: the registered `(driverName, plugin)` for a driver
+   * instance, or undefined. Lets handlers report the active driver's
+   * name without re-implementing the identity scan.
+   */
+  entryOf(driver: T): { driverName: string; plugin: string } | undefined {
+    for (const [driverName, entry] of this.drivers) {
+      if (entry.driver === driver) return { driverName, plugin: entry.plugin };
+    }
+    return undefined;
+  }
+
   list(): { driverName: string; plugin: string }[] {
     return Array.from(this.drivers.entries()).map(([driverName, { plugin }]) => ({ driverName, plugin }));
   }
@@ -59,5 +73,9 @@ export const makeAuthScope = (registry: DriverRegistry<AuthDriver>, plugin: stri
 });
 
 export const makeNotifierScope = (registry: DriverRegistry<NotifierDriver>, plugin: string): NotifierRegistry => ({
+  register: (driverName, driver) => registry.register(driverName, driver, plugin),
+});
+
+export const makeMailScope = (registry: DriverRegistry<MailSender>, plugin: string): MailSenderRegistry => ({
   register: (driverName, driver) => registry.register(driverName, driver, plugin),
 });

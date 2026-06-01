@@ -1,0 +1,44 @@
+{
+  "name": "@crowi/plugin-mail-aws-ses",
+  "version": "0.1.0-dev",
+  "description": "AWS SES (v2) mail sender for Crowi 2.0. Depends on @crowi/plugin-aws for shared credentials.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@crowi/plugin-api": "^0.1.0",
+    "@crowi/plugin-aws": "^0.1.0",
+    "zod": "catalog:"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.700.0"
+  },
+  "devDependencies": {
+    "@crowi/plugin-api": "workspace:*",
+    "@crowi/plugin-aws": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}

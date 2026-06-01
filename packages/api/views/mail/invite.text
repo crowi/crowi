@@ -1,0 +1,13 @@
+{{ t.invite.heading }}
+
+{{ t.invite.intro }}
+
+{{ t.invite.cta }}: {{ inviteUrl }}
+
+{{ t.invite.expiresNote }}
+
+{{ t.invite.ignoreNote }}
+
+--
+{{ appTitle }}
+{{ appUrl }}

@@ -33,6 +33,8 @@ export type { AuthDriver, AuthRegistry, AuthProfile, AuthVerifyResult } from './
 
 export type { NotifierDriver, NotifierRegistry, NotificationPayload } from './registries/notifier';
 
+export type { MailSender, MailSenderRegistry, EmailMessage } from './registries/mail';
+
 export type {
   RendererRegistry,
   NodeRenderer,

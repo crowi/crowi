@@ -1,59 +1,29 @@
 import { z } from '@hono/zod-openapi';
-import { AwsAccessKeyIdSchema, AwsRegionSchema } from './_aws';
 
 /**
- * SMTP port — number 1..65535. Empty/blank from the legacy plaintext config
- * surfaces as 0 here (we coerce missing/non-numeric values to 0 on read).
- */
-const SmtpPortSchema = z.number().int().min(1).max(65535);
-
-/**
- * GET response: the current `mail:*` config slice.
+ * GET response: the sender-independent mail settings.
  *
- * `smtpPassword` and `aws.secretAccessKey` are masked — the API never returns
- * the plaintext, only whether a value is currently set. `accessKeyId` is
- * returned plain (parity with admin/app).
+ * Only `from` lives in core config now; each sender's transport
+ * credentials (SMTP host/auth, Resend API key, SES via @crowi/plugin-aws)
+ * are edited under `/admin/plugins`. `activeDriver` is the registered
+ * name of the currently-active mail sender (e.g. `'smtp'`), shown
+ * read-only so the operator knows which plugin's settings to edit.
  */
 export const GetMailSettingsResponseSchema = z.object({
   from: z.string(),
-  smtpHost: z.string(),
-  /** 0 means "not set" — the legacy default was empty string. */
-  smtpPort: z.number().int().min(0).max(65535),
-  smtpUser: z.string(),
-  smtpPassword: z.object({
-    hasValue: z.boolean(),
-  }),
-  aws: z.object({
-    region: z.string(),
-    accessKeyId: z.string(),
-    secretAccessKey: z.object({
-      hasValue: z.boolean(),
-    }),
-  }),
+  activeDriver: z.string(),
+  /** npm name of the plugin that registered the active driver, for
+   * linking to its config page. Empty when no sender is active. */
+  activePlugin: z.string(),
 });
 export type GetMailSettingsResponse = z.infer<typeof GetMailSettingsResponseSchema>;
 
 /**
- * PUT request body. All fields are optional so partial updates are supported.
- *
- * Semantics for `smtpPassword` and `aws.secretAccessKey`:
- * - omitted (undefined) → leave the stored value untouched.
- * - empty string         → explicitly clear the stored value.
- * - non-empty            → save (auto-encrypted via `isSensitiveConfig`).
+ * PUT request body. `from` is the only editable core mail setting; it is
+ * optional so an empty PUT is a no-op.
  */
 export const UpdateMailSettingsRequestSchema = z.object({
   from: z.string().trim().max(254).optional(),
-  smtpHost: z.string().trim().max(255).optional(),
-  smtpPort: SmtpPortSchema.optional(),
-  smtpUser: z.string().trim().max(255).optional(),
-  smtpPassword: z.string().optional(),
-  aws: z
-    .object({
-      region: AwsRegionSchema.optional(),
-      accessKeyId: AwsAccessKeyIdSchema.optional(),
-      secretAccessKey: z.string().optional(),
-    })
-    .optional(),
 });
 export type UpdateMailSettingsRequest = z.infer<typeof UpdateMailSettingsRequestSchema>;
 
@@ -63,18 +33,12 @@ export const UpdateMailSettingsResponseSchema = z.object({
 export type UpdateMailSettingsResponse = z.infer<typeof UpdateMailSettingsResponseSchema>;
 
 /**
- * POST /admin/mail/test request body. All fields are optional — when omitted
- * the server uses the currently-saved values. Sending a body lets the operator
- * dry-run a configuration before persisting it.
+ * POST /admin/mail/test request body. No fields — the test mail is sent
+ * to the calling admin through the currently-active sender, so there is
+ * nothing to override. Kept as an (optional, empty) object so the route
+ * still declares a JSON body.
  */
-export const SendTestMailRequestSchema = z
-  .object({
-    smtpHost: z.string().trim().max(255).optional(),
-    smtpPort: SmtpPortSchema.optional(),
-    smtpUser: z.string().trim().max(255).optional(),
-    smtpPassword: z.string().optional(),
-  })
-  .optional();
+export const SendTestMailRequestSchema = z.object({}).optional();
 export type SendTestMailRequest = z.infer<typeof SendTestMailRequestSchema>;
 
 export const SendTestMailResponseSchema = z.object({

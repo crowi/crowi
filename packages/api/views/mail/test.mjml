@@ -1,0 +1,2 @@
+<mj-text font-size="20px" font-weight="700" padding="24px 24px 8px">{{ t.test.heading }}</mj-text>
+<mj-text padding="0 24px 24px">{{ t.test.intro }}</mj-text>

@@ -94,6 +94,8 @@ beforeAll(async () => {
     PORT: '13001',
     MONGO_URI: MONGO_URI,
     BASE_URL: 'http://localhost:13001',
+    // Public origin (used by getBaseUrl() for CORS + mail links).
+    CLIENT_URL: 'http://localhost:13001',
   });
   await crowi.init();
 

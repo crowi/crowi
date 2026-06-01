@@ -31,6 +31,7 @@ import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
+import { createMailTokenUtil } from 'src/util/mail-token';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -92,8 +93,18 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
           let code = 'USER_NOT_ACTIVE';
           let message = 'User account is not active';
           if (user.status === User.STATUS_REGISTERED) {
-            code = 'USER_REGISTERED';
-            message = 'User registration is not complete';
+            // REGISTERED covers two distinct gates. In restricted mode the
+            // account awaits admin approval (no activation email was
+            // sent); otherwise (open mode) it awaits email confirmation.
+            const mode = crowi.getConfig()?.crowi?.['security:registrationMode'];
+            const awaitingApproval = mode === Config.SECURITY_REGISTRATION_MODE_RESTRICTED;
+            if (!awaitingApproval && user.emailConfirmedAt == null) {
+              code = 'EMAIL_NOT_CONFIRMED';
+              message = 'Please confirm your email address — check your inbox for the activation link.';
+            } else {
+              code = 'USER_REGISTERED';
+              message = 'Your account is awaiting administrator approval.';
+            }
           } else if (user.status === User.STATUS_SUSPENDED) {
             code = 'USER_SUSPENDED';
             message = 'User account is suspended';
@@ -135,19 +146,57 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
           return c.json({ error: { code: 'USER_EXISTS', message } }, 409);
         }
 
-        const newUser = await new Promise<UserDocument | null>((resolve, reject) => {
-          User.createUserByEmailAndPassword(name, username, email, password, 'en', (err: Error | null, user: UserDocument | null) => {
-            if (err) reject(err);
-            else resolve(user);
-          });
-        });
+        // Create the account directly as REGISTERED. We intentionally do
+        // NOT go through createUserByEmailAndPassword: in open mode it
+        // would create a STATUS_ACTIVE user and emit 'activated' (which
+        // creates the user's wiki page) BEFORE the email is confirmed,
+        // leaving orphan pages for never-confirmed signups. The account
+        // only becomes ACTIVE (and fires 'activated') on confirmation
+        // (open: POST /auth/activate) or admin approval (restricted).
+        const newUser = new User();
+        newUser.name = name;
+        newUser.username = username;
+        newUser.email = email;
+        newUser.setPassword(password);
+        newUser.lang = 'en';
+        newUser.status = User.STATUS_REGISTERED;
+        newUser.emailConfirmedAt = null;
+        await newUser.save();
 
-        if (!newUser) {
-          return c.json({ error: { code: 'REGISTRATION_FAILED', message: 'Failed to create user' } }, 400);
+        const mailer = crowi.getMailer();
+        const brand = mailer.brandVars();
+        const baseUrl = crowi.getBaseUrl() || '';
+        const restricted = config.crowi['security:registrationMode'] === Config.SECURITY_REGISTRATION_MODE_RESTRICTED;
+
+        if (restricted) {
+          // Awaiting admin approval. Notify every active admin (best-effort,
+          // per recipient language). Fire-and-forget: don't block the
+          // response on the admin fan-out.
+          const admins = (await User.find({ admin: true, status: User.STATUS_ACTIVE })) as UserDocument[];
+          void Promise.all(
+            admins.map((admin) =>
+              mailer
+                .send({
+                  to: admin.email,
+                  htmlTemplate: 'adminApprovalPending',
+                  lang: admin.lang,
+                  vars: { ...brand, createdUserName: newUser.name, createdUserEmail: email, adminUsersUrl: `${baseUrl}/admin/users` },
+                })
+                .catch((err) => debug('failed to send admin approval-pending notice:', err)),
+            ),
+          ).catch(() => undefined);
+
+          return c.json({ status: 'approval_required' as const }, 200);
         }
 
-        const tokens = jwtUtil.generateTokens(newUser);
-        return c.json({ ...tokens, user: toAuthUser(newUser) }, 201);
+        // Open mode: send an email-confirmation link. Fire-and-forget.
+        const { token } = createMailTokenUtil().signMailToken({ purpose: 'activate', userId: newUser._id.toString(), email });
+        const activationUrl = `${baseUrl}/activate?token=${token}`;
+        void mailer
+          .send({ to: email, htmlTemplate: 'activation', lang: newUser.lang, vars: { ...brand, activationUrl } })
+          .catch((err) => debug('failed to send activation email:', err));
+
+        return c.json({ status: 'confirmation_required' as const }, 200);
       } catch (error) {
         debug('Registration error:', error);
         return c.json(INTERNAL_ERROR_BODY, 500);

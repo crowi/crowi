@@ -1,5 +1,5 @@
 import Debug from 'debug';
-import type { AuthDriver, CrowiPlugin, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
+import type { AuthDriver, CrowiPlugin, MailSender, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
 import { type CrowiConfigFile, resolvePlugins } from '@crowi/runner';
 import type Crowi from 'src/crowi';
 import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
@@ -7,7 +7,7 @@ import type { ConfigChangeSource } from 'src/service/config';
 import { createPluginContext } from './plugin-context';
 import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
 import { makeRendererScope } from 'src/renderer';
-import { DriverRegistry, makeAuthScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
+import { DriverRegistry, makeAuthScope, makeMailScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
 import { topoSortPlugins } from './topo-sort';
 
 const debug = Debug('crowi:plugin:manager');
@@ -30,6 +30,7 @@ export interface PluginRegistries {
   search: DriverRegistry<SearchDriver>;
   auth: DriverRegistry<AuthDriver>;
   notifier: DriverRegistry<NotifierDriver>;
+  mail: DriverRegistry<MailSender>;
   /** Active driver for each registry, resolved from `crowi.config.json`. */
   active: {
     storage: StorageDriver | null;
@@ -37,6 +38,8 @@ export interface PluginRegistries {
     /** Auth and notifier are always lists — zero or more providers. */
     auth: AuthDriver[];
     notifiers: NotifierDriver[];
+    /** Single active mail sender, selected by `mail.driver`. */
+    mail: MailSender | null;
   };
 }
 
@@ -71,6 +74,7 @@ export class PluginManager {
   private search = new DriverRegistry<SearchDriver>('search');
   private auth = new DriverRegistry<AuthDriver>('auth');
   private notifier = new DriverRegistry<NotifierDriver>('notifier');
+  private mail = new DriverRegistry<MailSender>('mail');
   private loadedPlugins: CrowiPlugin[] = [];
   /** plugin name → set of plugin names that `requires` it */
   private dependents = new Map<string, Set<string>>();
@@ -111,6 +115,7 @@ export class PluginManager {
       search: this.search,
       auth: this.auth,
       notifier: this.notifier,
+      mail: this.mail,
       active: this.resolveActiveDrivers(config),
     };
   }
@@ -301,6 +306,7 @@ export class PluginManager {
     if (plugin.registerSearch) plugin.registerSearch(makeSearchScope(this.search, plugin.name), ctx);
     if (plugin.registerAuth) plugin.registerAuth(makeAuthScope(this.auth, plugin.name), ctx);
     if (plugin.registerNotifier) plugin.registerNotifier(makeNotifierScope(this.notifier, plugin.name), ctx);
+    if (plugin.registerMailSender) plugin.registerMailSender(makeMailScope(this.mail, plugin.name), ctx);
     if (plugin.registerRenderer) {
       // Renderer is registered against `crowi.renderer.registry`; it
       // already has the core 4 transforms in place when we get here
@@ -328,6 +334,7 @@ export class PluginManager {
         .list()
         .map(({ driverName }) => this.notifier.get(driverName))
         .filter((d): d is NotifierDriver => !!d),
+      mail: this.resolveOrWarn(this.mail, 'mail', config.mail.driver),
     };
   }
 
