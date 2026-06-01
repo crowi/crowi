@@ -329,7 +329,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register new user and receive tokens */
+        /** Register a new user; sends an activation email or queues for admin approval */
         post: {
             parameters: {
                 query?: never;
@@ -349,25 +349,15 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Successful registration */
-                201: {
+                /** @description Registration accepted; activation pending (email confirmation or admin approval) */
+                200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": {
-                            accessToken: string;
-                            refreshToken: string;
-                            expiresIn: number;
-                            user: {
-                                id: string;
-                                username: string;
-                                /** Format: email */
-                                email: string;
-                                name: string;
-                                image?: string;
-                                admin?: boolean;
-                            };
+                            /** @enum {string} */
+                            status: "confirmation_required" | "approval_required";
                         };
                     };
                 };
@@ -771,6 +761,7 @@ export interface paths {
                             githubId?: string | null;
                             hasPassword: boolean;
                             createdAt: string;
+                            emailChangePending?: boolean;
                         };
                     };
                 };
@@ -835,6 +826,7 @@ export interface paths {
                             githubId?: string | null;
                             hasPassword: boolean;
                             createdAt: string;
+                            emailChangePending?: boolean;
                         };
                     };
                 };
@@ -847,6 +839,7 @@ export interface paths {
                         "application/json": {
                             /** @enum {string} */
                             status: "error";
+                            code?: string;
                             message?: string;
                             errors?: string[];
                         };
@@ -926,6 +919,7 @@ export interface paths {
                         "application/json": {
                             /** @enum {string} */
                             status: "error";
+                            code?: string;
                             message?: string;
                             errors?: string[];
                         };
@@ -982,6 +976,7 @@ export interface paths {
                         "application/json": {
                             /** @enum {string} */
                             status: "error";
+                            code?: string;
                             message?: string;
                             errors?: string[];
                         };
@@ -9287,7 +9282,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read the current Mail settings (SMTP + AWS SES, with secret masking) */
+        /** Read the sender-independent mail settings (from + active sender driver) */
         get: {
             parameters: {
                 query?: never;
@@ -9305,19 +9300,8 @@ export interface paths {
                     content: {
                         "application/json": {
                             from: string;
-                            smtpHost: string;
-                            smtpPort: number;
-                            smtpUser: string;
-                            smtpPassword: {
-                                hasValue: boolean;
-                            };
-                            aws: {
-                                region: string;
-                                accessKeyId: string;
-                                secretAccessKey: {
-                                    hasValue: boolean;
-                                };
-                            };
+                            activeDriver: string;
+                            activePlugin: string;
                         };
                     };
                 };
@@ -9357,7 +9341,7 @@ export interface paths {
                 };
             };
         };
-        /** Update Mail settings — partial updates, secret masking on input */
+        /** Update the sender-independent mail settings (from address) */
         put: {
             parameters: {
                 query?: never;
@@ -9369,15 +9353,6 @@ export interface paths {
                 content: {
                     "application/json": {
                         from?: string;
-                        smtpHost?: string;
-                        smtpPort?: number;
-                        smtpUser?: string;
-                        smtpPassword?: string;
-                        aws?: {
-                            region?: string;
-                            accessKeyId?: string;
-                            secretAccessKey?: string;
-                        };
                     };
                 };
             };
@@ -9463,7 +9438,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Send a test mail to the calling admin (req.user.email) using SMTP */
+        /** Send a test mail to the calling admin (req.user.email) via the active sender */
         post: {
             parameters: {
                 query?: never;
@@ -9473,12 +9448,7 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": {
-                        smtpHost?: string;
-                        smtpPort?: number;
-                        smtpUser?: string;
-                        smtpPassword?: string;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             responses: {
@@ -13735,42 +13705,17 @@ export interface components {
         };
         GetMailSettingsResponse: {
             from: string;
-            smtpHost: string;
-            smtpPort: number;
-            smtpUser: string;
-            smtpPassword: {
-                hasValue: boolean;
-            };
-            aws: {
-                region: string;
-                accessKeyId: string;
-                secretAccessKey: {
-                    hasValue: boolean;
-                };
-            };
+            activeDriver: string;
+            activePlugin: string;
         };
         UpdateMailSettingsRequest: {
             from?: string;
-            smtpHost?: string;
-            smtpPort?: number;
-            smtpUser?: string;
-            smtpPassword?: string;
-            aws?: {
-                region?: string;
-                accessKeyId?: string;
-                secretAccessKey?: string;
-            };
         };
         UpdateMailSettingsResponse: {
             /** @enum {boolean} */
             ok: true;
         };
-        SendTestMailRequest: {
-            smtpHost?: string;
-            smtpPort?: number;
-            smtpUser?: string;
-            smtpPassword?: string;
-        };
+        SendTestMailRequest: Record<string, never>;
         SendTestMailResponse: {
             /** @enum {boolean} */
             ok: true;

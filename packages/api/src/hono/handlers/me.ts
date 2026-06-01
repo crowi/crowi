@@ -49,6 +49,7 @@ import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import FileUploader from 'src/util/fileUploader';
+import { createMailTokenUtil } from 'src/util/mail-token';
 import { pageToResponse } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
@@ -61,7 +62,7 @@ const debug = Debug('crowi:hono:handlers:me');
 // `null | string`), so we forward `user.image` verbatim — no
 // `toUserImage` coercion. Only token endpoints, where the schema is
 // `z.string().optional()`, need `null → undefined`.
-const userToProfileResponse = (user: UserDocument, hasPassword: boolean) => ({
+const userToProfileResponse = (user: UserDocument, hasPassword: boolean, emailChangePending?: boolean) => ({
   id: user._id.toString(),
   username: user.username,
   name: user.name,
@@ -73,6 +74,7 @@ const userToProfileResponse = (user: UserDocument, hasPassword: boolean) => ({
   githubId: user.githubId,
   hasPassword,
   createdAt: user.createdAt.toISOString(),
+  ...(emailChangePending ? { emailChangePending: true } : {}),
 });
 
 const extractMongooseErrors = (err: unknown, fallback: string): string[] => {
@@ -158,6 +160,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         return c.json(
           {
             status: 'error' as const,
+            code: 'EMAIL_NOT_ALLOWED' as const,
             message: "You can't update to that email address",
             errors: ["You can't update to that email address"],
           },
@@ -171,6 +174,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         return c.json(
           {
             status: 'error' as const,
+            code: 'EMAIL_TAKEN' as const,
             message: 'It can not be changed to that mail address',
             errors: ['It can not be changed to that mail address'],
           },
@@ -179,14 +183,32 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
       }
 
       try {
+        // Email changes are not applied immediately — they require the
+        // user to confirm control of the new address via an emailed link.
+        // Name / lang apply right away.
+        const emailChangeRequested = email !== user.email;
         user.name = name;
-        user.email = email;
         user.lang = lang;
         await user.save();
 
+        if (emailChangeRequested) {
+          const mailer = crowi.getMailer();
+          const baseUrl = crowi.getBaseUrl() || '';
+          // Bind the token to the CURRENT email so it is single-use: once
+          // the address changes, a stale token (whose fromEmail no longer
+          // matches) is rejected and cannot revert the address later.
+          const { token } = createMailTokenUtil().signMailToken({ purpose: 'email-change', userId: user._id.toString(), email, fromEmail: user.email });
+          const confirmUrl = `${baseUrl}/confirm-email?token=${token}`;
+          // Fire-and-forget: do not block the profile response on SMTP.
+          void mailer
+            .send({ to: email, htmlTemplate: 'emailChange', lang: user.lang, vars: { ...mailer.brandVars(), confirmUrl, newEmail: email } })
+            // Best-effort: the address simply stays unchanged on failure.
+            .catch((err) => debug('failed to send email-change confirmation:', err));
+        }
+
         const userWithSecrets = await user.populateSecrets();
         const hasPassword = userWithSecrets.isPasswordSet();
-        return c.json(userToProfileResponse(user, hasPassword), 200);
+        return c.json(userToProfileResponse(user, hasPassword, emailChangeRequested), 200);
       } catch (err) {
         const errors = extractMongooseErrors(err, 'Failed to update profile');
         return c.json({ status: 'error' as const, message: errors[0], errors }, 400);
@@ -351,6 +373,11 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
             resolve(c.json({ status: 'error' as const, message: errors[0] || 'Failed to update password', errors }, 400));
             return;
           }
+          // Security notification — best-effort, never fails the change.
+          void crowi
+            .getMailer()
+            .sendPasswordChangedNotice(user.email, user.lang)
+            .catch((mailErr) => debug('failed to send password-changed notice:', mailErr));
           resolve(c.json({ status: 'ok' as const, message: 'Password updated' }, 200));
         });
       });

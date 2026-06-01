@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import async from 'async';
 import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth } from 'src/models/config';
+import { createMailTokenUtil } from 'src/util/mail-token';
 
 const STATUS_REGISTERED = 1;
 const STATUS_ACTIVE = 2;
@@ -33,6 +34,14 @@ export interface UserDocument extends Document {
   status: number;
   createdAt: Date;
   admin: boolean;
+  /**
+   * When the user confirmed control of their email address. Set on
+   * self-registration activation, invite acceptance, and for admin /
+   * installer-created accounts. `null` = unconfirmed (self-registered,
+   * pending the activation-link click). Login gates on `status`, not on
+   * this field, so existing ACTIVE users are unaffected.
+   */
+  emailConfirmedAt: Date | null;
 
   isPasswordSet(): boolean;
   isPasswordValid(password: string): boolean;
@@ -150,6 +159,7 @@ export default (crowi: Crowi) => {
     status: { type: Number, required: true, default: STATUS_ACTIVE, index: true },
     createdAt: { type: Date, default: Date.now },
     admin: { type: Boolean, default: false, index: true },
+    emailConfirmedAt: { type: Date, default: null },
   });
   userSchema.plugin(mongoosePaginate);
 
@@ -333,6 +343,8 @@ export default (crowi: Crowi) => {
     this.name = name;
     this.username = username;
     this.status = STATUS_ACTIVE;
+    // Clicking the invite link proves control of the email address.
+    this.emailConfirmedAt = new Date();
     this.save(function (err, userData) {
       userEvent.emit('activated', userData);
       return callback(err, userData);
@@ -690,31 +702,39 @@ export default (crowi: Crowi) => {
         }
 
         if (toSendEmail) {
-          // TODO: メール送信部分のロジックをサービス化する
+          const mailTokenUtil = createMailTokenUtil();
+          const brand = mailer.brandVars();
+          // Absolute base for the invite link (CLIENT_URL).
+          const baseUrl = crowi.getBaseUrl() || '';
+
           async.each(
             createdUserList,
-            function (user, next) {
-              if (user.password === null) {
+            function (item, next) {
+              // Skip rows that already existed or failed to save.
+              if (!item.user) {
                 return next();
               }
 
-              mailer.send(
-                {
-                  to: user.email,
-                  subject: 'Invitation to ' + config.crowi['app:title'],
-                  template: 'admin/userInvitation.txt',
-                  vars: {
-                    email: user.email,
-                    password: user.password,
-                    url: config.crowi['app:url'],
-                    appTitle: config.crowi['app:title'],
-                  },
-                },
-                function (err, s) {
-                  debug('completed to send email: ', err, s);
-                  next();
-                },
-              );
+              // Token-based invite link — no plaintext password is ever
+              // emailed; the invitee sets their own credentials on accept.
+              const { token } = mailTokenUtil.signMailToken({
+                purpose: 'invite',
+                userId: item.user._id.toString(),
+                email: item.email,
+              });
+              const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
+
+              mailer
+                .send({
+                  to: item.email,
+                  htmlTemplate: 'invite',
+                  vars: { ...brand, inviteUrl, email: item.email },
+                })
+                // A send failure must not abort user creation — log and
+                // continue so the remaining invitations still go out.
+                .then(() => debug('completed to send invitation to', item.email))
+                .catch((err) => debug('failed to send invitation email: ', err))
+                .finally(() => next());
             },
             function (err) {
               debug('Sending invitation email completed.', err);

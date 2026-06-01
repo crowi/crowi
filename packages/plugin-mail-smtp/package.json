@@ -1,0 +1,43 @@
+{
+  "name": "@crowi/plugin-mail-smtp",
+  "version": "0.1.0-dev",
+  "description": "SMTP mail sender for Crowi 2.0. Default-on; delivers core-assembled email over SMTP via nodemailer.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@crowi/plugin-api": "^0.1.0",
+    "zod": "catalog:"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.9"
+  },
+  "devDependencies": {
+    "@crowi/plugin-api": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/nodemailer": "^8.0.0",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}

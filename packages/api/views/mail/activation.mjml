@@ -1,0 +1,9 @@
+<mj-text font-size="20px" font-weight="700" padding="24px 24px 8px">{{ t.activation.heading }}</mj-text>
+<mj-text padding="0 24px 16px">{{ t.activation.intro }}</mj-text>
+<mj-button href="{{ activationUrl }}" background-color="#3b6e72" color="#ffffff" font-size="15px" font-weight="600" border-radius="8px" padding="8px 24px 20px" inner-padding="12px 28px">
+  {{ t.activation.cta }}
+</mj-button>
+<mj-text padding="0 24px 4px" font-size="13px" color="#6b7280">{{ t.activation.expiresNote }}</mj-text>
+<mj-text padding="0 24px 8px" font-size="13px" color="#6b7280">{{ t.common.linkFallback }}<br /><a href="{{ activationUrl }}" style="color:#3b6e72;word-break:break-all;">{{ activationUrl }}</a></mj-text>
+<mj-divider border-color="#eceef0" padding="12px 24px" />
+<mj-text padding="0 24px 16px" font-size="12px" color="#9aa0a6">{{ t.activation.ignoreNote }}</mj-text>

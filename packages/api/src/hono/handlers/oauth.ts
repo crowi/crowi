@@ -63,25 +63,6 @@ const DEVICE_POLL_INTERVAL_SEC = 5;
 /** Dev fallback web origin when `CLIENT_URL` is unset (matches `.env.example`). */
 const DEV_CLIENT_BASE_URL = 'http://localhost:4302';
 
-/**
- * Public base URL of the trusted web client (`CLIENT_URL`). Every
- * browser-facing OAuth URL (the discovery `issuer`, the authorize / device
- * consent pages) and every advertised API endpoint is built from this one
- * trusted origin.
- *
- * It is deliberately **not** derived from the request `Host` /
- * `X-Forwarded-Host` header: those are attacker-controllable, and a forged
- * Host would otherwise poison the discovery document and the device
- * `verification_uri` (sending a victim to an attacker's origin). RFC-0010's
- * earlier `app:url` was Host-derived and is no longer trusted — `CLIENT_URL`
- * is the single trusted client base URL. Falls back to the dev web origin
- * when unset; production deployments set `CLIENT_URL`.
- */
-const clientBaseUrl = (): string => {
-  const configured = process.env.CLIENT_URL?.trim();
-  return (configured || DEV_CLIENT_BASE_URL).replace(/\/$/, '');
-};
-
 const FORBIDDEN_BODY: ForbiddenError = {
   error: {
     code: 'FORBIDDEN',
@@ -165,6 +146,21 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
     }
     return { granted };
   };
+
+  /**
+   * Public base URL of the trusted web client — the single origin every
+   * browser-facing OAuth URL (discovery `issuer`, authorize / device consent
+   * pages) and every advertised API endpoint is built from.
+   *
+   * Sourced from `crowi.getBaseUrl()` (i.e. the `CLIENT_URL` env, the same
+   * trusted origin used for CORS and absolute email links — RFC-0010). It is
+   * deliberately **not** derived from the request `Host` / `X-Forwarded-Host`
+   * header: those are attacker-controllable, and a forged Host would poison
+   * the discovery document and the device `verification_uri`, steering a
+   * victim to an attacker origin. Falls back to the dev web origin when
+   * `CLIENT_URL` is unset (a fixed localhost, never the request Host).
+   */
+  const clientBaseUrl = (): string => (crowi.getBaseUrl() || DEV_CLIENT_BASE_URL).replace(/\/$/, '');
 
   return app
     .openapi(authorizeRoute, async (c) => {

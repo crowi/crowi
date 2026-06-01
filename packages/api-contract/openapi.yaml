@@ -4021,73 +4021,20 @@ components:
       properties:
         from:
           type: string
-        smtpHost:
+        activeDriver:
           type: string
-        smtpPort:
-          type: integer
-          minimum: 0
-          maximum: 65535
-        smtpUser:
+        activePlugin:
           type: string
-        smtpPassword:
-          type: object
-          properties:
-            hasValue:
-              type: boolean
-          required:
-            - hasValue
-        aws:
-          type: object
-          properties:
-            region:
-              type: string
-            accessKeyId:
-              type: string
-            secretAccessKey:
-              type: object
-              properties:
-                hasValue:
-                  type: boolean
-              required:
-                - hasValue
-          required:
-            - region
-            - accessKeyId
-            - secretAccessKey
       required:
         - from
-        - smtpHost
-        - smtpPort
-        - smtpUser
-        - smtpPassword
-        - aws
+        - activeDriver
+        - activePlugin
     UpdateMailSettingsRequest:
       type: object
       properties:
         from:
           type: string
           maxLength: 254
-        smtpHost:
-          type: string
-          maxLength: 255
-        smtpPort:
-          type: integer
-          minimum: 1
-          maximum: 65535
-        smtpUser:
-          type: string
-          maxLength: 255
-        smtpPassword:
-          type: string
-        aws:
-          type: object
-          properties:
-            region:
-              type: string
-            accessKeyId:
-              type: string
-            secretAccessKey:
-              type: string
     UpdateMailSettingsResponse:
       type: object
       properties:
@@ -4099,19 +4046,7 @@ components:
         - ok
     SendTestMailRequest:
       type: object
-      properties:
-        smtpHost:
-          type: string
-          maxLength: 255
-        smtpPort:
-          type: integer
-          minimum: 1
-          maximum: 65535
-        smtpUser:
-          type: string
-          maxLength: 255
-        smtpPassword:
-          type: string
+      properties: {}
     SendTestMailResponse:
       type: object
       properties:
@@ -4810,7 +4745,9 @@ paths:
     post:
       tags:
         - tokenAuth
-      summary: Register new user and receive tokens
+      summary: >-
+        Register a new user; sends an activation email or queues for admin
+        approval
       requestBody:
         content:
           application/json:
@@ -4833,45 +4770,22 @@ paths:
                 - email
                 - password
       responses:
-        '201':
-          description: Successful registration
+        '200':
+          description: >-
+            Registration accepted; activation pending (email confirmation or
+            admin approval)
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  accessToken:
+                  status:
                     type: string
-                  refreshToken:
-                    type: string
-                  expiresIn:
-                    type: number
-                  user:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                      username:
-                        type: string
-                      email:
-                        type: string
-                        format: email
-                      name:
-                        type: string
-                      image:
-                        type: string
-                      admin:
-                        type: boolean
-                    required:
-                      - id
-                      - username
-                      - email
-                      - name
+                    enum:
+                      - confirmation_required
+                      - approval_required
                 required:
-                  - accessToken
-                  - refreshToken
-                  - expiresIn
-                  - user
+                  - status
         '400':
           description: Registration failed (validation)
           content:
@@ -5342,6 +5256,8 @@ paths:
                     type: boolean
                   createdAt:
                     type: string
+                  emailChangePending:
+                    type: boolean
                 required:
                   - id
                   - username
@@ -5452,6 +5368,8 @@ paths:
                     type: boolean
                   createdAt:
                     type: string
+                  emailChangePending:
+                    type: boolean
                 required:
                   - id
                   - username
@@ -5472,6 +5390,8 @@ paths:
                     type: string
                     enum:
                       - error
+                  code:
+                    type: string
                   message:
                     type: string
                   errors:
@@ -5547,6 +5467,8 @@ paths:
                     type: string
                     enum:
                       - error
+                  code:
+                    type: string
                   message:
                     type: string
                   errors:
@@ -5613,6 +5535,8 @@ paths:
                     type: string
                     enum:
                       - error
+                  code:
+                    type: string
                   message:
                     type: string
                   errors:
@@ -19907,7 +19831,7 @@ paths:
         - admin.mail
       security:
         - bearerAuth: []
-      summary: Read the current Mail settings (SMTP + AWS SES, with secret masking)
+      summary: Read the sender-independent mail settings (from + active sender driver)
       responses:
         '200':
           description: Current mail settings
@@ -19918,46 +19842,14 @@ paths:
                 properties:
                   from:
                     type: string
-                  smtpHost:
+                  activeDriver:
                     type: string
-                  smtpPort:
-                    type: integer
-                    minimum: 0
-                    maximum: 65535
-                  smtpUser:
+                  activePlugin:
                     type: string
-                  smtpPassword:
-                    type: object
-                    properties:
-                      hasValue:
-                        type: boolean
-                    required:
-                      - hasValue
-                  aws:
-                    type: object
-                    properties:
-                      region:
-                        type: string
-                      accessKeyId:
-                        type: string
-                      secretAccessKey:
-                        type: object
-                        properties:
-                          hasValue:
-                            type: boolean
-                        required:
-                          - hasValue
-                    required:
-                      - region
-                      - accessKeyId
-                      - secretAccessKey
                 required:
                   - from
-                  - smtpHost
-                  - smtpPort
-                  - smtpUser
-                  - smtpPassword
-                  - aws
+                  - activeDriver
+                  - activePlugin
         '401':
           description: Authentication required
           content:
@@ -20013,7 +19905,7 @@ paths:
         - admin.mail
       security:
         - bearerAuth: []
-      summary: Update Mail settings — partial updates, secret masking on input
+      summary: Update the sender-independent mail settings (from address)
       requestBody:
         content:
           application/json:
@@ -20023,27 +19915,6 @@ paths:
                 from:
                   type: string
                   maxLength: 254
-                smtpHost:
-                  type: string
-                  maxLength: 255
-                smtpPort:
-                  type: integer
-                  minimum: 1
-                  maximum: 65535
-                smtpUser:
-                  type: string
-                  maxLength: 255
-                smtpPassword:
-                  type: string
-                aws:
-                  type: object
-                  properties:
-                    region:
-                      type: string
-                    accessKeyId:
-                      type: string
-                    secretAccessKey:
-                      type: string
       responses:
         '200':
           description: Update succeeded
@@ -20146,25 +20017,15 @@ paths:
         - admin.mail
       security:
         - bearerAuth: []
-      summary: Send a test mail to the calling admin (req.user.email) using SMTP
+      summary: >-
+        Send a test mail to the calling admin (req.user.email) via the active
+        sender
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                smtpHost:
-                  type: string
-                  maxLength: 255
-                smtpPort:
-                  type: integer
-                  minimum: 1
-                  maximum: 65535
-                smtpUser:
-                  type: string
-                  maxLength: 255
-                smtpPassword:
-                  type: string
+              properties: {}
       responses:
         '200':
           description: Test mail sent successfully

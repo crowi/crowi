@@ -106,17 +106,27 @@ describe('Routes /api/v2/auth (Hono)', () => {
       await User().deleteMany({ $or: [{ email: NEW_EMAIL }, { username: 'register-tester' }] });
     });
 
-    it('creates a new active user and returns 201 + tokens', async () => {
+    it('creates a registered (email-unconfirmed) user pending confirmation, without auto-login', async () => {
       const res = await request(app)
         .post('/api/v2/auth/register')
         .send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
 
-      expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({
-        accessToken: expect.any(String),
-        refreshToken: expect.any(String),
-        user: { email: NEW_EMAIL, username: 'register-tester' },
-      });
+      // No tokens: the account must confirm its email first.
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'confirmation_required' });
+      expect(res.body.accessToken).toBeUndefined();
+
+      const created = await User().findOne({ email: NEW_EMAIL });
+      expect(created?.status).toBe(User().STATUS_REGISTERED);
+      expect(created?.emailConfirmedAt ?? null).toBeNull();
+    });
+
+    it('blocks login with EMAIL_NOT_CONFIRMED until the account is activated', async () => {
+      await request(app).post('/api/v2/auth/register').send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
+
+      const res = await request(app).post('/api/v2/auth/login').send({ email: NEW_EMAIL, password: 'Password!1' });
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('EMAIL_NOT_CONFIRMED');
     });
 
     it('returns 409 USER_EXISTS when the email is already taken', async () => {
@@ -129,6 +139,32 @@ describe('Routes /api/v2/auth (Hono)', () => {
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('USER_EXISTS');
       await User().deleteMany({ username: 'duplicate-user' });
+    });
+
+    it('returns approval_required (no auto-login) under restricted registration', async () => {
+      const original = (await Config().loadAllConfig()) as { crowi: Record<string, unknown> };
+      const prev = original.crowi['security:registrationMode'];
+      await Config().updateConfig('crowi', 'security:registrationMode', Config().SECURITY_REGISTRATION_MODE_RESTRICTED);
+      await crowi.getConfigService().load();
+
+      try {
+        const res = await request(app)
+          .post('/api/v2/auth/register')
+          .send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ status: 'approval_required' });
+        expect(res.body.accessToken).toBeUndefined();
+
+        const created = await User().findOne({ email: NEW_EMAIL });
+        expect(created?.status).toBe(User().STATUS_REGISTERED);
+      } finally {
+        if (prev !== undefined) {
+          await Config().updateConfig('crowi', 'security:registrationMode', prev);
+        } else {
+          await Config().deleteOne({ ns: 'crowi', key: 'security:registrationMode' });
+        }
+        await crowi.getConfigService().load();
+      }
     });
 
     it('returns 403 REGISTRATION_CLOSED when admin has restricted signups', async () => {

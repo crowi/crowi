@@ -526,11 +526,12 @@ describe('Routes /api/v2/oauth (Hono)', () => {
 
     it('pins every URL to CLIENT_URL and ignores a forged Host header', async () => {
       // RFC-0010: the discovery / device URLs must come from the trusted
-      // CLIENT_URL origin, never the request Host (`app:url` was Host-derived
-      // and is no longer trusted). A forged Host must not leak into issuer /
-      // endpoints, otherwise a client could be steered to an attacker origin.
-      const prev = process.env.CLIENT_URL;
-      process.env.CLIENT_URL = 'https://wiki.example.com/';
+      // CLIENT_URL origin (crowi.getBaseUrl()), never the request Host. A
+      // forged Host must not leak into issuer / endpoints, otherwise a client
+      // could be steered to an attacker origin.
+      const env = crowi.getEnv() as { CLIENT_URL?: string };
+      const prev = env.CLIENT_URL;
+      env.CLIENT_URL = 'https://wiki.example.com/';
       try {
         const res = await request(app)
           .get('/api/v2/.well-known/oauth-authorization-server')
@@ -545,7 +546,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
         expect(res.body.device_authorization_endpoint).toBe('https://wiki.example.com/api/v2/oauth/device/authorize');
         expect(JSON.stringify(res.body)).not.toContain('evil.example.com');
       } finally {
-        process.env.CLIENT_URL = prev;
+        env.CLIENT_URL = prev;
       }
     });
   });

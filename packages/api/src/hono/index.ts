@@ -47,6 +47,10 @@ import { registerPresenceRoutes } from './handlers/presence';
 import { registerRevisionRoutes } from './handlers/revision';
 import { registerSearchRoutes } from './handlers/search';
 import { registerTokenAuthRoutes } from './handlers/tokenAuth';
+import { registerInviteAcceptRoutes } from './handlers/inviteAccept';
+import { registerPasswordResetRoutes } from './handlers/passwordReset';
+import { registerActivationRoutes } from './handlers/activation';
+import { registerEmailChangeRoutes } from './handlers/emailChange';
 import { registerUserRoutes } from './handlers/user';
 
 export { createHonoApp, createJwtAdminRequired, createJwtAuth, defaultHook, honoOnError } from './app';
@@ -79,15 +83,26 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withApp = registerAppRoutes(base, crowi);
   const withInstaller = registerInstallerRoutes(withApp, crowi);
   const withTokenAuth = registerTokenAuthRoutes(withInstaller, crowi);
-  const withMe = registerMeRoutes(withTokenAuth, crowi);
+  // Public invite-acceptance (token is the credential) — register before
+  // the auth-gated me/user routes.
+  const withInviteAccept = registerInviteAcceptRoutes(withTokenAuth, crowi);
+  // Public self-service password reset (token is the credential).
+  const withPasswordReset = registerPasswordResetRoutes(withInviteAccept, crowi);
+  // Public account activation (email confirmation; token is the credential).
+  const withActivation = registerActivationRoutes(withPasswordReset, crowi);
+  // Public email-change confirmation (token is the credential).
+  const withEmailChange = registerEmailChangeRoutes(withActivation, crowi);
+  const withMe = registerMeRoutes(withEmailChange, crowi);
   // RFC-0010 Phase 2 — PAT management (`/me/access-tokens`). MUST follow
   // `registerMeRoutes`: it rides that handler's broad `/me/*` jwtAuth
   // apply rather than installing its own (avoids a second User.findById).
   const withAccessToken = registerAccessTokenRoutes(withMe, crowi);
-  // RFC-0010 Phase 3 — OAuth authorization-server endpoints. `/oauth/token`,
-  // `/oauth/revoke`, `/.well-known/oauth-authorization-server` are public;
-  // `/oauth/authorize` installs its own per-path `createJwtAuth` (no prefix
-  // overlap with any other handler's broad apply, so it is self-contained).
+  // RFC-0010 Phase 3/4 — OAuth authorization-server endpoints. `/oauth/token`,
+  // `/oauth/revoke`, `/.well-known/oauth-authorization-server`,
+  // `/oauth/device/authorize` and `GET /oauth/device` are public;
+  // `/oauth/authorize` and `/oauth/device/verify` install their own per-path
+  // `createJwtAuth` (no prefix overlap with any other handler's broad apply,
+  // so they are self-contained).
   const withOAuth = registerOAuthRoutes(withAccessToken, crowi);
   const withUser = registerUserRoutes(withOAuth, crowi);
   const withBookmark = registerBookmarkRoutes(withUser, crowi);

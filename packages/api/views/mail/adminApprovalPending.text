@@ -1,0 +1,11 @@
+{{ t.adminApprovalPending.heading }}
+
+{{ t.adminApprovalPending.intro }}
+
+  {{ createdUserName }} <{{ createdUserEmail }}>
+
+{{ t.adminApprovalPending.cta }}: {{ adminUsersUrl }}
+
+--
+{{ appTitle }}
+{{ appUrl }}

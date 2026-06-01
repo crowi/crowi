@@ -69,16 +69,33 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     }
 
     try {
-      await updateProfile.mutateAsync({
+      const requestedEmail = formData.email;
+      const result = await updateProfile.mutateAsync({
         userForm: {
           name: formData.name,
           email: formData.email,
           lang: formData.lang,
         },
       });
-      setSuccessMessage(m['me.profile.success_save']());
+      if (result?.emailChangePending) {
+        // Email isn't applied until confirmed — revert the field to the
+        // current address and tell the user a confirmation link was sent.
+        setFormData((prev) => ({ ...prev, email: profile.email }));
+        setSuccessMessage(m['me.profile.email_change_pending']({ email: requestedEmail }));
+      } else {
+        setSuccessMessage(m['me.profile.success_save']());
+      }
     } catch (err) {
-      setErrors([err instanceof Error ? err.message : m['me.profile.error_save']()]);
+      const code = (err as { code?: string })?.code;
+      let message: string;
+      if (code === 'EMAIL_TAKEN') {
+        message = m['me.profile.error_email_taken']();
+      } else if (code === 'EMAIL_NOT_ALLOWED') {
+        message = m['me.profile.error_email_not_allowed']();
+      } else {
+        message = err instanceof Error ? err.message : m['me.profile.error_save']();
+      }
+      setErrors([message]);
     }
   };
 

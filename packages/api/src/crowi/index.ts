@@ -16,7 +16,7 @@ import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
 import { hasSlackConfig } from '../models/config';
-import mailer from 'src/util/mailer';
+import { MailService } from 'src/service/mail';
 import slack from 'src/util/slack';
 import { resetKeyProvider } from 'src/util/crypto';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
@@ -68,7 +68,7 @@ class Crowi {
   // FIXME after service/config typed
   config: any;
 
-  mailer: any = {};
+  mailer: MailService | null = null;
 
   lru: any = {};
 
@@ -338,18 +338,19 @@ class Crowi {
     return this.config;
   }
 
+  /**
+   * The site's public origin (the web app), used to build absolute URLs
+   * in emails (invite / activation / reset / email-change links) and for
+   * CORS. Sourced solely from the `CLIENT_URL` env — no fallback.
+   *
+   * Deliberately NOT derived from the incoming request: trusting the
+   * Host / Origin header here would let an attacker poison reset /
+   * activation links in a victim's inbox (host-header injection). When
+   * `CLIENT_URL` is unset this returns `null` and mail links fall back to
+   * relative paths — `setupMailer` warns about that at boot.
+   */
   getBaseUrl() {
-    if (this.baseUrl) {
-      return this.baseUrl;
-    }
-    const config = this.getConfig();
-    if (config && config.crowi && config.crowi['app:url']) {
-      return config.crowi['app:url'];
-    }
-
-    // This might be happend when env BASE_URL is not set and this is not an express request.
-    // While initialize express, config.crowi['app:url'] could be set be detecting accessing URL.
-    return null;
+    return this.env.CLIENT_URL || null;
   }
 
   getEnv() {
@@ -483,7 +484,10 @@ class Crowi {
     return this.pluginRegistries.active.search;
   }
 
-  getMailer() {
+  getMailer(): MailService {
+    if (!this.mailer) {
+      this.mailer = new MailService(this);
+    }
     return this.mailer;
   }
 
@@ -501,7 +505,22 @@ class Crowi {
   }
 
   setupMailer() {
-    this.mailer = mailer(this);
+    // The MailService resolves the active sender lazily from the plugin
+    // registry on each send, so there is no transport state to build
+    // here — just construct the service. Kept as a boot step so the
+    // boot sequence reads uniformly and future eager checks have a home.
+    this.mailer = new MailService(this);
+
+    // Absolute links in emails (invite / activation / reset /
+    // email-change) require a public origin. It comes solely from
+    // CLIENT_URL; without it links would be relative and unusable.
+    if (!this.getBaseUrl()) {
+      console.warn(
+        '[crowi] CLIENT_URL is not set — links in outgoing emails (invite / activation / password reset / ' +
+          'email change) will be relative and will not work. Set CLIENT_URL to the web app origin ' +
+          '(e.g. https://wiki.example.com).',
+      );
+    }
   }
 
   setupSlack() {

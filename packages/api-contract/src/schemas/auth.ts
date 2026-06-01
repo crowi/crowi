@@ -39,3 +39,14 @@ export const TokenAuthRegisterRequestSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 });
+
+/**
+ * Self-registration no longer auto-signs-in: the account must clear a
+ * gate first. `confirmation_required` = an activation email was sent
+ * (open registration with email confirmation); `approval_required` = an
+ * admin must approve (restricted registration).
+ */
+export const RegisterPendingResponseSchema = z.object({
+  status: z.enum(['confirmation_required', 'approval_required']),
+});
+export type RegisterPendingResponse = z.infer<typeof RegisterPendingResponseSchema>;

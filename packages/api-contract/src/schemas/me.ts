@@ -18,6 +18,12 @@ export const UserProfileResponseSchema = z.object({
   githubId: z.string().nullable().optional(),
   hasPassword: z.boolean(),
   createdAt: z.string(),
+  /**
+   * True when the profile update requested a new email that is awaiting
+   * confirmation: the stored `email` is unchanged and a confirmation
+   * link was sent to the new address.
+   */
+  emailChangePending: z.boolean().optional(),
 });
 export type UserProfileResponse = z.infer<typeof UserProfileResponseSchema>;
 
@@ -49,6 +55,8 @@ export type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
 // Error response schema for profile operations
 export const ProfileErrorResponseSchema = z.object({
   status: z.literal('error'),
+  /** Stable code so the web can localize the message (e.g. EMAIL_TAKEN). */
+  code: z.string().optional(),
   message: z.string().optional(),
   errors: z.array(z.string()).optional(),
 });
