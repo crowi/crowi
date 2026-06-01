@@ -7,8 +7,8 @@ import { apiClientV2 } from './api-client';
  * Query key factory for watch (notification subscription) queries.
  *
  * Watch state is kept on its own key (not piggy-backed on the page query)
- * because `watching` is not part of the page document and is derived from a
- * separate Watcher collection + getNotificationTargetUsers fallback.
+ * because `watching` is not part of the page document — it is the presence
+ * of an explicit WATCH row in the separate Watcher collection.
  * Toggling watch should NOT invalidate the page document cache.
  */
 export const watchKeys = {
@@ -16,9 +16,9 @@ export const watchKeys = {
   detail: (pageId: string) => ['watch', pageId] as const,
 };
 
-// The /pages/watch fallback path runs two distinct() queries on Comment and
-// Revision when no Watcher row exists. Hold the result in cache long enough
-// to survive header rerenders / window focus without re-hitting the API.
+// Watch status is a single Watcher lookup. Hold the result in cache long
+// enough to survive header rerenders / window focus without re-hitting the
+// API.
 const WATCH_STALE_TIME = 5 * 60 * 1000;
 
 /**
