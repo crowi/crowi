@@ -256,7 +256,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -271,7 +271,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -369,7 +369,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -384,7 +384,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -399,7 +399,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -503,7 +503,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -535,7 +535,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -11578,11 +11578,13 @@ export interface components {
     schemas: {
         ApiError: {
             error: {
-                code: string;
+                code: components["schemas"]["ErrorCode"];
                 message: string;
                 details?: unknown;
             };
         };
+        /** @enum {string} */
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "PASSWORD_AUTH_REQUIRES_THIRDPARTY" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
