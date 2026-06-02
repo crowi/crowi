@@ -22191,6 +22191,7 @@ paths:
                             - COMMENT
                             - LIKE
                             - MENTION
+                            - UPDATE
                         status:
                           type: string
                           enum:
@@ -22586,6 +22587,7 @@ paths:
                           - COMMENT
                           - LIKE
                           - MENTION
+                          - UPDATE
                       status:
                         type: string
                         enum:
