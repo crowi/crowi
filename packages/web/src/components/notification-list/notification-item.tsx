@@ -1,11 +1,11 @@
 'use client';
 
 import type { Notification } from '@crowi/api-contract';
-
-import { UserAvatar } from '@/components/user-avatar';
-import { cn } from '@/lib/utils';
-import { buildNotificationMessage, formatRelativeTime, isUnopenedNotification } from '@/lib/notification-format';
 import { m } from '@paraglide/messages.js';
+import { formatRelativeTime, isUnopenedNotification } from '@/lib/notification-format';
+import { cn } from '@/lib/utils';
+import { NotificationAvatar } from './notification-avatar';
+import { NotificationMessage } from './notification-message';
 
 interface NotificationItemProps {
   notification: Notification;
@@ -23,7 +23,6 @@ interface NotificationItemProps {
  */
 export function NotificationItem({ notification, onOpen }: NotificationItemProps) {
   const isUnread = isUnopenedNotification(notification);
-  const firstUser = notification.actionUsers[0];
 
   return (
     <button
@@ -36,13 +35,13 @@ export function NotificationItem({ notification, onOpen }: NotificationItemProps
         isUnread && 'bg-blue-50/40 dark:bg-blue-500/10',
       )}
     >
-      {firstUser ? (
-        <UserAvatar user={firstUser} size="md" className="mt-0.5 shrink-0" />
-      ) : (
-        <div className="mt-0.5 h-8 w-8 shrink-0 rounded-full bg-muted" aria-hidden />
-      )}
+      <div className="mt-0.5">
+        <NotificationAvatar user={notification.actionUsers[0]} action={notification.action} size="md" />
+      </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="text-sm break-all text-foreground">{buildNotificationMessage(notification)}</div>
+        <div className="text-sm break-words text-muted-foreground">
+          <NotificationMessage notification={notification} />
+        </div>
         <div className="text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</div>
       </div>
       {isUnread ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden aria-label={m['notifications.unread_aria']()} /> : null}
