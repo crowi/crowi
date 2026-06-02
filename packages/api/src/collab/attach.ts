@@ -131,8 +131,11 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
         // Same wire shape as `Page.updatePage` / `Page.createPage` so
         // api-side listeners (events/page.ts, events/render-cache.ts,
         // events/mention-dispatch.ts) don't need a collab-specific
-        // branch.
-        crowi.event('Page').emit(eventName, pageDoc, userDoc, payload.bookmarkCount ?? 0);
+        // branch. The 4th arg flags "a new revision was created": a collab
+        // save always pushes a new revision (save-flow Step 2), so
+        // forward `true` for 'update' so events/page.ts fans out an UPDATE
+        // notification on the realtime path too.
+        crowi.event('Page').emit(eventName, pageDoc, userDoc, payload.bookmarkCount ?? 0, eventName === 'update');
         debug('pageEventPublisher: emitted %s for page %s', eventName, payload.pageId);
       } catch (err) {
         // Save already committed — fan-out is best-effort.
