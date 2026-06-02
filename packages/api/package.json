@@ -29,7 +29,7 @@
   "license": "MIT",
   "scripts": {
     "start": "NODE_ENV=production node dist/app.js",
-    "dev": "cd ../.. && DEBUG=crowi:* NODE_ENV=development tsx watch --tsconfig packages/api/tsconfig.json --clear-screen=false packages/api/src/app.ts",
+    "dev": "cd ../.. && NODE_ENV=development tsx watch --tsconfig packages/api/tsconfig.json --clear-screen=false packages/api/src/app.ts",
     "lint": "eslint src/ --ext .ts,.tsx",
     "lint:fix": "eslint src/ --ext .ts,.tsx --fix",
     "test": "env -u DEBUG TZ=UTC jest --maxWorkers=5",
