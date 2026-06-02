@@ -21,14 +21,22 @@ import { PageSortMenu } from './page-sort-menu';
 import { PortalHeader, PortalOverline } from './portal-header';
 
 /**
- * A portal document leads its body with a markdown `# heading`, which we
- * let stand as the single page title (the header strip carries no title).
- * Only when the body has NO leading H1 do we fall back to rendering the
- * folder name as the title. Matches the first non-blank line against a
- * level-1 ATX heading (`# x`, not `## x`).
+ * A portal document whose body leads with a level-1 heading lets that
+ * heading stand as the single page title (the header strip carries no
+ * title); otherwise we fall back to rendering the folder name so the
+ * portal is never titleless.
+ *
+ * Checked against the persisted mdast (`renderedAst`) rather than the raw
+ * markdown so both ATX (`# x`) and setext (`x\n===`) level-1 headings are
+ * recognised — a raw-text regex would miss setext and reintroduce a
+ * double title.
  */
-function hasLeadingH1(body: string): boolean {
-  return /^\s*#[ \t]+\S/.test(body);
+function leadsWithH1(renderedAst: unknown): boolean {
+  if (!renderedAst || typeof renderedAst !== 'object') return false;
+  const children = (renderedAst as { children?: unknown }).children;
+  if (!Array.isArray(children) || children.length === 0) return false;
+  const first = children[0] as { type?: unknown; depth?: unknown } | null;
+  return !!first && first.type === 'heading' && first.depth === 1;
 }
 
 interface PageListProps {
@@ -142,10 +150,10 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
         <div>
           <PortalHeader page={portalPage} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(portalPage._id)}`)} />
           <div className="mt-6">
-            {/* The portal body's own `# heading` is the page title. Only
-                when it has none do we name the folder ourselves so the
-                portal is never titleless. */}
-            {!hasLeadingH1(portalPage.revision?.body ?? '') && (
+            {/* The portal body's own leading heading is the page title.
+                Only when it has none do we name the folder ourselves so
+                the portal is never titleless. */}
+            {!leadsWithH1(portalPage.revision?.renderedAst) && (
               <h1 className="mb-4 text-3xl font-bold leading-tight tracking-tight">{getPortalTitle(portalPage.path)}</h1>
             )}
             <PageContent page={portalPage} />

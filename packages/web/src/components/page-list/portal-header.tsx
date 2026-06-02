@@ -8,10 +8,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BookmarkButton } from '@/components/page-view/bookmark-button';
+import { GrantChip } from '@/components/page-view/page-header';
 import { PageActionsMenu } from '@/components/page-view/page-actions-menu';
 import { formatAbsoluteDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { resolveDisplayUser } from '@/lib/page-display-user';
 import { useAuth } from '@/lib/use-auth';
+import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 
 interface PortalHeaderProps {
   page: PageWithRevision;
@@ -39,6 +41,10 @@ interface PortalHeaderProps {
 export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
   const { user, isAuthenticated } = useAuth();
 
+  // Light the header accent strip for a non-public portal, exactly as the
+  // single-page view does — a portal can be restricted/private too.
+  usePageGrantAccent(page.grant);
+
   const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
 
   const displayUser = resolveDisplayUser(page);
@@ -51,6 +57,10 @@ export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
           <PortalOverline path={page.path} />
           <PortalTag />
+          {/* Sharing posture (lock / link chip) for a non-public portal —
+              restored from the shared page header so a restricted portal
+              still signals it is not public. */}
+          {page.grant != null && <GrantChip grant={page.grant} />}
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
             {isAuthenticated && <BookmarkButton pageId={page._id} />}
