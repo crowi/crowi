@@ -23,6 +23,7 @@ export interface ActivityModel extends Model<ActivityDocument> {
   removeByPageCommentDelete(comment: any): Promise<{ deletedCount: number }>;
   createByPageLike(page: any, user: any): Promise<ActivityDocument>;
   removeByPageUnlike(page: any, user: any): Promise<{ deletedCount: number }>;
+  createByPageUpdate(page: any, user: any): Promise<ActivityDocument>;
   createByPageMention(page: any, mentionedUser: any, author: any): Promise<ActivityDocument>;
   removeByPage(page: any): Promise<{ deletedCount: number }>;
   findByUser(user: any): Promise<ActivityDocument[]>;
@@ -157,6 +158,28 @@ export default (crowi: Crowi) => {
   };
 
   /**
+   * feature-page-update-notification: record a page body update (a new
+   * revision was created). Fanned out to every page watcher by the
+   * `Activity.post('save')` hook below — the same path COMMENT / LIKE
+   * use — so the editor (excluded as `actionUser`) does not get notified
+   * of their own save.
+   *
+   * @param {Page} page page document whose body was updated
+   * @param {User} user user who authored the new revision
+   * @return {Promise<ActivityDocument>}
+   */
+  activitySchema.statics.createByPageUpdate = function (page, user) {
+    const parameters = {
+      user: user._id,
+      targetModel: ActivityDefine.MODEL_PAGE,
+      target: page._id,
+      action: ActivityDefine.ACTION_UPDATE,
+    };
+
+    return this.createByParameters(parameters);
+  };
+
+  /**
    * RFC-0002 Phase 8: record a `@username` mention on a page save.
    *
    * Unlike comment / like, MENTION is dispatched per mentioned-user from
@@ -204,14 +227,25 @@ export default (crowi: Crowi) => {
     return activities.map(({ user }) => user).filter((user, i, self) => self.indexOf(user) === i);
   };
 
+  /**
+   * feature-watch-autosubscribe — watcher-only notification fan-out.
+   *
+   * The notification audience is now exactly the explicit WATCH watchers
+   * minus the IGNORE opt-outs, minus the action user, minus inactive
+   * users. The legacy implicit set (page creator + comment authors +
+   * revision authors via `Page.getNotificationTargetUsers()`) is no
+   * longer mixed in — participation now materialises a real WATCH row
+   * via `autoWatchPage` (events/page.ts + comment handler), so the
+   * watcher collection is the single source of truth for "who gets
+   * notified". This makes `getWatchStatus` exact and lets anyone
+   * plainly unwatch.
+   */
   activitySchema.methods.getNotificationTargetUsers = async function () {
     const User = crowi.model('User');
     const Watcher = crowi.model('Watcher');
-    const { user: actionUser, targetModel, target } = this;
+    const { user: actionUser, target } = this;
 
-    const model: any = await this.model(targetModel).findById(target);
-    const [targetUsers, watchUsers, ignoreUsers] = await Promise.all([
-      model.getNotificationTargetUsers(),
+    const [watchUsers, ignoreUsers] = await Promise.all([
       Watcher.getWatchers(target as any as Types.ObjectId),
       Watcher.getIgnorers(target as any as Types.ObjectId),
     ]);
@@ -221,7 +255,7 @@ export default (crowi: Crowi) => {
       const ids = pull.map((object) => object.toString());
       return array.filter((object) => !ids.includes(object.toString()));
     };
-    const notificationUsers = filter(unique([...targetUsers, ...watchUsers]), [...ignoreUsers, actionUser]);
+    const notificationUsers = filter(unique(watchUsers), [...ignoreUsers, actionUser]);
     const activeNotificationUsers = await User.find({
       _id: { $in: notificationUsers },
       status: User.STATUS_ACTIVE,

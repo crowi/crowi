@@ -3732,6 +3732,7 @@ export interface paths {
                                 commentPosition: number;
                                 createdAt: string;
                             };
+                            newlyWatching: boolean;
                         };
                     };
                 };
@@ -11884,7 +11885,7 @@ export interface paths {
                                     status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 };
                                 /** @enum {string} */
-                                action: "COMMENT" | "LIKE" | "MENTION";
+                                action: "COMMENT" | "LIKE" | "MENTION" | "UPDATE";
                                 /** @enum {string} */
                                 status: "UNREAD" | "UNOPENED" | "OPENED";
                                 actionUsers: {
@@ -12210,7 +12211,7 @@ export interface paths {
                                     status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
                                 };
                                 /** @enum {string} */
-                                action: "COMMENT" | "LIKE" | "MENTION";
+                                action: "COMMENT" | "LIKE" | "MENTION" | "UPDATE";
                                 /** @enum {string} */
                                 status: "UNREAD" | "UNOPENED" | "OPENED";
                                 actionUsers: {

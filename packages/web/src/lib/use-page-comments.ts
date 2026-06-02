@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
 import type { Comment } from '@crowi/api-contract';
+import { watchKeys } from './use-watch';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.comment.*`
@@ -74,6 +75,7 @@ export function usePageCommentsList(pageId: string | null | undefined) {
 
 export function useAddComment(pageId: string | null | undefined) {
   const invalidate = useInvalidateComments(pageId);
+  const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: async (input: { revisionId: string; comment: string; commentPosition?: number }) => {
@@ -88,11 +90,23 @@ export function useAddComment(pageId: string | null | undefined) {
       });
       if (response.ok) {
         const body = await response.json();
-        return body.comment;
+        // feature-watch-autosubscribe — `newlyWatching` is true only when
+        // this comment auto-created a fresh WATCH row. Returned alongside
+        // the comment so the UI can show a one-shot "now watching" hint.
+        return { comment: body.comment, newlyWatching: body.newlyWatching };
       }
       throw new Error(await extractErrorMessage(response, 'Failed to add comment'));
     },
-    onSuccess: () => invalidate(),
+    onSuccess: (result) => {
+      invalidate();
+      // Commenting always leaves the user as a watcher (unless they had
+      // explicitly ignored — in which case newlyWatching is false and the
+      // ignore stands). Keep the watch-status cache in sync so the header
+      // toggle reflects the new state without a refetch.
+      if (pageId && result.newlyWatching) {
+        queryClient.setQueryData<{ watching: boolean }>(watchKeys.detail(pageId), { watching: true });
+      }
+    },
   });
 
   return {

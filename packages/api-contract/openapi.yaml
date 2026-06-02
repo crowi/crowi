@@ -10574,8 +10574,11 @@ paths:
                       - revision
                       - comment
                       - createdAt
+                  newlyWatching:
+                    type: boolean
                 required:
                   - comment
+                  - newlyWatching
         '400':
           description: Invalid request body
           content:
@@ -23516,6 +23519,7 @@ paths:
                             - COMMENT
                             - LIKE
                             - MENTION
+                            - UPDATE
                         status:
                           type: string
                           enum:
@@ -23911,6 +23915,7 @@ paths:
                           - COMMENT
                           - LIKE
                           - MENTION
+                          - UPDATE
                       status:
                         type: string
                         enum:

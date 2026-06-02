@@ -28,6 +28,7 @@ import type Crowi from 'src/crowi';
 import type { CommentDocument } from 'src/models/comment';
 import type { PageDocument } from 'src/models/page';
 import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
+import { autoWatchPage } from 'src/util/auto-watch';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -79,6 +80,7 @@ const commentToResponse = (comment: CommentDocument) => {
 export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Comment = crowi.model('Comment');
   const Page = crowi.model('Page');
+  const Watcher = crowi.model('Watcher');
 
   app.use('/comments/*', createJwtAuth(crowi));
   app.use('/comments', createJwtAuth(crowi));
@@ -145,7 +147,21 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
         });
         const populated = (await created.populate('creator')) as CommentDocument;
 
-        return c.json({ comment: commentToResponse(populated) }, 200);
+        // feature-watch-autosubscribe — commenting auto-watches the page.
+        // Done synchronously here (not in the Comment post-save Activity
+        // hook, which fires asynchronously) so `newlyWatching` is accurate
+        // in this response. An existing IGNORE row is respected; an
+        // existing WATCH yields newlyWatching=false. Best-effort: a
+        // watcher failure must not fail the comment write.
+        let newlyWatching = false;
+        try {
+          const result = await autoWatchPage(Watcher, user._id, new Types.ObjectId(page_id));
+          newlyWatching = result.newlyWatching;
+        } catch (watchErr) {
+          debug('Error auto-watching page on comment:', (watchErr as Error).message);
+        }
+
+        return c.json({ comment: commentToResponse(populated), newlyWatching }, 200);
       } catch (err) {
         const error = err as Error;
         debug('Error adding comment:', error.message);

@@ -15936,10 +15936,14 @@
                         "comment",
                         "createdAt"
                       ]
+                    },
+                    "newlyWatching": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "comment"
+                    "comment",
+                    "newlyWatching"
                   ]
                 }
               }
@@ -35840,7 +35844,8 @@
                             "enum": [
                               "COMMENT",
                               "LIKE",
-                              "MENTION"
+                              "MENTION",
+                              "UPDATE"
                             ]
                           },
                           "status": {
@@ -36448,7 +36453,8 @@
                           "enum": [
                             "COMMENT",
                             "LIKE",
-                            "MENTION"
+                            "MENTION",
+                            "UPDATE"
                           ]
                         },
                         "status": {
