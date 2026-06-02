@@ -25,32 +25,26 @@ interface NotificationAvatarProps {
   size: 'sm' | 'md';
 }
 
-const AVATAR_PLACEHOLDER = {
-  sm: 'h-6 w-6',
-  md: 'h-8 w-8',
-} as const;
-
-const BADGE = {
-  sm: 'h-3.5 w-3.5 -right-1 -bottom-1',
-  md: 'h-4 w-4 -right-1 -bottom-1',
-} as const;
-
-const BADGE_ICON = {
-  sm: 'h-2 w-2',
-  md: 'h-2.5 w-2.5',
+const SIZE_CONFIG = {
+  sm: { avatar: 'h-6 w-6', badge: 'h-3.5 w-3.5 -right-1 -bottom-1', icon: 'h-2 w-2' },
+  md: { avatar: 'h-8 w-8', badge: 'h-4 w-4 -right-1 -bottom-1', icon: 'h-2.5 w-2.5' },
 } as const;
 
 export function NotificationAvatar({ user, action, size }: NotificationAvatarProps) {
   const Icon = ACTION_ICONS[action];
+  const sizes = SIZE_CONFIG[size];
 
   return (
-    <div className="relative shrink-0">
-      {user ? <UserAvatar user={user} size={size} /> : <div className={cn('rounded-full bg-muted', AVATAR_PLACEHOLDER[size])} aria-hidden />}
+    // mt-0.5 aligns the avatar with the first line of the message text; both
+    // the bell row and the list item want the same alignment, so the avatar
+    // owns it rather than each call site wrapping it.
+    <div className="relative mt-0.5 shrink-0">
+      {user ? <UserAvatar user={user} size={size} /> : <div className={cn('rounded-full bg-muted', sizes.avatar)} aria-hidden />}
       <span
-        className={cn('absolute flex items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border', BADGE[size])}
+        className={cn('absolute flex items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border', sizes.badge)}
         aria-hidden
       >
-        <Icon className={BADGE_ICON[size]} />
+        <Icon className={sizes.icon} />
       </span>
     </div>
   );

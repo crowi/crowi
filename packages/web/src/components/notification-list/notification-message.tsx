@@ -20,8 +20,9 @@ export function NotificationMessage({ notification }: { notification: Notificati
             {segment.text}
           </strong>
         ) : (
-          // biome-ignore lint/suspicious/noArrayIndexKey: segments are a stable render-only split of one string
-          <span key={i}>{segment.text}</span>
+          // Plain runs need no wrapper — a bare string in the array carries
+          // its position implicitly (only the <strong> elements need a key).
+          segment.text
         ),
       )}
     </>

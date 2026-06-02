@@ -35,9 +35,7 @@ export function NotificationItem({ notification, onOpen }: NotificationItemProps
         isUnread && 'bg-blue-50/40 dark:bg-blue-500/10',
       )}
     >
-      <div className="mt-0.5">
-        <NotificationAvatar user={notification.actionUsers[0]} action={notification.action} size="md" />
-      </div>
+      <NotificationAvatar user={notification.actionUsers[0]} action={notification.action} size="md" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="text-sm break-words text-muted-foreground">
           <NotificationMessage notification={notification} />
