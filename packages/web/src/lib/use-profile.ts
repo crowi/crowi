@@ -130,33 +130,3 @@ export function useUpdatePassword() {
     },
   });
 }
-
-export function useApiToken() {
-  return useQuery({
-    queryKey: ['apiToken'],
-    queryFn: async () => {
-      const response = await apiClientV2.me.apiToken.$get();
-      if (!response.ok) {
-        throw new Error('Failed to fetch API token');
-      }
-      return response.json();
-    },
-  });
-}
-
-export function useResetApiToken() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      const response = await apiClientV2.me.apiToken.$post();
-      if (response.status === 200) {
-        return response.json();
-      }
-      throw new Error('Failed to reset API token');
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['apiToken'] });
-    },
-  });
-}

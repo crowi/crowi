@@ -54,6 +54,8 @@ import {
   draftRoutes,
   installerRoutes,
   meRoutes,
+  accessTokenRoutes,
+  oauthRoutes,
   notificationRoutes,
   pageCollabRoutes,
   pagePreviewRoutes,
@@ -105,6 +107,18 @@ import {
   ListPluginsResponseSchema,
   MailSettingsValidationErrorSchema,
   MentionSchema,
+  AuthorizeRequestSchema,
+  AuthorizeResponseSchema,
+  DeviceAuthorizeRequestSchema,
+  DeviceAuthorizeResponseSchema,
+  DeviceInfoResponseSchema,
+  DeviceVerifyRequestSchema,
+  DeviceVerifyResponseSchema,
+  DiscoveryResponseSchema,
+  OAuthErrorSchema,
+  RevokeRequestSchema,
+  TokenRequestSchema,
+  TokenResponseSchema,
   NotFoundErrorSchema,
   PageNotFoundErrorSchema,
   PageNotGrantedErrorSchema,
@@ -178,6 +192,22 @@ const schemas = [
   ['NotFoundError', NotFoundErrorSchema],
   ['ConflictError', ConflictErrorSchema],
   ['ServiceUnavailableError', ServiceUnavailableErrorSchema],
+
+  // oauth (RFC-0010 Phase 3)
+  ['OAuthError', OAuthErrorSchema],
+  ['AuthorizeRequest', AuthorizeRequestSchema],
+  ['AuthorizeResponse', AuthorizeResponseSchema],
+  ['TokenRequest', TokenRequestSchema],
+  ['TokenResponse', TokenResponseSchema],
+  ['RevokeRequest', RevokeRequestSchema],
+  ['DiscoveryResponse', DiscoveryResponseSchema],
+
+  // oauth device grant (RFC-0010 Phase 4 / RFC 8628)
+  ['DeviceAuthorizeRequest', DeviceAuthorizeRequestSchema],
+  ['DeviceAuthorizeResponse', DeviceAuthorizeResponseSchema],
+  ['DeviceInfoResponse', DeviceInfoResponseSchema],
+  ['DeviceVerifyRequest', DeviceVerifyRequestSchema],
+  ['DeviceVerifyResponse', DeviceVerifyResponseSchema],
 
   // user / shared
   ['UserPublic', UserPublicSchema],
@@ -278,6 +308,13 @@ const routeGroups = [
   installerRoutes,
   tokenAuthRoutes,
   meRoutes,
+  // RFC-0010 Phase 2 — PAT management rides the `/me/*` apply; registered
+  // right after meRoutes to mirror the buildHonoApp chain.
+  accessTokenRoutes,
+  // RFC-0010 Phase 3 — OAuth authorization-server endpoints (authorize /
+  // token / revoke / discovery). Registered after access-token to mirror
+  // the buildHonoApp chain.
+  oauthRoutes,
   userRoutes,
   bookmarkRoutes,
   backlinkRoutes,

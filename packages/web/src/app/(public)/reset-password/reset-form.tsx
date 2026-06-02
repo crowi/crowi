@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormErrorList } from '@/components/ui/form-error-list';
 import { apiClientV2 } from '@/lib/api-client';
+import { errorMessage } from '@/lib/error-message';
 import { storeTokens } from '@/lib/auth-token';
 import { m } from '@paraglide/messages.js';
 
@@ -55,7 +56,8 @@ export function ResetPasswordForm() {
         router.push('/');
       } else {
         const body = await res.json();
-        setErrors([('error' in body && body.error?.message) || m['auth.reset.error']()]);
+        const error = 'error' in body ? body.error : undefined;
+        setErrors([errorMessage(error?.code, error?.message || m['auth.reset.error']())]);
       }
     } catch {
       setErrors([m['auth.common.server_error']()]);

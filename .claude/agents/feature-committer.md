@@ -50,7 +50,8 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
      - git commit (HEREDOC で渡す)
      - エラーなら中止して報告
 5. task ファイルの status を COMMITTED に更新 + commitInfo を記録
-6. 報告
+6. spec ファイルの後始末 (下記「spec の後始末」参照)
+7. 報告
 ```
 
 ## commitPlan の処理
@@ -140,6 +141,27 @@ git diff --cached --name-only | grep -E '\.feature-state/|\.migration-state/'
 
 `.feature-state/` は gitignore されているので、この更新自体はコミットに含まれない。
 
+## spec の後始末
+
+実装が完了したら spec ファイル (`.feature-state/specs/{id}.md`) を **削除する** のも
+committer の責務。実装済み spec が `specs/` に溜まり続けないようにするため。
+
+**削除する条件 (すべて満たすときだけ)**:
+- task 全体の `status` が `COMMITTED` になった (= 全 commit が landed)。
+- **残タスク / 残 phase が無い**。具体的には:
+  - single-phase task → status が COMMITTED ならそのまま削除可。
+  - multi-phase task → **全 phase が COMMITTED** のときのみ削除。1 つでも
+    PLANNED / NEEDS_WORK / gated (autoContinue=false 未通過) phase が残っていれば
+    **削除しない** (後続 phase が spec を読むため)。
+  - status が PARTIALLY_COMMITTED → **削除しない**。
+
+**削除しない場合**は spec をそのまま残し、報告にその旨 (「残 phase あり / 部分コミットの
+ため spec は保持」) を明記する。
+
+削除は `.feature-state/specs/{id}.md` のみ。**task ファイル (`tasks/{id}.json`) は
+履歴・commitInfo を持つので削除しない** (queue から currentTask=null にするのは従来通り)。
+spec は gitignore 配下なので削除もコミットには影響しない (`git` 操作不要、ファイル削除のみ)。
+
 ## 出力 (報告フォーマット)
 
 ```
@@ -172,5 +194,5 @@ Push / PR: 未実施 (ユーザー指示待ち)
 
 - commitPlan の順序を尊重する (api-contract → api → web → test → docs が典型)
 - 1 commit が大きすぎる場合は reviewer に差し戻して分割提案を求める
-- spec.md は **編集しない**
+- spec.md は **編集しない** (ただし task 全体完了時の削除は「spec の後始末」に従う)
 - `.feature-state/` (root) を使うこと

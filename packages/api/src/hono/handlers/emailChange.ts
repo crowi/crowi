@@ -49,7 +49,7 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
 
         const user = await User.findById(payload.userId);
         if (!user) {
-          return c.json({ error: { code: 'USER_NOT_FOUND', message: 'User no longer exists' } }, 404);
+          return c.json({ error: { code: 'USER_NOT_FOUND' as const, message: 'User no longer exists' } }, 404);
         }
 
         // Single-use binding: the token carries the account's email at
@@ -64,7 +64,7 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
         // the request and the confirmation.
         const clash = await User.findOne({ email: payload.email });
         if (clash && clash._id.toString() !== user._id.toString()) {
-          return c.json({ error: { code: 'EMAIL_TAKEN', message: 'That email address is already in use' } }, 409);
+          return c.json({ error: { code: 'EMAIL_TAKEN' as const, message: 'That email address is already in use' } }, 409);
         }
 
         user.email = payload.email;

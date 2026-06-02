@@ -99,20 +99,6 @@ export const PasswordErrorResponseSchema = z.object({
 });
 export type PasswordErrorResponse = z.infer<typeof PasswordErrorResponseSchema>;
 
-// API Token response schema
-export const ApiTokenResponseSchema = z.object({
-  status: z.literal('ok'),
-  apiToken: z.string(),
-});
-export type ApiTokenResponse = z.infer<typeof ApiTokenResponseSchema>;
-
-// API Token error response schema
-export const ApiTokenErrorResponseSchema = z.object({
-  status: z.literal('error'),
-  message: z.string(),
-});
-export type ApiTokenErrorResponse = z.infer<typeof ApiTokenErrorResponseSchema>;
-
 export const RecentlyViewedPagesResponseSchema = z.object({
   pages: z.array(PageSchema),
 });

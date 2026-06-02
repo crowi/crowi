@@ -36,6 +36,7 @@ import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 
 import { PAGE_NOT_FOUND_BODY, invalidRequestBody } from './_helpers/errors';
 
@@ -79,6 +80,9 @@ const revisionToMetaResponse = (revision: RevisionDocument) => {
     // Omit `.contributors` entirely (not `[]`) when undefined so the
     // pre-RFC-0003 shape stays byte-identical.
     ...(contributors !== undefined ? { contributors } : {}),
+    // RFC-0010 — edit channel for the history "app" chip; omitted when
+    // absent (pre-RFC-0010 / collab / web) to keep the legacy shape.
+    ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
   };
 };
@@ -92,6 +96,11 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
   // factory output.
   app.use('/pages/*', createJwtAuth(crowi));
   app.use('/pages', createJwtAuth(crowi));
+
+  // RFC-0010 — revision reads are page reads.
+  applyScope(app, listRevisionsRoute, 'pages:read');
+  applyScope(app, getRevisionsRoute, 'pages:read');
+  applyScope(app, getRevisionRoute, 'pages:read');
 
   return (
     app
@@ -115,7 +124,7 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
           // One round-trip: chained .populate() calls collapse to a
           // single `$lookup` stage. fetch +1 to derive hasNext.
           const allRevisions = await Revision.find({ path: page.path })
-            .select('_id path author savedBy contributors createdAt')
+            .select('_id path author savedBy contributors editVia createdAt')
             .sort({ createdAt: -1 })
             .skip(offset)
             .limit(limit + 1)

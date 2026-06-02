@@ -4,11 +4,31 @@ import Debug from 'debug';
 
 const debug = Debug('crowi:util:jwt');
 
-interface TokenPayload {
-  userId: string;
-  email: string;
-  type: 'access' | 'refresh';
-}
+/**
+ * Web session tokens (`access` / `refresh`) carry no scope claim and are
+ * treated as "all scopes" by the auth middleware. OAuth access tokens
+ * (RFC-0010) add a space-delimited `scope` claim (RFC 6749 §3.3) and the
+ * issuing `client_id`. Modelled as a discriminated union on `type` so
+ * only `oauth_access` payloads expose `scope` / `client_id` — web-session
+ * callers can never accidentally read a scope off a session token.
+ */
+export type TokenPayload =
+  | {
+      userId: string;
+      email: string;
+      type: 'access' | 'refresh';
+    }
+  | {
+      userId: string;
+      email: string;
+      type: 'oauth_access';
+      /** space-delimited scope claim (RFC 6749 §3.3) */
+      scope: string;
+      client_id: string;
+    };
+
+/** Token types a Bearer credential may carry through `verifyToken`. */
+export type VerifiableTokenType = TokenPayload['type'];
 
 /**
  * Access / refresh token lifetimes in seconds. Env-overridable; the
@@ -52,20 +72,57 @@ export function createJwtUtil(crowi: Crowi) {
   }
 
   /**
-   * Verify and decode a token
+   * Sign a scope-bearing OAuth access token (RFC-0010). The real issuing
+   * path (`POST /oauth/token`) lands in Phase 3; this helper exists so
+   * Phase 1's scope-aware middleware can be exercised end-to-end in tests
+   * (mint a token with a known scope, assert `requireScope` accepts /
+   * rejects it). `scopes` is space-joined into the `scope` claim per
+   * RFC 6749 §3.3. The web-session `generateTokens` path is untouched.
    */
-  function verifyToken(token: string, type: 'access' | 'refresh'): TokenPayload | null {
+  function signOauthAccessToken(params: {
+    user: { _id: { toString(): string }; email: string };
+    scopes: readonly string[];
+    clientId: string;
+    expiresInSec?: number;
+  }): string {
+    const { user, scopes, clientId, expiresInSec } = params;
+    return jwt.sign(
+      {
+        userId: user._id.toString(),
+        email: user.email,
+        type: 'oauth_access',
+        scope: scopes.join(' '),
+        client_id: clientId,
+      },
+      secret,
+      {
+        expiresIn: expiresInSec ?? ACCESS_TOKEN_TTL_SEC,
+        issuer: 'crowi',
+      },
+    );
+  }
+
+  /**
+   * Verify and decode a token. `type` may be a single accepted type or a
+   * list — passing `['access', 'oauth_access']` lets the unified Bearer
+   * middleware accept both web-session and OAuth access tokens in one
+   * call while still rejecting refresh tokens presented as access. The
+   * decoded payload is the `TokenPayload` discriminated union, so callers
+   * narrow on `payload.type` to read `scope` / `client_id`.
+   */
+  function verifyToken<T extends VerifiableTokenType>(token: string, type: T | readonly T[]): (TokenPayload & { type: T }) | null {
+    const accepted = Array.isArray(type) ? type : [type as T];
     try {
       const decoded = jwt.verify(token, secret, {
         issuer: 'crowi',
       }) as TokenPayload;
 
-      if (decoded.type !== type) {
-        debug(`Invalid token type. Expected ${type}, got ${decoded.type}`);
+      if (!accepted.includes(decoded.type as T)) {
+        debug(`Invalid token type. Expected ${accepted.join('|')}, got ${decoded.type}`);
         return null;
       }
 
-      return decoded;
+      return decoded as TokenPayload & { type: T };
     } catch (error) {
       debug('Token verification failed:', error);
       return null;
@@ -109,6 +166,7 @@ export function createJwtUtil(crowi: Crowi) {
 
   return {
     generateTokens,
+    signOauthAccessToken,
     verifyToken,
     extractTokenFromHeader,
     refreshAccessToken,

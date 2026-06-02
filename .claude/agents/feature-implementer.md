@@ -48,6 +48,16 @@ planner が用意した task ファイルを読んで、Hono API / Next.js UI / 
 # 契約を編集した場合 (build しないと dist が古いまま)
 pnpm --filter @crowi/api-contract build
 
+# 契約 (contracts / schemas) を変更した場合は OpenAPI 成果物も再生成する。
+# build (dts) と generate (openapi.{json,yaml} + src/generated/openapi.ts) は別物で、
+# 再生成漏れは pre-push の `check:openapi` ガードで push 時に初めて落ちる。実装フェーズで
+# 必ず捕まえる:
+pnpm --filter @crowi/api-contract generate   # api-contract の contracts/schemas を触ったとき
+pnpm check:openapi                            # ✓ in sync を確認 (成果物が drift していれば fail)
+# → 変更された openapi.json / openapi.yaml / src/generated/openapi.ts を commitPlan に含める
+#   (api-contract の chore commit として。pre-commit format は lefthook の
+#    --no-errors-on-unmatched で生成物を素通しするので普通に commit できる)
+
 # 型チェック (必須)
 pnpm --filter @crowi/api type-check
 pnpm --filter @crowi/web type-check  # web を編集した場合

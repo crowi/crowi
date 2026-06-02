@@ -22,6 +22,49 @@ Crowi 2.0 移行 (Express + Swig → Next.js + Hono)。フェーズ別。
 - [ ] **Step 10: auth provider plugin 化** — Google / GitHub OAuth を plugin に切り出し (フェーズ 4 の admin OAuth 設定と一緒に)
 - [ ] **将来**: encryption KeyProvider plugin (KMS 系)、attachment storage の S3 以外プロバイダ
 
+## High Priority — OAuth 2.0 & Scoped API Access (RFC-0010)
+
+`docs/rfcs/0010-oauth-and-api-access.md`。Crowi 自身を OAuth プロバイダ化し、
+CLI/SDK がスコープ付きトークンで API を叩けるようにする multi-phase 機能。
+
+- [x] **Phase 1: scope 基盤** — `SCOPES` catalog + `scopeSatisfies` (含意ルール) を
+  `@crowi/api-contract` に集約、`util/jwt.ts` を `oauth_access` claim 対応に拡張、
+  `createJwtAuth` を scope-aware 化 (web セッション = 全 scope で挙動不変)、
+  `requireScope(scope)` middleware を page/revision/draft/backlink/search/
+  autocomplete/comment/bookmark/attachment/notification/me/user の各ルートに
+  method 別付与。不足時 403 `INSUFFICIENT_SCOPE` + `WWW-Authenticate`
+- [x] **Phase 2: Personal Access Token + legacy apiToken 廃止** — `PersonalAccessToken`
+  model (SHA-256 hash 保存 / scope / 期限 / 失効) + `GET/POST/DELETE /me/access-tokens`
+  (発行時のみ平文 `crowi_pat_…` を返す) + 設定画面の PAT 発行/一覧/失効 UI、
+  `createJwtAuth` の `crowi_pat_` 受理 (scope 適用 / 期限切れ・失効を弾く / `lastUsedAt` 更新)。
+  発行可能 scope は `admin:*` を除外、PAT 管理 API は web セッション専用 (403 `FORBIDDEN`)。
+  legacy `User.apiToken` / `generateApiToken` / `findUserByApiToken` / 未使用
+  `accessTokenParser` / `GET/POST /me/apiToken` を fallback なしで完全削除
+- [x] **Phase 3: Authorization Code + PKCE + discovery** — `OAuthClient` /
+  `OAuthAuthorizationCode` (TTL) / `OAuthRefreshToken` (rotation + reuse 検知)
+  model、first-party `crowi-cli` の boot 冪等 seed、`POST /oauth/authorize`
+  (web セッション限定・PKCE S256・loopback redirect 任意ポート許可) /
+  `POST /oauth/token` (authorization_code + refresh_token rotation、form +
+  JSON 受理) / `POST /oauth/revoke` (refresh / PAT、RFC 7009) /
+  `GET /.well-known/oauth-authorization-server` (RFC 8414 discovery)、
+  Next.js 同意画面 `(auth)/oauth/authorize` (all-or-nothing consent)
+- [x] **Phase 4: Device Authorization Grant (RFC 8628)** — `OAuthDeviceCode`
+  model (TTL ~10min / `deviceCodeHash` + `userCode` unique index / status
+  pending→approved|denied / atomic single-use `consume`)、`user_code` ジェネレータ
+  (`BCDFGHJKMNPQRSTVWXZ` + 数字、`ABCD-1234`、紛らわしい文字除外 + normalize)、
+  公開 `POST /oauth/device/authorize` (client+scope 検証は authorize と共通化) /
+  `POST /oauth/token` の `urn:ietf:params:oauth:grant-type:device_code` grant
+  (pending→authorization_pending / 早ポーリング→slow_down / denied→access_denied /
+  expired→expired_token / approved→単回消費して issueTokens) / 公開
+  `GET /oauth/device` (user_code→client+requestedScopes lookup) /
+  web セッション限定 `POST /oauth/device/verify` (approve/deny)、discovery に
+  device grant URN + `device_authorization_endpoint` 追加、Next.js
+  `(auth)/oauth/device` 入力 + 同意画面 (Phase 3 `ConsentCard` 再利用、
+  `verification_uri_complete` から prefill、完了後 CLI 復帰案内)
+- [x] **OAuth 基盤 (RFC-0010 Phase 1-4) 全体完了** — scope 基盤 / PAT + legacy
+  apiToken 廃止 / Authorization Code + PKCE + discovery / Device Authorization
+  Grant。admin による任意 OAuth クライアント登録 UI (将来 Phase 5) のみ未着手
+
 ## High Priority — 横断的 advisory (累積)
 
 - [x] **UI 共通化** (`2c390a55`): `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出。9 ファイル / 13 サイトで重複削減
@@ -81,6 +124,15 @@ Crowi 2.0 移行 (Express + Swig → Next.js + Hono)。フェーズ別。
   - **Simplification (MEDIUM)**: web 認証フォームの重複 — (a) token を searchParams から取り token 有無で初期 state を derive するパターンが activate/confirm/reset/accept で重複 → `useTokenFromUrl()` hook、(b) activate/confirm の「mount で auto-POST + `useRef(started)` で StrictMode 二重実行ガード」が重複 → `useAsyncOnce(token, fn)` hook
   - **Reuse (LOW)**: `installer-form.tsx` も同じ error-list markup を持つ。今回 merge 非対象なので触らず据え置き。`FormErrorList` に寄せれば 5 フォーム完全統一
   - **Skip 済み (micro-opt / 実コストなし、記録のみ)**: `createMailTokenUtil()` の per-request 生成 (tokenAuth/me) は fallback secret が process-wide memoize 済みで実害なし。`service/mail.ts` の `send()` が `getFrom`/`defaultSubject`/`brandVars` で `crowi.getConfig()` を 3 回読むのは in-memory cache なので I/O 無し。`LoadingSpinner`/`ErrorAlert` への置換は「ページ読込失敗/中」用プリミティブでフォーム submit 状態とは意味が異なり mismatch のため見送り
+- [ ] **feature-shared-error-codes-i18n follow-up (reviewer/simplify deferred)** — 共有 ErrorCode 台帳 + web `errorMessage()` 規約導入時の積み残し:
+  - **Reuse (LOW)**: `schemas/common.ts` の各 `*ErrorSchema` の `z.literal(...)` が台帳 `ERROR_CODES` と型リンクされず二重管理。`z.literal` を `ErrorCode` メンバから導出する形へ single-source 化 (構造変更のため別タスク)
+  - **Quality (LOW)**: `VALIDATION_ERROR` の `details.fieldErrors` を使ったフィールド単位のフォーム表示 (現状 `errorMessage()` は汎用文言のみ返す)
+  - **Reuse (LOW)**: admin 保存系フォーム (mail / plugins / users) の web 表示も `errorMessage()` 経由へ横展開 (本 AC 範囲外、規約として TODO 化)
+  - **Quality (LOW)**: ハンドラ側の英語 fallback message (`INVALID_CREDENTIALS_BODY` 等) と paraglide 文言が別管理 (code 一致時は paraglide が勝つため画面表示には影響なし)。fallback 英語更新時に ja 別途要更新
+- [ ] **feature-editor-session-reauth follow-up (reviewer advisory 由来、non-blocking)** — エディタ画面のセッション切れインライン再認証の堅牢化:
+  - **Quality (LOW)**: `session-reauth-context.tsx` の `refetchTokens` コメント (および `(auth)/layout.tsx` の redirect 抑止コメント) を実態に合わせて修正。`use-collab-document.ts` / `use-presence.ts` は provider / 接続を `[pageId, wsToken]` / `[pageId, token]` の **値変化** でのみ再構築するため、collab / presence の再接続は `invalidateQueries(refetchType:'active')` が effect を再走させる事実ではなく **token 値が変わる** ことに依存する。コメントの根拠を「token 値変化に依存」に直す
+  - **Quality (LOW, future hardening)**: `wsToken` / `presence-token` の `iat` が `Math.floor(Date.now()/1000)` の秒粒度のため、同一秒内に refetch すると byte-identical な token が返り reconnect が skip され得るエッジ。現実の再認証 (パスワード入力 + 往復で >1s) では token 値が必ず変わるので AC5 は満たされるが、`onAuthenticationFailed` (terminal auth-failed) 後に同値 token が返ると provider が terminal に留まる理論リスクがある。token query に世代カウンタ / nonce を混ぜて強制再構築する or wsToken に jti を付与して堅牢化する (実用上 reauth は >1s で問題化しないので優先度低)
+  - **Quality (LOW, UX)**: `session-reauth-modal` の `handleDiscard` は dirty 状態に関わらず即 `clearTokens` + 遷移する。discard ボタン自体が破壊的導線で warning 文言を伴うため AC は満たすが、`UnsavedChangesDialog` 相当の二段確認 (discard の二段確認 UX) を将来検討余地
 
 ## Medium Priority — フェーズ 2 残 / 周辺機能
 

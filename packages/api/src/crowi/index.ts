@@ -24,6 +24,7 @@ import { type Renderer, createRenderer } from 'src/renderer';
 import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runAwsConfigMigration } from 'src/util/aws-config-migration';
+import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
 import { runPageStatusMigration } from 'src/util/page-status-migration';
 
 const pkg = require('../../package.json');
@@ -189,6 +190,10 @@ class Crowi {
     // the Page model is available; ordering vs the aws migration is
     // irrelevant (disjoint collections).
     await step('runPageStatusMigration', () => runPageStatusMigration(this));
+    // RFC-0010 Phase 3: seed the first-party `crowi-cli` OAuth client.
+    // Idempotent upsert (`$setOnInsert`) — runs after setupModels so the
+    // OAuthClient model is registered; disjoint from the migrations above.
+    await step('seedOAuthClients', () => runOAuthClientSeed(this));
     // Renderer must boot BEFORE plugins so PluginManager.activate()
     // can hand plugins a registry that already has the core 4
     // transforms (TOC / wikilinks / mentions / codeBlockLanguages)

@@ -27,6 +27,7 @@ import { registerAdminSecurityRoutes } from './handlers/admin/security';
 import { registerAdminShareRoutes } from './handlers/admin/share';
 import { registerAdminStorageRoutes } from './handlers/admin/storage';
 import { registerAdminUsersRoutes } from './handlers/admin/users';
+import { registerAccessTokenRoutes } from './handlers/access-token';
 import { registerAppRoutes } from './handlers/app';
 import { registerAttachmentRoutes } from './handlers/attachment';
 import { registerAttachmentStreamRoutes } from './handlers/attachment-stream';
@@ -38,6 +39,7 @@ import { registerDraftRoutes } from './handlers/draft';
 import { registerInstallerRoutes } from './handlers/installer';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notification';
+import { registerOAuthRoutes } from './handlers/oauth';
 import { registerPageRoutes } from './handlers/page';
 import { registerPageCollabRoutes } from './handlers/page-collab';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
@@ -91,7 +93,18 @@ export const buildHonoApp = (crowi: Crowi) => {
   // Public email-change confirmation (token is the credential).
   const withEmailChange = registerEmailChangeRoutes(withActivation, crowi);
   const withMe = registerMeRoutes(withEmailChange, crowi);
-  const withUser = registerUserRoutes(withMe, crowi);
+  // RFC-0010 Phase 2 — PAT management (`/me/access-tokens`). MUST follow
+  // `registerMeRoutes`: it rides that handler's broad `/me/*` jwtAuth
+  // apply rather than installing its own (avoids a second User.findById).
+  const withAccessToken = registerAccessTokenRoutes(withMe, crowi);
+  // RFC-0010 Phase 3/4 — OAuth authorization-server endpoints. `/oauth/token`,
+  // `/oauth/revoke`, `/.well-known/oauth-authorization-server`,
+  // `/oauth/device/authorize` and `GET /oauth/device` are public;
+  // `/oauth/authorize` and `/oauth/device/verify` install their own per-path
+  // `createJwtAuth` (no prefix overlap with any other handler's broad apply,
+  // so they are self-contained).
+  const withOAuth = registerOAuthRoutes(withAccessToken, crowi);
+  const withUser = registerUserRoutes(withOAuth, crowi);
   const withBookmark = registerBookmarkRoutes(withUser, crowi);
   const withBacklink = registerBacklinkRoutes(withBookmark, crowi);
   const withComment = registerCommentRoutes(withBacklink, crowi);

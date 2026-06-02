@@ -1031,7 +1031,7 @@ export default (crowi: Crowi) => {
       grantedUsers: user ? [user] : [],
     });
 
-    const newRevision = await Revision.prepareRevision(newPage, body, user, { format });
+    const newRevision = await Revision.prepareRevision(newPage, body, user, { format, editVia: options.editVia });
     try {
       const revisionData = await Page.pushRevision(newPage, newRevision, user);
       pageEvent.emit('create', revisionData, user);
@@ -1047,7 +1047,21 @@ export default (crowi: Crowi) => {
     const Bookmark = crowi.model('Bookmark');
     const grant = options.grant || null;
     // update existing page
-    const newRevision = await Revision.prepareRevision(pageData, body, user);
+    const newRevision = await Revision.prepareRevision(pageData, body, user, { editVia: options.editVia });
+
+    // This is the external (REST / API) edit path — it bypasses the
+    // collaborative editor. Per RFC-0003 §"Server-side direct Markdown
+    // edits", a direct body write MUST drop the persisted Y.Doc snapshot so
+    // the next `onLoadDocument` rebuilds a fresh doc from this revision
+    // instead of restoring the pre-edit `yjsState` (which would show stale
+    // content in the editor and, on its next autosave, silently revert this
+    // edit). Re-point `currentRevision` to the new revision so that rebuild
+    // (`currentRevision ?? revision`) seeds from the new body. The collab
+    // save flow manages these fields itself and never routes through
+    // `updatePage`, so this only affects external writes.
+    pageData.currentRevision = newRevision;
+    pageData.yjsState = null;
+    pageData.yjsCheckpointAt = null;
 
     await Page.pushRevision(pageData, newRevision, user);
     const bookmarkCount = await Bookmark.countByPageId(pageData._id);

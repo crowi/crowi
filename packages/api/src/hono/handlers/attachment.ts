@@ -80,6 +80,7 @@ import {
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 import { withRateLimit } from '../middleware/rate-limit';
+import { applyScope } from '../middleware/require-scope';
 
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 
@@ -280,6 +281,14 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
   // (only `uploadAttachment` is throttled).
   app.use('/attachments/*', createJwtAuth(crowi));
   app.use('/attachments/upload', uploadRateLimitMiddleware);
+
+  // RFC-0010 — attachment scopes.
+  applyScope(app, getAttachmentUsageRoute, 'attachments:read');
+  applyScope(app, listAttachmentsRoute, 'attachments:read');
+  applyScope(app, getAttachmentMetaRoute, 'attachments:read');
+  applyScope(app, addAttachmentRoute, 'attachments:write');
+  applyScope(app, uploadAttachmentRoute, 'attachments:write');
+  applyScope(app, removeAttachmentRoute, 'attachments:write');
 
   return (
     app

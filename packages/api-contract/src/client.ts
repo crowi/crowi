@@ -83,6 +83,8 @@ import { commentRoutes } from './contracts/comment';
 import { draftRoutes } from './contracts/draft';
 import { installerRoutes } from './contracts/installer';
 import { meRoutes } from './contracts/me';
+import { accessTokenRoutes } from './contracts/access-token';
+import { oauthRoutes } from './contracts/oauth';
 import { notificationRoutes } from './contracts/notification';
 import { pageCollabRoutes } from './contracts/page-collab';
 import { pageRoutes } from './contracts/page';
@@ -103,13 +105,22 @@ import type { BookmarkResponseSchema, ListMyBookmarksResponseSchema, RemoveBookm
 import type { AddCommentResponseSchema, DeleteCommentResponseSchema, ListCommentsResponseSchema } from './schemas/comment';
 import type { CreateAdminResponseSchema, InstallerStatusResponseSchema } from './schemas/installer';
 import type {
-  ApiTokenResponseSchema,
   PasswordUpdateSuccessSchema,
   PictureUploadResponseSchema,
   RecentlyViewedPagesResponseSchema,
   SuccessResponseSchema,
   UserProfileResponseSchema,
 } from './schemas/me';
+import type { AccessTokenSchema, CreateAccessTokenResponseSchema, ListAccessTokensResponseSchema } from './schemas/access-token';
+import type {
+  AuthorizeResponseSchema,
+  DeviceAuthorizeResponseSchema,
+  DeviceInfoResponseSchema,
+  DeviceVerifyResponseSchema,
+  DiscoveryResponseSchema,
+  RevokeResponseSchema,
+  TokenResponseSchema,
+} from './schemas/oauth-endpoints';
 import type {
   ListNotificationsResponseSchema,
   MarkAllAsReadResponseSchema,
@@ -165,7 +176,16 @@ type UserProfileResponse = z.infer<typeof UserProfileResponseSchema>;
 type PictureUploadResponse = z.infer<typeof PictureUploadResponseSchema>;
 type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
 type PasswordUpdateSuccess = z.infer<typeof PasswordUpdateSuccessSchema>;
-type ApiTokenResponse = z.infer<typeof ApiTokenResponseSchema>;
+type AccessToken = z.infer<typeof AccessTokenSchema>;
+type ListAccessTokensResponse = z.infer<typeof ListAccessTokensResponseSchema>;
+type CreateAccessTokenResponse = z.infer<typeof CreateAccessTokenResponseSchema>;
+type AuthorizeResponse = z.infer<typeof AuthorizeResponseSchema>;
+type TokenResponse = z.infer<typeof TokenResponseSchema>;
+type RevokeResponse = z.infer<typeof RevokeResponseSchema>;
+type DiscoveryResponse = z.infer<typeof DiscoveryResponseSchema>;
+type DeviceAuthorizeResponse = z.infer<typeof DeviceAuthorizeResponseSchema>;
+type DeviceInfoResponse = z.infer<typeof DeviceInfoResponseSchema>;
+type DeviceVerifyResponse = z.infer<typeof DeviceVerifyResponseSchema>;
 type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;
 type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
 type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
@@ -268,6 +288,50 @@ const stubProfile: UserProfileResponse = {
   hasPassword: false,
   createdAt: '',
 };
+
+const stubAccessToken: AccessToken = {
+  id: '',
+  name: '',
+  scopes: [],
+  expiresAt: null,
+  lastUsedAt: null,
+  createdAt: '',
+};
+
+const stubCreateAccessToken: CreateAccessTokenResponse = { ...stubAccessToken, token: '' };
+
+// OAuth endpoint stubs (RFC-0010 Phase 3).
+const stubAuthorize: AuthorizeResponse = { redirectUri: '' };
+const stubToken: TokenResponse = {
+  access_token: '',
+  token_type: 'Bearer',
+  expires_in: 0,
+  refresh_token: '',
+  scope: '',
+};
+const stubRevoke: RevokeResponse = {};
+const stubDiscovery: DiscoveryResponse = {
+  issuer: '',
+  authorization_endpoint: '',
+  token_endpoint: '',
+  revocation_endpoint: '',
+  scopes_supported: [],
+  response_types_supported: [],
+  grant_types_supported: [],
+  code_challenge_methods_supported: [],
+  token_endpoint_auth_methods_supported: [],
+};
+// OAuth device-grant stubs (RFC-0010 Phase 4 / RFC 8628).
+const stubDeviceAuthorize: DeviceAuthorizeResponse = {
+  device_code: '',
+  user_code: '',
+  verification_uri: '',
+  verification_uri_complete: '',
+  expires_in: 0,
+  interval: 0,
+};
+const stubDeviceInfo: DeviceInfoResponse = { client_id: '', scopes: [] };
+const stubDeviceVerify: DeviceVerifyResponse = { status: 'approved' };
 
 const stubUserPublic = {
   _id: '',
@@ -513,9 +577,10 @@ const appAuthMeUserChain = new OpenAPIHono()
   .openapi(meRoutes.uploadPictureRoute, (c) => c.json({ status: true } satisfies PictureUploadResponse, 200))
   .openapi(meRoutes.deletePictureRoute, (c) => c.json({ status: 'ok' } satisfies SuccessResponse, 200))
   .openapi(meRoutes.updatePasswordRoute, (c) => c.json({ status: 'ok', message: '' } satisfies PasswordUpdateSuccess, 200))
-  .openapi(meRoutes.getApiTokenRoute, (c) => c.json({ status: 'ok', apiToken: '' } satisfies ApiTokenResponse, 200))
-  .openapi(meRoutes.resetApiTokenRoute, (c) => c.json({ status: 'ok', apiToken: '' } satisfies ApiTokenResponse, 200))
   .openapi(meRoutes.recentlyViewedPagesRoute, (c) => c.json({ pages: [] } satisfies RecentlyViewedPagesResponse, 200))
+  .openapi(accessTokenRoutes.listAccessTokensRoute, (c) => c.json({ accessTokens: [] } satisfies ListAccessTokensResponse, 200))
+  .openapi(accessTokenRoutes.createAccessTokenRoute, (c) => c.json(stubCreateAccessToken, 201))
+  .openapi(accessTokenRoutes.deleteAccessTokenRoute, (c) => c.json(stubAccessToken, 200))
   .openapi(userRoutes.getUserPageRoute, (c) => c.json(stubUserPage, 200))
   .openapi(userRoutes.getUserBookmarksRoute, (c) => c.json(stubUserBookmarks, 200))
   .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200));
@@ -667,6 +732,21 @@ const adminUsersPluginsContractApp = new OpenAPIHono()
   .openapi(adminPluginsRoutes.clearRenderCachePluginRoute, (c) => c.json(stubClearRenderCache, 200));
 
 /**
+ * OAuth 2.0 authorization-server endpoints (RFC-0010 Phase 3) — 4 routes.
+ * Kept on its own chain (rather than extended onto the near-full
+ * `appAuthMeUserChain`) to stay well under TS's instantiation-depth
+ * ceiling, per the TS2589 mitigation documented in this file's header.
+ */
+const oauthContractApp = new OpenAPIHono()
+  .openapi(oauthRoutes.authorizeRoute, (c) => c.json(stubAuthorize, 200))
+  .openapi(oauthRoutes.tokenRoute, (c) => c.json(stubToken, 200))
+  .openapi(oauthRoutes.revokeRoute, (c) => c.json(stubRevoke, 200))
+  .openapi(oauthRoutes.discoveryRoute, (c) => c.json(stubDiscovery, 200))
+  .openapi(oauthRoutes.deviceAuthorizeRoute, (c) => c.json(stubDeviceAuthorize, 200))
+  .openapi(oauthRoutes.deviceInfoRoute, (c) => c.json(stubDeviceInfo, 200))
+  .openapi(oauthRoutes.deviceVerifyRoute, (c) => c.json(stubDeviceVerify, 200));
+
+/**
  * Per-chain type aliases. These are **exported** so the dts bundler
  * (tsup) keeps them as named declarations in `dist/index.d.ts`; if we
  * referenced the `const` chain variables via `typeof` from inside
@@ -684,6 +764,7 @@ export type PageChain = typeof pageChain;
 export type LateContractApp = typeof lateContractApp;
 export type AdminSettingsContractApp = typeof adminSettingsContractApp;
 export type AdminUsersPluginsContractApp = typeof adminUsersPluginsContractApp;
+export type OAuthContractApp = typeof oauthContractApp;
 
 /**
  * `AppType` is exposed as an alias of one representative sub-chain so
@@ -733,7 +814,8 @@ export type CrowiApiClient = ReturnType<typeof hc<AppAuthMeUserChain>> &
   ReturnType<typeof hc<PageChain>> &
   ReturnType<typeof hc<LateContractApp>> &
   ReturnType<typeof hc<AdminSettingsContractApp>> &
-  ReturnType<typeof hc<AdminUsersPluginsContractApp>>;
+  ReturnType<typeof hc<AdminUsersPluginsContractApp>> &
+  ReturnType<typeof hc<OAuthContractApp>>;
 
 /**
  * Build a typed Hono client against the contract chain. Constructs a

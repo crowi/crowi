@@ -256,7 +256,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -271,7 +271,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -369,7 +369,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -384,7 +384,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -399,7 +399,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -503,7 +503,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -535,7 +535,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: {
-                                code: string;
+                                code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
                             };
@@ -1085,130 +1085,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/me/apiToken": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get current API token */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Current API token */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status: "ok";
-                            apiToken: string;
-                        };
-                    };
-                };
-                /** @description Authentication required */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "AUTHENTICATION_REQUIRED";
-                                /** @enum {string} */
-                                message: "Authentication is required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status: "error";
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        /** Regenerate API token */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Regenerated API token */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status: "ok";
-                            apiToken: string;
-                        };
-                    };
-                };
-                /** @description Authentication required */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "AUTHENTICATION_REQUIRED";
-                                /** @enum {string} */
-                                message: "Authentication is required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @enum {string} */
-                            status: "error";
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/me/recently-viewed-pages": {
         parameters: {
             query?: never;
@@ -1295,6 +1171,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -1375,6 +1253,816 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/access-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's personal access tokens (metadata only) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Personal access token list (no secrets) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            accessTokens: {
+                                id: string;
+                                name: string;
+                                scopes: string[];
+                                expiresAt: string | null;
+                                lastUsedAt: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Personal access tokens can only be managed from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Issue a personal access token (plaintext returned once) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        scopes: string[];
+                        /** Format: date-time */
+                        expiresAt?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Token issued; `token` holds the one-time plaintext secret */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            scopes: string[];
+                            expiresAt: string | null;
+                            lastUsedAt: string | null;
+                            createdAt: string;
+                            token: string;
+                        };
+                    };
+                };
+                /** @description One or more requested scopes are not issuable */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INVALID_SCOPE";
+                                message: string;
+                                details?: {
+                                    invalidScopes: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Personal access tokens can only be managed from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/access-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a personal access token */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Token revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            scopes: string[];
+                            expiresAt: string | null;
+                            lastUsedAt: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Personal access tokens can only be managed from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description No such token belonging to the current user */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue an authorization code for the consenting web user (PKCE) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        client_id: string;
+                        redirect_uri: string;
+                        scope: string;
+                        code_challenge: string;
+                        /** @enum {string} */
+                        code_challenge_method: "S256";
+                        state?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Authorization code issued; `redirectUri` carries `code` + `state` */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            redirectUri: string;
+                        };
+                    };
+                };
+                /** @description Invalid request / scope / client (RFC 6749 §4.1.2.1) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
+                            error_description?: string;
+                        };
+                    };
+                };
+                /** @description Authorization codes can only be issued from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exchange an authorization code or refresh token for an access token */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Access + refresh token issued (RFC 6749 §5.1) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            access_token: string;
+                            /** @enum {string} */
+                            token_type: "Bearer";
+                            expires_in: number;
+                            refresh_token: string;
+                            scope: string;
+                        };
+                    };
+                };
+                /** @description invalid_grant / invalid_request / unsupported_grant_type (RFC 6749 §5.2) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
+                            error_description?: string;
+                        };
+                    };
+                };
+                /** @description invalid_client (RFC 6749 §5.2) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
+                            error_description?: string;
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a refresh token or personal access token (RFC 7009) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Revocation processed (200 even for unknown tokens, RFC 7009) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Record<string, never>;
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** OAuth 2.0 authorization-server metadata (RFC 8414) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Authorization-server metadata */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issuer: string;
+                            authorization_endpoint: string;
+                            token_endpoint: string;
+                            revocation_endpoint: string;
+                            device_authorization_endpoint?: string;
+                            scopes_supported: string[];
+                            response_types_supported: string[];
+                            grant_types_supported: string[];
+                            code_challenge_methods_supported: string[];
+                            token_endpoint_auth_methods_supported: string[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/device/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a device authorization grant — issue device_code + user_code (RFC 8628) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        client_id: string;
+                        scope: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Device + user code issued (RFC 8628 §3.2) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            device_code: string;
+                            user_code: string;
+                            verification_uri: string;
+                            verification_uri_complete: string;
+                            expires_in: number;
+                            interval: number;
+                        };
+                    };
+                };
+                /** @description invalid_client / invalid_scope (RFC 6749 §5.2) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
+                            error_description?: string;
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Look up a pending device authorization by user_code (consent screen) */
+        get: {
+            parameters: {
+                query: {
+                    user_code: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Pending device authorization metadata */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            client_id: string;
+                            scopes: string[];
+                        };
+                    };
+                };
+                /** @description No pending device authorization for this user_code */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/device/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or deny a device authorization by user_code (web session only) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        user_code: string;
+                        /** @enum {string} */
+                        action: "approve" | "deny";
+                    };
+                };
+            };
+            responses: {
+                /** @description Device authorization approved or denied */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "approved" | "denied";
+                        };
+                    };
+                };
+                /** @description Device approvals can only come from a web session */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FORBIDDEN";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description No pending device authorization for this user_code */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1485,6 +2173,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -1589,6 +2279,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -1800,6 +2492,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -2015,6 +2709,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -2213,6 +2909,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -2410,6 +3108,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -2693,6 +3393,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -3246,6 +3948,8 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 }[];
+                                /** @enum {string} */
+                                editVia?: "web" | "oauth" | "pat";
                                 createdAt: string;
                             }[];
                             pager: {
@@ -3399,6 +4103,8 @@ export interface paths {
                                     createdAt: string;
                                 })[];
                                 message?: string;
+                                /** @enum {string} */
+                                editVia?: "web" | "oauth" | "pat";
                             }[];
                         };
                     };
@@ -3546,6 +4252,8 @@ export interface paths {
                                     createdAt: string;
                                 })[];
                                 message?: string;
+                                /** @enum {string} */
+                                editVia?: "web" | "oauth" | "pat";
                             };
                         };
                     };
@@ -3698,6 +4406,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -3880,6 +4590,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4074,6 +4786,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4237,6 +4951,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4441,6 +5157,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4548,6 +5266,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4712,6 +5432,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5114,6 +5836,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5307,6 +6031,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5665,6 +6391,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5860,6 +6588,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -7740,6 +8470,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -11579,11 +12311,13 @@ export interface components {
     schemas: {
         ApiError: {
             error: {
-                code: string;
+                code: components["schemas"]["ErrorCode"];
                 message: string;
                 details?: unknown;
             };
         };
+        /** @enum {string} */
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "PASSWORD_AUTH_REQUIRES_THIRDPARTY" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
@@ -11679,6 +12413,91 @@ export interface components {
                 message: string;
             };
         };
+        OAuthError: {
+            /** @enum {string} */
+            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope" | "access_denied" | "authorization_pending" | "slow_down" | "expired_token";
+            error_description?: string;
+        };
+        AuthorizeRequest: {
+            client_id: string;
+            redirect_uri: string;
+            scope: string;
+            code_challenge: string;
+            /** @enum {string} */
+            code_challenge_method: "S256";
+            state?: string;
+        };
+        AuthorizeResponse: {
+            redirectUri: string;
+        };
+        TokenRequest: {
+            /** @enum {string} */
+            grant_type: "authorization_code";
+            code: string;
+            code_verifier: string;
+            redirect_uri: string;
+            client_id: string;
+        } | {
+            /** @enum {string} */
+            grant_type: "refresh_token";
+            refresh_token: string;
+            client_id: string;
+            scope?: string;
+        } | {
+            /** @enum {string} */
+            grant_type: "urn:ietf:params:oauth:grant-type:device_code";
+            device_code: string;
+            client_id: string;
+        };
+        TokenResponse: {
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            expires_in: number;
+            refresh_token: string;
+            scope: string;
+        };
+        RevokeRequest: {
+            token: string;
+            token_type_hint?: string;
+        };
+        DiscoveryResponse: {
+            issuer: string;
+            authorization_endpoint: string;
+            token_endpoint: string;
+            revocation_endpoint: string;
+            device_authorization_endpoint?: string;
+            scopes_supported: string[];
+            response_types_supported: string[];
+            grant_types_supported: string[];
+            code_challenge_methods_supported: string[];
+            token_endpoint_auth_methods_supported: string[];
+        };
+        DeviceAuthorizeRequest: {
+            client_id: string;
+            scope: string;
+        };
+        DeviceAuthorizeResponse: {
+            device_code: string;
+            user_code: string;
+            verification_uri: string;
+            verification_uri_complete: string;
+            expires_in: number;
+            interval: number;
+        };
+        DeviceInfoResponse: {
+            client_id: string;
+            scopes: string[];
+        };
+        DeviceVerifyRequest: {
+            user_code: string;
+            /** @enum {string} */
+            action: "approve" | "deny";
+        };
+        DeviceVerifyResponse: {
+            /** @enum {string} */
+            status: "approved" | "denied";
+        };
         UserPublic: {
             _id: string;
             id?: string;
@@ -11765,6 +12584,8 @@ export interface components {
                     createdAt: string;
                 })[];
                 message?: string;
+                /** @enum {string} */
+                editVia?: "web" | "oauth" | "pat";
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
@@ -11867,6 +12688,8 @@ export interface components {
                     createdAt: string;
                 })[];
                 message?: string;
+                /** @enum {string} */
+                editVia?: "web" | "oauth" | "pat";
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
@@ -11966,6 +12789,8 @@ export interface components {
                 createdAt: string;
             })[];
             message?: string;
+            /** @enum {string} */
+            editVia?: "web" | "oauth" | "pat";
         };
         RevisionMeta: {
             toc?: {
@@ -12074,6 +12899,8 @@ export interface components {
                         createdAt: string;
                     })[];
                     message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -12181,6 +13008,8 @@ export interface components {
                         createdAt: string;
                     })[];
                     message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -12285,6 +13114,8 @@ export interface components {
                         createdAt: string;
                     })[];
                     message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -12439,6 +13270,8 @@ export interface components {
                         createdAt: string;
                     })[];
                     message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */

@@ -24,6 +24,7 @@ import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toStringId, toUser
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 
 import { INVALID_PAGE_ID_BODY } from './_helpers/errors';
 
@@ -78,6 +79,9 @@ export const registerBacklinkRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
 
   app.use('/backlinks/*', createJwtAuth(crowi));
   app.use('/backlinks', createJwtAuth(crowi));
+
+  // RFC-0010 — backlinks are a page-graph read.
+  applyScope(app, getBacklinksRoute, 'pages:read');
 
   return app.openapi(getBacklinksRoute, async (c) => {
     const user = c.get('user');

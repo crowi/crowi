@@ -62,7 +62,7 @@ export const registerInviteAcceptRoutes = <E extends OpenAPIHono<CrowiHonoBindin
 
         const user = await User.findById(payload.userId);
         if (!user) {
-          return c.json({ error: { code: 'USER_NOT_FOUND', message: 'Invited user no longer exists' } }, 404);
+          return c.json({ error: { code: 'USER_NOT_FOUND' as const, message: 'Invited user no longer exists' } }, 404);
         }
         if (user.status !== User.STATUS_INVITED) {
           return c.json(ALREADY_ACCEPTED_BODY, 409);
@@ -71,7 +71,7 @@ export const registerInviteAcceptRoutes = <E extends OpenAPIHono<CrowiHonoBindin
         // Username uniqueness (excluding this invited user).
         const clash = await User.findOne({ username });
         if (clash && clash._id.toString() !== user._id.toString()) {
-          return c.json({ error: { code: 'USERNAME_TAKEN', message: 'Username already taken' } }, 409);
+          return c.json({ error: { code: 'USERNAME_TAKEN' as const, message: 'Username already taken' } }, 409);
         }
 
         const activated = await new Promise<UserDocument>((resolve, reject) => {

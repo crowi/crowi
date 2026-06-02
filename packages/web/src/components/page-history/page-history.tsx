@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { GitCompare, History as HistoryIcon, Loader2 } from 'lucide-react';
+import { GitCompare, History as HistoryIcon, Loader2, Terminal } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserAvatar } from '@/components/user-avatar';
 import { formatDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { usePageRevisions } from '@/lib/use-page-revisions';
@@ -15,6 +16,31 @@ import { getLocale } from '@paraglide/runtime.js';
 interface PageHistoryProps {
   pageId: string;
   pagePath: string;
+}
+
+/**
+ * Small "app" chip shown next to the author when a revision was authored
+ * through the API with an access token (`editVia` of `oauth` / `pat`), as
+ * opposed to the browser / collaborative editor. RFC-0010. Self-contained
+ * `TooltipProvider` so it can drop into the history table (which has none).
+ */
+function ApiEditChip() {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className="inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase leading-none text-muted-foreground"
+            aria-label={m['page_history.api_update_tooltip']()}
+          >
+            <Terminal className="h-3 w-3" aria-hidden="true" />
+            {m['page_history.api_chip_label']()}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{m['page_history.api_update_tooltip']()}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 /**
@@ -200,6 +226,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                             <div className="flex items-center gap-2">
                               <UserAvatar user={savedBy} size="sm" />
                               <span className="truncate">{savedBy.name}</span>
+                              {(rev.editVia === 'oauth' || rev.editVia === 'pat') && <ApiEditChip />}
                               {contributors.length > 0 && (
                                 <span className="text-muted-foreground ml-1 text-xs">{m['collab.history_with_others']({ names: contributorNames })}</span>
                               )}

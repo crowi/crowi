@@ -9,8 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormErrorList } from '@/components/ui/form-error-list';
-import { apiClientV2 } from '@/lib/api-client';
-import { storeTokens } from '@/lib/auth-token';
+import { loginWithPassword } from '@/lib/auth-login';
 import { safeContinueUrl } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
 
@@ -38,38 +37,16 @@ export function LoginForm() {
     setIsSubmitting(true);
     setErrors([]);
 
-    try {
-      // RFC-0006 Phase 4 Batch 1 — switched from
-      // `apiClient.tokenAuth.tokenLogin` to `apiClientV2.auth.login.$post`.
-      // Wire format unchanged: 200 + `{ accessToken, refreshToken, … }` on
-      // success; 401/403/500/503 with `{ error: { code, message } }` on
-      // failure.
-      const response = await apiClientV2.auth.login.$post({
-        json: {
-          email: formData.email,
-          password: formData.password,
-        },
-      });
-
-      if (response.status === 200) {
-        const body = await response.json();
-        // Store tokens (also mirrors access token into a cookie so
-        // browser-built `<img>` requests can authenticate).
-        storeTokens(body, body.expiresIn);
-
-        // Redirect to continue URL
-        router.push(continueUrl);
-      } else if (response.status === 401 || response.status === 403 || response.status === 503) {
-        const body = await response.json();
-        setErrors([body.error?.message || m['auth.login.error']()]);
-      } else {
-        setErrors([m['auth.login.unexpected_error']()]);
-      }
-    } catch {
-      setErrors([m['auth.common.server_error']()]);
-    } finally {
-      setIsSubmitting(false);
+    // RFC-0006 Phase 4 Batch 1 — `POST /auth/login` (Hono). The wire
+    // format + token persistence live in the shared `loginWithPassword`
+    // helper, reused by the editor's inline session-reauth modal.
+    const result = await loginWithPassword(formData.email, formData.password);
+    if (result.ok) {
+      router.push(continueUrl);
+    } else {
+      setErrors([result.message]);
     }
+    setIsSubmitting(false);
   };
 
   return (

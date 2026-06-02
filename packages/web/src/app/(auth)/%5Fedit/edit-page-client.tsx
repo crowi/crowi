@@ -13,6 +13,8 @@ import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarni
 import { GrantSelect } from '@/components/editor/GrantSelect';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
+import { SessionReauthModal } from '@/components/editor/session-reauth-modal';
+import { SessionReauthProvider } from '@/lib/session-reauth-context';
 import { UnsavedChangesDialog } from '@/components/editor/UnsavedChangesDialog';
 import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
 import { DraftConflictAlert } from '@/components/page-edit/draft-conflict-alert';
@@ -639,6 +641,7 @@ interface UpdatePageEditorProps {
 
 function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const { page, isLoading, isError, error } = usePage({ page_id: pageId });
 
   // RFC-0005 — register the editor on the page's presence channel. The
@@ -751,30 +754,39 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
     );
   }
 
+  // Wrap the realtime editor in the session-reauth provider so a JWT
+  // expiry shows an inline modal instead of the `(auth)` redirect (which
+  // would unmount the Y.Doc + lose the unsaved buffer). The provider +
+  // modal live *outside* `EditorShell`, so a reauth never remounts the
+  // editor — the buffer survives. Only the Y.Doc-bearing update flow is
+  // wrapped; the create flow (no page id yet) is out of scope.
   return (
-    <EditorShell
-      title={m['edit.title_update']()}
-      subtitle={page.path}
-      body={body ?? ''}
-      onChangeBody={setBody}
-      // HTTP save path kept as a fallback signature; the realtime
-      // shell ignores `onSave` when `useRealtimeSave` is true.
-      onSave={handleSave}
-      onCancel={handleCancel}
-      isSaving={updateMutation.isPending}
-      feedback={feedback}
-      pageId={page._id}
-      onAttachError={(message) => setFeedback({ kind: 'error', message })}
-      realtimePageId={page._id}
-      onReadonlyChange={handleReadonlyChange}
-      readonly={readonly}
-      // Phase 8: in-flight edits land via `crowi:save` over Hocuspocus
-      // — the HTTP path stays around for the create flow only.
-      useRealtimeSave={true}
-      grant={page.grant ?? 1}
-      onChangeGrant={handleChangeGrant}
-      isGrantSaving={setGrantMutation.isPending}
-    />
+    <SessionReauthProvider pageId={page._id} currentEmail={user?.email}>
+      <EditorShell
+        title={m['edit.title_update']()}
+        subtitle={page.path}
+        body={body ?? ''}
+        onChangeBody={setBody}
+        // HTTP save path kept as a fallback signature; the realtime
+        // shell ignores `onSave` when `useRealtimeSave` is true.
+        onSave={handleSave}
+        onCancel={handleCancel}
+        isSaving={updateMutation.isPending}
+        feedback={feedback}
+        pageId={page._id}
+        onAttachError={(message) => setFeedback({ kind: 'error', message })}
+        realtimePageId={page._id}
+        onReadonlyChange={handleReadonlyChange}
+        readonly={readonly}
+        // Phase 8: in-flight edits land via `crowi:save` over Hocuspocus
+        // — the HTTP path stays around for the create flow only.
+        useRealtimeSave={true}
+        grant={page.grant ?? 1}
+        onChangeGrant={handleChangeGrant}
+        isGrantSaving={setGrantMutation.isPending}
+      />
+      <SessionReauthModal />
+    </SessionReauthProvider>
   );
 }
 

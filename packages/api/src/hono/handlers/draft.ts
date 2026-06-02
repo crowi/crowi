@@ -40,6 +40,7 @@ import type { UserDocument } from 'src/models/user';
 import { isValidObjectId, toISOStringOrNull } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
+import { applyScope } from '../middleware/require-scope';
 
 const debug = Debug('crowi:hono:handlers:draft');
 
@@ -55,6 +56,12 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
   const Page = crowi.model('Page');
   const Revision = crowi.model('Revision');
   const User = crowi.model('User');
+
+  // RFC-0010 — drafts are page content (jwtAuth rides on the
+  // revision-owned `/pages/*` apply). Create / cancel mutate, list reads.
+  applyScope(app, createDraftRoute, 'pages:write');
+  applyScope(app, listDraftsRoute, 'pages:read');
+  applyScope(app, cancelDraftRoute, 'pages:write');
 
   return (
     app

@@ -12,6 +12,7 @@ import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
 import { useNotificationsSocket } from '@/lib/use-notifications-socket';
 import { useConnection } from '@/lib/connection-context';
+import { isReauthSuppressed, useReauthSuppressed } from '@/lib/session-reauth-context';
 import { m } from '@paraglide/messages.js';
 import { UserMenuItems } from '@/components/user-menu-items';
 import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
@@ -26,6 +27,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
+  // While an inline-reauth-capable editor is mounted (or its modal is
+  // open), both redirect routes below are suppressed so a session expiry
+  // doesn't navigate away and throw the Y.Doc buffer out. The signal is
+  // module-level because `SessionReauthProvider` is a *descendant* of
+  // this layout, so a React Context can't flow upward — see
+  // `session-reauth-context.tsx`. Outside the editor it is always
+  // `false` and redirects run as before.
+  const reauthSuppressed = useReauthSuppressed();
 
   // Realtime notification invalidation. The hook is idle until auth
   // resolves (`enabled: isAuthenticated`) so the unauthed login screen
@@ -35,15 +44,20 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   useNotificationsSocket({ enabled: isAuthenticated });
 
   useEffect(() => {
-    // 接続エラー中はリダイレクトしない
-    if (!isLoading && !isAuthenticated && connectionState === 'connected') {
+    // 接続エラー中、またはエディタの再認証中はリダイレクトしない
+    if (!isLoading && !isAuthenticated && connectionState === 'connected' && !reauthSuppressed) {
       router.push(buildLoginRedirectUrl(window.location.pathname + window.location.search));
     }
-  }, [isLoading, isAuthenticated, connectionState, router]);
+  }, [isLoading, isAuthenticated, connectionState, router, reauthSuppressed]);
 
   // セッション期限切れイベントのリスナー
   useEffect(() => {
     const handleSessionExpired = () => {
+      // エディタ(再認証 provider 配下)では、このイベントはインラインモーダル
+      // が処理するのでリダイレクトしない。このリスナーは ancestor として先に
+      // 登録され provider のハンドラより先に走るため、React state ではなく
+      // ハンドラ実行時点のモジュールフラグ(provider マウント有無)を直接読む。
+      if (isReauthSuppressed()) return;
       router.push(buildLoginRedirectUrl(window.location.pathname + window.location.search));
     };
 
@@ -52,8 +66,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }, [router]);
 
   // 認証チェック中、または接続正常時の未認証の場合はローディング画面を表示
-  // 接続エラー時は下のレイアウト(エラーバナー/モーダル付き)を表示
-  if (!isAuthenticated && (isLoading || connectionState === 'connected')) {
+  // 接続エラー時は下のレイアウト(エラーバナー/モーダル付き)を表示。
+  // ただしエディタ再認証中は children(= Y.Doc を持つエディタ)を unmount
+  // させないため、このローディング画面に切り替えない。
+  if (!isAuthenticated && (isLoading || connectionState === 'connected') && !reauthSuppressed) {
     // Intentionally locale-agnostic: this Client Component is SSR-rendered
     // before hydration and Paraglide's getLocale() is bound to a different
     // runtime instance there than in Server Components, so any localised
