@@ -8,8 +8,9 @@
  *
  * Out of scope:
  * - User.password (already bcrypt-hashed, one-way)
- * - User.apiToken (looked up by equality, needs deterministic / hashed scheme)
- * - Share.secretKeyword (same reason as apiToken)
+ * - PersonalAccessToken.tokenHash (already SHA-256-hashed, one-way; the
+ *   legacy User.apiToken this replaced was removed in RFC-0010 Phase 2)
+ * - Share.secretKeyword (looked up by equality, needs deterministic scheme)
  */
 const SENSITIVE_CONFIG_KEYS: ReadonlySet<string> = new Set([
   'crowi:google:clientSecret',

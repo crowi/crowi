@@ -31,6 +31,7 @@ import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toS
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 
@@ -71,6 +72,11 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   // Every `/user/*` endpoint requires auth. Apply the middleware
   // broadly so each route below sees `c.get('user')` populated.
   app.use('/user/*', createJwtAuth(crowi));
+
+  // RFC-0010 — public user pages are profile:read.
+  applyScope(app, getUserPageRoute, 'profile:read');
+  applyScope(app, getUserBookmarksRoute, 'profile:read');
+  applyScope(app, getUserPagesRoute, 'profile:read');
 
   return app
     .openapi(getUserPageRoute, async (c) => {

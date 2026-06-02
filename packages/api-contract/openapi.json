@@ -446,6 +446,376 @@
           "error"
         ]
       },
+      "OAuthError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "invalid_client",
+              "invalid_grant",
+              "unauthorized_client",
+              "unsupported_grant_type",
+              "invalid_scope",
+              "access_denied",
+              "authorization_pending",
+              "slow_down",
+              "expired_token"
+            ]
+          },
+          "error_description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "AuthorizeRequest": {
+        "type": "object",
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "redirect_uri": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code_challenge": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code_challenge_method": {
+            "type": "string",
+            "enum": [
+              "S256"
+            ]
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "redirect_uri",
+          "scope",
+          "code_challenge",
+          "code_challenge_method"
+        ]
+      },
+      "AuthorizeResponse": {
+        "type": "object",
+        "properties": {
+          "redirectUri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "redirectUri"
+        ]
+      },
+      "TokenRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "grant_type": {
+                "type": "string",
+                "enum": [
+                  "authorization_code"
+                ]
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "code_verifier": {
+                "type": "string",
+                "minLength": 1
+              },
+              "redirect_uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "client_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "grant_type",
+              "code",
+              "code_verifier",
+              "redirect_uri",
+              "client_id"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "grant_type": {
+                "type": "string",
+                "enum": [
+                  "refresh_token"
+                ]
+              },
+              "refresh_token": {
+                "type": "string",
+                "minLength": 1
+              },
+              "client_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant_type",
+              "refresh_token",
+              "client_id"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "grant_type": {
+                "type": "string",
+                "enum": [
+                  "urn:ietf:params:oauth:grant-type:device_code"
+                ]
+              },
+              "device_code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "client_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "grant_type",
+              "device_code",
+              "client_id"
+            ]
+          }
+        ]
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expires_in": {
+            "type": "number"
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "refresh_token",
+          "scope"
+        ]
+      },
+      "RevokeRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1
+          },
+          "token_type_hint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "DiscoveryResponse": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "authorization_endpoint": {
+            "type": "string"
+          },
+          "token_endpoint": {
+            "type": "string"
+          },
+          "revocation_endpoint": {
+            "type": "string"
+          },
+          "device_authorization_endpoint": {
+            "type": "string"
+          },
+          "scopes_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "response_types_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "grant_types_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "code_challenge_methods_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "token_endpoint_auth_methods_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "issuer",
+          "authorization_endpoint",
+          "token_endpoint",
+          "revocation_endpoint",
+          "scopes_supported",
+          "response_types_supported",
+          "grant_types_supported",
+          "code_challenge_methods_supported",
+          "token_endpoint_auth_methods_supported"
+        ]
+      },
+      "DeviceAuthorizeRequest": {
+        "type": "object",
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "client_id",
+          "scope"
+        ]
+      },
+      "DeviceAuthorizeResponse": {
+        "type": "object",
+        "properties": {
+          "device_code": {
+            "type": "string"
+          },
+          "user_code": {
+            "type": "string"
+          },
+          "verification_uri": {
+            "type": "string"
+          },
+          "verification_uri_complete": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "number"
+          },
+          "interval": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "device_code",
+          "user_code",
+          "verification_uri",
+          "verification_uri_complete",
+          "expires_in",
+          "interval"
+        ]
+      },
+      "DeviceInfoResponse": {
+        "type": "object",
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "client_id",
+          "scopes"
+        ]
+      },
+      "DeviceVerifyRequest": {
+        "type": "object",
+        "properties": {
+          "user_code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "deny"
+            ]
+          }
+        },
+        "required": [
+          "user_code",
+          "action"
+        ]
+      },
+      "DeviceVerifyResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "denied"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
       "UserPublic": {
         "type": "object",
         "properties": {
@@ -792,6 +1162,14 @@
                   },
                   "message": {
                     "type": "string"
+                  },
+                  "editVia": {
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "oauth",
+                      "pat"
+                    ]
                   }
                 },
                 "required": [
@@ -1225,6 +1603,14 @@
               },
               "message": {
                 "type": "string"
+              },
+              "editVia": {
+                "type": "string",
+                "enum": [
+                  "web",
+                  "oauth",
+                  "pat"
+                ]
               }
             },
             "required": [
@@ -1634,6 +2020,14 @@
           },
           "message": {
             "type": "string"
+          },
+          "editVia": {
+            "type": "string",
+            "enum": [
+              "web",
+              "oauth",
+              "pat"
+            ]
           }
         },
         "required": [
@@ -2081,6 +2475,14 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "editVia": {
+                          "type": "string",
+                          "enum": [
+                            "web",
+                            "oauth",
+                            "pat"
+                          ]
                         }
                       },
                       "required": [
@@ -2548,6 +2950,14 @@
                       },
                       "message": {
                         "type": "string"
+                      },
+                      "editVia": {
+                        "type": "string",
+                        "enum": [
+                          "web",
+                          "oauth",
+                          "pat"
+                        ]
                       }
                     },
                     "required": [
@@ -2990,6 +3400,14 @@
                   },
                   "message": {
                     "type": "string"
+                  },
+                  "editVia": {
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "oauth",
+                      "pat"
+                    ]
                   }
                 },
                 "required": [
@@ -3611,6 +4029,14 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "editVia": {
+                          "type": "string",
+                          "enum": [
+                            "web",
+                            "oauth",
+                            "pat"
+                          ]
                         }
                       },
                       "required": [
@@ -8117,212 +8543,6 @@
         }
       }
     },
-    "/me/apiToken": {
-      "get": {
-        "tags": [
-          "me"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Get current API token",
-        "responses": {
-          "200": {
-            "description": "Current API token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "ok"
-                      ]
-                    },
-                    "apiToken": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "status",
-                    "apiToken"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "AUTHENTICATION_REQUIRED"
-                          ]
-                        },
-                        "message": {
-                          "type": "string",
-                          "enum": [
-                            "Authentication is required"
-                          ]
-                        },
-                        "redirectTo": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "error"
-                      ]
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "status",
-                    "message"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "me"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Regenerate API token",
-        "responses": {
-          "200": {
-            "description": "Regenerated API token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "ok"
-                      ]
-                    },
-                    "apiToken": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "status",
-                    "apiToken"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "AUTHENTICATION_REQUIRED"
-                          ]
-                        },
-                        "message": {
-                          "type": "string",
-                          "enum": [
-                            "Authentication is required"
-                          ]
-                        },
-                        "redirectTo": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "error"
-                      ]
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "status",
-                    "message"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/me/recently-viewed-pages": {
       "get": {
         "tags": [
@@ -8600,6 +8820,14 @@
                                   },
                                   "message": {
                                     "type": "string"
+                                  },
+                                  "editVia": {
+                                    "type": "string",
+                                    "enum": [
+                                      "web",
+                                      "oauth",
+                                      "pat"
+                                    ]
                                   }
                                 },
                                 "required": [
@@ -8814,6 +9042,1499 @@
                           ]
                         },
                         "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/access-tokens": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List the current user's personal access tokens (metadata only)",
+        "responses": {
+          "200": {
+            "description": "Personal access token list (no secrets)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessTokens": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scopes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "expiresAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "lastUsedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scopes",
+                          "expiresAt",
+                          "lastUsedAt",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "accessTokens"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Personal access tokens can only be managed from a web session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FORBIDDEN"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Issue a personal access token (plaintext returned once)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  },
+                  "expiresAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "name",
+                  "scopes"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Token issued; `token` holds the one-time plaintext secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "expiresAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastUsedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "scopes",
+                    "expiresAt",
+                    "lastUsedAt",
+                    "createdAt",
+                    "token"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "One or more requested scopes are not issuable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INVALID_SCOPE"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {
+                            "invalidScopes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "invalidScopes"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Personal access tokens can only be managed from a web session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FORBIDDEN"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/access-tokens/{id}": {
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Revoke a personal access token",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "expiresAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastUsedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "scopes",
+                    "expiresAt",
+                    "lastUsedAt",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Personal access tokens can only be managed from a web session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FORBIDDEN"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such token belonging to the current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/authorize": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Issue an authorization code for the consenting web user (PKCE)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "redirect_uri": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scope": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "code_challenge": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "code_challenge_method": {
+                    "type": "string",
+                    "enum": [
+                      "S256"
+                    ]
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "client_id",
+                  "redirect_uri",
+                  "scope",
+                  "code_challenge",
+                  "code_challenge_method"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authorization code issued; `redirectUri` carries `code` + `state`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "redirectUri": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "redirectUri"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request / scope / client (RFC 6749 §4.1.2.1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_request",
+                        "invalid_client",
+                        "invalid_grant",
+                        "unauthorized_client",
+                        "unsupported_grant_type",
+                        "invalid_scope",
+                        "access_denied",
+                        "authorization_pending",
+                        "slow_down",
+                        "expired_token"
+                      ]
+                    },
+                    "error_description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authorization codes can only be issued from a web session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FORBIDDEN"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Exchange an authorization code or refresh token for an access token",
+        "responses": {
+          "200": {
+            "description": "Access + refresh token issued (RFC 6749 §5.1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "access_token": {
+                      "type": "string"
+                    },
+                    "token_type": {
+                      "type": "string",
+                      "enum": [
+                        "Bearer"
+                      ]
+                    },
+                    "expires_in": {
+                      "type": "number"
+                    },
+                    "refresh_token": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "access_token",
+                    "token_type",
+                    "expires_in",
+                    "refresh_token",
+                    "scope"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_grant / invalid_request / unsupported_grant_type (RFC 6749 §5.2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_request",
+                        "invalid_client",
+                        "invalid_grant",
+                        "unauthorized_client",
+                        "unsupported_grant_type",
+                        "invalid_scope",
+                        "access_denied",
+                        "authorization_pending",
+                        "slow_down",
+                        "expired_token"
+                      ]
+                    },
+                    "error_description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid_client (RFC 6749 §5.2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_request",
+                        "invalid_client",
+                        "invalid_grant",
+                        "unauthorized_client",
+                        "unsupported_grant_type",
+                        "invalid_scope",
+                        "access_denied",
+                        "authorization_pending",
+                        "slow_down",
+                        "expired_token"
+                      ]
+                    },
+                    "error_description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/revoke": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Revoke a refresh token or personal access token (RFC 7009)",
+        "responses": {
+          "200": {
+            "description": "Revocation processed (200 even for unknown tokens, RFC 7009)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/oauth-authorization-server": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "OAuth 2.0 authorization-server metadata (RFC 8414)",
+        "responses": {
+          "200": {
+            "description": "Authorization-server metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issuer": {
+                      "type": "string"
+                    },
+                    "authorization_endpoint": {
+                      "type": "string"
+                    },
+                    "token_endpoint": {
+                      "type": "string"
+                    },
+                    "revocation_endpoint": {
+                      "type": "string"
+                    },
+                    "device_authorization_endpoint": {
+                      "type": "string"
+                    },
+                    "scopes_supported": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "response_types_supported": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "grant_types_supported": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "code_challenge_methods_supported": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "token_endpoint_auth_methods_supported": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "issuer",
+                    "authorization_endpoint",
+                    "token_endpoint",
+                    "revocation_endpoint",
+                    "scopes_supported",
+                    "response_types_supported",
+                    "grant_types_supported",
+                    "code_challenge_methods_supported",
+                    "token_endpoint_auth_methods_supported"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/device/authorize": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Start a device authorization grant — issue device_code + user_code (RFC 8628)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scope": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "client_id",
+                  "scope"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device + user code issued (RFC 8628 §3.2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "device_code": {
+                      "type": "string"
+                    },
+                    "user_code": {
+                      "type": "string"
+                    },
+                    "verification_uri": {
+                      "type": "string"
+                    },
+                    "verification_uri_complete": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "number"
+                    },
+                    "interval": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "device_code",
+                    "user_code",
+                    "verification_uri",
+                    "verification_uri_complete",
+                    "expires_in",
+                    "interval"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_client / invalid_scope (RFC 6749 §5.2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_request",
+                        "invalid_client",
+                        "invalid_grant",
+                        "unauthorized_client",
+                        "unsupported_grant_type",
+                        "invalid_scope",
+                        "access_denied",
+                        "authorization_pending",
+                        "slow_down",
+                        "expired_token"
+                      ]
+                    },
+                    "error_description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Internal server error"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/device": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Look up a pending device authorization by user_code (consent screen)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "user_code",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending device authorization metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "client_id": {
+                      "type": "string"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "client_id",
+                    "scopes"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending device authorization for this user_code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/device/verify": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Approve or deny a device authorization by user_code (web session only)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "deny"
+                    ]
+                  }
+                },
+                "required": [
+                  "user_code",
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device authorization approved or denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "approved",
+                        "denied"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Device approvals can only come from a web session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FORBIDDEN"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending device authorization for this user_code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "message": {
                           "type": "string"
                         }
                       },
@@ -9215,6 +10936,14 @@
                                   },
                                   "message": {
                                     "type": "string"
+                                  },
+                                  "editVia": {
+                                    "type": "string",
+                                    "enum": [
+                                      "web",
+                                      "oauth",
+                                      "pat"
+                                    ]
                                   }
                                 },
                                 "required": [
@@ -9662,6 +11391,14 @@
                                       },
                                       "message": {
                                         "type": "string"
+                                      },
+                                      "editVia": {
+                                        "type": "string",
+                                        "enum": [
+                                          "web",
+                                          "oauth",
+                                          "pat"
+                                        ]
                                       }
                                     },
                                     "required": [
@@ -10357,6 +12094,14 @@
                                       },
                                       "message": {
                                         "type": "string"
+                                      },
+                                      "editVia": {
+                                        "type": "string",
+                                        "enum": [
+                                          "web",
+                                          "oauth",
+                                          "pat"
+                                        ]
                                       }
                                     },
                                     "required": [
@@ -11074,6 +12819,14 @@
                                   },
                                   "message": {
                                     "type": "string"
+                                  },
+                                  "editVia": {
+                                    "type": "string",
+                                    "enum": [
+                                      "web",
+                                      "oauth",
+                                      "pat"
+                                    ]
                                   }
                                 },
                                 "required": [
@@ -11703,6 +13456,14 @@
                                     },
                                     "message": {
                                       "type": "string"
+                                    },
+                                    "editVia": {
+                                      "type": "string",
+                                      "enum": [
+                                        "web",
+                                        "oauth",
+                                        "pat"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -12374,6 +14135,14 @@
                                     },
                                     "message": {
                                       "type": "string"
+                                    },
+                                    "editVia": {
+                                      "type": "string",
+                                      "enum": [
+                                        "web",
+                                        "oauth",
+                                        "pat"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -13214,6 +14983,14 @@
                                       },
                                       "message": {
                                         "type": "string"
+                                      },
+                                      "editVia": {
+                                        "type": "string",
+                                        "enum": [
+                                          "web",
+                                          "oauth",
+                                          "pat"
+                                        ]
                                       }
                                     },
                                     "required": [
@@ -14664,6 +16441,14 @@
                               ]
                             }
                           },
+                          "editVia": {
+                            "type": "string",
+                            "enum": [
+                              "web",
+                              "oauth",
+                              "pat"
+                            ]
+                          },
                           "createdAt": {
                             "type": "string"
                           }
@@ -15094,6 +16879,14 @@
                           },
                           "message": {
                             "type": "string"
+                          },
+                          "editVia": {
+                            "type": "string",
+                            "enum": [
+                              "web",
+                              "oauth",
+                              "pat"
+                            ]
                           }
                         },
                         "required": [
@@ -15494,6 +17287,14 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "editVia": {
+                          "type": "string",
+                          "enum": [
+                            "web",
+                            "oauth",
+                            "pat"
+                          ]
                         }
                       },
                       "required": [
@@ -15918,6 +17719,14 @@
                             },
                             "message": {
                               "type": "string"
+                            },
+                            "editVia": {
+                              "type": "string",
+                              "enum": [
+                                "web",
+                                "oauth",
+                                "pat"
+                              ]
                             }
                           },
                           "required": [
@@ -16504,6 +18313,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -17066,6 +18883,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -17693,6 +19518,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -18355,6 +20188,14 @@
                                   },
                                   "message": {
                                     "type": "string"
+                                  },
+                                  "editVia": {
+                                    "type": "string",
+                                    "enum": [
+                                      "web",
+                                      "oauth",
+                                      "pat"
+                                    ]
                                   }
                                 },
                                 "required": [
@@ -18822,6 +20663,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -19351,6 +21200,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -20373,6 +22230,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -20966,6 +22831,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -21870,6 +23743,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -22470,6 +24351,14 @@
                                 },
                                 "message": {
                                   "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
                                 }
                               },
                               "required": [
@@ -26749,6 +28638,14 @@
                                       },
                                       "message": {
                                         "type": "string"
+                                      },
+                                      "editVia": {
+                                        "type": "string",
+                                        "enum": [
+                                          "web",
+                                          "oauth",
+                                          "pat"
+                                        ]
                                       }
                                     },
                                     "required": [

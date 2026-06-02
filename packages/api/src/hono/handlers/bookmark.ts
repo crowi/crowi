@@ -33,6 +33,7 @@ import { type PopulatedUser, isPopulatedUser, isValidObjectId, toISOStringOrNull
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { applyScope } from '../middleware/require-scope';
 
 import { INTERNAL_ERROR_BODY, INVALID_PAGE_ID_BODY } from './_helpers/errors';
 
@@ -73,6 +74,12 @@ export const registerBookmarkRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
   // treats `/bookmarks/*` as matching the trailing slash variants.
   app.use('/bookmarks/*', createJwtAuth(crowi));
   app.use('/bookmarks', createJwtAuth(crowi));
+
+  // RFC-0010 — bookmark add/remove are bookmarks:write.
+  applyScope(app, getBookmarkRoute, 'bookmarks:read');
+  applyScope(app, listMyBookmarksRoute, 'bookmarks:read');
+  applyScope(app, addBookmarkRoute, 'bookmarks:write');
+  applyScope(app, removeBookmarkRoute, 'bookmarks:write');
 
   return app
     .openapi(getBookmarkRoute, async (c) => {

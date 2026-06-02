@@ -25,6 +25,8 @@ export interface PopulatedRevision {
   renderedAst?: unknown;
   /** RFC-0002 round 3.1 — semver of the pipeline that produced `renderedAst`. */
   rendererVersion?: string;
+  /** RFC-0010 — edit channel ('web' | 'oauth' | 'pat'); absent = web. */
+  editVia?: 'web' | 'oauth' | 'pat';
 }
 
 /**
@@ -91,6 +93,7 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   body: revision.body,
   format: revision.format || 'markdown',
   author: revision.author ? toPageUser(revision.author) : null,
+  ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
   createdAt: toISOStringOrNull(revision.createdAt) || EPOCH_ISO,
   // Sync path: only emits stored meta + renderedAst. Detail endpoints
   // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`

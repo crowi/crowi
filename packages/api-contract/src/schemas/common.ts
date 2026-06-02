@@ -130,6 +130,22 @@ export const ServiceUnavailableErrorSchema = ApiErrorSchema.extend({
   }),
 });
 
+/**
+ * Generic 403 returned when an authenticated principal is recognised but
+ * not permitted to perform the action for a reason other than scope
+ * shortfall. RFC-0010 §Security uses it for PAT management endpoints
+ * (`/me/access-tokens`), which are **web-session only** — issuing a new
+ * PAT from a PAT/OAuth token would be a privilege escalation, so those
+ * requests are rejected with `FORBIDDEN` even though they are otherwise
+ * authenticated.
+ */
+export const ForbiddenErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('FORBIDDEN'),
+    message: z.string(),
+  }),
+});
+
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type ApplicationNotInstalledError = z.infer<typeof ApplicationNotInstalledErrorSchema>;
 export type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
@@ -142,3 +158,4 @@ export type ValidationError = z.infer<typeof ValidationErrorSchema>;
 export type NotFoundError = z.infer<typeof NotFoundErrorSchema>;
 export type ConflictError = z.infer<typeof ConflictErrorSchema>;
 export type ServiceUnavailableError = z.infer<typeof ServiceUnavailableErrorSchema>;
+export type ForbiddenError = z.infer<typeof ForbiddenErrorSchema>;

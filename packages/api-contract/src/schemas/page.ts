@@ -113,6 +113,9 @@ export const RevisionSchema = z.object({
   savedBy: z.union([z.string(), PageUserSchema]).nullable().optional(),
   contributors: z.array(z.union([z.string(), PageUserSchema])).optional(),
   message: z.string().optional(),
+  // RFC-0010 — edit channel ('web' | 'oauth' | 'pat'); absent on
+  // pre-RFC-0010 / collaborative / browser revisions.
+  editVia: z.enum(['web', 'oauth', 'pat']).optional(),
 });
 export type Revision = z.infer<typeof RevisionSchema>;
 

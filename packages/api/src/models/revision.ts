@@ -91,6 +91,14 @@ export interface RevisionDocument extends Document {
    * without a migration.
    */
   message?: string;
+  /**
+   * RFC-0010: how the revision was authored — `web` (browser session,
+   * including the collaborative editor), `oauth` (OAuth access token) or
+   * `pat` (personal access token). Undefined on pre-RFC-0010 revisions and
+   * on collaborative saves (both treated as `web`). The history UI surfaces
+   * an "app" chip for `oauth` / `pat` (API) edits.
+   */
+  editVia?: 'web' | 'oauth' | 'pat';
 }
 
 /**
@@ -114,6 +122,7 @@ export interface PrepareRevisionOptions {
   message?: string;
   type?: RevisionType;
   parentRevisionId?: Types.ObjectId | null;
+  editVia?: 'web' | 'oauth' | 'pat';
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
@@ -137,6 +146,9 @@ export default (crowi: Crowi) => {
     body: { type: String, required: true },
     format: { type: String, default: 'markdown' },
     author: { type: Schema.Types.ObjectId, ref: 'User' },
+    // RFC-0010: edit channel — 'web' | 'oauth' | 'pat'. Absent on
+    // pre-RFC-0010 / collaborative-save revisions (treated as 'web').
+    editVia: { type: String },
     createdAt: { type: Date, default: Date.now },
     // Older revisions without `meta` fall back to on-the-fly metadata
     // generation in pageToResponse / resolveRevisionMeta.
@@ -335,6 +347,9 @@ export default (crowi: Crowi) => {
       // parent") so we forward it verbatim rather than collapsing to
       // undefined.
       newRevision.parentRevisionId = opts.parentRevisionId;
+    }
+    if (opts.editVia !== undefined) {
+      newRevision.editVia = opts.editVia;
     }
 
     return newRevision;
