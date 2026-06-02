@@ -218,9 +218,9 @@ export function useDeleteAdminUser() {
 }
 
 /**
- * Number of users awaiting admin approval (status REGISTERED). Polls on a
- * short interval so the sidebar approval badge stays roughly fresh while an
- * admin works elsewhere in the panel.
+ * Number of users awaiting admin approval (status REGISTERED). Refetched on a
+ * 60s interval (and on window focus) so the sidebar approval badge stays
+ * roughly fresh while an admin works elsewhere in the panel.
  */
 export function useAdminPendingUsersCount() {
   return useQuery({
@@ -231,6 +231,7 @@ export function useAdminPendingUsersCount() {
       return throwAdminUserError(response, 'Failed to fetch pending user count');
     },
     staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
     refetchOnWindowFocus: true,
   });
 }

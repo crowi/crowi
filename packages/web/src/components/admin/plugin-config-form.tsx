@@ -232,7 +232,7 @@ function FieldRow({ field, state, setState, issue }: FieldRowProps) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={`field-${field.name}`}>
-        {field.name}
+        {labelDisplay}
         {optional}
       </Label>
       <Input

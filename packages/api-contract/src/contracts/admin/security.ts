@@ -45,7 +45,7 @@ export const updateSecuritySettingsRoute = createRoute({
   path: '/admin/security',
   tags: ['admin.security'],
   security: [{ bearerAuth: [] }],
-  summary: 'Update security:* settings (basicName / basicSecret / registrationMode / registrationWhiteList)',
+  summary: 'Update security:* settings (registrationMode / registrationWhiteList)',
   request: {
     body: {
       content: { 'application/json': { schema: UpdateSecuritySettingsRequestSchema } },
