@@ -1,21 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Bell } from 'lucide-react';
 import type { Notification } from '@crowi/api-contract';
-
-import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { UserAvatar } from '@/components/user-avatar';
-import { cn } from '@/lib/utils';
-import { useUnreadCount, useNotifications, useMarkAllAsRead, useOpenNotification } from '@/lib/use-notifications';
-import { formatRelativeTime, buildNotificationMessage, isUnopenedNotification } from '@/lib/notification-format';
-import { resolveNotificationHref } from '@/lib/notification-href';
-import { scrollToSectionWhenReady, SCROLL_TARGETS } from '@/lib/scroll-to-section';
 import { NotificationActionEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { Bell } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { NotificationAvatar } from '@/components/notification-list/notification-avatar';
+import { NotificationMessage } from '@/components/notification-list/notification-message';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { formatRelativeTime, isUnopenedNotification } from '@/lib/notification-format';
+import { resolveNotificationHref } from '@/lib/notification-href';
+import { SCROLL_TARGETS, scrollToSectionWhenReady } from '@/lib/scroll-to-section';
+import { useMarkAllAsRead, useNotifications, useOpenNotification, useUnreadCount } from '@/lib/use-notifications';
+import { cn } from '@/lib/utils';
 
 interface NotificationRowProps {
   notification: Notification;
@@ -37,13 +37,13 @@ function NotificationRow({ notification, onOpen }: NotificationRowProps) {
         isUnread && 'bg-accent/40',
       )}
     >
-      {firstUser ? (
-        <UserAvatar user={firstUser} size="sm" className="mt-0.5 shrink-0" />
-      ) : (
-        <div className="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-muted" aria-hidden />
-      )}
+      <div className="mt-0.5">
+        <NotificationAvatar user={firstUser} action={notification.action} size="sm" />
+      </div>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="line-clamp-2 break-all text-foreground">{buildNotificationMessage(notification)}</div>
+        <div className="line-clamp-2 break-words text-muted-foreground">
+          <NotificationMessage notification={notification} />
+        </div>
         <div className="text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</div>
       </div>
       {isUnread ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden /> : null}
@@ -116,7 +116,7 @@ export function NotificationBell() {
           ) : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0">
+      <DropdownMenuContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
           <span className="text-sm font-medium">{m['notifications.title']()}</span>
           <button
