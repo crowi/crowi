@@ -6,6 +6,12 @@ const ACTION_MODIFY = 'MODIFY'; // Not support yet
 const ACTION_DELETE = 'DELETE'; // Not support yet
 const ACTION_COMMENT = 'COMMENT';
 const ACTION_LIKE = 'LIKE';
+// feature-page-update-notification: fan-out to watchers when a page body
+// gets a new revision. Named to match the page event ('update'), the
+// contract NotificationAction enum ('UPDATE') and the i18n key
+// (`notifications.action_update`) end-to-end. The reserved ACTION_MODIFY
+// placeholder above is left untouched.
+const ACTION_UPDATE = 'UPDATE';
 // RFC-0002 Phase 8: page-level mention of a user via `@username` in
 // the body. Dispatched per mentioned-user (not fanned out to watchers)
 // by `events/mention-dispatch.ts`.
@@ -27,6 +33,7 @@ const getSupportActionNames = () => {
     ACTION_COMMENT,
     ACTION_LIKE,
     ACTION_MENTION,
+    ACTION_UPDATE,
   ];
 };
 
@@ -40,6 +47,7 @@ const activityDefine = {
   ACTION_COMMENT,
   ACTION_LIKE,
   ACTION_MENTION,
+  ACTION_UPDATE,
 
   getSupportTargetModelNames,
   getSupportEventModelNames,

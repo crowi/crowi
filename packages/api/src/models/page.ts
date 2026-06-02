@@ -1052,12 +1052,16 @@ export default (crowi: Crowi) => {
     await Page.pushRevision(pageData, newRevision, user);
     const bookmarkCount = await Bookmark.countByPageId(pageData._id);
 
+    // The 4th arg flags "a new revision was created" so events/page.ts can
+    // fan out an UPDATE notification only for body updates (not rename /
+    // metadata-only 'update' emits). updatePage always goes through
+    // pushRevision above, so this path is always a new revision.
     if (grant != pageData.grant) {
       const data = await Page.updateGrant(pageData, grant, user);
-      pageEvent.emit('update', data, user, bookmarkCount);
+      pageEvent.emit('update', data, user, bookmarkCount, true);
       return data;
     }
-    pageEvent.emit('update', pageData, user, bookmarkCount);
+    pageEvent.emit('update', pageData, user, bookmarkCount, true);
     return pageData;
   };
 
