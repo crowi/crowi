@@ -297,6 +297,8 @@
   "page_history.col_from": "From",
   "page_history.col_to": "To",
   "page_history.col_author": "Author",
+  "page_history.api_chip_label": "app",
+  "page_history.api_update_tooltip": "Updated via the API using an OAuth token",
   "page_history.col_created": "Created",
   "page_history.col_revision": "Revision",
   "page_history.unknown_author": "Unknown",

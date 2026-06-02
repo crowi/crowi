@@ -80,6 +80,9 @@ const revisionToMetaResponse = (revision: RevisionDocument) => {
     // Omit `.contributors` entirely (not `[]`) when undefined so the
     // pre-RFC-0003 shape stays byte-identical.
     ...(contributors !== undefined ? { contributors } : {}),
+    // RFC-0010 — edit channel for the history "app" chip; omitted when
+    // absent (pre-RFC-0010 / collab / web) to keep the legacy shape.
+    ...(revision.editVia !== undefined ? { editVia: revision.editVia } : {}),
     createdAt: toISOStringOrNull(revision.createdAt) ?? new Date(0).toISOString(),
   };
 };
@@ -121,7 +124,7 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
           // One round-trip: chained .populate() calls collapse to a
           // single `$lookup` stage. fetch +1 to derive hasNext.
           const allRevisions = await Revision.find({ path: page.path })
-            .select('_id path author savedBy contributors createdAt')
+            .select('_id path author savedBy contributors editVia createdAt')
             .sort({ createdAt: -1 })
             .skip(offset)
             .limit(limit + 1)

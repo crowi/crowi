@@ -1171,6 +1171,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -2171,6 +2173,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -2275,6 +2279,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -2486,6 +2492,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -2701,6 +2709,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -2899,6 +2909,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -3096,6 +3108,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -3379,6 +3393,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -3931,6 +3947,8 @@ export interface paths {
                                     image?: string | null;
                                     createdAt: string;
                                 }[];
+                                /** @enum {string} */
+                                editVia?: "web" | "oauth" | "pat";
                                 createdAt: string;
                             }[];
                             pager: {
@@ -4084,6 +4102,8 @@ export interface paths {
                                     createdAt: string;
                                 })[];
                                 message?: string;
+                                /** @enum {string} */
+                                editVia?: "web" | "oauth" | "pat";
                             }[];
                         };
                     };
@@ -4231,6 +4251,8 @@ export interface paths {
                                     createdAt: string;
                                 })[];
                                 message?: string;
+                                /** @enum {string} */
+                                editVia?: "web" | "oauth" | "pat";
                             };
                         };
                     };
@@ -4383,6 +4405,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4565,6 +4589,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4759,6 +4785,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -4922,6 +4950,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5126,6 +5156,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5233,6 +5265,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5397,6 +5431,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5799,6 +5835,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -5992,6 +6030,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -6350,6 +6390,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -6545,6 +6587,8 @@ export interface paths {
                                         createdAt: string;
                                     })[];
                                     message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
                                 };
                                 redirectTo?: string | null;
                                 /** @enum {string|null} */
@@ -8425,6 +8469,8 @@ export interface paths {
                                             createdAt: string;
                                         })[];
                                         message?: string;
+                                        /** @enum {string} */
+                                        editVia?: "web" | "oauth" | "pat";
                                     };
                                     redirectTo?: string | null;
                                     /** @enum {string|null} */
@@ -12535,6 +12581,8 @@ export interface components {
                     createdAt: string;
                 })[];
                 message?: string;
+                /** @enum {string} */
+                editVia?: "web" | "oauth" | "pat";
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
@@ -12637,6 +12685,8 @@ export interface components {
                     createdAt: string;
                 })[];
                 message?: string;
+                /** @enum {string} */
+                editVia?: "web" | "oauth" | "pat";
             };
             redirectTo?: string | null;
             /** @enum {string|null} */
@@ -12736,6 +12786,8 @@ export interface components {
                 createdAt: string;
             })[];
             message?: string;
+            /** @enum {string} */
+            editVia?: "web" | "oauth" | "pat";
         };
         RevisionMeta: {
             toc?: {
@@ -12844,6 +12896,8 @@ export interface components {
                         createdAt: string;
                     })[];
                     message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -12951,6 +13005,8 @@ export interface components {
                         createdAt: string;
                     })[];
                     message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -13055,6 +13111,8 @@ export interface components {
                         createdAt: string;
                     })[];
                     message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */
@@ -13209,6 +13267,8 @@ export interface components {
                         createdAt: string;
                     })[];
                     message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
                 };
                 redirectTo?: string | null;
                 /** @enum {string|null} */

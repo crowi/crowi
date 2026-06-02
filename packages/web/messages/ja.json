@@ -297,6 +297,8 @@
   "page_history.col_from": "From",
   "page_history.col_to": "To",
   "page_history.col_author": "作成者",
+  "page_history.api_chip_label": "app",
+  "page_history.api_update_tooltip": "OAuth トークンを用いた API 経由での更新です",
   "page_history.col_created": "作成日時",
   "page_history.col_revision": "リビジョン",
   "page_history.unknown_author": "不明",

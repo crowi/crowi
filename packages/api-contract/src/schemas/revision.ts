@@ -25,6 +25,10 @@ export const RevisionMetaSchema = z.object({
   author: PageUserSchema.nullable().optional(),
   savedBy: PageUserSchema.nullable().optional(),
   contributors: z.array(PageUserSchema).optional(),
+  // RFC-0010 — edit channel. `web` (browser / collab editor) vs the API
+  // token paths (`oauth` / `pat`). Absent on pre-RFC-0010 revisions. The
+  // history UI shows an "app" chip for the token paths.
+  editVia: z.enum(['web', 'oauth', 'pat']).optional(),
   createdAt: z.string(),
 });
 export type RevisionMeta = z.infer<typeof RevisionMetaSchema>;

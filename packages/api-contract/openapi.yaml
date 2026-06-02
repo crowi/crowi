@@ -758,6 +758,12 @@ components:
                           - createdAt
                 message:
                   type: string
+                editVia:
+                  type: string
+                  enum:
+                    - web
+                    - oauth
+                    - pat
               required:
                 - _id
                 - path
@@ -1043,6 +1049,12 @@ components:
                       - createdAt
             message:
               type: string
+            editVia:
+              type: string
+              enum:
+                - web
+                - oauth
+                - pat
           required:
             - _id
             - path
@@ -1320,6 +1332,12 @@ components:
                   - createdAt
         message:
           type: string
+        editVia:
+          type: string
+          enum:
+            - web
+            - oauth
+            - pat
       required:
         - _id
         - path
@@ -1621,6 +1639,12 @@ components:
                                 - createdAt
                       message:
                         type: string
+                      editVia:
+                        type: string
+                        enum:
+                          - web
+                          - oauth
+                          - pat
                     required:
                       - _id
                       - path
@@ -1927,6 +1951,12 @@ components:
                               - createdAt
                     message:
                       type: string
+                    editVia:
+                      type: string
+                      enum:
+                        - web
+                        - oauth
+                        - pat
                   required:
                     - _id
                     - path
@@ -2218,6 +2248,12 @@ components:
                           - createdAt
                 message:
                   type: string
+                editVia:
+                  type: string
+                  enum:
+                    - web
+                    - oauth
+                    - pat
               required:
                 - _id
                 - path
@@ -2638,6 +2674,12 @@ components:
                                 - createdAt
                       message:
                         type: string
+                      editVia:
+                        type: string
+                        enum:
+                          - web
+                          - oauth
+                          - pat
                     required:
                       - _id
                       - path
@@ -5846,6 +5888,12 @@ paths:
                                           - createdAt
                                 message:
                                   type: string
+                                editVia:
+                                  type: string
+                                  enum:
+                                    - web
+                                    - oauth
+                                    - pat
                               required:
                                 - _id
                                 - path
@@ -7224,6 +7272,12 @@ paths:
                                           - createdAt
                                 message:
                                   type: string
+                                editVia:
+                                  type: string
+                                  enum:
+                                    - web
+                                    - oauth
+                                    - pat
                               required:
                                 - _id
                                 - path
@@ -7518,6 +7572,12 @@ paths:
                                               - createdAt
                                     message:
                                       type: string
+                                    editVia:
+                                      type: string
+                                      enum:
+                                        - web
+                                        - oauth
+                                        - pat
                                   required:
                                     - _id
                                     - path
@@ -7971,6 +8031,12 @@ paths:
                                               - createdAt
                                     message:
                                       type: string
+                                    editVia:
+                                      type: string
+                                      enum:
+                                        - web
+                                        - oauth
+                                        - pat
                                   required:
                                     - _id
                                     - path
@@ -8438,6 +8504,12 @@ paths:
                                           - createdAt
                                 message:
                                   type: string
+                                editVia:
+                                  type: string
+                                  enum:
+                                    - web
+                                    - oauth
+                                    - pat
                               required:
                                 - _id
                                 - path
@@ -8847,6 +8919,12 @@ paths:
                                             - createdAt
                                   message:
                                     type: string
+                                  editVia:
+                                    type: string
+                                    enum:
+                                      - web
+                                      - oauth
+                                      - pat
                                 required:
                                   - _id
                                   - path
@@ -9283,6 +9361,12 @@ paths:
                                             - createdAt
                                   message:
                                     type: string
+                                  editVia:
+                                    type: string
+                                    enum:
+                                      - web
+                                      - oauth
+                                      - pat
                                 required:
                                   - _id
                                   - path
@@ -9826,6 +9910,12 @@ paths:
                                               - createdAt
                                     message:
                                       type: string
+                                    editVia:
+                                      type: string
+                                      enum:
+                                        - web
+                                        - oauth
+                                        - pat
                                   required:
                                     - _id
                                     - path
@@ -10770,6 +10860,12 @@ paths:
                               - name
                               - email
                               - createdAt
+                        editVia:
+                          type: string
+                          enum:
+                            - web
+                            - oauth
+                            - pat
                         createdAt:
                           type: string
                       required:
@@ -11051,6 +11147,12 @@ paths:
                                   - createdAt
                         message:
                           type: string
+                        editVia:
+                          type: string
+                          enum:
+                            - web
+                            - oauth
+                            - pat
                       required:
                         - _id
                         - path
@@ -11310,6 +11412,12 @@ paths:
                                 - createdAt
                       message:
                         type: string
+                      editVia:
+                        type: string
+                        enum:
+                          - web
+                          - oauth
+                          - pat
                     required:
                       - _id
                       - path
@@ -11586,6 +11694,12 @@ paths:
                                     - createdAt
                           message:
                             type: string
+                          editVia:
+                            type: string
+                            enum:
+                              - web
+                              - oauth
+                              - pat
                         required:
                           - _id
                           - path
@@ -11974,6 +12088,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -12340,6 +12460,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -12747,6 +12873,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -13176,6 +13308,12 @@ paths:
                                           - createdAt
                                 message:
                                   type: string
+                                editVia:
+                                  type: string
+                                  enum:
+                                    - web
+                                    - oauth
+                                    - pat
                               required:
                                 - _id
                                 - path
@@ -13482,6 +13620,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -13825,6 +13969,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -14486,6 +14636,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -14869,6 +15025,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -15446,6 +15608,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -15834,6 +16002,12 @@ paths:
                                         - createdAt
                               message:
                                 type: string
+                              editVia:
+                                type: string
+                                enum:
+                                  - web
+                                  - oauth
+                                  - pat
                             required:
                               - _id
                               - path
@@ -18681,6 +18855,12 @@ paths:
                                               - createdAt
                                     message:
                                       type: string
+                                    editVia:
+                                      type: string
+                                      enum:
+                                        - web
+                                        - oauth
+                                        - pat
                                   required:
                                     - _id
                                     - path

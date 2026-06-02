@@ -1031,7 +1031,7 @@ export default (crowi: Crowi) => {
       grantedUsers: user ? [user] : [],
     });
 
-    const newRevision = await Revision.prepareRevision(newPage, body, user, { format });
+    const newRevision = await Revision.prepareRevision(newPage, body, user, { format, editVia: options.editVia });
     try {
       const revisionData = await Page.pushRevision(newPage, newRevision, user);
       pageEvent.emit('create', revisionData, user);
@@ -1047,7 +1047,7 @@ export default (crowi: Crowi) => {
     const Bookmark = crowi.model('Bookmark');
     const grant = options.grant || null;
     // update existing page
-    const newRevision = await Revision.prepareRevision(pageData, body, user);
+    const newRevision = await Revision.prepareRevision(pageData, body, user, { editVia: options.editVia });
 
     // This is the external (REST / API) edit path — it bypasses the
     // collaborative editor. Per RFC-0003 §"Server-side direct Markdown

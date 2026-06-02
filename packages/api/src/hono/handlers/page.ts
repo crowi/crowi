@@ -363,7 +363,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(pageBadRequestBody('PAGE_EXISTS', 'Page exists'), 400);
           }
 
-          const createOptions: { grant?: number } = grant !== undefined ? { grant } : {};
+          // RFC-0010 — record the edit channel (web / oauth / pat) so the
+          // history view can flag API-token edits.
+          const createOptions: { grant?: number; editVia: 'web' | 'oauth' | 'pat' } = { editVia: c.get('authContext').kind };
+          if (grant !== undefined) createOptions.grant = grant;
           const created = (await Page.createPage(path, body, user, createOptions)) as PageDocument | null;
           if (!created) {
             throw new Error('Failed to create page.');
@@ -409,8 +412,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(pageRevisionConflictBody(), 409);
           }
 
-          const grantOption = { grant: grant ?? pageData.grant };
-          const updated = (await Page.updatePage(pageData, body, user, grantOption)) as PageDocument;
+          // RFC-0010 — record the edit channel (web / oauth / pat) so the
+          // history view can flag API-token edits.
+          const updateOptions = { grant: grant ?? pageData.grant, editVia: c.get('authContext').kind };
+          const updated = (await Page.updatePage(pageData, body, user, updateOptions)) as PageDocument;
           const populated = await Page.populatePageData(updated, null);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
