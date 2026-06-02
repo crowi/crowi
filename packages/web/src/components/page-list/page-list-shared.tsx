@@ -76,17 +76,21 @@ interface PageListSectionHeaderProps {
   icon?: LucideIcon;
   /** The header text. Callers format their own count (e.g. `{count} ページ`). */
   label: string;
+  /** Optional right-aligned slot (e.g. a sort control). */
+  action?: React.ReactNode;
 }
 
 /**
  * The small muted row that sits above the `PageRowsCard` and tells the
  * reader what they are looking at (`23 件のページ`, `12 件のブックマーク`).
+ * An optional `action` slot hugs the right edge for controls like sort.
  */
-export function PageListSectionHeader({ icon: Icon = List, label }: PageListSectionHeaderProps) {
+export function PageListSectionHeader({ icon: Icon = List, label, action }: PageListSectionHeaderProps) {
   return (
     <div className="flex items-center gap-1.5 px-1 text-sm text-muted-foreground">
       <Icon className="h-4 w-4" />
       <span>{label}</span>
+      {action && <div className="ml-auto">{action}</div>}
     </div>
   );
 }

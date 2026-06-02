@@ -7,6 +7,7 @@ import type { PageWithRevision } from '@crowi/api-contract';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatAbsoluteDateTime, formatDistanceToNow } from '@/lib/date-utils';
+import { resolveDisplayUser } from '@/lib/page-display-user';
 import { useBacklinks } from '@/lib/use-backlinks';
 import { SCROLL_TARGETS, scrollToSection } from '@/lib/scroll-to-section';
 import { m } from '@paraglide/messages.js';
@@ -41,10 +42,7 @@ export function MetaChipRow({ page }: MetaChipRowProps) {
   const [likersOpen, setLikersOpen] = useState(false);
   const [seenOpen, setSeenOpen] = useState(false);
 
-  const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
-  const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
-  const author = page.revision?.author ?? null;
-  const displayUser = lastUpdateUser ?? creator ?? author;
+  const displayUser = resolveDisplayUser(page);
 
   const likerCount = page.likerCount ?? page.liker?.length ?? 0;
   const seenUsersCount = page.seenUsersCount ?? 0;

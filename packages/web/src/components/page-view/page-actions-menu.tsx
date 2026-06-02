@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Bookmark, History, Link2, MoreHorizontal, MoveRight, Trash2 } from 'lucide-react';
+import { Bell, BellOff, Bookmark, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToggleBookmark } from '@/lib/use-bookmark';
+import { useToggleLike } from '@/lib/use-like';
 import { useToggleWatch } from '@/lib/use-watch';
 import { m } from '@paraglide/messages.js';
 import { DeletePageDialog } from './delete-page-dialog';
@@ -23,9 +24,18 @@ interface PageActionsMenuProps {
   compact?: boolean;
   /** Whether the current user can use the authenticated-only actions (watch). */
   isAuthenticated?: boolean;
+  /**
+   * Portal mode: fold the social actions (like / watch / copy-link) in as
+   * menu items so the portal header stays minimal. Unlike `compact`,
+   * bookmark is NOT folded in — the portal keeps it as a visible button —
+   * and `like` IS folded in (a portal has no separate like button).
+   */
+  foldSocial?: boolean;
+  /** Current like state, used only by the `foldSocial` like menu item. */
+  isLiked?: boolean;
 }
 
-export function PageActionsMenu({ page, compact = false, isAuthenticated = false }: PageActionsMenuProps) {
+export function PageActionsMenu({ page, compact = false, isAuthenticated = false, foldSocial = false, isLiked = false }: PageActionsMenuProps) {
   const router = useRouter();
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -43,10 +53,22 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {/* Compact sticky header: fold watch / bookmark / copy-link in
+              (like stays a separate icon button up in the bar). */}
           {compact && !isDraft && (
             <>
               {isAuthenticated && <WatchMenuItem pageId={page._id} />}
               <BookmarkMenuItem pageId={page._id} />
+              <CopyLinkMenuItem pageId={page._id} />
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {/* Portal: fold like / watch / copy-link in — bookmark stays a
+              visible button in the portal header, so it is not folded. */}
+          {foldSocial && !isDraft && (
+            <>
+              {isAuthenticated && <LikeMenuItem pageId={page._id} isLiked={isLiked} />}
+              {isAuthenticated && <WatchMenuItem pageId={page._id} />}
               <CopyLinkMenuItem pageId={page._id} />
               <DropdownMenuSeparator />
             </>
@@ -70,6 +92,22 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
       <RenameDialog page={page} open={isRenameOpen} onOpenChange={setIsRenameOpen} />
       <DeletePageDialog pageId={page._id} pagePath={page.path} revisionId={page.revision?._id} open={isDeleteOpen} onOpenChange={setIsDeleteOpen} />
     </>
+  );
+}
+
+/** Like toggle as a dropdown item (portal header `foldSocial`). */
+function LikeMenuItem({ pageId, isLiked }: { pageId: string; isLiked: boolean }) {
+  const { toggle } = useToggleLike(pageId, isLiked);
+  return (
+    <DropdownMenuItem
+      onSelect={(e) => {
+        e.preventDefault();
+        toggle();
+      }}
+    >
+      <ThumbsUp className={`h-4 w-4 mr-2 ${isLiked ? 'fill-current' : ''}`} />
+      {isLiked ? m['page.like_label_done']() : m['page.like_label']()}
+    </DropdownMenuItem>
   );
 }
 

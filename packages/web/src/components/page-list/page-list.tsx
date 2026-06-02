@@ -5,9 +5,7 @@ import { m } from '@paraglide/messages.js';
 import { Compass, Folder, HelpCircle, Pencil, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Breadcrumb } from '@/components/breadcrumb';
 import { PageContent } from '@/components/page-view/page-content';
-import { PageHeader } from '@/components/page-view/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -19,6 +17,19 @@ import { usePageList } from '@/lib/use-page-list';
 import type { PageListVariant } from './page-list-item';
 import { PageListEmptyCard, PageListSectionHeader, PageRowsCard, PageRowsSkeleton } from './page-list-shared';
 import { Pagination } from './pagination';
+import { PageSortMenu } from './page-sort-menu';
+import { PortalHeader, PortalOverline } from './portal-header';
+
+/**
+ * A portal document leads its body with a markdown `# heading`, which we
+ * let stand as the single page title (the header strip carries no title).
+ * Only when the body has NO leading H1 do we fall back to rendering the
+ * folder name as the title. Matches the first non-blank line against a
+ * level-1 ATX heading (`# x`, not `## x`).
+ */
+function hasLeadingH1(body: string): boolean {
+  return /^\s*#[ \t]+\S/.test(body);
+}
 
 interface PageListProps {
   initialParams?: Partial<ListPagesRequest>;
@@ -54,6 +65,8 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
     limit: DEFAULT_PAGE_LIMIT,
     offset: 0,
     include_deleted: false,
+    sort: 'updatedAt',
+    order: 'desc',
     ...initialParams,
   });
   const portalPath = params.path;
@@ -65,6 +78,12 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
     setParams((prev) => ({ ...prev, offset }));
     // Scroll to top when page changes
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Changing the sort resets to the first page — the offset into the old
+  // ordering is meaningless under the new one.
+  const handleSortChange = (next: { sort: ListPagesRequest['sort']; order: ListPagesRequest['order'] }) => {
+    setParams((prev) => ({ ...prev, ...next, offset: 0 }));
   };
 
   if (isLoading) {
@@ -120,16 +139,18 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
           like / bookmark / watch) come from the shared PageHeader, so the
           portal can be operated exactly like a normal page. */}
       {portalPage ? (
-        <Card className="gap-0 overflow-hidden py-0">
-          <div className="p-6">
-            <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
-              <Compass className="h-3.5 w-3.5" />
-              {m['page_list.portal_label']()}
-            </div>
-            <PageHeader page={portalPage} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(portalPage._id)}`)} showActions />
+        <div>
+          <PortalHeader page={portalPage} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(portalPage._id)}`)} />
+          <div className="mt-6">
+            {/* The portal body's own `# heading` is the page title. Only
+                when it has none do we name the folder ourselves so the
+                portal is never titleless. */}
+            {!hasLeadingH1(portalPage.revision?.body ?? '') && (
+              <h1 className="mb-4 text-3xl font-bold leading-tight tracking-tight">{getPortalTitle(portalPage.path)}</h1>
+            )}
             <PageContent page={portalPage} />
           </div>
-        </Card>
+        </div>
       ) : (
         portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash && !ownDraftPortalId} draftPortalId={ownDraftPortalId} />
       )}
@@ -137,7 +158,10 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
       {/* Children list */}
       {data.pages.length > 0 && (
         <section className="space-y-2">
-          <PageListSectionHeader label={formatPageCount(data.pages.length, data.pager)} />
+          <PageListSectionHeader
+            label={formatPageCount(data.pages.length, data.pager)}
+            action={!isTrash && <PageSortMenu sort={params.sort} order={params.order} onChange={handleSortChange} />}
+          />
           <PageRowsCard pages={data.pages} variant={variant} />
           <Pagination pager={data.pager} limit={params.limit} onPageChange={handlePageChange} />
         </section>
@@ -170,8 +194,11 @@ function PortalFallbackHeader({ path, showCreatePortal = false, draftPortalId }:
   const isRoot = path === '/';
   return (
     <div className="border-b pb-4">
-      <Breadcrumb path={path} />
-      <div className="mt-1 flex items-start justify-between gap-4">
+      {/* No portal document here yet — the "Create Portal" CTA + folder
+          title already say "this is a folder without a portal", so the
+          PORTAL chip (reserved for an actual portal document) is omitted. */}
+      <PortalOverline path={path} />
+      <div className="mt-3 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Folder className="h-7 w-7 text-muted-foreground shrink-0" aria-hidden="true" />

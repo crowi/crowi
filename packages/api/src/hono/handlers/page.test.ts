@@ -1545,3 +1545,68 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
     expect(withoutFlagPaths).not.toContain(`/trash${path}`);
   });
 });
+
+describe('Routes /api/v2/pages/list (Hono listPages — sort / order)', () => {
+  const PATH_PREFIX = '/hono-page-sort-test/';
+  let headers: ReturnType<typeof authHeaders>;
+
+  beforeAll(async () => {
+    const u = await createTestUser({ name: 'Sort Tester', username: 'sortTester', email: 'sort-tester@example.com' });
+    headers = authHeaders(u.accessToken);
+  });
+
+  afterEach(async () => {
+    await cleanupPathPrefix(PATH_PREFIX);
+  });
+
+  // Create a page and return { id, revisionId }. Pages are authored in
+  // call order, so createdAt follows the sequence of awaited calls.
+  const createPage = async (name: string) => {
+    const res = await request(app)
+      .post('/api/v2/pages')
+      .set(headers)
+      .send({ path: `${PATH_PREFIX}${name}`, body: `# ${name}` });
+    expect(res.status).toBe(200);
+    return { id: res.body.page._id as string, revisionId: res.body.page.revision._id as string };
+  };
+
+  // Returned ids restricted to (and in the order of) the three we created.
+  const orderedOurs = (body: { pages: Array<{ _id: string }> }, ours: string[]) => body.pages.map((p) => p._id).filter((id) => ours.includes(id));
+
+  it('sorts by name (path) ascending', async () => {
+    // Created z → a → m so creation order differs from alphabetical.
+    const zebra = await createPage('zebra');
+    const alpha = await createPage('alpha');
+    const mango = await createPage('mango');
+
+    const list = await request(app).get('/api/v2/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'path', order: 'asc' });
+    expect(list.status).toBe(200);
+    expect(orderedOurs(list.body, [zebra.id, alpha.id, mango.id])).toEqual([alpha.id, mango.id, zebra.id]);
+  });
+
+  it('sorts by createdAt descending (newest authored first)', async () => {
+    const zebra = await createPage('zebra');
+    const alpha = await createPage('alpha');
+    const mango = await createPage('mango');
+
+    const list = await request(app).get('/api/v2/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'createdAt', order: 'desc' });
+    expect(list.status).toBe(200);
+    expect(orderedOurs(list.body, [zebra.id, alpha.id, mango.id])).toEqual([mango.id, alpha.id, zebra.id]);
+  });
+
+  it('sorts by updatedAt descending, independent of creation order', async () => {
+    const zebra = await createPage('zebra');
+    const alpha = await createPage('alpha');
+    await createPage('mango');
+
+    // Touch the oldest-created page so its updatedAt becomes the newest;
+    // by createdAt it would sort last, by updatedAt it must now lead.
+    const upd = await request(app).put('/api/v2/pages').set(headers).send({ page_id: zebra.id, body: '# zebra v2', revision_id: zebra.revisionId });
+    expect(upd.status).toBe(200);
+
+    const list = await request(app).get('/api/v2/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'updatedAt', order: 'desc' });
+    expect(list.status).toBe(200);
+    const ours = orderedOurs(list.body, [zebra.id, alpha.id]);
+    expect(ours[0]).toBe(zebra.id);
+  });
+});
