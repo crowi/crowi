@@ -35888,7 +35888,8 @@
                             "enum": [
                               "COMMENT",
                               "LIKE",
-                              "MENTION"
+                              "MENTION",
+                              "UPDATE"
                             ]
                           },
                           "status": {
@@ -36496,7 +36497,8 @@
                           "enum": [
                             "COMMENT",
                             "LIKE",
-                            "MENTION"
+                            "MENTION",
+                            "UPDATE"
                           ]
                         },
                         "status": {
