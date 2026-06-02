@@ -26,6 +26,7 @@ import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runAwsConfigMigration } from 'src/util/aws-config-migration';
 import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
 import { runPageStatusMigration } from 'src/util/page-status-migration';
+import { type BootReporter, createBootReporter } from 'src/util/boot-reporter';
 
 const pkg = require('../../package.json');
 
@@ -140,6 +141,14 @@ class Crowi {
    */
   notificationsAttachment: AttachedNotifications | null = null;
 
+  /**
+   * Docker-style boot progress reporter (feature-boot-progress-ui). Spans
+   * `init()` (core/config/services layers) and `start()` (server layer), so it
+   * lives on the instance rather than a local. `null` for the CLI lightweight
+   * init (`initForCli`) which keeps the legacy quiet UX.
+   */
+  bootReporter: BootReporter | null = null;
+
   initialized = false;
 
   constructor(rootdir: string, env: typeof process.env) {
@@ -173,10 +182,41 @@ class Crowi {
     // rather than reading +0ms (debug's default when there's no prior log
     // on the namespace).
     bootDebug('init start');
+
+    // Boot progress reporter — owns stdout (debug-independent) so operators
+    // see layered spinner/✓ progress without `DEBUG=crowi:*`. Degrades to
+    // structured plain lines on non-TTY (prod / `| cat`) or when DEBUG is set.
+    const reporter = createBootReporter();
+    this.bootReporter = reporter;
+
+    // A step throwing (DB/Redis down is the common dev case) rejects out of
+    // init(); without this guard the spinner interval keeps redrawing the same
+    // line — overwriting the fatal stack `exitOnError` prints — and the hidden
+    // cursor never comes back. Stop the spinner before the rejection
+    // propagates. `dispose()` is idempotent, so `exitOnError` calling it again
+    // is harmless.
+    try {
+      await this.runInitLayers(reporter);
+    } catch (err) {
+      reporter.dispose();
+      throw err;
+    }
+
+    bootDebug(`init complete in ${Date.now() - initStart}ms`);
+    this.initialized = true;
+  }
+
+  private async runInitLayers(reporter: BootReporter): Promise<void> {
+    // ── core: encryption / database / models / redis ──
+    reporter.beginLayer('core');
     await step('setupEncryption', () => this.setupEncryption());
     await step('setupDatabase', () => this.setupDatabase());
     await step('setupModels', () => this.setupModels());
     await step('setupRedisClient', () => this.setupRedisClient());
+    reporter.endLayer();
+
+    // ── config: load / migrations / oauth seed ──
+    reporter.beginLayer('config');
     await step('setupConfig', () => this.setupConfig());
     await step('migrateConfig', () => this.migrateConfig());
     // Must run before setupPlugins — @crowi/plugin-aws reads its config at
@@ -194,6 +234,10 @@ class Crowi {
     // Idempotent upsert (`$setOnInsert`) — runs after setupModels so the
     // OAuthClient model is registered; disjoint from the migrations above.
     await step('seedOAuthClients', () => runOAuthClientSeed(this));
+    reporter.endLayer();
+
+    // ── services: renderer / plugins / mailer / slack / lru ──
+    reporter.beginLayer('services');
     // Renderer must boot BEFORE plugins so PluginManager.activate()
     // can hand plugins a registry that already has the core 4
     // transforms (TOC / wikilinks / mentions / codeBlockLanguages)
@@ -213,9 +257,7 @@ class Crowi {
     await step('setupMailer', () => this.setupMailer());
     await step('setupSlack', () => this.setupSlack());
     await step('setupLRU', () => this.setupLRU());
-
-    bootDebug(`init complete in ${Date.now() - initStart}ms`);
-    this.initialized = true;
+    reporter.endLayer();
   }
 
   /**
@@ -298,7 +340,11 @@ class Crowi {
     this.pluginManager = new PluginManager(this);
     this.pluginRegistries = await this.pluginManager.bootstrap();
     const loaded = this.pluginManager.getLoadedPlugins();
-    console.log(`[crowi] Loaded ${loaded.length} plugin(s): ${loaded.map((p) => `${p.name}@${p.version}`).join(', ')}`);
+    const summary = `[crowi] Loaded ${loaded.length} plugin(s): ${loaded.map((p) => `${p.name}@${p.version}`).join(', ')}`;
+    // Route through `bootNote` so the summary clears/re-draws the in-progress
+    // `services` spinner instead of corrupting it (plain console.log outside
+    // boot / in plain mode).
+    this.bootNote(() => console.log(summary));
   }
 
   /**
@@ -353,6 +399,34 @@ class Crowi {
     return this.env.CLIENT_URL || null;
   }
 
+  /**
+   * The address the api server itself is listening on (`this.port`, default
+   * 4301). Used for the boot reporter's `🚀 API ready` banner and the
+   * `@@crowi:ready api <url>` marker that `scripts/dev.mjs` keys on.
+   *
+   * Deliberately NOT `getBaseUrl()`: that is `CLIENT_URL` / `app:url`, the
+   * public site origin, which in dev is the web app on :4302 — using it here
+   * would mislabel the api as the web port.
+   */
+  getApiReadyUrl(): string {
+    return `http://localhost:${this.port}`;
+  }
+
+  /**
+   * Emit a boot-time line (warning / error / info such as the plugin summary)
+   * without corrupting the live progress spinner. When the reporter is active
+   * it clears the current spinner line, runs `write`, then re-draws; otherwise
+   * (no reporter / plain mode) it just runs `write`. Keeps the existing
+   * console.warn/error/log visibility intact (these are not gated on DEBUG).
+   */
+  bootNote(write: () => void): void {
+    if (this.bootReporter) {
+      this.bootReporter.note(write);
+    } else {
+      write();
+    }
+  }
+
   getEnv() {
     return this.env;
   }
@@ -392,8 +466,12 @@ class Crowi {
   setupEncryption() {
     const raw = process.env.CROWI_ENCRYPTION_KEY;
     if (!raw) {
-      console.warn('[crowi] CROWI_ENCRYPTION_KEY is not set — sensitive Config values will be stored as plaintext (legacy mode).');
-      console.warn('[crowi] Generate a 32-byte key with: openssl rand -base64 32');
+      // `note()` clears the live boot spinner before warning so the line
+      // isn't corrupted (no-op passthrough outside boot / in plain mode).
+      this.bootNote(() => {
+        console.warn('[crowi] CROWI_ENCRYPTION_KEY is not set — sensitive Config values will be stored as plaintext (legacy mode).');
+        console.warn('[crowi] Generate a 32-byte key with: openssl rand -base64 32');
+      });
       return;
     }
     const buf = Buffer.from(raw, 'base64');
@@ -427,7 +505,12 @@ class Crowi {
         if (e) {
           debug('DB Connect Error: ', e);
           debug('DB Connect Error: ', mongoUri);
-          return reject(new Error("Cann't connect to Database Server."));
+          // Fold the underlying driver message (ECONNREFUSED / auth / DNS) into
+          // the thrown error so the root cause is visible with DEBUG off — the
+          // raw `e` only ever reached the silenced debug line above. `cause`
+          // keeps the original error for anything that inspects it.
+          const err = e as Error;
+          return reject(new Error(`Cannot connect to Database Server: ${err.message}`, { cause: e }));
         }
 
         this.mongoose = mongoose;
@@ -445,7 +528,7 @@ class Crowi {
         debug('Redis client connected successfully');
       } catch (error) {
         debug('Failed to connect to Redis:', (error as Error).message);
-        console.warn('Redis connection failed. Continuing without Redis...');
+        this.bootNote(() => console.warn('Redis connection failed. Continuing without Redis...'));
         this.redis = null;
       }
     }
@@ -515,10 +598,12 @@ class Crowi {
     // email-change) require a public origin. It comes solely from
     // CLIENT_URL; without it links would be relative and unusable.
     if (!this.getBaseUrl()) {
-      console.warn(
-        '[crowi] CLIENT_URL is not set — links in outgoing emails (invite / activation / password reset / ' +
-          'email change) will be relative and will not work. Set CLIENT_URL to the web app origin ' +
-          '(e.g. https://wiki.example.com).',
+      this.bootNote(() =>
+        console.warn(
+          '[crowi] CLIENT_URL is not set — links in outgoing emails (invite / activation / password reset / ' +
+            'email change) will be relative and will not work. Set CLIENT_URL to the web app origin ' +
+            '(e.g. https://wiki.example.com).',
+        ),
       );
     }
   }
@@ -560,6 +645,14 @@ class Crowi {
     // wired **before** `server.listen()` runs — the upstream
     // `serve()` helper listens immediately, which would race the
     // first WS client against the upgrade hook.
+    // The server layer spans build → attach (collab/presence/notifications) →
+    // listen. The reporter was created in `init()`; if `start()` is somehow
+    // called without it (defensive), make a fresh one so the banner/marker
+    // still emit.
+    const reporter = this.bootReporter ?? createBootReporter();
+    this.bootReporter = reporter;
+    reporter.beginLayer('server');
+
     const honoApp = buildHonoApp(this);
     const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiV2Prefix(request));
 
@@ -603,7 +696,11 @@ class Crowi {
       };
       const onListening = () => {
         server.off('error', onError);
-        console.log('[' + this.node_env + '] Hono server listening on port ' + this.port);
+        // Close the server layer (✓ + duration), then emit the human banner
+        // and the machine-readable readiness marker. The marker is the only
+        // contract `scripts/dev.mjs` depends on; it is emitted TTY or not.
+        reporter.endLayer();
+        reporter.finish('api', this.getApiReadyUrl());
         resolveListen();
       };
       server.once('error', onError);
@@ -614,12 +711,20 @@ class Crowi {
     return server as http.Server;
   };
 
-  exitOnError(err) {
+  // Arrow property so `this` stays bound when passed as
+  // `.catch(crowi.exitOnError)` from `app.ts` (the bare method would lose
+  // `this` and the dispose() below would throw).
+  exitOnError = (err) => {
     debug('Critical error occured.');
+    // Tear the boot reporter down *first*: stop the spinner interval and
+    // restore the cursor so the fatal stack trace below isn't overwritten /
+    // the terminal isn't left cursorless. Idempotent — the init()/start()
+    // try-path may already have disposed.
+    this.bootReporter?.dispose();
     console.error(err);
     console.error(err.stack);
     process.exit(1);
-  }
+  };
 }
 
 export default Crowi;
