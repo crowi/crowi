@@ -5,7 +5,12 @@ pre-commit:
   jobs:
     - name: format
       glob: "*.{ts,tsx,js,jsx}"
-      run: pnpm exec biome format --write {staged_files}
+      # --no-errors-on-unmatched: when every staged file is biome-ignored
+      # (e.g. only generated artifacts like src/generated/openapi.ts, excluded
+      # via biome.json `!**/generated/**`), biome would otherwise exit 1 with
+      # "No files were processed" and wrongly fail the commit. This silences
+      # that case without changing formatting of real files.
+      run: pnpm exec biome format --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
     - name: workspace-protocol
       glob: "**/package.json"
