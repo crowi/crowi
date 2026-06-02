@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Bell, Cloud, Database, HardDrive, Key, KeyRound, Link2, Mail, Plug, Search, Server, Settings, Share2, ShieldCheck, Users } from 'lucide-react';
+import { Bell, Cloud, Database, HardDrive, Key, KeyRound, Mail, Plug, Search, Server, Settings, Share2, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PluginInfo } from '@crowi/api-contract';
 import { cn } from '@/lib/utils';
 import { useAdminPlugins } from '@/lib/use-admin-plugins';
+import { useAdminPendingUsersCount } from '@/lib/use-admin-users';
 import { m } from '@paraglide/messages.js';
 
 interface AdminNavItem {
@@ -27,6 +28,11 @@ interface AdminNavItem {
    * for plugin entries it's the plugin npm name.
    */
   key?: string;
+  /**
+   * Optional count badge (e.g. pending user-approval count). Rendered only
+   * when > 0; injected at render time, not part of the static config.
+   */
+  badge?: number;
 }
 
 /**
@@ -34,7 +40,7 @@ interface AdminNavItem {
  * the plugin-api contract — plugins inject sidebar entries by
  * matching this key.
  */
-type SectionKey = 'settings' | 'shared' | 'auth' | 'storage' | 'mail' | 'notification' | 'users' | 'maintenance';
+type SectionKey = 'settings' | 'users' | 'storage' | 'mail' | 'notification' | 'search' | 'renderer' | 'shared';
 
 interface AdminNavGroup {
   key: SectionKey;
@@ -64,6 +70,13 @@ const STATIC_GROUPS: AdminNavGroup[] = [
         description: () => m['admin.nav_security_summary'](),
       },
       {
+        href: '/admin/auth',
+        label: () => m['admin.nav_auth'](),
+        icon: KeyRound,
+        status: 'available',
+        description: () => m['admin.nav_auth_summary'](),
+      },
+      {
         href: '/admin/share',
         label: () => m['admin.nav_share'](),
         icon: Share2,
@@ -80,23 +93,23 @@ const STATIC_GROUPS: AdminNavGroup[] = [
     ],
   },
   {
+    key: 'users',
+    heading: () => m['admin.section_users'](),
+    items: [
+      {
+        href: '/admin/users',
+        label: () => m['admin.nav_users'](),
+        icon: Users,
+        status: 'available',
+        description: () => m['admin.users.lead'](),
+      },
+    ],
+  },
+  {
     key: 'shared',
     heading: () => m['admin.section_shared'](),
     items: [],
     hideWhenEmpty: true,
-  },
-  {
-    key: 'auth',
-    heading: () => m['admin.section_auth'](),
-    items: [
-      {
-        href: '/admin/auth',
-        label: () => m['admin.nav_auth'](),
-        icon: KeyRound,
-        status: 'available',
-        description: () => m['admin.nav_auth_summary'](),
-      },
-    ],
   },
   {
     key: 'storage',
@@ -126,25 +139,21 @@ const STATIC_GROUPS: AdminNavGroup[] = [
     items: [{ href: '/admin/notification', label: () => m['admin.nav_notification'](), icon: Bell }],
   },
   {
-    key: 'users',
-    heading: () => m['admin.section_users'](),
-    items: [
-      {
-        href: '/admin/users',
-        label: () => m['admin.nav_users'](),
-        icon: Users,
-        status: 'available',
-        description: () => m['admin.users.lead'](),
-      },
-    ],
+    key: 'search',
+    // Static "search index" status/rebuild page first; search-backend
+    // plugins (e.g. Elasticsearch, derived via `registerSearch`) inject
+    // their settings page under this heading.
+    heading: () => m['admin.section_search'](),
+    items: [{ href: '/admin/search', label: () => m['admin.nav_search'](), icon: Search }],
   },
   {
-    key: 'maintenance',
-    heading: () => m['admin.section_maintenance'](),
-    items: [
-      { href: '/admin/search', label: () => m['admin.nav_search'](), icon: Search },
-      { href: '/admin/backlink', label: () => m['admin.nav_backlink'](), icon: Link2 },
-    ],
+    // Renderer plugins (PlantUML, KaTeX, …) inject here via the
+    // `registerRenderer`-derived `'renderer'` section. Hidden when no
+    // renderer plugin exposes config.
+    key: 'renderer',
+    heading: () => m['admin.section_renderer'](),
+    items: [],
+    hideWhenEmpty: true,
   },
 ];
 
@@ -182,7 +191,8 @@ export function AdminSidebar() {
   const editPluginName = searchParams?.get('name');
 
   const { data } = useAdminPlugins();
-  const groups = injectPluginEntries(STATIC_GROUPS, data?.plugins ?? []);
+  const { data: pending } = useAdminPendingUsersCount();
+  const groups = injectApprovalEntry(injectPluginEntries(STATIC_GROUPS, data?.plugins ?? []), pending?.count ?? 0);
 
   return (
     <nav className="space-y-6 text-sm" aria-label={m['admin.nav_dashboard']()}>
@@ -218,6 +228,11 @@ export function AdminSidebar() {
                     >
                       <Icon className="h-4 w-4" />
                       <span className="truncate">{item.label()}</span>
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );
@@ -254,6 +269,32 @@ function injectPluginEntries(staticGroups: AdminNavGroup[], plugins: PluginInfo[
 
   // Preserve the original static-group order.
   return staticGroups.map((g) => groupsByKey.get(g.key) ?? g);
+}
+
+/**
+ * Surface a "user approval" entry under the users group when one or more
+ * sign-ups await admin approval (status REGISTERED). Hidden at zero so the
+ * sidebar stays quiet on installs that never use restricted registration.
+ * The count rides along as a badge so admins notice without opening the page.
+ */
+function injectApprovalEntry(groups: AdminNavGroup[], pendingCount: number): AdminNavGroup[] {
+  if (pendingCount <= 0) return groups;
+  return groups.map((group) => {
+    if (group.key !== 'users') return group;
+    return {
+      ...group,
+      items: [
+        ...group.items,
+        {
+          key: '/admin/users/pending',
+          href: '/admin/users/pending',
+          label: () => m['admin.nav_users_pending'](),
+          icon: UserCheck,
+          badge: pendingCount,
+        },
+      ],
+    };
+  });
 }
 
 function pluginIcon(name: string | undefined): LucideIcon {

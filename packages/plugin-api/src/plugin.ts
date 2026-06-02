@@ -82,10 +82,25 @@ export interface CrowiPlugin {
    * from a fixed allow-list to keep the bundle small.
    */
   adminPlacement?: {
-    section?: 'settings' | 'shared' | 'storage' | 'mail' | 'notification' | 'auth';
+    section?: 'settings' | 'shared' | 'storage' | 'mail' | 'notification' | 'auth' | 'search' | 'renderer';
     label?: string;
     icon?: string;
   };
+
+  /**
+   * Optional localized overrides for the admin config-form field labels and
+   * descriptions, keyed by locale then by `configSchema` field name. The
+   * admin API overlays the entry matching the requesting admin's locale on
+   * top of the schema-derived field; the Zod `.describe()` text stays the
+   * (English) default when a locale or field is missing. Lets a plugin ship
+   * its own translations without the host app knowing about them.
+   *
+   * @example
+   * configI18n: {
+   *   ja: { serverUrl: { description: 'PlantUML サーバーのベース URL。' } },
+   * }
+   */
+  configI18n?: Record<string, Record<string, { label?: string; description?: string }>>;
 
   /** Storage driver registration. Called once at boot. */
   registerStorage?: (registry: StorageRegistry, ctx: PluginContext) => void;

@@ -7,6 +7,11 @@ import { z } from '@hono/zod-openapi';
  */
 export const PluginFieldSchema = z.object({
   name: z.string(),
+  /**
+   * Localized display label. Falls back to `name` in the form when absent.
+   * Filled from the plugin's `configI18n[locale]` overlay by the admin API.
+   */
+  label: z.string().optional(),
   kind: z.enum(['string', 'secret', 'number', 'boolean', 'enum', 'string-array']),
   description: z.string().optional(),
   defaultValue: z.unknown().optional(),
@@ -22,7 +27,7 @@ export const PluginFieldSchema = z.object({
 });
 export type PluginField = z.infer<typeof PluginFieldSchema>;
 
-export const AdminSidebarSection = z.enum(['settings', 'shared', 'storage', 'mail', 'notification', 'auth']);
+export const AdminSidebarSection = z.enum(['settings', 'shared', 'storage', 'mail', 'notification', 'auth', 'search', 'renderer']);
 export type AdminSidebarSectionValue = z.infer<typeof AdminSidebarSection>;
 
 export const PluginAdminPlacementSchema = z.object({

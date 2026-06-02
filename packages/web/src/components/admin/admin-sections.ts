@@ -19,7 +19,6 @@ export const ADMIN_SECTIONS = {
   users: () => m['admin.nav_users'](),
   notification: () => m['admin.nav_notification'](),
   search: () => m['admin.nav_search'](),
-  backlink: () => m['admin.nav_backlink'](),
   plugins: () => m['admin.nav_plugins'](),
 } as const;
 

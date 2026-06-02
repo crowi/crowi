@@ -8,12 +8,15 @@ import type {
   UpdatePluginConfigRequest,
   UpdatePluginConfigResponse,
 } from '@crowi/api-contract';
+import { getLocale } from '@paraglide/runtime.js';
 import { apiClientV2 } from './api-client';
 
 export const adminPluginsKeys = {
   all: ['admin', 'plugins'] as const,
   list: () => ['admin', 'plugins', 'list'] as const,
-  config: (name: string) => ['admin', 'plugins', name, 'config'] as const,
+  // Locale is part of the key so switching language refetches the localized
+  // field labels/descriptions (plugin `configI18n` overlay).
+  config: (name: string, locale: string) => ['admin', 'plugins', name, 'config', locale] as const,
 };
 
 const readWireMessage = async (response: Response): Promise<string | undefined> => {
@@ -57,11 +60,12 @@ export function useAdminPlugins() {
 }
 
 export function useAdminPluginConfig(name: string | null) {
+  const locale = getLocale();
   return useQuery<PluginConfigResponse, Error>({
-    queryKey: name ? adminPluginsKeys.config(name) : adminPluginsKeys.all,
+    queryKey: name ? adminPluginsKeys.config(name, locale) : adminPluginsKeys.all,
     queryFn: async () => {
       if (!name) throw new Error('plugin name is required');
-      const response = await apiClientV2.admin.plugins.config.$get({ query: { name } });
+      const response = await apiClientV2.admin.plugins.config.$get({ query: { name, locale } });
       if (response.status === 200) return (await response.json()) as PluginConfigResponse;
       return throwGenericError(response, 'Failed to fetch plugin config', 'Plugin not found');
     },
@@ -74,11 +78,12 @@ export function useAdminPluginConfig(name: string | null) {
 // useQueries (rather than N useQuery calls) because `names.length` varies
 // per plugin's `requires` array.
 export function useAdminPluginConfigs(names: string[]) {
+  const locale = getLocale();
   return useQueries({
     queries: names.map((name) => ({
-      queryKey: adminPluginsKeys.config(name),
+      queryKey: adminPluginsKeys.config(name, locale),
       queryFn: async (): Promise<PluginConfigResponse> => {
-        const response = await apiClientV2.admin.plugins.config.$get({ query: { name } });
+        const response = await apiClientV2.admin.plugins.config.$get({ query: { name, locale } });
         if (response.status === 200) return (await response.json()) as PluginConfigResponse;
         return throwGenericError(response, 'Failed to fetch plugin config', 'Plugin not found');
       },
@@ -121,7 +126,8 @@ export function useUpdateAdminPluginConfig(name: string) {
       return throwGenericError(response, 'Failed to update plugin config', 'Plugin not found');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: adminPluginsKeys.config(name) });
+      // Prefix match (no locale) so every cached locale variant is refreshed.
+      queryClient.invalidateQueries({ queryKey: ['admin', 'plugins', name, 'config'] });
       queryClient.invalidateQueries({ queryKey: adminPluginsKeys.list() });
     },
   });

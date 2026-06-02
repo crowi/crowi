@@ -31,6 +31,9 @@ import {
 import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../../schemas/common';
 
 const PluginNameQuerySchema = z.object({ name: z.string() });
+// getPluginConfig also accepts an optional `locale` so the API can overlay
+// the plugin's `configI18n[locale]` field label/description translations.
+const PluginConfigQuerySchema = z.object({ name: z.string(), locale: z.string().optional() });
 
 export const listPluginsRoute = createRoute({
   method: 'get',
@@ -65,7 +68,7 @@ export const getPluginConfigRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Get a plugin config form schema + current values',
   request: {
-    query: PluginNameQuerySchema,
+    query: PluginConfigQuerySchema,
   },
   responses: {
     200: {

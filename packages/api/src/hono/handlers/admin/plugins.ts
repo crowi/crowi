@@ -19,7 +19,7 @@ import type { CrowiPlugin } from '@crowi/plugin-api';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { serializeConfigSchema } from 'src/plugin/schema-serializer';
+import { type SerializedPluginField, serializeConfigSchema } from 'src/plugin/schema-serializer';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
@@ -33,6 +33,30 @@ const pluginNotFoundBody = (name: string) => ({
     message: `Plugin '${name}' is not loaded`,
   },
 });
+
+/**
+ * Overlay a plugin's `configI18n[locale]` label/description translations onto
+ * the schema-derived fields (案A — translations ship with the plugin). The
+ * Zod `.describe()` text remains the default when a locale or a field entry
+ * is absent.
+ */
+const localizeFields = (
+  fields: SerializedPluginField[],
+  i18n: CrowiPlugin['configI18n'],
+  locale: string | undefined,
+): (SerializedPluginField & { label?: string })[] => {
+  const table = locale ? i18n?.[locale] : undefined;
+  if (!table) return fields;
+  return fields.map((field) => {
+    const t = table[field.name];
+    if (!t) return field;
+    return {
+      ...field,
+      ...(t.label ? { label: t.label } : {}),
+      ...(t.description ? { description: t.description } : {}),
+    };
+  });
+};
 
 const collectRegistrySlots = (plugin: CrowiPlugin): string[] => {
   const slots: string[] = [];
@@ -49,6 +73,8 @@ const deriveSectionFromHooks = (plugin: CrowiPlugin): PluginInfo['adminPlacement
   if (plugin.registerAuth) return 'auth';
   if (plugin.registerNotifier) return 'notification';
   if (plugin.registerMailSender) return 'mail';
+  if (plugin.registerSearch) return 'search';
+  if (plugin.registerRenderer) return 'renderer';
   return undefined;
 };
 
@@ -106,7 +132,7 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       return c.json({ plugins }, 200);
     })
     .openapi(adminPluginsRoutes.getPluginConfigRoute, async (c) => {
-      const { name } = c.req.valid('query');
+      const { name, locale } = c.req.valid('query');
       const manager = crowi.pluginManager;
       const plugin = manager?.getLoadedPlugin(name);
       if (!plugin) return c.json(pluginNotFoundBody(name), 404);
@@ -115,7 +141,7 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
         return c.json({ name: plugin.name, fields: [], values: {} }, 200);
       }
 
-      const fields = serializeConfigSchema(plugin.configSchema);
+      const fields = localizeFields(serializeConfigSchema(plugin.configSchema), plugin.configI18n, locale);
       const ns = readPluginNamespace(crowi, plugin.name);
       const values: Record<string, unknown> = {};
       for (const field of fields) {

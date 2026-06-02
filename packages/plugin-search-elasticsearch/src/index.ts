@@ -92,7 +92,7 @@ const plugin: CrowiPlugin = {
   adminPlacement: {
     label: 'Elasticsearch',
     icon: 'search',
-    // section omitted: derived from registerSearch -> 'shared' fallback
+    // section omitted: derived from registerSearch -> 'search'
   },
 
   registerSearch: (registry, ctx) => {

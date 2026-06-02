@@ -117,9 +117,18 @@ const plugin: CrowiPlugin = {
   version: '0.1.0-dev',
   configSchema: plantumlConfigSchema,
   adminPlacement: {
-    section: 'shared',
+    section: 'renderer',
     label: 'PlantUML diagrams',
     icon: 'diagram-3',
+  },
+  configI18n: {
+    ja: {
+      serverUrl: { label: 'サーバー URL', description: 'PlantUML サーバーのベース URL。' },
+      format: {
+        label: '画像形式',
+        description: 'サーバーが返す画像形式。SVG 推奨（軽量で対話的）。PNG は SVG を返せないサーバー向けのフォールバックです。',
+      },
+    },
   },
   registerRenderer: (registry, ctx) => {
     // PluginContext.config<T>() parses the configSchema-typed config

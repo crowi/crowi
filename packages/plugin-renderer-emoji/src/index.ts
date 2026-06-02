@@ -73,7 +73,7 @@ const plugin: CrowiPlugin = {
   name: '@crowi/plugin-renderer-emoji',
   version: '0.1.0-dev',
   adminPlacement: {
-    section: 'shared',
+    section: 'renderer',
     label: 'Emoji shortcodes',
     icon: 'smile',
   },

@@ -103,11 +103,15 @@ interface FieldRowProps {
 
 function FieldRow({ field, state, setState, issue }: FieldRowProps) {
   const description = field.description;
+  // Localized label from the plugin's `configI18n` overlay; falls back to the
+  // raw schema field name. `field.name` is still the wire key used for ids and
+  // state, so only the *display* text switches to `labelDisplay`.
+  const labelDisplay = field.label ?? field.name;
   const optional = field.optional ? <span className="text-muted-foreground text-xs ml-2">{m['admin.plugins.field_optional']()}</span> : null;
 
   if (field.kind === 'secret') {
     const meta = state.values[field.name] as SecretFieldState | undefined;
-    const labelText = field.optional ? `${field.name}  (optional)` : field.name;
+    const labelText = field.optional ? `${labelDisplay}  (optional)` : labelDisplay;
     return (
       <div className="space-y-1.5">
         <SecretField
@@ -142,7 +146,7 @@ function FieldRow({ field, state, setState, issue }: FieldRowProps) {
         <Switch id={`field-${field.name}`} checked={value} onCheckedChange={(v) => setState((prev) => setValue(prev, field.name, v))} />
         <div className="space-y-1">
           <Label htmlFor={`field-${field.name}`} className="text-sm font-medium">
-            {field.name}
+            {labelDisplay}
             {optional}
           </Label>
           {description && <p className="text-muted-foreground text-xs">{description}</p>}
@@ -161,7 +165,7 @@ function FieldRow({ field, state, setState, issue }: FieldRowProps) {
     return (
       <div className="space-y-1.5">
         <Label htmlFor={`field-${field.name}`}>
-          {field.name}
+          {labelDisplay}
           {optional}
         </Label>
         <Select value={value} onValueChange={(v) => setState((prev) => setValue(prev, field.name, v))} name={field.name}>
@@ -191,7 +195,7 @@ function FieldRow({ field, state, setState, issue }: FieldRowProps) {
     return (
       <div className="space-y-1.5">
         <Label htmlFor={`field-${field.name}`}>
-          {field.name}
+          {labelDisplay}
           {optional}
         </Label>
         <Textarea

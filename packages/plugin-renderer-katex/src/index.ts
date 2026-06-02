@@ -119,7 +119,7 @@ const plugin: CrowiPlugin = {
   name: '@crowi/plugin-renderer-katex',
   version: '0.1.0-dev',
   adminPlacement: {
-    section: 'shared',
+    section: 'renderer',
     label: 'KaTeX math',
     icon: 'function-square',
   },
