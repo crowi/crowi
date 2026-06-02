@@ -16,7 +16,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { coerceString, coerceStringArray, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { coerceStringArray, getCrowiConfigNamespace } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
@@ -24,8 +24,6 @@ import { INTERNAL_ERROR_BODY } from '../_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:admin:security');
 
-const DEFAULT_BASIC_NAME = '';
-const DEFAULT_BASIC_SECRET = '';
 const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'Open';
 
 const toRegistrationMode = (value: unknown): RegistrationMode => {
@@ -38,8 +36,6 @@ const sanitizeWhiteList = (list: string[]): string[] => list.map((entry) => entr
 const readSecuritySettings = (crowi: Crowi): SecuritySettings => {
   const ns = getCrowiConfigNamespace(crowi);
   return {
-    basicName: coerceString(ns['security:basicName'], DEFAULT_BASIC_NAME),
-    basicSecret: coerceString(ns['security:basicSecret'], DEFAULT_BASIC_SECRET),
     registrationMode: toRegistrationMode(ns['security:registrationMode']),
     registrationWhiteList: coerceStringArray(ns['security:registrationWhiteList']),
   };
@@ -65,8 +61,6 @@ export const registerAdminSecurityRoutes = <E extends OpenAPIHono<CrowiHonoBindi
 
       try {
         await configService.saveConfig('crowi', {
-          'security:basicName': body.basicName,
-          'security:basicSecret': body.basicSecret,
           'security:registrationMode': body.registrationMode,
           'security:registrationWhiteList': sanitizedWhiteList,
         });

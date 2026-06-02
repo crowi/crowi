@@ -18,19 +18,17 @@ export type RegistrationMode = z.infer<typeof RegistrationModeSchema>;
 /**
  * Canonical shape of the security settings on the wire.
  *
- * Mirrors the four `security:*` keys in the legacy `crowi` config namespace:
- *   - security:basicName              -> basicName
- *   - security:basicSecret            -> basicSecret  (returned in plaintext, see openQuestions)
+ * Mirrors the registration-related `security:*` keys in the `crowi` config
+ * namespace:
  *   - security:registrationMode       -> registrationMode
  *   - security:registrationWhiteList  -> registrationWhiteList
  *
- * basicSecret is currently returned as plaintext to preserve parity with the
- * legacy `actions.api.app.index` endpoint. Migrating to a write-only / masked
- * representation is tracked in openQuestions.
+ * NOTE: the legacy site-wide HTTP Basic auth (`security:basicName` /
+ * `security:basicSecret`) was removed (breaking change). In the split
+ * Next.js + Hono architecture, gate the site at a reverse proxy instead.
+ * The old config keys, if present in the DB, are simply ignored.
  */
 export const SecuritySettingsSchema = z.object({
-  basicName: z.string(),
-  basicSecret: z.string(),
   registrationMode: RegistrationModeSchema,
   registrationWhiteList: z.array(z.string()),
 });

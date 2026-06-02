@@ -10,10 +10,11 @@ import { m } from '@paraglide/messages.js';
 /**
  * /admin/security
  *
- * Manages the four legacy `security:*` config keys: basicName, basicSecret,
- * registrationMode, registrationWhiteList. Authorization (admin only) is
- * already enforced by the surrounding (admin) layout, so this page assumes
- * the current user is admin and only handles fetch / form state.
+ * Manages the registration `security:*` config keys: registrationMode and
+ * registrationWhiteList. (Legacy site-wide HTTP Basic auth was removed — gate
+ * the site at a reverse proxy instead.) Authorization (admin only) is already
+ * enforced by the surrounding (admin) layout, so this page assumes the current
+ * user is admin and only handles fetch / form state.
  */
 export default function AdminSecurityPage() {
   const { data, isLoading, error } = useAdminSecuritySettings();

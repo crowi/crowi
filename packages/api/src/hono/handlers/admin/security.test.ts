@@ -18,16 +18,14 @@ const createTestUser = async (info: { name: string; username: string; email: str
 };
 
 /**
- * Reset the four security:* keys back to defaults between tests so each case
- * starts from a known state. We can't simply rely on `applicationInstall`
- * because the test setup boots the app once; instead we directly poke the
- * config service / collection.
+ * Reset the registration-related security:* keys back to defaults between
+ * tests so each case starts from a known state. We can't simply rely on
+ * `applicationInstall` because the test setup boots the app once; instead we
+ * directly poke the config service / collection.
  */
 const resetSecurityConfig = async () => {
   const configService = crowi.getConfigService();
   await configService.saveConfig('crowi', {
-    'security:basicName': '',
-    'security:basicSecret': '',
     'security:registrationMode': 'Open',
     'security:registrationWhiteList': [],
   });
@@ -77,8 +75,6 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
-        basicName: '',
-        basicSecret: '',
         registrationMode: 'Open',
         registrationWhiteList: [],
       });
@@ -86,8 +82,6 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
     it('reflects values previously written via configService', async () => {
       await crowi.getConfigService().saveConfig('crowi', {
-        'security:basicName': 'crowi-user',
-        'security:basicSecret': 's3cret',
         'security:registrationMode': 'Resricted',
         'security:registrationWhiteList': ['allowed@example.com', 'team@example.org'],
       });
@@ -96,8 +90,6 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
-        basicName: 'crowi-user',
-        basicSecret: 's3cret',
         registrationMode: 'Resricted',
         registrationWhiteList: ['allowed@example.com', 'team@example.org'],
       });
@@ -106,8 +98,6 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
   describe('PUT /api/v2/admin/security', () => {
     const validBody = {
-      basicName: 'admin',
-      basicSecret: 'pw',
       registrationMode: 'Closed' as const,
       registrationWhiteList: ['user@example.com'],
     };
@@ -146,21 +136,17 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('persists the four security:* keys and returns the updated settings', async () => {
+    it('persists the registration security:* keys and returns the updated settings', async () => {
       const res = await request(app)
         .put('/api/v2/admin/security')
         .set(authHeaders(adminToken))
         .send({
-          basicName: 'crowi-user',
-          basicSecret: 's3cret',
           registrationMode: 'Resricted',
           registrationWhiteList: ['user@example.com'],
         });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
-        basicName: 'crowi-user',
-        basicSecret: 's3cret',
         registrationMode: 'Resricted',
         registrationWhiteList: ['user@example.com'],
       });
@@ -169,7 +155,6 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       // values are in sync.
       const getRes = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
       expect(getRes.status).toBe(200);
-      expect(getRes.body.basicName).toBe('crowi-user');
       expect(getRes.body.registrationMode).toBe('Resricted');
       expect(getRes.body.registrationWhiteList).toEqual(['user@example.com']);
     });
@@ -179,8 +164,6 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
         .put('/api/v2/admin/security')
         .set(authHeaders(adminToken))
         .send({
-          basicName: '',
-          basicSecret: '',
           registrationMode: 'Resricted',
           registrationWhiteList: ['  user@example.com  ', '', '   ', 'team@example.org'],
         });
@@ -200,7 +183,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
       const cfg = crowi.getConfig();
       expect(cfg.crowi['app:title']).toBe('Custom Crowi Title');
-      expect(cfg.crowi['security:basicName']).toBe('admin');
+      expect(cfg.crowi['security:registrationMode']).toBe('Closed');
     });
   });
 });

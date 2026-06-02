@@ -504,8 +504,6 @@ const stubGetAppSettings: GetAppSettingsResponse = {
 const stubUpdateAppSettings: UpdateAppSettingsResponse = { ok: true };
 const stubAuthSettings: GetAuthSettingsResponse = { requireThirdPartyAuth: false, disablePasswordAuth: false };
 const stubSecuritySettings: GetSecuritySettingsResponse = {
-  basicName: '',
-  basicSecret: '',
   registrationMode: 'Open',
   registrationWhiteList: [],
 };

@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -52,8 +51,6 @@ const formatWhiteList = (list: string[]): string => list.join('\n');
 
 export function SecurityForm({ settings }: SecurityFormProps) {
   const [formData, setFormData] = useState({
-    basicName: settings.basicName,
-    basicSecret: settings.basicSecret,
     registrationMode: settings.registrationMode,
     registrationWhiteListRaw: formatWhiteList(settings.registrationWhiteList),
   });
@@ -62,8 +59,6 @@ export function SecurityForm({ settings }: SecurityFormProps) {
 
   const updateSettings = useUpdateAdminSecuritySettings();
   const isDirty =
-    formData.basicName !== settings.basicName ||
-    formData.basicSecret !== settings.basicSecret ||
     formData.registrationMode !== settings.registrationMode ||
     formData.registrationWhiteListRaw !== formatWhiteList(settings.registrationWhiteList);
 
@@ -90,8 +85,6 @@ export function SecurityForm({ settings }: SecurityFormProps) {
 
     try {
       const updated = await updateSettings.mutateAsync({
-        basicName: formData.basicName,
-        basicSecret: formData.basicSecret,
         registrationMode: formData.registrationMode,
         registrationWhiteList: whiteList,
       });
@@ -163,24 +156,6 @@ export function SecurityForm({ settings }: SecurityFormProps) {
             rows={6}
           />
           <p className="text-xs text-muted-foreground">{m['admin.security.field_whitelist_help']()}</p>
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">{m['admin.security.section_basic_heading']()}</h2>
-          <p className="text-muted-foreground text-sm">{m['admin.security.section_basic_lead']()}</p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="basicName">{m['admin.security.field_basic_name']()}</Label>
-          <Input id="basicName" name="basicName" type="text" value={formData.basicName} onChange={handleChange} autoComplete="off" />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="basicSecret">{m['admin.security.field_basic_secret']()}</Label>
-          <Input id="basicSecret" name="basicSecret" type="text" value={formData.basicSecret} onChange={handleChange} autoComplete="off" />
-          <p className="text-xs text-muted-foreground">{m['admin.security.field_basic_secret_help']()}</p>
         </div>
       </section>
 
