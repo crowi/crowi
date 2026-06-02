@@ -332,7 +332,7 @@
   "page_comments.empty_form_error": "Comment cannot be empty",
   "page_comments.unknown_user": "Unknown user",
   "page_comments.delete_aria": "Delete comment",
-  "page_comments.now_watching": "You're now watching this page and will be notified of new activity.",
+  "page_comments.now_watching": "You're now watching this page and will be notified when others comment.",
   "page_comments.now_watching_undo": "Stop watching",
   "page_comments.now_watching_dismiss": "Dismiss",
   "edit.title_create": "Create new page",

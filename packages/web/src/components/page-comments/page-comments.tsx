@@ -1,17 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import type { PageWithRevision } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { Eye, Loader2, MessageSquare, X } from 'lucide-react';
+import { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { SCROLL_TARGETS } from '@/lib/scroll-to-section';
 import { useAuth } from '@/lib/use-auth';
 import { useAddComment, useDeleteComment, usePageCommentsList } from '@/lib/use-page-comments';
 import { useToggleWatch } from '@/lib/use-watch';
-import { SCROLL_TARGETS } from '@/lib/scroll-to-section';
-import type { PageWithRevision } from '@crowi/api-contract';
-import { CommentItem } from './comment-item';
 import { CommentForm } from './comment-form';
-import { m } from '@paraglide/messages.js';
+import { CommentItem } from './comment-item';
 
 interface PageCommentsProps {
   page: PageWithRevision;
@@ -75,7 +75,7 @@ export function PageComments({ page }: PageCommentsProps) {
       )}
 
       {showWatchHint && (
-        <Alert className="mb-4">
+        <Alert className="mb-4 items-center [&>svg]:translate-y-0">
           <Eye className="h-4 w-4" />
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>{m['page_comments.now_watching']()}</span>
