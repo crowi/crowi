@@ -38,19 +38,13 @@ export function buildNotificationMessage(notification: Notification): string {
 }
 
 /**
- * A run of notification-message text, flagged for bold emphasis. The
+ * Split a notification message into alternating plain / bold runs. The
  * message templates wrap the page name and the action verb in `**...**`
- * markers (a markdown-bold convention the translators control per locale);
- * this splits the rendered string into alternating plain / bold runs so the
- * UI can render the emphasised parts as `<strong>`. Odd-indexed split
- * results are the marked (bold) runs.
+ * markers (a markdown-bold convention the translators control per locale,
+ * one matched pair each); odd-indexed split results are the marked (bold)
+ * runs, which the UI renders as `<strong>`.
  */
-export interface MessageSegment {
-  text: string;
-  bold: boolean;
-}
-
-export function splitMessageSegments(message: string): MessageSegment[] {
+export function splitMessageSegments(message: string): Array<{ text: string; bold: boolean }> {
   return message
     .split('**')
     .map((text, i) => ({ text, bold: i % 2 === 1 }))
