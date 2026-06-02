@@ -141,6 +141,14 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
           return c.json({ error: { code: 'REGISTRATION_CLOSED' as const, message: 'User registration is closed' } }, 403);
         }
 
+        // Email whitelist gate (legacy parity). Applied in every non-closed
+        // mode: when `security:registrationWhiteList` is non-empty, only
+        // matching addresses may register. `isEmailValid` returns true when
+        // the whitelist is empty (no restriction).
+        if (!User.isEmailValid(email)) {
+          return c.json({ error: { code: 'EMAIL_NOT_ALLOWED' as const, message: 'This email address is not allowed to register' } }, 403);
+        }
+
         const existingUser = await User.findOne({ $or: [{ email }, { username }] });
         if (existingUser) {
           const message = existingUser.email === email ? 'Email already registered' : 'Username already taken';

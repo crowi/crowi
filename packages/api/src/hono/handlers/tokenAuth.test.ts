@@ -189,6 +189,37 @@ describe('Routes /api/v2/auth (Hono)', () => {
         await crowi.getConfigService().load();
       }
     });
+
+    it('enforces the email whitelist in every non-closed mode (legacy parity)', async () => {
+      const original = (await Config().loadAllConfig()) as { crowi: Record<string, unknown> };
+      const prev = original.crowi['security:registrationWhiteList'];
+
+      await Config().updateConfig('crowi', 'security:registrationWhiteList', ['allowed.example.com']);
+      await crowi.getConfigService().load();
+
+      try {
+        // Open mode (default) + whitelist set: a non-matching address is rejected.
+        const blocked = await request(app)
+          .post('/api/v2/auth/register')
+          .send({ username: 'wl-blocked', name: 'WL Blocked', email: 'blocked@other.test', password: 'Password!1' });
+        expect(blocked.status).toBe(403);
+        expect(blocked.body.error.code).toBe('EMAIL_NOT_ALLOWED');
+
+        // A matching address still registers.
+        const allowed = await request(app)
+          .post('/api/v2/auth/register')
+          .send({ username: 'wl-allowed', name: 'WL Allowed', email: 'ok@allowed.example.com', password: 'Password!1' });
+        expect(allowed.status).toBe(200);
+      } finally {
+        await User().deleteMany({ username: { $in: ['wl-blocked', 'wl-allowed'] } });
+        if (prev !== undefined) {
+          await Config().updateConfig('crowi', 'security:registrationWhiteList', prev);
+        } else {
+          await Config().deleteOne({ ns: 'crowi', key: 'security:registrationWhiteList' });
+        }
+        await crowi.getConfigService().load();
+      }
+    });
   });
 
   describe('POST /auth/refresh', () => {
