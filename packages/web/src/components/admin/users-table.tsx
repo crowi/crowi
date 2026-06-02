@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/date-utils';
 import { m } from '@paraglide/messages.js';
 
-export type UserRowActionKind = 'edit' | 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'reset-password' | 'update-email';
+export type UserRowActionKind = 'edit' | 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'reset-password' | 'update-email' | 'delete';
 
 export interface UserRowAction {
   kind: UserRowActionKind;
@@ -115,6 +115,28 @@ interface RowActionMenuProps {
 function RowActionMenu({ user, isSelf, onAction }: RowActionMenuProps) {
   const showActivate = user.status === UserStatusEnum.SUSPENDED || user.status === UserStatusEnum.REGISTERED;
   const showSuspend = user.status === UserStatusEnum.ACTIVE;
+
+  // Invited (never-activated) users have a deliberately minimal menu: the only
+  // meaningful operations are correcting the invite email or removing the
+  // pending invite. Activation/admin toggles make no sense pre-acceptance.
+  if (user.status === UserStatusEnum.INVITED) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={m['admin.users.action.menu_open']()}>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>{m['admin.users.action.menu_label']()}</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => onAction({ kind: 'update-email', user })}>{m['admin.users.action.update_email']()}</DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onSelect={() => onAction({ kind: 'delete', user })}>
+            {m['admin.users.action.delete']()}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
 
   return (
     <DropdownMenu>

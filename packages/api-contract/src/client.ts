@@ -162,8 +162,10 @@ import type { GetShareSettingsResponseSchema, UpdateShareSettingsResponseSchema 
 import type { GetStorageStatusResponseSchema } from './schemas/admin/storage';
 import type {
   AdminUserMutationResponseSchema,
+  DeleteAdminUserResponseSchema,
   InviteUsersResponseSchema,
   ListAdminUsersResponseSchema,
+  PendingUsersCountResponseSchema,
   ResetPasswordResponseSchema,
   SearchAdminUsersByEmailResponseSchema,
 } from './schemas/admin/users';
@@ -245,6 +247,8 @@ type SearchAdminUsersByEmailResponse = z.infer<typeof SearchAdminUsersByEmailRes
 type InviteUsersResponse = z.infer<typeof InviteUsersResponseSchema>;
 type AdminUserMutationResponse = z.infer<typeof AdminUserMutationResponseSchema>;
 type ResetPasswordResponse = z.infer<typeof ResetPasswordResponseSchema>;
+type DeleteAdminUserResponse = z.infer<typeof DeleteAdminUserResponseSchema>;
+type PendingUsersCountResponse = z.infer<typeof PendingUsersCountResponseSchema>;
 type ListPluginsResponse = z.infer<typeof ListPluginsResponseSchema>;
 type PluginConfigResponse = z.infer<typeof PluginConfigResponseSchema>;
 type UpdatePluginConfigResponse = z.infer<typeof UpdatePluginConfigResponseSchema>;
@@ -530,6 +534,8 @@ const stubSearchAdminUsersByEmail: SearchAdminUsersByEmailResponse = { users: []
 const stubInviteUsers: InviteUsersResponse = { results: [] };
 const stubAdminUserMutation: AdminUserMutationResponse = { user: stubUserPublic };
 const stubResetPassword: ResetPasswordResponse = { user: stubUserPublic, newPassword: '' };
+const stubDeleteAdminUser: DeleteAdminUserResponse = { deletedId: '' };
+const stubPendingUsersCount: PendingUsersCountResponse = { count: 0 };
 const stubListPlugins: ListPluginsResponse = { plugins: [] };
 const stubPluginConfig: PluginConfigResponse = { name: '', fields: [], values: {} };
 const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false };
@@ -710,11 +716,13 @@ const adminSettingsContractApp = new OpenAPIHono()
   .openapi(adminSearchRoutes.getSearchStatusRoute, (c) => c.json(stubSearchStatus, 200));
 
 const adminUsersPluginsContractApp = new OpenAPIHono()
-  // admin.users — 10 endpoints. Literal `/admin/users/search` registers
-  // before `/admin/users/{id}` paths so it does not collide with the
-  // id-template routes (Hono matches first-defined).
+  // admin.users — 12 endpoints. Literal `/admin/users/search` and
+  // `/admin/users/pending-count` register before `/admin/users/{id}`
+  // paths so they do not collide with the id-template routes (Hono
+  // matches first-defined).
   .openapi(adminUsersRoutes.listUsersRoute, (c) => c.json(stubListAdminUsers, 200))
   .openapi(adminUsersRoutes.searchUsersByEmailRoute, (c) => c.json(stubSearchAdminUsersByEmail, 200))
+  .openapi(adminUsersRoutes.pendingUsersCountRoute, (c) => c.json(stubPendingUsersCount, 200))
   .openapi(adminUsersRoutes.inviteUsersRoute, (c) => c.json(stubInviteUsers, 200))
   .openapi(adminUsersRoutes.editUserRoute, (c) => c.json(stubAdminUserMutation, 200))
   .openapi(adminUsersRoutes.makeAdminRoute, (c) => c.json(stubAdminUserMutation, 200))
@@ -723,6 +731,7 @@ const adminUsersPluginsContractApp = new OpenAPIHono()
   .openapi(adminUsersRoutes.suspendUserRoute, (c) => c.json(stubAdminUserMutation, 200))
   .openapi(adminUsersRoutes.resetPasswordRoute, (c) => c.json(stubResetPassword, 200))
   .openapi(adminUsersRoutes.updateUserEmailRoute, (c) => c.json(stubAdminUserMutation, 200))
+  .openapi(adminUsersRoutes.deleteUserRoute, (c) => c.json(stubDeleteAdminUser, 200))
   // admin.plugins — 5 endpoints. `clear-all` and `clear-plugin` use
   // different literal paths so no collision risk.
   .openapi(adminPluginsRoutes.listPluginsRoute, (c) => c.json(stubListPlugins, 200))

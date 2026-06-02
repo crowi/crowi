@@ -488,4 +488,70 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       });
     });
   });
+
+  describe('GET /api/v2/admin/users/pending-count', () => {
+    let adminToken: string;
+
+    beforeEach(async () => {
+      await clearUsers();
+      const User = crowi.model('User');
+      adminToken = (await createTestUser({ name: 'PC Admin', username: 'pcadmin', email: 'pc-admin@example.com', admin: true })).accessToken;
+
+      // Two REGISTERED (awaiting approval) + one ACTIVE that must not be counted.
+      const [r1, r2] = (await Fixture.generate('User', [
+        { name: 'Pending One', username: 'pending1', email: 'pending1@example.com' },
+        { name: 'Pending Two', username: 'pending2', email: 'pending2@example.com' },
+      ])) as UserDocument[];
+      r1.status = User.STATUS_REGISTERED;
+      r2.status = User.STATUS_REGISTERED;
+      await r1.save();
+      await r2.save();
+    });
+
+    it('returns 403 for a non-admin user', async () => {
+      const userToken = (await createTestUser({ name: 'PC User', username: 'pcuser', email: 'pc-user@example.com' })).accessToken;
+      const res = await request(app).get('/api/v2/admin/users/pending-count').set(authHeaders(userToken));
+      expect(res.status).toBe(403);
+    });
+
+    it('counts only REGISTERED (awaiting-approval) users', async () => {
+      const res = await request(app).get('/api/v2/admin/users/pending-count').set(authHeaders(adminToken));
+      expect(res.status).toBe(200);
+      expect(res.body.count).toBe(2);
+    });
+  });
+
+  describe('DELETE /api/v2/admin/users/:id', () => {
+    let adminToken: string;
+    let invited: UserDocument;
+
+    beforeEach(async () => {
+      await clearUsers();
+      const User = crowi.model('User');
+      adminToken = (await createTestUser({ name: 'Del Admin', username: 'deladmin', email: 'del-admin@example.com', admin: true })).accessToken;
+      const [u] = (await Fixture.generate('User', [{ name: 'Invitee', username: 'invitee', email: 'invitee@example.com' }])) as UserDocument[];
+      u.status = User.STATUS_INVITED;
+      await u.save();
+      invited = u;
+    });
+
+    it('physically removes an INVITED user', async () => {
+      const res = await request(app).delete(`/api/v2/admin/users/${invited._id}`).set(authHeaders(adminToken));
+      expect(res.status).toBe(200);
+      expect(res.body.deletedId).toBe(invited._id.toString());
+      const stillThere = await crowi.model('User').findById(invited._id);
+      expect(stillThere).toBeNull();
+    });
+
+    it('returns 409 when the user is not INVITED', async () => {
+      const active = await createPlainUser({ name: 'Active U', username: 'activeu', email: 'active-u@example.com' });
+      const res = await request(app).delete(`/api/v2/admin/users/${active._id}`).set(authHeaders(adminToken));
+      expect(res.status).toBe(409);
+    });
+
+    it('returns 404 for a non-existent id', async () => {
+      const res = await request(app).delete('/api/v2/admin/users/0123456789abcdef01234567').set(authHeaders(adminToken));
+      expect(res.status).toBe(404);
+    });
+  });
 });

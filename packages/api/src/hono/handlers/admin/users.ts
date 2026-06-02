@@ -51,6 +51,9 @@ const invalidIdBody = (id: string) => ({
 });
 const userNotFoundBody = { error: { code: 'NOT_FOUND' as const, message: 'User not found' as const } } as const;
 const emailConflictBody = { error: { code: 'CONFLICT' as const, message: 'Email is already in use by another user' as const } } as const;
+const notInvitedConflictBody = {
+  error: { code: 'CONFLICT' as const, message: 'Only invited (never-activated) users can be removed' as const },
+} as const;
 
 type LegacyInvitedUserRow = {
   email: string;
@@ -99,8 +102,8 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
   return app
     .openapi(adminUsersRoutes.listUsersRoute, async (c) => {
       try {
-        const { q, page, limit } = c.req.valid('query');
-        const filter = buildSearchFilter(q);
+        const { q, status, page, limit } = c.req.valid('query');
+        const filter = { ...buildSearchFilter(q), ...(status !== undefined ? { status } : {}) };
         const result = await User.paginate(filter, {
           page,
           limit,
@@ -253,6 +256,31 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         return c.json({ user: toUserPublic(updated) }, 200);
       } catch (err) {
         debug('updateUserEmail error: %s', (err as Error).message);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(adminUsersRoutes.pendingUsersCountRoute, async (c) => {
+      try {
+        const count = await User.countDocuments({ status: User.STATUS_REGISTERED });
+        return c.json({ count }, 200);
+      } catch (err) {
+        debug('pendingUsersCount error: %s', (err as Error).message);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(adminUsersRoutes.deleteUserRoute, async (c) => {
+      const { id } = c.req.valid('param');
+      if (!isValidObjectId(id)) return c.json(invalidIdBody(id), 400);
+      try {
+        const user = (await User.findById(id)) as UserDocument | null;
+        if (!user) return c.json(userNotFoundBody, 404);
+        // Physical removal is restricted to never-activated (INVITED) users;
+        // activated users must go through the suspend/logical-delete flow.
+        if (user.status !== User.STATUS_INVITED) return c.json(notInvitedConflictBody, 409);
+        await promisifyMethod<1 | null>((cb) => User.removeCompletelyById(id, cb));
+        return c.json({ deletedId: id }, 200);
+      } catch (err) {
+        debug('deleteUser error: %s', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     });

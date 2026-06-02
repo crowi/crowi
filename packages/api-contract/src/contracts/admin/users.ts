@@ -23,11 +23,13 @@ import { createRoute, z } from '@hono/zod-openapi';
 import {
   AdminUserIdParamSchema,
   AdminUserMutationResponseSchema,
+  DeleteAdminUserResponseSchema,
   EditAdminUserRequestSchema,
   InviteUsersRequestSchema,
   InviteUsersResponseSchema,
   ListAdminUsersRequestSchema,
   ListAdminUsersResponseSchema,
+  PendingUsersCountResponseSchema,
   ResetPasswordResponseSchema,
   SearchAdminUsersByEmailRequestSchema,
   SearchAdminUsersByEmailResponseSchema,
@@ -408,6 +410,73 @@ export const updateUserEmailRoute = createRoute({
   },
 });
 
+export const pendingUsersCountRoute = createRoute({
+  method: 'get',
+  path: '/admin/users/pending-count',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Count users awaiting admin approval (status REGISTERED)',
+  responses: {
+    200: {
+      description: 'Pending-approval user count',
+      content: { 'application/json': { schema: PendingUsersCountResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const deleteUserRoute = createRoute({
+  method: 'delete',
+  path: '/admin/users/{id}',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Physically remove a user (INVITED status only)',
+  request: {
+    params: AdminUserIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'User removed',
+      content: { 'application/json': { schema: DeleteAdminUserResponseSchema } },
+    },
+    400: {
+      description: 'Invalid id',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    409: {
+      description: 'User is not in the INVITED status and cannot be physically removed',
+      content: { 'application/json': { schema: ConflictErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
 export const adminUsersRoutes = {
   listUsersRoute,
   searchUsersByEmailRoute,
@@ -419,6 +488,8 @@ export const adminUsersRoutes = {
   suspendUserRoute,
   resetPasswordRoute,
   updateUserEmailRoute,
+  pendingUsersCountRoute,
+  deleteUserRoute,
 };
 
 export type {

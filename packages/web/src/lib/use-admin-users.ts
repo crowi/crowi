@@ -4,10 +4,12 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { apiClientV2 } from './api-client';
 import type {
   AdminUserMutationResponse,
+  DeleteAdminUserResponse,
   EditAdminUserRequest,
   InviteUsersRequest,
   InviteUsersResponse,
   ListAdminUsersResponse,
+  PendingUsersCountResponse,
   ResetPasswordResponse,
   UpdateAdminUserEmailRequest,
 } from '@crowi/api-contract';
@@ -15,13 +17,17 @@ import { m } from '@paraglide/messages.js';
 
 export interface UseAdminUsersParams {
   q?: string;
+  /** Numeric user-status filter (see UserStatusEnum); used by the approval queue. */
+  status?: number;
   page?: number;
   limit?: number;
 }
 
 export const adminUsersKeys = {
   all: ['admin', 'users'] as const,
-  list: (params: UseAdminUsersParams) => [...adminUsersKeys.all, 'list', params.q ?? '', params.page ?? 1, params.limit ?? 50] as const,
+  list: (params: UseAdminUsersParams) =>
+    [...adminUsersKeys.all, 'list', params.q ?? '', params.status ?? '', params.page ?? 1, params.limit ?? 50] as const,
+  pendingCount: () => [...adminUsersKeys.all, 'pending-count'] as const,
 };
 
 /**
@@ -82,6 +88,7 @@ export function useAdminUsers(params: UseAdminUsersParams) {
       const response = await apiClientV2.admin.users.$get({
         query: {
           q: params.q,
+          status: params.status !== undefined ? String(params.status) : undefined,
           page: params.page !== undefined ? String(params.page) : undefined,
           limit: params.limit !== undefined ? String(params.limit) : undefined,
         },
@@ -189,5 +196,41 @@ export function useUpdateAdminUserEmail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });
     },
+  });
+}
+
+/**
+ * Physically removes an INVITED user. The API rejects non-invited users with
+ * 409; we surface that as a plain error so the caller can show a toast.
+ */
+export function useDeleteAdminUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { id: string }): Promise<DeleteAdminUserResponse> => {
+      const response = await apiClientV2.admin.users[':id'].$delete({ param: { id: params.id } });
+      if (response.status === 200) return (await response.json()) as DeleteAdminUserResponse;
+      return throwAdminUserError(response, m['admin.users.action.delete_failed']());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });
+    },
+  });
+}
+
+/**
+ * Number of users awaiting admin approval (status REGISTERED). Polls on a
+ * short interval so the sidebar approval badge stays roughly fresh while an
+ * admin works elsewhere in the panel.
+ */
+export function useAdminPendingUsersCount() {
+  return useQuery({
+    queryKey: adminUsersKeys.pendingCount(),
+    queryFn: async (): Promise<PendingUsersCountResponse> => {
+      const response = await apiClientV2.admin.users['pending-count'].$get();
+      if (response.status === 200) return (await response.json()) as PendingUsersCountResponse;
+      return throwAdminUserError(response, 'Failed to fetch pending user count');
+    },
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 }

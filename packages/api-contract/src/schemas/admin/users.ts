@@ -19,6 +19,12 @@ export { AdminPagerSchema, type AdminPager } from './_pager';
  */
 export const ListAdminUsersRequestSchema = z.object({
   q: z.string().optional(),
+  /**
+   * Optional numeric user-status filter (see `UserStatusEnum`). When set, only
+   * users in that status are returned — used by the "user approval" queue
+   * screen to list `REGISTERED` (= awaiting admin approval) users.
+   */
+  status: z.coerce.number().int().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
@@ -173,3 +179,27 @@ export const UpdateAdminUserEmailRequestSchema = z.object({
   email: z.string().email(),
 });
 export type UpdateAdminUserEmailRequest = z.infer<typeof UpdateAdminUserEmailRequestSchema>;
+
+/**
+ * Response body for DELETE /admin/users/:id.
+ *
+ * Only users still in the INVITED status can be physically removed
+ * (`User.removeCompletelyById`); activated users are logically deleted via the
+ * suspend/delete status flow instead. Returns the removed id so the client can
+ * drop the row optimistically.
+ */
+export const DeleteAdminUserResponseSchema = z.object({
+  deletedId: z.string(),
+});
+export type DeleteAdminUserResponse = z.infer<typeof DeleteAdminUserResponseSchema>;
+
+/**
+ * Response body for GET /admin/users/pending-count.
+ *
+ * `count` is the number of users awaiting admin approval (status REGISTERED).
+ * Drives the "user approval" sidebar badge so admins notice pending sign-ups.
+ */
+export const PendingUsersCountResponseSchema = z.object({
+  count: z.number().int().nonnegative(),
+});
+export type PendingUsersCountResponse = z.infer<typeof PendingUsersCountResponseSchema>;

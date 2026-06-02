@@ -18,7 +18,7 @@ import {
   UpdateEmailDialog,
   userLabel,
 } from '@/components/admin/user-action-dialogs';
-import { useAdminUsers, useResetAdminUserPassword, useToggleAdminRole, useToggleAdminStatus } from '@/lib/use-admin-users';
+import { useAdminUsers, useDeleteAdminUser, useResetAdminUserPassword, useToggleAdminRole, useToggleAdminStatus } from '@/lib/use-admin-users';
 import { useAuth } from '@/lib/use-auth';
 import { m } from '@paraglide/messages.js';
 
@@ -31,7 +31,7 @@ function parsePage(value: string | null): number {
   return parsed;
 }
 
-type ConfirmKind = Extract<UserRowActionKind, 'make-admin' | 'remove-admin' | 'activate' | 'suspend'>;
+type ConfirmKind = Extract<UserRowActionKind, 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'delete'>;
 
 /**
  * Discriminated union for the open dialog. Mutual exclusion (one dialog at a
@@ -69,6 +69,11 @@ const CONFIRM_COPY: Record<ConfirmKind, { title: () => string; description: (var
     description: (v) => m['admin.users.action.confirm_suspend_description'](v),
     destructive: true,
   },
+  delete: {
+    title: () => m['admin.users.action.confirm_delete_title'](),
+    description: (v) => m['admin.users.action.confirm_delete_description'](v),
+    destructive: true,
+  },
 };
 
 export default function AdminUsersPage() {
@@ -86,6 +91,7 @@ export default function AdminUsersPage() {
   const toggleRole = useToggleAdminRole();
   const toggleStatus = useToggleAdminStatus();
   const resetPassword = useResetAdminUserPassword();
+  const deleteUser = useDeleteAdminUser();
 
   useEffect(() => {
     setInputValue(urlQuery);
@@ -131,6 +137,7 @@ export default function AdminUsersPage() {
       case 'remove-admin':
       case 'activate':
       case 'suspend':
+      case 'delete':
         setDialog({ kind: 'confirm', action: action.kind, user: action.user });
         return;
     }
@@ -148,6 +155,10 @@ export default function AdminUsersPage() {
       toggleRole.mutate({ id: user._id, nextAdmin: action === 'make-admin' }, { onSuccess: () => setDialog(CLOSED), onError });
       return;
     }
+    if (action === 'delete') {
+      deleteUser.mutate({ id: user._id }, { onSuccess: () => setDialog(CLOSED), onError });
+      return;
+    }
     toggleStatus.mutate({ id: user._id, nextStatus: action === 'activate' ? 'active' : 'suspended' }, { onSuccess: () => setDialog(CLOSED), onError });
   };
 
@@ -163,8 +174,13 @@ export default function AdminUsersPage() {
           name: userLabel(dialog.user),
         }
       : null;
-  const confirmActionUsesRole = dialog.kind === 'confirm' && (dialog.action === 'make-admin' || dialog.action === 'remove-admin');
-  const confirmPending = dialog.kind === 'confirm' && (confirmActionUsesRole ? toggleRole.isPending : toggleStatus.isPending);
+  const confirmPending =
+    dialog.kind === 'confirm' &&
+    (dialog.action === 'make-admin' || dialog.action === 'remove-admin'
+      ? toggleRole.isPending
+      : dialog.action === 'delete'
+        ? deleteUser.isPending
+        : toggleStatus.isPending);
 
   return (
     <div className="space-y-6">
