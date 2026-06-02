@@ -277,7 +277,15 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         // Physical removal is restricted to never-activated (INVITED) users;
         // activated users must go through the suspend/logical-delete flow.
         if (user.status !== User.STATUS_INVITED) return c.json(notInvitedConflictBody, 409);
-        await promisifyMethod<1 | null>((cb) => User.removeCompletelyById(id, cb));
+        try {
+          await promisifyMethod<1 | null>((cb) => User.removeCompletelyById(id, cb));
+        } catch (removeErr) {
+          // removeCompletelyById re-checks the status and rejects if the user
+          // is no longer INVITED (e.g. activated by a concurrent request
+          // between our pre-check and the delete). Surface that as 409, not 500.
+          if ((removeErr as Error).message?.includes('INVITED')) return c.json(notInvitedConflictBody, 409);
+          throw removeErr;
+        }
         return c.json({ deletedId: id }, 200);
       } catch (err) {
         debug('deleteUser error: %s', (err as Error).message);

@@ -19,7 +19,8 @@ import { m } from '@paraglide/messages.js';
  * list query so the row drops out and the sidebar badge count drops too.
  */
 export default function AdminUsersPendingPage() {
-  const { data, isLoading, error } = useAdminUsers({ status: UserStatusEnum.REGISTERED, limit: 100 });
+  const [page, setPage] = useState(1);
+  const { data, isLoading, error } = useAdminUsers({ status: UserStatusEnum.REGISTERED, page });
   const toggleStatus = useToggleAdminStatus();
   const [rowError, setRowError] = useState<string | null>(null);
 
@@ -83,6 +84,18 @@ export default function AdminUsersPendingPage() {
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {!isLoading && !error && data && data.pager.pagesCount > 1 && (
+        <nav className="flex items-center justify-center gap-3 text-sm" aria-label={m['admin.users.pager_aria_label']()}>
+          <Button type="button" variant="outline" size="sm" disabled={data.pager.previous === null} onClick={() => data.pager.previous !== null && setPage(data.pager.previous)}>
+            {m['admin.users.pager_previous']()}
+          </Button>
+          <span className="text-muted-foreground">{data.pager.page} / {data.pager.pagesCount}</span>
+          <Button type="button" variant="outline" size="sm" disabled={data.pager.next === null} onClick={() => data.pager.next !== null && setPage(data.pager.next)}>
+            {m['admin.users.pager_next']()}
+          </Button>
+        </nav>
       )}
     </div>
   );

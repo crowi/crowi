@@ -428,14 +428,32 @@ export default (crowi: Crowi) => {
     const config = crowi.getConfig();
     const whitelist = config.crowi['security:registrationWhiteList'];
 
-    if (Array.isArray(whitelist) && whitelist.length > 0) {
-      return config.crowi['security:registrationWhiteList'].some(function (allowedEmail) {
-        const re = new RegExp(allowedEmail + '$');
-        return re.test(email);
-      });
+    if (!Array.isArray(whitelist) || whitelist.length === 0) {
+      return true;
     }
 
-    return true;
+    const target = String(email ?? '')
+      .trim()
+      .toLowerCase();
+    if (target.length === 0) return false;
+
+    // Each whitelist entry is matched as a literal (no regex), case-insensitively:
+    //   - 'admin@example.com'  → exact full-address match
+    //   - '@example.com'       → any local-part at that domain
+    //   - 'example.com'        → that domain or any subdomain of it
+    // This replaces the legacy `new RegExp(entry + '$')`, which left entries
+    // unanchored at the start (so 'example.com' also matched 'notexample.com'),
+    // unescaped (metachars like '.' matched any char; a bad entry threw), and
+    // case-sensitive.
+    return whitelist.some(function (allowedEmail) {
+      const entry = String(allowedEmail ?? '')
+        .trim()
+        .toLowerCase();
+      if (entry.length === 0) return false;
+      if (entry.startsWith('@')) return target.endsWith(entry);
+      if (entry.includes('@')) return target === entry;
+      return target.endsWith(`@${entry}`) || target.endsWith(`.${entry}`);
+    });
   };
 
   userSchema.statics.isGitHubAccountValid = function (organizations) {

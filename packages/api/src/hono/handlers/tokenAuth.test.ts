@@ -205,13 +205,28 @@ describe('Routes /api/v2/auth (Hono)', () => {
         expect(blocked.status).toBe(403);
         expect(blocked.body.error.code).toBe('EMAIL_NOT_ALLOWED');
 
-        // A matching address still registers.
+        // A matching address (subdomain of the whitelisted domain) registers.
         const allowed = await request(app)
           .post('/api/v2/auth/register')
           .send({ username: 'wl-allowed', name: 'WL Allowed', email: 'ok@allowed.example.com', password: 'Password!1' });
         expect(allowed.status).toBe(200);
+
+        // Regression: the legacy `new RegExp(entry + '$')` matched this
+        // (ends with 'allowed.example.com') even though it is a different
+        // domain. The hardened literal match must reject it.
+        const overmatch = await request(app)
+          .post('/api/v2/auth/register')
+          .send({ username: 'wl-overmatch', name: 'WL Overmatch', email: 'evil@notallowed.example.com', password: 'Password!1' });
+        expect(overmatch.status).toBe(403);
+        expect(overmatch.body.error.code).toBe('EMAIL_NOT_ALLOWED');
+
+        // Case-insensitive: uppercased address still matches the whitelist.
+        const mixedCase = await request(app)
+          .post('/api/v2/auth/register')
+          .send({ username: 'wl-case', name: 'WL Case', email: 'OK@Allowed.Example.com', password: 'Password!1' });
+        expect(mixedCase.status).toBe(200);
       } finally {
-        await User().deleteMany({ username: { $in: ['wl-blocked', 'wl-allowed'] } });
+        await User().deleteMany({ username: { $in: ['wl-blocked', 'wl-allowed', 'wl-overmatch', 'wl-case'] } });
         if (prev !== undefined) {
           await Config().updateConfig('crowi', 'security:registrationWhiteList', prev);
         } else {
