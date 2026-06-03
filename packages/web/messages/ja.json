@@ -156,7 +156,7 @@
   "page.watch_loading_aria": "ウォッチ状態を確認中",
   "page.seen_by": "閲覧",
   "page.seen_by_dialog_title": "閲覧者一覧",
-  "page.seen_by_dialog_description": "{count} 人がこのページを見ています。",
+  "page.seen_by_dialog_description": "{count} 人がこのページを閲覧しました。",
   "page.seen_by_more": "+{count} 人を表示",
   "page.seen_by_loading": "ユーザー一覧を読み込み中...",
   "page.seen_by_empty": "表示できるユーザーがいません。",

@@ -59,16 +59,16 @@ export function LinkSharePopover({ page }: LinkSharePopoverProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[480px] p-2">
         <DropdownMenuLabel className="flex items-center gap-2 px-2 pb-1">
-          {copiedKey === 'idUrl' ? (
-            <>
+          {/* The "共有" title stays put; the copy confirmation rides on the
+              right edge (auto-copy fires on open) so it never hides the
+              title. `ml-auto` pushes it to the far end. */}
+          <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+          {m['page.share.title']()}
+          {copiedKey === 'idUrl' && (
+            <span className="ml-auto flex items-center gap-1 text-xs font-normal text-emerald-700 dark:text-emerald-400">
               <Check className="h-3.5 w-3.5 text-emerald-600" />
-              <span className="text-emerald-700 dark:text-emerald-400">{m['page.share.url_copied']()}</span>
-            </>
-          ) : (
-            <>
-              <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-              {m['page.share.title']()}
-            </>
+              {m['page.share.url_copied']()}
+            </span>
           )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
