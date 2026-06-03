@@ -114,7 +114,17 @@ export function NotificationBell() {
           ) : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-96 p-0">
+      {/*
+        `max-w-[calc(100vw-1.5rem)]` caps the panel at the viewport on
+        mobile (the fixed `w-96` = 384px otherwise nearly fills a phone
+        screen, and Radix's collision avoidance clamps it flush to the
+        left edge). `collisionPadding={12}` then keeps an equal 0.75rem
+        gap on both sides — the panel is sized to `viewport - 24px` and
+        collision aligns it to `edge + padding`, so left and right
+        margins match and it reads as centred. On desktop the 384px
+        panel is well under the cap and still hangs under the bell.
+      */}
+      <DropdownMenuContent align="end" collisionPadding={12} className="w-96 max-w-[calc(100vw-1.5rem)] p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
           <span className="text-sm font-medium">{m['notifications.title']()}</span>
           <button
