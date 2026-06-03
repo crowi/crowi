@@ -13,6 +13,7 @@ import { LocaleSync } from '@/components/locale-sync';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
+import { CreatePageButton } from '@/components/create-page/create-page-dialog';
 import { useConnection } from '@/lib/connection-context';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
@@ -103,6 +104,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <CreatePageButton />
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

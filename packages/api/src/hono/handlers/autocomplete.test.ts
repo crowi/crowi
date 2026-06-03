@@ -175,6 +175,23 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
       expect(hit.label).toBe(`${PATH_PREFIX}with-meta`);
       expect(typeof hit.modifiedAt).toBe('string');
     });
+
+    it('anchor=prefix matches only paths that start with q (excludes mid-path substring hits)', async () => {
+      // The "create page" modal queries with the full `/`-rooted prefix.
+      await createPage(aliceToken, 'anchored-root');
+      await createPage(aliceToken, 'nested/anchored-leaf');
+      const res = await request(app)
+        .get('/api/v2/pages/autocomplete')
+        .set(authHeaders(aliceToken))
+        .query({ q: `${PATH_PREFIX}anchored`, anchor: 'prefix' });
+
+      expect(res.status).toBe(200);
+      const labels = res.body.results.map((r: { label: string }) => r.label);
+      // Starts with the prefix → included.
+      expect(labels).toContain(`${PATH_PREFIX}anchored-root`);
+      // `anchored` only appears mid-path here → excluded under prefix anchoring.
+      expect(labels).not.toContain(`${PATH_PREFIX}nested/anchored-leaf`);
+    });
   });
 
   describe('rate limiting', () => {

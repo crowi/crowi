@@ -26111,6 +26111,19 @@
             "required": false,
             "name": "limit",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "substring",
+                "prefix"
+              ],
+              "default": "substring"
+            },
+            "required": false,
+            "name": "anchor",
+            "in": "query"
           }
         ],
         "responses": {
@@ -26326,6 +26339,19 @@
             },
             "required": false,
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "substring",
+                "prefix"
+              ],
+              "default": "substring"
+            },
+            "required": false,
+            "name": "anchor",
             "in": "query"
           }
         ],
