@@ -431,6 +431,7 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
 - [x] **page-comment 統合** (`bbe2a2dd` + simplify `89b45630`) — 共有 helper 抽出 (toPageUser / toISOStringOrNull / isValidObjectId)
 - [x] **page-bookmark 統合** (`a76e4f9c` + simplify `9d74e0de`) — Bookmark button
 - [x] **page-rename 統合** (`5d0942e3` + simplify `0c7621f1`) — Rename API
+- [x] **renameTree (サブページごと一括リネーム) 移行** (`feature-rename-tree`) — 既存 `POST /pages/rename` に `include_descendants` フラグを追加し、true のとき `findListByStartWith` → `getPathMap` → `checkPagesRenamable` (実行前検証) → `renameTree` (preserveUpdatedAt / 非ポータルのみ redirect / best-effort 非トランザクション) でルート＋grant可視サブツリーを一括移動。レスポンスに `renamed_count` 追加、衝突は構造化 400 (`PAGE_RENAME_TREE_FAILED` + `conflicts[]`)。Web は rename-dialog の submit ガード (`!includeDescendants`) と「準備中」注記を撤去しスイッチを結線、成功トースト (件数) + 衝突 path 一覧表示。`include_descendants:false` は現行単一 rename と完全同一
 
 ### Web UI 改善 (main 直)
 - [x] **Seen by を avatar stack + N+ more dialog 化** (`a2b37dde` + `20da8dbd`) — preview 10 件は重なりアバター、超過分は `+N more` ボタンで Dialog から全件閲覧。`PageSchema` から id 配列の `seenUsers` を撤去 (count のみ)、`getSeenUsers` に `limit` query 追加でペイロードを軽量化
