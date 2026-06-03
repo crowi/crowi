@@ -1,5 +1,7 @@
 import { Command } from 'commander';
+import { registerMigrate } from './commands/migrate';
 import { registerMigrateWikilink } from './commands/migrate-wikilink';
+import { registerRebuild } from './commands/rebuild';
 import { registerSearchRebuild } from './commands/search-rebuild';
 import { registerStorageCopy } from './commands/storage-copy';
 
@@ -18,6 +20,13 @@ export function createProgram(): Command {
     .name('crowi-admin')
     .description('Operator-side admin CLI for Crowi 2.0. Talks directly to MongoDB; intended for use inside the server (ssh / kubectl exec).')
     .version('0.1.0-dev');
+
+  // RFC-0008: the unified migration framework namespaces. The legacy
+  // command forms below (storage copy / search rebuild / migrate-wikilink)
+  // are removed in later phases once their tasks move onto `migrate` /
+  // `rebuild`.
+  registerMigrate(program);
+  registerRebuild(program);
 
   registerStorageCopy(program);
   registerSearchRebuild(program);
