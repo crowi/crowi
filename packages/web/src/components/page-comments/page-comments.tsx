@@ -70,7 +70,7 @@ export function PageComments({ page }: PageCommentsProps) {
 
       {!isReadOnly && revisionId && (
         <div className="mb-4">
-          <CommentForm isSubmitting={isAdding} error={addError} onSubmit={handleSubmit} />
+          <CommentForm isSubmitting={isAdding} error={addError} onSubmit={handleSubmit} isFirstComment={!isLoading && !isError && comments.length === 0} />
         </div>
       )}
 
@@ -104,8 +104,6 @@ export function PageComments({ page }: PageCommentsProps) {
           <AlertDescription>{error?.message ?? m['common.try_again_later']()}</AlertDescription>
         </Alert>
       )}
-
-      {!isLoading && !isError && comments.length === 0 && <p className="text-sm text-muted-foreground py-4">{m['page_comments.empty']()}</p>}
 
       {!isLoading && !isError && comments.length > 0 && (
         <ul className="divide-y">

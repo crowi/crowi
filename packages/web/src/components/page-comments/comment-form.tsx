@@ -10,9 +10,11 @@ interface CommentFormProps {
   isSubmitting: boolean;
   error: Error | null;
   onSubmit: (comment: string) => Promise<void> | void;
+  /** When true (no comments yet), invite the user to write the page's first comment. */
+  isFirstComment?: boolean;
 }
 
-export function CommentForm({ isSubmitting, error, onSubmit }: CommentFormProps) {
+export function CommentForm({ isSubmitting, error, onSubmit, isFirstComment = false }: CommentFormProps) {
   const [value, setValue] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -45,7 +47,7 @@ export function CommentForm({ isSubmitting, error, onSubmit }: CommentFormProps)
           setValue(e.target.value);
           if (localError) setLocalError(null);
         }}
-        placeholder={m['page_comments.placeholder']()}
+        placeholder={isFirstComment ? m['page_comments.placeholder_first']() : m['page_comments.placeholder']()}
         disabled={isSubmitting}
         rows={3}
         aria-label={m['page_comments.body_aria']()}
