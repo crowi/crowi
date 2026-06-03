@@ -2,7 +2,7 @@
 
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { AlertCircle, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -11,9 +11,10 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { notify } from '@/lib/notify';
 import { usePageList } from '@/lib/use-page-list';
 import { pagePathToHref } from '@/lib/page-path';
-import { PageRevisionConflictError, useRenamePage } from '@/lib/use-page-mutations';
+import { PageRevisionConflictError, type RenameTreeConflict, RenameTreeConflictError, useRenamePage } from '@/lib/use-page-mutations';
 
 interface RenameDialogProps {
   page: PageWithRevision;
@@ -21,7 +22,7 @@ interface RenameDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type Feedback = { kind: 'conflict' | 'error'; message: string };
+type Feedback = { kind: 'conflict' | 'error'; message: string } | { kind: 'tree_conflict'; message: string; conflicts: RenameTreeConflict[]; partial: boolean };
 
 const DESCENDANT_PREVIEW_LIMIT = 5;
 
@@ -109,12 +110,7 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
   }, [descendants, page.path, newPath]);
   const moreCount = descendantCount - preview.length;
 
-  // Subtree rename (renameTree) is UI-only for now — the backend endpoint
-  // is a separate task. Toggling the switch on previews the move but
-  // blocks submit so we never silently rename just the single page.
-  // TODO(renameTree): wire to the renameTree API once it lands and drop
-  // the `includeDescendants` submit guard + pending note below.
-  const canSubmit = !isSubmitting && !isUnchanged && !isInvalid && !includeDescendants;
+  const canSubmit = !isSubmitting && !isUnchanged && !isInvalid;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -123,19 +119,29 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
     setFeedback(null);
 
     try {
-      const updated = await renameMutation.mutateAsync({
+      const result = await renameMutation.mutateAsync({
         page_id: page._id,
         new_path: newPath,
         revision_id: page.revision._id,
         // Match legacy behaviour: always create a redirect page from the old path.
         create_redirect: true,
+        include_descendants: includeDescendants,
       });
 
       onOpenChange(false);
-      router.replace(pagePathToHref(updated.path));
+      // Surface the moved count for a subtree move so the user sees the
+      // bulk effect; a single rename navigates silently as before.
+      if (includeDescendants) {
+        notify.info(m['page.rename.success_tree']({ count: result.renamedCount }));
+      }
+      router.replace(pagePathToHref(result.page.path));
     } catch (err) {
       if (err instanceof PageRevisionConflictError) {
         setFeedback({ kind: 'conflict', message: err.message });
+        return;
+      }
+      if (err instanceof RenameTreeConflictError) {
+        setFeedback({ kind: 'tree_conflict', message: err.message, conflicts: err.conflicts, partial: err.partial });
         return;
       }
       setFeedback({
@@ -152,11 +158,30 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
         <DialogDescription>{m['page.rename.description']()}</DialogDescription>
       </DialogHeader>
 
-      {feedback && (
+      {feedback && feedback.kind !== 'tree_conflict' && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>{feedback.kind === 'conflict' ? m['page.rename.conflict_title']() : m['page.rename.error_title']()}</AlertTitle>
           <AlertDescription>{feedback.message}</AlertDescription>
+        </Alert>
+      )}
+
+      {feedback && feedback.kind === 'tree_conflict' && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>{m['page.rename.conflict_tree_title']()}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{feedback.partial ? m['page.rename.conflict_tree_partial']() : m['page.rename.conflict_tree_description']()}</p>
+            {feedback.conflicts.length > 0 && (
+              <ul className="space-y-0.5 font-mono text-xs">
+                {feedback.conflicts.map((conflict) => (
+                  <li key={conflict.path} className="truncate">
+                    {conflict.path}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -181,7 +206,8 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
       </div>
 
       {/* Subtree-move (renameTree) affordance — only when the page has
-          descendants. UI is complete; execution is gated until the API ships. */}
+          descendants. Toggling it on moves the page together with its
+          whole grant-visible subtree. */}
       {descendantCount > 0 && (
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
           <div className="flex items-start justify-between gap-3">
@@ -206,13 +232,7 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
 
           {includeDescendants && (
             <>
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                <div className="flex items-center gap-1.5 font-medium">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  {m['page.rename.descendants_pending_badge']()}
-                </div>
-                <p className="mt-1">{m['page.rename.descendants_pending_note']()}</p>
-              </div>
+              <p className="text-xs text-muted-foreground">{m['page.rename.descendants_note']()}</p>
 
               {preview.length > 0 && !isInvalid && (
                 <div className="space-y-1.5">
