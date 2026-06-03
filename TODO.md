@@ -105,8 +105,20 @@ multi-phase 機能。v1→v2 in-place upgrade の preflight が最大ユース�
   HTML 終了タグのみの body の永久 pending (boot デッドロック) を回避。旧
   `migrate-wikilink` コマンド (`.ts` + `.test.ts`) を削除し `cli.ts` から登録除去
   (互換エイリアス無し)
-- [ ] **Phase 4: rebuild tasks を共有 runner へ** — search rebuild /
-  storage copy を `rebuild` 名前空間へ集約 + renderer / backlink 骨組み
+- [x] **Phase 4: rebuild tasks を共有 runner へ** — `runner.ts` の共有部分
+  (dry-run / `ProgressReporter` / bounded concurrency / SIGINT 安全中断 /
+  構造化ログ / `MigrationContext` 構築) を `MigrationRunnerCore` へ抽出し、
+  `MigrationRunner` (migrate: `migrationApplications` reconciliation + record) と
+  `RebuildRunner` (rebuild: record 経路を構造的に持たない) を分離 — `apply` に
+  `if(rebuild)` 分岐を足さず §8.5 no pending/applied concept を subclass で保証。
+  既存 `runSearchRebuild` / `runStorageCopy` util は無変更で温存し
+  `rebuild` 名前空間 (`crowi-admin rebuild {search,storage copy}`) の task が
+  共有 ctx 経由で呼ぶ。旧トップレベル `search-rebuild` / `storage-copy` CLI form
+  を削除し `cli.ts` から `registerSearchRebuild` / `registerStorageCopy` を除去
+  (互換エイリアス無し)。renderer / backlink は既存実装無しのため
+  `util/rebuild-{renderer,backlink}.ts` を骨組み + 明示 TODO で新設し dispatcher
+  登録 (実行すると not-implemented を throw)。storage copy partial→exit code 2 の
+  旧 convention は純粋関数 `rebuildExitCode(outcome)` で構造的に維持
 - [ ] **Phase 5: user-unique-prepare preflight + uniqueness spec 本体** —
   username/email の collation + partial unique index 宣言 / E11000 →
   USERNAME_TAKEN/EMAIL_TAKEN マッピング / dedup-users
