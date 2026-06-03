@@ -23,7 +23,6 @@ import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { type Renderer, createRenderer } from 'src/renderer';
 import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { registerMentionDispatch } from 'src/events/mention-dispatch';
-import { runAwsConfigMigration } from 'src/util/aws-config-migration';
 import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
 import { runPageStatusMigration } from 'src/util/page-status-migration';
 import { type BootReporter, createBootReporter } from 'src/util/boot-reporter';
@@ -218,17 +217,10 @@ class Crowi {
     // ── config: load / migrations / oauth seed ──
     reporter.beginLayer('config');
     await step('setupConfig', () => this.setupConfig());
-    await step('migrateConfig', () => this.migrateConfig());
-    // Must run before setupPlugins — @crowi/plugin-aws reads its config at
-    // register time. Idempotent (write-only-when-target-empty); a failure
-    // here can leak plaintext secrets, so let it bubble out instead of
-    // continuing boot.
-    await step('runAwsConfigMigration', () => runAwsConfigMigration(this));
     // RFC-0004: backfill `status='published'` on legacy pages that
     // predate the `Page.status` field. Idempotent — only matches rows
     // where `status` is still null/missing. Runs after setupModels so
-    // the Page model is available; ordering vs the aws migration is
-    // irrelevant (disjoint collections).
+    // the Page model is available.
     await step('runPageStatusMigration', () => runPageStatusMigration(this));
     // RFC-0010 Phase 3: seed the first-party `crowi-cli` OAuth client.
     // Idempotent upsert (`$setOnInsert`) — runs after setupModels so the
@@ -579,12 +571,6 @@ class Crowi {
     await this.config.setupPubSub();
 
     return this.config.load();
-  }
-
-  async migrateConfig() {
-    const Config = this.model('Config');
-
-    return Config.migrate();
   }
 
   setupMailer() {

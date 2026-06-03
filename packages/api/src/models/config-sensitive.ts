@@ -13,17 +13,17 @@
  * - Share.secretKeyword (looked up by equality, needs deterministic scheme)
  */
 const SENSITIVE_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  // OAuth client secrets — still core config (these move to an auth plugin's
+  // namespace once auth providers become plugins).
   'crowi:google:clientSecret',
   'crowi:github:clientSecret',
-  'crowi:upload:aws:accessKeyId',
-  'crowi:upload:aws:secretAccessKey',
+  // Slack notification credentials.
   'notification:slack:clientSecret',
   'notification:slack:token',
-  // The aws-config-migration writes these BEFORE setupPlugins runs, so the
-  // plugin's runtime @sensitive registration hasn't happened yet. List them
-  // statically so the migration's saveConfig still encrypts at rest.
-  'crowi:plugin:@crowi/plugin-aws:accessKeyId',
-  'crowi:plugin:@crowi/plugin-aws:secretAccessKey',
+  // Storage / mail / other third-party credentials live in their plugin's
+  // config namespace (`crowi:plugin:<name>:<field>`) and are registered at
+  // boot from each plugin's `@sensitive`-marked schema fields — see
+  // `RUNTIME_SENSITIVE_KEYS` below. They are not listed statically here.
 ]);
 
 /**

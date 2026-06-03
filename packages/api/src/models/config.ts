@@ -76,7 +76,6 @@ export interface ConfigModel extends Model<ConfigDocument> {
   deleteConfig(ns: string, key: string): Promise<void>;
   loadAllConfig(): Promise<object>;
   isUploadable(): boolean;
-  migrate(): Promise<void>;
 
   SECURITY_REGISTRATION_MODE_OPEN: string;
   SECURITY_REGISTRATION_MODE_RESTRICTED: string;
@@ -106,10 +105,10 @@ export default (crowi: Crowi) => {
       'auth:requireThirdPartyAuth': false,
       'auth:disablePasswordAuth': false,
 
-      'upload:aws:bucket': 'crowi',
-      'upload:aws:region': 'ap-northeast-1',
-      'upload:aws:accessKeyId': '',
-      'upload:aws:secretAccessKey': '',
+      // Storage credentials (incl. AWS) live in the storage plugin's own
+      // config namespace (`plugin:@crowi/plugin-aws:*` /
+      // `plugin:@crowi/plugin-storage-*:*`), entered via the admin Plugins
+      // screen — not seeded here.
 
       // The sender-independent "from" address stays in core config; each
       // sender's transport credentials (SMTP host/auth, Resend API key,
@@ -214,23 +213,6 @@ export default (crowi: Crowi) => {
   // is the path writable" — Config no longer reaches into AWS keys.
   configSchema.statics.isUploadable = function () {
     return crowi.getPlugins().active.storage !== null;
-  };
-
-  configSchema.statics.migrate = async function () {
-    const renameKeys = {
-      crowi: [
-        ['aws:bucket', 'upload:aws:bucket'],
-        ['aws:region', 'upload:aws:region'],
-        ['aws:accessKeyId', 'upload:aws:accessKeyId'],
-        ['aws:secretAccessKey', 'upload:aws:secretAccessKey'],
-      ],
-    };
-
-    const forEachConfigs = (func: (ns: string, oldKey: string, newKey: string) => Promise<void>): Promise<void[][]> =>
-      Promise.all(Object.entries(renameKeys).map(([ns, keys]) => Promise.all(keys.map(([oldKey, newKey]) => func(ns, oldKey, newKey)))));
-
-    await forEachConfigs((ns, oldKey, newKey) => Config.copyConfig(ns, oldKey, newKey));
-    await forEachConfigs((ns, oldKey) => Config.deleteConfig(ns, oldKey));
   };
 
   const Config = model<ConfigDocument, ConfigModel>('Config', configSchema);
