@@ -296,8 +296,47 @@ export const RenamePageRequestSchema = z.object({
   new_path: z.string(),
   revision_id: z.string().optional(),
   create_redirect: z.boolean().optional(),
+  // When true, rename the page together with its whole (grant-visible)
+  // descendant subtree (renameTree) instead of just the single page.
+  // Defaults to false — the single-page rename behaviour.
+  include_descendants: z.boolean().optional(),
 });
 export type RenamePageRequest = z.infer<typeof RenamePageRequestSchema>;
+
+// Rename page response schema
+//
+// Shared by single-page and subtree renames. `renamed_count` is the number
+// of pages whose path was rewritten (1 for a single rename, root + descendants
+// for a subtree). `partial` is set when a subtree rename failed midway —
+// best-effort / non-transactional, so some pages may already have moved.
+export const RenamePageResponseSchema = z.object({
+  page: PageSchema,
+  renamed_count: z.number(),
+});
+export type RenamePageResponse = z.infer<typeof RenamePageResponseSchema>;
+
+// Structured 400 returned when a subtree rename (include_descendants:true)
+// cannot proceed because one or more destination paths collide or are not a
+// creatable name. `conflicts` tells the client which path failed and why
+// (i18n keys from Page.checkPagesRenamable, e.g.
+// 'rename_tree.error.already_exists' / 'rename_tree.error.can_not_use_this_name').
+export const RenameTreeErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('PAGE_RENAME_TREE_FAILED'),
+    message: z.string(),
+    conflicts: z.array(
+      z.object({
+        path: z.string(),
+        reasons: z.array(z.string()),
+      }),
+    ),
+    // True when the failure happened after some pages were already moved
+    // (non-transactional best-effort). When omitted/false the failure was
+    // detected up-front and nothing was moved.
+    partial: z.boolean().optional(),
+  }),
+});
+export type RenameTreeError = z.infer<typeof RenameTreeErrorSchema>;
 
 // Error response schemas
 export const PageNotFoundErrorSchema = z.object({
