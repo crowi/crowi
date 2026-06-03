@@ -3719,6 +3719,10 @@ components:
       properties:
         q:
           type: string
+        status:
+          type:
+            - integer
+            - 'null'
         page:
           type: integer
           minimum: 1
@@ -4227,6 +4231,8 @@ components:
       properties:
         name:
           type: string
+        label:
+          type: string
         kind:
           type: string
           enum:
@@ -4291,6 +4297,8 @@ components:
                 - mail
                 - notification
                 - auth
+                - search
+                - renderer
             label:
               type: string
             icon:
@@ -4341,6 +4349,8 @@ components:
                       - mail
                       - notification
                       - auth
+                      - search
+                      - renderer
                   label:
                     type: string
                   icon:
@@ -4370,6 +4380,8 @@ components:
             type: object
             properties:
               name:
+                type: string
+              label:
                 type: string
               kind:
                 type: string
@@ -19826,10 +19838,6 @@ paths:
               schema:
                 type: object
                 properties:
-                  basicName:
-                    type: string
-                  basicSecret:
-                    type: string
                   registrationMode:
                     type: string
                     enum:
@@ -19841,8 +19849,6 @@ paths:
                     items:
                       type: string
                 required:
-                  - basicName
-                  - basicSecret
                   - registrationMode
                   - registrationWhiteList
         '401':
@@ -19923,19 +19929,13 @@ paths:
         - admin.security
       security:
         - bearerAuth: []
-      summary: >-
-        Update security:* settings (basicName / basicSecret / registrationMode /
-        registrationWhiteList)
+      summary: Update security:* settings (registrationMode / registrationWhiteList)
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                basicName:
-                  type: string
-                basicSecret:
-                  type: string
                 registrationMode:
                   type: string
                   enum:
@@ -19947,8 +19947,6 @@ paths:
                   items:
                     type: string
               required:
-                - basicName
-                - basicSecret
                 - registrationMode
                 - registrationWhiteList
       responses:
@@ -19959,10 +19957,6 @@ paths:
               schema:
                 type: object
                 properties:
-                  basicName:
-                    type: string
-                  basicSecret:
-                    type: string
                   registrationMode:
                     type: string
                     enum:
@@ -19974,8 +19968,6 @@ paths:
                     items:
                       type: string
                 required:
-                  - basicName
-                  - basicSecret
                   - registrationMode
                   - registrationWhiteList
         '401':
@@ -20821,6 +20813,13 @@ paths:
           name: q
           in: query
         - schema:
+            type:
+              - integer
+              - 'null'
+          required: false
+          name: status
+          in: query
+        - schema:
             type: integer
             minimum: 1
             default: 1
@@ -21500,6 +21499,182 @@ paths:
                   - error
         '409':
           description: Email already in use by another user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - CONFLICT
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+    delete:
+      tags:
+        - admin.users
+      security:
+        - bearerAuth: []
+      summary: Physically remove a user (INVITED status only)
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: id
+          in: path
+      responses:
+        '200':
+          description: User removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedId:
+                    type: string
+                required:
+                  - deletedId
+        '400':
+          description: Invalid id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - VALIDATION_ERROR
+                      message:
+                        type: string
+                      details:
+                        type: object
+                        properties:
+                          fieldErrors:
+                            type: object
+                            additionalProperties:
+                              type: array
+                              items:
+                                type: string
+                          formErrors:
+                            type: array
+                            items:
+                              type: string
+                        required:
+                          - fieldErrors
+                          - formErrors
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Admin permission required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ADMIN_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Admin permission required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - NOT_FOUND
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '409':
+          description: User is not in the INVITED status and cannot be physically removed
           content:
             application/json:
               schema:
@@ -22728,6 +22903,99 @@ paths:
                       - message
                 required:
                   - error
+  /admin/users/pending-count:
+    get:
+      tags:
+        - admin.users
+      security:
+        - bearerAuth: []
+      summary: Count users awaiting admin approval (status REGISTERED)
+      responses:
+        '200':
+          description: Pending-approval user count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+                required:
+                  - count
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Admin permission required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ADMIN_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Admin permission required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
   /admin/plugins:
     get:
       tags:
@@ -22774,6 +23042,8 @@ paths:
                                 - mail
                                 - notification
                                 - auth
+                                - search
+                                - renderer
                             label:
                               type: string
                             icon:
@@ -22878,6 +23148,11 @@ paths:
           required: true
           name: name
           in: query
+        - schema:
+            type: string
+          required: false
+          name: locale
+          in: query
       responses:
         '200':
           description: Plugin config + values (secrets masked)
@@ -22894,6 +23169,8 @@ paths:
                       type: object
                       properties:
                         name:
+                          type: string
+                        label:
                           type: string
                         kind:
                           type: string

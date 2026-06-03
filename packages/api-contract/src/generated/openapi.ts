@@ -9168,8 +9168,6 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            basicName: string;
-                            basicSecret: string;
                             /** @enum {string} */
                             registrationMode: "Open" | "Resricted" | "Closed";
                             registrationWhiteList: string[];
@@ -9228,7 +9226,7 @@ export interface paths {
                 };
             };
         };
-        /** Update security:* settings (basicName / basicSecret / registrationMode / registrationWhiteList) */
+        /** Update security:* settings (registrationMode / registrationWhiteList) */
         put: {
             parameters: {
                 query?: never;
@@ -9239,8 +9237,6 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        basicName: string;
-                        basicSecret: string;
                         /** @enum {string} */
                         registrationMode: "Open" | "Resricted" | "Closed";
                         registrationWhiteList: string[];
@@ -9255,8 +9251,6 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            basicName: string;
-                            basicSecret: string;
                             /** @enum {string} */
                             registrationMode: "Open" | "Resricted" | "Closed";
                             registrationWhiteList: string[];
@@ -9958,6 +9952,7 @@ export interface paths {
             parameters: {
                 query?: {
                     q?: string;
+                    status?: number | null;
                     page?: number;
                     limit?: number;
                 };
@@ -10304,7 +10299,132 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Physically remove a user (INVITED status only) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description User removed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deletedId: string;
+                        };
+                    };
+                };
+                /** @description Invalid id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description User not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description User is not in the INVITED status and cannot be physically removed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "CONFLICT";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /** Update a user's name and email */
@@ -11297,6 +11417,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users/pending-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count users awaiting admin approval (status REGISTERED) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Pending-approval user count */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            count: number;
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/plugins": {
         parameters: {
             query?: never;
@@ -11329,7 +11537,7 @@ export interface paths {
                                 registers: string[];
                                 adminPlacement: {
                                     /** @enum {string} */
-                                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth";
+                                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer";
                                     label: string;
                                     icon?: string;
                                 };
@@ -11410,6 +11618,7 @@ export interface paths {
             parameters: {
                 query: {
                     name: string;
+                    locale?: string;
                 };
                 header?: never;
                 path?: never;
@@ -11427,6 +11636,7 @@ export interface paths {
                             name: string;
                             fields: {
                                 name: string;
+                                label?: string;
                                 /** @enum {string} */
                                 kind: "string" | "secret" | "number" | "boolean" | "enum" | "string-array";
                                 description?: string;
@@ -13625,6 +13835,7 @@ export interface components {
         };
         ListAdminUsersRequest: {
             q?: string;
+            status?: number | null;
             /** @default 1 */
             page: number;
             /** @default 50 */
@@ -13813,6 +14024,7 @@ export interface components {
         };
         PluginField: {
             name: string;
+            label?: string;
             /** @enum {string} */
             kind: "string" | "secret" | "number" | "boolean" | "enum" | "string-array";
             description?: string;
@@ -13833,7 +14045,7 @@ export interface components {
             registers: string[];
             adminPlacement: {
                 /** @enum {string} */
-                section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth";
+                section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer";
                 label: string;
                 icon?: string;
             };
@@ -13848,7 +14060,7 @@ export interface components {
                 registers: string[];
                 adminPlacement: {
                     /** @enum {string} */
-                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth";
+                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer";
                     label: string;
                     icon?: string;
                 };
@@ -13859,6 +14071,7 @@ export interface components {
             name: string;
             fields: {
                 name: string;
+                label?: string;
                 /** @enum {string} */
                 kind: "string" | "secret" | "number" | "boolean" | "enum" | "string-array";
                 description?: string;
