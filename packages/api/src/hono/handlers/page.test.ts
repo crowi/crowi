@@ -516,6 +516,248 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const pageDoc = await Page.findById(pageId);
       expect(pageDoc.path).toBe(fromPath);
     });
+
+    it('returns renamed_count: 1 for a single-page rename', async () => {
+      const fromPath = `${PATH_PREFIX}count-from`;
+      const toPath = `${PATH_PREFIX}count-to`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# c' });
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath });
+
+      expect(res.status).toBe(200);
+      expect(res.body.renamed_count).toBe(1);
+    });
+  });
+
+  describe('POST /api/v2/pages/rename (include_descendants — renameTree)', () => {
+    it('moves the root and all descendants to the new base path', async () => {
+      const headers = authHeaders(accessToken);
+      const rootFrom = `${PATH_PREFIX}tree-root`;
+      const rootTo = `${PATH_PREFIX}tree-moved`;
+
+      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootId = rootRes.body.page._id;
+      await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child-a`, body: '# a' });
+      await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child-a/grandchild`, body: '# gc' });
+      await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child-b`, body: '# b' });
+
+      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page.path).toBe(rootTo);
+      // root + 3 descendants
+      expect(res.body.renamed_count).toBe(4);
+
+      expect(await Page.findOne({ path: rootTo })).not.toBeNull();
+      expect(await Page.findOne({ path: `${rootTo}/child-a` })).not.toBeNull();
+      expect(await Page.findOne({ path: `${rootTo}/child-a/grandchild` })).not.toBeNull();
+      expect(await Page.findOne({ path: `${rootTo}/child-b` })).not.toBeNull();
+
+      // Old descendant paths now only exist as redirect stubs (or nothing).
+      const oldChild = await Page.findOne({ path: `${rootFrom}/child-a`, redirectTo: null });
+      expect(oldChild).toBeNull();
+    });
+
+    it('preserves updatedAt on the root and all descendants (no bump)', async () => {
+      const headers = authHeaders(accessToken);
+      const rootFrom = `${PATH_PREFIX}ts-root`;
+      const rootTo = `${PATH_PREFIX}ts-moved`;
+
+      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootId = rootRes.body.page._id;
+      const childRes = await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child`, body: '# c' });
+      const childId = childRes.body.page._id;
+
+      const rootBefore = await Page.findById(rootId);
+      const childBefore = await Page.findById(childId);
+
+      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      expect(res.status).toBe(200);
+
+      const rootAfter = await Page.findOne({ path: rootTo });
+      const childAfter = await Page.findOne({ path: `${rootTo}/child` });
+      expect(rootAfter.updatedAt.getTime()).toBe(rootBefore.updatedAt.getTime());
+      expect(childAfter.updatedAt.getTime()).toBe(childBefore.updatedAt.getTime());
+    });
+
+    it('creates redirect stubs on each non-portal page when create_redirect=true', async () => {
+      const headers = authHeaders(accessToken);
+      const rootFrom = `${PATH_PREFIX}redir-root`;
+      const rootTo = `${PATH_PREFIX}redir-moved`;
+
+      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootId = rootRes.body.page._id;
+      await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child`, body: '# c' });
+
+      const res = await request(app)
+        .post('/api/v2/pages/rename')
+        .set(headers)
+        .send({ page_id: rootId, new_path: rootTo, include_descendants: true, create_redirect: true });
+      expect(res.status).toBe(200);
+
+      const rootRedirect = await Page.findOne({ path: rootFrom });
+      expect(rootRedirect).not.toBeNull();
+      expect(rootRedirect.redirectTo).toBe(rootTo);
+      const childRedirect = await Page.findOne({ path: `${rootFrom}/child` });
+      expect(childRedirect).not.toBeNull();
+      expect(childRedirect.redirectTo).toBe(`${rootTo}/child`);
+    });
+
+    it('does not create a redirect for a destination that is a portal path', async () => {
+      const headers = authHeaders(accessToken);
+      const rootFrom = `${PATH_PREFIX}portal-root`;
+      const rootTo = `${PATH_PREFIX}portal-moved/`;
+
+      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootId = rootRes.body.page._id;
+      await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child`, body: '# c' });
+
+      const res = await request(app)
+        .post('/api/v2/pages/rename')
+        .set(headers)
+        .send({ page_id: rootId, new_path: rootTo, include_descendants: true, create_redirect: true });
+      expect(res.status).toBe(200);
+
+      // The portal root destination ends in '/', so no redirect stub at the
+      // old root. The (non-portal) child still gets one.
+      const rootRedirect = await Page.findOne({ path: rootFrom });
+      expect(rootRedirect).toBeNull();
+      const childRedirect = await Page.findOne({ path: `${rootFrom}/child` });
+      expect(childRedirect).not.toBeNull();
+    });
+
+    it('rejects with a structured 400 PAGE_RENAME_TREE_FAILED when a destination collides', async () => {
+      const headers = authHeaders(accessToken);
+      const rootFrom = `${PATH_PREFIX}clash-root`;
+      const rootTo = `${PATH_PREFIX}clash-moved`;
+
+      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootId = rootRes.body.page._id;
+      await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child`, body: '# c' });
+
+      // A non-unlinkable page already sits where the child would land, owned
+      // by another user with OWNER grant so the renamer cannot unlink it.
+      const occupiedChildPath = `${rootTo}/child`;
+      await request(app).post('/api/v2/pages').set(authHeaders(otherAccessToken)).send({ path: occupiedChildPath, body: '# occupied', grant: 4 });
+
+      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
+      expect(Array.isArray(res.body.error.conflicts)).toBe(true);
+      const conflictPaths = res.body.error.conflicts.map((c: { path: string }) => c.path);
+      expect(conflictPaths).toContain(occupiedChildPath);
+
+      // Up-front detection — nothing was moved.
+      expect(await Page.findOne({ path: rootFrom })).not.toBeNull();
+      expect(await Page.findOne({ path: `${rootFrom}/child` })).not.toBeNull();
+      expect(await Page.findOne({ path: rootTo })).toBeNull();
+    });
+
+    it('does not move descendants the caller cannot see (grant-filtered, orphaning allowed)', async () => {
+      const ownerHeaders = authHeaders(accessToken);
+      const otherHeaders = authHeaders(otherAccessToken);
+      const rootFrom = `${PATH_PREFIX}grant-root`;
+      const rootTo = `${PATH_PREFIX}grant-moved`;
+
+      // Public root + a public child, both created by `other` so the renamer
+      // can move them; plus an OWNER-grant child owned by `accessToken` that
+      // `other` cannot see.
+      const rootRes = await request(app).post('/api/v2/pages').set(otherHeaders).send({ path: rootFrom, body: '# root' });
+      const rootId = rootRes.body.page._id;
+      await request(app)
+        .post('/api/v2/pages')
+        .set(otherHeaders)
+        .send({ path: `${rootFrom}/visible`, body: '# v' });
+      await request(app)
+        .post('/api/v2/pages')
+        .set(ownerHeaders)
+        .send({ path: `${rootFrom}/hidden`, body: '# h', grant: 4 });
+
+      const res = await request(app).post('/api/v2/pages/rename').set(otherHeaders).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+
+      expect(res.status).toBe(200);
+      // root + visible child only.
+      expect(res.body.renamed_count).toBe(2);
+      expect(await Page.findOne({ path: rootTo })).not.toBeNull();
+      expect(await Page.findOne({ path: `${rootTo}/visible` })).not.toBeNull();
+      // The hidden child stays where it was (orphaned, allowed).
+      expect(await Page.findOne({ path: `${rootFrom}/hidden` })).not.toBeNull();
+      expect(await Page.findOne({ path: `${rootTo}/hidden` })).toBeNull();
+    });
+
+    it('returns 409 when the root revision_id is stale (subtree path)', async () => {
+      const headers = authHeaders(accessToken);
+      const rootFrom = `${PATH_PREFIX}stale-tree-root`;
+      const rootTo = `${PATH_PREFIX}stale-tree-moved`;
+
+      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootId = rootRes.body.page._id;
+      const staleRevisionId = rootRes.body.page.revision._id;
+      await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child`, body: '# c' });
+
+      // Bump the root revision so the captured id is stale.
+      await request(app).put('/api/v2/pages').set(headers).send({ page_id: rootId, body: '# bumped', revision_id: staleRevisionId });
+
+      const res = await request(app)
+        .post('/api/v2/pages/rename')
+        .set(headers)
+        .send({ page_id: rootId, new_path: rootTo, include_descendants: true, revision_id: staleRevisionId });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PAGE_REVISION_ERROR');
+      expect(await Page.findOne({ path: rootFrom })).not.toBeNull();
+      expect(await Page.findOne({ path: rootTo })).toBeNull();
+    });
+
+    it('include_descendants:false behaves exactly like a single-page rename (back-compat)', async () => {
+      const headers = authHeaders(accessToken);
+      const rootFrom = `${PATH_PREFIX}compat-root`;
+      const rootTo = `${PATH_PREFIX}compat-moved`;
+
+      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootId = rootRes.body.page._id;
+      await request(app)
+        .post('/api/v2/pages')
+        .set(headers)
+        .send({ path: `${rootFrom}/child`, body: '# c' });
+
+      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page.path).toBe(rootTo);
+      expect(res.body.renamed_count).toBe(1);
+      // The child stayed put — only the single root page moved.
+      expect(await Page.findOne({ path: `${rootFrom}/child` })).not.toBeNull();
+      expect(await Page.findOne({ path: `${rootTo}/child` })).toBeNull();
+    });
   });
 });
 
