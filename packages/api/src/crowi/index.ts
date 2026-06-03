@@ -469,7 +469,7 @@ class Crowi {
     debug('CROWI_ENCRYPTION_KEY is configured (sensitive Config values will be encrypted at rest)');
   }
 
-  setupDatabase() {
+  async setupDatabase() {
     // mongoUri = mongodb://user:password@host/dbname
     mongoose.Promise = global.Promise;
 
@@ -483,26 +483,21 @@ class Crowi {
       this.env.MONGO_URI ||
       'mongodb://localhost/crowi';
 
-    return new Promise((resolve, reject) => {
-      const mongooseOptions = {
-        // Mongoose 6+ removes these deprecated options
-      };
-      mongoose.connect(mongoUri, mongooseOptions, (e) => {
-        if (e) {
-          debug('DB Connect Error: ', e);
-          debug('DB Connect Error: ', mongoUri);
-          // Fold the underlying driver message (ECONNREFUSED / auth / DNS) into
-          // the thrown error so the root cause is visible with DEBUG off — the
-          // raw `e` only ever reached the silenced debug line above. `cause`
-          // keeps the original error for anything that inspects it.
-          const err = e as Error;
-          return reject(new Error(`Cannot connect to Database Server: ${err.message}`, { cause: e }));
-        }
-
-        this.mongoose = mongoose;
-        return resolve(mongoose);
-      });
-    });
+    try {
+      // mongoose 7 removed the callback form of connect(); it is promise-only.
+      await mongoose.connect(mongoUri);
+      this.mongoose = mongoose;
+      return mongoose;
+    } catch (e) {
+      debug('DB Connect Error: ', e);
+      debug('DB Connect Error: ', mongoUri);
+      // Fold the underlying driver message (ECONNREFUSED / auth / DNS) into
+      // the thrown error so the root cause is visible with DEBUG off — the
+      // raw `e` only ever reached the silenced debug line above. `cause`
+      // keeps the original error for anything that inspects it.
+      const err = e as Error;
+      throw new Error(`Cannot connect to Database Server: ${err.message}`, { cause: e });
+    }
   }
 
   async setupRedisClient() {

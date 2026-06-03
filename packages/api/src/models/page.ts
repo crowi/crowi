@@ -646,9 +646,12 @@ export default (crowi: Crowi) => {
   };
 
   pageSchema.statics.updateRevision = function (pageId, revisionId, cb) {
-    Page.updateOne({ _id: pageId }, { revision: revisionId }, {}, function (err, data) {
-      cb(err, data);
-    });
+    // mongoose 7 dropped the callback form of updateOne(); bridge the promise
+    // to the existing callback signature.
+    Page.updateOne({ _id: pageId }, { revision: revisionId }).then(
+      (data) => cb(null, data),
+      (err) => cb(err, undefined),
+    );
   };
 
   pageSchema.statics.exists = async function (query) {

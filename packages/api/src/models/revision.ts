@@ -126,7 +126,7 @@ export interface PrepareRevisionOptions {
 }
 
 export interface RevisionModel extends Model<RevisionDocument> {
-  findLatestRevision(path: string, cb: (err: Error, data: RevisionDocument | null) => void): void;
+  findLatestRevision(path: string, cb: (err: Error | null, data: RevisionDocument | null) => void): void;
   findRevision(id: Types.ObjectId): Promise<RevisionDocument | null>;
   findRevisions(ids): Promise<RevisionDocument[]>;
   findRevisionIdList(path): Promise<RevisionDocument[]>;
@@ -254,11 +254,15 @@ export default (crowi: Crowi) => {
   });
 
   revisionSchema.statics.findLatestRevision = function (path, cb) {
+    // mongoose 7 dropped Query#exec(callback); bridge the promise to the
+    // existing callback signature.
     this.findOne({ path })
       .sort({ createdAt: -1 })
-      .exec(function (err, data) {
-        cb(err, data);
-      });
+      .exec()
+      .then(
+        (data) => cb(null, data),
+        (err) => cb(err as Error, null),
+      );
   };
 
   revisionSchema.statics.findRevision = function (id) {

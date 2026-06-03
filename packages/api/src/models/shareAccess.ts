@@ -1,7 +1,8 @@
 import Crowi from 'src/crowi';
-import { Types, Document, Model, Schema, model } from 'mongoose';
+import { Types, Document, Schema, model } from 'mongoose';
+import type { PaginateModel } from 'mongoose';
 // import Debug from 'debug'
-import mongoosePaginate from 'mongoose-paginate';
+import { applyPaginatePlugin } from 'src/util/mongoose-paginate';
 
 export interface ShareAccessDocument extends Document {
   _id: Types.ObjectId;
@@ -11,9 +12,7 @@ export interface ShareAccessDocument extends Document {
   lastAccessedAt: Date;
 }
 
-export interface ShareAccessModel extends Model<ShareAccessDocument> {
-  paginate: any;
-
+export interface ShareAccessModel extends PaginateModel<ShareAccessDocument> {
   findAccesses(query, options: { page?: number; limit?: number; sort?: object }): Promise<any>;
   access(shareId: Types.ObjectId, trackingId: Types.ObjectId): Promise<any>;
 }
@@ -28,7 +27,7 @@ export default (crowi: Crowi) => {
     lastAccessedAt: { type: Date, default: Date.now },
   });
   shareAccessSchema.index({ share: 1, tracking: 1 }, { unique: true });
-  shareAccessSchema.plugin(mongoosePaginate);
+  applyPaginatePlugin(shareAccessSchema);
 
   shareAccessSchema.statics.findAccesses = async function (query, options = {}) {
     const page = options.page || 1;

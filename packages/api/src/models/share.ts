@@ -1,8 +1,9 @@
 import Crowi from 'src/crowi';
-import { Types, Document, Model, Schema, model } from 'mongoose';
+import { Types, Document, Schema, model } from 'mongoose';
+import type { PaginateModel } from 'mongoose';
 // import Debug from 'debug'
 import { v4 as uuidv4 } from 'uuid';
-import mongoosePaginate from 'mongoose-paginate';
+import { applyPaginatePlugin } from 'src/util/mongoose-paginate';
 import { UserDocument } from './user';
 
 const STATUS_ACTIVE = 'active';
@@ -23,9 +24,7 @@ export interface ShareDocument extends Document {
   isCreator(userData): boolean;
 }
 
-export interface ShareModel extends Model<ShareDocument> {
-  paginate: any;
-
+export interface ShareModel extends PaginateModel<ShareDocument> {
   isExists(query): Promise<any>;
   findShares(query, options: { page?: number; limit?: number; sort?: object; populateAccesses?: boolean }): Promise<any>;
   findShare(query, options?: { populateAccesses?: boolean }): Promise<ShareDocument>;
@@ -59,7 +58,7 @@ export default (crowi: Crowi) => {
   });
   shareSchema.set('toObject', { virtuals: true });
   shareSchema.set('toJSON', { virtuals: true });
-  shareSchema.plugin(mongoosePaginate);
+  applyPaginatePlugin(shareSchema);
 
   shareSchema.methods.isActive = function () {
     return this.status === STATUS_ACTIVE;
