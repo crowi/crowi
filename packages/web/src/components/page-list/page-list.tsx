@@ -5,6 +5,7 @@ import { m } from '@paraglide/messages.js';
 import { Compass, Folder, HelpCircle, Pencil, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { CreatePageListButton } from '@/components/create-page/create-page-dialog';
 import { PageContent } from '@/components/page-view/page-content';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -180,6 +181,7 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
         <section className="space-y-2">
           <PageListSectionHeader
             label={formatPageCount(data.pages.length, data.pager)}
+            labelAction={!isTrash && !disableCreatePortal && portalPath && portalPath !== '/' && <CreatePageListButton path={portalPath} />}
             action={!isTrash && <PageSortMenu sort={params.sort} order={params.order} onChange={handleSortChange} />}
           />
           <PageRowsCard pages={data.pages} variant={variant} />

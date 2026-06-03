@@ -7,6 +7,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/lib/use-auth';
 import { usePagePathCandidates } from '@/lib/use-page-path-candidates';
 import { cn } from '@/lib/utils';
 
@@ -42,29 +43,59 @@ function normaliseTarget(value: string): string {
   return collapsed.length > 1 && collapsed.endsWith('/') ? collapsed.slice(0, -1) : collapsed;
 }
 
-function CreatePageForm({ onClose }: { onClose: () => void }) {
+/** Today's date as a `/`-separated Crowi date hierarchy (`2026/06/03`). */
+function todayHierarchy(date: Date): string {
+  const y = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}/${mo}/${d}`;
+}
+
+interface CreatePageFormProps {
+  /**
+   * The `/`-rooted namespace to pre-fill (e.g. `/` from the header, or the
+   * current list path `/crowi/qa/` from the list-header button). Normalised
+   * to a trailing slash so the "dated note here" shortcut concatenates
+   * cleanly.
+   */
+  defaultDir: string;
+  onClose: () => void;
+}
+
+function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
+
+  // Captured once at open: the namespace to pre-fill (trailing-slash
+  // normalised) and today's date for the quick "dated page" shortcuts.
+  const [currentDir] = useState(() => (defaultDir.endsWith('/') ? defaultDir : `${defaultDir}/`));
+  const [today] = useState(() => todayHierarchy(new Date()));
 
   // `typed` is the completion *stem* — the text the user actually typed.
   // It drives the candidate query and never changes on Tab. `preview` is
   // the currently cycled candidate shown in the input (null = show the
   // stem). The displayed value is `preview ?? typed`.
-  const [typed, setTyped] = useState('/');
+  const [typed, setTyped] = useState(currentDir);
   const [preview, setPreview] = useState<string | null>(null);
   // Cycle position over [stem, ...candidates]: 0 = stem, k = candidate k-1.
   const [cyclePos, setCyclePos] = useState(0);
+  // Quick shortcuts (root / dated memo / dated note here) are offered only
+  // until the user starts editing — once they do, the list is pure path
+  // completion.
+  const [touched, setTouched] = useState(false);
 
-  const [debounced, setDebounced] = useState('/');
+  const [debounced, setDebounced] = useState(currentDir);
   useEffect(() => {
     const id = setTimeout(() => setDebounced(typed), QUERY_DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [typed]);
 
-  // A bare `/` would match every page — only query once the user has
-  // typed at least one character after the root slash.
-  const { data } = usePagePathCandidates(debounced, { enabled: debounced.length > 1 });
+  // Always query — even at the bare root `/`, where we want the first-level
+  // namespaces (`/crowi/`, `/path/`, …) listed below the shortcuts. The
+  // endpoint caps the scan at 25 rows, so a root match-all stays bounded.
+  const { data } = usePagePathCandidates(debounced);
   const prefixes = data?.prefixes ?? [];
   const existingPaths = data?.existingPaths ?? [];
 
@@ -72,26 +103,39 @@ function CreatePageForm({ onClose }: { onClose: () => void }) {
   const target = normaliseTarget(displayed);
   const endsWithSlash = displayed.length > 1 && displayed.endsWith('/');
   const isEmpty = target.length <= 1;
-  // The level the user is currently at, derived from the stem (stable —
-  // it doesn't shift while cycling a preview).
   const stemBase = normaliseTarget(typed);
-  // Existing pages strictly *under* the current level. Excludes a page
-  // sitting exactly at the level itself (that's the thing being extended,
-  // not a child).
   const childPages = existingPaths.filter((p) => p !== stemBase);
 
-  // Tab cycles the deeper namespaces when any exist; otherwise it cycles
-  // the existing child pages, so the user can descend into a leaf
-  // (`/path/to/foo` → `/path/to/foo/`) and create a page beneath it.
+  // Deeper namespaces first; otherwise existing child pages (descend into a
+  // leaf to create a page beneath it).
   const usingPrefixes = prefixes.length > 0;
-  const candidates = usingPrefixes ? prefixes : childPages;
+  const normalCandidates = usingPrefixes ? prefixes : childPages;
+
+  // Quick shortcuts so a special path / today's date is always one Tab
+  // away from a freshly-opened modal: root, a personal dated memo, and a
+  // dated note in the current namespace. They vanish as soon as the user
+  // edits the field. At the root itself the `/` jump and the "dated note
+  // here" (`/2026/06/03`) shortcuts are pointless, so only the personal
+  // memo remains — with the first-level namespaces listed beneath it.
+  const atRoot = currentDir === '/';
+  const memoPath = user?.username ? `/user/${user.username}/memo/${today}` : null;
+  const datedHerePath = `${currentDir}${today}`;
+  const specials = touched ? [] : [...new Set([atRoot ? null : '/', memoPath, atRoot ? null : datedHerePath].filter((p): p is string => p !== null))];
+
+  const candidates = [...new Set([...specials, ...normalCandidates])];
+  const hasList = candidates.length > 0;
 
   // Only a real page sitting at exactly this path blocks creation. A
   // trailing slash means "namespace — keep typing", never a final path.
   const alreadyExists = existingPaths.includes(target);
   const canSubmit = !isEmpty && !endsWithSlash && !alreadyExists;
 
-  const hasList = debounced.length > 1 && candidates.length > 0;
+  const specialLabel = (path: string): string | null => {
+    if (path === '/') return m['create_page.special_root']();
+    if (path === memoPath) return m['create_page.special_memo']();
+    if (path === datedHerePath) return m['create_page.special_today']();
+    return null;
+  };
 
   const focusEnd = () => {
     const el = inputRef.current;
@@ -105,6 +149,7 @@ function CreatePageForm({ onClose }: { onClose: () => void }) {
     setTyped(withLeadingSlash(raw));
     setPreview(null);
     setCyclePos(0);
+    setTouched(true);
   };
 
   const cycle = (direction: 1 | -1) => {
@@ -117,13 +162,14 @@ function CreatePageForm({ onClose }: { onClose: () => void }) {
     requestAnimationFrame(focusEnd);
   };
 
-  // Commit a candidate into the stem. `descend` (Shift) turns a leaf page
-  // into a namespace (`/foo` → `/foo/`) so the next keystrokes create a
-  // child; prefixes already end in `/` so it's a no-op for them.
+  // Commit a candidate into the stem. `descend` (Shift) turns a leaf into a
+  // namespace (`/foo` → `/foo/`) so the next keystrokes create a child;
+  // prefixes already end in `/` so it's a no-op for them.
   const selectCandidate = (path: string, descend: boolean) => {
     setTyped(descend && !path.endsWith('/') ? `${path}/` : path);
     setPreview(null);
     setCyclePos(0);
+    setTouched(true);
     focusEnd();
   };
 
@@ -192,22 +238,28 @@ function CreatePageForm({ onClose }: { onClose: () => void }) {
       <div id={listId} className="min-h-[2.5rem]">
         {hasList ? (
           <>
-            {!usingPrefixes ? <p className="px-1 pb-1 text-xs text-muted-foreground">{m['create_page.existing_pages_hint']()}</p> : null}
+            {touched && !usingPrefixes && childPages.length > 0 ? (
+              <p className="px-1 pb-1 text-xs text-muted-foreground">{m['create_page.existing_pages_hint']()}</p>
+            ) : null}
             <ul className="flex flex-col overflow-hidden rounded-md border">
-              {candidates.map((path, i) => (
-                <li key={path}>
-                  <button
-                    type="button"
-                    onClick={(e) => selectCandidate(path, e.shiftKey)}
-                    className={cn(
-                      'flex w-full items-center px-3 py-1.5 text-left font-mono text-sm transition-colors hover:bg-accent',
-                      i === activeIndex && 'bg-accent',
-                    )}
-                  >
-                    {path}
-                  </button>
-                </li>
-              ))}
+              {candidates.map((path, i) => {
+                const label = specialLabel(path);
+                return (
+                  <li key={path}>
+                    <button
+                      type="button"
+                      onClick={(e) => selectCandidate(path, e.shiftKey)}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-sm transition-colors hover:bg-accent',
+                        i === activeIndex && 'bg-accent',
+                      )}
+                    >
+                      <span className="truncate">{path}</span>
+                      {label ? <span className="ml-auto shrink-0 text-xs text-muted-foreground">{label}</span> : null}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </>
         ) : null}
@@ -241,31 +293,69 @@ function CreatePageForm({ onClose }: { onClose: () => void }) {
   );
 }
 
+interface CreatePageDialogProps {
+  /** The namespace the modal pre-fills (`/` for the header entry point). */
+  defaultDir: string;
+  /** The button that opens the modal (rendered as the dialog trigger). */
+  trigger: React.ReactNode;
+}
+
 /**
- * Header entry point for the new-page flow: a "Create page" button that
- * opens a modal where the user builds a `/`-rooted path with Tab-cycle
- * completion against existing pages. Submitting routes to the create-mode
- * editor (`/_edit?path=…`).
+ * The new-page modal: build a `/`-rooted path with shell-like Tab-cycle
+ * completion against existing pages, then route to the create-mode editor
+ * (`/_edit?path=…`). Reused from two entry points with different
+ * pre-filled namespaces via `defaultDir`.
  */
-export function CreatePageButton() {
+function CreatePageDialog({ defaultDir, trigger }: CreatePageDialogProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground">
-          <FilePlus className="h-4 w-4" />
-          <span className="hidden sm:inline">{m['header.create_page']()}</span>
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{m['create_page.title']()}</DialogTitle>
           <DialogDescription>{m['create_page.description']()}</DialogDescription>
         </DialogHeader>
         {/* Remount the form per open so its state resets cleanly. */}
-        {open ? <CreatePageForm onClose={() => setOpen(false)} /> : null}
+        {open ? <CreatePageForm defaultDir={defaultDir} onClose={() => setOpen(false)} /> : null}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Header entry point. Always starts from the root (`/`) — it is a global
+ * "new page" action with no location context.
+ */
+export function CreatePageButton() {
+  return (
+    <CreatePageDialog
+      defaultDir="/"
+      trigger={
+        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground">
+          <FilePlus className="h-4 w-4" />
+          <span className="hidden sm:inline">{m['header.create_page']()}</span>
+        </Button>
+      }
+    />
+  );
+}
+
+/**
+ * List-header entry point (sits next to the "N pages" count). Pre-fills the
+ * namespace currently being listed so new pages land under it by default.
+ */
+export function CreatePageListButton({ path }: { path: string }) {
+  return (
+    <CreatePageDialog
+      defaultDir={path}
+      trigger={
+        <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground">
+          <FilePlus className="h-3.5 w-3.5" />
+          {m['header.create_page']()}
+        </Button>
+      }
+    />
   );
 }
