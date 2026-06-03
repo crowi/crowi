@@ -5,6 +5,7 @@ import Bookmark from './bookmark';
 import Comment from './comment';
 // import with allow-js flag
 import Config from './config';
+import MigrationApplication from './migration-application';
 import Notification from './notification';
 import OAuthAuthorizationCode from './oauth-authorization-code';
 import OAuthClient from './oauth-client';
@@ -38,6 +39,7 @@ export default {
   Notification,
   Watcher,
   Config,
+  MigrationApplication,
   PluginRenderCache,
   PageYjsUpdate,
   PersonalAccessToken,
