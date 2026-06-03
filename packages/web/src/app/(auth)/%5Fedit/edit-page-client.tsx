@@ -344,7 +344,14 @@ function EditorShell({
   // pattern `page-content.tsx` uses to subscribe to the URL hash.
   const isWide = useSyncExternalStore(subscribeWideQuery, getWideQuerySnapshot, getWideQueryServerSnapshot);
 
-  useScrollSync({ editorRef: wideEditorRef, previewRef: widePreviewScrollRef, enabled: isWide });
+  // The collab wrapper remounts the inner CodeMirror editor via `key`
+  // once Y.Text becomes ready (and again if the page swaps), producing a
+  // fresh `scrollDOM`. Mirror that key here so `useScrollSync` re-binds
+  // its editor→preview `scroll` listener to the new element — otherwise
+  // editor→preview sync silently dies after the ~100ms collab handshake
+  // (preview→editor survives via the live ref).
+  const scrollSyncRebindKey = `${realtimePageId ?? 'plain'}:${session.yText ? 'ready' : 'pending'}`;
+  useScrollSync({ editorRef: wideEditorRef, previewRef: widePreviewScrollRef, enabled: isWide, rebindKey: scrollSyncRebindKey });
 
   /**
    * Hand a markdown snippet to the editor's `insertAtCursor` handle —

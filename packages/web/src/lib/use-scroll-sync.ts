@@ -25,6 +25,19 @@ interface UseScrollSyncOptions {
    * Tabs layout where editor / preview never coexist on screen.
    */
   enabled: boolean;
+  /**
+   * Opaque value the caller changes whenever the underlying CodeMirror
+   * view is recreated (e.g. the collab wrapper remounts the inner editor
+   * via `key` once Y.Text becomes ready). The hook captures
+   * `editorScroll = getScrollDOM()` once per effect run and binds the
+   * editor→preview `scroll` listener to *that* element; when the view is
+   * replaced, the old `scrollDOM` is destroyed and the listener goes
+   * dead — while preview→editor keeps working because it dereferences
+   * the live ref each time. Bumping `rebindKey` re-runs the effect so
+   * the listener re-binds to the new `scrollDOM`. Leave undefined when
+   * the editor never remounts.
+   */
+  rebindKey?: unknown;
 }
 
 /**
@@ -60,7 +73,7 @@ interface UseScrollSyncOptions {
  * If a future plugin reorders top-level mdast nodes, sync would
  * silently mis-target.
  */
-export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncOptions): void {
+export function useScrollSync({ editorRef, previewRef, enabled, rebindKey }: UseScrollSyncOptions): void {
   useEffect(() => {
     if (!enabled) return;
     const editorScroll = editorRef.current?.getScrollDOM() ?? null;
@@ -168,5 +181,7 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
       editorScroll.removeEventListener('scroll', onEditorScroll);
       previewScroll.removeEventListener('scroll', onPreviewScroll);
     };
-  }, [editorRef, previewRef, enabled]);
+    // `rebindKey` re-runs the effect when the editor view is recreated so
+    // the editor→preview listener re-binds to the fresh `scrollDOM`.
+  }, [editorRef, previewRef, enabled, rebindKey]);
 }
