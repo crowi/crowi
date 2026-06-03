@@ -86,8 +86,14 @@ multi-phase 機能。v1→v2 in-place upgrade の preflight が最大ユース�
   `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` block/warn = §4.2.7 全 replica
   fail-fast で処理)、`crowi-admin migrate plan|apply|status|list` +
   `rebuild` dispatcher 骨組み。runner / registry / isPending / boot 二層化に単体テスト
-- [ ] **Phase 2: page-status-default boot migration** — 既存
-  `runPageStatusMigration` を boot layer migration へ移植 (挙動温存)
+- [x] **Phase 2: page-status-default boot migration** — 既存
+  `runPageStatusMigration` (RFC-0004 backfill) を `page-status-default`
+  boot layer migration へ移植 (null/未設定のみ published 化・draft/deleted
+  不変・冪等の挙動温存)。`isPending` は `status` index 裏付けの cheap probe、
+  stage は旧 `updateMany` を逐語移植。`crowi/index.ts` は
+  `runPageStatusMigration` step/import を除去し `runBootMigrations()` 一本化
+  (`seedOAuthClients` は枠外 seed として隣で温存)。旧 `util/page-status-migration.ts`
+  + `.test.ts` を削除して重複排除
 - [ ] **Phase 3: wikilink-format preflight migration** — legacy
   `migrate-wikilink` を `rewritePageBody` 経由へ移植 (Yjs 無効化バグ修正) + 旧コマンド削除
 - [ ] **Phase 4: rebuild tasks を共有 runner へ** — search rebuild /
