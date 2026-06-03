@@ -31,18 +31,20 @@ export function NotificationItem({ notification, onOpen }: NotificationItemProps
         void onOpen(notification);
       }}
       className={cn(
-        'flex w-full items-start gap-4 px-4 py-4 text-left transition-colors hover:bg-accent/60 focus:bg-accent/60 focus:outline-none',
-        isUnread && 'bg-blue-50/40 dark:bg-blue-500/10',
+        'relative flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-accent/60 focus:bg-accent/60 focus:outline-none',
+        isUnread && 'bg-accent/40',
       )}
     >
+      {/* Unread affordance: a brand-coloured left accent bar (replaces the
+          old off-brand blue tint + red dot) — cleaner and on-theme. */}
+      {isUnread ? <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" aria-label={m['notifications.unread_aria']()} /> : null}
       <NotificationAvatar user={notification.actionUsers[0]} action={notification.action} size="md" />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="text-sm break-words text-muted-foreground">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="text-sm break-words text-foreground/80">
           <NotificationMessage notification={notification} />
         </div>
         <div className="text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</div>
       </div>
-      {isUnread ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden aria-label={m['notifications.unread_aria']()} /> : null}
     </button>
   );
 }

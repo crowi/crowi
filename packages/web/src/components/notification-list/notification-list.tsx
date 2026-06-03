@@ -82,7 +82,7 @@ export function NotificationList() {
 
       {/* Body */}
       {isLoading ? (
-        <Card className="divide-y">
+        <Card className="divide-y gap-0 py-0 overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
             <NotificationSkeletonRow key={i} />
           ))}
@@ -99,7 +99,7 @@ export function NotificationList() {
         </Card>
       ) : (
         <>
-          <Card className="divide-y overflow-hidden">
+          <Card className="divide-y gap-0 py-0 overflow-hidden">
             {allNotifications.map((notification) => (
               <NotificationItem key={notification._id} notification={notification} onOpen={handleOpenNotification} />
             ))}
