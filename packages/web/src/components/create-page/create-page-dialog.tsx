@@ -123,8 +123,11 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
   const atRoot = currentDir === '/';
   const memoPath = user?.username ? `/user/${user.username}/memo/${today}` : null;
   const datedHerePath = `${currentDir}${today}`;
-  const specials = touched ? [] : [...new Set([atRoot ? null : '/', memoPath, atRoot ? null : datedHerePath].filter((p): p is string => p !== null))];
+  const specials = touched ? [] : [atRoot ? null : '/', memoPath, atRoot ? null : datedHerePath].filter((p): p is string => p !== null);
 
+  // The single dedupe here also collapses any overlap *within* specials
+  // (e.g. the dated-note-here shortcut coinciding with the personal memo
+  // when listing your own `/user/<me>/memo/` namespace).
   const candidates = [...new Set([...specials, ...normalCandidates])];
   const hasList = candidates.length > 0;
 

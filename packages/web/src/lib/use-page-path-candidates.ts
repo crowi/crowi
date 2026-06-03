@@ -65,9 +65,9 @@ interface UsePagePathCandidatesOptions {
 }
 
 /**
- * @param query The full `/`-rooted prefix the user has typed. Must be
- *   non-empty (the caller gates on `query.length > 1` so a bare `/`
- *   doesn't fan out a match against every page).
+ * @param query The full `/`-rooted prefix the user has typed. The bare
+ *   root `/` is queried too (to surface first-level namespaces); the
+ *   server caps the scan at 25 rows, so the match-all stays bounded.
  */
 export function usePagePathCandidates(
   query: string,
