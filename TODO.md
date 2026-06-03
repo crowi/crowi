@@ -65,6 +65,39 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
   apiToken 廃止 / Authorization Code + PKCE + discovery / Device Authorization
   Grant。admin による任意 OAuth クライアント登録 UI (将来 Phase 5) のみ未着手
 
+## High Priority — Migration Framework (RFC-0008)
+
+`docs/rfcs/0008-migration-framework.md`。散在する admin 操作 (migrate-wikilink /
+search rebuild / storage copy) と boot 時の page-status migration を、共有 runner /
+registry / migrationApplications 監査ログ / migrate+rebuild 二名前空間 /
+boot-auto vs preflight 二層化を持つ単一の migration framework へ統合する
+multi-phase 機能。v1→v2 in-place upgrade の preflight が最大ユースケース。
+
+- [x] **Phase 1: framework core** — `migration/types.ts`
+  (`MigrationLayer` / `MigrationStage` / `MigrationDefinition` /
+  `MigrationContext` / `defineMigration`)、append-only / self-bootstrapping な
+  `migrationApplications` model (RFC §7.1)、registry (auto-register +
+  version range/order 整列 + dup id ガード)、共有 runner
+  (`--dry-run` / `ProgressReporter` / bounded concurrency / SIGINT 安全中断 /
+  構造化ログ / §6.2 reconciliation / `ctx.rewritePageBody` +
+  `ctx.invalidateYjsPersistence` を全 layer・`ctx.broadcastForceReload?` を
+  boot layer のみ提供)、`runBootMigrations()` で boot 二層化
+  (boot migration を isPending 適用 + preflight 未適用を
+  `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` block/warn = §4.2.7 全 replica
+  fail-fast で処理)、`crowi-admin migrate plan|apply|status|list` +
+  `rebuild` dispatcher 骨組み。runner / registry / isPending / boot 二層化に単体テスト
+- [ ] **Phase 2: page-status-default boot migration** — 既存
+  `runPageStatusMigration` を boot layer migration へ移植 (挙動温存)
+- [ ] **Phase 3: wikilink-format preflight migration** — legacy
+  `migrate-wikilink` を `rewritePageBody` 経由へ移植 (Yjs 無効化バグ修正) + 旧コマンド削除
+- [ ] **Phase 4: rebuild tasks を共有 runner へ** — search rebuild /
+  storage copy を `rebuild` 名前空間へ集約 + renderer / backlink 骨組み
+- [ ] **Phase 5: user-unique-prepare preflight + uniqueness spec 本体** —
+  username/email の collation + partial unique index 宣言 / E11000 →
+  USERNAME_TAKEN/EMAIL_TAKEN マッピング / dedup-users
+- [ ] **Phase 6: revisions-schema-unify preflight** — skeleton + transform
+  設計確定待ち (autoContinue=false / 要調整)
+
 ## High Priority — 横断的 advisory (累積)
 
 - [x] **UI 共通化** (`2c390a55`): `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` を `apps/crowi-web/src/components/ui/` に抽出。9 ファイル / 13 サイトで重複削減
