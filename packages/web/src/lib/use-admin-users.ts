@@ -25,8 +25,7 @@ export interface UseAdminUsersParams {
 
 export const adminUsersKeys = {
   all: ['admin', 'users'] as const,
-  list: (params: UseAdminUsersParams) =>
-    [...adminUsersKeys.all, 'list', params.q ?? '', params.status ?? '', params.page ?? 1, params.limit ?? 50] as const,
+  list: (params: UseAdminUsersParams) => [...adminUsersKeys.all, 'list', params.q ?? '', params.status ?? '', params.page ?? 1, params.limit ?? 50] as const,
   pendingCount: () => [...adminUsersKeys.all, 'pending-count'] as const,
 };
 

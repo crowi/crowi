@@ -87,5 +87,4 @@ describe('Config model test', () => {
       expect(config.crowi['mail:smtpPassword']).toBe('legacy-plain-password');
     });
   });
-
 });

@@ -59,8 +59,7 @@ export function SecurityForm({ settings }: SecurityFormProps) {
 
   const updateSettings = useUpdateAdminSecuritySettings();
   const isDirty =
-    formData.registrationMode !== settings.registrationMode ||
-    formData.registrationWhiteListRaw !== formatWhiteList(settings.registrationWhiteList);
+    formData.registrationMode !== settings.registrationMode || formData.registrationWhiteListRaw !== formatWhiteList(settings.registrationWhiteList);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
