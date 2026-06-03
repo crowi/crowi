@@ -15,9 +15,7 @@ import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 import LRU from '../service/lru';
 import ConfigService from '../service/config';
-import { hasSlackConfig } from '../models/config';
 import { MailService } from 'src/service/mail';
-import slack from 'src/util/slack';
 import { resetKeyProvider } from 'src/util/crypto';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { type Renderer, createRenderer } from 'src/renderer';
@@ -92,9 +90,6 @@ class Crowi {
   redisUrl: string | null;
 
   redisOpts: any;
-
-  // FIXME: util/slack に型付けたらやる
-  slack: any;
 
   /**
    * PluginManager + resolved registries. Available after `setupPlugins`
@@ -228,7 +223,7 @@ class Crowi {
     await step('seedOAuthClients', () => runOAuthClientSeed(this));
     reporter.endLayer();
 
-    // ── services: renderer / plugins / mailer / slack / lru ──
+    // ── services: renderer / plugins / mailer / lru ──
     reporter.beginLayer('services');
     // Renderer must boot BEFORE plugins so PluginManager.activate()
     // can hand plugins a registry that already has the core 4
@@ -243,11 +238,10 @@ class Crowi {
     // directly after a save flow completes.
     // Plugins must boot AFTER config/models are ready (so PluginContext
     // can read config and access models) but BEFORE the legacy
-    // mailer / slack initialisers — those are migrating to
-    // plugin-provided drivers and any conflict should fail noisily here.
+    // mailer initialiser — that is migrating to plugin-provided drivers
+    // and any conflict should fail noisily here.
     await step('setupPlugins', () => this.setupPlugins());
     await step('setupMailer', () => this.setupMailer());
-    await step('setupSlack', () => this.setupSlack());
     await step('setupLRU', () => this.setupLRU());
     reporter.endLayer();
   }
@@ -255,7 +249,7 @@ class Crowi {
   /**
    * Lightweight init for the `@crowi/admin-cli` operator CLI. Brings up
    * just what's needed to read Config + reach storage drivers — Redis
-   * / mailer / slack / search / LRU / the boot-time AWS migration are
+   * / mailer / search / LRU / the boot-time AWS migration are
    * all skipped (the migration belongs to `init()` so the long-running
    * server runs it once; the CLI shouldn't mutate Mongo as a side
    * effect of starting up).
@@ -591,16 +585,6 @@ class Crowi {
             '(e.g. https://wiki.example.com).',
         ),
       );
-    }
-  }
-
-  setupSlack() {
-    const config = this.getConfig();
-
-    if (!hasSlackConfig(config)) {
-      this.slack = {};
-    } else {
-      this.slack = slack(this);
     }
   }
 

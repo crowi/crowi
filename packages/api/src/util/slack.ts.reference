@@ -1,3 +1,11 @@
+// ⚠️ REFERENCE IMPLEMENTATION — NOT COMPILED / NOT WIRED.
+//
+// This is the legacy Crowi Slack integration (notify / unfurl / OAuth),
+// kept verbatim as a reference for the planned `@crowi/plugin-slack`.
+// The `@slack/client` dependency it imports has been removed from
+// `@crowi/api` (it was vestigial: nothing in v2 consumed `crowi.slack`),
+// so this file is renamed `.ts.reference` to keep it out of the TS program
+// until its logic is ported into a plugin. See dependabot cleanup.
 import Crowi from 'src/crowi';
 import { hasSlackConfig, hasSlackToken } from 'src/models/config';
 import Debug from 'debug';

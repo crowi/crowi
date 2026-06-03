@@ -122,7 +122,7 @@ export default class ConfigService {
 
   async postUpdate(changedNamespaces: string[] = [], source: ConfigChangeSource = 'local') {
     debug('Config updated run postUpdate');
-    await Promise.all([this.crowi.setupSlack(), this.crowi.setupMailer()]);
+    await this.crowi.setupMailer();
     await this.notifyListeners(changedNamespaces, source);
   }
 

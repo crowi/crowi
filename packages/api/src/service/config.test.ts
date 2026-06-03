@@ -40,7 +40,6 @@ describe('ConfigService listener API', () => {
         };
         return e;
       },
-      setupSlack: jest.fn(async () => undefined),
       setupMailer: jest.fn(async () => undefined),
       redisOpts: null,
     } as any;
