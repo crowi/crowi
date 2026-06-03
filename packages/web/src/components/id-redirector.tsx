@@ -8,6 +8,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { usePage } from '@/lib/use-page';
+import { pagePathToHref } from '@/lib/page-path';
 import { m } from '@paraglide/messages.js';
 
 interface IdRedirectorProps {
@@ -21,7 +22,7 @@ export function IdRedirector({ pageId }: IdRedirectorProps) {
   // Use replace (not push) so the id URL stays out of browser history.
   useEffect(() => {
     if (page?.path) {
-      router.replace(page.path);
+      router.replace(pagePathToHref(page.path));
     }
   }, [page?.path, router]);
 

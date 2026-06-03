@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { usePageList } from '@/lib/use-page-list';
+import { pagePathToHref } from '@/lib/page-path';
 import { PageRevisionConflictError, useRenamePage } from '@/lib/use-page-mutations';
 
 interface RenameDialogProps {
@@ -131,7 +132,7 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
       });
 
       onOpenChange(false);
-      router.replace(updated.path);
+      router.replace(pagePathToHref(updated.path));
     } catch (err) {
       if (err instanceof PageRevisionConflictError) {
         setFeedback({ kind: 'conflict', message: err.message });

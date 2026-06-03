@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pageBasename, pageDirname, pageDisplayName, pageDisplayParent } from './page-path';
+import { decodePagePathFromUrl, pageBasename, pageDirname, pageDisplayName, pageDisplayParent, pagePathToHref } from './page-path';
 
 describe('pageBasename', () => {
   it('returns the last non-empty segment', () => {
@@ -97,5 +97,33 @@ describe('pageDisplayParent', () => {
   it('pairs with pageDisplayName to reconstruct the (trimmed) path', () => {
     const path = '/user/foo/日報/2026/05/23';
     expect(pageDisplayParent(path) + pageDisplayName(path)).toBe(path);
+  });
+});
+
+describe('pagePathToHref / decodePagePathFromUrl', () => {
+  it('renders spaces in a page path as + for the URL', () => {
+    expect(pagePathToHref('/Weall/dev/infra/v0/mysql connect to production db')).toBe('/Weall/dev/infra/v0/mysql+connect+to+production+db');
+  });
+
+  it('reads + back as a space (the legacy URL form of a space)', () => {
+    expect(decodePagePathFromUrl('/Weall/dev/infra/v0/mysql+connect+to+production+db')).toBe('/Weall/dev/infra/v0/mysql connect to production db');
+  });
+
+  it('also reads %20 as a space', () => {
+    expect(decodePagePathFromUrl('/a%20b/c')).toBe('/a b/c');
+  });
+
+  it('round-trips a path with spaces', () => {
+    const path = '/foo bar/baz qux';
+    expect(decodePagePathFromUrl(pagePathToHref(path))).toBe(path);
+  });
+
+  it('leaves a space-free path untouched in both directions', () => {
+    expect(pagePathToHref('/crowi/rfc/0001')).toBe('/crowi/rfc/0001');
+    expect(decodePagePathFromUrl('/crowi/rfc/0001')).toBe('/crowi/rfc/0001');
+  });
+
+  it('decodes percent-encoded non-ASCII segments', () => {
+    expect(decodePagePathFromUrl('/%E6%97%A5%E5%A0%B1/2026')).toBe('/日報/2026');
   });
 });

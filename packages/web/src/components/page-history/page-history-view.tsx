@@ -9,6 +9,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { Breadcrumb } from '@/components/breadcrumb';
+import { pagePathToHref } from '@/lib/page-path';
 import { usePage } from '@/lib/use-page';
 import { PageHistory } from './page-history';
 import { m } from '@paraglide/messages.js';
@@ -71,7 +72,7 @@ export function PageHistoryView({ path }: PageHistoryViewProps) {
         <div>
           <Breadcrumb path={page.path} />
           <div className="mt-2">
-            <Button variant="ghost" size="sm" onClick={() => router.push(page.path)} type="button" className="-ml-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push(pagePathToHref(page.path))} type="button" className="-ml-2">
               <ArrowLeft className="h-4 w-4 mr-1" />
               {m['page_history.back_to_page']()}
             </Button>

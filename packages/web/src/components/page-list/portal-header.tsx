@@ -12,6 +12,7 @@ import { GrantChip } from '@/components/page-view/page-header';
 import { PageActionsMenu } from '@/components/page-view/page-actions-menu';
 import { formatAbsoluteDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { resolveDisplayUser } from '@/lib/page-display-user';
+import { pagePathToHref } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 
@@ -128,7 +129,7 @@ export function PortalOverline({ path }: { path: string }) {
   const segments = path.replace(/\/$/, '').split('/').filter(Boolean);
   const ancestors = segments.slice(0, -1).map((segment, index) => ({
     name: segment,
-    href: `/${segments.slice(0, index + 1).join('/')}/`,
+    href: pagePathToHref(`/${segments.slice(0, index + 1).join('/')}/`),
   }));
   const here = segments[segments.length - 1];
 

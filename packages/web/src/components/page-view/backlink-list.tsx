@@ -6,6 +6,7 @@ import { Link2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { useBacklinks } from '@/lib/use-backlinks';
+import { pagePathToHref } from '@/lib/page-path';
 import { SCROLL_TARGETS } from '@/lib/scroll-to-section';
 import { m } from '@paraglide/messages.js';
 
@@ -58,7 +59,7 @@ export function BacklinkList({ pageId }: BacklinkListProps) {
                 // (e.g. populated user was deleted). Empty placeholder ring.
                 <div className="h-6 w-6 rounded-full bg-muted" aria-hidden="true" />
               )}
-              <Link href={b.fromPage.path} className="text-foreground hover:text-primary transition-colors truncate" title={b.fromPage.path}>
+              <Link href={pagePathToHref(b.fromPage.path)} className="text-foreground hover:text-primary transition-colors truncate" title={b.fromPage.path}>
                 {b.fromPage.path}
               </Link>
             </li>

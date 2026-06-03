@@ -24,7 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { pageDisplayName } from '@/lib/page-path';
+import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import type { CollabStatus } from '@/lib/use-collab-document';
 import { useCollabSave } from '@/lib/use-collab-save';
@@ -692,7 +692,7 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
 
   const handleCancel = () => {
     if (page) {
-      router.push(page.path);
+      router.push(pagePathToHref(page.path));
       return;
     }
     router.back();
@@ -724,7 +724,7 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
         body,
         revision_id: revisionId ?? undefined,
       });
-      router.push(updated.path);
+      router.push(pagePathToHref(updated.path));
     } catch (err) {
       if (err instanceof PageRevisionConflictError) {
         setFeedback({ kind: 'conflict', message: err.message });

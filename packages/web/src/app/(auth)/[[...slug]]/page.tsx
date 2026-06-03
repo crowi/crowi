@@ -7,7 +7,7 @@ import { PageView } from '@/components/page-view';
 import { UserDirectoryPreview } from '@/components/user-directory/user-directory-preview';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { isObjectId } from '@/lib/object-id';
-import { pageDisplayName } from '@/lib/page-path';
+import { decodePagePathFromUrl, pageDisplayName } from '@/lib/page-path';
 import { usePageTitle } from '@/lib/use-page-title';
 
 export default function CatchAllPage() {
@@ -18,8 +18,10 @@ export default function CatchAllPage() {
   const revisionId = searchParams.get('revision_id') || undefined;
 
   // Next.js usePathname() returns URL-encoded paths (e.g., /%E3%83%A6%E3%83%BC%E3%82%B6%E3%83%BC).
-  // Decode so the value matches what the API expects.
-  const path = pathname === '/' ? '/' : decodeURIComponent(pathname);
+  // Decode so the value matches what the API expects — and follow legacy
+  // Crowi by reading `+` as a space (the readable URL form of a space in
+  // a page path; see decodePagePathFromUrl).
+  const path = pathname === '/' ? '/' : decodePagePathFromUrl(pathname);
   const isPortalPath = path.endsWith('/');
   // `/user/` is the member directory: a portal-style list page that leads
   // with the user roster and forbids creating a portal document of its own.
