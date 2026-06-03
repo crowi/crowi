@@ -47,6 +47,19 @@ const debug = Debug('crowi:hono:handlers:autocomplete');
 const RATE_LIMIT = 60;
 const RATE_WINDOW_MS = 60_000;
 
+/**
+ * Build the case-insensitive matcher for a candidate query. `'prefix'`
+ * anchors at the start (`^…`) so only true prefixes match — the "create
+ * page" modal needs this so cycling through completions of a `/`-rooted
+ * path never surfaces a deep page that merely *contains* the typed text.
+ * `'substring'` (the default) keeps the historical anywhere-in-string
+ * match used by the editor pickers.
+ */
+const buildMatcher = (q: string, anchor: 'substring' | 'prefix'): RegExp => {
+  const escaped = escapeRegExp(q);
+  return new RegExp(anchor === 'prefix' ? `^${escaped}` : escaped, 'i');
+};
+
 /** Last `/`-separated segment of a wiki path — the page's "title". */
 const pathLeaf = (path: string): string => {
   const trimmed = path.replace(/\/+$/, '');
@@ -92,15 +105,15 @@ export const registerAutocompleteRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       // --------------------------------------------------------------
       .openapi(autocompleteUsersRoute, async (c) => {
         const user = c.get('user');
-        const { q, limit } = c.req.valid('query');
+        const { q, limit, anchor } = c.req.valid('query');
 
-        debug('autocompleteUsers', { q, limit, userId: user._id.toString() });
+        debug('autocompleteUsers', { q, limit, anchor, userId: user._id.toString() });
 
         // Widest cheap filter: case-insensitive substring on any of
         // the three fields. Fuzzy hits that are *not* substrings are
         // intentionally not surfaced — username typo tolerance is
         // low-value and the substring net already covers prefixes.
-        const re = new RegExp(escapeRegExp(q), 'i');
+        const re = buildMatcher(q, anchor);
         const candidates = (await User.find({
           status: User.STATUS_ACTIVE,
           $or: [{ username: re }, { name: re }, { email: re }],
@@ -143,11 +156,11 @@ export const registerAutocompleteRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       // --------------------------------------------------------------
       .openapi(autocompletePagesRoute, async (c) => {
         const user = c.get('user');
-        const { q, limit } = c.req.valid('query');
+        const { q, limit, anchor } = c.req.valid('query');
 
-        debug('autocompletePages', { q, limit, userId: user._id.toString() });
+        debug('autocompletePages', { q, limit, anchor, userId: user._id.toString() });
 
-        const re = new RegExp(escapeRegExp(q), 'i');
+        const re = buildMatcher(q, anchor);
         const candidates = (await Page.find({
           redirectTo: null,
           path: re,

@@ -17178,6 +17178,15 @@ paths:
           required: false
           name: limit
           in: query
+        - schema:
+            type: string
+            enum:
+              - substring
+              - prefix
+            default: substring
+          required: false
+          name: anchor
+          in: query
       responses:
         '200':
           description: Ranked user candidates
@@ -17317,6 +17326,15 @@ paths:
             default: 10
           required: false
           name: limit
+          in: query
+        - schema:
+            type: string
+            enum:
+              - substring
+              - prefix
+            default: substring
+          required: false
+          name: anchor
           in: query
       responses:
         '200':

@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/use-auth';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
+import { CreatePageButton } from '@/components/create-page/create-page-dialog';
 import { useNotificationsSocket } from '@/lib/use-notifications-socket';
 import { useConnection } from '@/lib/connection-context';
 import { isReauthSuppressed, useReauthSuppressed } from '@/lib/session-reauth-context';
@@ -98,6 +99,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
           <GlobalSearchInput />
           <div className="flex items-center gap-2 ml-auto">
+            <CreatePageButton />
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

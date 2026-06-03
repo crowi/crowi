@@ -21,6 +21,15 @@ import { z } from '@hono/zod-openapi';
 export const AutocompleteRequestSchema = z.object({
   q: z.string().min(1).max(128),
   limit: z.coerce.number().int().min(1).max(25).optional().default(10),
+  /**
+   * How `q` is matched against the candidate text. `'substring'` (the
+   * default, used by the editor's `@mention` / `[[wikilink]]` pickers)
+   * keeps the historical anywhere-in-string match. `'prefix'` anchors
+   * the match at the start — used by the "create page" modal, where the
+   * user is building a `/`-rooted path and only true prefixes are valid
+   * completions of what they have typed so far.
+   */
+  anchor: z.enum(['substring', 'prefix']).optional().default('substring'),
 });
 export type AutocompleteRequest = z.infer<typeof AutocompleteRequestSchema>;
 

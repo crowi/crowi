@@ -7419,6 +7419,7 @@ export interface paths {
                 query: {
                     q: string;
                     limit?: number;
+                    anchor?: "substring" | "prefix";
                 };
                 header?: never;
                 path?: never;
@@ -7519,6 +7520,7 @@ export interface paths {
                 query: {
                     q: string;
                     limit?: number;
+                    anchor?: "substring" | "prefix";
                 };
                 header?: never;
                 path?: never;
