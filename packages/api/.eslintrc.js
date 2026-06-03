@@ -19,6 +19,13 @@ module.exports = {
       excludedFiles: ['**/*.test.ts', 'src/test/**/*'],
       parserOptions: {
         project: './tsconfig.json',
+        // Resolve `project` relative to THIS config's directory, not the
+        // process cwd. `pnpm lint` runs with cwd = packages/api (turbo), but
+        // the VSCode ESLint extension runs with cwd = repo root, where
+        // `./tsconfig.json` would wrongly resolve to the root solution-style
+        // tsconfig (`include: []`) and fail with "TSConfig does not include
+        // this file". `__dirname` makes it deterministic in both.
+        tsconfigRootDir: __dirname,
       },
     },
     {
