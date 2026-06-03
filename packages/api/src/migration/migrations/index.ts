@@ -1,5 +1,6 @@
 import type { MigrationDefinition } from '../types';
 import { pageStatusDefault } from './page-status-default';
+import { wikilinkFormat } from './wikilink-format';
 
 /**
  * RFC-0008 §5.5 — the migration barrel.
@@ -11,10 +12,10 @@ import { pageStatusDefault } from './page-status-default';
  *
  * Subsequent phases append their definitions here:
  *
- *   import { wikilinkFormat } from './wikilink-format';          // phase 3 (preflight)
  *   import { userUniquePrepare } from './user-unique-prepare';   // phase 5 (preflight)
  *   import { revisionsSchemaUnify } from './revisions-schema-unify'; // phase 6 (preflight)
  */
 export const allMigrations: MigrationDefinition[] = [
   pageStatusDefault, // phase 2 (boot)
+  wikilinkFormat, // phase 3 (preflight)
 ];
