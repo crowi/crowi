@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { IdRedirector } from '@/components/id-redirector';
 import { PageList } from '@/components/page-list/page-list';
 import { PageView } from '@/components/page-view';
+import { UserDirectoryPreview } from '@/components/user-directory/user-directory-preview';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { isObjectId } from '@/lib/object-id';
 import { pageDisplayName } from '@/lib/page-path';
@@ -20,6 +21,9 @@ export default function CatchAllPage() {
   // Decode so the value matches what the API expects.
   const path = pathname === '/' ? '/' : decodeURIComponent(pathname);
   const isPortalPath = path.endsWith('/');
+  // `/user/` is the member directory: a portal-style list page that leads
+  // with the user roster and forbids creating a portal document of its own.
+  const isUserDirectory = path === '/user/';
   const segments = path.split('/').filter(Boolean);
 
   // Only the last path segment names the tab (e.g.
@@ -42,7 +46,16 @@ export default function CatchAllPage() {
         </Alert>
       )}
 
-      {isPortalPath ? <PageList initialParams={{ path }} /> : <PageView path={path} revisionId={revisionId} />}
+      {isUserDirectory ? (
+        <div className="space-y-8">
+          <UserDirectoryPreview />
+          <PageList initialParams={{ path }} disableCreatePortal />
+        </div>
+      ) : isPortalPath ? (
+        <PageList initialParams={{ path }} />
+      ) : (
+        <PageView path={path} revisionId={revisionId} />
+      )}
     </>
   );
 }

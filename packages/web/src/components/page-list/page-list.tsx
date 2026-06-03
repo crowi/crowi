@@ -34,6 +34,12 @@ function hasLeadingH1(body: string): boolean {
 interface PageListProps {
   initialParams?: Partial<ListPagesRequest>;
   variant?: PageListVariant;
+  /**
+   * Suppress the "Create Portal" CTA in the fallback header. Used for the
+   * `/user/` member directory, where the path is reserved and a portal
+   * document must not be created (see `Page.isCreatableName`).
+   */
+  disableCreatePortal?: boolean;
 }
 
 // Default page size for the main directory listing. The 2-line dense
@@ -58,7 +64,7 @@ function formatPageCount(count: number, pager: { offset: number; next: number | 
   return knownTotal ? m['page_list.page_count']({ count }) : m['page_list.page_count_more']({ count });
 }
 
-export function PageList({ initialParams = {}, variant = 'default' }: PageListProps) {
+export function PageList({ initialParams = {}, variant = 'default', disableCreatePortal = false }: PageListProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [params, setParams] = useState<ListPagesRequest>({
@@ -127,7 +133,7 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
   if (!data || (data.pages.length === 0 && !portalPage && !ownDraftPortalId)) {
     return (
       <div className="space-y-6">
-        {portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash} />}
+        {portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash && !disableCreatePortal} />}
         <PageListEmptyCard message={isTrash ? m['page_list.empty_trash']() : m['page_list.empty_default']()} />
       </div>
     );
@@ -152,7 +158,13 @@ export function PageList({ initialParams = {}, variant = 'default' }: PageListPr
           </div>
         </div>
       ) : (
-        portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash && !ownDraftPortalId} draftPortalId={ownDraftPortalId} />
+        portalPath && (
+          <PortalFallbackHeader
+            path={portalPath}
+            showCreatePortal={!isTrash && !ownDraftPortalId && !disableCreatePortal}
+            draftPortalId={disableCreatePortal ? undefined : ownDraftPortalId}
+          />
+        )
       )}
 
       {/* Children list */}

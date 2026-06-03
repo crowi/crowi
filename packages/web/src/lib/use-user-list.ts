@@ -1,0 +1,47 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import { apiClientV2 } from './api-client';
+
+/**
+ * Member directory list hook — fetches active users (avatar + name +
+ * @username) for the special `/user/` portal. Backed by `GET /users`
+ * (authenticated, non-admin). `q` matches username/name; pagination is
+ * offset-based, name-ascending.
+ */
+export interface UseUserListParams {
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const userListKeys = {
+  all: ['users', 'directory'] as const,
+  list: (params: UseUserListParams) => [...userListKeys.all, params] as const,
+};
+
+const DEFAULT_LIMIT = 24;
+
+export function useUserList(params: UseUserListParams = {}) {
+  const { q = '', limit = DEFAULT_LIMIT, offset = 0 } = params;
+
+  return useQuery({
+    queryKey: userListKeys.list({ q, limit, offset }),
+    queryFn: async () => {
+      const response = await apiClientV2.users.$get({
+        query: {
+          ...(q ? { q } : {}),
+          limit: String(limit),
+          offset: String(offset),
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to load members');
+      }
+      return response.json();
+    },
+    // Keep the previous page visible while the next page / search loads,
+    // so the grid doesn't flash empty between requests.
+    placeholderData: (prev) => prev,
+  });
+}
