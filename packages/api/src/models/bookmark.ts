@@ -160,11 +160,11 @@ export default (crowi: Crowi) => {
 
   BookmarkSchema.statics.removeBookmark = async function (page, user) {
     try {
-      const data = await Bookmark.findOneAndRemove({ page, user });
+      const data = await Bookmark.findOneAndDelete({ page, user });
       BookmarkEvent.emit('delete', page);
       return data;
     } catch (err) {
-      debug('Bookmark.findOneAndRemove failed', err);
+      debug('Bookmark.findOneAndDelete failed', err);
       throw err;
     }
   };

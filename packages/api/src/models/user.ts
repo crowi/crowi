@@ -1,12 +1,13 @@
 import Crowi from 'src/crowi';
-import { Types, Document, Model, Schema, model } from 'mongoose';
+import { Types, Document, Schema, model } from 'mongoose';
+import type { PaginateModel, PaginateOptions, PaginateResult } from 'mongoose';
 import Debug from 'debug';
-import mongoosePaginate from 'mongoose-paginate';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import async from 'async';
 import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth } from 'src/models/config';
 import { createMailTokenUtil } from 'src/util/mail-token';
+import { applyPaginatePlugin } from 'src/util/mongoose-paginate';
 
 const STATUS_REGISTERED = 1;
 const STATUS_ACTIVE = 2;
@@ -47,11 +48,11 @@ export interface UserDocument extends Document {
   isPasswordValid(password: string): boolean;
   setPassword(password: string): this;
   isEmailSet(): boolean;
-  updatePassword(password: string, callback: (err: Error, userData: UserDocument) => void): any;
-  updateImage(image, callback: (err: Error, userData: UserDocument) => void): any;
+  updatePassword(password: string, callback: (err: Error | null, userData: UserDocument) => void): void;
+  updateImage(image, callback: (err: Error | null, userData: UserDocument) => void): void;
   updateEmail(email: string): any;
   updateNameAndEmail(name: string, email: string): any;
-  deleteImage(callback): any;
+  deleteImage(callback: (err: Error | null, userData: UserDocument) => void): void;
   updateGoogleId(googleId): Promise<UserDocument>;
   deleteGoogleId(): Promise<UserDocument>;
   updateGitHubId(githubId): Promise<UserDocument>;
@@ -59,55 +60,34 @@ export interface UserDocument extends Document {
   countValidThirdPartyIds(): number;
   hasValidThirdPartyId(): boolean;
   canDisconnectThirdPartyId(): boolean;
-  activateInvitedUser(username, name, password, callback: (err: Error, userData: UserDocument) => void): any;
-  removeFromAdmin(callback: (err: Error, userData: UserDocument) => void): any;
-  makeAdmin(callback: (err: Error, userData: UserDocument) => void): any;
-  statusActivate(callback: (err: Error, userData: UserDocument) => void): any;
-  statusSuspend(callback: (err: Error, userData: UserDocument) => void): any;
-  statusDelete(callback: (err: Error, userData: UserDocument) => void): any;
+  activateInvitedUser(username, name, password, callback: (err: Error | null, userData: UserDocument) => void): void;
+  removeFromAdmin(callback: (err: Error | null, userData: UserDocument) => void): void;
+  makeAdmin(callback: (err: Error | null, userData: UserDocument) => void): void;
+  statusActivate(callback: (err: Error | null, userData: UserDocument) => void): void;
+  statusSuspend(callback: (err: Error | null, userData: UserDocument) => void): void;
+  statusDelete(callback: (err: Error | null, userData: UserDocument) => void): void;
   populateSecrets(): Promise<any>;
 }
 
 /**
- * Result envelope produced by the `mongoose-paginate` plugin. Re-declared
- * here because the package does not ship its own type definitions.
+ * `mongoose-paginate-v2` (unlike the unmaintained `mongoose-paginate`) ships
+ * its types by augmenting the `mongoose` module: `PaginateResult` /
+ * `PaginateOptions` / `PaginateModel` live on `mongoose`. The result envelope
+ * renames `total`→`totalDocs` and `pages`→`totalPages`; handlers absorb that
+ * rename so the client-facing JSON contract is unchanged. Re-exported here so
+ * existing `import { PaginateResult } from 'models/user'` consumers keep working.
  */
-export interface PaginateResult<T> {
-  docs: T[];
-  total: number;
-  limit: number;
-  page?: number;
-  pages: number;
-  offset?: number;
-}
+export type { PaginateResult, PaginateOptions } from 'mongoose';
 
-/**
- * Subset of mongoose-paginate options actually used by Crowi handlers.
- * `populate`/`lean`/`leanWithId`/`offset` are accepted by the plugin too
- * but we don't lean on them today; add them here when needed.
- */
-export interface PaginateOptions {
-  page?: number;
-  limit?: number;
-  sort?: Record<string, 1 | -1>;
-  select?: string;
-}
-
-export interface UserModel extends Model<UserDocument> {
-  paginate(
-    query: Record<string, unknown>,
-    options?: PaginateOptions,
-    callback?: (err: Error | null, result: PaginateResult<UserDocument>) => void,
-  ): Promise<PaginateResult<UserDocument>>;
-
+export interface UserModel extends PaginateModel<UserDocument> {
   getLanguageLabels(): Record<string, string>;
   getUserStatusLabels(): any;
   isEmailValid(email): boolean;
   isGitHubAccountValid(organizations): boolean;
-  findUsers(options, callback: (err: Error, userData: UserDocument[]) => void);
+  findUsers(options, callback: (err: Error | null, userData: UserDocument[]) => void): void;
   findAllUsers(options?): Promise<UserDocument[]>;
   findUsersByIds(ids, options?): Promise<UserDocument[]>;
-  findAdmins(callback: (err: Error, admins: UserDocument[]) => void): void;
+  findAdmins(callback: (err: Error | null, admins: UserDocument[]) => void): void;
   findUsersWithPagination(options, query, callback): any;
   findUsersByPartOfEmail(emailPart, options): any;
   findUserByUsername(username): Promise<UserDocument | null>;
@@ -161,7 +141,7 @@ export default (crowi: Crowi) => {
     admin: { type: Boolean, default: false, index: true },
     emailConfirmedAt: { type: Date, default: null },
   });
-  userSchema.plugin(mongoosePaginate);
+  applyPaginatePlugin(userSchema);
 
   userEvent.on('activated', userEvent.onActivated);
 
@@ -274,18 +254,29 @@ export default (crowi: Crowi) => {
     return false;
   };
 
+  // mongoose 7 dropped the callback form of Document#save(). These public
+  // model methods keep their `(err, userData)` callback signature for the
+  // handler call sites; only the internal save is switched to the promise
+  // form, with this bridge forwarding resolution/rejection to the callback.
+  // `doc` is typed by the schema-method `this`, which mongoose 8 hydrates to
+  // a richer type than the bare `UserDocument`, so accept any saveable doc.
+  function bridgeSave(saving: Promise<unknown>, fallback: unknown, callback: (err: Error | null, userData: UserDocument) => void): void {
+    saving.then(
+      (userData) => callback(null, userData as UserDocument),
+      // On a save failure there is no saved document; the legacy callback
+      // form also surfaced the in-memory doc, so forward it as the error case.
+      (err) => callback(err as Error, fallback as UserDocument),
+    );
+  }
+
   userSchema.methods.updatePassword = function (password, callback) {
     this.setPassword(password);
-    this.save(function (err, userData) {
-      return callback(err, userData);
-    });
+    bridgeSave(this.save(), this, callback);
   };
 
   userSchema.methods.updateImage = function (image, callback) {
     this.image = image;
-    this.save(function (err, userData) {
-      return callback(err, userData);
-    });
+    bridgeSave(this.save(), this, callback);
   };
 
   userSchema.methods.updateEmail = function (email) {
@@ -345,35 +336,37 @@ export default (crowi: Crowi) => {
     this.status = STATUS_ACTIVE;
     // Clicking the invite link proves control of the email address.
     this.emailConfirmedAt = new Date();
-    this.save(function (err, userData) {
-      userEvent.emit('activated', userData);
-      return callback(err, userData);
-    });
+    this.save().then(
+      (userData) => {
+        userEvent.emit('activated', userData);
+        return callback(null, userData);
+      },
+      (err) => callback(err as Error, this as unknown as UserDocument),
+    );
   };
 
   userSchema.methods.removeFromAdmin = function (callback) {
     debug('Remove from admin', this);
     this.admin = false;
-    this.save(function (err, userData) {
-      return callback(err, userData);
-    });
+    bridgeSave(this.save(), this, callback);
   };
 
   userSchema.methods.makeAdmin = function (callback) {
     debug('Admin', this);
     this.admin = true;
-    this.save(function (err, userData) {
-      return callback(err, userData);
-    });
+    bridgeSave(this.save(), this, callback);
   };
 
   userSchema.methods.statusActivate = function (callback) {
     debug('Activate User', this);
     this.status = STATUS_ACTIVE;
-    this.save(function (err, userData) {
-      userEvent.emit('activated', userData);
-      return callback(err, userData);
-    });
+    this.save().then(
+      (userData) => {
+        userEvent.emit('activated', userData);
+        return callback(null, userData);
+      },
+      (err) => callback(err as Error, this as unknown as UserDocument),
+    );
   };
 
   userSchema.methods.statusSuspend = function (callback) {
@@ -391,9 +384,7 @@ export default (crowi: Crowi) => {
       // migrate old data
       this.username = '-';
     }
-    this.save(function (err, userData) {
-      return callback(err, userData);
-    });
+    bridgeSave(this.save(), this, callback);
   };
 
   userSchema.methods.statusDelete = function (callback) {
@@ -403,9 +394,7 @@ export default (crowi: Crowi) => {
     this.email = 'deleted@deleted';
     this.googleId = null;
     this.image = null;
-    this.save(function (err, userData) {
-      return callback(err, userData);
-    });
+    bridgeSave(this.save(), this, callback);
   };
 
   userSchema.methods.populateSecrets = async function () {
@@ -468,13 +457,17 @@ export default (crowi: Crowi) => {
   userSchema.statics.findUsers = function (options, callback) {
     const sort = options.sort || { status: 1, createdAt: 1 };
 
+    // mongoose 7 dropped Query#exec(callback); bridge the promise to the
+    // existing callback signature.
     this.find()
       .sort(sort)
       .skip(options.skip || 0)
       .limit(options.limit || 21)
-      .exec(function (err, userData) {
-        callback(err, userData);
-      });
+      .exec()
+      .then(
+        (userData) => callback(null, userData),
+        (err) => callback(err as Error, []),
+      );
   };
 
   userSchema.statics.findAllUsers = function (options = {}) {
@@ -509,33 +502,36 @@ export default (crowi: Crowi) => {
   };
 
   userSchema.statics.findAdmins = function (callback) {
-    this.find({ admin: true }).exec(function (err, admins) {
-      debug('Admins: ', admins);
-      callback(err, admins);
-    });
+    this.find({ admin: true })
+      .exec()
+      .then(
+        (admins) => {
+          debug('Admins: ', admins);
+          callback(null, admins);
+        },
+        (err) => callback(err as Error, []),
+      );
   };
 
   userSchema.statics.findUsersWithPagination = function (options, query, callback) {
     const sort = options.sort || { status: 1, username: 1, createdAt: 1 };
 
-    this.paginate(
-      query,
-      {
-        page: options.page || 1,
-        limit: options.limit || PAGE_ITEMS,
-        sort,
-        // Drop secret fields at the Mongo layer instead of stripping them
-        // client-side via toUserPublic. Saves bandwidth between Mongo and
-        // Node and ensures no admin handler accidentally leaks a hash.
-        select: '-password -googleId -githubId',
-      },
-      function (err, result) {
-        if (err) {
-          debug('Error on pagination:', err);
-          return callback(err, null);
-        }
-
-        return callback(err, result);
+    // mongoose-paginate-v2 returns a promise; the callback form was removed.
+    // Result fields totalDocs/totalPages replace mongoose-paginate's
+    // total/pages — callers that need the legacy names absorb the rename.
+    this.paginate(query, {
+      page: options.page || 1,
+      limit: options.limit || PAGE_ITEMS,
+      sort,
+      // Drop secret fields at the Mongo layer instead of stripping them
+      // client-side via toUserPublic. Saves bandwidth between Mongo and
+      // Node and ensures no admin handler accidentally leaks a hash.
+      select: '-password -googleId -githubId',
+    }).then(
+      (result) => callback(null, result),
+      (err) => {
+        debug('Error on pagination:', err);
+        return callback(err, null);
       },
     );
   };
@@ -626,26 +622,27 @@ export default (crowi: Crowi) => {
   };
 
   userSchema.statics.removeCompletelyById = function (id, callback) {
-    User.findById(id, function (err, userData) {
-      if (!userData) {
-        return callback(err, null);
-      }
-
-      debug('Removing user:', userData);
-      // 物理削除可能なのは、招待中ユーザーのみ
-      // 利用を一度開始したユーザーは論理削除のみ可能
-      if (userData.status !== STATUS_INVITED) {
-        return callback(new Error('Cannot remove completely the user whoes status is not INVITED'), null);
-      }
-
-      userData.remove(function (err) {
-        if (err) {
-          return callback(err, null);
+    // mongoose 7 dropped findById(cb) and Document#remove(); use the promise
+    // form + deleteOne(). The public (err, 1|null) callback is preserved.
+    User.findById(id)
+      .then((userData) => {
+        if (!userData) {
+          return callback(null, null);
         }
 
-        return callback(null, 1);
-      });
-    });
+        debug('Removing user:', userData);
+        // 物理削除可能なのは、招待中ユーザーのみ
+        // 利用を一度開始したユーザーは論理削除のみ可能
+        if (userData.status !== STATUS_INVITED) {
+          return callback(new Error('Cannot remove completely the user whoes status is not INVITED'), null);
+        }
+
+        return userData.deleteOne().then(
+          () => callback(null, 1),
+          (err) => callback(err as Error, null),
+        );
+      })
+      .catch((err) => callback(err as Error, null));
   };
 
   userSchema.statics.resetPasswordByRandomString = async function (id) {
@@ -686,33 +683,42 @@ export default (crowi: Crowi) => {
 
         // email check
         // TODO: 削除済みはチェック対象から外そう〜
-        User.findOne({ email }, function (err, user) {
-          // The user is exists
-          if (user) {
-            createdUserList.push({ email, password: null, user: null });
-
-            return next();
-          }
-
-          password = Math.random().toString(36).slice(-16);
-
-          newUser.email = email;
-          newUser.setPassword(password);
-          newUser.createdAt = Date.now() as any;
-          newUser.status = STATUS_INVITED;
-
-          newUser.save(function (err, user) {
-            if (err) {
+        // mongoose 7 dropped the callback forms of findOne()/save(); use
+        // promises inside the async.each iteratee, still calling next().
+        User.findOne({ email })
+          .then((user) => {
+            // The user is exists
+            if (user) {
               createdUserList.push({ email, password: null, user: null });
-              debug('save failed!! ', email);
-            } else {
-              createdUserList.push({ email, password, user });
-              debug('saved!', email);
+
+              return next();
             }
 
+            password = Math.random().toString(36).slice(-16);
+
+            newUser.email = email;
+            newUser.setPassword(password);
+            newUser.createdAt = Date.now() as any;
+            newUser.status = STATUS_INVITED;
+
+            return newUser.save().then(
+              (saved) => {
+                createdUserList.push({ email, password, user: saved });
+                debug('saved!', email);
+                next();
+              },
+              () => {
+                createdUserList.push({ email, password: null, user: null });
+                debug('save failed!! ', email);
+                next();
+              },
+            );
+          })
+          .catch(() => {
+            createdUserList.push({ email, password: null, user: null });
+            debug('save failed!! ', email);
             next();
           });
-        });
       },
       function (err) {
         if (err) {
@@ -777,12 +783,16 @@ export default (crowi: Crowi) => {
     newUser.createdAt = Date.now() as any;
     newUser.status = decideUserStatusOnRegistration();
 
-    newUser.save(function (err, userData) {
-      if (userData.status == STATUS_ACTIVE) {
-        userEvent.emit('activated', userData);
-      }
-      return callback(err, userData);
-    });
+    // mongoose 7 dropped Document#save(callback); bridge the promise.
+    newUser.save().then(
+      (userData) => {
+        if (userData.status == STATUS_ACTIVE) {
+          userEvent.emit('activated', userData);
+        }
+        return callback(null, userData);
+      },
+      (err) => callback(err as Error, null),
+    );
   };
 
   userSchema.statics.createUserPictureFilePath = function (user, ext) {

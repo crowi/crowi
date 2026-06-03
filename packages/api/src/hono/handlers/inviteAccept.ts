@@ -75,7 +75,7 @@ export const registerInviteAcceptRoutes = <E extends OpenAPIHono<CrowiHonoBindin
         }
 
         const activated = await new Promise<UserDocument>((resolve, reject) => {
-          user.activateInvitedUser(username, name, password, (err: Error, userData: UserDocument) => {
+          user.activateInvitedUser(username, name, password, (err: Error | null, userData: UserDocument) => {
             if (err) reject(err);
             else resolve(userData);
           });
