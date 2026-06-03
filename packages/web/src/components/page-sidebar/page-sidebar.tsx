@@ -4,23 +4,16 @@ import { SidebarNavLinks } from './sidebar-nav-links';
 import { MEMBER_DIR_PATH } from './sidebar-paths';
 import { SidebarTree } from './sidebar-tree';
 
-// Non-wiki routes that have no page hierarchy: their own dedicated
-// surfaces (trash, my-page settings, OAuth, and the `_`-prefixed feature
-// routes — search / notifications / member roster / history / …). On
-// these the sidebar still shows its shared nav links, just no tree.
-// `/user/{username}/…` is intentionally NOT excluded — those routes
-// (my page / bookmarks / created pages) share the user's page hierarchy.
+// Non-wiki route roots (themselves + their subtrees): my-page settings,
+// OAuth, and trash. On these the sidebar shows its shared nav links but no
+// hierarchy tree. `/user/{username}/…` is intentionally NOT here — those
+// routes (my page / bookmarks / created pages) share the user's hierarchy.
+const NON_HIERARCHY_ROOTS = ['/me', '/oauth', '/trash'];
+
 function isHierarchyPath(path: string): boolean {
-  return !(
-    path === MEMBER_DIR_PATH || // the member roster — a special list, no tree
-    path.startsWith('/_') ||
-    path === '/me' ||
-    path.startsWith('/me/') ||
-    path === '/oauth' ||
-    path.startsWith('/oauth/') ||
-    path === '/trash' ||
-    path.startsWith('/trash/')
-  );
+  if (path === MEMBER_DIR_PATH) return false; // the member roster — a special list
+  if (path.startsWith('/_')) return false; // _edit / _history / _search / _user / _notifications / …
+  return !NON_HIERARCHY_ROOTS.some((root) => path === root || path.startsWith(`${root}/`));
 }
 
 /**
