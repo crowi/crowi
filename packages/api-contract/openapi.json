@@ -2211,6 +2211,23 @@
               "null"
             ],
             "default": false
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "updatedAt",
+              "createdAt",
+              "path"
+            ],
+            "default": "updatedAt"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
           }
         }
       },
@@ -19939,6 +19956,33 @@
             },
             "required": false,
             "name": "include_deleted",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "updatedAt",
+                "createdAt",
+                "path"
+              ],
+              "default": "updatedAt"
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            },
+            "required": false,
+            "name": "order",
             "in": "query"
           }
         ],

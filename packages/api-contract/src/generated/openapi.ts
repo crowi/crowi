@@ -5081,6 +5081,8 @@ export interface paths {
                     limit?: number | null;
                     offset?: number | null;
                     include_deleted?: boolean | null;
+                    sort?: "updatedAt" | "createdAt" | "path";
+                    order?: "asc" | "desc";
                 };
                 header?: never;
                 path?: never;
@@ -13045,6 +13047,16 @@ export interface components {
             offset: number | null;
             /** @default false */
             include_deleted: boolean | null;
+            /**
+             * @default updatedAt
+             * @enum {string}
+             */
+            sort: "updatedAt" | "createdAt" | "path";
+            /**
+             * @default desc
+             * @enum {string}
+             */
+            order: "asc" | "desc";
         };
         ListPagesResponse: {
             pages: {

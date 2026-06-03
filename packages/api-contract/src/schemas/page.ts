@@ -193,8 +193,14 @@ export const ListPagesRequestSchema = z.object({
     .preprocess((v) => v === true || v === 'true' || v === '1', z.boolean())
     .optional()
     .default(false),
+  // Sort field + direction for the listing. Defaults preserve the legacy
+  // "newest-updated first" order so existing callers are unaffected.
+  // `path` sorts alphabetically by full page path (≈ name order).
+  sort: z.enum(['updatedAt', 'createdAt', 'path']).optional().default('updatedAt'),
+  order: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 export type ListPagesRequest = z.infer<typeof ListPagesRequestSchema>;
+export type ListPagesSort = ListPagesRequest['sort'];
 
 // Pager schema
 export const PagerSchema = z.object({

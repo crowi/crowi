@@ -16,7 +16,11 @@ interface UsePageListOptions {
   enabled?: boolean;
 }
 
-export function usePageList(params: ListPagesRequest, options: UsePageListOptions = {}) {
+// `sort` / `order` carry server-side defaults, so callers that don't care
+// about ordering (e.g. the rename-dialog descendant probe) may omit them.
+type UsePageListParams = Omit<ListPagesRequest, 'sort' | 'order'> & Partial<Pick<ListPagesRequest, 'sort' | 'order'>>;
+
+export function usePageList(params: UsePageListParams, options: UsePageListOptions = {}) {
   return useQuery({
     queryKey: ['pages', 'list', params],
     enabled: options.enabled ?? true,
@@ -28,6 +32,8 @@ export function usePageList(params: ListPagesRequest, options: UsePageListOption
           limit: params.limit !== undefined ? String(params.limit) : undefined,
           offset: params.offset !== undefined ? String(params.offset) : undefined,
           include_deleted: params.include_deleted !== undefined ? String(params.include_deleted) : undefined,
+          sort: params.sort,
+          order: params.order,
         },
       });
       if (!response.ok) {

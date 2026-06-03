@@ -83,7 +83,7 @@ function grantChipInfo(grant: number | undefined): { Icon: LucideIcon; label: st
  * Companion to the thin accent strip in `(auth)/layout.tsx` — both
  * read the same CSS variable so the colour stays consistent.
  */
-function GrantChip({ grant }: { grant: number }) {
+export function GrantChip({ grant }: { grant: number }) {
   const info = grantChipInfo(grant);
   if (!info) return null;
   const { Icon, label } = info;
