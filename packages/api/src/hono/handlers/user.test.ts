@@ -144,4 +144,62 @@ describe('Routes /api/v2/user (Hono)', () => {
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
   });
+
+  describe('GET /users (member directory)', () => {
+    const SUSPENDED_EMAIL = 'user-suspended@example.com';
+    const SUSPENDED_USERNAME = 'user-suspended';
+
+    beforeAll(async () => {
+      // A suspended user must never appear in the directory.
+      const suspended = await seedActiveUser({ name: 'Suspended', username: SUSPENDED_USERNAME, email: SUSPENDED_EMAIL, password: 'Password!1' });
+      suspended.user.status = User().STATUS_SUSPENDED;
+      await suspended.user.save();
+    });
+
+    afterAll(async () => {
+      await User().deleteMany({ email: SUSPENDED_EMAIL });
+    });
+
+    it('lists active users name-ascending with pager + total, excluding non-active users', async () => {
+      const res = await request(app).get('/api/v2/users').query({ limit: 50, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.pager).toMatchObject({ offset: 0 });
+      const usernames = res.body.users.map((u: { username: string }) => u.username);
+      expect(usernames).toEqual(expect.arrayContaining([TARGET_USERNAME, VIEWER_USERNAME]));
+      expect(usernames).not.toContain(SUSPENDED_USERNAME);
+
+      // Directory items carry only the public shape — never email.
+      const target = res.body.users.find((u: { username: string }) => u.username === TARGET_USERNAME);
+      expect(target).toMatchObject({ username: TARGET_USERNAME, name: 'Target' });
+      expect(target).not.toHaveProperty('email');
+
+      // name-ascending: 'Target' < 'Viewer'.
+      const names = res.body.users.map((u: { name: string }) => u.name);
+      const sorted = [...names].sort((a, b) => a.localeCompare(b));
+      expect(names).toEqual(sorted);
+    });
+
+    it('filters by q against username/name (case-insensitive)', async () => {
+      const res = await request(app).get('/api/v2/users').query({ q: 'target' }).set('Authorization', `Bearer ${viewerToken}`);
+      expect(res.status).toBe(200);
+      const usernames = res.body.users.map((u: { username: string }) => u.username);
+      expect(usernames).toContain(TARGET_USERNAME);
+      expect(usernames).not.toContain(VIEWER_USERNAME);
+    });
+
+    it('paginates via limit/offset and exposes a next cursor', async () => {
+      const res = await request(app).get('/api/v2/users').query({ limit: 1, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.users.length).toBe(1);
+      expect(res.body.total).toBeGreaterThanOrEqual(2);
+      expect(res.body.pager.next).toBe(1);
+      expect(res.body.pager.prev).toBeNull();
+    });
+
+    it('returns 401 AUTHENTICATION_REQUIRED without a bearer token', async () => {
+      const res = await request(app).get('/api/v2/users');
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+  });
 });
