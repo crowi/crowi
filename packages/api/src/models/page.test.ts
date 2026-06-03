@@ -156,6 +156,13 @@ describe('Page', () => {
         expect(Page.isCreatableName('/user/aoi/' + pn)).toBe(false);
         expect(Page.isCreatableName('/user/aoi/x/' + pn)).toBe(true);
       }
+
+      // `/user` and `/user/` are the member directory — no portal/page here,
+      // but individual user pages (and their sub-portals) stay creatable.
+      expect(Page.isCreatableName('/user')).toBe(false);
+      expect(Page.isCreatableName('/user/')).toBe(false);
+      expect(Page.isCreatableName('/user/aoi')).toBe(true);
+      expect(Page.isCreatableName('/user/aoi/')).toBe(true);
     });
   });
 

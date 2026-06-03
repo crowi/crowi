@@ -18,7 +18,7 @@
  * `GRANT_PUBLIC` policy as the ts-rest version when viewing another
  * user's pages.
  */
-import { getUserBookmarksRoute, getUserPageRoute, getUserPagesRoute } from '@crowi/api-contract';
+import { getUserBookmarksRoute, getUserPageRoute, getUserPagesRoute, listMembersRoute } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 import type { Types } from 'mongoose';
@@ -27,6 +27,7 @@ import type Crowi from 'src/crowi';
 import type { BookmarkDocument } from 'src/models/bookmark';
 import { type PageDocument, visiblePageStatusOr } from 'src/models/page';
 import { type PageLike, pageToResponse } from 'src/util/page-response';
+import { escapeRegExp } from 'src/util/regex';
 import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -70,13 +71,17 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   const Bookmark = crowi.model('Bookmark');
 
   // Every `/user/*` endpoint requires auth. Apply the middleware
-  // broadly so each route below sees `c.get('user')` populated.
+  // broadly so each route below sees `c.get('user')` populated. The
+  // member directory lives at the sibling path `/users` (plural), which
+  // `/user/*` does not cover, so it gets its own auth apply.
   app.use('/user/*', createJwtAuth(crowi));
+  app.use('/users', createJwtAuth(crowi));
 
-  // RFC-0010 — public user pages are profile:read.
+  // RFC-0010 — public user pages + member directory are profile:read.
   applyScope(app, getUserPageRoute, 'profile:read');
   applyScope(app, getUserBookmarksRoute, 'profile:read');
   applyScope(app, getUserPagesRoute, 'profile:read');
+  applyScope(app, listMembersRoute, 'profile:read');
 
   return app
     .openapi(getUserPageRoute, async (c) => {
@@ -200,6 +205,57 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
       } catch (err) {
         const error = err as Error;
         debug('Error fetching user pages:', error.message, error.stack);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(listMembersRoute, async (c) => {
+      const { q, limit, offset } = c.req.valid('query');
+
+      debug('listMembers called with:', { q, limit, offset });
+
+      try {
+        const trimmed = q?.trim();
+        const rx = trimmed ? { $regex: escapeRegExp(trimmed), $options: 'i' } : null;
+        const filter: Record<string, unknown> = {
+          status: User.STATUS_ACTIVE,
+          ...(rx ? { $or: [{ username: rx }, { name: rx }] } : {}),
+        };
+
+        // count + page fetch are independent — run them together.
+        const [total, users] = await Promise.all([
+          User.countDocuments(filter),
+          User.find(filter)
+            .select('username name image')
+            // Case-insensitive name ordering; `username` breaks ties so the
+            // page boundaries are stable across requests. A compound index on
+            // `{ name, username }` with this collation would back the sort if
+            // the active-user set ever grows large enough to matter.
+            .collation({ locale: 'en', strength: 2 })
+            .sort({ name: 1, username: 1 })
+            .skip(offset)
+            .limit(limit)
+            .exec() as Promise<Array<{ _id: Types.ObjectId | string; username: string; name: string; image?: string | null }>>,
+        ]);
+
+        const prev = offset > 0 ? Math.max(0, offset - limit) : null;
+        const next = offset + limit < total ? offset + limit : null;
+
+        return c.json(
+          {
+            users: users.map((u) => ({
+              _id: toStringId(u._id),
+              username: u.username,
+              name: u.name,
+              image: u.image ?? null,
+            })),
+            pager: { prev, next, offset },
+            total,
+          },
+          200,
+        );
+      } catch (err) {
+        const error = err as Error;
+        debug('Error listing members:', error.message, error.stack);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     });

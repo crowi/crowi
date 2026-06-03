@@ -8788,6 +8788,133 @@ paths:
                       - message
                 required:
                   - error
+  /users:
+    get:
+      tags:
+        - user
+      security:
+        - bearerAuth: []
+      summary: List active users for the member directory (paginated, searchable)
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: q
+          in: query
+        - schema:
+            type:
+              - number
+              - 'null'
+            default: 24
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type:
+              - number
+              - 'null'
+            default: 0
+          required: false
+          name: offset
+          in: query
+      responses:
+        '200':
+          description: Paginated active users, name-ascending
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        username:
+                          type: string
+                        name:
+                          type: string
+                        image:
+                          type:
+                            - string
+                            - 'null'
+                      required:
+                        - _id
+                        - username
+                        - name
+                  pager:
+                    type: object
+                    properties:
+                      prev:
+                        type:
+                          - number
+                          - 'null'
+                      next:
+                        type:
+                          - number
+                          - 'null'
+                      offset:
+                        type: number
+                    required:
+                      - prev
+                      - next
+                      - offset
+                  total:
+                    type: number
+                required:
+                  - users
+                  - pager
+                  - total
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
   /bookmarks:
     get:
       tags:

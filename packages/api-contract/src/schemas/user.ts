@@ -29,6 +29,35 @@ export const PaginationRequestSchema = z.object({
 });
 export type PaginationRequest = z.infer<typeof PaginationRequestSchema>;
 
+// Member-directory list item — the minimal public shape rendered on the
+// `/user/` member directory (avatar + display name + @username + link).
+// Intentionally narrower than UserPublicSchema: email and other PII are
+// never surfaced in the directory.
+export const UserListItemSchema = z.object({
+  _id: z.string(),
+  username: z.string(),
+  name: z.string(),
+  image: z.string().nullable().optional(),
+});
+export type UserListItem = z.infer<typeof UserListItemSchema>;
+
+// Member-directory list request. `q` matches username/name (case-insensitive);
+// pagination is offset-based to reuse the shared `Pager` envelope.
+export const ListUsersRequestSchema = z.object({
+  q: z.string().optional(),
+  limit: z.coerce.number().optional().default(24),
+  offset: z.coerce.number().optional().default(0),
+});
+export type ListUsersRequest = z.infer<typeof ListUsersRequestSchema>;
+
+// Member-directory list response — active users only, name-ascending.
+export const ListUsersResponseSchema = z.object({
+  users: z.array(UserListItemSchema),
+  pager: PagerSchema,
+  total: z.number(),
+});
+export type ListUsersResponse = z.infer<typeof ListUsersResponseSchema>;
+
 // User page response schema - combines profile, bookmarks, and created pages
 export const UserPageResponseSchema = z.object({
   user: UserPublicSchema,

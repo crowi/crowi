@@ -620,6 +620,7 @@ export default (crowi: Crowi) => {
       /^\/_.*/, // /_api/* and so on
       /^\/-\/.*/,
       /^\/_r\/.*/,
+      /^\/user\/?$/, // `/user` and `/user/` are the member directory — no portal/page here
       /^\/user\/[^/]+\/(bookmarks|comments|activities|pages|recent-create|recent-edit)/, // reserved
       /^\/?https?:\/\/.+$/, // avoid miss in renaming
       /\/{2,}/, // avoid miss in renaming
