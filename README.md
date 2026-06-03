@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="packages/api/public/logo/800x200.png" width="500" alt="Crowi">
+  <img src="packages/web/public/logo/500w.png" width="500" alt="Crowi">
 </div>
 
 <h1 align="center">Crowi</h1>
