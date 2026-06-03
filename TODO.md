@@ -94,8 +94,17 @@ multi-phase 機能。v1→v2 in-place upgrade の preflight が最大ユース�
   `runPageStatusMigration` step/import を除去し `runBootMigrations()` 一本化
   (`seedOAuthClients` は枠外 seed として隣で温存)。旧 `util/page-status-migration.ts`
   + `.test.ts` を削除して重複排除
-- [ ] **Phase 3: wikilink-format preflight migration** — legacy
-  `migrate-wikilink` を `rewritePageBody` 経由へ移植 (Yjs 無効化バグ修正) + 旧コマンド削除
+- [x] **Phase 3: wikilink-format preflight migration** — legacy
+  `migrate-wikilink` の変換ロジック (`rewriteAndDetect` / `shouldRewriteWikilink`)
+  を `wikilink-format` preflight migration へ byte-identical 移植。body 書換は
+  `ctx.rewritePageBody` (= `updatePage` 経路) を通し `currentRevision` 付け替え +
+  `yjsState` / `yjsCheckpointAt` の null 化を行う — 旧コマンドの直 `pushRevision`
+  バイパスが `updatePage` を迂回し editor を stale な Y.Doc に残していた Yjs 無効化
+  バグを修正 (RFC §4.3.1)。`isPending` は current revision body を `</` 高速
+  プレフィルタ + full ルール verdict (`bodyHasRewritableWikilink`) で probe し
+  HTML 終了タグのみの body の永久 pending (boot デッドロック) を回避。旧
+  `migrate-wikilink` コマンド (`.ts` + `.test.ts`) を削除し `cli.ts` から登録除去
+  (互換エイリアス無し)
 - [ ] **Phase 4: rebuild tasks を共有 runner へ** — search rebuild /
   storage copy を `rebuild` 名前空間へ集約 + renderer / backlink 骨組み
 - [ ] **Phase 5: user-unique-prepare preflight + uniqueness spec 本体** —
