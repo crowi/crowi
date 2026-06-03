@@ -101,7 +101,10 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
 
   const displayed = preview ?? typed;
   const target = normaliseTarget(displayed);
-  const endsWithSlash = displayed.length > 1 && displayed.endsWith('/');
+  // A trailing slash — including the bare root `/` — is a namespace, not a
+  // final path: not creatable here (portals aren't made from this modal),
+  // so it shows the "keep typing" prompt rather than an exists-error.
+  const endsWithSlash = displayed.endsWith('/');
   const isEmpty = target.length <= 1;
   const stemBase = normaliseTarget(typed);
   const childPages = existingPaths.filter((p) => p !== stemBase);
@@ -179,12 +182,27 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
     onClose();
   };
 
+  // Navigate to the page that already lives at `target` (wiki pages are
+  // served at their own path). Offered when creation is blocked because the
+  // path exists.
+  const goToExisting = () => {
+    router.push(target);
+    onClose();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Tab') {
       // Tab is hijacked for completion; Esc / the cancel button are the
       // documented ways out of the field (focus trap handled by Dialog).
       e.preventDefault();
       cycle(e.shiftKey ? -1 : 1);
+      return;
+    }
+    // Shift+Enter on an existing path jumps to that page instead of trying
+    // (and failing) to create it.
+    if (e.key === 'Enter' && e.shiftKey && alreadyExists) {
+      e.preventDefault();
+      goToExisting();
     }
   };
 
@@ -225,7 +243,7 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
           {m['create_page.kbd_next']()}
         </span>
         <span className="flex items-center gap-1">
-          <Kbd>⇧</Kbd>
+          <Kbd>Shift</Kbd>
           <Kbd>Tab</Kbd>
           {m['create_page.kbd_prev']()}
         </span>
@@ -269,7 +287,20 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
       {endsWithSlash ? (
         <p className="text-sm text-muted-foreground">{m['create_page.continue_typing']()}</p>
       ) : alreadyExists ? (
-        <p className="text-sm text-destructive">{m['create_page.exists_error']()}</p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <span className="text-destructive">{m['create_page.exists_error']()}</span>
+          <button
+            type="button"
+            onClick={goToExisting}
+            className="inline-flex items-center gap-1.5 font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+          >
+            {m['create_page.go_to_page']()}
+            <span className="flex items-center gap-0.5">
+              <Kbd>Shift</Kbd>
+              <Kbd>Enter</Kbd>
+            </span>
+          </button>
+        </div>
       ) : canSubmit ? (
         <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
           <Kbd>Enter</Kbd>

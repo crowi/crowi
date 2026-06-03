@@ -603,6 +603,7 @@
   "create_page.continue_typing": "続けて新しいページ名を入力してください",
   "create_page.create_hint": "{path} を作成",
   "create_page.exists_error": "このパスのページは既に存在します",
+  "create_page.go_to_page": "このページへ",
   "create_page.submit": "作成",
   "header.admin_aria": "管理画面",
   "header.user_menu_aria": "{name} のメニュー",

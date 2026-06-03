@@ -603,6 +603,7 @@
   "create_page.continue_typing": "Keep typing a name for the new page",
   "create_page.create_hint": "Create {path}",
   "create_page.exists_error": "A page already exists at this path",
+  "create_page.go_to_page": "Go to page",
   "create_page.submit": "Create",
   "header.admin_aria": "Admin",
   "header.user_menu_aria": "{name}'s menu",
