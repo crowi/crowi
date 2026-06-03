@@ -52,8 +52,7 @@
     "tailwind-merge": "^3.4.0",
     "y-codemirror.next": "^0.3.5",
     "y-protocols": "^1.0.7",
-    "yjs": "^13.6.8",
-    "zod": "catalog:"
+    "yjs": "^13.6.8"
   },
   "devDependencies": {
     "@crowi/tsconfig": "workspace:*",
