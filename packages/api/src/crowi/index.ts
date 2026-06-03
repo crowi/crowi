@@ -22,7 +22,6 @@ import { type Renderer, createRenderer } from 'src/renderer';
 import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
-import { runPageStatusMigration } from 'src/util/page-status-migration';
 import { runBootMigrations } from 'src/migration/run-boot-migrations';
 import { type BootReporter, createBootReporter } from 'src/util/boot-reporter';
 
@@ -213,19 +212,16 @@ class Crowi {
     // ── config: load / migrations / oauth seed ──
     reporter.beginLayer('config');
     await step('setupConfig', () => this.setupConfig());
-    // RFC-0004: backfill `status='published'` on legacy pages that
-    // predate the `Page.status` field. Idempotent — only matches rows
-    // where `status` is still null/missing. Runs after setupModels so
-    // the Page model is available.
-    await step('runPageStatusMigration', () => runPageStatusMigration(this));
     // RFC-0008: the migration framework's boot step. Applies any pending
-    // `layer:'boot'` migrations (none until Phase 2 ports
-    // `runPageStatusMigration` here) and probes `layer:'preflight'`
-    // migrations, refusing boot when any is unapplied under the default
-    // `block` policy (§4.2.1/§4.2.7). With an empty registry this is a fast
-    // no-op. `broadcastForceReload` is intentionally omitted here: the live
-    // Hocuspocus handle is attached later in `start()`, after init, so boot
-    // migrations rely on persistence-layer Yjs invalidation only.
+    // `layer:'boot'` migrations (currently `page-status-default`, the
+    // RFC-0004 backfill that stamps `status='published'` onto legacy pages
+    // predating the `Page.status` field — see
+    // `migration/migrations/page-status-default.ts`) and probes
+    // `layer:'preflight'` migrations, refusing boot when any is unapplied
+    // under the default `block` policy (§4.2.1/§4.2.7). `broadcastForceReload`
+    // is intentionally omitted here: the live Hocuspocus handle is attached
+    // later in `start()`, after init, so boot migrations rely on
+    // persistence-layer Yjs invalidation only.
     await step('runBootMigrations', () => runBootMigrations(this));
     // RFC-0010 Phase 3: seed the first-party `crowi-cli` OAuth client.
     // Idempotent upsert (`$setOnInsert`) — runs after setupModels so the
