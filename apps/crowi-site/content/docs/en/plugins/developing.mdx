@@ -99,6 +99,45 @@ behaviour:
 | `@sensitive` | `z.string().describe('@sensitive ...')` | Auto-encrypts on write. Rendered as a secret input. |
 | `@action` | `z.string().describe('@action "Test" POST /test')` | Renders an action button next to the field; calls a `registerRoutes` endpoint. |
 
+### Sidebar placement (`adminPlacement`)
+
+A plugin's settings link is shown in the admin sidebar. Where it lands is
+derived from the **extension hook** the plugin registers — `registerStorage`
+→ Storage, `registerSearch` → Search, `registerRenderer` → Renderers,
+`registerNotifier` → Notification, `registerMailSender` → Mail. A config-only
+base plugin (no hook) must declare `adminPlacement: { section: 'shared' }` to
+appear under "Shared services". You can override the derived placement and set
+the label/icon explicitly:
+
+```ts
+adminPlacement: {
+  section: 'renderer', // settings | shared | storage | mail | notification | auth | search | renderer
+  label: 'PlantUML diagrams',
+  icon: 'diagram-3',
+},
+```
+
+Only plugins that declare a `configSchema` appear in the sidebar (there must be
+something to configure).
+
+### Localizing field labels (`configI18n`)
+
+Field labels and descriptions default to the Zod `.describe()` text (English).
+To localize them, ship a `configI18n` catalog keyed by locale, then field name.
+The admin API overlays the entry matching the admin's UI language; missing
+locales or fields fall back to `.describe()`:
+
+```ts
+configSchema: z.object({
+  serverUrl: z.string().url().describe('Base URL of the PlantUML server.'),
+}),
+configI18n: {
+  ja: {
+    serverUrl: { label: 'サーバー URL', description: 'PlantUML サーバーのベース URL。' },
+  },
+},
+```
+
 ## What you can do with PluginContext
 
 The second argument of each `register*` callback, `PluginContext`, is

@@ -1,6 +1,6 @@
 ---
 title: Admin panel
-description: Using the admin panel sections (App / Security / Authentication / Mail / Share / Users / Storage / Plugins)
+description: Using the admin panel sections (App / Security / Authentication / Share / Plugins / Users / Storage / Mail / Notification / Search / Renderers)
 ---
 
 The Crowi admin panel is where you manage site-wide settings, users, and
@@ -31,18 +31,37 @@ headings are grouped as follows.
 
 | Group | Sections | Status |
 | ----- | -------- | ------ |
-| Settings | App / Security / Share / Plugins | Available |
-| Auth | Authentication | Available |
+| Settings | App / Security / Authentication / Share / Plugins | Available |
+| User management | Users (+ "User approval" when sign-ups are pending) | Available |
+| Shared services | (config-only base plugins, e.g. AWS) | Plugin-dependent |
 | Storage | Storage (+ storage plugins) | Available |
 | Mail | Mail | Available |
 | Notification | Notification | In progress |
-| Users | Users | Available |
-| Maintenance | Search / Backlink | Available |
+| Search | Search (search index + search-backend plugins) | Available |
+| Renderers | (renderer plugins, e.g. PlantUML) | Plugin-dependent |
 
-The storage, mail, notification, and auth groups can have sidebar entries
-injected by loaded plugins via `adminPlacement`. For example, the
-Elasticsearch search plugin and the AWS credentials plugin appear as
-links to their settings pages in the matching group.
+Loaded plugins are injected into the sidebar as links to their settings
+pages. The target group comes from the plugin's **`adminPlacement.section`**
+declaration, or is derived from the **extension hook** it registers:
+
+| Hook / declaration | Group |
+| ------------------ | ----- |
+| `registerStorage` | Storage |
+| `registerSearch` | Search |
+| `registerRenderer` | Renderers |
+| `registerNotifier` | Notification |
+| `registerMailSender` | Mail |
+| config-only (no hook) → `section: 'shared'` | Shared services |
+
+For example, the Elasticsearch search plugin appears under "Search" and the
+PlantUML renderer plugin under "Renderers" (only plugins that declare a config
+schema are shown).
+
+> **Note**: As of a point in the v2 alpha, **Authentication moved into the
+> Settings group** (directly under Security). The former standalone "Auth" and
+> "Maintenance" groups were removed; Search now has its own "Search" group and
+> renderers a "Renderers" group. Backlink rebuilding moved from the admin panel
+> to the `crowi-admin` CLI, so the Backlink sidebar entry was removed.
 
 ## App
 
@@ -59,19 +78,29 @@ Basic site settings. Maps to `GET/PUT /admin/app`.
 
 ## Security
 
-Sign-up and access control settings. Maps to `GET/PUT /admin/security`.
+New-user registration settings. Maps to `GET/PUT /admin/security`.
 
-- **Basic auth**: Set a username and password to put HTTP Basic auth in
-  front of the whole site — useful for a temporary deployment outside the
-  corporate network.
-- **Registration mode (registrationMode)**: Controls whether new users can
-  register.
-  - `Open` — anyone can register
-  - `Restricted` — only email domains matching the registration whitelist
-    are allowed
-  - `Closed` — registration is fully closed (admin invites only)
+- **Registration mode (registrationMode)**: Controls how new users register.
+  - `Open` — anyone can register; usable right after email confirmation.
+  - `Restricted` — anyone can apply, but an **administrator must approve** the
+    account before it can be used (applicants are created in a pending state
+    and appear in the "User approval" queue under [Users](#users)).
+  - `Closed` — public sign-up is disabled; accounts are created **only by
+    admin invitation**.
 - **Registration whitelist (registrationWhiteList)**: The list of email
-  domains allowed in `Restricted` mode.
+  addresses / domains allowed to register. It is **evaluated in every mode
+  except `Closed`**; an empty list means no restriction. One entry per line,
+  matched case-insensitively as:
+  - `admin@example.com` — that exact full address only
+  - `@example.com` — any local-part at that domain
+  - `example.com` — that domain or any subdomain of it
+
+> **Note**: The legacy **site-wide HTTP Basic auth**
+> (`security:basicName` / `security:basicSecret`) was **removed** in v2
+> (breaking change). It could not reliably gate a single-page app in the
+> Next.js + Hono architecture and was never actually enforced. If you need a
+> site-wide Basic-auth gate, configure it at your **reverse proxy** (e.g.
+> nginx). Any leftover config rows in the DB are simply ignored.
 
 ## Authentication
 
@@ -123,11 +152,24 @@ endpoints.
 | Admin permission | Grant or revoke admin permission |
 | Status change | Activate (ACTIVE) or suspend (SUSPENDED) a user |
 | Reset password | Reissue a random password (the plaintext is returned once) |
+| Delete | Physically remove an **INVITED** user (users who have ever activated cannot be deleted) |
+
+An invited user's row menu is intentionally limited to "Change email" and
+"Delete" (since the account has not activated yet, edit / permission / status
+actions are hidden).
 
 > **Tip**: The plaintext password returned by a password reset is shown
 > only at that moment. After a reset, deliver it to the user promptly over
 > a secure channel and have them change it themselves after their first
 > login.
+
+### User approval
+
+When one or more **pending (REGISTERED) users** created by `Restricted` mode
+exist, a **"User approval"** entry appears directly under "User management" in
+the sidebar, with a **count badge** so admins notice pending sign-ups. Opening
+`/admin/users/pending` lists the pending users; the "Approve" button on each
+row activates (sets ACTIVE) that user. The badge refreshes on an interval.
 
 ## Storage
 
@@ -152,17 +194,29 @@ Lists loaded plugins and lets you edit each plugin's configuration.
   configuration. The form is auto-generated from the plugin's Zod schema;
   for sensitive fields only "whether a value is set" round-trips — the
   plaintext is never shown.
+- Field labels and descriptions are **localized** to the admin UI language
+  when the plugin ships a `configI18n` catalog (missing locales or fields fall
+  back to the Zod `.describe()` default text).
 - Clearing the render cache per-plugin or globally is also done here.
 
 For installing and managing plugins see [Managing plugins](../plugins/managing),
 and for how plugins work see [Plugin overview](../plugins/overview).
 
-## Maintenance
+## Search
 
-- **Search** — A page to check the status of the search driver. Index
-  rebuilds are done with the `crowi-admin search rebuild` CLI. See
-  [Setting up the search backend](./search-setup) for details.
-- **Backlink** — A page for backlink maintenance.
+A page to check the status of the search driver. Maps to `GET /admin/search`.
+
+- Shows the currently active search driver and the index status.
+- Index rebuilds are not done from the admin panel — use the
+  `crowi-admin search rebuild` CLI.
+- Search-backend plugins such as Elasticsearch are auto-injected into **this
+  "Search" group** (derived from `registerSearch`) as a settings-page link.
+
+See [Setting up the search backend](./search-setup) for details.
+
+> **Note**: The **Backlink** rebuild page that used to live under the
+> "Maintenance" group was removed. Backlink rebuilding is now a
+> `crowi-admin backlink rebuild`-style CLI operation.
 
 ## Sections in progress
 

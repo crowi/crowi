@@ -99,6 +99,46 @@ export default myPlugin;
 | `@sensitive` | `z.string().describe('@sensitive ...')` | 保存時に自動暗号化。シークレット入力欄で描画。 |
 | `@action` | `z.string().describe('@action "Test" POST /test')` | フィールド横にアクションボタンを描画。`registerRoutes` のエンドポイントを呼ぶ。 |
 
+### サイドバーへの配置 (`adminPlacement`)
+
+プラグインの設定リンクは管理サイドバーに表示されます。配置先は登録した
+**拡張フック**から導出されます — `registerStorage` → ストレージ、
+`registerSearch` → 検索、`registerRenderer` → レンダラー、
+`registerNotifier` → 通知、`registerMailSender` → メール。フックを持たない
+config のみの基盤プラグインは、「共通サービス」に出すために
+`adminPlacement: { section: 'shared' }` を宣言します。導出された配置を
+上書きしたり、ラベル / アイコンを明示することもできます。
+
+```ts
+adminPlacement: {
+  section: 'renderer', // settings | shared | storage | mail | notification | auth | search | renderer
+  label: 'PlantUML diagrams',
+  icon: 'diagram-3',
+},
+```
+
+サイドバーに表示されるのは `configSchema` を宣言したプラグインのみです
+(設定する対象がある場合だけ)。
+
+### フィールドラベルのローカライズ (`configI18n`)
+
+フィールドのラベルと説明は、既定では Zod の `.describe()` の文言 (英語) が
+使われます。ローカライズするには、locale → フィールド名 でキーを持つ
+`configI18n` カタログを同梱します。管理画面の表示言語に一致するエントリが
+上書きされ、未対応の locale / フィールドは `.describe()` にフォールバック
+します。
+
+```ts
+configSchema: z.object({
+  serverUrl: z.string().url().describe('Base URL of the PlantUML server.'),
+}),
+configI18n: {
+  ja: {
+    serverUrl: { label: 'サーバー URL', description: 'PlantUML サーバーのベース URL。' },
+  },
+},
+```
+
 ## PluginContext でできること
 
 各 `register*` コールバックの第 2 引数 `PluginContext` が、プラグインが
