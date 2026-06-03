@@ -129,7 +129,14 @@ import type {
   OpenNotificationResponseSchema,
 } from './schemas/notification';
 import type { WsTokenResponseSchema } from './schemas/collab';
-import type { GetPageResponseSchema, ListPagesResponseSchema, PageSchema, SeenUsersResponseSchema, WatchStatusResponseSchema } from './schemas/page';
+import type {
+  GetPageResponseSchema,
+  ListPageChildrenResponseSchema,
+  ListPagesResponseSchema,
+  PageSchema,
+  SeenUsersResponseSchema,
+  WatchStatusResponseSchema,
+} from './schemas/page';
 import type { PreviewPageResponseSchema } from './schemas/page-preview';
 import type { LikersResponseSchema, PresenceTokenResponseSchema } from './schemas/presence';
 import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisionsResponseSchema } from './schemas/revision';
@@ -214,6 +221,7 @@ type OpenNotificationResponse = z.infer<typeof OpenNotificationResponseSchema>;
 type Page = z.infer<typeof PageSchema>;
 type GetPageResponse = z.infer<typeof GetPageResponseSchema>;
 type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
+type ListPageChildrenResponse = z.infer<typeof ListPageChildrenResponseSchema>;
 type SeenUsersResponse = z.infer<typeof SeenUsersResponseSchema>;
 type WatchStatusResponse = z.infer<typeof WatchStatusResponseSchema>;
 type PreviewPageResponse = z.infer<typeof PreviewPageResponseSchema>;
@@ -451,6 +459,7 @@ const stubPageWithRevision: GetPageResponse = {
 
 const stubPageResponse = { page: stubPage };
 const stubListPages: ListPagesResponse = { pages: [], pager: stubPager, portalPage: null };
+const stubListPageChildren: ListPageChildrenResponse = { children: [] };
 const stubSeenUsers: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
 const stubWatchStatus: WatchStatusResponse = { watching: false };
 const stubPreview: PreviewPageResponse = { renderedAst: null };
@@ -627,6 +636,7 @@ const bookmarkBacklinkCommentRevisionChain = new OpenAPIHono()
 const pageChain = new OpenAPIHono()
   .openapi(pageRoutes.getPageRoute, (c) => c.json(stubPageWithRevision, 200))
   .openapi(pageRoutes.listPagesRoute, (c) => c.json(stubListPages, 200))
+  .openapi(pageRoutes.listPageChildrenRoute, (c) => c.json(stubListPageChildren, 200))
   .openapi(pageRoutes.createPageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.updatePageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.setPageGrantRoute, (c) => c.json(stubPageResponse, 200))

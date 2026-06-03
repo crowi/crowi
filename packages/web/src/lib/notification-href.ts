@@ -1,5 +1,6 @@
 import type { Notification } from '@crowi/api-contract';
 import { NotificationActionEnum } from '@crowi/api-contract';
+import { pagePathToHref } from './page-path';
 import { SCROLL_TARGETS } from './scroll-to-section';
 
 /**
@@ -12,9 +13,9 @@ import { SCROLL_TARGETS } from './scroll-to-section';
  * AST has rendered.
  */
 export function resolveNotificationHref(notification: Pick<Notification, 'action' | 'target'>): string {
-  const path = notification.target.path;
+  const href = pagePathToHref(notification.target.path);
   if (notification.action === NotificationActionEnum.COMMENT) {
-    return `${path}#${SCROLL_TARGETS.COMMENTS}`;
+    return `${href}#${SCROLL_TARGETS.COMMENTS}`;
   }
-  return path;
+  return href;
 }

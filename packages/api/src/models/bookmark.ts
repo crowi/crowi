@@ -47,7 +47,14 @@ export default (crowi: Crowi) => {
 
     const populatedBookmarks = await Bookmark.populate(bookmarks, {
       path: 'page',
-      populate: { path: 'revision', model: 'Revision', populate: { path: 'author', model: 'User' } },
+      // Populate creator / lastUpdateUser alongside the revision so the
+      // page-row avatar resolves (mirrors the /pages/list listing); without
+      // them the bookmark list renders an empty placeholder ring.
+      populate: [
+        { path: 'revision', model: 'Revision', populate: { path: 'author', model: 'User' } },
+        { path: 'creator', model: 'User' },
+        { path: 'lastUpdateUser', model: 'User' },
+      ],
     });
 
     // hmm...

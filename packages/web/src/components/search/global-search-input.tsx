@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Clock, Search } from 'lucide-react';
 import { useSearchPages } from '@/lib/use-search';
 import { useRecentlyViewedPages } from '@/lib/use-recently-viewed';
+import { pagePathToHref } from '@/lib/page-path';
 import { SearchSuggestionItem } from './search-suggestion-item';
 import { m } from '@paraglide/messages.js';
 
@@ -146,7 +147,7 @@ function ResultsSection({ isLoading, isError, hits, total, onItemClick, onShowAl
       <div className="px-3 py-1 text-xs font-medium text-muted-foreground">{m['search.global.results_heading']({ total: String(total) })}</div>
       <div className="space-y-0.5">
         {hits.map((hit) => (
-          <SearchSuggestionItem key={hit.pageId} href={hit.path} page={hit.page} snippet={hit.snippet} onClick={onItemClick} />
+          <SearchSuggestionItem key={hit.pageId} href={pagePathToHref(hit.path)} page={hit.page} snippet={hit.snippet} onClick={onItemClick} />
         ))}
       </div>
       <button
@@ -174,7 +175,7 @@ function RecentsSection({ pages, onItemClick }: RecentsSectionProps) {
       </div>
       <div className="space-y-0.5">
         {pages.map((page) => (
-          <SearchSuggestionItem key={page._id} href={page.path} page={page} onClick={onItemClick} />
+          <SearchSuggestionItem key={page._id} href={pagePathToHref(page.path)} page={page} onClick={onItemClick} />
         ))}
       </div>
     </div>

@@ -27,6 +27,7 @@ import {
   getSeenUsersRoute,
   getWatchStatusRoute,
   likePageRoute,
+  listPageChildrenRoute,
   listPagesRoute,
   PageGrantEnum,
   renamePageRoute,
@@ -93,6 +94,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   // page relations and are `pages:write`.
   applyScope(app, getPageRoute, 'pages:read');
   applyScope(app, listPagesRoute, 'pages:read');
+  applyScope(app, listPageChildrenRoute, 'pages:read');
   applyScope(app, getSeenUsersRoute, 'pages:read');
   applyScope(app, getWatchStatusRoute, 'pages:read');
   applyScope(app, seenPageRoute, 'pages:read');
@@ -347,6 +349,23 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             },
             200,
           );
+        }
+      })
+      // --------------------------------------------------------------
+      // GET /pages/children — listPageChildren (sidebar tree)
+      // --------------------------------------------------------------
+      .openapi(listPageChildrenRoute, async (c) => {
+        const user = c.get('user');
+        const { path } = c.req.valid('query');
+        debug('listPageChildren called with:', { path, userId: user._id });
+        try {
+          const children = await Page.findChildSegments(path, user);
+          return c.json({ children }, 200);
+        } catch (err) {
+          // Mirror listPages: a scan error collapses to an empty tree
+          // rather than 500 — the sidebar is non-critical chrome.
+          debug('Error listing page children:', (err as Error).message);
+          return c.json({ children: [] }, 200);
         }
       })
       // --------------------------------------------------------------

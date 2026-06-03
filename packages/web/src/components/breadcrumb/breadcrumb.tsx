@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Home } from 'lucide-react';
+import { pagePathToHref } from '@/lib/page-path';
 
 interface BreadcrumbProps {
   path: string;
@@ -45,7 +46,7 @@ export function Breadcrumb({ path }: BreadcrumbProps) {
       {items.map((item) => (
         <span key={item.path} className="flex items-center gap-1">
           <span>/</span>
-          <Link href={item.path} className="hover:text-foreground transition-colors">
+          <Link href={pagePathToHref(item.path)} className="hover:text-foreground transition-colors">
             {item.name}
           </Link>
         </span>

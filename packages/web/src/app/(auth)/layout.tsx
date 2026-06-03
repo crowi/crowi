@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
@@ -21,13 +21,28 @@ import { SiteBrand } from '@/components/site-brand';
 import { LocaleSync } from '@/components/locale-sync';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
+import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
+import { decodePagePathFromUrl } from '@/lib/page-path';
 import { Toaster } from '@/components/ui/sonner';
 import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
 
+// Routes whose nested layout escapes the centred column to fill the
+// viewport (`w-screen`); the fixed left rail would overlap them, so the
+// sidebar is suppressed there.
+const FULL_BLEED_PREFIXES = ['/_edit', '/_history'];
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
+
+  // The page sidebar lives at the (auth) shell level so its shared nav
+  // links show on every page, not just wiki pages — it only collapses
+  // its hierarchy tree on non-wiki routes (see PageSidebar). Full-bleed
+  // routes (editor / history) opt out entirely.
+  const sidebarPath = pathname === '/' ? '/' : decodePagePathFromUrl(pathname);
+  const showSidebar = !FULL_BLEED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   // While an inline-reauth-capable editor is mounted (or its modal is
   // open), both redirect routes below are suppressed so a session expiry
   // doesn't navigate away and throw the Y.Doc buffer out. The signal is
@@ -138,6 +153,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div aria-hidden className="h-1 transition-colors" style={{ backgroundColor: 'var(--page-grant-accent)' }} />
 
       <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
+
+      {showSidebar && <PageSidebar path={sidebarPath} />}
 
       {/* RFC-0003 Phase 7 — single toaster instance for collab connection
           status notifications (offline / reconnected / auth-failed).

@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDeletePage } from '@/lib/use-page-mutations';
+import { pagePathToHref } from '@/lib/page-path';
 import { m } from '@paraglide/messages.js';
 
 interface DeletePageDialogProps {
@@ -43,7 +44,7 @@ export function DeletePageDialog({ pageId, pagePath, revisionId, open, onOpenCha
           onOpenChange(false);
           // Soft delete: navigate to parent path (legacy behavior).
           // Hard delete: same — the page no longer exists, so parent is the safest target.
-          router.replace(parentPathOf(pagePath));
+          router.replace(pagePathToHref(parentPathOf(pagePath)));
         },
       },
     );

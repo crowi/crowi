@@ -13,6 +13,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { usePage } from '@/lib/use-page';
+import { pagePathToHref } from '@/lib/page-path';
 import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { useMarkSeenOnView } from '@/lib/use-seen';
@@ -107,7 +108,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
         { page_id: page._id },
         {
           onSuccess: (restored) => {
-            router.replace(restored.path);
+            router.replace(pagePathToHref(restored.path));
           },
         },
       );

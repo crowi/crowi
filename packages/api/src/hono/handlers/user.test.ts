@@ -119,6 +119,13 @@ describe('Routes /api/v2/user (Hono)', () => {
       expect(res.body.total).toBeGreaterThanOrEqual(1);
       expect(res.body.pager).toEqual({ prev: null, next: null, offset: 0 });
       expect(res.body.bookmarks.length).toBeGreaterThanOrEqual(1);
+
+      // The bookmarked page's creator must be populated (not a bare id) so
+      // the page-row avatar renders instead of an empty placeholder.
+      const bookmarkedPage = res.body.bookmarks[0].page;
+      expect(bookmarkedPage).not.toBeNull();
+      expect(typeof bookmarkedPage.creator).toBe('object');
+      expect(bookmarkedPage.creator.username).toBe(TARGET_USERNAME);
     });
 
     it('returns 404 USER_NOT_FOUND for an unknown username', async () => {

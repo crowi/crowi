@@ -6,6 +6,7 @@ import { Bookmark, Compass, Lock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { SearchHit } from '@crowi/api-contract';
 import { isPrivateGrant } from '@/lib/page-grant';
+import { pagePathToHref } from '@/lib/page-path';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { SearchHitSnippet } from './search-hit-snippet';
 
@@ -34,7 +35,7 @@ export const SearchHitItem = memo(function SearchHitItem({ hit }: SearchHitItemP
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <Link href={page.path} className="font-medium text-foreground hover:text-primary transition-colors truncate">
+          <Link href={pagePathToHref(page.path)} className="font-medium text-foreground hover:text-primary transition-colors truncate">
             {page.path}
           </Link>
           {isPortal && <Compass className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-label="Portal page" />}

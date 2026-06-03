@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { UserAvatar } from '@/components/user-avatar';
 import { formatDistanceToNow } from '@/lib/date-utils';
-import { pageDisplayName, pageDisplayParent } from '@/lib/page-path';
+import { pageDisplayName, pageDisplayParent, pagePathToHref } from '@/lib/page-path';
 import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { cn } from '@/lib/utils';
 
@@ -51,7 +51,7 @@ export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
   }
 
   return (
-    <Link href={page.path} className={cn(rowClass, 'focus-visible:bg-accent/50 focus-visible:outline-none')}>
+    <Link href={pagePathToHref(page.path)} className={cn(rowClass, 'focus-visible:bg-accent/50 focus-visible:outline-none')}>
       <PageRowBody page={page} />
     </Link>
   );

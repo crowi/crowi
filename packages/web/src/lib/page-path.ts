@@ -89,3 +89,38 @@ export function pageDisplayParent(path: string): string {
   const start = trailingNumericRunStart(segments);
   return start === 0 ? '/' : `/${segments.slice(0, start).join('/')}/`;
 }
+
+/**
+ * Wiki page paths may contain spaces. Following legacy Crowi, the URL
+ * renders each space as `+` (far more readable than `%20`) and reads `+`
+ * back as a space, so `/Weall/dev/infra/v0/mysql+connect+to+production+db`
+ * resolves to the page `/Weall/dev/infra/v0/mysql connect to production db`.
+ * The API and every stored path use real spaces — these two helpers
+ * convert only at the Next.js routing boundary.
+ *
+ * Mirrors the server-side `encodeSpace` / `decodeSpace`
+ * (`packages/api/src/util/path.ts`), which apply the same rule to
+ * `[[wiki links]]` inside page bodies.
+ */
+
+/**
+ * Real page path → href. Spaces become `+`; every other character is left
+ * for Next.js / the browser to percent-encode, exactly as before.
+ *
+ *   /a b/c → /a+b/c
+ */
+export function pagePathToHref(path: string): string {
+  return path.replace(/ /g, '+');
+}
+
+/**
+ * URL pathname (or a `?path=` value) → real page path. Both `+` and `%20`
+ * decode to a space, so — as in legacy Crowi — a literal `+` cannot appear
+ * in a page path (it is always read as a space).
+ *
+ *   /a+b/c   → /a b/c
+ *   /a%20b/c → /a b/c
+ */
+export function decodePagePathFromUrl(urlPath: string): string {
+  return decodeURIComponent(urlPath).replace(/\+/g, ' ');
+}
