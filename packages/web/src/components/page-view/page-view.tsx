@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { TocEntryResponse } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
-import { FilePlus2, Info, Loader2, Trash2 } from 'lucide-react';
+import { Edit2, FilePlus2, Info, Loader2, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -164,29 +164,32 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // tells the author the page isn't published yet. PageHeader / PageActionsMenu
     // independently hide like / watch / bookmark / link-share for the same reason.
     const isDraft = page.status === PageStatusEnum.DRAFT;
+    const handleEdit = () => {
+      router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
+    };
     return (
       <>
         <article className="space-y-12">
           {isStaleRevision && <StaleRevisionBanner pagePath={page.path} />}
-          <PageHeader
-            page={page}
-            onEdit={() => {
-              router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
-            }}
-            showActions={!isStaleRevision}
-            showPresence={!isStaleRevision && !isDraft}
-            sticky={!isStaleRevision}
-          />
+          <PageHeader page={page} onEdit={handleEdit} showActions={!isStaleRevision} showPresence={!isStaleRevision && !isDraft} sticky={!isStaleRevision} />
           <PageContent page={page} />
           {!isStaleRevision && (
             <>
               <BacklinkList pageId={page._id} />
               <AttachmentList pageId={page._id} />
               {isDraft ? (
-                <Alert>
+                <Alert className="items-center [&>svg]:translate-y-0">
                   <Info className="h-4 w-4" />
-                  <AlertTitle>{m['page.draft_notice_title']()}</AlertTitle>
-                  <AlertDescription>{m['page.draft_notice_body']()}</AlertDescription>
+                  <div className="col-start-2 flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <AlertTitle>{m['page.draft_notice_title']()}</AlertTitle>
+                      <AlertDescription>{m['page.draft_notice_body']()}</AlertDescription>
+                    </div>
+                    <Button variant="default" size="sm" onClick={handleEdit} className="shrink-0">
+                      <Edit2 className="h-4 w-4 mr-1" />
+                      {m['page.action_edit']()}
+                    </Button>
+                  </div>
                 </Alert>
               ) : (
                 <PageComments page={page} />
