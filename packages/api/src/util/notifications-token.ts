@@ -50,42 +50,38 @@ export interface SignNotificationsTokenResult {
 }
 
 /**
- * Module-load time warning when `WS_TOKEN_SECRET` is unset. Emitted once
- * per process rather than per-`createNotificationsTokenUtil()` call so
- * the dev console does not get spammed every time the handler / model
- * code constructs a fresh util.
- *
- * Silenced under `NODE_ENV === 'test'` because the api test setup
- * imports the model layer (and transitively this module) before each
- * test file's top-of-file env stub runs, which would otherwise spam
- * one warn per Jest worker. Tests that actually exercise the
- * env-missing path can verify the runtime behaviour separately.
- *
- * The fallback random secret itself is generated lazily inside
- * `buildNotificationsTokenUtil` so a test that injects `WS_TOKEN_SECRET`
- * before importing the consumer still picks up the env value.
+ * Tracks whether the "secret missing" warning has already been emitted,
+ * so it fires at most once per process regardless of how many
+ * `createNotificationsTokenUtil()` calls the handler / model layer makes.
  */
-if ((!process.env.WS_TOKEN_SECRET || process.env.WS_TOKEN_SECRET.length === 0) && process.env.NODE_ENV !== 'test') {
-  console.warn(
-    '[crowi] WS_TOKEN_SECRET is not set — notifications tokens will be signed with a random in-memory secret. ' +
-      'Process restarts will invalidate outstanding notifications tokens, and multi-instance deployments ' +
-      'will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded 32-byte ' +
-      'value (`openssl rand -base64 32`) in production.',
-  );
-}
+let warnedMissingSecret = false;
 
 /**
  * Resolve the signing secret. Reads `WS_TOKEN_SECRET` per call so a test
  * that mutates the env between imports / util constructions still picks
- * up the latest value. The fallback random secret is generated silently
- * here — the load-time warn above tells the operator about the env miss
- * exactly once.
+ * up the latest value.
+ *
+ * The "secret missing" warning is emitted here (lazily, on first
+ * resolution) rather than at module-load time: this module is imported
+ * transitively before `app.ts` runs `dotenv.config()`, so a load-time
+ * `process.env` read fires a false warning even when `.env` defines
+ * `WS_TOKEN_SECRET`. `warnedMissingSecret` keeps it to once per process.
+ * Silenced under tests.
  */
 const resolveNotificationsTokenSecret = (): string => {
   const fromEnv = process.env.WS_TOKEN_SECRET;
   if (fromEnv && fromEnv.length > 0) {
     debug('notifications token secret resolved from WS_TOKEN_SECRET');
     return fromEnv;
+  }
+  if (!warnedMissingSecret && process.env.NODE_ENV !== 'test') {
+    warnedMissingSecret = true;
+    console.warn(
+      '[crowi] WS_TOKEN_SECRET is not set — notifications tokens will be signed with a random in-memory secret. ' +
+        'Process restarts will invalidate outstanding notifications tokens, and multi-instance deployments ' +
+        'will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded 32-byte ' +
+        'value (`openssl rand -base64 32`) in production.',
+    );
   }
   return crypto.randomBytes(32).toString('base64');
 };

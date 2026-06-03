@@ -48,18 +48,6 @@ export interface SignMailTokenResult {
   expiresAt: Date;
 }
 
-// One-time load-time warning when the signing key is absent. Silenced
-// under tests (the model layer imports this transitively before each
-// file's env stub runs). Mirrors `util/notifications-token.ts`.
-if ((!process.env.WS_TOKEN_SECRET || process.env.WS_TOKEN_SECRET.length === 0) && process.env.NODE_ENV !== 'test') {
-  console.warn(
-    '[crowi] WS_TOKEN_SECRET is not set — mail tokens (invite / activate / reset links) will be signed ' +
-      'with a random in-memory secret. Process restarts will invalidate outstanding links, and multi-instance ' +
-      'deployments will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded ' +
-      '32-byte value (`openssl rand -base64 32`) in production.',
-  );
-}
-
 /**
  * Process-wide random fallback secret, generated at most once. Must NOT
  * be per-call: a mail token is signed in one request (e.g. the invite
@@ -73,8 +61,14 @@ let fallbackSecret: string | null = null;
 /**
  * Resolve the signing secret. Reads WS_TOKEN_SECRET per call so a test
  * mutating the env between imports still picks up the latest value; the
- * random fallback is memoized process-wide (the load-time warn above
- * reports the env miss).
+ * random fallback is memoized process-wide.
+ *
+ * The "secret missing" warning is emitted here (lazily, on first
+ * resolution) rather than at module-load time: this module is imported
+ * transitively before `app.ts` runs `dotenv.config()`, so a load-time
+ * `process.env` read fires a false warning even when `.env` defines
+ * `WS_TOKEN_SECRET`. The memoized `fallbackSecret` makes the warn fire
+ * exactly once per process. Silenced under tests.
  */
 const resolveMailTokenSecret = (): string => {
   const fromEnv = process.env.WS_TOKEN_SECRET;
@@ -83,6 +77,14 @@ const resolveMailTokenSecret = (): string => {
   }
   if (!fallbackSecret) {
     fallbackSecret = crypto.randomBytes(32).toString('base64');
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn(
+        '[crowi] WS_TOKEN_SECRET is not set — mail tokens (invite / activate / reset links) will be signed ' +
+          'with a random in-memory secret. Process restarts will invalidate outstanding links, and multi-instance ' +
+          'deployments will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded ' +
+          '32-byte value (`openssl rand -base64 32`) in production.',
+      );
+    }
   }
   return fallbackSecret;
 };
