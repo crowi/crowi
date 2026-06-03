@@ -264,7 +264,10 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         });
 
         await fileUploader.uploadFile(filePath, persisted.mimetype, tmpFileStream, {});
-        const imageUrl = await fileUploader.generateUrl(filePath);
+        // Persist the STABLE proxy URL, not a signed one: `user.image`
+        // is stored in the DB and served verbatim, so a time-limited
+        // S3 signed URL would 403 once its (5-minute) TTL elapsed.
+        const imageUrl = fileUploader.persistentUrl(filePath);
 
         await new Promise<void>((resolve, reject) => {
           user.updateImage(imageUrl, (err: Error | null) => {

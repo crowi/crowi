@@ -215,6 +215,11 @@ describe('Routes /api/v2/me (Hono)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ status: true, url: expect.any(String) });
 
+      // Must be the STABLE by-key proxy path — never a time-limited
+      // signed URL (those expire and 403 once persisted in user.image).
+      expect(res.body.url).toMatch(/^\/api\/v2\/attachments\/by-key\//);
+      expect(res.body.url).not.toContain('X-Amz-Signature');
+
       const reread = await User().findById(user._id);
       expect(reread?.image).toEqual(res.body.url);
     });

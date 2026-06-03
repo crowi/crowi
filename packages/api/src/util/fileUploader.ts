@@ -50,8 +50,23 @@ export interface FileUploader {
    * Build a URL the browser can fetch. Drivers that support
    * `signedUrl` (e.g. S3) return a time-limited URL; drivers that
    * don't fall back to the API streaming endpoint.
+   *
+   * NOTE: For values that get *persisted* (e.g. `user.image`) use
+   * {@link persistentUrl} instead — a signed URL expires and would
+   * 403 once stored.
    */
   generateUrl(filePath: string, expiresInSec?: number): Promise<string>;
+
+  /**
+   * Stable, non-expiring URL for a `user/`-prefixed key, suitable for
+   * storing in the DB (`user.image`). Always the `by-key` streaming
+   * proxy (`/api/v2/attachments/by-key/:key`), never a time-limited
+   * signed URL — regardless of the active driver. The proxy streams
+   * from whichever driver is active (local or S3) and is reachable from
+   * an `<img src>` via the access-token cookie, so avatars survive past
+   * any signed-URL TTL.
+   */
+  persistentUrl(filePath: string): string;
 }
 
 export default (crowi: Crowi): FileUploader => ({
@@ -81,6 +96,12 @@ export default (crowi: Crowi): FileUploader => ({
     // The `by-key` route only accepts keys under the `user/` prefix
     // (profile pictures); attachment-row-backed files use the
     // `/api/v2/attachments/:id` route via `Attachment.fileUrl`.
+    return `${BY_KEY_URL_PREFIX}${encodeURIComponent(filePath)}`;
+  },
+
+  persistentUrl(filePath) {
+    // Always the stable proxy — never a signed URL — because the value
+    // is persisted (e.g. user.image). See the interface doc.
     return `${BY_KEY_URL_PREFIX}${encodeURIComponent(filePath)}`;
   },
 });
