@@ -110,7 +110,9 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           sort: ADMIN_PAGINATE_SORT,
           select: ADMIN_PAGINATE_SELECT,
         });
-        const pager = createPager(result.total, result.page ?? page, result.pages, MAX_PAGE_LIST);
+        // mongoose-paginate-v2 renames total→totalDocs and pages→totalPages;
+        // absorb the rename here so the AdminPager JSON contract is unchanged.
+        const pager = createPager(result.totalDocs, result.page ?? page, result.totalPages, MAX_PAGE_LIST);
         return c.json(
           {
             users: result.docs.map(toUserPublic),
