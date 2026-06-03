@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Clock, Link2, MessageSquare, ThumbsUp, Eye } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PageDisplayUserBadge } from '@/components/page-display-user-badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatAbsoluteDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { resolveDisplayUser } from '@/lib/page-display-user';
@@ -51,26 +51,12 @@ export function MetaChipRow({ page }: MetaChipRowProps) {
   const { data: backlinkData } = useBacklinks(page._id, { limit: BACKLINK_COUNT_LIMIT });
   const backlinkCount = backlinkData?.backlinks.length ?? 0;
 
-  // The updater name links to the user page only when `displayUser` is a
-  // populated user object carrying a `username`; a bare id renders plain.
-  const updaterUsername = displayUser && 'username' in displayUser ? displayUser.username : null;
-
   return (
     <TooltipProvider>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
         {displayUser && (
           <div className="flex items-center gap-2">
-            <Avatar className="h-5 w-5">
-              <AvatarImage src={displayUser.image || undefined} alt={displayUser.name} />
-              <AvatarFallback className="bg-primary/10 text-primary text-[10px]">{displayUser.name.charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            {updaterUsername ? (
-              <Link href={`/user/${updaterUsername}`} className="text-foreground/80 hover:text-foreground hover:underline">
-                {displayUser.name}
-              </Link>
-            ) : (
-              <span className="text-foreground/80">{displayUser.name}</span>
-            )}
+            <PageDisplayUserBadge user={displayUser} />
           </div>
         )}
 

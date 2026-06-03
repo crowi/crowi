@@ -202,7 +202,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         const user = c.get('user');
         const { path, user: userParam, limit, offset, include_deleted, sort, order } = c.req.valid('query');
         // Mongoose sort direction: 1 ascending, -1 descending.
-        const desc = order === 'asc' ? 1 : -1;
+        const sortDir = order === 'asc' ? 1 : -1;
 
         // Force-enable include_deleted for /trash and /trash/<sub> requests so
         // the legacy deletedPageListShow semantics are preserved even when
@@ -240,7 +240,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             // mirror the legacy deletedPageListShow which always rendered
             // with page=null.
             const portalPagePromise = isTrashPath ? Promise.resolve(null) : Page.findPortalPage(path, user);
-            const listPromise = Page.findListByStartWith(path, user, { limit, offset, includeDeletedPage, sort, desc });
+            const listPromise = Page.findListByStartWith(path, user, { limit, offset, includeDeletedPage, sort, desc: sortDir });
             const [rawPortalPage, rawPages] = await Promise.all([portalPagePromise, listPromise]);
             [portalPage, pages] = (await Promise.all([
               rawPortalPage ? Page.populate(rawPortalPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }]) : null,
@@ -282,7 +282,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               [portalPage, pages] = await Promise.all([
                 Page.findPortalPage(path, user),
                 Page.find(conditions)
-                  .sort({ [sort]: desc })
+                  .sort({ [sort]: sortDir })
                   .skip(offset)
                   .limit(limit)
                   .populate({ path: 'revision', populate: { path: 'author' } })
@@ -292,7 +292,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               ]);
             } else {
               pages = await Page.find(conditions)
-                .sort({ [sort]: desc })
+                .sort({ [sort]: sortDir })
                 .skip(offset)
                 .limit(limit)
                 .populate({ path: 'revision', populate: { path: 'author' } })

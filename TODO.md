@@ -395,6 +395,11 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
 - [ ] **lookup-key 系 secret の対応**: `User.apiToken` / `Share.secretKeyword` は equality lookup されるため hash 化または deterministic encryption が必要。別 issue
 
 ### 並行 worktree 統合 (`/integrate-worktree`)
+- [x] **portal-redesign 統合** (`8da694aa` + simplify) — ポータル(フォルダ index)ページ再設計 + ページ一覧ソート + page-view 調整。simplify で provenance 行を共通 `PageDisplayUserBadge` に抽出、portal-header の orphan JSDoc 修正、page.ts sort 変数 `desc`→`sortDir` rename。以下は別タスクに見送り:
+  - [ ] **page-list sort の DB インデックス**: `Page.find().sort({path|createdAt|updatedAt})` を裏付ける index が無く、ポータル/ルート一覧でメモリソート + collection scan になる。`{status:1, updatedAt:-1}` / `{status:1, path:1}` 等の compound index を検討
+  - [ ] **`ListPagesResponse.portalPage` の型**: contract は lean `PageSchema` だが handler は populated revision+renderedAst を返すため web 側で `as PageWithRevision` キャスト。response schema を `PageWithRevision` 型にしてキャスト除去
+  - [ ] **`usePageList` の default sort キャッシュキー**: default の `sort`/`order` を queryKey に展開しているため、明示指定する呼び出し元と省略する呼び出し元で同一一覧が別キーにキャッシュされうる。`usePageList` 内で default を正規化してから queryKey を組む
+  - [ ] **`PageActionsMenu` の `compact`/`foldSocial` 真偽ペア**: 排他的なヘッダ variant なので単一 `variant?: 'default'|'compact'|'portal'` discriminant に寄せると fold ブロックの重複も解消
 - [x] **trash 統合** (`c5a9e8ec` + simplify `0cd08638`) — `/trash/*` 一覧 + Restore / Delete forever。`useDeletePage` / `useRevertDeletedPage` の `['pages']` invalidate 追加で行が即時に消えるよう修正
 - [x] **pages-watch 統合** (`d7538524` + simplify `e2687f87`) — Bell / BellOff の WatchButton + GET/PUT `/pages/watch` (Watcher upsert + `getNotificationTargetUsers` フォールバック)。`useToggleWatch` を `useToggleBookmark` 流の状態導出に整理、`useWatchStatus` に 5min staleTime
 - [x] **notification-subscribe を破棄** — pages-watch と完全重複していたため `gw end -f`
@@ -477,6 +482,6 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
 4. `/admin/storage` を開いて新 driver が active と表示されることを確認。
 5. 旧 driver のデータは温存される(将来 cleanup task で削除を検討)。
 
-### AWS 認証情報の boot-time migration
+### AWS 認証情報 (旧 `upload:aws:*` からの移行)
 
-旧 `upload:aws:*` 設定が Mongo に残っているサイトは、初回起動時に自動で `plugin:@crowi/plugin-aws:*` (region / accessKeyId / secretAccessKey) と `plugin:@crowi/plugin-storage-aws-s3:bucket` にコピーされる。新キーに既に値が入っている場合は触らない(operator が新キーを直接編集したケースを保護)。boot ログに `Migrated N legacy upload:aws:* config key(s)` と出る。rollback 用に旧キーは残るので、安心が確認できたら別タスクで削除する。
+旧 `upload:aws:*` のコア設定キーと、その boot-time 自動移行は **廃止済み** (`refactor(api): drop legacy AWS config migration ...`)。旧 Crowi から移行するサイトは、`@crowi/plugin-aws` (および `@crowi/plugin-storage-aws-s3`) を有効化し、管理画面の **Plugins** で認証情報を入力し直す。値は plugin 名前空間 (`plugin:@crowi/plugin-aws:*`) の `@sensitive` フィールドに保存され自動で暗号化される。旧データの自動移行・fallback 参照は行わない (`/api/v2` は後方互換不要方針)。

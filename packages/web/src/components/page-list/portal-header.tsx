@@ -4,7 +4,7 @@ import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Compass, Edit2 } from 'lucide-react';
 import Link from 'next/link';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PageDisplayUserBadge } from '@/components/page-display-user-badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BookmarkButton } from '@/components/page-view/bookmark-button';
@@ -48,7 +48,6 @@ export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
   const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
 
   const displayUser = resolveDisplayUser(page);
-  const updaterUsername = displayUser && 'username' in displayUser ? displayUser.username : null;
 
   return (
     <TooltipProvider>
@@ -75,17 +74,7 @@ export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
         {/* Row 2 — single muted provenance line (no social chips) */}
         {displayUser && (
           <div className="mt-2.5 flex items-center gap-2 text-sm text-muted-foreground">
-            <Avatar className="h-5 w-5">
-              <AvatarImage src={displayUser.image || undefined} alt={displayUser.name} />
-              <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{displayUser.name.charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            {updaterUsername ? (
-              <Link href={`/user/${updaterUsername}`} className="text-foreground/80 hover:text-foreground hover:underline">
-                {displayUser.name}
-              </Link>
-            ) : (
-              <span className="text-foreground/80">{displayUser.name}</span>
-            )}
+            <PageDisplayUserBadge user={displayUser} />
             {page.updatedAt && (
               <>
                 <span aria-hidden className="text-border">
@@ -109,13 +98,6 @@ export function PortalHeader({ page, onEdit }: PortalHeaderProps) {
 }
 
 /**
- * Breadcrumb-style overline whose tail IS the current folder (bold, not a
- * link). The shared `<Breadcrumb>` drops the last segment because for a
- * normal page that segment is echoed by the `<h1>`; a portal has no such
- * H1, so here we keep the folder name visible — it's the only place the
- * location is named.
- */
-/**
  * The small "PORTAL" pill (compass glyph + label) that sits at the end of
  * the overline. Shared by the live portal header and the no-document
  * fallback header so the two read as the same kind of surface.
@@ -129,6 +111,13 @@ export function PortalTag() {
   );
 }
 
+/**
+ * Breadcrumb-style overline whose tail IS the current folder (bold, not a
+ * link). The shared `<Breadcrumb>` drops the last segment because for a
+ * normal page that segment is echoed by the `<h1>`; a portal has no such
+ * H1, so here we keep the folder name visible — it's the only place the
+ * location is named.
+ */
 export function PortalOverline({ path }: { path: string }) {
   const crumbClass = 'transition-colors hover:text-foreground';
 
