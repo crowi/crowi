@@ -56,14 +56,15 @@ export interface SendMailOptions {
 }
 
 /**
- * `mjml2html` as actually shipped by mjml v4: synchronous, returning
- * `{ html, errors }`. Typed locally because `@types/mjml` models the
- * signature differently across versions; this matches the runtime.
+ * `mjml2html` as actually shipped by mjml v5: asynchronous, returning a
+ * `Promise<{ html, errors }>` (it was synchronous in v4). Typed locally
+ * because `@types/mjml` models the signature differently across versions;
+ * this matches the runtime.
  */
 type Mjml2Html = (
   input: string,
   options?: { validationLevel?: 'strict' | 'soft' | 'skip' },
-) => { html: string; errors: Array<{ message?: string; formattedMessage?: string }> };
+) => Promise<{ html: string; errors: Array<{ message?: string; formattedMessage?: string }> }>;
 
 /**
  * Lazily-loaded `mjml`. It pulls in a large dependency tree, so we defer
@@ -174,7 +175,7 @@ export class MailService {
     ]);
     const mergedSource = renderTemplateString(layout.replace('<!--BODY-->', body), vars);
     const mjml2html = await loadMjml();
-    const { html, errors } = mjml2html(mergedSource, { validationLevel: 'soft' });
+    const { html, errors } = await mjml2html(mergedSource, { validationLevel: 'soft' });
     if (errors && errors.length > 0) {
       debug(
         'mjml warnings for %s: %o',
