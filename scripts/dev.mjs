@@ -124,11 +124,19 @@ function main() {
   // Drop the forced DEBUG flood: the api boot reporter is debug-independent, so
   // the default dev experience is the dashboard, not crowi:* debug spam.
   // Developers opt in by exporting DEBUG themselves before `pnpm dev`.
+  //
+  // Force colors on in the child when we're attached to a TTY: the child's
+  // stdout/stderr are pipes (we forward them to this terminal verbatim), so
+  // `debug` (DEBUG_COLORS) and turbo / chalk (FORCE_COLOR) would otherwise
+  // auto-disable ANSI on the non-TTY pipe and `debug()` output would lose its
+  // colors. `...process.env` last so a developer's own FORCE_COLOR /
+  // DEBUG_COLORS wins, and we stay plain when output is redirected (no TTY).
+  const colorEnv = isTTY ? { FORCE_COLOR: '1', DEBUG_COLORS: '1' } : {}
   const child = spawn('pnpm', ['exec', 'turbo', ...TURBO_ARGS], {
     stdio: ['inherit', 'pipe', 'pipe'],
     // Own process group so SIGINT can be delivered to the whole turbo tree.
     detached: true,
-    env: process.env,
+    env: { ...colorEnv, ...process.env },
   })
 
   const clearDashboard = () => {
