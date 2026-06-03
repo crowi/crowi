@@ -151,11 +151,18 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
     el.setSelectionRange(len, len);
   };
 
-  const handleChange = (raw: string) => {
-    setTyped(withLeadingSlash(raw));
+  // Reset the Tab-cycle whenever the stem changes (typing or picking a
+  // candidate): clear the preview, return to the stem slot, and mark the
+  // field edited so the quick-shortcuts drop out.
+  const resetCompletion = () => {
     setPreview(null);
     setCyclePos(0);
     setTouched(true);
+  };
+
+  const handleChange = (raw: string) => {
+    setTyped(withLeadingSlash(raw));
+    resetCompletion();
   };
 
   const cycle = (direction: 1 | -1) => {
@@ -173,9 +180,7 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
   // prefixes already end in `/` so it's a no-op for them.
   const selectCandidate = (path: string, descend: boolean) => {
     setTyped(descend && !path.endsWith('/') ? `${path}/` : path);
-    setPreview(null);
-    setCyclePos(0);
-    setTouched(true);
+    resetCompletion();
     focusEnd();
   };
 
