@@ -136,7 +136,7 @@ import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisio
 import type { SearchPagesResponseSchema } from './schemas/search';
 import type { CryptoStatusResponseSchema, ReencryptResponseSchema } from './schemas/adminCrypto';
 import type { TokenAuthResponseSchema } from './schemas/auth';
-import type { UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
+import type { ListUsersResponseSchema, UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
 import type { CreateDraftResponseSchema, ListDraftsResponseSchema } from './schemas/draft';
 import type { AutocompleteResponseSchema } from './schemas/autocomplete';
 import type {
@@ -190,6 +190,7 @@ type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSch
 type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
 type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
 type UserPagesResponse = z.infer<typeof UserPagesResponseSchema>;
+type ListUsersResponse = z.infer<typeof ListUsersResponseSchema>;
 type BookmarkResponse = z.infer<typeof BookmarkResponseSchema>;
 type ListMyBookmarksResponse = z.infer<typeof ListMyBookmarksResponseSchema>;
 type RemoveBookmarkResponse = z.infer<typeof RemoveBookmarkResponseSchema>;
@@ -361,6 +362,12 @@ const stubUserBookmarks: UserBookmarksResponse = {
 
 const stubUserPages: UserPagesResponse = {
   pages: [],
+  pager: stubPager,
+  total: 0,
+};
+
+const stubListUsers: ListUsersResponse = {
+  users: [],
   pager: stubPager,
   total: 0,
 };
@@ -583,7 +590,8 @@ const appAuthMeUserChain = new OpenAPIHono()
   .openapi(accessTokenRoutes.deleteAccessTokenRoute, (c) => c.json(stubAccessToken, 200))
   .openapi(userRoutes.getUserPageRoute, (c) => c.json(stubUserPage, 200))
   .openapi(userRoutes.getUserBookmarksRoute, (c) => c.json(stubUserBookmarks, 200))
-  .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200));
+  .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200))
+  .openapi(userRoutes.listMembersRoute, (c) => c.json(stubListUsers, 200));
 
 // bookmark / backlink / comment / revision — 11 routes. Revision's
 // list-by-ids endpoint registers before the by-id endpoint to mirror

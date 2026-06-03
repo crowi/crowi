@@ -18,6 +18,8 @@ import { createRoute, z } from '@hono/zod-openapi';
 
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 import {
+  ListUsersRequestSchema,
+  ListUsersResponseSchema,
   PaginationRequestSchema,
   UserBookmarksResponseSchema,
   UserNotFoundErrorSchema,
@@ -116,8 +118,37 @@ export const getUserPagesRoute = createRoute({
   },
 });
 
+// Member directory — list active users (avatar + name + @username) for the
+// special `/user/` portal. Plural `/users` so it never collides with the
+// `/user/{username}` profile routes. Authenticated, non-admin.
+export const listMembersRoute = createRoute({
+  method: 'get',
+  path: '/users',
+  tags: ['user'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List active users for the member directory (paginated, searchable)',
+  request: {
+    query: ListUsersRequestSchema,
+  },
+  responses: {
+    200: {
+      description: 'Paginated active users, name-ascending',
+      content: { 'application/json': { schema: ListUsersResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
 export const userRoutes = {
   getUserPageRoute,
   getUserBookmarksRoute,
   getUserPagesRoute,
+  listMembersRoute,
 };
