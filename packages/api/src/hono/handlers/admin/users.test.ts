@@ -99,6 +99,21 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       expect(res.body.pager.pages).toEqual([1]);
     });
 
+    it('keeps the AdminPager JSON shape stable after the mongoose-paginate-v2 migration', async () => {
+      // mongoose-paginate-v2 renames the result envelope (total→totalDocs,
+      // pages→totalPages). The handler absorbs that rename into createPager, so
+      // the client-facing pager must still expose the legacy AdminPager keys
+      // and must NOT leak the raw paginate-v2 field names.
+      const res = await request(app).get('/api/v2/admin/users').set(authHeaders(adminToken));
+
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body.pager).sort()).toEqual(['next', 'nextDots', 'page', 'pages', 'pagesCount', 'previous', 'previousDots', 'total'].sort());
+      expect(res.body.pager).not.toHaveProperty('totalDocs');
+      expect(res.body.pager).not.toHaveProperty('totalPages');
+      expect(res.body.pager).not.toHaveProperty('docs');
+      expect(res.body.pager).not.toHaveProperty('hasNextPage');
+    });
+
     it('omits sensitive fields (password / apiToken / googleId / githubId)', async () => {
       const res = await request(app).get('/api/v2/admin/users').set(authHeaders(adminToken));
 
