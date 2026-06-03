@@ -10,16 +10,31 @@ describe('pageSidebarLayout', () => {
         currentSegment: 'yyy',
         currentLevelIndex: 2,
         upPath: '/crowi/',
+        userHome: null,
       });
     });
 
-    it('roots at the space for a 2-segment page and points ⤴ to the top', () => {
-      expect(pageSidebarLayout('/crowi/foo')).toEqual({
-        levelPaths: ['/crowi/'],
-        activeSegments: ['foo'],
-        currentSegment: 'foo',
-        currentLevelIndex: 0,
+    it('shows the parent folder as a node for a shallow page (not just its page list)', () => {
+      // Regression: /crowi/rfc/0002 must surface `rfc/` as a node rather
+      // than collapsing to the bare page list under an "⤴ crowi".
+      expect(pageSidebarLayout('/crowi/rfc/0002-renderer')).toEqual({
+        levelPaths: ['/crowi/', '/crowi/rfc/'],
+        activeSegments: ['rfc', '0002-renderer'],
+        currentSegment: '0002-renderer',
+        currentLevelIndex: 1,
         upPath: '/',
+        userHome: null,
+      });
+    });
+
+    it('shows the containing space as a node for a 2-segment page', () => {
+      expect(pageSidebarLayout('/crowi/foo')).toEqual({
+        levelPaths: ['/', '/crowi/'],
+        activeSegments: ['crowi', 'foo'],
+        currentSegment: 'foo',
+        currentLevelIndex: 1,
+        upPath: null,
+        userHome: null,
       });
     });
 
@@ -30,6 +45,7 @@ describe('pageSidebarLayout', () => {
         currentSegment: 'foo',
         currentLevelIndex: 0,
         upPath: null,
+        userHome: null,
       });
     });
   });
@@ -47,6 +63,7 @@ describe('pageSidebarLayout', () => {
         currentSegment: 'ops',
         currentLevelIndex: 1,
         upPath: '/almoha/',
+        userHome: null,
       });
     });
 
@@ -67,6 +84,46 @@ describe('pageSidebarLayout', () => {
         currentSegment: '',
         currentLevelIndex: -1,
         upPath: null,
+        userHome: null,
+      });
+    });
+  });
+
+  describe('user space', () => {
+    it('tops a deep user page with the user home (no ⤴) and roots at /user/{username}/', () => {
+      expect(pageSidebarLayout('/user/alice/diary/2026/05/23')).toEqual({
+        levelPaths: ['/user/alice/', '/user/alice/diary/', '/user/alice/diary/2026/', '/user/alice/diary/2026/05/'],
+        activeSegments: ['diary', '2026', '05', '23'],
+        currentSegment: '23',
+        currentLevelIndex: 3,
+        upPath: null,
+        userHome: 'alice',
+      });
+    });
+
+    it('roots a user home page at its own namespace (lists sub-pages, no ⤴)', () => {
+      // /user/alice (the home content page) and /user/alice/ both root at
+      // /user/alice/ so the sidebar lists the user's sub-pages.
+      expect(pageSidebarLayout('/user/alice')).toEqual({
+        levelPaths: ['/user/alice/'],
+        activeSegments: [null],
+        currentSegment: 'alice',
+        currentLevelIndex: -1,
+        upPath: null,
+        userHome: 'alice',
+      });
+      expect(pageSidebarLayout('/user/alice/').levelPaths).toEqual(['/user/alice/']);
+      expect(pageSidebarLayout('/user/alice/').userHome).toBe('alice');
+    });
+
+    it('renders no tree for the member directory itself', () => {
+      expect(pageSidebarLayout('/user/')).toEqual({
+        levelPaths: [],
+        activeSegments: [],
+        currentSegment: '',
+        currentLevelIndex: -1,
+        upPath: null,
+        userHome: null,
       });
     });
   });

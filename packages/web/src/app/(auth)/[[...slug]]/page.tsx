@@ -3,7 +3,6 @@
 import { usePathname, useSearchParams } from 'next/navigation';
 import { IdRedirector } from '@/components/id-redirector';
 import { PageList } from '@/components/page-list/page-list';
-import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
 import { PageView } from '@/components/page-view';
 import { UserDirectoryPreview } from '@/components/user-directory/user-directory-preview';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -59,8 +58,6 @@ export default function CatchAllPage() {
       ) : (
         <PageView path={path} revisionId={revisionId} />
       )}
-
-      <PageSidebar path={path} />
     </>
   );
 }

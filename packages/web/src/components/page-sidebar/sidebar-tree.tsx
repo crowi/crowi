@@ -8,14 +8,16 @@ import { usePageChildrenLevels } from '@/lib/use-page-children';
 import { cn } from '@/lib/utils';
 import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { SidebarRowLink } from './sidebar-row';
-import { pageSidebarLayout } from './sidebar-paths';
+import { SidebarUserHome } from './sidebar-user-home';
+import { MEMBER_DIR_PATH, pageSidebarLayout } from './sidebar-paths';
 
 /**
  * The page sidebar hierarchy — the current path's ancestry as an
  * expanded tree, identical for list (portal) and content pages (see
  * `pageSidebarLayout`). Each ancestor directory's children are fetched
- * in parallel; the branch toward the current node is opened down to it,
- * and a "⤴" affordance above the root jumps to the parent list page.
+ * in parallel; the branch toward the current node is opened down to it.
+ * A "⤴" affordance tops a normal tree; inside a user's space the user's
+ * home tops it instead (user icon, no ⤴).
  */
 export function SidebarTree({ path }: { path: string }) {
   const layout = useMemo(() => pageSidebarLayout(path), [path]);
@@ -24,10 +26,16 @@ export function SidebarTree({ path }: { path: string }) {
   const levels = results.map((r) => r.data?.children ?? []);
   const isLoading = results.some((r) => r.isLoading);
 
+  // The user-home node occupies depth 0, so its space's levels nest under
+  // it one step deeper.
+  const baseDepth = layout.userHome ? 1 : 0;
+
   // Recursively render the tree from level `k` down, opening only the
   // active branch at each level.
   const renderLevel = (k: number): React.ReactNode => {
-    const children = levels[k] ?? [];
+    // The member directory (/user/) is a special roster, not a tree node —
+    // drop it wherever it would appear (only ever at the top level).
+    const children = (levels[k] ?? []).filter((c) => c.path !== MEMBER_DIR_PATH);
     if (children.length === 0) return null;
     const activeSegment = layout.activeSegments[k];
     const isDeepest = k === layout.levelPaths.length - 1;
@@ -39,7 +47,7 @@ export function SidebarTree({ path }: { path: string }) {
           const isCurrent = k === layout.currentLevelIndex && child.segment === layout.currentSegment;
           return (
             <li key={child.segment}>
-              <SidebarRowLink segment={child} depth={k} isCurrent={isCurrent} isOpen={isActive && !isCurrent} />
+              <SidebarRowLink segment={child} depth={k + baseDepth} isCurrent={isCurrent} isOpen={isActive && !isCurrent} />
               {isActive && !isDeepest && renderLevel(k + 1)}
             </li>
           );
@@ -60,6 +68,12 @@ export function SidebarTree({ path }: { path: string }) {
 
   return (
     <div className="space-y-0.5">
+      {layout.userHome && (
+        // The user's home tops their space — a node (avatar), not a ⤴,
+        // since the roster is reached from the nav links. Highlighted when
+        // it is itself the current page.
+        <SidebarUserHome username={layout.userHome} isCurrent={layout.currentLevelIndex === -1} isOpen={layout.currentLevelIndex !== -1} />
+      )}
       {layout.upPath && (
         <Link
           href={pagePathToHref(layout.upPath)}

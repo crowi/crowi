@@ -24,6 +24,12 @@
 // `/space/group/` — the directory depth at which the inline tree roots.
 export const ROOT_DEPTH = 2;
 
+// The member directory: a special page list (the user roster), reached
+// from the sidebar nav links rather than the hierarchy tree. It is never
+// rendered as a tree node, and a user's own space (`/user/{username}/…`)
+// roots at the user's home with no ⤴ above it.
+export const MEMBER_DIR_PATH = '/user/';
+
 export interface PageSidebarLayout {
   /**
    * Directory paths whose children form each tree level, ordered from
@@ -50,6 +56,12 @@ export interface PageSidebarLayout {
    * `null` when the root is already the top — nowhere further up.
    */
   upPath: string | null;
+  /**
+   * When inside a user's space (`/user/{username}/…`), the username — the
+   * tree is topped with that user's home as a node (user icon) instead of
+   * a ⤴, since the roster is reached from the nav links. `null` otherwise.
+   */
+  userHome: string | null;
 }
 
 /**
@@ -66,14 +78,32 @@ export interface PageSidebarLayout {
  *     currentSegment:'hoge' currentLevelIndex: 0  upPath: '/crowi/'
  */
 export function pageSidebarLayout(path: string): PageSidebarLayout {
+  // The member directory itself has no hierarchy tree — its content is
+  // the roster, and it is reached from the nav links.
+  if (path === MEMBER_DIR_PATH) {
+    return { levelPaths: [], activeSegments: [], currentSegment: '', currentLevelIndex: -1, upPath: null, userHome: null };
+  }
+
   const isPortal = path.endsWith('/');
   const segs = path.split('/').filter(Boolean);
+  // A user's own space (`/user/{username}/…`) always roots at the user's
+  // home (`/user/{username}/`, depth = ROOT_DEPTH) and shows no ⤴ — the
+  // roster lives in the nav links, not above this in the tree.
+  const isUserSpace = segs[0] === 'user' && segs.length >= 2;
+
   // Deepest directory whose children we fetch & expand:
   //   portal page  → the portal itself (every segment is a directory)
   //   content page → the directory that contains the leaf page
-  const maxDepth = Math.max(0, isPortal ? segs.length : segs.length - 1);
-  // Root no deeper than that directory.
-  const rootDepth = Math.min(ROOT_DEPTH, maxDepth);
+  // For a user space, never shallower than the user's home so the tree
+  // always roots there (even on the home page itself).
+  const naturalMaxDepth = Math.max(0, isPortal ? segs.length : segs.length - 1);
+  const maxDepth = isUserSpace ? Math.max(naturalMaxDepth, ROOT_DEPTH) : naturalMaxDepth;
+  // Root one level ABOVE that directory (bounded by ROOT_DEPTH), so the
+  // directory you're in always renders as a labelled node rather than the
+  // un-rendered root: viewing /crowi/rfc/0002 shows `rfc/` (then its
+  // pages), not just the bare page list under an "⤴ crowi". A user space
+  // is the exception — it intentionally roots AT /user/{username}/.
+  const rootDepth = isUserSpace ? ROOT_DEPTH : Math.max(0, Math.min(ROOT_DEPTH, maxDepth - 1));
 
   const dirPathAt = (depth: number) => (depth === 0 ? '/' : `/${segs.slice(0, depth).join('/')}/`);
 
@@ -89,7 +119,8 @@ export function pageSidebarLayout(path: string): PageSidebarLayout {
 
   const currentSegment = segs[segs.length - 1] ?? '';
   const currentLevelIndex = segs.length - 1 - rootDepth;
-  const upPath = rootDepth === 0 ? null : dirPathAt(rootDepth - 1);
+  const upPath = isUserSpace || rootDepth === 0 ? null : dirPathAt(rootDepth - 1);
+  const userHome = isUserSpace ? segs[1] : null;
 
-  return { levelPaths, activeSegments, currentSegment, currentLevelIndex, upPath };
+  return { levelPaths, activeSegments, currentSegment, currentLevelIndex, upPath, userHome };
 }
