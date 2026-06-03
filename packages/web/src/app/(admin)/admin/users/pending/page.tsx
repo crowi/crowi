@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { UserAvatar } from '@/components/user-avatar';
+import { UserIdentityCell } from '@/components/admin/user-identity-cell';
+import { UsersPager } from '@/components/admin/users-table';
 import { formatDate } from '@/lib/date-utils';
 import { useAdminUsers, useToggleAdminStatus } from '@/lib/use-admin-users';
 import { m } from '@paraglide/messages.js';
@@ -61,18 +62,8 @@ export default function AdminUsersPendingPage() {
           <CardContent className="divide-y p-0">
             {users.map((user) => (
               <div key={user._id} className="flex items-center gap-3 px-4 py-3">
-                <UserAvatar user={{ name: user.name, username: user.username, image: user.image ?? null }} size="sm" />
-                <div className="min-w-0 flex-1 leading-tight">
-                  <div className="font-medium">{user.name || user.username}</div>
-                  <div className="text-muted-foreground text-xs truncate">
-                    @{user.username}
-                    {user.email && (
-                      <>
-                        <span className="mx-1.5 opacity-50">·</span>
-                        <span className="font-mono">{user.email}</span>
-                      </>
-                    )}
-                  </div>
+                <div className="min-w-0 flex-1">
+                  <UserIdentityCell user={user} />
                 </div>
                 <span className="text-muted-foreground hidden whitespace-nowrap text-xs sm:inline">{formatDate(user.createdAt)}</span>
                 <Button type="button" size="sm" disabled={toggleStatus.isPending} onClick={() => approve(user)}>
@@ -86,17 +77,7 @@ export default function AdminUsersPendingPage() {
         </Card>
       )}
 
-      {!isLoading && !error && data && data.pager.pagesCount > 1 && (
-        <nav className="flex items-center justify-center gap-3 text-sm" aria-label={m['admin.users.pager_aria_label']()}>
-          <Button type="button" variant="outline" size="sm" disabled={data.pager.previous === null} onClick={() => data.pager.previous !== null && setPage(data.pager.previous)}>
-            {m['admin.users.pager_previous']()}
-          </Button>
-          <span className="text-muted-foreground">{data.pager.page} / {data.pager.pagesCount}</span>
-          <Button type="button" variant="outline" size="sm" disabled={data.pager.next === null} onClick={() => data.pager.next !== null && setPage(data.pager.next)}>
-            {m['admin.users.pager_next']()}
-          </Button>
-        </nav>
-      )}
+      {!isLoading && !error && data && <UsersPager pager={data.pager} onPageChange={setPage} />}
     </div>
   );
 }

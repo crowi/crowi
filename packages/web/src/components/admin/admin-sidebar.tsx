@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Bell, Cloud, Database, HardDrive, Key, KeyRound, Mail, Plug, Search, Server, Settings, Share2, ShieldCheck, UserCheck, Users } from 'lucide-react';
@@ -192,7 +193,9 @@ export function AdminSidebar() {
 
   const { data } = useAdminPlugins();
   const { data: pending } = useAdminPendingUsersCount();
-  const groups = injectApprovalEntry(injectPluginEntries(STATIC_GROUPS, data?.plugins ?? []), pending?.count ?? 0);
+  const plugins = data?.plugins;
+  const pendingCount = pending?.count ?? 0;
+  const groups = useMemo(() => injectApprovalEntry(injectPluginEntries(STATIC_GROUPS, plugins ?? []), pendingCount), [plugins, pendingCount]);
 
   return (
     <nav className="space-y-6 text-sm" aria-label={m['admin.nav_dashboard']()}>

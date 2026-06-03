@@ -3,7 +3,7 @@
 import type { AdminPager, UserPublic } from '@crowi/api-contract';
 import { UserStatusEnum } from '@crowi/api-contract';
 import { MoreHorizontal } from 'lucide-react';
-import { UserAvatar } from '@/components/user-avatar';
+import { UserIdentityCell } from '@/components/admin/user-identity-cell';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -67,7 +67,7 @@ function statusPillClass(status: number | undefined): string {
   }
 }
 
-function Pager({ pager, onPageChange }: { pager: AdminPager; onPageChange: (page: number) => void }) {
+export function UsersPager({ pager, onPageChange }: { pager: AdminPager; onPageChange: (page: number) => void }) {
   if (pager.pagesCount <= 1) return null;
 
   return (
@@ -209,21 +209,7 @@ export function UsersTable({ users, pager, onPageChange, onAction, currentUserId
             {users.map((user) => (
               <tr key={user._id} className="border-t align-top">
                 <td className="px-4 py-3">
-                  <div className="flex items-start gap-3">
-                    <UserAvatar user={{ name: user.name, username: user.username, image: user.image ?? null }} size="sm" />
-                    <div className="min-w-0 leading-tight">
-                      <div className="font-medium">{user.name || user.username}</div>
-                      <div className="text-muted-foreground text-xs truncate">
-                        @{user.username}
-                        {user.email && (
-                          <>
-                            <span className="mx-1.5 opacity-50">·</span>
-                            <span className="font-mono">{user.email}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <UserIdentityCell user={user} />
                 </td>
                 <td className="px-4 py-3">
                   <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap', statusPillClass(user.status))}>
@@ -249,7 +235,7 @@ export function UsersTable({ users, pager, onPageChange, onAction, currentUserId
         </table>
       </div>
 
-      <Pager pager={pager} onPageChange={onPageChange} />
+      <UsersPager pager={pager} onPageChange={onPageChange} />
     </div>
   );
 }

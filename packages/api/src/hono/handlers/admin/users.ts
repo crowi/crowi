@@ -282,8 +282,10 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         } catch (removeErr) {
           // removeCompletelyById re-checks the status and rejects if the user
           // is no longer INVITED (e.g. activated by a concurrent request
-          // between our pre-check and the delete). Surface that as 409, not 500.
-          if ((removeErr as Error).message?.includes('INVITED')) return c.json(notInvitedConflictBody, 409);
+          // between our pre-check and the delete). Re-read to tell that race
+          // apart from a genuine failure and surface it as 409, not 500.
+          const current = (await User.findById(id)) as UserDocument | null;
+          if (current && current.status !== User.STATUS_INVITED) return c.json(notInvitedConflictBody, 409);
           throw removeErr;
         }
         return c.json({ deletedId: id }, 200);

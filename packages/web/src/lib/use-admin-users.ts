@@ -85,12 +85,13 @@ export function useAdminUsers(params: UseAdminUsersParams) {
   return useQuery({
     queryKey: adminUsersKeys.list(params),
     queryFn: async (): Promise<ListAdminUsersResponse> => {
+      const toQ = (v: number | undefined) => (v === undefined ? undefined : String(v));
       const response = await apiClientV2.admin.users.$get({
         query: {
           q: params.q,
-          status: params.status !== undefined ? String(params.status) : undefined,
-          page: params.page !== undefined ? String(params.page) : undefined,
-          limit: params.limit !== undefined ? String(params.limit) : undefined,
+          status: toQ(params.status),
+          page: toQ(params.page),
+          limit: toQ(params.limit),
         },
       });
       if (response.status === 200) return (await response.json()) as ListAdminUsersResponse;

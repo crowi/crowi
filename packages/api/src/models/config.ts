@@ -70,8 +70,6 @@ export interface ConfigModel extends Model<ConfigDocument> {
   updateByParams(ns: string, key: string, value: string): Promise<void>;
   updateConfig(ns: string, key: string, value: string): Promise<void>;
   updateConfigByNamespace(ns: string, nsConfig: Record<string, any>): Promise<void>;
-  copyByParams(ns: string, key: string, newKey: string): Promise<void>;
-  copyConfig(ns: string, key: string, newKey: string): Promise<void>;
   deleteByParams(ns: string, key: string): Promise<void>;
   deleteConfig(ns: string, key: string): Promise<void>;
   loadAllConfig(): Promise<object>;
@@ -158,21 +156,6 @@ export default (crowi: Crowi) => {
       await Promise.all(Object.entries(nsConfig).map(([key, value]) => Config.updateByParams(ns, key, value)));
     } catch (err) {
       debug('updateConfigByNamespace', err);
-    }
-  };
-
-  configSchema.statics.copyByParams = async function (ns, key, newKey) {
-    const config = await Config.findOne({ ns, key }).exec();
-    if (config !== null) {
-      await Config.findOneAndUpdate({ ns, key: newKey }, { ns, key: newKey, value: config.value }, { upsert: true }).exec();
-    }
-  };
-
-  configSchema.statics.copyConfig = async function (ns, key, newKey) {
-    try {
-      await Config.copyByParams(ns, key, newKey);
-    } catch (err) {
-      debug('copyConfig', err);
     }
   };
 

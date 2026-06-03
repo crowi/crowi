@@ -59,15 +59,19 @@ export function useAdminPlugins() {
   });
 }
 
+async function fetchPluginConfig(name: string, locale: string): Promise<PluginConfigResponse> {
+  const response = await apiClientV2.admin.plugins.config.$get({ query: { name, locale } });
+  if (response.status === 200) return (await response.json()) as PluginConfigResponse;
+  return throwGenericError(response, 'Failed to fetch plugin config', 'Plugin not found');
+}
+
 export function useAdminPluginConfig(name: string | null) {
   const locale = getLocale();
   return useQuery<PluginConfigResponse, Error>({
     queryKey: name ? adminPluginsKeys.config(name, locale) : adminPluginsKeys.all,
-    queryFn: async () => {
+    queryFn: () => {
       if (!name) throw new Error('plugin name is required');
-      const response = await apiClientV2.admin.plugins.config.$get({ query: { name, locale } });
-      if (response.status === 200) return (await response.json()) as PluginConfigResponse;
-      return throwGenericError(response, 'Failed to fetch plugin config', 'Plugin not found');
+      return fetchPluginConfig(name, locale);
     },
     enabled: !!name,
     staleTime: 60 * 1000,
@@ -82,11 +86,7 @@ export function useAdminPluginConfigs(names: string[]) {
   return useQueries({
     queries: names.map((name) => ({
       queryKey: adminPluginsKeys.config(name, locale),
-      queryFn: async (): Promise<PluginConfigResponse> => {
-        const response = await apiClientV2.admin.plugins.config.$get({ query: { name, locale } });
-        if (response.status === 200) return (await response.json()) as PluginConfigResponse;
-        return throwGenericError(response, 'Failed to fetch plugin config', 'Plugin not found');
-      },
+      queryFn: () => fetchPluginConfig(name, locale),
       staleTime: 60 * 1000,
       refetchOnWindowFocus: false,
     })),
