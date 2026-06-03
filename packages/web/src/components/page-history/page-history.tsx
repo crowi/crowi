@@ -105,6 +105,14 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
     setActivePair({ from: pendingFrom, to: pendingTo });
   };
 
+  // `revisions` is newest-first (index 0 = newest, larger index = older).
+  // The diff is always rendered `from` → `to`, so `from` must be the
+  // OLDER side and `to` the NEWER side. Disable any radio that would
+  // invert that: `to` can't sit at/older than the selected `from`, and
+  // `from` can't sit at/newer than the selected `to`.
+  const fromIndex = pendingFrom ? revisions.findIndex((r) => r._id === pendingFrom) : -1;
+  const toIndex = pendingTo ? revisions.findIndex((r) => r._id === pendingTo) : -1;
+
   return (
     <div className="space-y-6">
       <header className="border-b pb-4">
@@ -174,7 +182,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {revisions.map((rev) => {
+                  {revisions.map((rev, i) => {
                     // When the revision was made via the collab
                     // `crowi:save` flow, `savedBy` holds the user who
                     // triggered the checkpoint and `contributors`
@@ -197,6 +205,10 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                     const contributorNames = listFormatter.format(contributors.map((c) => c.name));
                     const isFrom = pendingFrom === rev._id;
                     const isTo = pendingTo === rev._id;
+                    // Keep the from → to direction: `from` can't be newer
+                    // than `to`, and `to` can't be older than `from`.
+                    const fromDisabled = isTo || (toIndex !== -1 && i < toIndex);
+                    const toDisabled = isFrom || (fromIndex !== -1 && i > fromIndex);
                     return (
                       <tr key={rev._id} className="border-t">
                         <td className="px-3 py-2 text-center">
@@ -205,7 +217,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                             name="rev-from"
                             value={rev._id}
                             checked={isFrom}
-                            disabled={isTo}
+                            disabled={fromDisabled}
                             onChange={() => setPendingFrom(rev._id)}
                             aria-label={`Select revision ${rev._id.slice(-8)} as from`}
                           />
@@ -216,7 +228,7 @@ export function PageHistory({ pageId, pagePath }: PageHistoryProps) {
                             name="rev-to"
                             value={rev._id}
                             checked={isTo}
-                            disabled={isFrom}
+                            disabled={toDisabled}
                             onChange={() => setPendingTo(rev._id)}
                             aria-label={`Select revision ${rev._id.slice(-8)} as to`}
                           />
