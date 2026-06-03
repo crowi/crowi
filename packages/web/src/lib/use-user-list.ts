@@ -20,10 +20,8 @@ export const userListKeys = {
   list: (params: UseUserListParams) => [...userListKeys.all, params] as const,
 };
 
-const DEFAULT_LIMIT = 24;
-
 export function useUserList(params: UseUserListParams = {}) {
-  const { q = '', limit = DEFAULT_LIMIT, offset = 0 } = params;
+  const { q = '', limit, offset } = params;
 
   return useQuery({
     queryKey: userListKeys.list({ q, limit, offset }),
@@ -31,8 +29,10 @@ export function useUserList(params: UseUserListParams = {}) {
       const response = await apiClientV2.users.$get({
         query: {
           ...(q ? { q } : {}),
-          limit: String(limit),
-          offset: String(offset),
+          // Omit when unset so the contract's server-side defaults apply
+          // (avoids a second copy of the default page size on the client).
+          ...(limit !== undefined ? { limit: String(limit) } : {}),
+          ...(offset !== undefined ? { offset: String(offset) } : {}),
         },
       });
       if (!response.ok) {

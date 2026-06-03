@@ -13217,10 +13217,9 @@
           },
           {
             "schema": {
-              "type": [
-                "number",
-                "null"
-              ],
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
               "default": 24
             },
             "required": false,
@@ -13230,9 +13229,10 @@
           {
             "schema": {
               "type": [
-                "number",
+                "integer",
                 "null"
               ],
+              "minimum": 0,
               "default": 0
             },
             "required": false,

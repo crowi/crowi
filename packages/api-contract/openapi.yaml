@@ -8802,17 +8802,18 @@ paths:
           name: q
           in: query
         - schema:
-            type:
-              - number
-              - 'null'
+            type: integer
+            minimum: 1
+            maximum: 100
             default: 24
           required: false
           name: limit
           in: query
         - schema:
             type:
-              - number
+              - integer
               - 'null'
+            minimum: 0
             default: 0
           required: false
           name: offset

@@ -395,6 +395,14 @@ CLI/SDK がスコープ付きトークンで API を叩けるようにする mul
 - [ ] **lookup-key 系 secret の対応**: `User.apiToken` / `Share.secretKeyword` は equality lookup されるため hash 化または deterministic encryption が必要。別 issue
 
 ### 並行 worktree 統合 (`/integrate-worktree`)
+- [x] **user-list-special-portal 統合** (`675f4c3c` + simplify) — メンバーディレクトリ (`GET /users` active ユーザー一覧 + `/user/` 予約パス + `_user` ディレクトリページ + user-card grid/preview)。simplify で `ListUsersRequestSchema.limit` に上限 (max 100) を追加、`use-user-list` の dead `DEFAULT_LIMIT` を除去 (サーバ default に委譲)。以下は別タスクに見送り:
+  - [ ] **member-directory のコレーション index**: `listMembers` は `.collation({locale:'en',strength:2}).sort({name,username})` だが対応する collated 複合 index が無く、毎回メモリソートになる。User スキーマに同 collation の `{name:1, username:1}` index を追加
+  - [ ] **`/user/` ディレクトリの二重化**: 正準ディレクトリは `/_user`、予約した `/user/` には preview を埋め込み「show all」で `/_user` に飛ぶ二段構成。`/user/` 自体をディレクトリ本体にする (redirect or 本体描画) か、preview/full の役割を整理
+  - [ ] **予約パスの一元化**: `/user/` 予約が web (`[[...slug]]/page.tsx` の `path === '/user/'`) と api (`models/page.ts isCreatableName` の regex) に分散。共有定数 / 単一ソースに集約
+  - [ ] **`PaginationRequestSchema.limit` の上限**: getUserBookmarks / getUserPages 共有の pagination も上限なし。`ListUsersRequestSchema` と同様に cap
+  - [ ] **offset pager の共通化**: `prev/next` 計算が user.ts (×3) / page.ts / bookmark.ts / notification.ts で重複。`buildOffsetPager(offset, limit, total)` を util に抽出
+  - [ ] **`GET /users` と `GET /admin/users` の query 共通化**: status filter + q-regex + offset/page 化が二重実装。`buildUserListFilter(q, status)` 等の共有 helper に
+  - [ ] **`disableCreatePortal` prop の altitude**: `/user/` の Create Portal CTA 抑止を専用 boolean で渡しているが、本来 path の creatability (api `isCreatableName` と同根) から導出すべき
 - [x] **portal-redesign 統合** (`8da694aa` + simplify) — ポータル(フォルダ index)ページ再設計 + ページ一覧ソート + page-view 調整。simplify で provenance 行を共通 `PageDisplayUserBadge` に抽出、portal-header の orphan JSDoc 修正、page.ts sort 変数 `desc`→`sortDir` rename。以下は別タスクに見送り:
   - [ ] **page-list sort の DB インデックス**: `Page.find().sort({path|createdAt|updatedAt})` を裏付ける index が無く、ポータル/ルート一覧でメモリソート + collection scan になる。`{status:1, updatedAt:-1}` / `{status:1, path:1}` 等の compound index を検討
   - [ ] **`ListPagesResponse.portalPage` の型**: contract は lean `PageSchema` だが handler は populated revision+renderedAst を返すため web 側で `as PageWithRevision` キャスト。response schema を `PageWithRevision` 型にしてキャスト除去

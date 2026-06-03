@@ -45,8 +45,10 @@ export type UserListItem = z.infer<typeof UserListItemSchema>;
 // pagination is offset-based to reuse the shared `Pager` envelope.
 export const ListUsersRequestSchema = z.object({
   q: z.string().optional(),
-  limit: z.coerce.number().optional().default(24),
-  offset: z.coerce.number().optional().default(0),
+  // Cap the page size so a client can't request the whole user table in one
+  // unbounded find+sort (mirrors the page-list `limit` guard).
+  limit: z.coerce.number().int().min(1).max(100).optional().default(24),
+  offset: z.coerce.number().int().min(0).optional().default(0),
 });
 export type ListUsersRequest = z.infer<typeof ListUsersRequestSchema>;
 

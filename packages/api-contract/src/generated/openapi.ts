@@ -2831,7 +2831,7 @@ export interface paths {
             parameters: {
                 query?: {
                     q?: string;
-                    limit?: number | null;
+                    limit?: number;
                     offset?: number | null;
                 };
                 header?: never;
