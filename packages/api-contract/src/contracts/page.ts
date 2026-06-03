@@ -42,6 +42,8 @@ import {
   GetPageResponseSchema,
   GetSeenUsersRequestSchema,
   GetWatchStatusRequestSchema,
+  ListPageChildrenRequestSchema,
+  ListPageChildrenResponseSchema,
   ListPagesRequestSchema,
   ListPagesResponseSchema,
   PageNotFoundErrorSchema,
@@ -128,6 +130,27 @@ export const listPagesRoute = createRoute({
     200: {
       description: 'Page list (newest first) with optional portal page',
       content: { 'application/json': { schema: ListPagesResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+  },
+});
+
+export const listPageChildrenRoute = createRoute({
+  method: 'get',
+  path: '/pages/children',
+  tags: ['page'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List immediate child segments under a portal path (sidebar tree)',
+  request: {
+    query: ListPageChildrenRequestSchema,
+  },
+  responses: {
+    200: {
+      description: 'First-level child segments (alphabetical) under the path',
+      content: { 'application/json': { schema: ListPageChildrenResponseSchema } },
     },
     401: {
       description: 'Authentication required',
@@ -527,6 +550,8 @@ export const pageRoutes = {
   getPageRoute,
   // GET /pages/list — listPages (paginated)
   listPagesRoute,
+  // GET /pages/children — listPageChildren (sidebar tree)
+  listPageChildrenRoute,
   // POST /pages — createPage
   createPageRoute,
   // PUT /pages — updatePage

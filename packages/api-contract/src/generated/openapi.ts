@@ -5426,6 +5426,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pages/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List immediate child segments under a portal path (sidebar tree) */
+        get: {
+            parameters: {
+                query: {
+                    path: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description First-level child segments (alphabetical) under the path */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            children: {
+                                segment: string;
+                                path: string;
+                                isPage: boolean;
+                                hasPortal: boolean;
+                                count: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pages/grant": {
         parameters: {
             query?: never;

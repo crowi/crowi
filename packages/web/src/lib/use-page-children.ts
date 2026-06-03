@@ -1,0 +1,55 @@
+'use client';
+
+import type { ListPageChildrenResponse } from '@crowi/api-contract';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { apiClientV2 } from './api-client';
+
+/**
+ * Sidebar hierarchy data. Backs both sidebar modes:
+ *
+ *  - list page  → `usePageChildren(path)` — one level of children.
+ *  - single page → `usePageChildrenLevels(paths)` — the children of
+ *    every ancestor directory along the current page's path, fetched in
+ *    parallel and stitched into the expanded tree by the caller.
+ *
+ * Server returns the *complete* first-level segment set (unpaginated),
+ * so the sidebar never drops a directory the way a `/pages/list` slice
+ * would.
+ */
+
+export const pageChildrenKeys = {
+  all: ['pages', 'children'] as const,
+  detail: (path: string) => ['pages', 'children', path] as const,
+};
+
+async function fetchPageChildren(path: string): Promise<ListPageChildrenResponse> {
+  const response = await apiClientV2.pages.children.$get({ query: { path } });
+  if (!response.ok) {
+    throw new Error('Failed to fetch page children');
+  }
+  return await response.json();
+}
+
+export function usePageChildren(path: string, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: pageChildrenKeys.detail(path),
+    enabled: options.enabled ?? true,
+    queryFn: () => fetchPageChildren(path),
+  });
+}
+
+/**
+ * Fetch children for several ancestor directory paths at once. Used by
+ * the single-page sidebar, where each level of the expanded breadcrumb
+ * tree is an independent `/pages/children` call. Returns the array of
+ * query results positionally aligned with `paths`.
+ */
+export function usePageChildrenLevels(paths: string[], options: { enabled?: boolean } = {}) {
+  return useQueries({
+    queries: paths.map((path) => ({
+      queryKey: pageChildrenKeys.detail(path),
+      enabled: options.enabled ?? true,
+      queryFn: () => fetchPageChildren(path),
+    })),
+  });
+}

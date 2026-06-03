@@ -21165,6 +21165,115 @@
         }
       }
     },
+    "/pages/children": {
+      "get": {
+        "tags": [
+          "page"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List immediate child segments under a portal path (sidebar tree)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "path",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "First-level child segments (alphabetical) under the path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "segment": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "isPage": {
+                            "type": "boolean"
+                          },
+                          "hasPortal": {
+                            "type": "boolean"
+                          },
+                          "count": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "segment",
+                          "path",
+                          "isPage",
+                          "hasPortal",
+                          "count"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "children"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pages/grant": {
       "put": {
         "tags": [

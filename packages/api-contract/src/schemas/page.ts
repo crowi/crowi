@@ -218,6 +218,48 @@ export const ListPagesResponseSchema = z.object({
 });
 export type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
 
+// Sidebar hierarchy — the immediate child "directories" (next path
+// segment) directly under a portal path, aggregated server-side. Backs
+// the list-page / single-page sidebar tree. Unpaginated: a single
+// portal's direct children are bounded enough to return whole, and the
+// sidebar needs the *complete* set of first-level segments (a paginated
+// /pages/list slice would drop segments past the page boundary).
+export const PageChildSegmentSchema = z.object({
+  // The bare segment name immediately under the queried path
+  // (e.g. 'rfc' for /crowi/rfc/... when querying /crowi/).
+  segment: z.string(),
+  // Portal-style path for this segment (always trailing-slashed),
+  // e.g. '/crowi/rfc/'. Drop the trailing slash for the page path when
+  // the segment is a leaf page (see `isPage`).
+  path: z.string(),
+  // True when a real page is saved at the segment path itself
+  // (e.g. `/crowi/rfc`, no trailing slash) — i.e. the segment is a
+  // navigable page, not only an inferred directory.
+  isPage: z.boolean(),
+  // True when a real portal page is saved at `path` (→ compass icon).
+  hasPortal: z.boolean(),
+  // Number of descendant content pages strictly under this segment
+  // (excludes the segment's own page / portal docs). A rough "how much
+  // lives here" hint; > 0 means the segment is an expandable directory.
+  count: z.number(),
+});
+export type PageChildSegment = z.infer<typeof PageChildSegmentSchema>;
+
+// List page children request schema
+export const ListPageChildrenRequestSchema = z.object({
+  // Portal path to list children of. Trailing slash optional — the
+  // handler normalises it. '/' lists the top-level segments.
+  path: z.string(),
+});
+export type ListPageChildrenRequest = z.infer<typeof ListPageChildrenRequestSchema>;
+
+// List page children response schema
+export const ListPageChildrenResponseSchema = z.object({
+  // Sorted alphabetically by segment.
+  children: z.array(PageChildSegmentSchema),
+});
+export type ListPageChildrenResponse = z.infer<typeof ListPageChildrenResponseSchema>;
+
 // Create page request schema
 export const CreatePageRequestSchema = z.object({
   path: z.string(),

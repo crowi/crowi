@@ -191,6 +191,7 @@ export interface PageModel extends Model<PageDocument> {
   getStreamOfFindAll(options?): any;
   findListByStartWith(path, userData, option): Promise<PageDocument[]>;
   findChildrenByPath(path, userData, option): any;
+  findChildSegments(path, userData): Promise<Array<{ segment: string; path: string; isPage: boolean; hasPortal: boolean; count: number }>>;
   findUnfurlablePages(type, array, grants?: number[]): any;
   findUnfurlablePagesByIds(ids): any;
   findUnfurlablePagesByPaths(paths): any;
@@ -928,6 +929,60 @@ export default (crowi: Crowi) => {
   pageSchema.statics.findChildrenByPath = async function (path, userData, option) {
     path = addTrailingSlash(path);
     return Page.findListByStartWith(path, userData, { limit: 0, ...option });
+  };
+
+  /**
+   * Aggregate the immediate child "directories" (next path segment)
+   * directly under a portal `path`, for the sidebar tree. Returns one
+   * entry per distinct first segment beneath `path`, with whether a
+   * real portal page is saved there (`hasPortal` → compass icon) and a
+   * descendant count.
+   *
+   * Implemented as a lean `path`-only scan + in-process grouping rather
+   * than a `$group` aggregation: extracting "the segment after the
+   * prefix" is awkward in MongoDB's expression language, and a portal's
+   * subtree is bounded. Visibility (grant + draft status) is enforced
+   * with the same `$or` predicates as the listing endpoints so the
+   * sidebar never leaks a page the viewer can't open.
+   */
+  pageSchema.statics.findChildSegments = async function (path, userData) {
+    const prefix = addTrailingSlash(path);
+    // Escape regex metacharacters so a path like `/foo(bar)/` is matched
+    // literally, not as a pattern.
+    const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const query = {
+      redirectTo: null,
+      path: new RegExp(`^${escaped}`),
+      $and: [{ $or: visiblePageGrantOr(userData._id) }, { $or: visiblePageStatusOr(userData._id) }],
+    };
+    const docs: Array<{ path: string }> = await Page.find(query, { path: 1 }).lean().exec();
+
+    const map = new Map<string, { segment: string; path: string; isPage: boolean; hasPortal: boolean; count: number }>();
+    for (const doc of docs) {
+      // Skip the portal page for `path` itself (e.g. `/crowi/` when
+      // querying `/crowi/`) — it is the parent, not a child.
+      if (doc.path === prefix) continue;
+      const rest = doc.path.slice(prefix.length);
+      const slashIdx = rest.indexOf('/');
+      const segment = slashIdx === -1 ? rest : rest.slice(0, slashIdx);
+      if (!segment) continue;
+      let entry = map.get(segment);
+      if (!entry) {
+        entry = { segment, path: `${prefix}${segment}/`, isPage: false, hasPortal: false, count: 0 };
+        map.set(segment, entry);
+      }
+      if (slashIdx === -1) {
+        // doc.path === `${prefix}${segment}` — the segment is a real page.
+        entry.isPage = true;
+      } else if (rest === `${segment}/`) {
+        // doc.path === `${prefix}${segment}/` — a portal page.
+        entry.hasPortal = true;
+      } else {
+        // A deeper descendant (`${prefix}${segment}/...`).
+        entry.count += 1;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.segment.localeCompare(b.segment));
   };
 
   pageSchema.statics.findUnfurlablePages = async function (type, array, grants = [GRANT_PUBLIC, GRANT_RESTRICTED]) {
