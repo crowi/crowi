@@ -196,7 +196,7 @@ When `preflightUnappliedPolicy: 'block'` (default) and a preflight migration is 
 When a migration rewrites page **body** content, any in-memory `Y.Doc` held by currently-editing clients becomes stale. The mechanism has two distinct sides:
 
 - **Writer side (persistence):** the writer nulls `page.yjsState` and `yjsCheckpointAt` (and repoints `currentRevision`). This is what `Page.updatePage` already does (`page.ts:1066-1068`). Once `yjsState` is null, the next `onLoadDocument` rebuilds the `Y.Doc` from the body.
-- **Reader side (live broadcast):** `packages/collab/src/hooks/on-load-document.ts:148-157` *detects* the null state and `broadcastStateless`es `{ kind: 'crowi:force-reload', reason: 'page-body-replaced' }` so connected clients reload. This requires a handle to a **live Hocuspocus instance**.
+- **Reader side (live broadcast):** `packages/collab/src/hooks/on-load-document.ts` *detects* the null state (`:194-203`, setting `forceReloadReason = 'page-body-replaced'`) and, via the `broadcastForceReload` helper (`:141-165`, the `broadcastStateless` call at `:157`, wired in at `:223`), `broadcastStateless`es `{ kind: 'crowi:force-reload', reason: 'page-body-replaced' }` so connected clients reload. This requires a handle to a **live Hocuspocus instance**.
 
 The two sides have different reachability across processes, which the runner must respect:
 
