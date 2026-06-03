@@ -141,15 +141,26 @@ function resolveOptions(
 }
 
 /**
- * The shared runner. Holds the booted Crowi + resolved options and the
- * SIGINT-aware abort flag every long-running stage can consult via the
- * runner's `aborted` getter.
+ * RFC-0008 §4.3 — the shared runner *core*.
+ *
+ * Holds the booted Crowi, the resolved options, the per-run
+ * `MigrationContext` (dry-run / progress / logger / Yjs invalidation), the
+ * SIGINT-aware abort flag, and the bounded-concurrency limiter. This is the
+ * "shared infrastructure" both namespaces ride on: `migrate` adds the
+ * `migrationApplications` reconciliation/record path on top (`MigrationRunner`
+ * below), while `rebuild` rides on the core alone with **no** audit-log
+ * coupling (`RebuildRunner` in `rebuild-runner.ts`).
+ *
+ * Keeping the record path out of the core is deliberate (§8.5: rebuilds have
+ * "no pending/applied concept"): a rebuild can never accidentally append to
+ * `migrationApplications`, and `MigrationRunner.apply` carries no `if (rebuild)`
+ * branch — the two namespaces are distinct subclasses, not flags on one path.
  */
-export class MigrationRunner {
-  private readonly crowi: Crowi;
-  private readonly opts: ReturnType<typeof resolveOptions>;
+export class MigrationRunnerCore {
+  protected readonly crowi: Crowi;
+  protected readonly opts: ReturnType<typeof resolveOptions>;
   private readonly ctx: MigrationContext;
-  private abortRequested = false;
+  protected abortRequested = false;
   private sigintHandler: (() => void) | null = null;
 
   constructor(crowi: Crowi, options: RunnerOptions = {}) {
@@ -163,7 +174,7 @@ export class MigrationRunner {
     return this.abortRequested;
   }
 
-  /** The shared per-run context handed to migration callbacks. */
+  /** The shared per-run context handed to migration / rebuild callbacks. */
   get context(): MigrationContext {
     return this.ctx;
   }
@@ -173,7 +184,7 @@ export class MigrationRunner {
   }
 
   /**
-   * Install a SIGINT handler so an in-progress `apply` can stop between
+   * Install a SIGINT handler so an in-progress run can stop between
    * stages / units instead of leaving Mongo in an arbitrary state. Returns
    * a disposer; safe to call when no handler is desired (tests pass none).
    */
@@ -196,21 +207,11 @@ export class MigrationRunner {
     }
   }
 
-  /** Cheap pending probe. Never writes; safe to call on every boot (§4.2.1). */
-  async isPending(def: MigrationDefinition): Promise<boolean> {
-    return def.isPending(this.ctx);
-  }
-
-  /** Rich, optional report for `plan`. Returns null when the migration has no `detect`. */
-  async detect(def: MigrationDefinition): Promise<DetectReport | null> {
-    if (!def.detect) return null;
-    return def.detect(this.ctx);
-  }
-
   /**
    * Run a bounded-concurrency map over `items`, respecting the SIGINT abort
    * flag (stops scheduling new work once aborted). Exposed so a stage's `fn`
-   * can fan out per-document work through the shared concurrency limiter.
+   * or a rebuild task can fan out per-document work through the shared
+   * concurrency limiter.
    */
   async mapBounded<T>(items: readonly T[], worker: (item: T, index: number) => Promise<void>): Promise<{ processed: number; interrupted: boolean }> {
     const limit = Math.max(1, this.opts.concurrency);
@@ -225,6 +226,25 @@ export class MigrationRunner {
     };
     await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runWorker));
     return { processed, interrupted: this.abortRequested };
+  }
+}
+
+/**
+ * The `migrate`-namespace runner. Adds the §6.2 reconciliation rules and the
+ * `migrationApplications` audit-log append on top of the shared core. The
+ * `rebuild` namespace does NOT extend this — it rides the core directly so it
+ * stays free of any applied/pending semantics (§8.5).
+ */
+export class MigrationRunner extends MigrationRunnerCore {
+  /** Cheap pending probe. Never writes; safe to call on every boot (§4.2.1). */
+  async isPending(def: MigrationDefinition): Promise<boolean> {
+    return def.isPending(this.context);
+  }
+
+  /** Rich, optional report for `plan`. Returns null when the migration has no `detect`. */
+  async detect(def: MigrationDefinition): Promise<DetectReport | null> {
+    if (!def.detect) return null;
+    return def.detect(this.context);
   }
 
   /**
@@ -288,7 +308,7 @@ export class MigrationRunner {
         }
         this.opts.progress.setLabel(`${def.id}:${stage.name}`);
         this.opts.logger.info(`${def.id}: stage ${stage.name} …`);
-        const stageResult: StageResult = await stage.fn(this.ctx);
+        const stageResult: StageResult = await stage.fn(this.context);
         stats[stage.name] = { transformed: stageResult.transformed ?? 0, ...(stageResult.stats ?? {}) };
       }
     } catch (err) {
