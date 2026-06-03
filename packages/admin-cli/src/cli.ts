@@ -1,8 +1,6 @@
 import { Command } from 'commander';
 import { registerMigrate } from './commands/migrate';
 import { registerRebuild } from './commands/rebuild';
-import { registerSearchRebuild } from './commands/search-rebuild';
-import { registerStorageCopy } from './commands/storage-copy';
 
 /**
  * Build the root commander program. Exported so the bin entry point
@@ -21,14 +19,12 @@ export function createProgram(): Command {
     .version('0.1.0-dev');
 
   // RFC-0008: the unified migration framework namespaces. The wikilink
-  // migration now lives under `migrate apply --id wikilink-format` (phase 3);
-  // the legacy `storage copy` / `search rebuild` forms below are removed in
-  // phase 4 once their tasks move onto `rebuild`.
+  // migration lives under `migrate apply --id wikilink-format` (phase 3); the
+  // legacy top-level `storage copy` / `search rebuild` forms are gone (phase
+  // 4) — their tasks now ride the shared runner under `rebuild storage copy` /
+  // `rebuild search`. No compatibility aliases (CHANGELOG / upgrade guide).
   registerMigrate(program);
   registerRebuild(program);
-
-  registerStorageCopy(program);
-  registerSearchRebuild(program);
 
   return program;
 }
