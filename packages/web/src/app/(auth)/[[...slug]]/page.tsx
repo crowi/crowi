@@ -60,7 +60,7 @@ export default function CatchAllPage() {
         <PageView path={path} revisionId={revisionId} />
       )}
 
-      <PageSidebar path={path} mode={isPortalPath ? 'list' : 'single'} />
+      <PageSidebar path={path} />
     </>
   );
 }

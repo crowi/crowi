@@ -30,6 +30,8 @@ interface SidebarRowLinkProps {
  */
 export function SidebarRowLink({ segment, depth, isCurrent, isOpen }: SidebarRowLinkProps) {
   const isDirectory = segment.count > 0 || segment.hasPortal;
+  // Directories link to the trailing-slashed portal path; a bare page links
+  // to its slash-less page path.
   const href = pagePathToHref(isDirectory ? segment.path : segment.path.replace(/\/$/, ''));
   const label = isDirectory ? `${segment.segment}/` : segment.segment;
   const Icon = segment.hasPortal ? Compass : isDirectory ? Folder : FileText;

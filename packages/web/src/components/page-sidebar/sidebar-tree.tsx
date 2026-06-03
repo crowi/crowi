@@ -8,39 +8,39 @@ import { usePageChildrenLevels } from '@/lib/use-page-children';
 import { cn } from '@/lib/utils';
 import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { SidebarRowLink } from './sidebar-row';
-import { singleSidebarLayout } from './sidebar-paths';
+import { pageSidebarLayout } from './sidebar-paths';
 
 /**
- * Single-page sidebar: the current page's ancestry as an expanded
- * breadcrumb tree. Each ancestor directory's children are fetched in
- * parallel; the branch toward the current page is opened one level
- * deeper at each step, down to the current page itself. A ⤴ affordance
- * above the root jumps to the parent list page.
+ * The page sidebar hierarchy — the current path's ancestry as an
+ * expanded tree, identical for list (portal) and content pages (see
+ * `pageSidebarLayout`). Each ancestor directory's children are fetched
+ * in parallel; the branch toward the current node is opened down to it,
+ * and a "⤴" affordance above the root jumps to the parent list page.
  */
-export function SingleSidebar({ path }: { path: string }) {
-  const layout = useMemo(() => singleSidebarLayout(path), [path]);
+export function SidebarTree({ path }: { path: string }) {
+  const layout = useMemo(() => pageSidebarLayout(path), [path]);
   const results = usePageChildrenLevels(layout.levelPaths);
   // Positionally aligned with layout.levelPaths.
   const levels = results.map((r) => r.data?.children ?? []);
   const isLoading = results.some((r) => r.isLoading);
 
-  // Recursively render the tree from level `i` down, opening only the
+  // Recursively render the tree from level `k` down, opening only the
   // active branch at each level.
-  const renderLevel = (i: number): React.ReactNode => {
-    const children = levels[i] ?? [];
+  const renderLevel = (k: number): React.ReactNode => {
+    const children = levels[k] ?? [];
     if (children.length === 0) return null;
-    const activeSegment = layout.activeSegments[i];
-    const isLast = i === layout.levelPaths.length - 1;
+    const activeSegment = layout.activeSegments[k];
+    const isDeepest = k === layout.levelPaths.length - 1;
 
     return (
       <ul className="space-y-0.5">
         {children.map((child) => {
-          const onBranch = !isLast && child.segment === activeSegment;
-          const isCurrent = isLast && child.segment === layout.currentSegment;
+          const isActive = activeSegment !== null && child.segment === activeSegment;
+          const isCurrent = k === layout.currentLevelIndex && child.segment === layout.currentSegment;
           return (
             <li key={child.segment}>
-              <SidebarRowLink segment={child} depth={i} isCurrent={isCurrent} isOpen={onBranch} />
-              {onBranch && renderLevel(i + 1)}
+              <SidebarRowLink segment={child} depth={k} isCurrent={isCurrent} isOpen={isActive && !isCurrent} />
+              {isActive && !isDeepest && renderLevel(k + 1)}
             </li>
           );
         })}

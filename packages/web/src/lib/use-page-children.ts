@@ -1,18 +1,15 @@
 'use client';
 
 import type { ListPageChildrenResponse } from '@crowi/api-contract';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
 
 /**
- * Sidebar hierarchy data. Backs both sidebar modes:
+ * Sidebar hierarchy data. The sidebar tree fetches the children of every
+ * ancestor directory along the current path in parallel and stitches
+ * them into the expanded tree (see `pageSidebarLayout`).
  *
- *  - list page  → `usePageChildren(path)` — one level of children.
- *  - single page → `usePageChildrenLevels(paths)` — the children of
- *    every ancestor directory along the current page's path, fetched in
- *    parallel and stitched into the expanded tree by the caller.
- *
- * Server returns the *complete* first-level segment set (unpaginated),
+ * The server returns the *complete* first-level segment set (unpaginated),
  * so the sidebar never drops a directory the way a `/pages/list` slice
  * would.
  */
@@ -30,19 +27,11 @@ async function fetchPageChildren(path: string): Promise<ListPageChildrenResponse
   return await response.json();
 }
 
-export function usePageChildren(path: string, options: { enabled?: boolean } = {}) {
-  return useQuery({
-    queryKey: pageChildrenKeys.detail(path),
-    enabled: options.enabled ?? true,
-    queryFn: () => fetchPageChildren(path),
-  });
-}
-
 /**
- * Fetch children for several ancestor directory paths at once. Used by
- * the single-page sidebar, where each level of the expanded breadcrumb
- * tree is an independent `/pages/children` call. Returns the array of
- * query results positionally aligned with `paths`.
+ * Fetch children for several ancestor directory paths at once. Returns
+ * the array of query results positionally aligned with `paths`. Each
+ * path keys its own cache entry, so sibling pages that share ancestors
+ * reuse the same fetched levels.
  */
 export function usePageChildrenLevels(paths: string[], options: { enabled?: boolean } = {}) {
   return useQueries({
