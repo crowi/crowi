@@ -1,0 +1,222 @@
+/**
+ * Allow-list of element tag names that browsers (and therefore React)
+ * recognise. Used by `render-mdast.ts` to strip *unknown* raw-HTML
+ * elements that arrive in a page body — most commonly junk pasted from
+ * Word / Outlook (`<o:p>`, `<v:shape>`, …) or literal placeholder tags
+ * a user types (`<thing>`). React renders such a tag as an unknown DOM
+ * element and logs:
+ *
+ *   "The tag <thing> is unrecognized in this browser. If you meant to
+ *    render a React component, start its name with an uppercase letter."
+ *
+ * We mirror GitHub's behaviour: drop the unrecognised wrapper but keep
+ * its children, so the visible text survives.
+ *
+ * The list MUST be deterministic (no `document.createElement` probing)
+ * because the same render runs on the server (show-page SSR) and the
+ * client — a divergent result would trip a hydration mismatch.
+ *
+ * HTML tags are matched case-insensitively (parse5 lower-cases them);
+ * SVG tags keep their canonical camelCase, so they appear verbatim.
+ */
+
+// Standard + still-recognised-obsolete HTML elements (lower-case).
+const HTML_TAGS = [
+  'a',
+  'abbr',
+  'address',
+  'area',
+  'article',
+  'aside',
+  'audio',
+  'b',
+  'base',
+  'bdi',
+  'bdo',
+  'blockquote',
+  'body',
+  'br',
+  'button',
+  'canvas',
+  'caption',
+  'cite',
+  'code',
+  'col',
+  'colgroup',
+  'data',
+  'datalist',
+  'dd',
+  'del',
+  'details',
+  'dfn',
+  'dialog',
+  'div',
+  'dl',
+  'dt',
+  'em',
+  'embed',
+  'fieldset',
+  'figcaption',
+  'figure',
+  'footer',
+  'form',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'head',
+  'header',
+  'hgroup',
+  'hr',
+  'html',
+  'i',
+  'iframe',
+  'img',
+  'input',
+  'ins',
+  'kbd',
+  'label',
+  'legend',
+  'li',
+  'link',
+  'main',
+  'map',
+  'mark',
+  'menu',
+  'meta',
+  'meter',
+  'nav',
+  'noscript',
+  'object',
+  'ol',
+  'optgroup',
+  'option',
+  'output',
+  'p',
+  'param',
+  'picture',
+  'pre',
+  'progress',
+  'q',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'script',
+  'search',
+  'section',
+  'select',
+  'slot',
+  'small',
+  'source',
+  'span',
+  'strong',
+  'style',
+  'sub',
+  'summary',
+  'sup',
+  'svg',
+  'table',
+  'tbody',
+  'td',
+  'template',
+  'textarea',
+  'tfoot',
+  'th',
+  'thead',
+  'time',
+  'title',
+  'tr',
+  'track',
+  'u',
+  'ul',
+  'var',
+  'video',
+  'wbr',
+  // Obsolete but still recognised by browsers (not HTMLUnknownElement).
+  'acronym',
+  'big',
+  'center',
+  'dir',
+  'font',
+  'frame',
+  'frameset',
+  'marquee',
+  'menuitem',
+  'nobr',
+  'noembed',
+  'noframes',
+  'rb',
+  'rtc',
+  'strike',
+  'tt',
+  'xmp',
+  'listing',
+  'basefont',
+];
+
+// SVG elements — canonical (possibly camelCase) casing, matched as-is.
+const SVG_TAGS = [
+  'circle',
+  'clipPath',
+  'defs',
+  'desc',
+  'ellipse',
+  'feBlend',
+  'feColorMatrix',
+  'feComponentTransfer',
+  'feComposite',
+  'feConvolveMatrix',
+  'feDiffuseLighting',
+  'feDisplacementMap',
+  'feFlood',
+  'feGaussianBlur',
+  'feImage',
+  'feMerge',
+  'feMergeNode',
+  'feMorphology',
+  'feOffset',
+  'feSpecularLighting',
+  'feTile',
+  'feTurbulence',
+  'filter',
+  'foreignObject',
+  'g',
+  'image',
+  'line',
+  'linearGradient',
+  'marker',
+  'mask',
+  'metadata',
+  'mpath',
+  'path',
+  'pattern',
+  'polygon',
+  'polyline',
+  'radialGradient',
+  'rect',
+  'stop',
+  'switch',
+  'symbol',
+  'text',
+  'textPath',
+  'tspan',
+  'use',
+  'view',
+];
+
+const KNOWN_TAGS = new Set<string>([...HTML_TAGS, ...SVG_TAGS]);
+
+/**
+ * True for any tag name the browser renders without warning. HTML tags
+ * are checked case-insensitively; SVG camelCase tags via their exact
+ * spelling. Custom elements (containing a `-`, e.g. `my-widget`) are
+ * also valid — React treats them as custom elements, not unknown tags.
+ */
+export function isKnownTag(tagName: string): boolean {
+  if (tagName.includes('-')) return true;
+  return KNOWN_TAGS.has(tagName) || KNOWN_TAGS.has(tagName.toLowerCase());
+}

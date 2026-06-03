@@ -6,6 +6,7 @@ import { raw } from 'hast-util-raw';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import type { Nodes as HastNodes } from 'hast';
 import type { ReactNode } from 'react';
+import { isKnownTag } from './known-tags';
 
 /**
  * Minimal hast subset used by `wrapSections`. Keeping this local
@@ -22,6 +23,72 @@ export type HastLike = {
 };
 
 const HEADING_RE = /^h[1-6]$/;
+
+// Leading tag-name of a raw-HTML chunk: `<thing …>` / `</thing>` /
+// `<thing/>`. Allows `:` so namespaced paste junk (`<o:p>`) is caught.
+// `<!-- … -->` / `<!doctype>` start with `<!`, never match, and pass
+// through to `raw()` unchanged.
+const RAW_LEADING_TAG_RE = /^\s*<\/?\s*([a-zA-Z][a-zA-Z0-9:_-]*)/;
+
+/**
+ * Escape raw-HTML chunks whose tag is one no browser recognises so they
+ * render as the *literal text the user typed* instead of vanishing.
+ *
+ * A page body can contain inline HTML the markdown parser hands through
+ * verbatim — a documentation placeholder like `<thing>` (`shows "No
+ * <thing> yet" tooltip`), or namespaced junk pasted from Word (`<o:p>`).
+ * Without this, `mdast-util-to-hast` + `raw()` turn `<thing>` into an
+ * empty unknown DOM element: it both disappears from the output *and*
+ * makes React log "The tag <thing> is unrecognized in this browser…".
+ *
+ * We mirror what a documentation author expects (and what the source
+ * editor shows): the text stays visible. Converting the `raw` node to a
+ * `text` node makes the later `raw()` serialise it with `<`/`>` escaped,
+ * so `<thing>` survives as the four-plus characters rather than a tag.
+ *
+ * Must run BEFORE `raw()` — that's when these are still flat `raw` nodes
+ * carrying their original source string. Known HTML/SVG tags and custom
+ * elements (`foo-bar`) are left as `raw` so `raw()` parses them as real
+ * markup — including shiki's `<pre class="shiki">` highlight blocks.
+ */
+export function escapeUnknownRawHtml(tree: HastLike): void {
+  if (!tree.children) return;
+  for (const child of tree.children) {
+    if (child.children) escapeUnknownRawHtml(child);
+    if (child.type === 'raw' && typeof child.value === 'string') {
+      const tag = RAW_LEADING_TAG_RE.exec(child.value)?.[1];
+      if (tag && !isKnownTag(tag)) {
+        // Demote to text — `raw()` will HTML-escape it, so the tag shows
+        // verbatim instead of being parsed into an unknown element.
+        child.type = 'text';
+      }
+    }
+  }
+}
+
+/**
+ * Safety net for unknown elements that slipped past
+ * {@link escapeUnknownRawHtml} — e.g. an unknown tag *nested inside* a
+ * block of recognised raw HTML, which `raw()` parses as one unit. Drops
+ * the element but keeps its children so no React unknown-tag warning is
+ * left behind. Runs AFTER `raw()`, when such chunks have become real
+ * hast elements with a `tagName`. Custom elements (`foo-bar`) pass
+ * through untouched.
+ */
+export function stripUnknownElements(tree: HastLike): void {
+  if (!tree.children) return;
+  const out: HastLike[] = [];
+  for (const child of tree.children) {
+    if (child.children) stripUnknownElements(child);
+    if (child.type === 'element' && typeof child.tagName === 'string' && !isKnownTag(child.tagName)) {
+      // Unwrap: keep the (already-cleaned) children in place of the node.
+      if (child.children) out.push(...child.children);
+      continue;
+    }
+    out.push(child);
+  }
+  tree.children = out;
+}
 
 /**
  * Group each heading + its following sibling content into a
@@ -105,7 +172,16 @@ export function renderMdastToReactNode(renderedAst: unknown, options: RenderMdas
     // is wasted work.
     wrapSections(hast as HastLike);
   }
+  // Demote unrecognised raw-HTML tags (e.g. a literal `<thing>` typed in
+  // prose) to text BEFORE `raw()` parses them, so they render as the
+  // verbatim text the author typed instead of vanishing into an empty
+  // unknown DOM element (which also makes React warn).
+  escapeUnknownRawHtml(hast as HastLike);
   const parsed = raw(hast as HastNodes);
+  // Safety net: drop any unknown element that survived (unknown tag
+  // nested inside an otherwise-recognised raw-HTML block), keeping its
+  // children so no React unknown-tag warning is left behind.
+  stripUnknownElements(parsed as HastLike);
   return toJsxRuntime(parsed, {
     Fragment,
     jsx,
