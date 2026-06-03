@@ -67,6 +67,7 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **api-contract**: edit contracts/schemas → `pnpm --filter @crowi/api-contract
   build` to regenerate dts before api/web consumers pick them up (turbo `^build`
   handles this in `dev` / `build` / `test`).
+- **OpenAPI artifacts (run before committing any API change)**: after editing contracts/schemas or routes, run `pnpm check:openapi`. It regenerates `packages/api-contract/openapi.{json,yaml}` and `src/generated/openapi.ts` from the contracts and fails if the committed copies drifted, leaving the regenerated files in the working tree — `git add` them into the same commit. The pre-push hook runs this too (scoped to `packages/api-contract/**`), so a stale spec blocks the push.
 - **Realtime collab dev**: `pnpm dev` is enough — `@crowi/collab` is attached
   as a library inside the api process (RFC-0003 §"Implementation notes"), so
   there is no separate collab process / port to manage. To smoke-test collab
@@ -77,7 +78,7 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 ## Architecture Overview
 
 ### API server (`packages/api`)
-- **Boot**: `Crowi.init()` runs `setupEncryption` → `setupDatabase` → `setupModels` → `setupRedisClient` → `setupSessionConfig` → `setupConfig` → `migrateConfig` → `setupSearcher` → `setupMailer` → `setupSlack` → `buildServer`.
+- **Boot**: `Crowi.init()` runs `setupEncryption` → `setupDatabase` → `setupModels` → `setupRedisClient` → `setupSessionConfig` → `setupConfig` → `setupSearcher` → `setupMailer` → `setupSlack` → `buildServer`.
 - **Routing** (all Hono, mounted under `/api/v2`):
   - Public routes (no auth)
   - Authenticated routes under `createJwtAuth(crowi)` (most page / user / comment / etc. endpoints)
@@ -85,7 +86,7 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **Auth**: JWT (access + refresh tokens). `req.user` is augmented to `UserDocument` via `packages/api/src/types/express.ts`.
 - **Models** (Mongoose):
   - Page (with grant), Revision, User, Comment, Bookmark, Like (on Page), Watcher, Notification, Activity, Config, Backlink, Share, Attachment.
-- **Sensitive Config encryption**: `packages/api/src/util/crypto.ts` provides AES-256-GCM `encrypt` / `decrypt` / `isEncrypted`. Sensitive keys (OAuth secrets, AWS keys, SMTP password, Slack token) are listed in `models/config-sensitive.ts` and auto-encrypted by `Config.updateByParams` / decrypted by `Config.loadAllConfig` when `CROWI_ENCRYPTION_KEY` is set. Legacy plaintext rows pass through; admin can re-encrypt them via `/admin/crypto/reencrypt`.
+- **Sensitive Config encryption**: `packages/api/src/util/crypto.ts` provides AES-256-GCM `encrypt` / `decrypt` / `isEncrypted`. Sensitive keys are registered in `models/config-sensitive.ts`: a static set for the few that remain in core config (OAuth secrets, Slack token) plus a runtime set that each plugin's `@sensitive` config fields (storage / mail credentials etc.) register at boot. They are auto-encrypted by `Config.updateByParams` / decrypted by `Config.loadAllConfig` when `CROWI_ENCRYPTION_KEY` is set. Legacy plaintext rows pass through; admin can re-encrypt them via `/admin/crypto/reencrypt`.
 - **Realtime collab (RFC-0003)**: Hocuspocus is attached to the api process as a library via `packages/api/src/collab/attach.ts`, using the api's `http.Server` in `ws noServer` mode for `/collab/*` upgrades. When `crowi.redis !== null` (i.e. `REDIS_URL` is set), `@hocuspocus/extension-redis` is auto-attached so multi-instance deployments work without sticky sessions. See `docs/rfcs/0003-realtime-collaborative-editing.md` for the design and `apps/crowi-site/content/docs/{ja,en}/operations/realtime-collab.mdx` for operator instructions.
 
 ### Web frontend (`packages/web`)
@@ -185,7 +186,7 @@ go to `TODO.md`.
 
 ### Hooks (lefthook)
 - **pre-commit**: Biome format on staged files
-- **pre-push**: `pnpm lint` (errors=0 required)
+- **pre-push**: `pnpm lint` (errors=0 required) + `pnpm check:openapi` (only when `packages/api-contract/**` changed — the OpenAPI artifacts must be regenerated and committed)
 - Installed during `pnpm install`.
 
 ### Commit messages
@@ -200,50 +201,38 @@ go to `TODO.md`.
 
 ### Changesets (release notes accumulation)
 
-Phase 9 で `@changesets/cli` を導入済み。v2 開発中も `pnpm changeset add`
-で各リリース対象の変更を `.changeset/*.md` として **蓄積していく** ことで、
-2.0.0-alpha1 / 安定版リリース時に過去変更のリリースノートが自動生成される。
+`@changesets/cli` is set up (Phase 9). Throughout v2 development, accumulate a `.changeset/*.md` per release-worthy change with `pnpm changeset add`, so the release notes for 2.0.0-alpha1 / stable are generated automatically from the past changes.
 
-**changeset 本文も英語で書く** (commit message と同様、リリースノートに
-そのまま載るため)。会話が日本語でも changeset の要約は英語。
+Write changeset bodies in English too (like commit messages, they go straight into the release notes), even when the working conversation is in Japanese.
 
-**Add のタイミング — 「ユーザー価値の単位」で 1 つ**:
-- ✅ 機能追加・バグ修正・破壊的変更 → 1 changeset
-- ✅ 同じ機能を分割した複数 commit でも、ユーザー視点で 1 つなら 1 changeset
-  (実装途中の小さな commit ごとに changeset は **作らない**)
-- ❌ 内部 refactor / コード整理 / lint fix / format / 内部 build infra
-  / test 追加だけ → changeset 不要 (ユーザーから見える変化なし)
-- ❌ docs(todo) / CLAUDE.md / `.claude/` 更新 → changeset 不要
-- ❌ `feature-monorepo-packages-restructure` の各 phase commit → 全体で 1
-  changeset (`.changeset/initial-release.md` で既に拾われている)
+When to add — one changeset per "unit of user value":
+- ✅ Feature / bug fix / breaking change → one changeset.
+- ✅ One feature split across several commits is still one changeset if it's a single thing from the user's point of view (do not add a changeset per small in-progress commit).
+- ❌ Internal refactor / cleanup / lint fix / format / build infra / tests only → no changeset (no user-visible change).
+- ❌ docs(todo) / CLAUDE.md / `.claude/` updates → no changeset.
+- ❌ Per-phase commits of `feature-monorepo-packages-restructure` → covered as a whole by one changeset (`.changeset/initial-release.md`).
 
-判断基準: 「次の changelog に書いて意味があるか」。`feat:` / `fix:` で
-ユーザー behavior が変わるなら add、`refactor:` / `chore:` / `test:` /
-`docs:` だけなら add しない。
+Rule of thumb: "is it worth writing in the next changelog?" Add when `feat:` / `fix:` changes user behavior; skip when it is only `refactor:` / `chore:` / `test:` / `docs:`.
 
-**Bump レベルの選び方**:
-- `patch` — bug fix、内部最適化が露出するもの、依存 bump (semver-safe)
-- `minor` — 新機能、新エンドポイント、既存挙動を壊さない設定追加
-- `major` — 破壊的変更 (API 削除、エンドポイント仕様変更、required 設定追加)
+Choosing the bump level:
+- `patch` — bug fix, an internal optimization that becomes observable, dependency bump (semver-safe).
+- `minor` — new feature, new endpoint, backward-compatible config addition.
+- `major` — breaking change (API removal, endpoint contract change, newly-required config).
 
-**対象 package の選び方**:
-- API 振る舞いを変えた → `@crowi/api`
-- Web UI を変えた → `@crowi/web` (private なので登録しても publish はされない
-  が、CHANGELOG.md は生成される)
-- API contract を変えた → `@crowi/api-contract` (linked group なので
-  api / web も同時 bump される)
-- Plugin SDK を拡張した → `@crowi/plugin-api` + 影響する個別 plugin
-- Plugin 1 つだけ更新 → その plugin のみ
+Choosing the target package:
+- Changed API behavior → `@crowi/api`.
+- Changed Web UI → `@crowi/web` (private, so it is never published, but a CHANGELOG.md is still generated).
+- Changed an API contract → `@crowi/api-contract` (linked group, so api / web bump together).
+- Extended the plugin SDK → `@crowi/plugin-api` + the affected individual plugins.
+- Updated a single plugin → that plugin only.
 
-**コマンド**:
+Commands:
 ```bash
-pnpm changeset add        # 対話的に package + bump level + 概要を選ぶ
-pnpm changeset status     # 蓄積された未公開 changeset 一覧
+pnpm changeset add        # interactively pick package + bump level + summary
+pnpm changeset status     # list accumulated, unreleased changesets
 ```
 
-PR を main に merge する直前 (or PR の中) で 1 ファイル add する運用。
-初版 (`.changeset/initial-release.md`) は restructure 全体を覆う sentinel
-として `feature-monorepo-packages-restructure` 完了時に置いた、消さない。
+Add one file just before merging to main (or within the PR). The initial `.changeset/initial-release.md` is a sentinel covering the whole restructure, placed when `feature-monorepo-packages-restructure` completed — do not delete it.
 
 ### State directories
 - `.migration-state/` (repo root, gitignored except `.gitkeep`): per-task
