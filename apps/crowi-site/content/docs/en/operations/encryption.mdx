@@ -15,21 +15,39 @@ enable encryption, set the master key `CROWI_ENCRYPTION_KEY`.
 ## What gets encrypted
 
 Only the keys in the MongoDB `Config` collection that are registered as
-sensitive are encrypted. The targets built into Crowi are as follows.
+sensitive are encrypted.
+
+**1. Plugin sensitive fields (the primary target)**
+
+Third-party credentials for storage, mail, search, etc. live in their
+**plugin's config namespace** (`crowi:plugin:<plugin name>:<field>`). Fields a
+plugin marks with `@sensitive` are automatically registered into the sensitive
+list at boot and follow the encryption path. For example:
+
+| Namespace:key | Description |
+| ------------- | ----------- |
+| `crowi:plugin:@crowi/plugin-aws:secretAccessKey` | AWS credentials (S3 storage / SES mail) |
+| `crowi:plugin:@crowi/plugin-mail-smtp:password` | SMTP password |
+| `crowi:plugin:@crowi/plugin-mail-resend:apiKey` | Resend API key |
+
+**2. Sensitive keys that remain in core config**
 
 | Namespace:key | Description |
 | ------------- | ----------- |
 | `crowi:google:clientSecret` | Google OAuth client secret |
 | `crowi:github:clientSecret` | GitHub OAuth client secret |
-| `crowi:upload:aws:accessKeyId` / `secretAccessKey` | AWS credentials for uploads |
-| `crowi:mail:aws:accessKeyId` / `secretAccessKey` | AWS credentials for mail (SES) |
-| `crowi:mail:smtpPassword` | SMTP password |
 | `notification:slack:clientSecret` / `token` | Slack integration secret / token |
-| `crowi:plugin:@crowi/plugin-aws:accessKeyId` / `secretAccessKey` | AWS plugin credentials |
 
-In addition, configuration fields that a plugin marks with `@sensitive`
-are automatically registered into the sensitive list at boot and follow
-the same encryption path (`crowi:plugin:<plugin name>:<field>`).
+> **Note**: OAuth (Google / GitHub) secrets stay in core config until auth
+> providers become plugins; once they do, they move to the plugin namespace
+> like the other integrations.
+
+> **Note (migrating from old Crowi)**: The legacy core-namespace credentials
+> from older versions — `crowi:upload:aws:*`, `crowi:mail:aws:*`,
+> `crowi:mail:smtpPassword` — **have been removed**. In the new Crowi you simply
+> **enable the matching plugin and re-enter the values** (they are saved as the
+> plugin's `@sensitive` fields and encrypted automatically). There is no
+> automatic migration of the old data and no fallback read of the old keys.
 
 > **Note**: User passwords (`User.password`) are separately hashed with
 > bcrypt and are not part of this encryption. API tokens and shared-page

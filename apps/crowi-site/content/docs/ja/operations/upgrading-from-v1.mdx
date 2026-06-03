@@ -103,6 +103,12 @@ crowi-admin storage copy --from local --to s3 --dry-run
 crowi-admin storage copy --from local --to s3
 ```
 
+> **Note**: v1 の AWS / S3 認証情報 (旧 `upload:aws:*` のコア設定) は
+> **引き継がれません**。`@crowi/plugin-aws` (および
+> `@crowi/plugin-storage-aws-s3`) を有効化し、管理画面の **Plugins** で
+> 認証情報を入力し直してください (プラグイン名前空間に保存され、暗号化
+> されます)。
+
 ## 移行前に必ず行うこと
 
 実際に移行を試す前に、以下を済ませてください。

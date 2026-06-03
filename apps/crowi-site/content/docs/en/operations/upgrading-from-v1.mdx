@@ -104,6 +104,11 @@ crowi-admin storage copy --from local --to s3 --dry-run
 crowi-admin storage copy --from local --to s3
 ```
 
+> **Note**: v1 AWS / S3 credentials (the old `upload:aws:*` core config) are
+> **not carried over**. Enable `@crowi/plugin-aws` (and
+> `@crowi/plugin-storage-aws-s3`) and re-enter the credentials in the admin
+> **Plugins** screen — they are stored in the plugin's namespace and encrypted.
+
 ## What to do before migrating
 
 Before actually trying a migration, complete the following.

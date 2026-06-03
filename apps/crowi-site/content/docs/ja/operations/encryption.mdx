@@ -14,22 +14,39 @@ Slack トークンといった **機密性の高い設定値を、保存時に�
 ## 暗号化の対象
 
 暗号化されるのは MongoDB の `Config` コレクションのうち、機密扱いとして
-登録されたキーだけです。Crowi にあらかじめ組み込まれている対象は次の
-とおりです。
+登録されたキーだけです。
+
+**1. プラグインの機密フィールド (主な対象)**
+
+ストレージ・メール・検索などサードパーティ連携のクレデンシャルは、その
+**プラグインの設定名前空間** (`crowi:plugin:<プラグイン名>:<フィールド>`)
+に保存されます。プラグインが `@sensitive` マーカーを付けたフィールドは
+起動時に自動で機密リストへ登録され、暗号化経路をたどります。例:
+
+| 名前空間:キー | 内容 |
+| ------------- | ---- |
+| `crowi:plugin:@crowi/plugin-aws:secretAccessKey` | AWS クレデンシャル (S3 ストレージ / SES メール) |
+| `crowi:plugin:@crowi/plugin-mail-smtp:password` | SMTP パスワード |
+| `crowi:plugin:@crowi/plugin-mail-resend:apiKey` | Resend API キー |
+
+**2. コア設定に残る機密キー**
 
 | 名前空間:キー | 内容 |
 | ------------- | ---- |
 | `crowi:google:clientSecret` | Google OAuth のクライアントシークレット |
 | `crowi:github:clientSecret` | GitHub OAuth のクライアントシークレット |
-| `crowi:upload:aws:accessKeyId` / `secretAccessKey` | アップロード用 AWS クレデンシャル |
-| `crowi:mail:aws:accessKeyId` / `secretAccessKey` | メール (SES) 用 AWS クレデンシャル |
-| `crowi:mail:smtpPassword` | SMTP パスワード |
 | `notification:slack:clientSecret` / `token` | Slack 連携のシークレット / トークン |
-| `crowi:plugin:@crowi/plugin-aws:accessKeyId` / `secretAccessKey` | AWS プラグインのクレデンシャル |
 
-これに加えて、プラグインが `@sensitive` マーカーを付けた設定フィールドも
-起動時に自動で機密リストへ登録され、同じ暗号化経路をたどります
-(`crowi:plugin:<プラグイン名>:<フィールド>`)。
+> **Note**: OAuth (Google / GitHub) のシークレットは、認証プロバイダが
+> プラグイン化されるまではコア設定に残ります。プラグイン化後は他の連携と
+> 同様にプラグイン名前空間へ移動します。
+
+> **Note (旧 Crowi からの移行)**: 旧バージョンにあった
+> `crowi:upload:aws:*` / `crowi:mail:aws:*` / `crowi:mail:smtpPassword`
+> などの**コア名前空間の legacy クレデンシャルは廃止**されました。新しい
+> Crowi では、対応する**プラグインを有効化し、値を入力し直す**だけです
+> (値はプラグイン名前空間の `@sensitive` フィールドに保存され、自動で
+> 暗号化されます)。旧データの自動移行やフォールバック参照は行いません。
 
 > **Note**: ユーザーのパスワード (`User.password`) は別途 bcrypt で
 > ハッシュ化されており、ここでの暗号化対象には含まれません。API トークンや
