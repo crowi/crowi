@@ -22,7 +22,15 @@
   "packageManager": "pnpm@9.15.9",
   "pnpm": {
     "overrides": {
-      "fast-xml-parser": "5.7.3"
+      "fast-xml-parser": "5.7.3",
+      "minimatch@9.0.3": "9.0.9",
+      "postcss@<8.5.13": "8.5.15",
+      "follow-redirects@<1.16.0": "1.16.0",
+      "brace-expansion@>=1.0.0 <1.1.13": "1.1.13",
+      "picomatch@>=2.0.0 <2.3.2": "2.3.2",
+      "yaml@>=1.0.0 <1.10.3": "1.10.3",
+      "yauzl@3.2.0": "3.2.1",
+      "ajv@>=6.0.0 <6.14.0": "6.14.0"
     }
   },
   "scripts": {
@@ -51,6 +59,6 @@
     "@changesets/cli": "^2.31.0",
     "conventional-changelog-cli": "^5.0.0",
     "lefthook": "^2.1.6",
-    "turbo": "^2.5.4"
+    "turbo": "^2.9.16"
   }
 }
