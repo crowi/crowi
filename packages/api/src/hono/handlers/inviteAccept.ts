@@ -18,6 +18,7 @@ import type Crowi from 'src/crowi';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
 import { createMailTokenUtil } from 'src/util/mail-token';
+import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 
 import type { CrowiHonoBindings } from '../app';
 
@@ -84,6 +85,13 @@ export const registerInviteAcceptRoutes = <E extends OpenAPIHono<CrowiHonoBindin
         const tokens = jwtUtil.generateTokens(activated);
         return c.json({ ...tokens, user: toAuthUser(activated) }, 200);
       } catch (error) {
+        // The username findOne pre-check can be raced; the unique index is the
+        // final defence. Map its E11000 to the same 409 the pre-check returns.
+        const duplicateCode = mapDuplicateKeyError(error);
+        if (duplicateCode) {
+          const message = duplicateCode === 'USERNAME_TAKEN' ? 'Username already taken' : 'That email address is already in use';
+          return c.json({ error: { code: duplicateCode, message } }, 409);
+        }
         debug('Invite acceptance error:', error);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }

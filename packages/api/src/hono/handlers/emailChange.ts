@@ -14,6 +14,7 @@ import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
 import { createMailTokenUtil } from 'src/util/mail-token';
+import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 
 import type { CrowiHonoBindings } from '../app';
 
@@ -72,6 +73,12 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
 
         return c.json({ ok: true as const, email: user.email }, 200);
       } catch (error) {
+        // The email findOne pre-check can be raced; the unique index is the
+        // final defence. Map its E11000 to the same 409 the pre-check returns.
+        const duplicateCode = mapDuplicateKeyError(error);
+        if (duplicateCode === 'EMAIL_TAKEN') {
+          return c.json({ error: { code: 'EMAIL_TAKEN' as const, message: 'That email address is already in use' } }, 409);
+        }
         debug('email-change confirmation error:', error);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
