@@ -12,8 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { notify } from '@/lib/notify';
-import { usePageList } from '@/lib/use-page-list';
 import { pagePathToHref } from '@/lib/page-path';
+import { usePageList } from '@/lib/use-page-list';
 import { PageRevisionConflictError, type RenameTreeConflict, RenameTreeConflictError, useRenamePage } from '@/lib/use-page-mutations';
 
 interface RenameDialogProps {
@@ -237,12 +237,14 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
               {preview.length > 0 && !isInvalid && (
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium text-muted-foreground">{m['page.rename.descendants_preview_title']()}</p>
-                  <ul className="space-y-1">
+                  <ul className="space-y-1.5">
                     {preview.map((item) => (
-                      <li key={item.from} className="flex items-center gap-1.5 font-mono text-xs">
-                        <span className="truncate text-muted-foreground line-through">{item.from}</span>
-                        <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className="truncate text-foreground">{item.to}</span>
+                      <li key={item.from} className="min-w-0 font-mono text-xs">
+                        <span className="block truncate text-muted-foreground line-through">{item.from}</span>
+                        <span className="flex items-center gap-1.5 text-foreground">
+                          <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 truncate">{item.to}</span>
+                        </span>
                       </li>
                     ))}
                   </ul>
