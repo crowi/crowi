@@ -1,5 +1,6 @@
 import type { MigrationDefinition } from '../types';
 import { pageStatusDefault } from './page-status-default';
+import { userUniquePrepare } from './user-unique-prepare';
 import { wikilinkFormat } from './wikilink-format';
 
 /**
@@ -12,10 +13,10 @@ import { wikilinkFormat } from './wikilink-format';
  *
  * Subsequent phases append their definitions here:
  *
- *   import { userUniquePrepare } from './user-unique-prepare';   // phase 5 (preflight)
  *   import { revisionsSchemaUnify } from './revisions-schema-unify'; // phase 6 (preflight)
  */
 export const allMigrations: MigrationDefinition[] = [
   pageStatusDefault, // phase 2 (boot)
   wikilinkFormat, // phase 3 (preflight)
+  userUniquePrepare, // phase 5 (preflight)
 ];
