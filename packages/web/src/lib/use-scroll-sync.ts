@@ -25,19 +25,6 @@ interface UseScrollSyncOptions {
    * Tabs layout where editor / preview never coexist on screen.
    */
   enabled: boolean;
-  /**
-   * Opaque value the caller changes whenever the underlying CodeMirror
-   * view is recreated (e.g. the collab wrapper remounts the inner editor
-   * via `key` once Y.Text becomes ready). The hook captures
-   * `editorScroll = getScrollDOM()` once per effect run and binds the
-   * editor→preview `scroll` listener to *that* element; when the view is
-   * replaced, the old `scrollDOM` is destroyed and the listener goes
-   * dead — while preview→editor keeps working because it dereferences
-   * the live ref each time. Bumping `rebindKey` re-runs the effect so
-   * the listener re-binds to the new `scrollDOM`. Leave undefined when
-   * the editor never remounts.
-   */
-  rebindKey?: unknown;
 }
 
 /**
@@ -73,12 +60,11 @@ interface UseScrollSyncOptions {
  * If a future plugin reorders top-level mdast nodes, sync would
  * silently mis-target.
  */
-export function useScrollSync({ editorRef, previewRef, enabled, rebindKey }: UseScrollSyncOptions): void {
+export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncOptions): void {
   useEffect(() => {
     if (!enabled) return;
-    const editorScroll = editorRef.current?.getScrollDOM() ?? null;
     const previewScroll = previewRef.current;
-    if (!editorScroll || !previewScroll) return;
+    if (!previewScroll) return;
 
     let lock: 'editor' | 'preview' | null = null;
 
@@ -175,13 +161,23 @@ export function useScrollSync({ editorRef, previewRef, enabled, rebindKey }: Use
       });
     };
 
-    editorScroll.addEventListener('scroll', onEditorScroll, { passive: true });
+    // Editor → preview: the CodeMirror `.cm-scroller` element is *replaced*
+    // whenever the collab wrapper remounts the inner view (Y.Text becomes
+    // ready, StrictMode, page swap, …), so binding to a captured element
+    // silently goes dead after the ~100ms handshake. Instead listen on
+    // `document` in the capture phase — scroll events don't bubble but
+    // ancestor capture listeners still receive them — and match the event
+    // against the *live* scroll element each time. This survives any view
+    // recreation without the caller having to signal remounts.
+    const onEditorScrollCapture = (e: Event) => {
+      if (e.target !== editorRef.current?.getScrollDOM()) return;
+      onEditorScroll();
+    };
+    document.addEventListener('scroll', onEditorScrollCapture, { capture: true, passive: true });
     previewScroll.addEventListener('scroll', onPreviewScroll, { passive: true });
     return () => {
-      editorScroll.removeEventListener('scroll', onEditorScroll);
+      document.removeEventListener('scroll', onEditorScrollCapture, { capture: true });
       previewScroll.removeEventListener('scroll', onPreviewScroll);
     };
-    // `rebindKey` re-runs the effect when the editor view is recreated so
-    // the editor→preview listener re-binds to the fresh `scrollDOM`.
-  }, [editorRef, previewRef, enabled, rebindKey]);
+  }, [editorRef, previewRef, enabled]);
 }
