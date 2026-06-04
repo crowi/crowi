@@ -80,6 +80,12 @@ const pageRevisionConflictBody = () => ({
   error: { code: 'PAGE_REVISION_ERROR' as const, message: 'Revision error.' },
 });
 
+// Structured 400 body shared by both subtree-rename paths (page_id-based and
+// path-based). `partial: true` marks a mid-execution best-effort failure.
+const renameTreeFailedBody = (message: string, conflicts: { path: string; reasons: string[] }[], partial?: boolean) => ({
+  error: { code: 'PAGE_RENAME_TREE_FAILED' as const, message, conflicts, ...(partial ? { partial } : {}) },
+});
+
 export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Page = crowi.model('Page');
   const User = crowi.model('User');
@@ -751,18 +757,13 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             }
             const newPaths = Object.values(pathMap);
 
-            // Structured 400 for both the up-front collision case and the
-            // mid-execution best-effort failure — they share the same envelope.
-            const renameTreeFailed = (message: string, conflicts: { path: string; reasons: string[] }[], partial?: boolean) =>
-              c.json({ error: { code: 'PAGE_RENAME_TREE_FAILED' as const, message, conflicts, ...(partial ? { partial } : {}) } }, 400);
-
             // Up-front validation: name legality + destination collisions.
             const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
             if (hasError) {
               const conflicts = Object.entries(errorsByPath)
                 .filter(([, reasons]) => reasons.length > 0)
                 .map(([path, reasons]) => ({ path, reasons }));
-              return renameTreeFailed('Some pages cannot be moved to the destination path.', conflicts);
+              return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', conflicts), 400);
             }
 
             // Execute. Non-transactional best-effort: a mid-way failure may
@@ -772,7 +773,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             } catch (err) {
               const error = err as Error;
               debug('Error renaming subtree:', error.message);
-              return renameTreeFailed(`Failed to move the whole subtree — some pages may already have been moved. (${error.message})`, [], true);
+              return c.json(
+                renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${error.message})`, [], true),
+                400,
+              );
             }
 
             const movedRoot = (await Page.findPageByPath(newPagePath)) as PageDocument | null;
@@ -844,9 +848,6 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           return c.json(pageBadRequestBody('PAGE_INVALID_NAME', `Cannot move the subtree to this path (${newPagePath})`), 400);
         }
 
-        const renameTreeFailed = (message: string, conflicts: { path: string; reasons: string[] }[], partial?: boolean) =>
-          c.json({ error: { code: 'PAGE_RENAME_TREE_FAILED' as const, message, conflicts, ...(partial ? { partial } : {}) } }, 400);
-
         try {
           // Grant-filtered subtree under the folder. Drop the folder path
           // itself and its un-slashed twin (a separate page, not a child) —
@@ -857,7 +858,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const descendants = subtree.filter((p) => !selfPaths.has(p.path));
 
           if (descendants.length === 0) {
-            return renameTreeFailed('There are no pages to move under this path.', []);
+            return c.json(renameTreeFailedBody('There are no pages to move under this path.', []), 400);
           }
 
           const pathMap = Page.getPathMap(
@@ -873,7 +874,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             const conflicts = Object.entries(errorsByPath)
               .filter(([, reasons]) => reasons.length > 0)
               .map(([path, reasons]) => ({ path, reasons }));
-            return renameTreeFailed('Some pages cannot be moved to the destination path.', conflicts);
+            return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', conflicts), 400);
           }
 
           // Execute. Non-transactional best-effort: a mid-way failure may
@@ -883,14 +884,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           } catch (err) {
             const error = err as Error;
             debug('Error renaming subtree by path:', error.message);
-            return renameTreeFailed(`Failed to move the whole subtree — some pages may already have been moved. (${error.message})`, [], true);
+            return c.json(renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${error.message})`, [], true), 400);
           }
 
           return c.json({ renamed_count: newPaths.length }, 200);
         } catch (err) {
           const error = err as Error;
           debug('Error renaming subtree by path:', error.message);
-          return renameTreeFailed(error.message || 'Failed to move the subtree.', []);
+          return c.json(renameTreeFailedBody(error.message || 'Failed to move the subtree.', []), 400);
         }
       })
   );

@@ -77,6 +77,24 @@ export interface RenamePageResult {
   renamedCount: number;
 }
 
+/**
+ * Inspect a parsed 400 body from a rename endpoint and, if it is the structured
+ * PAGE_RENAME_TREE_FAILED variant (the one carrying `conflicts`), throw a
+ * RenameTreeConflictError. Discriminates on the presence of `conflicts` — the
+ * generic page-error variant's `code` is a plain string and cannot narrow as a
+ * literal. Returns (without throwing) for any other body so the caller can fall
+ * back to a generic error.
+ */
+function throwIfRenameTreeConflict(body: unknown): void {
+  if (body && typeof body === 'object' && 'error' in body) {
+    const error = (body as { error: unknown }).error;
+    if (error && typeof error === 'object' && 'conflicts' in error) {
+      const treeError = error as { message: string; conflicts: RenameTreeConflict[]; partial?: boolean };
+      throw new RenameTreeConflictError(treeError.message, treeError.conflicts, Boolean(treeError.partial));
+    }
+  }
+}
+
 export function useUpdatePage() {
   const queryClient = useQueryClient();
 
@@ -229,15 +247,7 @@ export function useRenamePage() {
         // A subtree rename can fail with a structured PAGE_RENAME_TREE_FAILED
         // body (destination collisions / partial move). Surface the offending
         // paths so the dialog can list them.
-        const body = await response.json().catch(() => null);
-        // The 400 body is a union of the generic page error and the subtree
-        // RenameTreeError; the latter is the one carrying `conflicts`. The
-        // generic variant's `code` is `string` (so a literal compare cannot
-        // narrow it) — discriminate on the presence of `conflicts` instead.
-        if (body && 'error' in body && 'conflicts' in body.error) {
-          const treeError = body.error;
-          throw new RenameTreeConflictError(treeError.message, treeError.conflicts, Boolean(treeError.partial));
-        }
+        throwIfRenameTreeConflict(await response.json().catch(() => null));
       }
       throw new Error(m['errors.rename_failed']());
     },
@@ -267,13 +277,8 @@ export function useRenameSubtree() {
       }
       if (response.status === 400) {
         // Structured PAGE_RENAME_TREE_FAILED (collisions / nothing to move /
-        // partial). Discriminate on the presence of `conflicts` — the generic
-        // variant's `code` is `string` and cannot narrow as a literal.
-        const body = await response.json().catch(() => null);
-        if (body && 'error' in body && 'conflicts' in body.error) {
-          const treeError = body.error;
-          throw new RenameTreeConflictError(treeError.message, treeError.conflicts, Boolean(treeError.partial));
-        }
+        // partial), or a generic 400 → fall through to the generic error.
+        throwIfRenameTreeConflict(await response.json().catch(() => null));
       }
       throw new Error(m['errors.rename_failed']());
     },
