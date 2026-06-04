@@ -222,6 +222,16 @@ html[data-page-grant="2"] {
   * {
     @apply border-border outline-ring/50;
   }
+  /* Disable the document's rubber-band overscroll (the macOS / Chrome bounce
+   * at the top/bottom of the page). The in-flow header scrolls with the
+   * document while the left rail and right TOC are `position: fixed` to the
+   * viewport; during a bounce only one of them translates, so the fixed rails
+   * visibly overlap / bleed through the header. Killing the bounce keeps the
+   * two positioning models aligned. `-y` only, so horizontal scroll chaining
+   * is untouched. */
+  html {
+    overscroll-behavior-y: none;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-geist-sans), var(--font-noto-sans-jp), 'Helvetica Neue', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
