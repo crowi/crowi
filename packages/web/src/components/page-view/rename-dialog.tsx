@@ -15,6 +15,7 @@ import { notify } from '@/lib/notify';
 import { pagePathToHref } from '@/lib/page-path';
 import { usePageList } from '@/lib/use-page-list';
 import { PageRevisionConflictError, type RenameTreeConflict, RenameTreeConflictError, useRenamePage } from '@/lib/use-page-mutations';
+import { cn } from '@/lib/utils';
 
 interface RenameDialogProps {
   page: PageWithRevision;
@@ -83,7 +84,10 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
   // site-wide pages — short-circuit by disabling the query.
   const isRoot = page.path === '/';
   const descendantRoot = page.path.endsWith('/') ? page.path : `${page.path}/`;
-  const { data: descendantData } = usePageList({ path: descendantRoot, limit: 100, offset: 0, include_deleted: false }, { enabled: !isRoot });
+  // `limit: 0` fetches the whole subtree (Mongoose treats `.limit(0)` as no
+  // limit) so the count is exact and the user can expand to verify every page
+  // that would move — the server-side renameTree scans the same full subtree.
+  const { data: descendantData } = usePageList({ path: descendantRoot, limit: 0, offset: 0, include_deleted: false }, { enabled: !isRoot });
   // When a portal page '/foo/bar/' is being renamed, findListByStartWith
   // also returns the un-slashed leaf '/foo/bar' (see Page.findListByStartWith
   // — it appends `path.substr(0, path.length-1)` to the path conditions).
@@ -95,21 +99,21 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
   }, [page.path]);
   const descendants = useMemo(() => (descendantData?.pages ?? []).filter((p) => !pageSelfPaths.has(p.path)), [descendantData, pageSelfPaths]);
   const descendantCount = descendants.length;
-  // `descendantData.pager.next` is non-null when there are more pages of
-  // descendants beyond the limit=100 fetch — we surface that as a "X+"
-  // marker so the count never silently understates a large subtree.
-  const isCountTruncated = descendantData?.pager?.next != null;
 
-  // Preview of how subtree paths would be rewritten under the new path.
-  const preview = useMemo(() => {
+  // The full list of how every subtree path would be rewritten under the new
+  // path. Collapsed to the first DESCENDANT_PREVIEW_LIMIT rows by default; the
+  // "+N more" toggle reveals the rest in a scrollable list.
+  const [showAllDescendants, setShowAllDescendants] = useState(false);
+  const rewrites = useMemo(() => {
     const oldBase = page.path.replace(/\/+$/, '');
     const newBase = newPath.replace(/\/+$/, '');
-    return descendants.slice(0, DESCENDANT_PREVIEW_LIMIT).map((d) => ({
+    return descendants.map((d) => ({
       from: d.path,
       to: `${newBase}${d.path.slice(oldBase.length)}`,
     }));
   }, [descendants, page.path, newPath]);
-  const moreCount = descendantCount - preview.length;
+  const preview = showAllDescendants ? rewrites : rewrites.slice(0, DESCENDANT_PREVIEW_LIMIT);
+  const moreCount = rewrites.length - DESCENDANT_PREVIEW_LIMIT;
 
   const canSubmit = !isSubmitting && !isUnchanged && !isInvalid;
 
@@ -216,11 +220,7 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
               <Label htmlFor="rename-include-descendants" className="text-sm font-medium">
                 {m['page.rename.include_descendants']()}
               </Label>
-              <p className="text-xs text-muted-foreground">
-                {isCountTruncated
-                  ? m['page.rename.descendants_count_more']({ count: descendantCount })
-                  : m['page.rename.descendants_count']({ count: descendantCount })}
-              </p>
+              <p className="text-xs text-muted-foreground">{m['page.rename.descendants_count']({ count: descendantCount })}</p>
             </div>
             <Switch
               id="rename-include-descendants"
@@ -238,7 +238,7 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
               {preview.length > 0 && !isInvalid && (
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium text-muted-foreground">{m['page.rename.descendants_preview_title']()}</p>
-                  <ul className="space-y-1.5">
+                  <ul className={cn('space-y-1.5', showAllDescendants && 'max-h-56 overflow-y-auto pr-1')}>
                     {preview.map((item) => (
                       <li key={item.from} className="min-w-0 font-mono text-xs">
                         <span className="block truncate text-muted-foreground line-through">{item.from}</span>
@@ -249,7 +249,15 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
                       </li>
                     ))}
                   </ul>
-                  {moreCount > 0 && <p className="text-xs text-muted-foreground">{m['page.rename.descendants_more']({ count: moreCount })}</p>}
+                  {moreCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDescendants((v) => !v)}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      {showAllDescendants ? m['page.rename.descendants_collapse']() : m['page.rename.descendants_more']({ count: moreCount })}
+                    </button>
+                  )}
                 </div>
               )}
             </>
