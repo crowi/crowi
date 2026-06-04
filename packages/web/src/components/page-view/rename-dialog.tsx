@@ -2,7 +2,7 @@
 
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, ExternalLink, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -241,7 +241,19 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
                   <ul className={cn('space-y-1.5', showAllDescendants && 'max-h-56 overflow-y-auto pr-1')}>
                     {preview.map((item) => (
                       <li key={item.from} className="min-w-0 font-mono text-xs">
-                        <span className="block truncate text-muted-foreground line-through">{item.from}</span>
+                        {/* The page still lives at its old path until the move
+                            runs, so link `from` (not `to`) and open it in a new
+                            tab for inspection without leaving the dialog. */}
+                        <a
+                          href={pagePathToHref(item.from)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={m['page.rename.descendants_open_aria']({ path: item.from })}
+                          className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                        >
+                          <span className="min-w-0 truncate line-through">{item.from}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+                        </a>
                         <span className="flex items-center gap-1.5 text-foreground">
                           <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 truncate">{item.to}</span>

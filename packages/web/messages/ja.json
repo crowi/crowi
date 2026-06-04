@@ -240,6 +240,7 @@
   "page.rename.descendants_preview_title": "移動されるサブページ",
   "page.rename.descendants_more": "ほか {count} 件を表示",
   "page.rename.descendants_collapse": "折りたたむ",
+  "page.rename.descendants_open_aria": "{path} を新しいタブで開く",
   "page.rename.success_tree": "{count} 件のページを移動しました。",
   "page.rename.conflict_tree_title": "一部のページを移動できませんでした",
   "page.rename.conflict_tree_description": "次の移動先パスはすでに存在するか、利用できない名前です。解消してから再度お試しください。",

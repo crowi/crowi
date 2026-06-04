@@ -240,6 +240,7 @@
   "page.rename.descendants_preview_title": "Subpages to move",
   "page.rename.descendants_more": "+{count} more",
   "page.rename.descendants_collapse": "Show less",
+  "page.rename.descendants_open_aria": "Open {path} in a new tab",
   "page.rename.success_tree": "Moved {count} page(s).",
   "page.rename.conflict_tree_title": "Some pages could not be moved",
   "page.rename.conflict_tree_description": "These destination paths already exist or are not valid. Resolve them and try again.",
