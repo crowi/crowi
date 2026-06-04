@@ -1,9 +1,9 @@
 'use client';
 
+import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import type { PageWithRevision, RenamePageRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
-import { m } from '@paraglide/messages.js';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.*` (ts-rest)
@@ -244,6 +244,40 @@ export function useRenamePage() {
     onSuccess: () => {
       // A subtree rename moves many pages — invalidate the page + listing
       // caches so the sidebar tree and any list views refresh.
+      queryClient.invalidateQueries({ queryKey: ['page'] });
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
+    },
+  });
+}
+
+/**
+ * Rename (move) a whole subtree by path — for a portal-less folder that has no
+ * page document of its own (so there is no page_id to key `useRenamePage` on).
+ * Always a subtree move; returns how many pages were rewritten.
+ */
+export function useRenameSubtree() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: RenameSubtreeRequest): Promise<number> => {
+      const response = await apiClientV2.pages['rename-subtree'].$post({ json: data });
+      if (response.ok) {
+        const body = await response.json();
+        return body.renamed_count;
+      }
+      if (response.status === 400) {
+        // Structured PAGE_RENAME_TREE_FAILED (collisions / nothing to move /
+        // partial). Discriminate on the presence of `conflicts` — the generic
+        // variant's `code` is `string` and cannot narrow as a literal.
+        const body = await response.json().catch(() => null);
+        if (body && 'error' in body && 'conflicts' in body.error) {
+          const treeError = body.error;
+          throw new RenameTreeConflictError(treeError.message, treeError.conflicts, Boolean(treeError.partial));
+        }
+      }
+      throw new Error(m['errors.rename_failed']());
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
       queryClient.invalidateQueries({ queryKey: ['pages'] });
     },
