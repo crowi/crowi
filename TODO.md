@@ -119,9 +119,21 @@ multi-phase 機能。v1→v2 in-place upgrade の preflight が最大ユース�
   `util/rebuild-{renderer,backlink}.ts` を骨組み + 明示 TODO で新設し dispatcher
   登録 (実行すると not-implemented を throw)。storage copy partial→exit code 2 の
   旧 convention は純粋関数 `rebuildExitCode(outcome)` で構造的に維持
-- [ ] **Phase 5: user-unique-prepare preflight + uniqueness spec 本体** —
-  username/email の collation + partial unique index 宣言 / E11000 →
-  USERNAME_TAKEN/EMAIL_TAKEN マッピング / dedup-users
+- [x] **Phase 5: user-unique-prepare preflight + uniqueness spec 本体** —
+  `users.username` / `users.email` に `collation {locale:'en',strength:2}` の
+  plain unique index を宣言 (`username` は `sparse`、`partialFilterExpression`
+  不使用 = PostgreSQL 移植容易)。退会 (`statusDelete`) は固定 `deleted@deleted`
+  から per-id tombstone (`deleted-<id>@deleted.invalid` / `deleted-<id>`) へ移行し
+  退会者間の sentinel 衝突を解消。`util/map-duplicate-key-error.ts`
+  (`mapDuplicateKeyError` / `isDuplicateKeyError`) を新設し E11000 →
+  `USERNAME_TAKEN` / `EMAIL_TAKEN` を register / invite 受諾 / emailChange 確認 /
+  `/me` / admin user 編集の各書込経路に配線 (500 を解消)。`user-unique-prepare`
+  preflight migration (stages=`[dedup-username, dedup-email, tombstone-deleted]`)
+  + `util/dedup-users.ts` で生存重複を merge / 参照 reassign (uniqueness spec §c
+  全コレクション網羅、bookmark compound unique は from 側先削除)。`isPending` は
+  生存重複 + 未 tombstone DELETED の生存衝突を conservative に検出し apply 後 false
+  へ転じ boot クリア。`USERNAME_TAKEN` / `EMAIL_TAKEN` は codes.ts に既存 =
+  contract 無変更
 - [ ] **Phase 6: revisions-schema-unify preflight** — skeleton + transform
   設計確定待ち (autoContinue=false / 要調整)
 
