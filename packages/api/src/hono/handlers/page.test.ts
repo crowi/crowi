@@ -761,6 +761,121 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
   });
 });
 
+describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-less folder)', () => {
+  const PATH_PREFIX = '/hono-page-rename-subtree-test/';
+  let Page;
+  let accessToken: string;
+  let otherAccessToken: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+    [{ accessToken }, { accessToken: otherAccessToken }] = await Promise.all([
+      createTestUser({ name: 'RenameSubtree Test', username: 'renameSubtreeTester', email: 'rename-subtree-tester@example.com' }),
+      createTestUser({ name: 'RenameSubtree Other', username: 'renameSubtreeOther', email: 'rename-subtree-other@example.com' }),
+    ]);
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  it('requires authentication', async () => {
+    const res = await request(app)
+      .post('/api/v2/pages/rename-subtree')
+      .send({ old_path: `${PATH_PREFIX}folder/`, new_path: `${PATH_PREFIX}moved/` });
+    expect(res.status).toBe(401);
+  });
+
+  it('moves every page under a portal-less folder to the new base path', async () => {
+    const headers = authHeaders(accessToken);
+    const oldFolder = `${PATH_PREFIX}folder/`;
+    const newFolder = `${PATH_PREFIX}moved/`;
+
+    // No page exists AT `${PATH_PREFIX}folder` — only descendants under it.
+    await request(app)
+      .post('/api/v2/pages')
+      .set(headers)
+      .send({ path: `${oldFolder}child-a`, body: '# a' });
+    await request(app)
+      .post('/api/v2/pages')
+      .set(headers)
+      .send({ path: `${oldFolder}child-a/grandchild`, body: '# gc' });
+    await request(app)
+      .post('/api/v2/pages')
+      .set(headers)
+      .send({ path: `${oldFolder}child-b`, body: '# b' });
+
+    const res = await request(app).post('/api/v2/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+
+    expect(res.status).toBe(200);
+    expect(res.body.renamed_count).toBe(3);
+    expect(await Page.findOne({ path: `${PATH_PREFIX}moved/child-a` })).not.toBeNull();
+    expect(await Page.findOne({ path: `${PATH_PREFIX}moved/child-a/grandchild` })).not.toBeNull();
+    expect(await Page.findOne({ path: `${PATH_PREFIX}moved/child-b` })).not.toBeNull();
+    // Old descendant paths no longer exist as real pages.
+    expect(await Page.findOne({ path: `${oldFolder}child-a`, redirectTo: null })).toBeNull();
+  });
+
+  it('does not move descendants the caller cannot see (grant-filtered)', async () => {
+    const headers = authHeaders(accessToken);
+    const otherHeaders = authHeaders(otherAccessToken);
+    const oldFolder = `${PATH_PREFIX}grant-folder/`;
+    const newFolder = `${PATH_PREFIX}grant-moved/`;
+
+    await request(app)
+      .post('/api/v2/pages')
+      .set(headers)
+      .send({ path: `${oldFolder}visible`, body: '# v' });
+    // A private page owned by the other user — invisible to the mover.
+    await request(app)
+      .post('/api/v2/pages')
+      .set(otherHeaders)
+      .send({ path: `${oldFolder}hidden`, body: '# h', grant: 4 });
+
+    const res = await request(app).post('/api/v2/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+
+    expect(res.status).toBe(200);
+    expect(res.body.renamed_count).toBe(1);
+    expect(await Page.findOne({ path: `${PATH_PREFIX}grant-moved/visible` })).not.toBeNull();
+    // The invisible page stays put — it was never in the move set.
+    expect(await Page.findOne({ path: `${oldFolder}hidden` })).not.toBeNull();
+    expect(await Page.findOne({ path: `${PATH_PREFIX}grant-moved/hidden` })).toBeNull();
+  });
+
+  it('rejects with a structured 400 when a destination path already exists (nothing moved)', async () => {
+    const headers = authHeaders(accessToken);
+    const oldFolder = `${PATH_PREFIX}conflict-folder/`;
+    const newFolder = `${PATH_PREFIX}conflict-moved/`;
+
+    await request(app)
+      .post('/api/v2/pages')
+      .set(headers)
+      .send({ path: `${oldFolder}dup`, body: '# d' });
+    // A page already sitting at the destination of `dup`.
+    await request(app)
+      .post('/api/v2/pages')
+      .set(headers)
+      .send({ path: `${newFolder}dup`, body: '# existing' });
+
+    const res = await request(app).post('/api/v2/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
+    expect(res.body.error.conflicts.length).toBeGreaterThan(0);
+    // Nothing was moved — the source page is still where it was.
+    expect(await Page.findOne({ path: `${oldFolder}dup` })).not.toBeNull();
+  });
+
+  it('returns a 400 when there are no movable pages under the path', async () => {
+    const headers = authHeaders(accessToken);
+    const res = await request(app)
+      .post('/api/v2/pages/rename-subtree')
+      .set(headers)
+      .send({ old_path: `${PATH_PREFIX}empty-folder/`, new_path: `${PATH_PREFIX}empty-moved/` });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
+  });
+});
+
 describe('Routes /api/v2/pages (Hono deletePage)', () => {
   const PATH_PREFIX = '/hono-page-delete-test/';
   let Page;
