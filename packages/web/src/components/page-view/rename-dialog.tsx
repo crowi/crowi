@@ -45,7 +45,8 @@ function validateNewPath(path: string): PathValidation {
 export function RenameDialog({ page, open, onOpenChange }: RenameDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>{open && <RenameDialogForm page={page} onOpenChange={onOpenChange} />}</DialogContent>
+      {/* Wider than the default dialog so long subtree-move paths fit. */}
+      <DialogContent className="sm:max-w-2xl">{open && <RenameDialogForm page={page} onOpenChange={onOpenChange} />}</DialogContent>
     </Dialog>
   );
 }
