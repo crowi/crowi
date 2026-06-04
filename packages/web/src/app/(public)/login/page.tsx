@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { LocaleSwitcher } from '@/components/locale-switcher';
 import { LoginForm } from './login-form';
 
 export const metadata = {
@@ -22,6 +23,7 @@ function LoginFormFallback() {
 export default function LoginPage() {
   return (
     <div className="bg-crowi-login min-h-screen flex flex-col items-center justify-center p-4">
+      <LocaleSwitcher className="fixed right-4 top-4" />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/logo/500w-inverse.png" width={250} alt="Crowi" className="mx-auto mb-6" />

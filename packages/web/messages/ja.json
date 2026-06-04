@@ -1,6 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "auth.common.back_to_signin": "サインインに戻る",
+  "auth.common.language": "言語",
   "auth.common.server_error": "サーバーとの通信中にエラーが発生しました",
   "auth.common.invalid_link_title": "リンクが無効です",
   "auth.invite_accept.invalid_title": "招待リンクが無効です",
