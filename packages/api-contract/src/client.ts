@@ -649,6 +649,7 @@ const pageChain = new OpenAPIHono()
   .openapi(pageRoutes.deletePageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.revertDeletedPageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.renamePageRoute, (c) => c.json({ ...stubPageResponse, renamed_count: 1 }, 200))
+  .openapi(pageRoutes.renameSubtreeRoute, (c) => c.json({ renamed_count: 0 }, 200))
   // page-preview — single endpoint, `/pages/preview` (literal under
   // `/pages/*`). Method is POST so it does not collide with GET /pages
   // (getPage) or POST /pages (createPage) — Hono dispatches by

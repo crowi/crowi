@@ -338,6 +338,28 @@ export const RenameTreeErrorSchema = z.object({
 });
 export type RenameTreeError = z.infer<typeof RenameTreeErrorSchema>;
 
+// Rename-subtree request schema
+//
+// Moves a whole subtree by *path* rather than by page_id — used to rename a
+// portal-less list page (a folder like `/foo/bar/` that has descendants but no
+// page document of its own, so there is no page_id / revision to key on).
+// Always a subtree move: every grant-visible page under `old_path` is rewritten
+// to sit under `new_path`.
+export const RenameSubtreeRequestSchema = z.object({
+  old_path: z.string(),
+  new_path: z.string(),
+  create_redirect: z.boolean().optional(),
+});
+export type RenameSubtreeRequest = z.infer<typeof RenameSubtreeRequestSchema>;
+
+// Rename-subtree response — how many pages were rewritten. There is no root
+// page to return (the folder had none), so the client navigates to the new
+// folder path itself.
+export const RenameSubtreeResponseSchema = z.object({
+  renamed_count: z.number(),
+});
+export type RenameSubtreeResponse = z.infer<typeof RenameSubtreeResponseSchema>;
+
 // Error response schemas
 export const PageNotFoundErrorSchema = z.object({
   error: z.object({

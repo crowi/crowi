@@ -52,6 +52,8 @@ import {
   PageSchema,
   RenamePageRequestSchema,
   RenamePageResponseSchema,
+  RenameSubtreeRequestSchema,
+  RenameSubtreeResponseSchema,
   RenameTreeErrorSchema,
   SeenPageRequestSchema,
   SeenUsersResponseSchema,
@@ -541,6 +543,37 @@ export const renamePageRoute = createRoute({
   },
 });
 
+export const renameSubtreeRoute = createRoute({
+  method: 'post',
+  path: '/pages/rename-subtree',
+  tags: ['page'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Rename (move) a whole subtree by path (for portal-less folders)',
+  request: {
+    body: {
+      content: { 'application/json': { schema: RenameSubtreeRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'How many pages were moved',
+      content: { 'application/json': { schema: RenameSubtreeResponseSchema } },
+    },
+    400: {
+      description: 'PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure)',
+      content: {
+        'application/json': {
+          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema]),
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+  },
+});
+
 /**
  * Ordered export for the runtime handler chain and the stub chain in
  * `client.ts`. Order is chosen so literal sub-paths register before
@@ -582,4 +615,6 @@ export const pageRoutes = {
   revertDeletedPageRoute,
   // POST /pages/rename — renamePage
   renamePageRoute,
+  // POST /pages/rename-subtree — renameSubtree (portal-less folder)
+  renameSubtreeRoute,
 };
