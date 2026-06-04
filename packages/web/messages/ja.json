@@ -246,6 +246,7 @@
   "page.rename.folder_note": "このフォルダ配下の {count} 件のページを新しいパスへ移動します。",
   "page.rename.folder_empty": "このフォルダ配下に移動できるページがありません。",
   "page.rename.success_tree": "{count} 件のページを移動しました。",
+  "page.rename.submitting_tree": "{count} 件を移動中…",
   "page.rename.conflict_tree_title": "一部のページを移動できませんでした",
   "page.rename.conflict_tree_description": "次の移動先パスはすでに存在するか、利用できない名前です。解消してから再度お試しください。",
   "page.rename.conflict_tree_partial": "一部のページはすでに移動された可能性があります。再試行する前にサブツリーを確認してください。",

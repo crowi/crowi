@@ -246,6 +246,7 @@
   "page.rename.folder_note": "Moves all {count} page(s) under this folder to the new path.",
   "page.rename.folder_empty": "There are no movable pages under this folder.",
   "page.rename.success_tree": "Moved {count} page(s).",
+  "page.rename.submitting_tree": "Moving {count} page(s)…",
   "page.rename.conflict_tree_title": "Some pages could not be moved",
   "page.rename.conflict_tree_description": "These destination paths already exist or are not valid. Resolve them and try again.",
   "page.rename.conflict_tree_partial": "Some pages may have already been moved. Check the subtree before retrying.",

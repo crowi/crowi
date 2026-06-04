@@ -138,6 +138,10 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
   }, [descendants, basePath, newPath]);
   const preview = showAllDescendants ? rewrites : rewrites.slice(0, DESCENDANT_PREVIEW_LIMIT);
   const moreCount = rewrites.length - DESCENDANT_PREVIEW_LIMIT;
+  // How many pages a subtree move will touch — descendants in folder mode, or
+  // the root + descendants in page mode. Surfaced in the submit button while
+  // the (potentially slow) move runs.
+  const moveCount = isFolder ? descendantCount : descendantCount + 1;
 
   // A folder move needs at least one visible page under it — the folder path
   // itself has no page, so an empty subtree means there is nothing to move.
@@ -339,7 +343,7 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
         </DialogClose>
         <Button type="submit" disabled={!canSubmit}>
           {isSubmitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-          {m['page.rename.submit']()}
+          {isSubmitting && includeDescendants ? m['page.rename.submitting_tree']({ count: moveCount }) : m['page.rename.submit']()}
         </Button>
       </DialogFooter>
     </form>
