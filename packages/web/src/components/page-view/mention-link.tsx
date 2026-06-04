@@ -18,8 +18,9 @@ const MENTION_CLASS = 'text-primary font-medium underline-offset-[3px] transitio
  * caches and de-dupes the lookup per username, so a page that mentions
  * the same person many times still fetches them once.
  *
- * Until the user resolves — or when the username has no account
- * (`useUserPage` 404s) — it falls back to a plain `@username` link.
+ * When the username has no account (`useUserPage` 404s) — or while it is
+ * still resolving — it renders as plain `@username` text, NOT a link, so a
+ * non-mention like `@2000円` never points at a non-existent `/user/2000`.
  */
 export function MentionLink({ username }: { username: string }) {
   const { data } = useUserPage(username);
@@ -27,11 +28,7 @@ export function MentionLink({ username }: { username: string }) {
   const href = `/user/${username}`;
 
   if (!user) {
-    return (
-      <Link href={href} className={cn(MENTION_CLASS, 'underline decoration-primary/40 hover:decoration-primary/70')}>
-        @{username}
-      </Link>
-    );
+    return <span className="font-medium">@{username}</span>;
   }
 
   return (
