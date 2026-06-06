@@ -16,6 +16,7 @@ import type { Context, Next } from 'hono';
 import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
+import { attachMcp } from '../mcp/attach';
 import { createCors } from './middleware/cors';
 import { registerAdminCryptoRoutes } from './handlers/adminCrypto';
 import { registerAdminAppRoutes } from './handlers/admin/app';
@@ -169,6 +170,17 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withAdminUsers = registerAdminUsersRoutes(withAdminSearch, crowi);
   const withAdminPlugins = registerAdminPluginsRoutes(withAdminUsers, crowi);
   const withNotification = registerNotificationRoutes(withAdminPlugins, crowi);
+
+  // RFC-0011 — built-in MCP server. `/mcp` is a normal Hono route (not a
+  // WS upgrade), so it is attached here alongside the other handler
+  // registration rather than in the post-`buildServer` WS-attach phase.
+  // It mounts `app.all('/mcp', …)` under `createJwtAuth(crowi)` + a
+  // per-user rate limit; each tool dispatches in-process to the existing
+  // scoped routes (`honoApp.request`). `/mcp` is JSON-RPC, not a REST
+  // contract, so it is intentionally NOT added to the OpenAPI document.
+  // `attachMcp` mutates the underlying Hono instance (it does not extend
+  // the typed openapi chain), so it is called for its side-effect.
+  attachMcp(withNotification, crowi);
 
   // RFC-0006 Phase 6 — expose the runtime OpenAPI 3.1 document at
   // `/api/v2/openapi.json` and the Scalar API Reference UI at
