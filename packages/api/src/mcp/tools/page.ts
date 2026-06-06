@@ -15,14 +15,29 @@
  *  - `crowi_get_revision` dispatches to `/pages/revisions/{id}`. The
  *    route has no named request schema (only the `id` path param), so the
  *    tool defines a thin `{ id }` shape locally.
+ *  - `crowi_delete_page` / `crowi_revert_page` reuse the body schemas that
+ *    `contracts/page.ts` keeps local (not exported from `schemas/`). To
+ *    avoid widening the contract surface (which would force an
+ *    api-contract rebuild + OpenAPI regen), the MCP layer defines the same
+ *    shapes here rather than exporting them — they are a thin, stable
+ *    `{ page_id, … }`.
+ *  - `crowi_update_page`: `UpdatePageRequestSchema.revision_id` is
+ *    optional in the contract; the optimistic-lock 409 is enforced by the
+ *    handler. The tool description strongly requires it (fetch → update),
+ *    but the schema is left as-is (not forced required) so the contract is
+ *    the single source of truth and a model that omits it gets the
+ *    handler's 409 rather than a divergent MCP-only validation error.
  */
 import {
   AutocompleteRequestSchema,
+  CreatePageRequestSchema,
   GetBacklinksRequestSchema,
   GetPageRequestSchema,
   ListPageChildrenRequestSchema,
   ListPagesRequestSchema,
   ListRevisionsRequestSchema,
+  RenamePageRequestSchema,
+  UpdatePageRequestSchema,
 } from '@crowi/api-contract';
 import { z } from 'zod';
 
@@ -40,6 +55,21 @@ const GetPageHistoryShape = {
 /** `crowi_get_revision` — single revision by id (the route's `{id}` param). */
 const GetRevisionShape = {
   id: z.string().describe('The revision id to fetch (the `revision._id`).'),
+};
+
+/** `crowi_delete_page` — same shape as `contracts/page.ts` DeletePageRequestSchema. */
+const DeletePageShape = {
+  page_id: z.string().describe('The page id to delete.'),
+  revision_id: z
+    .string()
+    .optional()
+    .describe('Latest known revision id for optimistic-lock; recommended to avoid deleting a page edited since you last read it.'),
+  completely: z.boolean().optional().describe('When true, hard-delete (skip trash). Defaults to a soft delete into /trash.'),
+};
+
+/** `crowi_revert_page` — restore a soft-deleted page from trash. */
+const RevertPageShape = {
+  page_id: z.string().describe('The id of the soft-deleted (trash) page to restore.'),
 };
 
 // --- result mappers (RFC-0011 §9) ----------------------------------------
@@ -200,5 +230,59 @@ export const pageTools: ToolDescriptor[] = [
     kind: 'query',
     scope: 'pages:read',
     resultMapper: mapAutocompleteResult,
+  },
+  // --------------------------------------------------------------- writes
+  {
+    name: 'crowi_create_page',
+    description: 'Create a new wiki page at `path` with markdown `body` (optional `grant` visibility). Fails if a page already exists at `path`.',
+    method: 'POST',
+    path: '/pages',
+    schema: CreatePageRequestSchema.shape,
+    kind: 'body',
+    scope: 'pages:write',
+    resultMapper: mapPageResult,
+  },
+  {
+    name: 'crowi_update_page',
+    description:
+      "Update a page (`page_id`) with new markdown `body`. ALWAYS pass `revision_id` (the page's current revision, from `crowi_get_page`) for optimistic locking — a stale `revision_id` returns a 409 conflict and you must re-fetch the page and retry. The returned `revision_id` is the new one for chaining edits.",
+    method: 'PUT',
+    path: '/pages',
+    schema: UpdatePageRequestSchema.shape,
+    kind: 'body',
+    scope: 'pages:write',
+    resultMapper: mapPageResult,
+  },
+  {
+    name: 'crowi_rename_page',
+    description:
+      'Rename/move a page (`page_id`) to `new_path`. Optionally pass `revision_id` (optimistic lock) and `create_redirect` to leave a redirect at the old path.',
+    method: 'POST',
+    path: '/pages/rename',
+    schema: RenamePageRequestSchema.shape,
+    kind: 'body',
+    scope: 'pages:write',
+    resultMapper: mapPageResult,
+  },
+  {
+    name: 'crowi_delete_page',
+    description:
+      'Delete a page (`page_id`). By default a soft delete into /trash (recoverable via `crowi_revert_page`). Pass `completely: true` to hard-delete.',
+    method: 'DELETE',
+    path: '/pages',
+    schema: DeletePageShape,
+    kind: 'body',
+    scope: 'pages:write',
+    resultMapper: mapPageResult,
+  },
+  {
+    name: 'crowi_revert_page',
+    description: 'Restore a soft-deleted (trash) page back to its original path by `page_id`.',
+    method: 'POST',
+    path: '/pages/revert',
+    schema: RevertPageShape,
+    kind: 'body',
+    scope: 'pages:write',
+    resultMapper: mapPageResult,
   },
 ];
