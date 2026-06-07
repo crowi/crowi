@@ -21,7 +21,6 @@
  */
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { StreamableHTTPTransport } from '@hono/mcp';
-import Debug from 'debug';
 import { HTTPException } from 'hono/http-exception';
 
 import type Crowi from 'src/crowi';
@@ -31,8 +30,6 @@ import type { CrowiHonoBindings } from '../hono/app';
 import { createJwtAuth } from '../hono/middleware/auth';
 import { makeDispatch } from './dispatch';
 import { buildMcpServer } from './server';
-
-const debug = Debug('crowi:mcp:attach');
 
 /**
  * Per-user budget for the `/mcp` endpoint. A single budget covers all
@@ -54,40 +51,6 @@ const JSONRPC_AUTH_REQUIRED = -32001;
 /** A bare JSON-RPC error envelope (`id: null` — pre-dispatch, no request id). */
 const jsonRpcError = (code: number, message: string) => ({ jsonrpc: '2.0' as const, error: { code, message }, id: null });
 
-/**
- * Derive the DNS-rebinding `allowedHosts` from `CLIENT_URL` (RFC-0011
- * §10.6). DNS-rebinding protection works by pinning the `Host` header:
- * a malicious page that rebinds DNS to a local server still cannot forge
- * the `Host` the browser sends. The `Host` header is always present, so
- * pinning it is the right defence here.
- *
- * We intentionally do NOT also pin `allowedOrigins`: `@hono/mcp` rejects
- * a request that carries no `Origin` header once `allowedOrigins` is
- * set, which would break legitimate non-browser MCP clients (Claude
- * Code, curl, the SDK) that never send an `Origin`. The Host pin already
- * provides the DNS-rebinding guarantee; CORS (which Crowi applies
- * globally via `createCors`) governs browser cross-origin access.
- *
- * Returns `enableDnsRebindingProtection: false` when `CLIENT_URL` is
- * unset / invalid so protection is never enabled with an empty allow-list
- * (which would reject every request).
- */
-const deriveDnsRebindingConfig = (clientUrl: string | null): { allowedHosts?: string[]; enableDnsRebindingProtection: boolean } => {
-  if (!clientUrl) {
-    return { enableDnsRebindingProtection: false };
-  }
-  try {
-    const url = new URL(clientUrl);
-    return {
-      allowedHosts: [url.host],
-      enableDnsRebindingProtection: true,
-    };
-  } catch {
-    debug('CLIENT_URL is not a valid URL; DNS-rebinding protection disabled: %s', clientUrl);
-    return { enableDnsRebindingProtection: false };
-  }
-};
-
 export const attachMcp = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi): void => {
   // One shared limiter per process (Redis-backed when `crowi.redis !==
   // null`, in-memory fallback otherwise — same pattern as autocomplete).
@@ -97,8 +60,6 @@ export const attachMcp = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi): vo
     windowMs: RATE_WINDOW_MS,
     redisClient: crowi.redis ?? null,
   });
-
-  const dnsRebinding = deriveDnsRebindingConfig(crowi.getBaseUrl());
 
   // Auth gate: a valid PAT / OAuth token is required to reach the
   // endpoint at all. Per-tool scope is enforced downstream.
@@ -138,7 +99,16 @@ export const attachMcp = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi): vo
     const transport = new StreamableHTTPTransport({
       // Stateless: no session id, no long-lived session map.
       sessionIdGenerator: undefined,
-      ...dnsRebinding,
+      // DNS-rebinding protection is intentionally OFF. It is a defence for
+      // unauthenticated / ambient-authority (browser) servers; `/mcp` is
+      // Bearer-gated (a rebinding attacker cannot mint the user's PAT — the
+      // custom Authorization header forces a CORS preflight) and is hit by
+      // non-browser clients (Claude Code, the SDK), so Host pinning adds
+      // nothing here. Browser cross-origin access is governed by `createCors`.
+      // Pinning to a host (e.g. `CLIENT_URL`, the web origin) would instead
+      // reject every legitimate client whenever the api runs on its own
+      // host/port (dev's :4301 vs web :4302, or any split api/web deploy).
+      enableDnsRebindingProtection: false,
     });
 
     await server.connect(transport);

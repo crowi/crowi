@@ -16,8 +16,9 @@ v1 ships 13 page tools — 8 read (`crowi_search_pages`, `crowi_get_page`,
 `crowi_get_revision`, `crowi_get_backlinks`, `crowi_autocomplete_pages`)
 and 5 write (`crowi_create_page`, `crowi_update_page`, `crowi_rename_page`,
 `crowi_delete_page`, `crowi_revert_page`). The endpoint is stateless
-(per-request session), per-user rate-limited, and applies DNS-rebinding
-protection derived from `CLIENT_URL`. A read-only token (`pages:read`)
+(per-request session) and per-user rate-limited; Bearer-token auth is its
+gate (DNS-rebinding `Host` pinning is intentionally off — redundant for an
+authenticated, non-browser endpoint). A read-only token (`pages:read`)
 yields a read-only MCP; `admin:*` scopes are never issuable, so admin
 operations are unreachable. See the operations docs for setup and a
 prompt-injection note.
