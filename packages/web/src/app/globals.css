@@ -186,7 +186,11 @@ html[data-page-grant="2"] {
 
   /* Muted */
   --muted: oklch(0.25 0.015 192);
-  --muted-foreground: oklch(0.65 0 0);
+  /* AA audit: at L=0.65 muted-foreground hit only 4.92:1 against the
+   * muted surface (`--muted` L=0.25) — passing but with no headroom.
+   * Lifting lightness to 0.70 (hue/chroma unchanged, no redesign) raises
+   * it to ~5.96:1 and ~7.35:1 against the page background. */
+  --muted-foreground: oklch(0.7 0 0);
 
   /* Accent */
   --accent: oklch(0.3 0.025 192);
