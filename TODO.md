@@ -51,6 +51,7 @@ merge 後の 3-agent simplify レビューで挙がった非ブロッキング�
 - [ ] **RFC-0002 renderer 残** — Phase 6.1 Mermaid renderer、Phase 7+ GitHub Embed plugin + AuthContext 本実装、pageEvent payload enrichment、mention dispatch N+1、renderedAst size cap
 - [ ] **monorepo restructure follow-ups** — catalog 化候補の積み残し、compose healthcheck、devDeps mirror が tarball に prerelease pin で残る問題、dev/prod parity test、`.claude/agents/feature-*` の multi-phase 対応
 - [ ] **crypto Phase 3（将来）** — KeyProvider pluggable 化（AWS/GCP KMS）。lookup-key 系 secret（`Share.secretKeyword`）の hash 化（apiToken は廃止済み、Share は alpha1 で削除予定）
+- [ ] **renameTree merge advisory** — `page.ts` の subtree-rename が 2 ルート（`/pages/rename` の include_descendants 分岐 と `/pages/rename-subtree`）でほぼ重複 → 共通 subtree パイプラインを Model static か handler helper に集約。`checkPagesRenamable` の N+1（path 毎 `exists`+`findPageByPath` → `$in` で 1 クエリ化、behavior-sensitive）。web 側 conflict の型安全 discriminator（OpenAPI 生成 union を使う）。partial 失敗時に成功 path を返す/再試行契約。locale-bridge ↔ LocaleSync の責務文書化。`RENAME_TREE_CONCURRENCY=8` の env 化。`renameTreeFailedBody` を `_helpers/errors.ts` へ
 
 ---
 

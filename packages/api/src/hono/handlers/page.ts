@@ -86,6 +86,12 @@ const renameTreeFailedBody = (message: string, conflicts: { path: string; reason
   error: { code: 'PAGE_RENAME_TREE_FAILED' as const, message, conflicts, ...(partial ? { partial } : {}) },
 });
 
+/** `checkPagesRenamable`'s per-path error map → the non-empty `conflicts[]`. */
+const toConflicts = (errorsByPath: Record<string, string[]>): { path: string; reasons: string[] }[] =>
+  Object.entries(errorsByPath)
+    .filter(([, reasons]) => reasons.length > 0)
+    .map(([path, reasons]) => ({ path, reasons }));
+
 export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Page = crowi.model('Page');
   const User = crowi.model('User');
@@ -760,9 +766,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             // Up-front validation: name legality + destination collisions.
             const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
             if (hasError) {
-              const conflicts = Object.entries(errorsByPath)
-                .filter(([, reasons]) => reasons.length > 0)
-                .map(([path, reasons]) => ({ path, reasons }));
+              const conflicts = toConflicts(errorsByPath);
               return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', conflicts), 400);
             }
 
@@ -871,9 +875,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // Up-front validation: name legality + destination collisions.
           const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
           if (hasError) {
-            const conflicts = Object.entries(errorsByPath)
-              .filter(([, reasons]) => reasons.length > 0)
-              .map(([path, reasons]) => ({ path, reasons }));
+            const conflicts = toConflicts(errorsByPath);
             return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', conflicts), 400);
           }
 
