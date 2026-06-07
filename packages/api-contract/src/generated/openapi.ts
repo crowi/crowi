@@ -755,6 +755,8 @@ export interface paths {
                             email: string;
                             /** @enum {string} */
                             lang: "en" | "en-US" | "en-GB" | "ja";
+                            /** @enum {string} */
+                            theme: "system" | "light" | "dark";
                             image: string | null;
                             introduction?: string;
                             googleId?: string | null;
@@ -820,6 +822,8 @@ export interface paths {
                             email: string;
                             /** @enum {string} */
                             lang: "en" | "en-US" | "en-GB" | "ja";
+                            /** @enum {string} */
+                            theme: "system" | "light" | "dark";
                             image: string | null;
                             introduction?: string;
                             googleId?: string | null;
@@ -869,6 +873,86 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/me/theme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update preferred UI theme */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        theme: "system" | "light" | "dark";
+                    };
+                };
+            };
+            responses: {
+                /** @description Theme updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "ok";
+                            /** @enum {string} */
+                            theme: "system" | "light" | "dark";
+                        };
+                    };
+                };
+                /** @description Theme update failed */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "error";
+                            code?: string;
+                            message?: string;
+                            errors?: string[];
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/me/picture": {

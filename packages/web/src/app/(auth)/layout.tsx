@@ -19,6 +19,7 @@ import { UserMenuItems } from '@/components/user-menu-items';
 import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
 import { SiteBrand } from '@/components/site-brand';
 import { LocaleSync } from '@/components/locale-sync';
+import { ThemeSync } from '@/components/theme-sync';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
 import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
@@ -101,6 +102,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen bg-background">
       <LocaleSync />
+      <ThemeSync />
       {/* 接続エラーバナー */}
       <ConnectionBanner />
 

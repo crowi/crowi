@@ -18,6 +18,9 @@ const LANG_EN = 'en';
 const LANG_EN_US = 'en-US';
 const LANG_EN_GB = 'en-GB';
 const LANG_JA = 'ja';
+const THEME_SYSTEM = 'system';
+const THEME_LIGHT = 'light';
+const THEME_DARK = 'dark';
 const PAGE_ITEMS = 50;
 
 export interface UserDocument extends Document {
@@ -32,6 +35,13 @@ export interface UserDocument extends Document {
   introduction: string;
   password: string;
   lang: 'en' | 'en-US' | 'en-GB' | 'ja';
+  /**
+   * Preferred UI theme, synced across devices (the web client's
+   * `next-themes` localStorage value is the per-device fallback). Defaults
+   * to `'system'` (follow the OS setting). Added with `required: false` so
+   * existing rows are unaffected — they read back the schema default.
+   */
+  theme: 'system' | 'light' | 'dark';
   status: number;
   createdAt: Date;
   admin: boolean;
@@ -114,6 +124,9 @@ export interface UserModel extends PaginateModel<UserDocument> {
   LANG_EN_US: string;
   LANG_EN_GB: string;
   LANG_JA: string;
+  THEME_SYSTEM: string;
+  THEME_LIGHT: string;
+  THEME_DARK: string;
 }
 
 export default (crowi: Crowi) => {
@@ -135,6 +148,11 @@ export default (crowi: Crowi) => {
       type: String,
       enum: Object.values(getLanguageLabels()),
       default: LANG_EN_US,
+    },
+    theme: {
+      type: String,
+      enum: [THEME_SYSTEM, THEME_LIGHT, THEME_DARK],
+      default: THEME_SYSTEM,
     },
     status: { type: Number, required: true, default: STATUS_ACTIVE, index: true },
     createdAt: { type: Date, default: Date.now },
@@ -825,6 +843,10 @@ export default (crowi: Crowi) => {
   User.LANG_EN_US = LANG_EN_US;
   User.LANG_EN_GB = LANG_EN_US;
   User.LANG_JA = LANG_JA;
+
+  User.THEME_SYSTEM = THEME_SYSTEM;
+  User.THEME_LIGHT = THEME_LIGHT;
+  User.THEME_DARK = THEME_DARK;
 
   return User;
 };

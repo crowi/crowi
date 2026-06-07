@@ -5348,6 +5348,12 @@ paths:
                       - en-US
                       - en-GB
                       - ja
+                  theme:
+                    type: string
+                    enum:
+                      - system
+                      - light
+                      - dark
                   image:
                     type:
                       - string
@@ -5374,6 +5380,7 @@ paths:
                   - name
                   - email
                   - lang
+                  - theme
                   - image
                   - hasPassword
                   - createdAt
@@ -5460,6 +5467,12 @@ paths:
                       - en-US
                       - en-GB
                       - ja
+                  theme:
+                    type: string
+                    enum:
+                      - system
+                      - light
+                      - dark
                   image:
                     type:
                       - string
@@ -5486,11 +5499,100 @@ paths:
                   - name
                   - email
                   - lang
+                  - theme
                   - image
                   - hasPassword
                   - createdAt
         '400':
           description: Profile update failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - error
+                  code:
+                    type: string
+                  message:
+                    type: string
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - status
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /me/theme:
+    patch:
+      tags:
+        - me
+      security:
+        - bearerAuth: []
+      summary: Update preferred UI theme
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                theme:
+                  type: string
+                  enum:
+                    - system
+                    - light
+                    - dark
+              required:
+                - theme
+      responses:
+        '200':
+          description: Theme updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                  theme:
+                    type: string
+                    enum:
+                      - system
+                      - light
+                      - dark
+                required:
+                  - status
+                  - theme
+        '400':
+          description: Theme update failed
           content:
             application/json:
               schema:
