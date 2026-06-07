@@ -20,7 +20,7 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 
 ## モード
 
-`.feature-state/queue.json` の `config.commitStrategy` で動作分岐:
+`.feature-state/config.json` の `commitStrategy` で動作分岐（config は SHARED, queue.json は per-worktree）:
 
 ### `main-direct` (デフォルト・現在の運用)
 - 現在のブランチが main であることを確認

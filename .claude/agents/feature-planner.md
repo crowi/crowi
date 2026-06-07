@@ -75,7 +75,7 @@ context 完備の task 定義を作成する。
 - **state ディレクトリは `.feature-state/` (root)** ※ `.claude/feature-state/` ではない
 - Hono ルートは `authenticatedRouter` 配下で `jwtAuth` 自動適用、CSRF 不要
 - 新契約は `pnpm --filter @crowi/api-contract build` 必須 (implementer が走らせる)
-- main 直コミット運用 (queue.json `commitStrategy: main-direct`)
+- main 直コミット運用 (config.json `commitStrategy: main-direct`)
 
 ## 分析対象ディレクトリ
 
