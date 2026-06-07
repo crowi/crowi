@@ -12,7 +12,7 @@ spec: `.feature-state/specs/feature-v2-alpha1-release-prep.md`（実本番=v1 DB
 - [ ] **外部共有機能の削除** — admin/share トグル + `app:externalShare` config + admin/app 状態表示 + i18n。Share モデルは dormant 据え置き。LinkSharePopover（リンクコピー）は残す
 - [ ] **ソーシャルログイン削除** — `google:*`/`github:*` config・config-sensitive・/me の googleId/githubId・profile 表示・admin の coming-soon 枠・i18n。認証ポリシー設定は残して不活性化。User schema は dormant 据え置き
 - [ ] **通知設定メニュー削除** — admin サイドバーの stub + i18n のみ（通知本体は無改変）
-- [ ] **renameTree 移行** — spec: `feature-rename-tree`。UI/モデルは実装済み、API + 結線が未。`include_descendants` フラグ拡張・preserveUpdatedAt・部分失敗許容
+- [x] **renameTree 移行** — `POST /pages/rename` に `include_descendants` 追加。`findListByStartWith`→`getPathMap`→`checkPagesRenamable`→`renameTree`（preserveUpdatedAt / 非ポータルのみ redirect / best-effort）でルート＋grant可視サブツリーを一括移動。`renamed_count` + 構造化 400 衝突。Web は switch 結線・件数トースト・衝突表示
 - [ ] **prod build / runner 検証** — `pnpm build` で起動するか、特に `@crowi/runner` が prod build で plugin 解決できるか（環境固有の Lightsail 等は対象外）
 - [ ] **v1→v2 データ移行 (RFC-0008)** — 本番が v1 DB なので必須。フレームワーク本体は未実装。スコープ（最小マイグレーションのみ vs フル実装）は別 spec 化を推奨
 - [ ] **version bump + tag** — `-dev` 正規化 → linked group を `2.0.0-alpha.0` へ（api-contract は 1.0.0 からジャンプ）→ changeset pre mode → CHANGELOG → git tag。npm publish はしない

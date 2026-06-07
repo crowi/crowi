@@ -10,7 +10,7 @@
     "start": "next start --port 4302",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
-    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./paraglide",
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./paraglide --strategy cookie baseLocale",
     "predev": "pnpm paraglide:compile",
     "prebuild": "pnpm paraglide:compile",
     "pretype-check": "pnpm paraglide:compile",

@@ -1,10 +1,11 @@
-import type { Metadata } from 'next';
-import { headers } from 'next/headers';
-import { Geist, Noto_Sans_JP, Geist_Mono } from 'next/font/google';
-import { Providers } from '@/lib/providers';
-import { InstallerGate } from '@/components/installer-gate';
-import { PARAGLIDE_LOCALE_HEADER } from '@/proxy';
 import { baseLocale, isLocale, overwriteGetLocale } from '@paraglide/runtime.js';
+import type { Metadata } from 'next';
+import { Geist, Geist_Mono, Noto_Sans_JP } from 'next/font/google';
+import { headers } from 'next/headers';
+import { InstallerGate } from '@/components/installer-gate';
+import { LocaleBridge } from '@/components/locale-bridge';
+import { Providers } from '@/lib/providers';
+import { PARAGLIDE_LOCALE_HEADER } from '@/proxy';
 import './globals.css';
 
 // Two-font stack: Geist for Latin glyphs (covers most ASCII UI strings)
@@ -56,9 +57,15 @@ export default async function RootLayout({
           hydrates. Suppressing here only silences the one <body> node — real
           mismatches in descendants are still reported. */}
       <body suppressHydrationWarning className={`${geistSans.variable} ${notoSansJp.variable} ${geistMono.variable} antialiased`}>
-        <Providers>
-          <InstallerGate>{children}</InstallerGate>
-        </Providers>
+        {/* Mirror the Server-Component `overwriteGetLocale` above into the
+            client module graph so Client Components (which use a separate
+            module instance during SSR) render the same locale on the server
+            and on hydration. See locale-bridge.tsx. */}
+        <LocaleBridge locale={locale}>
+          <Providers>
+            <InstallerGate>{children}</InstallerGate>
+          </Providers>
+        </LocaleBridge>
       </body>
     </html>
   );

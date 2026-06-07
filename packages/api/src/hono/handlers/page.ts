@@ -31,6 +31,7 @@ import {
   listPagesRoute,
   PageGrantEnum,
   renamePageRoute,
+  renameSubtreeRoute,
   revertDeletedPageRoute,
   seenPageRoute,
   setPageGrantRoute,
@@ -79,6 +80,12 @@ const pageRevisionConflictBody = () => ({
   error: { code: 'PAGE_REVISION_ERROR' as const, message: 'Revision error.' },
 });
 
+// Structured 400 body shared by both subtree-rename paths (page_id-based and
+// path-based). `partial: true` marks a mid-execution best-effort failure.
+const renameTreeFailedBody = (message: string, conflicts: { path: string; reasons: string[] }[], partial?: boolean) => ({
+  error: { code: 'PAGE_RENAME_TREE_FAILED' as const, message, conflicts, ...(partial ? { partial } : {}) },
+});
+
 export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Page = crowi.model('Page');
   const User = crowi.model('User');
@@ -107,6 +114,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   applyScope(app, deletePageRoute, 'pages:write');
   applyScope(app, revertDeletedPageRoute, 'pages:write');
   applyScope(app, renamePageRoute, 'pages:write');
+  applyScope(app, renameSubtreeRoute, 'pages:write');
 
   /**
    * Build the seen-users response. `seenUsersCount` reflects the full
@@ -689,9 +697,9 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
       // --------------------------------------------------------------
       .openapi(renamePageRoute, async (c) => {
         const user = c.get('user');
-        const { page_id, new_path, revision_id, create_redirect } = c.req.valid('json');
+        const { page_id, new_path, revision_id, create_redirect, include_descendants } = c.req.valid('json');
 
-        debug('renamePage called with:', { page_id, new_path, revision_id, create_redirect, userId: user._id });
+        debug('renamePage called with:', { page_id, new_path, revision_id, create_redirect, include_descendants, userId: user._id });
 
         // Normalise the destination path first so obviously-bad inputs
         // are rejected without touching the DB.
@@ -708,10 +716,77 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
+          // Optimistic-lock on the root page's revision — same as the
+          // single-page path. Sub-pages are not individually version-checked
+          // (legacy renameTree parity).
           if (revision_id && !pageData.isUpdatable(revision_id)) {
             return c.json(pageRevisionConflictBody(), 409);
           }
 
+          // ------------------------------------------------------------
+          // Subtree move (renameTree) — root + grant-visible descendants.
+          // ------------------------------------------------------------
+          if (include_descendants) {
+            const oldStripped = pageData.path.replace(/\/+$/, '');
+
+            // Grant-filtered subtree under the root. `findListByStartWith`
+            // also returns the un-slashed twin of a portal path, and the
+            // root itself — drop both so `descendants` is only the subtree.
+            // Mirrors rename-dialog.tsx:85-94 on the client side.
+            const descendantRoot = pageData.path.endsWith('/') ? pageData.path : `${pageData.path}/`;
+            const selfPaths = new Set([pageData.path, oldStripped]);
+            const subtree = await Page.findListByStartWith(descendantRoot, user, { limit: 0 });
+            const descendants = subtree.filter((p) => !selfPaths.has(p.path));
+
+            // Build old→new for the root + every visible descendant.
+            // `getPathMap` strips the trailing slash on `search` itself but
+            // only `normalizePath`s `replace` (which keeps a trailing slash),
+            // so a portal destination ('/foo/') would yield '/foo//child'.
+            // Strip it here for the descendant base to match the client
+            // preview (rename-dialog.tsx:104).
+            const newBase = newPagePath.replace(/\/+$/, '');
+            const pathMap = Page.getPathMap([{ path: pageData.path }, ...descendants.map((p) => ({ path: p.path }))], pageData.path, newBase) as Record<
+              string,
+              string
+            >;
+            // The root preserves the caller's portal intent (trailing slash);
+            // renameTree skips redirect creation for portal destinations, so
+            // restore the slash on the root entry the single-page path keeps.
+            if (newPageIsPortal) {
+              pathMap[pageData.path] = newPagePath;
+            }
+            const newPaths = Object.values(pathMap);
+
+            // Up-front validation: name legality + destination collisions.
+            const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
+            if (hasError) {
+              const conflicts = Object.entries(errorsByPath)
+                .filter(([, reasons]) => reasons.length > 0)
+                .map(([path, reasons]) => ({ path, reasons }));
+              return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', conflicts), 400);
+            }
+
+            // Execute. Non-transactional best-effort: a mid-way failure may
+            // leave some pages already moved.
+            try {
+              await Page.renameTree(pathMap, user, { createRedirectPage: Boolean(create_redirect), preserveUpdatedAt: true });
+            } catch (err) {
+              const error = err as Error;
+              debug('Error renaming subtree:', error.message);
+              return c.json(
+                renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${error.message})`, [], true),
+                400,
+              );
+            }
+
+            const movedRoot = (await Page.findPageByPath(newPagePath)) as PageDocument | null;
+            const populated = movedRoot ? await Page.populatePageData(movedRoot, null) : await Page.populatePageData(pageData, null);
+            return c.json({ page: pageToResponse(populated), renamed_count: newPaths.length }, 200);
+          }
+
+          // ------------------------------------------------------------
+          // Single-page rename (default / back-compat).
+          // ------------------------------------------------------------
           // Collision at the destination path — unlink an existing
           // redirect when the caller has permission, otherwise refuse.
           const existingAtNewPath = await Page.findOne({ path: newPagePath });
@@ -737,7 +812,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           await Page.rename(pageData, newPagePath, user, options);
 
           const populated = await Page.populatePageData(pageData, null);
-          return c.json({ page: pageToResponse(populated) }, 200);
+          return c.json({ page: pageToResponse(populated), renamed_count: 1 }, 200);
         } catch (err) {
           const error = err as Error;
           debug('Error renaming page:', error.message);
@@ -746,6 +821,77 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
           return c.json(pageBadRequestBody('PAGE_RENAME_FAILED', error.message || 'Failed to rename page'), 400);
+        }
+      })
+
+      // --------------------------------------------------------------
+      // POST /pages/rename-subtree — move a whole subtree by PATH.
+      //
+      // For a portal-less folder (a path like '/foo/bar/' that has
+      // descendants but no page document of its own, so there is no
+      // page_id / revision to key on). Always a subtree move: every
+      // grant-visible page under `old_path` is rewritten under `new_path`.
+      // --------------------------------------------------------------
+      .openapi(renameSubtreeRoute, async (c) => {
+        const user = c.get('user');
+        const { old_path, new_path, create_redirect } = c.req.valid('json');
+
+        debug('renameSubtree called with:', { old_path, new_path, create_redirect, userId: user._id });
+
+        const newPagePath = Page.normalizePath(new_path);
+        const oldBase = old_path.replace(/\/+$/, '');
+        const newBase = newPagePath.replace(/\/+$/, '');
+
+        // Refuse a destination that normalises to the root portal — every
+        // descendant would be rewritten with an empty base.
+        if (newBase === '' || !Page.isCreatableName(newBase)) {
+          return c.json(pageBadRequestBody('PAGE_INVALID_NAME', `Cannot move the subtree to this path (${newPagePath})`), 400);
+        }
+
+        try {
+          // Grant-filtered subtree under the folder. Drop the folder path
+          // itself and its un-slashed twin (a separate page, not a child) —
+          // mirrors the client preview (rename-dialog.tsx).
+          const descendantRoot = old_path.endsWith('/') ? old_path : `${old_path}/`;
+          const selfPaths = new Set([descendantRoot, oldBase]);
+          const subtree = await Page.findListByStartWith(descendantRoot, user, { limit: 0 });
+          const descendants = subtree.filter((p) => !selfPaths.has(p.path));
+
+          if (descendants.length === 0) {
+            return c.json(renameTreeFailedBody('There are no pages to move under this path.', []), 400);
+          }
+
+          const pathMap = Page.getPathMap(
+            descendants.map((p) => ({ path: p.path })),
+            oldBase,
+            newBase,
+          ) as Record<string, string>;
+          const newPaths = Object.values(pathMap);
+
+          // Up-front validation: name legality + destination collisions.
+          const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
+          if (hasError) {
+            const conflicts = Object.entries(errorsByPath)
+              .filter(([, reasons]) => reasons.length > 0)
+              .map(([path, reasons]) => ({ path, reasons }));
+            return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', conflicts), 400);
+          }
+
+          // Execute. Non-transactional best-effort: a mid-way failure may
+          // leave some pages already moved.
+          try {
+            await Page.renameTree(pathMap, user, { createRedirectPage: Boolean(create_redirect), preserveUpdatedAt: true });
+          } catch (err) {
+            const error = err as Error;
+            debug('Error renaming subtree by path:', error.message);
+            return c.json(renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${error.message})`, [], true), 400);
+          }
+
+          return c.json({ renamed_count: newPaths.length }, 200);
+        } catch (err) {
+          const error = err as Error;
+          debug('Error renaming subtree by path:', error.message);
+          return c.json(renameTreeFailedBody(error.message || 'Failed to move the subtree.', []), 400);
         }
       })
   );

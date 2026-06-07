@@ -2,7 +2,7 @@
 
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { AlertCircle, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, ExternalLink, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -11,17 +11,25 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { usePageList } from '@/lib/use-page-list';
+import { notify } from '@/lib/notify';
 import { pagePathToHref } from '@/lib/page-path';
-import { PageRevisionConflictError, useRenamePage } from '@/lib/use-page-mutations';
+import { usePageList } from '@/lib/use-page-list';
+import { PageRevisionConflictError, type RenameTreeConflict, RenameTreeConflictError, useRenamePage, useRenameSubtree } from '@/lib/use-page-mutations';
+import { cn } from '@/lib/utils';
 
-interface RenameDialogProps {
-  page: PageWithRevision;
+/**
+ * Two modes:
+ *   - `page`: rename a real page (optionally with its subtree).
+ *   - `folderPath`: rename a portal-less folder (a list path with descendants
+ *     but no page document of its own) — always a subtree move by path, since
+ *     there is no page_id/revision to key on.
+ */
+type RenameDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
+} & ({ page: PageWithRevision; folderPath?: never } | { folderPath: string; page?: never });
 
-type Feedback = { kind: 'conflict' | 'error'; message: string };
+type Feedback = { kind: 'conflict' | 'error'; message: string } | { kind: 'tree_conflict'; message: string; conflicts: RenameTreeConflict[]; partial: boolean };
 
 const DESCENDANT_PREVIEW_LIMIT = 5;
 
@@ -41,29 +49,48 @@ function validateNewPath(path: string): PathValidation {
  * when closed. This guarantees that internal form state is fresh on every open
  * (so we don't need a useEffect to reset it).
  */
-export function RenameDialog({ page, open, onOpenChange }: RenameDialogProps) {
+export function RenameDialog(props: RenameDialogProps) {
+  const { open, onOpenChange } = props;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>{open && <RenameDialogForm page={page} onOpenChange={onOpenChange} />}</DialogContent>
+      {/* Wider than the default dialog so long subtree-move paths fit. */}
+      <DialogContent className="sm:max-w-2xl">
+        {open &&
+          (props.page ? (
+            <RenameDialogForm basePath={props.page.path} pageId={props.page._id} revisionId={props.page.revision?._id} onOpenChange={onOpenChange} />
+          ) : (
+            <RenameDialogForm basePath={props.folderPath} isFolder onOpenChange={onOpenChange} />
+          ))}
+      </DialogContent>
     </Dialog>
   );
 }
 
 interface RenameDialogFormProps {
-  page: PageWithRevision;
+  /** The page's path, or the folder path being renamed. */
+  basePath: string;
+  /** Set in page mode — the page being renamed. */
+  pageId?: string;
+  /** Set in page mode — for optimistic-lock on the root revision. */
+  revisionId?: string;
+  /** True when renaming a portal-less folder (always a subtree move by path). */
+  isFolder?: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
+function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOpenChange }: RenameDialogFormProps) {
   const router = useRouter();
   const renameMutation = useRenamePage();
+  const renameSubtreeMutation = useRenameSubtree();
 
-  const [newPath, setNewPath] = useState(page.path);
+  const [newPath, setNewPath] = useState(basePath);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [includeDescendants, setIncludeDescendants] = useState(false);
+  // Folder mode is always a subtree move; page mode is opt-in via the switch.
+  const [includeDescendantsState, setIncludeDescendants] = useState(false);
+  const includeDescendants = isFolder || includeDescendantsState;
 
-  const isSubmitting = renameMutation.isPending;
-  const isUnchanged = newPath === page.path;
+  const isSubmitting = renameMutation.isPending || renameSubtreeMutation.isPending;
+  const isUnchanged = newPath === basePath;
   const validation = validateNewPath(newPath);
   const isInvalid = !validation.ok;
   const invalidMessage = !validation.ok
@@ -79,42 +106,46 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
   // Renaming the root portal '/' is not a meaningful operation and the
   // listing endpoint's path='/' branch would return a slice of unrelated
   // site-wide pages — short-circuit by disabling the query.
-  const isRoot = page.path === '/';
-  const descendantRoot = page.path.endsWith('/') ? page.path : `${page.path}/`;
-  const { data: descendantData } = usePageList({ path: descendantRoot, limit: 100, offset: 0, include_deleted: false }, { enabled: !isRoot });
+  const isRoot = basePath === '/';
+  const descendantRoot = basePath.endsWith('/') ? basePath : `${basePath}/`;
+  // `limit: 0` fetches the whole subtree (Mongoose treats `.limit(0)` as no
+  // limit) so the count is exact and the user can expand to verify every page
+  // that would move — the server-side renameTree scans the same full subtree.
+  const { data: descendantData } = usePageList({ path: descendantRoot, limit: 0, offset: 0, include_deleted: false }, { enabled: !isRoot });
   // When a portal page '/foo/bar/' is being renamed, findListByStartWith
   // also returns the un-slashed leaf '/foo/bar' (see Page.findListByStartWith
   // — it appends `path.substr(0, path.length-1)` to the path conditions).
   // That leaf is a separate page, not a descendant of the portal, so drop
   // both the page itself and its un-slashed twin.
   const pageSelfPaths = useMemo(() => {
-    const stripped = page.path.replace(/\/+$/, '');
-    return new Set([page.path, stripped]);
-  }, [page.path]);
+    const stripped = basePath.replace(/\/+$/, '');
+    return new Set([basePath, stripped]);
+  }, [basePath]);
   const descendants = useMemo(() => (descendantData?.pages ?? []).filter((p) => !pageSelfPaths.has(p.path)), [descendantData, pageSelfPaths]);
   const descendantCount = descendants.length;
-  // `descendantData.pager.next` is non-null when there are more pages of
-  // descendants beyond the limit=100 fetch — we surface that as a "X+"
-  // marker so the count never silently understates a large subtree.
-  const isCountTruncated = descendantData?.pager?.next != null;
 
-  // Preview of how subtree paths would be rewritten under the new path.
-  const preview = useMemo(() => {
-    const oldBase = page.path.replace(/\/+$/, '');
+  // The full list of how every subtree path would be rewritten under the new
+  // path. Collapsed to the first DESCENDANT_PREVIEW_LIMIT rows by default; the
+  // "+N more" toggle reveals the rest in a scrollable list.
+  const [showAllDescendants, setShowAllDescendants] = useState(false);
+  const rewrites = useMemo(() => {
+    const oldBase = basePath.replace(/\/+$/, '');
     const newBase = newPath.replace(/\/+$/, '');
-    return descendants.slice(0, DESCENDANT_PREVIEW_LIMIT).map((d) => ({
+    return descendants.map((d) => ({
       from: d.path,
       to: `${newBase}${d.path.slice(oldBase.length)}`,
     }));
-  }, [descendants, page.path, newPath]);
-  const moreCount = descendantCount - preview.length;
+  }, [descendants, basePath, newPath]);
+  const preview = showAllDescendants ? rewrites : rewrites.slice(0, DESCENDANT_PREVIEW_LIMIT);
+  const moreCount = rewrites.length - DESCENDANT_PREVIEW_LIMIT;
+  // How many pages a subtree move will touch — descendants in folder mode, or
+  // the root + descendants in page mode. Surfaced in the submit button while
+  // the (potentially slow) move runs.
+  const moveCount = isFolder ? descendantCount : descendantCount + 1;
 
-  // Subtree rename (renameTree) is UI-only for now — the backend endpoint
-  // is a separate task. Toggling the switch on previews the move but
-  // blocks submit so we never silently rename just the single page.
-  // TODO(renameTree): wire to the renameTree API once it lands and drop
-  // the `includeDescendants` submit guard + pending note below.
-  const canSubmit = !isSubmitting && !isUnchanged && !isInvalid && !includeDescendants;
+  // A folder move needs at least one visible page under it — the folder path
+  // itself has no page, so an empty subtree means there is nothing to move.
+  const canSubmit = !isSubmitting && !isUnchanged && !isInvalid && (!isFolder || descendantCount > 0);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -123,19 +154,43 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
     setFeedback(null);
 
     try {
-      const updated = await renameMutation.mutateAsync({
-        page_id: page._id,
+      if (isFolder) {
+        const count = await renameSubtreeMutation.mutateAsync({
+          old_path: basePath,
+          new_path: newPath,
+          create_redirect: true,
+        });
+        onOpenChange(false);
+        notify.info(m['page.rename.success_tree']({ count }));
+        // The folder has no page of its own — navigate to the new folder's
+        // list view (newPath is a folder path).
+        router.replace(pagePathToHref(newPath));
+        return;
+      }
+
+      const result = await renameMutation.mutateAsync({
+        page_id: pageId as string,
         new_path: newPath,
-        revision_id: page.revision._id,
+        revision_id: revisionId,
         // Match legacy behaviour: always create a redirect page from the old path.
         create_redirect: true,
+        include_descendants: includeDescendants,
       });
 
       onOpenChange(false);
-      router.replace(pagePathToHref(updated.path));
+      // Surface the moved count for a subtree move so the user sees the
+      // bulk effect; a single rename navigates silently as before.
+      if (includeDescendants) {
+        notify.info(m['page.rename.success_tree']({ count: result.renamedCount }));
+      }
+      router.replace(pagePathToHref(result.page.path));
     } catch (err) {
       if (err instanceof PageRevisionConflictError) {
         setFeedback({ kind: 'conflict', message: err.message });
+        return;
+      }
+      if (err instanceof RenameTreeConflictError) {
+        setFeedback({ kind: 'tree_conflict', message: err.message, conflicts: err.conflicts, partial: err.partial });
         return;
       }
       setFeedback({
@@ -145,14 +200,54 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
     }
   };
 
+  // The from→to preview list, shared by the page (switch-on) and folder modes.
+  const previewBlock =
+    preview.length > 0 && !isInvalid ? (
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground">{m['page.rename.descendants_preview_title']()}</p>
+        <ul className={cn('space-y-1.5', showAllDescendants && 'max-h-56 overflow-y-auto pr-1')}>
+          {preview.map((item) => (
+            <li key={item.from} className="min-w-0 font-mono text-xs">
+              {/* The page still lives at its old path until the move runs, so
+                  link `from` (not `to`) and open it in a new tab for inspection
+                  without leaving the dialog. */}
+              <a
+                href={pagePathToHref(item.from)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={m['page.rename.descendants_open_aria']({ path: item.from })}
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+              >
+                <span className="min-w-0 truncate line-through">{item.from}</span>
+                <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+              </a>
+              <span className="flex items-center gap-1.5 text-foreground">
+                <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate">{item.to}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        {moreCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAllDescendants((v) => !v)}
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {showAllDescendants ? m['page.rename.descendants_collapse']() : m['page.rename.descendants_more']({ count: moreCount })}
+          </button>
+        )}
+      </div>
+    ) : null;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <DialogHeader>
-        <DialogTitle>{m['page.rename.title']()}</DialogTitle>
-        <DialogDescription>{m['page.rename.description']()}</DialogDescription>
+        <DialogTitle>{isFolder ? m['page.rename.folder_title']() : m['page.rename.title']()}</DialogTitle>
+        <DialogDescription>{isFolder ? m['page.rename.folder_description']() : m['page.rename.description']()}</DialogDescription>
       </DialogHeader>
 
-      {feedback && (
+      {feedback && feedback.kind !== 'tree_conflict' && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>{feedback.kind === 'conflict' ? m['page.rename.conflict_title']() : m['page.rename.error_title']()}</AlertTitle>
@@ -160,9 +255,28 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
         </Alert>
       )}
 
+      {feedback && feedback.kind === 'tree_conflict' && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>{m['page.rename.conflict_tree_title']()}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{feedback.partial ? m['page.rename.conflict_tree_partial']() : m['page.rename.conflict_tree_description']()}</p>
+            {feedback.conflicts.length > 0 && (
+              <ul className="space-y-0.5 font-mono text-xs">
+                {feedback.conflicts.map((conflict) => (
+                  <li key={conflict.path} className="truncate">
+                    {conflict.path}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="space-y-2">
         <Label htmlFor="rename-current-path">{m['page.rename.current_path']()}</Label>
-        <Input id="rename-current-path" value={page.path} readOnly className="font-mono text-sm bg-muted" />
+        <Input id="rename-current-path" value={basePath} readOnly className="font-mono text-sm bg-muted" />
       </div>
 
       <div className="space-y-2">
@@ -180,20 +294,28 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
         {isInvalid && invalidMessage && newPath.length > 0 && <p className="text-xs text-destructive">{invalidMessage}</p>}
       </div>
 
-      {/* Subtree-move (renameTree) affordance — only when the page has
-          descendants. UI is complete; execution is gated until the API ships. */}
-      {descendantCount > 0 && (
+      {/* Folder mode: always a subtree move (the folder has no page of its
+          own), so there is no toggle — just the count + preview. */}
+      {isFolder && (
+        <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+          <p className="text-xs text-muted-foreground">
+            {descendantCount > 0 ? m['page.rename.folder_note']({ count: descendantCount }) : m['page.rename.folder_empty']()}
+          </p>
+          {previewBlock}
+        </div>
+      )}
+
+      {/* Page mode: optional subtree move via a switch — only when the page
+          has descendants. Toggling it on moves the page together with its
+          whole grant-visible subtree. */}
+      {!isFolder && descendantCount > 0 && (
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-0.5">
               <Label htmlFor="rename-include-descendants" className="text-sm font-medium">
                 {m['page.rename.include_descendants']()}
               </Label>
-              <p className="text-xs text-muted-foreground">
-                {isCountTruncated
-                  ? m['page.rename.descendants_count_more']({ count: descendantCount })
-                  : m['page.rename.descendants_count']({ count: descendantCount })}
-              </p>
+              <p className="text-xs text-muted-foreground">{m['page.rename.descendants_count']({ count: descendantCount })}</p>
             </div>
             <Switch
               id="rename-include-descendants"
@@ -206,29 +328,8 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
 
           {includeDescendants && (
             <>
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                <div className="flex items-center gap-1.5 font-medium">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  {m['page.rename.descendants_pending_badge']()}
-                </div>
-                <p className="mt-1">{m['page.rename.descendants_pending_note']()}</p>
-              </div>
-
-              {preview.length > 0 && !isInvalid && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">{m['page.rename.descendants_preview_title']()}</p>
-                  <ul className="space-y-1">
-                    {preview.map((item) => (
-                      <li key={item.from} className="flex items-center gap-1.5 font-mono text-xs">
-                        <span className="truncate text-muted-foreground line-through">{item.from}</span>
-                        <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className="truncate text-foreground">{item.to}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {moreCount > 0 && <p className="text-xs text-muted-foreground">{m['page.rename.descendants_more']({ count: moreCount })}</p>}
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground">{m['page.rename.descendants_note']()}</p>
+              {previewBlock}
             </>
           )}
         </div>
@@ -242,7 +343,7 @@ function RenameDialogForm({ page, onOpenChange }: RenameDialogFormProps) {
         </DialogClose>
         <Button type="submit" disabled={!canSubmit}>
           {isSubmitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-          {m['page.rename.submit']()}
+          {isSubmitting && includeDescendants ? m['page.rename.submitting_tree']({ count: moveCount }) : m['page.rename.submit']()}
         </Button>
       </DialogFooter>
     </form>
