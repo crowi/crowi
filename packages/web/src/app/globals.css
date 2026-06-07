@@ -75,6 +75,10 @@
 }
 
 :root {
+  /* Align native UI (scrollbars, form controls, date pickers) with the
+     active theme. `.dark` flips this to `dark` below. */
+  color-scheme: light;
+
   --radius: 0.375rem;
 
   /* Crowi brand colors */
@@ -158,6 +162,8 @@ html[data-page-grant="2"] {
 }
 
 .dark {
+  color-scheme: dark;
+
   /* Primary stays same hue but lighter for dark mode */
   --primary: oklch(0.65 0.06 192);
   --primary-foreground: oklch(0.15 0 0);

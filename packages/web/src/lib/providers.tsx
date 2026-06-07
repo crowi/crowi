@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode, useMemo } from 'react';
+import { ThemeProvider } from '@/components/theme-provider';
 import { ConnectionProvider, useConnection } from './connection-context';
 import { ConnectionErrorContext } from './use-auth';
 
@@ -19,11 +20,13 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ConnectionProvider>
-        <ConnectionErrorBridge>{children}</ConnectionErrorBridge>
-      </ConnectionProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <ConnectionProvider>
+          <ConnectionErrorBridge>{children}</ConnectionErrorBridge>
+        </ConnectionProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 
