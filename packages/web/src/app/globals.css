@@ -410,3 +410,21 @@ html[data-page-grant="2"] {
   background-color: transparent !important;
 }
 
+/* Dark-mode Shiki: the renderer emits dual-theme markup
+ * (`defaultColor: false`), so every `<pre>` / token `<span>` carries both
+ * `--shiki-light` and `--shiki-dark` CSS variables in its inline `style`.
+ * Pick the light variable by default and the dark one under `.dark`. We
+ * intentionally drive *text* colour only — the block background stays the
+ * `bg-muted/60` token (set above) in both modes, so highlighted and plain
+ * fences share one surface and we don't reintroduce the per-token bg
+ * bands the rule above suppresses. */
+.crowi-prose pre.shiki,
+.crowi-prose pre.shiki span {
+  color: var(--shiki-light);
+}
+
+.dark .crowi-prose pre.shiki,
+.dark .crowi-prose pre.shiki span {
+  color: var(--shiki-dark);
+}
+
