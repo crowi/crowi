@@ -428,3 +428,20 @@ html[data-page-grant="2"] {
   color: var(--shiki-dark);
 }
 
+/* Server-generated diagrams (PlantUML `<div class="plantuml-embed">…</div>`
+ * with an inline `<svg>`, or the PNG `<img class="plantuml-embed">` fallback;
+ * future Mermaid output is expected to reuse the same class) ship with
+ * baked-in fixed colours — black strokes / text on transparent, designed for
+ * a light page. Re-colouring the SVG is out of scope (the markup is produced
+ * server-side and cached), so under `.dark` we wrap each diagram in a neutral
+ * white background with padding + rounded corners so it stays legible instead
+ * of black-on-near-black. Light mode is unchanged (transparent on the page
+ * background). */
+.dark .crowi-prose .plantuml-embed {
+  background-color: #fff;
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  display: inline-block;
+  max-width: 100%;
+}
+
