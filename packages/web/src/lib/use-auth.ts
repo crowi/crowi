@@ -4,20 +4,8 @@ import { useState, useEffect, useCallback, useRef, useContext, createContext } f
 import { useRouter } from 'next/navigation';
 import { apiClientV2 } from './api-client';
 import { clearTokens, getRefreshToken } from './auth-token';
-
-// ネットワークエラーかどうかを判定
-function isNetworkError(error: unknown): boolean {
-  if (error instanceof TypeError) {
-    const message = error.message.toLowerCase();
-    return message.includes('failed to fetch') || message.includes('network') || message.includes('connection');
-  }
-  return false;
-}
-
-// サーバーエラー（5xx）かどうかを判定
-function isServerError(status: number): boolean {
-  return status >= 500 && status < 600;
-}
+import { isNetworkError, isServerErrorStatus } from './is-network-error';
+import type { ConnectionErrorHandlers } from './connection-error-ref';
 
 interface User {
   id: string;
@@ -37,13 +25,8 @@ interface AuthState {
 }
 
 // 接続エラーハンドラーのコンテキスト（connection-contextとは別に、オプショナルに使用）
-interface ConnectionErrorHandlers {
-  setNetworkError: (error?: string) => void;
-  setServerError: (error?: string) => void;
-  setConnected: () => void;
-  registerRetryCallback: (callback: () => void) => void;
-}
-
+// 型は connection-error-ref.ts と共有する（QueryCache.onError の module-level
+// ブリッジでも同じハンドラ形を使うため）。
 const ConnectionErrorContext = createContext<ConnectionErrorHandlers | null>(null);
 
 export function useConnectionErrorHandlers(): ConnectionErrorHandlers | null {
@@ -101,7 +84,7 @@ export function useAuth() {
         });
         // 接続成功を通知
         connectionHandlers?.setConnected();
-      } else if (isServerError(response.status)) {
+      } else if (isServerErrorStatus(response.status)) {
         // サーバーエラー（5xx）: トークンはクリアせず、サーバーエラーを通知
         connectionHandlers?.setServerError(`サーバーエラーが発生しました (${response.status})`);
         // ローディング状態は解除するが、認証状態は維持
