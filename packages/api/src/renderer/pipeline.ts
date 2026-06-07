@@ -50,10 +50,16 @@ export interface PipelineEsmDeps {
   GithubSlugger: new () => { slug(text: string): string };
   mdastToString: (node: unknown) => string;
   /**
-   * Pre-warmed shiki highlighter bound to a fixed theme (`github-light`
-   * for Phase 3) and the bundled language set. Lazily initialised on
+   * Pre-warmed shiki highlighter bound to a **dual theme** (`github-light`
+   * + `github-dark`) and the bundled language set. Lazily initialised on
    * first pipeline run; subsequent runs share the same instance.
-   * Theme switching / dynamic language loading is deferred to Phase 6+.
+   *
+   * Emitted markup uses shiki's `defaultColor: false` mode, so each token
+   * carries `--shiki-light` / `--shiki-dark` CSS variables (and the `<pre>`
+   * carries `--shiki-light-bg` / `--shiki-dark-bg`) instead of a single
+   * inlined colour. The web side (`globals.css` `.shiki` rules) then picks
+   * the light or dark variable per `.dark` class — see the dark-mode
+   * feature. Dynamic language loading is deferred to a later phase.
    */
   shikiHighlighter: ShikiHighlighter;
 }
@@ -133,14 +139,28 @@ const SHIKI_BUNDLED_LANGS = [
   'diff',
 ] as const;
 
-const SHIKI_THEME = 'github-light';
+// Dual theme: light + dark are both compiled into the highlighter and
+// emitted together via `defaultColor: false` so a single render carries
+// both colour sets as CSS variables. The web client switches between
+// them with the `.dark` class — no re-render / second pipeline run.
+const SHIKI_THEMES = {
+  light: 'github-light',
+  dark: 'github-dark',
+} as const;
 
 interface ShikiCreateHighlighter {
   (opts: {
     themes: string[];
     langs: readonly string[];
   }): Promise<{
-    codeToHtml(code: string, opts: { lang: string; theme: string }): string;
+    codeToHtml(
+      code: string,
+      opts: {
+        lang: string;
+        themes: { light: string; dark: string };
+        defaultColor: false;
+      },
+    ): string;
     getLoadedLanguages(): string[];
   }>;
 }
@@ -165,17 +185,25 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
     const mdastToStringMod = jiti('mdast-util-to-string') as { toString: (node: unknown) => string };
     // shiki is ESM-only too; its bundled core entry exposes
     // `createHighlighter` (^1.x and ^2.x and ^4.x). We init once with
-    // the fixed Phase 3 theme + language set so per-block calls don't
-    // pay the cold-load every time.
+    // the dual (light + dark) theme + language set so per-block calls
+    // don't pay the cold-load every time.
     const shikiMod = jiti('shiki') as { createHighlighter: ShikiCreateHighlighter };
     const rawHighlighter = await shikiMod.createHighlighter({
-      themes: [SHIKI_THEME],
+      themes: [SHIKI_THEMES.light, SHIKI_THEMES.dark],
       langs: [...SHIKI_BUNDLED_LANGS],
     });
     const loadedLangs = new Set(rawHighlighter.getLoadedLanguages());
     const shikiHighlighter: ShikiHighlighter = {
       codeToHtml(code, lang) {
-        return rawHighlighter.codeToHtml(code, { lang, theme: SHIKI_THEME });
+        // `defaultColor: false` → tokens carry `--shiki-light` /
+        // `--shiki-dark` (and the `<pre>` `--shiki-light-bg` /
+        // `--shiki-dark-bg`) CSS variables instead of a single inlined
+        // colour, so `.dark` can switch them client-side.
+        return rawHighlighter.codeToHtml(code, {
+          lang,
+          themes: SHIKI_THEMES,
+          defaultColor: false,
+        });
       },
       hasLang(lang) {
         return loadedLangs.has(lang);
