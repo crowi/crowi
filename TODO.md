@@ -69,6 +69,7 @@ merge 後の 3-agent simplify レビューで挙がった非ブロッキング�
 - **管理画面（フェーズ4）** — app / security / auth / mail / share / storage / users + sensitive config の at-rest 暗号化（crypto status / reencrypt UI）
 - **monorepo restructure** — workspace protocol / pnpm catalog / `@crowi/tsconfig` / api・web を `packages/` へ / `@crowi/runner` 切り出し / Dockerfile + standalone / changesets + CI publish workflow
 - **エディタ / UI** — CodeMirror 6 + 2-column preview、階層ページサイドバー（全ページ表示）、create-page モーダル（Tab 補完）、page-path の `+` スペースエンコード、boot progress UI、通知のリアルタイム WS invalidation、watch ベース通知一本化
+- **ダークモード（theme-dark-mode）** — next-themes（class 戦略・system 既定・FOUC 対策）+ ヘッダー/サインインのトグル、`.dark` トークン起動。Shiki dual-theme（CSS 変数）+ RENDERER_PIPELINE_VERSION bump、CodeMirror dark theme（theme compartment）、diff / sonner のテーマ連動。`User.theme` + `PATCH /me/theme` + `ThemeSync` で端末間同期、PlantUML 等の固定色 SVG をニュートラル背景ラッパで包む、AA コントラスト監査
 - **インフラ / 品質** — mongoose 6→8 upgrade、Biome + lefthook、turbo `^build`、bcrypt 移行、i18n（paraglide）、installer 移行
 - **legacy 除去（RFC-0006）** — Express routes / controllers / form validators / Swig views / ts-rest 層 / `apiResponse.ts` をすべて削除済み
 
