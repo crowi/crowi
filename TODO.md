@@ -71,6 +71,7 @@ merge 後の 3-agent simplify レビューで挙がった非ブロッキング�
 - **エディタ / UI** — CodeMirror 6 + 2-column preview、階層ページサイドバー（全ページ表示）、create-page モーダル（Tab 補完）、page-path の `+` スペースエンコード、boot progress UI、通知のリアルタイム WS invalidation、watch ベース通知一本化
 - **インフラ / 品質** — mongoose 6→8 upgrade、Biome + lefthook、turbo `^build`、bcrypt 移行、i18n（paraglide）、installer 移行
 - **legacy 除去（RFC-0006）** — Express routes / controllers / form validators / Swig views / ts-rest 層 / `apiResponse.ts` をすべて削除済み
+- **web エラー画面 / 接続レジリエンス** — `apiV2Fetch` + `refreshAccessToken` に AbortController タイムアウト（既定 20s, `NEXT_PUBLIC_API_TIMEOUT_MS` で override、`AbortSignal.any` で caller signal 合成、timeout は `crowi:timeout` reason で cancel と識別）/ `app/error.tsx`・`app/global-error.tsx` エラーバウンダリ / `QueryCache.onError`→module-level ref→`ConnectionProvider` 集約（5xx→serverError / network・timeout→networkError、401 除外）/ react-query retry を 4xx 即エラー・5xx・network 少回数（2）に。spec: `.feature-state/specs/feature-web-error-screens.md`。手動確認: ① API 停止→ネットワークバナー ② 応答ハング→20s でタイムアウト→エラー ③ render throw→`error.tsx` のエラーカード + 再読み込み
 
 ---
 
