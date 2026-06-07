@@ -3,7 +3,20 @@ import type { NextConfig } from 'next';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
 
+// Hosts allowed to reach Next.js dev resources (`/_next/*`, HMR) from a
+// different origin — e.g. testing from another LAN device or over Tailscale.
+// Next blocks cross-origin dev requests by default; list the extra hosts in
+// `ALLOWED_DEV_ORIGINS` (comma-separated) to permit them. Dev-only and
+// machine-specific, so set it in a gitignored `packages/web/.env.local`
+// (e.g. `ALLOWED_DEV_ORIGINS=10.0.3.109,my-host.tailnet.ts.net`) rather than
+// committing it. No effect on production builds.
+const ALLOWED_DEV_ORIGINS = process.env.ALLOWED_DEV_ORIGINS?.split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
+  ...(ALLOWED_DEV_ORIGINS?.length ? { allowedDevOrigins: ALLOWED_DEV_ORIGINS } : {}),
+
   // Produce a self-contained `.next/standalone/` build that bundles only the
   // files traced by Next's module dependency walker (server.js + minimal
   // node_modules + workspace deps). The output is what the Docker runtime
