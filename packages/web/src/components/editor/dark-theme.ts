@@ -32,6 +32,10 @@ const darkCursor = '#e2e8f0';
 const darkSelection = '#1e3a5f';
 const darkGutterForeground = '#64748b';
 const darkComment = '#64748b';
+// Markdown syntax marks (`#`, `**`, `` ` ``, `>`, list bullets). Tagged
+// `processingInstruction` by @lezer/markdown; kept lighter than `darkComment`
+// so the markup stays visible on the dark surface instead of sinking in.
+const darkMark = '#94a3b8';
 const darkAccent = '#7dd3fc';
 const darkString = '#9ece6a';
 const darkKeyword = '#f472b6';
@@ -89,6 +93,10 @@ const editorDarkHighlightStyle = HighlightStyle.define([
   { tag: [t.propertyName, t.attributeName], color: darkAccent },
   { tag: [t.monospace], color: darkAccent },
   { tag: t.contentSeparator, color: darkComment },
+  // Syntax marks: heading `#`, emphasis `*`/`**`, code `` ` ``, quote `>`,
+  // list bullets. Without this they fall back to the light-oriented
+  // `defaultHighlightStyle` and disappear against the dark background.
+  { tag: [t.processingInstruction, t.meta], color: darkMark },
 ]);
 
 /**

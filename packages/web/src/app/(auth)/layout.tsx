@@ -109,7 +109,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* サーバーエラーモーダル */}
       <ServerErrorModal />
 
-      <header className="crowi-top-border bg-background text-foreground shadow-header relative z-40">
+      <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
           <div className="flex items-center gap-3 min-w-0 shrink-0">
             <SiteBrand />

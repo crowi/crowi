@@ -164,9 +164,12 @@ html[data-page-grant="2"] {
 .dark {
   color-scheme: dark;
 
-  /* Primary stays same hue but lighter for dark mode */
-  --primary: oklch(0.65 0.06 192);
-  --primary-foreground: oklch(0.15 0 0);
+  /* Primary: same teal hue, but lifted lightness + chroma for dark mode.
+   * The earlier L=0.65 C=0.06 read as a muddy grey-teal; L=0.72 C=0.11
+   * makes it a clear, saturated accent so the dark foreground text on
+   * primary buttons (post comment / rename / liked) stays legible. */
+  --primary: oklch(0.72 0.11 192);
+  --primary-foreground: oklch(0.16 0.01 192);
 
   /* Header background */
   --crowi-header: oklch(0.22 0.02 192);

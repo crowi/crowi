@@ -97,7 +97,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <ConnectionBanner />
       <ServerErrorModal />
 
-      <header className="crowi-top-border bg-background text-foreground shadow-header relative z-40">
+      <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <SiteBrand />
