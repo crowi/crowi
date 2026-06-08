@@ -91,6 +91,55 @@ export function pageDisplayParent(path: string): string {
 }
 
 /**
+ * The default H1 title text for a brand-new page at `path`.
+ *
+ * Crowi leans on the date-hierarchy idiom (`<notebook>/YYYY/MM/DD`), so
+ * the rule is:
+ *
+ *   - When the path ends in a date run (one or more trailing all-digit
+ *     segments), the title is that run PLUS the single segment in front
+ *     of it (the "notebook" label) — so a daily note keeps its context.
+ *   - Otherwise the title is just the leaf segment.
+ *
+ *   /user/sotarok/memo/2026/06/08          → 'memo/2026/06/08'
+ *   /user/sotarok/zyx/134/hoge-fuga-piyo   → 'hoge-fuga-piyo'
+ *   /crowi/qa/2026/06/08/rfc-0011-mcp      → 'rfc-0011-mcp'
+ *   /crowi/qa/rfc-0011-mcp                 → 'rfc-0011-mcp'
+ *   /crowi/日報/2026/06/08                 → '日報/2026/06/08'
+ *   /                                      → ''
+ *
+ * Note the deliberate difference from `pageDisplayName`, which drops the
+ * notebook segment (it collapses to just the date run). Here we keep it
+ * so the seeded H1 reads like the page's own name, not a bare date.
+ */
+export function pageDefaultTitle(path: string): string {
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 0) return '';
+  const last = segments[segments.length - 1];
+  // No trailing date run → the leaf segment is the whole title.
+  if (!isNumericSegment(last)) return last;
+  // A trailing all-digit run exists; keep the one segment before it
+  // (the notebook label) alongside the run.
+  const runStart = trailingNumericRunStart(segments);
+  const notebookStart = Math.max(0, runStart - 1);
+  return segments.slice(notebookStart).join('/');
+}
+
+/**
+ * The markdown body seeded into a freshly-created draft page: a path-
+ * derived H1, a blank line, then the line the cursor lands on. Falls
+ * back to a single newline (the legacy default) for the rootless edge
+ * case where no title can be derived.
+ *
+ *   /user/sotarok/memo/2026/06/08 → '# memo/2026/06/08\n\n'
+ */
+export function defaultDraftBody(path: string): string {
+  const title = pageDefaultTitle(path);
+  if (!title) return '\n';
+  return `# ${title}\n\n`;
+}
+
+/**
  * Wiki page paths may contain spaces. Following legacy Crowi, the URL
  * renders each space as `+` (far more readable than `%20`) and reads `+`
  * back as a space, so `/Weall/dev/infra/v0/mysql+connect+to+production+db`

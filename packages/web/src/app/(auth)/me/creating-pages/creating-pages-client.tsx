@@ -22,6 +22,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { notify } from '@/lib/notify';
+import { defaultDraftBody } from '@/lib/page-path';
 import { DraftPathConflictError, draftEditHref, useCancelDraft, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePageTitle } from '@/lib/use-page-title';
 
@@ -95,7 +96,9 @@ function NewDraftForm({ onCreated }: { onCreated?: () => void }) {
       return;
     }
     createDraft.mutate(
-      { path: trimmed },
+      // Seed the path-derived H1 so a page started from this form opens
+      // with the same default title as the `?path=` create flow.
+      { path: trimmed, initialBody: defaultDraftBody(trimmed) },
       {
         onSuccess: ({ pageId }) => {
           onCreated?.();

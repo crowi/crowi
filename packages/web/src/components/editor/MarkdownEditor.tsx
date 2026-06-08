@@ -81,6 +81,13 @@ export interface MarkdownEditorHandle {
    */
   insertAtCursor(snippet: string): number;
   /**
+   * Move the cursor to the end of the document and focus the editor.
+   * Used by the create flow to drop the caret on the blank line below
+   * the seeded H1 title so the user can start typing immediately.
+   * No-op when the view hasn't mounted yet.
+   */
+  focusEnd(): void;
+  /**
    * The scrollable DOM element CodeMirror owns (`view.scrollDOM`).
    * Exposed so the scroll-sync hook can attach a `scroll` listener
    * without depending on internal CodeMirror APIs at the callsite.
@@ -291,6 +298,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         });
         view.focus();
         return cursorAfter;
+      },
+      focusEnd() {
+        const view = viewRef.current;
+        if (!view) return;
+        const end = view.state.doc.length;
+        view.dispatch({ selection: { anchor: end } });
+        view.focus();
       },
       getScrollDOM() {
         return viewRef.current?.scrollDOM ?? null;
