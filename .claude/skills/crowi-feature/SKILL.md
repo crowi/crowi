@@ -62,30 +62,54 @@ gitignore 済み (`.gitkeep` のみ tracked)。
 
 ```
 .feature-state/
-├── .gitkeep
-├── queue.json              # currentTask + global config
+├── config.json             # 静的 config（SHARED, read-mostly）
 ├── specs/
-│   └── {id}.md            # 会話を要約した設計仕様 (人間レビュー対象)
-└── tasks/
-    └── {id}.json          # planner が埋めた context + AC + commitPlan
+│   └── {id}.md            # 設計仕様（SHARED, per-id）
+├── tasks/
+│   └── {id}.json          # planner が埋めた context + AC + commitPlan + status（SHARED, per-id）
+└── queue.json              # currentTask 等（PER-WORKTREE, volatile）※共有しない
 ```
 
-### queue.json スキーマ
+#### 共有 / per-worktree の線引き（並列 worktree 安全性）
+
+`gw` worktree は `~/.gw/hooks/feature-state-link.sh` で **`specs/` `tasks/`
+`config.json` だけ** を MAIN worktree に symlink 共有する。**`queue.json` は
+worktree ローカル**（共有しない）。理由:
+
+- `specs/` `tasks/` は **per-id ファイル**。並列 worktree は別々の id を触るので
+  共有して安全（むしろ「ある worktree で起こした spec を全 worktree から見たい」）。
+- `config.json` は静的（実行時に書き換えない）read-only なので共有して安全。
+- `queue.json` の `currentTask` は **「この worktree が今やっているタスク」= 単一
+  ポインタ**。これを共有すると、並列 `/feature` 実行が互いの `currentTask` を
+  上書きして壊れる。だから per-worktree に分離する。
+
+> 1 worktree = 1 タスク（= 1 `tasks/{id}.json`）。`currentTask` はその worktree
+> ローカルの「今のタスク」。タスク一覧が欲しければ `ls tasks/` を見る（集約
+> しない）。`tasks/{id}.json` への書き込みは torn write を避けるため
+> tmp+rename で atomic に行う。
+
+### config.json スキーマ（SHARED, 静的）
+
+```json
+{
+  "commitStrategy": "main-direct",
+  "maxReviewAttempts": 3,
+  "runSimplify": true,
+  "minScopeSize": "small"
+}
+```
+
+### queue.json スキーマ（PER-WORKTREE, volatile）
 
 ```json
 {
   "currentTask": "feature-attachment-thumbnail",
-  "config": {
-    "commitStrategy": "main-direct",
-    "maxReviewAttempts": 3,
-    "runSimplify": true,
-    "minScopeSize": "small"
-  },
-  "lastUpdated": "2026-05-09T..."
+  "lastUpdated": "2026-05-09T...",
+  "lastCompletedTask": "feature-..."
 }
 ```
 
-`config.minScopeSize`: `trivial | small | medium | large`
+`minScopeSize`（config.json）: `trivial | small | medium | large`
 spec の `scope:` がこの閾値より大きい (`>`) ときだけ planner が起動する。
 デフォルト `small` (= medium 以上で planner、small / trivial は skip)。
 順序は `trivial < small < medium < large`。
@@ -273,7 +297,7 @@ phase ごとの status:`PLANNED → IN_PROGRESS → REVIEW → (APPROVED → COM
 ### 2. scope 判定 → planner skip 判定
 
 ```
-2.1. queue.json の config.minScopeSize を読む (なければ "small" デフォルト)
+2.1. config.json の minScopeSize を読む (なければ "small" デフォルト)
 2.2. spec.md の scope と比較
      scope ≤ minScopeSize: planner skip
      scope >  minScopeSize: planner 起動
@@ -404,7 +428,7 @@ migration skill と同じパターン。
 ## 重要な前提
 
 - **state ディレクトリは `.feature-state/` (root)** ※ `.claude/feature-state/` ではない
-- **main 直コミット運用** がデフォルト (queue.json `commitStrategy: main-direct`)
+- **main 直コミット運用** がデフォルト (config.json `commitStrategy: main-direct`)
 - 認証が要るエンドポイントは Hono の認証ミドルウェア (`createJwtAuth(crowi)`) 配下に置く。CSRF 不要
 - 新契約は `packages/api-contract/src/contracts/{feature}.ts` に追加、build 必須
   (`pnpm --filter @crowi/api-contract build`)
