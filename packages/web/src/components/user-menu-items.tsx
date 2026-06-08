@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Bookmark, FilePen, FileText, Settings, Shield, Trash2, User } from 'lucide-react';
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { ThemeToggleMenuGroup } from '@/components/theme-toggle';
 import { m } from '@paraglide/messages.js';
 
 interface UserMenuItemsProps {
@@ -61,6 +62,8 @@ export function UserMenuItems({ username, isAdmin = false }: UserMenuItemsProps)
           </DropdownMenuItem>
         </>
       )}
+      <DropdownMenuSeparator />
+      <ThemeToggleMenuGroup />
       <DropdownMenuSeparator />
     </>
   );

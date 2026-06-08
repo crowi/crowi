@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/use-auth';
 import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
 import { SiteBrand } from '@/components/site-brand';
 import { LocaleSync } from '@/components/locale-sync';
+import { ThemeSync } from '@/components/theme-sync';
 import { ConnectionBanner } from '@/components/connection-banner';
 import { ServerErrorModal } from '@/components/server-error-modal';
 import { NotificationBell } from '@/components/notification-bell';
@@ -92,10 +93,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-background">
       <LocaleSync />
+      <ThemeSync />
       <ConnectionBanner />
       <ServerErrorModal />
 
-      <header className="crowi-top-border bg-background text-foreground shadow-header relative z-40">
+      <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <SiteBrand />

@@ -39,6 +39,7 @@ import {
   recentlyViewedPagesRoute,
   updatePasswordRoute,
   updateProfileRoute,
+  updateThemeRoute,
   uploadPictureRoute,
   deletePictureRoute,
 } from '@crowi/api-contract';
@@ -62,12 +63,19 @@ const debug = Debug('crowi:hono:handlers:me');
 // `null | string`), so we forward `user.image` verbatim — no
 // `toUserImage` coercion. Only token endpoints, where the schema is
 // `z.string().optional()`, need `null → undefined`.
+// Normalise a legacy regional `lang` ('en-US' / 'en-GB') to 'en' for the
+// response. Rows predating the enum tightening can still hold a legacy value
+// until their next save (which the User `pre('validate')` hook coerces), so we
+// guard the read boundary too — the typed contract only allows 'en' / 'ja'.
+const toResponseLang = (lang: string): 'en' | 'ja' => (lang === 'ja' ? 'ja' : 'en');
+
 const userToProfileResponse = (user: UserDocument, hasPassword: boolean, emailChangePending?: boolean) => ({
   id: user._id.toString(),
   username: user.username,
   name: user.name,
   email: user.email,
-  lang: user.lang,
+  lang: toResponseLang(user.lang),
+  theme: user.theme ?? 'system',
   image: user.image,
   introduction: user.introduction || undefined,
   googleId: user.googleId,
@@ -141,6 +149,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
   applyScope(app, getProfileRoute, 'profile:read');
   applyScope(app, recentlyViewedPagesRoute, 'profile:read');
   applyScope(app, updateProfileRoute, 'profile:write');
+  applyScope(app, updateThemeRoute, 'profile:write');
   applyScope(app, uploadPictureRoute, 'profile:write');
   applyScope(app, deletePictureRoute, 'profile:write');
   applyScope(app, updatePasswordRoute, 'profile:write');
@@ -211,6 +220,22 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         return c.json(userToProfileResponse(user, hasPassword, emailChangeRequested), 200);
       } catch (err) {
         const errors = extractMongooseErrors(err, 'Failed to update profile');
+        return c.json({ status: 'error' as const, message: errors[0], errors }, 400);
+      }
+    })
+    .openapi(updateThemeRoute, async (c) => {
+      const user = c.get('user');
+      const { theme } = c.req.valid('json');
+
+      try {
+        // Lightweight, dedicated to the theme toggle: persist just the
+        // theme so the `next-themes` change syncs across devices without
+        // resubmitting the full profile form (name / email / lang).
+        user.theme = theme;
+        await user.save();
+        return c.json({ status: 'ok' as const, theme }, 200);
+      } catch (err) {
+        const errors = extractMongooseErrors(err, 'Failed to update theme');
         return c.json({ status: 'error' as const, message: errors[0], errors }, 400);
       }
     })

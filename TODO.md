@@ -12,7 +12,7 @@ spec: `.feature-state/specs/feature-v2-alpha1-release-prep.md`（実本番=v1 DB
 - [ ] **外部共有機能の削除** — admin/share トグル + `app:externalShare` config + admin/app 状態表示 + i18n。Share モデルは dormant 据え置き。LinkSharePopover（リンクコピー）は残す
 - [ ] **ソーシャルログイン削除** — `google:*`/`github:*` config・config-sensitive・/me の googleId/githubId・profile 表示・admin の coming-soon 枠・i18n。認証ポリシー設定は残して不活性化。User schema は dormant 据え置き
 - [ ] **通知設定メニュー削除** — admin サイドバーの stub + i18n のみ（通知本体は無改変）
-- [ ] **renameTree 移行** — spec: `feature-rename-tree`。UI/モデルは実装済み、API + 結線が未。`include_descendants` フラグ拡張・preserveUpdatedAt・部分失敗許容
+- [x] **renameTree 移行** — `POST /pages/rename` に `include_descendants` 追加。`findListByStartWith`→`getPathMap`→`checkPagesRenamable`→`renameTree`（preserveUpdatedAt / 非ポータルのみ redirect / best-effort）でルート＋grant可視サブツリーを一括移動。`renamed_count` + 構造化 400 衝突。Web は switch 結線・件数トースト・衝突表示
 - [ ] **prod build / runner 検証** — `pnpm build` で起動するか、特に `@crowi/runner` が prod build で plugin 解決できるか（環境固有の Lightsail 等は対象外）
 - [ ] **v1→v2 データ移行 (RFC-0008)** — 本番が v1 DB なので必須。フレームワーク本体は未実装。スコープ（最小マイグレーションのみ vs フル実装）は別 spec 化を推奨
 - [ ] **version bump + tag** — `-dev` 正規化 → linked group を `2.0.0-alpha.0` へ（api-contract は 1.0.0 からジャンプ）→ changeset pre mode → CHANGELOG → git tag。npm publish はしない
@@ -51,6 +51,7 @@ merge 後の 3-agent simplify レビューで挙がった非ブロッキング�
 - [ ] **RFC-0002 renderer 残** — Phase 6.1 Mermaid renderer、Phase 7+ GitHub Embed plugin + AuthContext 本実装、pageEvent payload enrichment、mention dispatch N+1、renderedAst size cap
 - [ ] **monorepo restructure follow-ups** — catalog 化候補の積み残し、compose healthcheck、devDeps mirror が tarball に prerelease pin で残る問題、dev/prod parity test、`.claude/agents/feature-*` の multi-phase 対応
 - [ ] **crypto Phase 3（将来）** — KeyProvider pluggable 化（AWS/GCP KMS）。lookup-key 系 secret（`Share.secretKeyword`）の hash 化（apiToken は廃止済み、Share は alpha1 で削除予定）
+- [ ] **renameTree merge advisory** — `page.ts` の subtree-rename が 2 ルート（`/pages/rename` の include_descendants 分岐 と `/pages/rename-subtree`）でほぼ重複 → 共通 subtree パイプラインを Model static か handler helper に集約。`checkPagesRenamable` の N+1（path 毎 `exists`+`findPageByPath` → `$in` で 1 クエリ化、behavior-sensitive）。web 側 conflict の型安全 discriminator（OpenAPI 生成 union を使う）。partial 失敗時に成功 path を返す/再試行契約。locale-bridge ↔ LocaleSync の責務文書化。`RENAME_TREE_CONCURRENCY=8` の env 化。`renameTreeFailedBody` を `_helpers/errors.ts` へ
 
 ---
 
@@ -68,6 +69,7 @@ merge 後の 3-agent simplify レビューで挙がった非ブロッキング�
 - **管理画面（フェーズ4）** — app / security / auth / mail / share / storage / users + sensitive config の at-rest 暗号化（crypto status / reencrypt UI）
 - **monorepo restructure** — workspace protocol / pnpm catalog / `@crowi/tsconfig` / api・web を `packages/` へ / `@crowi/runner` 切り出し / Dockerfile + standalone / changesets + CI publish workflow
 - **エディタ / UI** — CodeMirror 6 + 2-column preview、階層ページサイドバー（全ページ表示）、create-page モーダル（Tab 補完）、page-path の `+` スペースエンコード、boot progress UI、通知のリアルタイム WS invalidation、watch ベース通知一本化
+- **ダークモード（theme-dark-mode）** — next-themes（class 戦略・system 既定・FOUC 対策）+ ヘッダー/サインインのトグル、`.dark` トークン起動。Shiki dual-theme（CSS 変数）+ RENDERER_PIPELINE_VERSION bump、CodeMirror dark theme（theme compartment）、diff / sonner のテーマ連動。`User.theme` + `PATCH /me/theme` + `ThemeSync` で端末間同期、PlantUML 等の固定色 SVG をニュートラル背景ラッパで包む、AA コントラスト監査
 - **インフラ / 品質** — mongoose 6→8 upgrade、Biome + lefthook、turbo `^build`、bcrypt 移行、i18n（paraglide）、installer 移行
 - **legacy 除去（RFC-0006）** — Express routes / controllers / form validators / Swig views / ts-rest 層 / `apiResponse.ts` をすべて削除済み
 

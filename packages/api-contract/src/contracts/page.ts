@@ -51,6 +51,10 @@ import {
   PageRevisionErrorSchema,
   PageSchema,
   RenamePageRequestSchema,
+  RenamePageResponseSchema,
+  RenameSubtreeRequestSchema,
+  RenameSubtreeResponseSchema,
+  RenameTreeErrorSchema,
   SeenPageRequestSchema,
   SeenUsersResponseSchema,
   SetPageGrantRequestSchema,
@@ -505,7 +509,7 @@ export const renamePageRoute = createRoute({
   path: '/pages/rename',
   tags: ['page'],
   security: [{ bearerAuth: [] }],
-  summary: 'Rename (move) a page to a new path',
+  summary: 'Rename (move) a page — optionally together with its subtree',
   request: {
     body: {
       content: { 'application/json': { schema: RenamePageRequestSchema } },
@@ -513,12 +517,16 @@ export const renamePageRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'The renamed page',
-      content: { 'application/json': { schema: PageResponseSchema } },
+      description: 'The renamed (root) page plus how many pages were moved',
+      content: { 'application/json': { schema: RenamePageResponseSchema } },
     },
     400: {
-      description: 'PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED',
-      content: { 'application/json': { schema: PageBadRequestErrorSchema } },
+      description: 'PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED',
+      content: {
+        'application/json': {
+          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema]),
+        },
+      },
     },
     401: {
       description: 'Authentication required',
@@ -531,6 +539,37 @@ export const renamePageRoute = createRoute({
     409: {
       description: 'Stale revision_id',
       content: { 'application/json': { schema: PageRevisionErrorSchema } },
+    },
+  },
+});
+
+export const renameSubtreeRoute = createRoute({
+  method: 'post',
+  path: '/pages/rename-subtree',
+  tags: ['page'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Rename (move) a whole subtree by path (for portal-less folders)',
+  request: {
+    body: {
+      content: { 'application/json': { schema: RenameSubtreeRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'How many pages were moved',
+      content: { 'application/json': { schema: RenameSubtreeResponseSchema } },
+    },
+    400: {
+      description: 'PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure)',
+      content: {
+        'application/json': {
+          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema]),
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
   },
 });
@@ -576,4 +615,6 @@ export const pageRoutes = {
   revertDeletedPageRoute,
   // POST /pages/rename — renamePage
   renamePageRoute,
+  // POST /pages/rename-subtree — renameSubtree (portal-less folder)
+  renameSubtreeRoute,
 };

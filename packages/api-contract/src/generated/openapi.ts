@@ -754,7 +754,9 @@ export interface paths {
                             /** Format: email */
                             email: string;
                             /** @enum {string} */
-                            lang: "en" | "en-US" | "en-GB" | "ja";
+                            lang: "en" | "ja";
+                            /** @enum {string} */
+                            theme: "system" | "light" | "dark";
                             image: string | null;
                             introduction?: string;
                             googleId?: string | null;
@@ -800,7 +802,7 @@ export interface paths {
                             /** Format: email */
                             email: string;
                             /** @enum {string} */
-                            lang: "en" | "en-US" | "en-GB" | "ja";
+                            lang: "en" | "ja";
                         };
                     };
                 };
@@ -819,7 +821,9 @@ export interface paths {
                             /** Format: email */
                             email: string;
                             /** @enum {string} */
-                            lang: "en" | "en-US" | "en-GB" | "ja";
+                            lang: "en" | "ja";
+                            /** @enum {string} */
+                            theme: "system" | "light" | "dark";
                             image: string | null;
                             introduction?: string;
                             googleId?: string | null;
@@ -869,6 +873,86 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/me/theme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update preferred UI theme */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        theme: "system" | "light" | "dark";
+                    };
+                };
+            };
+            responses: {
+                /** @description Theme updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "ok";
+                            /** @enum {string} */
+                            theme: "system" | "light" | "dark";
+                        };
+                    };
+                };
+                /** @description Theme update failed */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            status: "error";
+                            code?: string;
+                            message?: string;
+                            errors?: string[];
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/me/picture": {
@@ -6651,7 +6735,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rename (move) a page to a new path */
+        /** Rename (move) a page — optionally together with its subtree */
         post: {
             parameters: {
                 query?: never;
@@ -6666,11 +6750,12 @@ export interface paths {
                         new_path: string;
                         revision_id?: string;
                         create_redirect?: boolean;
+                        include_descendants?: boolean;
                     };
                 };
             };
             responses: {
-                /** @description The renamed page */
+                /** @description The renamed (root) page plus how many pages were moved */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -6781,10 +6866,11 @@ export interface paths {
                                 likerCount?: number;
                                 seenUsersCount?: number;
                             };
+                            renamed_count: number;
                         };
                     };
                 };
-                /** @description PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED */
+                /** @description PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -6794,6 +6880,17 @@ export interface paths {
                             error: {
                                 code: string;
                                 message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_RENAME_TREE_FAILED";
+                                message: string;
+                                conflicts: {
+                                    path: string;
+                                    reasons: string[];
+                                }[];
+                                partial?: boolean;
                             };
                         };
                     };
@@ -6842,6 +6939,94 @@ export interface paths {
                                 /** @enum {string} */
                                 code: "PAGE_REVISION_ERROR";
                                 message: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pages/rename-subtree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rename (move) a whole subtree by path (for portal-less folders) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        old_path: string;
+                        new_path: string;
+                        create_redirect?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description How many pages were moved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            renamed_count: number;
+                        };
+                    };
+                };
+                /** @description PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_RENAME_TREE_FAILED";
+                                message: string;
+                                conflicts: {
+                                    path: string;
+                                    reasons: string[];
+                                }[];
+                                partial?: boolean;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
                             };
                         };
                     };

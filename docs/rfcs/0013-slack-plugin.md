@@ -219,10 +219,12 @@ follow-up RFC that wires plugin HTTP contribution onto Hono". This is it.
 - e.g. `/crowi save-thread` to stock-ify a Slack thread as a wiki page;
   `/crowi search <q>` returning results.
 - Needs the `commands` scope + the `/slash` + `/interactions` endpoints.
-- **Identity mapping (open problem)**: which Crowi user authors a page created
-  from Slack? Options: map by verified email (Slack `users.info` ↔ Crowi user),
-  an explicit one-time link step, or a dedicated bot/service user. Required
-  before any *write* slash command. Flagged in §12.
+- **Identity mapping → explicit account link (decided, §12.2)**: any command
+  that *writes as a user* or maps *mentions* requires a real Slack↔Crowi
+  identity, so the user must **authenticate / link their account** (Sign in with
+  Slack / OAuth, §7.4) — no email-guessing. **Read-only** commands
+  (`/crowi search`) run as the bot without per-user identity. Therefore **slash
+  *writes* depend on §7.4** (account linking is a Phase-2-write prerequisite).
 
 ### §7.3 Notifications (Phase 3 — infra ready, UX deferred)
 
@@ -283,12 +285,19 @@ card" renderer extension** in Crowi.
   embedded Slack content"** (same shared-token model as GitHub Embed). Embedding
   a *private* Slack thread into a broadly-readable page leaks it — must be
   surfaced to the user (§8 / §12).
+- **Channel access (§12.10)**: Slack only lets the app read channels it can
+  access. **Public** channels are **auto-joined** (`conversations.join`) on first
+  embed; **private** channels need a human to invite the bot — until then the
+  card renders a locked "invite the Crowi bot" placeholder.
 
-### §7.4 Sign in with Slack (future)
+### §7.4 Account linking / Sign in with Slack
 
 - `registerAuth` (`AuthRegistry { buttonLabel, iconUrl?, verify }`) +
   `clientId`/`clientSecret` + an OAuth callback route (Phase 0 authed route).
-  Post-alpha1; only if social login returns (RFC-0001 Step 10 / RFC-0010).
+- **Two roles**: (a) optional *social login* (post-alpha1, if login returns —
+  RFC-0001 Step 10 / RFC-0010); (b) **the Slack↔Crowi account link that gates
+  slash *writes* and mention mapping** (§7.2, §12.2). Role (b) makes this a
+  **prerequisite for Phase 2 write commands**, not merely a future nicety.
 
 ## §8 Security
 
@@ -329,9 +338,9 @@ card" renderer extension** in Crowi.
 
 - New package `packages/plugin-slack` → `@crowi/plugin-slack`, `0.1.0-dev`,
   `publishConfig.access: public`, `requires`/peer `@crowi/plugin-api`.
-- **Slack SDK dep**: `chat.unfurl` / `chat.postMessage` are simple POSTs; prefer
-  a **thin `fetch` wrapper** (avoid the heavy `@slack/web-api`) unless the
-  Phase-2 surface grows. Decide in implementation.
+- **Slack SDK dep — `@slack/web-api`** (§12.4): handles 429 retries +
+  `conversations.replies` pagination + typed methods; ESM-only (jiti precedent
+  exists). Fall back to thin `fetch` only if weight/ESM bites.
 - tsup + app-node tsconfig (same template family as other plugins).
 - Phase 0 (`registerRoutes`) is core work in `@crowi/plugin-api` +
   `packages/api/src/plugin/` + `buildHonoApp`, not the plugin package.
@@ -353,30 +362,64 @@ card" renderer extension** in Crowi.
 - **Phase 3** — `registerNotifier` driver (page-update notification UX TBD).
 - **Future** — Sign in with Slack (`registerAuth`).
 
-## §12 Open questions
+## §12 Decisions (was open questions)
 
-1. **`registerRoutes` shape** — Hono `Context` handler (proposed) vs a typed
-   contract; how the scope guarantees raw-body availability; whether to add
-   per-route Crowi-scope declarations now or later.
-2. **Slack-user ↔ Crowi-user identity mapping** (§7.2) — needed for write slash
-   commands; email match vs explicit link vs bot user. Blocks Phase 2 writes.
-3. **Unfurl visibility policy** (§7.1/§8) — public-only rich unfurl + locked
-   placeholder (proposed) vs grant-aware (needs identity mapping).
-4. **Slack SDK dependency** — thin `fetch` (proposed) vs `@slack/web-api`.
-5. **Manifest base URL** — derive `request_url` from `CLIENT_URL`; behavior when
-   it's `localhost` (dev) / behind a proxy.
-6. **Multi-workspace** — single workspace v1; multi later (config shape impact).
-7. **Notification UX** (Phase 3) — deferred; separate design for triggers /
-   batching / per-channel rules.
-8. **Embed editor affordance scope** (§7.5) — generic "embeddable URL patterns
-   registered by plugins → editor offers conversion" vs a Slack-specific
-   detector in the web editor for v1. Generic is the clean target.
-9. **AuthContext sequencing** (§7.5) — drive its implementation from this RFC
-   (Slack = first real consumer) vs wait for RFC-0002 Phase 7 to land
-   independently. Lean: implement it here.
-10. **Slack URL forms / API** (§7.5) — parse `…/archives/<channel>/p<ts>`
-    (+ `thread_ts`); `conversations.replies` (thread) vs `conversations.history`
-    (single message); required bot scopes + "bot must be in channel" handling.
+1. **`registerRoutes` shape — RESOLVED**: a **Hono `Context` handler** +
+   `public` flag + **guaranteed raw body**. Rationale: Slack webhooks need
+   low-level control (raw body for HMAC, arbitrary headers, odd responses like
+   the `url_verification` challenge echo); a typed contract only helps
+   *our-UI*-called endpoints (`@action` buttons), which is minor. Typed-route
+   sugar + per-route Crowi-scope are deferred.
+2. **Identity mapping — RESOLVED: explicit account link (auth) required**.
+   Any *write* slash command and any *mention* mapping requires a real
+   Slack↔Crowi identity, i.e. the user authenticates / links their account
+   (Sign in with Slack / OAuth, §7.4). No email-guessing. Read-only commands
+   (`/crowi search`) can run as the bot without per-user identity. → **slash
+   *writes* depend on §7.4 (account linking)** — it is elevated from "future
+   optional" to a Phase-2-write prerequisite.
+3. **Unfurl visibility — RESOLVED**: public pages get rich unfurl; non-public
+   pages render a **locked placeholder** (no body).
+4. **Slack SDK — RESOLVED: use `@slack/web-api`**. It handles 429 rate-limit
+   retries, `conversations.replies` pagination, and typed methods that a thin
+   `fetch` would have to reimplement. The only costs (bundle weight, ESM/CJS —
+   loaded via runner, jiti precedent exists) are minor. Fall back to thin
+   `fetch` only if weight/ESM proves painful.
+5. **Manifest base URL — RESOLVED: `CLIENT_URL` is the SSOT** for
+   `request_url`. **Dev** needs a public tunnel (ngrok / cloudflared) since
+   Slack must reach the endpoint — provide an env override for the manifest's
+   request URL in dev. (Open: the exact dev override knob.)
+6. **Multi-workspace — RESOLVED: single workspace** in v1.
+7. **Notification UX — DEFERRED** (Phase 3): triggers / batching / per-channel
+   rules designed separately.
+8. **Embed editor affordance — RESOLVED: generic, plugin-registered**. Plugins
+   register *embeddable-URL affordances* (URL pattern + floating-action label +
+   the conversion/action, e.g. → `@[slack](url)`); the web editor **detects
+   matches dynamically and renders the floating button, delegating the action
+   to the plugin's declaration** — not Slack-specific code in the editor. This
+   is a new editor/plugin-SDK surface (see §7.5). Bigger than Slack, but the
+   right shape so every future embed plugin gets the affordance for free.
+9. **AuthContext — RESOLVED: implement it in this RFC** (Slack embed is the
+   first real consumer). *What it is*: the `RenderContext.auth` handle that lets
+   a renderer plugin read its **encrypted owner-config at render time**
+   (`ctx.auth.config(SlackConfigSchema).botToken`) to make an authenticated
+   external call; today `createAuthContextStub` throws ("Phase 7"). Wiring =
+   read the plugin's encrypted config namespace (the store plugins already use)
+   and expose it during render; **shared owner-token model** (one token for all
+   renders → the §8 "page reader sees the embed" visibility).
+10. **Slack URL / API — RESOLVED**: parse `…/archives/<channel>/p<ts>`
+    (+ `thread_ts`); `conversations.replies` (thread) / `conversations.history`
+    (single message). **Channel access**: Slack *requires* the bot to have
+    access — it cannot read a channel it isn't in. Mitigation: **auto-join
+    public channels** via `conversations.join` (no human step); **private
+    channels need a human invite**, else render a locked "invite the Crowi bot"
+    card. ("Works with no bot in the channel" is only achievable for public via
+    auto-join.)
+
+### Remaining smaller opens
+- Exact dev tunnel override knob (#5).
+- The generic embed-affordance SDK surface shape (#8) — how plugins declare the
+  pattern + action and how the editor invokes it (API to list rules + apply a
+  conversion). Worth its own short design when Phase E starts.
 
 ## §13 References
 

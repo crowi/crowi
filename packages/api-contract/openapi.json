@@ -7913,9 +7913,15 @@
                       "type": "string",
                       "enum": [
                         "en",
-                        "en-US",
-                        "en-GB",
                         "ja"
+                      ]
+                    },
+                    "theme": {
+                      "type": "string",
+                      "enum": [
+                        "system",
+                        "light",
+                        "dark"
                       ]
                     },
                     "image": {
@@ -7955,6 +7961,7 @@
                     "name",
                     "email",
                     "lang",
+                    "theme",
                     "image",
                     "hasPassword",
                     "createdAt"
@@ -8035,8 +8042,6 @@
                         "type": "string",
                         "enum": [
                           "en",
-                          "en-US",
-                          "en-GB",
                           "ja"
                         ]
                       }
@@ -8080,9 +8085,15 @@
                       "type": "string",
                       "enum": [
                         "en",
-                        "en-US",
-                        "en-GB",
                         "ja"
+                      ]
+                    },
+                    "theme": {
+                      "type": "string",
+                      "enum": [
+                        "system",
+                        "light",
+                        "dark"
                       ]
                     },
                     "image": {
@@ -8122,6 +8133,7 @@
                     "name",
                     "email",
                     "lang",
+                    "theme",
                     "image",
                     "hasPassword",
                     "createdAt"
@@ -8132,6 +8144,145 @@
           },
           "400": {
             "description": "Profile update failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "error"
+                      ]
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/theme": {
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update preferred UI theme",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "theme": {
+                    "type": "string",
+                    "enum": [
+                      "system",
+                      "light",
+                      "dark"
+                    ]
+                  }
+                },
+                "required": [
+                  "theme"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Theme updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "theme": {
+                      "type": "string",
+                      "enum": [
+                        "system",
+                        "light",
+                        "dark"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "theme"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Theme update failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -24429,7 +24580,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Rename (move) a page to a new path",
+        "summary": "Rename (move) a page — optionally together with its subtree",
         "requestBody": {
           "content": {
             "application/json": {
@@ -24447,6 +24598,9 @@
                   },
                   "create_redirect": {
                     "type": "boolean"
+                  },
+                  "include_descendants": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -24459,7 +24613,7 @@
         },
         "responses": {
           "200": {
-            "description": "The renamed page",
+            "description": "The renamed (root) page plus how many pages were moved",
             "content": {
               "application/json": {
                 "schema": {
@@ -24910,40 +25064,99 @@
                         "path",
                         "createdAt"
                       ]
+                    },
+                    "renamed_count": {
+                      "type": "number"
                     }
                   },
                   "required": [
-                    "page"
+                    "page",
+                    "renamed_count"
                   ]
                 }
               }
             }
           },
           "400": {
-            "description": "PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED",
+            "description": "PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_RENAME_TREE_FAILED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "conflicts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "reasons": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "path",
+                                  "reasons"
+                                ]
+                              }
+                            },
+                            "partial": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "conflicts"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "error"
                   ]
                 }
               }
@@ -25041,6 +25254,187 @@
                           ]
                         },
                         "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pages/rename-subtree": {
+      "post": {
+        "tags": [
+          "page"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Rename (move) a whole subtree by path (for portal-less folders)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "old_path": {
+                    "type": "string"
+                  },
+                  "new_path": {
+                    "type": "string"
+                  },
+                  "create_redirect": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "old_path",
+                  "new_path"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "How many pages were moved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "renamed_count": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "renamed_count"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PAGE_INVALID_NAME / PAGE_RENAME_TREE_FAILED (collisions, nothing to move, or partial failure)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PAGE_RENAME_TREE_FAILED"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "conflicts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "reasons": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "path",
+                                  "reasons"
+                                ]
+                              }
+                            },
+                            "partial": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "conflicts"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
                           "type": "string"
                         }
                       },

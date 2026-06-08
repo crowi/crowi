@@ -17,24 +17,20 @@ interface ProfileFormProps {
 }
 
 // Language labels stay in their native form so a user can find their own
-// language regardless of the active UI locale.
-// Only the locales we ship UI messages for are offered. Regional variants
-// (`en-US` / `en-GB`) remain valid legacy `User.lang` values — they map onto
-// `en` via locale-sync — but are no longer selectable.
+// language regardless of the active UI locale. Only `en` / `ja` exist now;
+// the legacy regional variants were retired and the API normalises any
+// lingering `en-US` / `en-GB` row to `en` on read, so `profile.lang` is
+// always one of these.
 const LANGUAGE_OPTIONS: { value: Language; label: string }[] = [
   { value: 'en', label: 'English' },
   { value: 'ja', label: '日本語' },
 ];
 
-// Collapse legacy regional variants onto the selectable base locale so a user
-// whose saved `lang` is `en-US` / `en-GB` still sees "English" pre-selected.
-const normalizeLang = (lang: Language): Language => (lang === 'en-US' || lang === 'en-GB' ? 'en' : lang);
-
 export function ProfileForm({ profile }: ProfileFormProps) {
   const [formData, setFormData] = useState({
     name: profile.name,
     email: profile.email,
-    lang: normalizeLang(profile.lang),
+    lang: profile.lang,
   });
   const [errors, setErrors] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);

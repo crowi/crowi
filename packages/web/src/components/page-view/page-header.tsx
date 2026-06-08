@@ -284,7 +284,7 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
         <div
           data-testid="page-header-compact"
           className={cn(
-            'fixed inset-x-0 top-0 z-30 h-[60px] bg-background shadow-header',
+            'fixed inset-x-0 top-0 z-30 h-[60px] bg-background shadow-header dark:shadow-none dark:border-b dark:border-border',
             'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
           )}
         >
