@@ -28,6 +28,9 @@ packages/web/paraglide/
 # local settings
 .claude/settings.local.json
 
+# scheduler runtime lock (/loop + /schedule); process-specific, never share
+.claude/scheduled_tasks.lock
+
 # migration state (temporary work-in-progress data)
 # Keep directory structure but ignore actual task files
 .migration-state/*
