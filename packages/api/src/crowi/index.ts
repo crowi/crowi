@@ -145,6 +145,19 @@ class Crowi {
 
   initialized = false;
 
+  /**
+   * In-flight fire-and-forget side effects (EventEmitter listeners +
+   * Mongoose `post('save')` hooks that start an un-awaited DB/redis write).
+   * `trackSideEffect` adds the promise here and removes it on settle;
+   * `drainSideEffects` awaits the set until it is empty.
+   *
+   * Production never calls `drainSideEffects`, so tracking is the only
+   * runtime cost on the request path (a Set add/delete per side effect) and
+   * the drain primitive is a no-op there. The test harness drains before
+   * disconnecting Mongo so settling writes do not race the close.
+   */
+  private inFlightSideEffects = new Set<Promise<unknown>>();
+
   constructor(rootdir: string, env: typeof process.env) {
     this.version = pkg.version;
 
@@ -287,6 +300,36 @@ class Crowi {
     if (this.mongoose) {
       await this.mongoose.disconnect();
       this.mongoose = null;
+    }
+  }
+
+  /**
+   * Track a fire-and-forget side effect so the test harness can drain it
+   * before tearing the connection down. The promise is removed from the
+   * in-flight set once it settles (resolve OR reject); we deliberately do
+   * NOT re-throw or alter the rejection — the caller keeps its own
+   * `.catch` and error-swallowing posture unchanged. This is purely
+   * drain bookkeeping.
+   */
+  trackSideEffect(p: Promise<unknown>): void {
+    this.inFlightSideEffects.add(p);
+    p.finally(() => {
+      this.inFlightSideEffects.delete(p);
+    });
+  }
+
+  /**
+   * Wait until every tracked side effect has settled. Loops because a
+   * side effect can spawn a second-level fire-and-forget while draining
+   * (Activity `post('save')` → Notification fan-out; `userEvent`
+   * 'activated' → user-page creation → page events → backlink/watch/
+   * mention), and those are tracked too. Resolves once the set is empty.
+   *
+   * Production never calls this — it is the test-teardown drain hook.
+   */
+  async drainSideEffects(): Promise<void> {
+    while (this.inFlightSideEffects.size > 0) {
+      await Promise.allSettled([...this.inFlightSideEffects]);
     }
   }
 
