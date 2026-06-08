@@ -11,33 +11,45 @@ describe('User', () => {
 
   describe('Create and Find.', () => {
     describe('The user', () => {
-      test('should created', () => {
-        return new Promise<void>((resolve) => {
-          User.createUserByEmailAndPassword('Aoi Miyazaki', 'aoi', 'aoi@example.com', 'hogefuga11', 'en', function (err, userData) {
-            expect(err).toBeNull();
-            expect(userData).toBeInstanceOf(User);
-            resolve();
+      // A unique fixture per run so these three tests own their user and the
+      // partial-email query below can filter on the exact known address rather
+      // than depending on the first array element (which is order-fragile once
+      // other blocks seed users whose email also contains the substring).
+      const suffix = Date.now().toString(36);
+      const username = `aoi-${suffix}`;
+      const email = `aoi-${suffix}@example.com`;
+
+      beforeAll(async () => {
+        await new Promise<void>((resolve, reject) => {
+          User.createUserByEmailAndPassword('Aoi Miyazaki', username, email, 'hogefuga11', 'en', (err, userData) => {
+            if (err) return reject(err);
+            try {
+              expect(userData).toBeInstanceOf(User);
+              resolve();
+            } catch (e) {
+              reject(e);
+            }
           });
         });
       });
 
-      test('should be found by findUserByUsername', () => {
-        return new Promise<void>((resolve) => {
-          User.findUserByUsername('aoi').then(function (userData) {
-            expect(userData).toBeInstanceOf(User);
-            resolve();
-          });
-        });
+      afterAll(async () => {
+        await User.deleteOne({ email });
       });
 
-      test('should be found by findUsersByPartOfEmail', () => {
-        return new Promise<void>((resolve) => {
-          User.findUsersByPartOfEmail('ao', {}).then(function (userData) {
-            expect(userData[0]).toBeInstanceOf(User);
-            expect(userData[0].email).toBe('aoi@example.com');
-            resolve();
-          });
-        });
+      test('should be found by findUserByUsername', async () => {
+        const userData = await User.findUserByUsername(username);
+        expect(userData).toBeInstanceOf(User);
+        expect(userData.email).toBe(email);
+      });
+
+      test('should be found by findUsersByPartOfEmail (filtered by the exact known email)', async () => {
+        // Query by the substring (exercises the partial-match regex), then
+        // select the row by its known email instead of relying on `[0]`.
+        const userData = await User.findUsersByPartOfEmail(`aoi-${suffix}`, {});
+        const found = userData.find((u: { email: string }) => u.email === email);
+        expect(found).toBeInstanceOf(User);
+        expect(found.email).toBe(email);
       });
     });
   });
