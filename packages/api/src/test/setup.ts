@@ -107,8 +107,25 @@ beforeAll(async () => {
   app = getRequestListener(fetchFn);
 }, 60000);
 
+// Between tests, drain any in-flight fire-and-forget side effects (event
+// listeners + Mongoose post('save') hooks that start un-awaited DB/redis
+// writes). Without this they interleave into the next test's window and,
+// at suite end, race the Mongo disconnect below — the dominant source of
+// "single-file green, full-suite flake". The drain is bounded (it resolves
+// once the in-flight set empties), so the per-test cost is just the tail of
+// writes the test itself triggered.
+afterEach(async () => {
+  await crowi.drainSideEffects();
+});
+
 afterAll(async () => {
-  await crowi.getMongo().disconnect();
+  // Drain BEFORE closing the connection so settling writes (render-cache
+  // invalidation, backlink/watch/Activity fan-out, notification publish,
+  // user-page creation) do not hit a half-closed Mongo/redis client.
+  await crowi.drainSideEffects();
+  // `teardownForCli` quits redis (the suites leak one live socket each
+  // otherwise → parallel handle pressure) then disconnects Mongo.
+  await crowi.teardownForCli();
 }, 60000);
 
 export const Fixture = {
