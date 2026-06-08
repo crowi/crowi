@@ -15,9 +15,30 @@ interface CreateTestUserInput {
   admin?: boolean;
 }
 
+// Every user this file creates is tracked here so `clearUsers()` can wipe
+// exactly this file's users between describe blocks — instead of a broad
+// `User.deleteMany({})` that, when the test database is shared across suites
+// under parallel jest workers, also deletes other blocks' JWT-backed seed
+// users and makes their authenticated requests 401 on re-auth (the cross-block
+// 401 flake). In the per-file-isolated DB the tracked set IS the whole table,
+// so the pagination / count assertions below stay exact.
+const ownedUserIds = new Set<string>();
+
+const track = (user: UserDocument): UserDocument => {
+  ownedUserIds.add(user._id.toString());
+  return user;
+};
+
+// Seed users via Fixture, registering each id as owned by this file.
+const seedUsers = async (infos: Array<Record<string, unknown>>): Promise<UserDocument[]> => {
+  const users = (await Fixture.generate('User', infos)) as UserDocument[];
+  users.forEach(track);
+  return users;
+};
+
 const createTestUser = async (info: CreateTestUserInput): Promise<{ user: UserDocument; accessToken: string }> => {
   const User = crowi.model('User');
-  const [user] = (await Fixture.generate('User', [info])) as UserDocument[];
+  const [user] = await seedUsers([info]);
   user.status = User.STATUS_ACTIVE;
   user.admin = !!info.admin;
   await user.save();
@@ -27,7 +48,7 @@ const createTestUser = async (info: CreateTestUserInput): Promise<{ user: UserDo
 
 const createPlainUser = async (info: CreateTestUserInput): Promise<UserDocument> => {
   const User = crowi.model('User');
-  const [user] = (await Fixture.generate('User', [info])) as UserDocument[];
+  const [user] = await seedUsers([info]);
   user.status = User.STATUS_ACTIVE;
   await user.save();
   return user;
@@ -35,8 +56,10 @@ const createPlainUser = async (info: CreateTestUserInput): Promise<UserDocument>
 
 const clearUsers = async () => {
   const User = crowi.model('User');
-  // Wipe everything between describe blocks so pagination math is predictable.
-  await User.deleteMany({});
+  // Wipe only this file's users (tracked above) so pagination math stays
+  // predictable WITHOUT wiping seed users owned by other blocks/suites.
+  await User.deleteMany({ _id: { $in: [...ownedUserIds] } });
+  ownedUserIds.clear();
 };
 
 describe('Routes /api/v2/admin/users (Hono)', () => {
@@ -513,10 +536,10 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       adminToken = (await createTestUser({ name: 'PC Admin', username: 'pcadmin', email: 'pc-admin@example.com', admin: true })).accessToken;
 
       // Two REGISTERED (awaiting approval) + one ACTIVE that must not be counted.
-      const [r1, r2] = (await Fixture.generate('User', [
+      const [r1, r2] = await seedUsers([
         { name: 'Pending One', username: 'pending1', email: 'pending1@example.com' },
         { name: 'Pending Two', username: 'pending2', email: 'pending2@example.com' },
-      ])) as UserDocument[];
+      ]);
       r1.status = User.STATUS_REGISTERED;
       r2.status = User.STATUS_REGISTERED;
       await r1.save();
@@ -544,7 +567,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       await clearUsers();
       const User = crowi.model('User');
       adminToken = (await createTestUser({ name: 'Del Admin', username: 'deladmin', email: 'del-admin@example.com', admin: true })).accessToken;
-      const [u] = (await Fixture.generate('User', [{ name: 'Invitee', username: 'invitee', email: 'invitee@example.com' }])) as UserDocument[];
+      const [u] = await seedUsers([{ name: 'Invitee', username: 'invitee', email: 'invitee@example.com' }]);
       u.status = User.STATUS_INVITED;
       await u.save();
       invited = u;

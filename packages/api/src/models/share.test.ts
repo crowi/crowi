@@ -8,26 +8,35 @@ describe('Share', () => {
   let user;
   let createdPages;
 
+  // Pages this block owns, scoped under a unique path prefix so cleanup
+  // (and any broad-ish query) never touches another block's seed pages.
+  const PATH_PREFIX = '/share-test-' + faker.random.alphaNumeric(8) + '/';
+
   beforeAll(async () => {
     User = crowi.model('User');
     Page = crowi.model('Page');
     Share = crowi.model('Share');
 
-    await User.deleteMany({});
+    // This block creates and references its own user/pages directly; it must
+    // NOT wipe the shared User/Page tables (that would delete other blocks'
+    // seed users and trigger 401 flake on JWT re-auth elsewhere). Scope all
+    // owned data and clean up only that.
     const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() }]);
     user = createdUsers[0];
 
-    await Page.deleteMany({});
     createdPages = await Fixture.generate('Page', [
-      { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
-      { path: '/' + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
+      { path: PATH_PREFIX + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
+      { path: PATH_PREFIX + faker.lorem.slug(), grant: Page.GRANT_PUBLIC, grantedUsers: [user], creator: user },
     ]);
+  });
 
-    await Share.deleteMany({});
+  afterAll(async () => {
+    await Promise.all([User.deleteOne({ _id: user._id }), Page.deleteMany({ _id: { $in: createdPages.map((p) => p._id) } })]);
   });
 
   afterEach(async () => {
-    await Share.deleteMany({});
+    // Shares created by this block all point at this block's pages.
+    await Share.deleteMany({ page: { $in: createdPages.map((p) => p._id) } });
   });
 
   describe('.create', () => {

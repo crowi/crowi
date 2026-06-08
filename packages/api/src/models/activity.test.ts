@@ -85,7 +85,17 @@ describe('Activity', function () {
     const pageId = new ObjectId();
 
     beforeAll(async () => {
-      await Promise.all([User, Page, Comment, Watcher, Activity].map((model) => model.deleteMany({})));
+      // Scope cleanup to this block's owned users/page (do NOT wipe the
+      // shared User table — that deletes other blocks' seed users and causes
+      // 401 flake on JWT re-auth elsewhere). All Comment/Watcher/Activity rows
+      // this block produces are keyed on these users or this page.
+      await Promise.all([
+        User.deleteMany({ _id: { $in: userIds } }),
+        Page.deleteMany({ _id: pageId }),
+        Comment.deleteMany({ page: pageId }),
+        Watcher.deleteMany({ user: { $in: userIds } }),
+        Activity.deleteMany({ user: { $in: userIds } }),
+      ]);
 
       const users = [
         { _id: userIds[0], email: faker.internet.email(), status: User.STATUS_ACTIVE },

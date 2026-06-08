@@ -54,6 +54,19 @@ describe('page UPDATE notification fan-out (events/page.ts)', () => {
   const secondEditorId = new ObjectId();
   const ignorerId = new ObjectId();
 
+  // The set of user ids this block owns. All fan-out (Watcher/Activity/
+  // Notification) this block produces is keyed on one of these users, so
+  // scoping every cleanup to `{ user: { $in: ownedUserIds } }` resets this
+  // block's state WITHOUT wiping other blocks' seed users / fan-out (a broad
+  // `User.deleteMany({})` here was the root cause of cross-block 401 flake).
+  const ownedUserIds = [editorId, watcherId, secondEditorId, ignorerId];
+
+  // Reset only this block's fan-out rows (keyed on its owned users). Used by
+  // every hook so the scoping lives in one place.
+  const clearOwnedFanout = () => Promise.all([Watcher, Activity, Notification].map((model) => model.deleteMany({ user: { $in: ownedUserIds } })));
+  // Full reset including this block's seed users (setup/teardown only).
+  const clearOwned = () => Promise.all([User.deleteMany({ _id: { $in: ownedUserIds } }), clearOwnedFanout()]);
+
   // A fresh page id per test so the fire-and-forget fan-out from one test
   // (Activity.createByPageUpdate → post('save') → upsertByActivity, which
   // may still be in flight when the next test's beforeEach clears the
@@ -72,7 +85,9 @@ describe('page UPDATE notification fan-out (events/page.ts)', () => {
     User = crowi.model('User');
     pageEvent = crowi.event('Page');
 
-    await Promise.all([User, Watcher, Activity, Notification].map((model) => model.deleteMany({})));
+    // Scope cleanup to this block's owned users (do NOT wipe the shared User
+    // table — that deletes other blocks' seed users and causes 401 flake).
+    await clearOwned();
     await Fixture.generate('User', [
       { _id: editorId, email: faker.internet.email(), status: User.STATUS_ACTIVE },
       { _id: watcherId, email: faker.internet.email(), status: User.STATUS_ACTIVE },
@@ -81,8 +96,12 @@ describe('page UPDATE notification fan-out (events/page.ts)', () => {
     ]);
   });
 
+  afterAll(async () => {
+    await clearOwned();
+  });
+
   beforeEach(async () => {
-    await Promise.all([Watcher, Activity, Notification].map((model) => model.deleteMany({})));
+    await clearOwnedFanout();
     pageId = new ObjectId();
     publishedPage = { _id: pageId, status: 'published' };
   });
