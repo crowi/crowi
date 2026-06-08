@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 
 /**
  * RFC-0006 Phase 4 Batch 1 — integration tests for the migrated
@@ -20,10 +21,22 @@ import { app, crowi } from 'src/test/setup';
 describe('GET /api/v2/installer (Hono)', () => {
   let Config: ReturnType<typeof crowi.model<'Config'>>;
   let User: ReturnType<typeof crowi.model<'User'>>;
+  let configSnapshot: ConfigRow[];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     Config = crowi.model('Config');
     User = crowi.model('User');
+    // The individual it()s flip the install flag (and the per-describe
+    // afterEach wipes `ns:'crowi'` to reset within the file). Snapshot the
+    // shared config here so the file-level afterAll can restore the namespace
+    // to its as-discovered (installed) state — otherwise the last afterEach
+    // leaves the shared config EMPTY and the next file sharing the test
+    // database reads back an uninstalled/empty config → cross-file seed-401.
+    configSnapshot = await snapshotCrowiConfig(crowi);
+  });
+
+  afterAll(async () => {
+    await restoreCrowiConfig(crowi, configSnapshot);
   });
 
   describe('GET /installer', () => {

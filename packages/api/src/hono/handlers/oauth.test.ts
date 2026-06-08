@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import request from 'supertest';
 
 import { app, crowi } from 'src/test/setup';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
 
@@ -54,8 +55,12 @@ describe('Routes /api/v2/oauth (Hono)', () => {
   const REDIRECT = 'http://127.0.0.1:51234/callback';
   let user: UserDocument;
   let webToken: string;
+  let configSnapshot: ConfigRow[];
 
   beforeAll(async () => {
+    // Snapshot the shared crowi config before wiping it (afterAll restores it
+    // to the as-discovered installed state rather than leaving it empty).
+    configSnapshot = await snapshotCrowiConfig(crowi);
     await Config().deleteMany({ ns: 'crowi' });
     await Config().applicationInstall();
     await crowi.getConfigService().load();
@@ -65,8 +70,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
   });
 
   afterAll(async () => {
-    await Config().deleteMany({ ns: 'crowi' });
-    await crowi.getConfigService().load();
+    await restoreCrowiConfig(crowi, configSnapshot);
     await User().deleteMany({ email: EMAIL });
     await Code().deleteMany({ userId: user._id });
     await Refresh().deleteMany({ userId: user._id });
