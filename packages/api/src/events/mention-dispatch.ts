@@ -50,10 +50,20 @@ export function registerMentionDispatch(crowi: Crowi): void {
   const handle = (savedPage: unknown, user: unknown) => {
     crowi.trackSideEffect(
       Promise.resolve()
-        .then(() => dispatchMentions(crowi, savedPage as PageLike | undefined, user as UserLike | undefined))
+        .then(() => {
+          // Dispatch reads + writes several collections. Skip once the
+          // connection is no longer `connected` so a side effect that
+          // fired after teardown began only logs at debug rather than
+          // throwing teardown-noise. Normal operation is unaffected.
+          if (!crowi.isMongoConnected()) {
+            debug('skip dispatch: mongo connection not connected');
+            return;
+          }
+          return dispatchMentions(crowi, savedPage as PageLike | undefined, user as UserLike | undefined);
+        })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
-          console.warn(`[crowi:mention-dispatch] dispatch failed: ${message}`);
+          debug('dispatch failed: %s', message);
         }),
     );
   };

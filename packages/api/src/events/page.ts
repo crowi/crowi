@@ -76,7 +76,13 @@ export default class PageEvent extends EventEmitter {
     const Watcher = this.crowi.model('Watcher');
     this.crowi.trackSideEffect(
       Promise.resolve()
-        .then(() => autoWatchPage(Watcher, user._id, savedPage._id))
+        .then(() => {
+          // Skip the deferred upsert once the connection is no longer
+          // `connected` — it would only throw teardown-noise. Normal
+          // operation (readyState === 1) is unaffected.
+          if (!this.crowi.isMongoConnected()) return;
+          return autoWatchPage(Watcher, user._id, savedPage._id);
+        })
         .catch((err) => {
           debug('auto-watch: failed to upsert watcher', err);
         }),
@@ -106,7 +112,10 @@ export default class PageEvent extends EventEmitter {
     const Activity = this.crowi.model('Activity');
     this.crowi.trackSideEffect(
       Promise.resolve()
-        .then(() => Activity.createByPageUpdate(savedPage, user))
+        .then(() => {
+          if (!this.crowi.isMongoConnected()) return;
+          return Activity.createByPageUpdate(savedPage, user);
+        })
         .catch((err) => {
           debug('page-update-notification: failed to create UPDATE activity', err);
         }),
@@ -117,7 +126,10 @@ export default class PageEvent extends EventEmitter {
     const Backlink = this.crowi.model('Backlink');
     this.crowi.trackSideEffect(
       Promise.resolve()
-        .then(() => Backlink.createBySavedPage(savedPage))
+        .then(() => {
+          if (!this.crowi.isMongoConnected()) return;
+          return Backlink.createBySavedPage(savedPage);
+        })
         .catch((err) => {
           debug('backlink: failed to register backlink', err);
         }),

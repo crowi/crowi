@@ -66,22 +66,36 @@ export default (crowi: Crowi) => {
     const Activity = crowi.model('Activity');
 
     crowi.trackSideEffect(
-      Comment.countCommentByPageId(savedComment.page)
-        .then(function (count) {
-          return Page.updateCommentCount(savedComment.page, count);
+      Promise.resolve()
+        .then(function () {
+          // Skip the deferred commentCount recompute once the connection
+          // is no longer `connected` — it would only throw teardown-noise.
+          // Normal operation (readyState === 1) is unaffected.
+          if (!crowi.isMongoConnected()) return;
+          return Comment.countCommentByPageId(savedComment.page).then(function (count) {
+            return Page.updateCommentCount(savedComment.page, count);
+          });
         })
         .then(function (page) {
           debug('CommentCount Updated', page);
         })
-        .catch(function () {}),
+        .catch(function (err) {
+          debug('Failed to update commentCount', err);
+        }),
     );
 
     crowi.trackSideEffect(
-      Activity.createByPageComment(savedComment)
+      Promise.resolve()
+        .then(function () {
+          if (!crowi.isMongoConnected()) return;
+          return Activity.createByPageComment(savedComment);
+        })
         .then(function (activityLog) {
           debug('Activity created', activityLog);
         })
-        .catch(function (err) {}),
+        .catch(function (err) {
+          debug('Failed to create comment Activity', err);
+        }),
     );
   });
 

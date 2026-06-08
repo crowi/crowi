@@ -575,6 +575,21 @@ class Crowi {
     return this.mongoose;
   }
 
+  /**
+   * True when the Mongoose connection is in the `connected` state
+   * (`readyState === 1`). Used to guard fire-and-forget deferred writes:
+   * a side effect scheduled by a synchronous `emit()` / `post('save')`
+   * can fire after the harness has begun tearing the connection down
+   * (`connecting=2` / `disconnecting=3` / `disconnected=0`), at which
+   * point the write would throw a teardown-noise `MongoNotConnectedError`
+   * / `MongoPoolClosedError`. We skip the write instead. In normal
+   * operation `readyState === 1` always holds, so production behaviour is
+   * unchanged.
+   */
+  isMongoConnected(): boolean {
+    return this.mongoose?.connection?.readyState === 1;
+  }
+
   getIo(): any {
     // return this.io
     return null;

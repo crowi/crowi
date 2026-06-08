@@ -281,10 +281,15 @@ export default (crowi: Crowi) => {
     const Notification = crowi.model('Notification');
 
     crowi.trackSideEffect(
-      savedActivity
-        .getNotificationTargetUsers()
-        .then((notificationUsers) => {
-          return Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)));
+      Promise.resolve()
+        .then(() => {
+          // Skip the deferred fan-out once the connection is no longer
+          // `connected` — it would only throw teardown-noise. Normal
+          // operation (readyState === 1) is unaffected.
+          if (!crowi.isMongoConnected()) return;
+          return savedActivity
+            .getNotificationTargetUsers()
+            .then((notificationUsers) => Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity))));
         })
         .catch((err) => {
           debug(err);
