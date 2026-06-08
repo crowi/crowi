@@ -72,6 +72,7 @@ merge 後の 3-agent simplify レビューで挙がった非ブロッキング�
 - **ダークモード（theme-dark-mode）** — next-themes（class 戦略・system 既定・FOUC 対策）+ ヘッダー/サインインのトグル、`.dark` トークン起動。Shiki dual-theme（CSS 変数）+ RENDERER_PIPELINE_VERSION bump、CodeMirror dark theme（theme compartment）、diff / sonner のテーマ連動。`User.theme` + `PATCH /me/theme` + `ThemeSync` で端末間同期、PlantUML 等の固定色 SVG をニュートラル背景ラッパで包む、AA コントラスト監査
 - **インフラ / 品質** — mongoose 6→8 upgrade、Biome + lefthook、turbo `^build`、bcrypt 移行、i18n（paraglide）、installer 移行
 - **legacy 除去（RFC-0006）** — Express routes / controllers / form validators / Swig views / ts-rest 層 / `apiResponse.ts` をすべて削除済み
+- **web エラー画面 / 接続レジリエンス** — `apiV2Fetch` + `refreshAccessToken` に AbortController タイムアウト（既定 20s, `NEXT_PUBLIC_API_TIMEOUT_MS` で override、`AbortSignal.any` で caller signal 合成、timeout は `crowi:timeout` reason で cancel と識別）/ `app/error.tsx`・`app/global-error.tsx` エラーバウンダリ / `QueryCache.onError`→module-level ref→`ConnectionProvider` 集約（5xx→serverError / network・timeout→networkError、401 除外）/ react-query retry を 4xx 即エラー・5xx・network 少回数（2）に。spec: `.feature-state/specs/feature-web-error-screens.md`。手動確認: ① API 停止→ネットワークバナー ② 応答ハング→20s でタイムアウト→エラー ③ render throw→`error.tsx` のエラーカード + 再読み込み
 
 ---
 

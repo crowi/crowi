@@ -1018,5 +1018,8 @@
   "errors.mail_test_failed": "テストメールの送信に失敗しました。",
   "errors.plugin_not_found": "プラグインが見つかりませんでした。",
   "errors.plugin_config_validation_failed": "プラグインの設定が正しくありません。",
-  "errors.unknown": "予期しないエラーが発生しました。"
+  "errors.unknown": "予期しないエラーが発生しました。",
+  "common.reload": "再読み込み",
+  "errors.unexpected_title": "問題が発生しました",
+  "errors.unexpected_body": "予期しないエラーが発生しました。ページを再読み込みするか、前の画面に戻ってもう一度お試しください。"
 }

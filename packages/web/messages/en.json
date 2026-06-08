@@ -1018,5 +1018,8 @@
   "errors.mail_test_failed": "Failed to send the test email.",
   "errors.plugin_not_found": "The plugin was not found.",
   "errors.plugin_config_validation_failed": "The plugin configuration is invalid.",
-  "errors.unknown": "An unexpected error occurred."
+  "errors.unknown": "An unexpected error occurred.",
+  "common.reload": "Reload",
+  "errors.unexpected_title": "Something went wrong",
+  "errors.unexpected_body": "An unexpected error occurred. Please reload the page, or go back and try again."
 }
