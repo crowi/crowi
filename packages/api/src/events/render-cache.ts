@@ -37,12 +37,14 @@ export function registerRenderCacheInvalidation(crowi: Crowi): void {
       debug('skipping invalidation: pageEvent emit had no resolvable pageId (reason=%s)', reason);
       return;
     }
-    Promise.resolve()
-      .then(() => renderer.cache.invalidatePage(pageId))
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[crowi:render-cache] invalidatePage(${pageId}) on ${reason} failed: ${message}`);
-      });
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => renderer.cache.invalidatePage(pageId))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[crowi:render-cache] invalidatePage(${pageId}) on ${reason} failed: ${message}`);
+        }),
+    );
   };
 
   pageEvent.on('update', (savedPage: unknown) => invalidate(savedPage as { _id?: unknown }, 'update'));

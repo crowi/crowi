@@ -48,12 +48,14 @@ export function registerMentionDispatch(crowi: Crowi): void {
   const pageEvent = crowi.event('Page');
 
   const handle = (savedPage: unknown, user: unknown) => {
-    Promise.resolve()
-      .then(() => dispatchMentions(crowi, savedPage as PageLike | undefined, user as UserLike | undefined))
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[crowi:mention-dispatch] dispatch failed: ${message}`);
-      });
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => dispatchMentions(crowi, savedPage as PageLike | undefined, user as UserLike | undefined))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[crowi:mention-dispatch] dispatch failed: ${message}`);
+        }),
+    );
   };
 
   // Subscribe to both 'create' (first save of a new page) and 'update'

@@ -284,12 +284,14 @@ function publishNotificationsChange(crowi: Crowi, userId: string): void {
   // subscriber. The attach handler validates the inbound side with the
   // same schema (`NotificationsServerMessageSchema`).
   const message = JSON.stringify(NotificationsChangedMessageSchema.parse({ type: 'changed' }));
-  Promise.resolve()
-    .then(() => redis.publish!(channel, message))
-    .catch((err: unknown) => {
-      const m = err instanceof Error ? err.message : String(err);
-      console.warn(`[crowi:notifications] publish failed for user ${userId}: ${m}`);
-    });
+  crowi.trackSideEffect(
+    Promise.resolve()
+      .then(() => redis.publish!(channel, message))
+      .catch((err: unknown) => {
+        const m = err instanceof Error ? err.message : String(err);
+        console.warn(`[crowi:notifications] publish failed for user ${userId}: ${m}`);
+      }),
+  );
 }
 
 /**
@@ -315,11 +317,13 @@ function forwardToNotifierPlugins(crowi: Crowi, notification: NotificationDocume
   };
 
   for (const driver of notifiers) {
-    Promise.resolve()
-      .then(() => driver.send(payload))
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[crowi:notification] notifier driver send failed: ${message}`);
-      });
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => driver.send(payload))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[crowi:notification] notifier driver send failed: ${message}`);
+        }),
+    );
   }
 }

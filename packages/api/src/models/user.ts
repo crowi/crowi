@@ -161,7 +161,16 @@ export default (crowi: Crowi) => {
   });
   applyPaginatePlugin(userSchema);
 
-  userEvent.on('activated', userEvent.onActivated);
+  // `onActivated` is async but `emit('activated', ...)` (a synchronous
+  // EventEmitter dispatch) does not await it. Track the returned promise so
+  // the user-page creation it kicks off — which re-fires page events and
+  // fans out to backlink / watch / mention — can be drained by the test
+  // harness before disconnect. Production never drains, so this only adds
+  // the side-effect to the in-flight set. Listener semantics are unchanged:
+  // `onActivated` already swallows its own errors via `createUserPage`.
+  userEvent.on('activated', (user: UserDocument) => {
+    crowi.trackSideEffect(Promise.resolve(userEvent.onActivated(user)));
+  });
 
   function decideUserStatusOnRegistration() {
     const Config = crowi.model('Config');

@@ -280,14 +280,16 @@ export default (crowi: Crowi) => {
 
     const Notification = crowi.model('Notification');
 
-    savedActivity
-      .getNotificationTargetUsers()
-      .then((notificationUsers) => {
-        return Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)));
-      })
-      .catch((err) => {
-        debug(err);
-      });
+    crowi.trackSideEffect(
+      savedActivity
+        .getNotificationTargetUsers()
+        .then((notificationUsers) => {
+          return Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)));
+        })
+        .catch((err) => {
+          debug(err);
+        }),
+    );
   });
 
   // because mongoose's 'remove' hook fired only when remove by a method of Document (not by a Model method)

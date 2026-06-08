@@ -74,11 +74,13 @@ export default class PageEvent extends EventEmitter {
     if ((savedPage as { status?: unknown }).status === STATUS_DELETED) return;
 
     const Watcher = this.crowi.model('Watcher');
-    Promise.resolve()
-      .then(() => autoWatchPage(Watcher, user._id, savedPage._id))
-      .catch((err) => {
-        debug('auto-watch: failed to upsert watcher', err);
-      });
+    this.crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => autoWatchPage(Watcher, user._id, savedPage._id))
+        .catch((err) => {
+          debug('auto-watch: failed to upsert watcher', err);
+        }),
+    );
   }
 
   /**
@@ -102,19 +104,23 @@ export default class PageEvent extends EventEmitter {
     if ((savedPage as { status?: unknown }).status === STATUS_DELETED) return;
 
     const Activity = this.crowi.model('Activity');
-    Promise.resolve()
-      .then(() => Activity.createByPageUpdate(savedPage, user))
-      .catch((err) => {
-        debug('page-update-notification: failed to create UPDATE activity', err);
-      });
+    this.crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => Activity.createByPageUpdate(savedPage, user))
+        .catch((err) => {
+          debug('page-update-notification: failed to create UPDATE activity', err);
+        }),
+    );
   }
 
   private registerBacklinks(savedPage: unknown) {
     const Backlink = this.crowi.model('Backlink');
-    Promise.resolve()
-      .then(() => Backlink.createBySavedPage(savedPage))
-      .catch((err) => {
-        debug('backlink: failed to register backlink', err);
-      });
+    this.crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => Backlink.createBySavedPage(savedPage))
+        .catch((err) => {
+          debug('backlink: failed to register backlink', err);
+        }),
+    );
   }
 }

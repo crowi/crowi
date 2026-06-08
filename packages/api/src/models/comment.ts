@@ -65,20 +65,24 @@ export default (crowi: Crowi) => {
     const Page = crowi.model('Page');
     const Activity = crowi.model('Activity');
 
-    Comment.countCommentByPageId(savedComment.page)
-      .then(function (count) {
-        return Page.updateCommentCount(savedComment.page, count);
-      })
-      .then(function (page) {
-        debug('CommentCount Updated', page);
-      })
-      .catch(function () {});
+    crowi.trackSideEffect(
+      Comment.countCommentByPageId(savedComment.page)
+        .then(function (count) {
+          return Page.updateCommentCount(savedComment.page, count);
+        })
+        .then(function (page) {
+          debug('CommentCount Updated', page);
+        })
+        .catch(function () {}),
+    );
 
-    Activity.createByPageComment(savedComment)
-      .then(function (activityLog) {
-        debug('Activity created', activityLog);
-      })
-      .catch(function (err) {});
+    crowi.trackSideEffect(
+      Activity.createByPageComment(savedComment)
+        .then(function (activityLog) {
+          debug('Activity created', activityLog);
+        })
+        .catch(function (err) {}),
+    );
   });
 
   const commentEvent = crowi.event('Comment');
