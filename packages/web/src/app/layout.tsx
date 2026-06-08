@@ -50,8 +50,13 @@ export default async function RootLayout({
   const locale = headerLocale && isLocale(headerLocale) ? headerLocale : baseLocale;
   overwriteGetLocale(() => locale);
 
+  // suppressHydrationWarning on <html>: next-themes injects the resolved theme
+  // as a class via a blocking inline script before React hydrates, so the
+  // server-rendered markup (no class) and the first client render differ on
+  // this node. Suppressing here silences only the <html> node — real
+  // mismatches in descendants are still reported.
   return (
-    <html lang={locale} className="scroll-smooth" data-scroll-behavior="smooth">
+    <html lang={locale} className="scroll-smooth" data-scroll-behavior="smooth" suppressHydrationWarning>
       {/* suppressHydrationWarning: browser extensions (ColorZilla, Grammarly, …)
           inject attributes like `cz-shortcut-listen` onto <body> before React
           hydrates. Suppressing here only silences the one <body> node — real

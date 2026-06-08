@@ -297,6 +297,7 @@ const stubProfile: UserProfileResponse = {
   name: '',
   email: 'stub@example.com',
   lang: 'en',
+  theme: 'system',
   image: null,
   hasPassword: false,
   createdAt: '',
@@ -594,6 +595,7 @@ const appAuthMeUserChain = new OpenAPIHono()
   )
   .openapi(meRoutes.getProfileRoute, (c) => c.json(stubProfile, 200))
   .openapi(meRoutes.updateProfileRoute, (c) => c.json(stubProfile, 200))
+  .openapi(meRoutes.updateThemeRoute, (c) => c.json({ status: 'ok' as const, theme: 'system' as const }, 200))
   .openapi(meRoutes.uploadPictureRoute, (c) => c.json({ status: true } satisfies PictureUploadResponse, 200))
   .openapi(meRoutes.deletePictureRoute, (c) => c.json({ status: 'ok' } satisfies SuccessResponse, 200))
   .openapi(meRoutes.updatePasswordRoute, (c) => c.json({ status: 'ok', message: '' } satisfies PasswordUpdateSuccess, 200))

@@ -1,9 +1,16 @@
 import { z } from '@hono/zod-openapi';
 import { PageSchema } from './page';
 
-// Language enum - matches User model
-export const LanguageSchema = z.enum(['en', 'en-US', 'en-GB', 'ja']);
+// Language enum - matches User model. Only `en` / `ja` are live UI locales
+// (paraglide `locales`); the legacy regional variants (`en-US` / `en-GB`) were
+// retired. Existing rows carrying them are normalised to `en` on read (see
+// `userToProfileResponse`) and coerced on write (User `pre('validate')` hook).
+export const LanguageSchema = z.enum(['en', 'ja']);
 export type Language = z.infer<typeof LanguageSchema>;
+
+// Theme enum - matches User model. `system` follows the OS setting.
+export const ThemeSchema = z.enum(['system', 'light', 'dark']);
+export type Theme = z.infer<typeof ThemeSchema>;
 
 // User profile response schema
 export const UserProfileResponseSchema = z.object({
@@ -12,6 +19,7 @@ export const UserProfileResponseSchema = z.object({
   name: z.string(),
   email: z.string().email(),
   lang: LanguageSchema,
+  theme: ThemeSchema,
   image: z.string().nullable(),
   introduction: z.string().optional(),
   googleId: z.string().nullable().optional(),
@@ -36,6 +44,22 @@ export const UpdateProfileRequestSchema = z.object({
   }),
 });
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
+
+// Update theme request schema. Theme is synced on its own lightweight
+// endpoint (driven by the header / sign-in toggle) rather than via the full
+// profile form, so the `next-themes` change can persist without resubmitting
+// name / email.
+export const UpdateThemeRequestSchema = z.object({
+  theme: ThemeSchema,
+});
+export type UpdateThemeRequest = z.infer<typeof UpdateThemeRequestSchema>;
+
+// Theme update response schema.
+export const ThemeUpdateResponseSchema = z.object({
+  status: z.literal('ok'),
+  theme: ThemeSchema,
+});
+export type ThemeUpdateResponse = z.infer<typeof ThemeUpdateResponseSchema>;
 
 // Picture upload response schema
 export const PictureUploadResponseSchema = z.object({

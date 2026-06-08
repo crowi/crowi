@@ -3,7 +3,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { useTheme } from 'next-themes';
 import { buildExtensions } from './build-extensions';
+import { editorThemeExtension } from './dark-theme';
 
 export interface MarkdownEditorProps {
   value: string;
@@ -122,6 +124,15 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
+  // App theme (`next-themes`). `resolvedTheme` is `'dark'` only when the
+  // effective theme is dark (explicit dark, or system + OS dark). Used to
+  // drive the editor theme compartment so the editor tracks the app theme
+  // without a view rebuild. `undefined` before mount → light baseline.
+  const { resolvedTheme } = useTheme();
+  // Captured at mount for the initial `EditorState`; live changes flow
+  // through the dedicated reconfigure effect below.
+  const resolvedThemeRef = useRef(resolvedTheme);
+
   // Collab mode is fixed for a mounted instance's lifetime (the collab
   // wrapper remounts via `key` when the session swaps), so capturing
   // `getInitialDoc` once at mount is correct — and required, since the
@@ -162,8 +173,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   // Without compartments either slot would be frozen at mount-time and
   // the realtime flow couldn't transition the editor into a writable
   // state once the doc arrived.
+  //   - `theme` swaps the dark editor theme on/off when the app theme
+  //     changes (`useTheme()` `resolvedTheme`). Light is the baseline
+  //     (`defaultHighlightStyle` from `buildExtensions`), so the dark
+  //     compartment only layers the dark chrome + token style on top.
   const extraCompartmentRef = useRef<Compartment>(new Compartment());
   const readonlyCompartmentRef = useRef<Compartment>(new Compartment());
+  const themeCompartmentRef = useRef<Compartment>(new Compartment());
   const readonlyExtension = (on: boolean): Extension => (on ? EditorState.readOnly.of(true) : []);
 
   // Mount the EditorView once. Initial doc comes from `value` at mount
@@ -190,6 +206,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           dnd: dndRef.current,
         }),
         readonlyCompartmentRef.current.of(readonlyExtension(readonlyRef.current)),
+        themeCompartmentRef.current.of(editorThemeExtension(resolvedThemeRef.current)),
         extraCompartmentRef.current.of(extraExtensions ?? []),
       ],
     });
@@ -225,6 +242,19 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       effects: readonlyCompartmentRef.current.reconfigure(readonlyExtension(readonly ?? false)),
     });
   }, [readonly]);
+
+  // Reconfigure the theme slot when the app theme flips (light ↔ dark,
+  // including the system-follow transition). `Compartment.reconfigure`
+  // hot-swaps only the theme slice — no view rebuild, no selection /
+  // history loss.
+  useEffect(() => {
+    resolvedThemeRef.current = resolvedTheme;
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: themeCompartmentRef.current.reconfigure(editorThemeExtension(resolvedTheme)),
+    });
+  }, [resolvedTheme]);
 
   // Sync `value` prop → editor doc when they diverge. Echo guard:
   // skip the dispatch when the buffers already match, otherwise the

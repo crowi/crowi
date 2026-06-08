@@ -246,8 +246,9 @@ describe('pipeline + core renderers', () => {
       const top = tree.children[0];
       expect(top.type).toBe('html');
       const html = (top as Html).value;
-      // shiki always emits a top-level `<pre class="shiki ...">`. The
-      // exact background color from `github-light` should ride along.
+      // shiki always emits a top-level `<pre class="shiki ...">`. With
+      // dual-theme output the `<pre>` carries `--shiki-light-bg` /
+      // `--shiki-dark-bg` CSS variables instead of a single bg colour.
       expect(html).toContain('<pre');
       expect(html).toContain('shiki');
     });
@@ -274,10 +275,12 @@ describe('pipeline + core renderers', () => {
       const html = (top as Html).value;
       expect(html).toContain('<pre');
       expect(html).toContain('shiki');
-      // shiki emits inline `style="color: #..."` spans per token —
-      // proof that the highlighter actually tokenised the body
-      // (otherwise it'd just escape the raw text).
-      expect(html).toMatch(/<span[^>]*style="color:/);
+      // Dual-theme (`defaultColor: false`) emits per-token spans carrying
+      // `--shiki-light` / `--shiki-dark` CSS variables instead of a single
+      // `color:` declaration — proof that the highlighter actually
+      // tokenised the body (otherwise it'd just escape the raw text).
+      expect(html).toMatch(/<span[^>]*style="[^"]*--shiki-light:/);
+      expect(html).toMatch(/<span[^>]*style="[^"]*--shiki-dark:/);
       expect(html).toContain('PHPStan');
     });
   });

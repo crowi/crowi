@@ -69,6 +69,9 @@ describe('Routes /api/v2/me (Hono)', () => {
         email: EMAIL,
         hasPassword: true,
         createdAt: expect.any(String),
+        // Schema default — existing rows without an explicit theme read back
+        // 'system' from the Mongoose default.
+        theme: 'system',
       });
     });
 
@@ -121,6 +124,48 @@ describe('Routes /api/v2/me (Hono)', () => {
       });
 
       await User().deleteOne({ _id: other.user._id });
+    });
+  });
+
+  describe('PATCH /me/theme', () => {
+    const EMAIL = 'me-theme@example.com';
+    let accessToken: string;
+    let user: UserDocument;
+
+    beforeAll(async () => {
+      const seeded = await seedActiveUser({ name: 'Me Theme', username: 'me-theme', email: EMAIL, password: 'Password!1' });
+      user = seeded.user;
+      accessToken = seeded.accessToken;
+    });
+    afterAll(async () => {
+      await User().deleteMany({ email: EMAIL });
+    });
+
+    it('persists the theme and echoes it back', async () => {
+      const res = await request(app).patch('/api/v2/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'dark' });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'ok', theme: 'dark' });
+
+      const reread = await User().findById(user._id);
+      expect(reread?.theme).toBe('dark');
+    });
+
+    it('round-trips the new theme on GET /me', async () => {
+      await request(app).patch('/api/v2/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'light' });
+      const res = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${accessToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.theme).toBe('light');
+    });
+
+    it('returns 400 on an invalid theme value', async () => {
+      const res = await request(app).patch('/api/v2/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'sepia' });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 401 without a bearer token', async () => {
+      const res = await request(app).patch('/api/v2/me/theme').send({ theme: 'dark' });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
   });
 
