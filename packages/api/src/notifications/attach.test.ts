@@ -390,10 +390,17 @@ describe('attachNotificationsServer — Redis-backed', () => {
 
     // Publish on user B's channel — A's socket must remain quiet.
     await testServer.primary!.publish(channelForUser(userB), JSON.stringify({ type: 'changed' }));
-    // Give a generous beat for the (non-)delivery — `waitUntil`
-    // would loop until timeout here, so we just sleep briefly.
-    await new Promise((r) => setTimeout(r, 100));
-    expect(messages).toEqual([]);
+    // Then publish a sentinel on A's OWN channel, which is genuinely
+    // delivered. Because FakeRedis fans out synchronously in publish
+    // order and the WS frames queue onto the socket in that same order,
+    // any (erroneous) cross-channel frame would land BEFORE the sentinel.
+    // So once the sentinel arrives, `messages` must contain exactly it —
+    // proving the user-B publish never leaked to A — without depending on
+    // a fixed sleep that a busy worker could under- or over-shoot.
+    await testServer.primary!.publish(channelForUser(userA), JSON.stringify({ type: 'changed' }));
+    await waitUntil(() => messages.length >= 1);
+    expect(messages).toHaveLength(1);
+    expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
 
     await new Promise<void>((resolve) => {
       ws.on('close', () => resolve());
@@ -524,14 +531,17 @@ describe('attachNotificationsServer — schema-guarded fan-out (#14)', () => {
 
     // Foreign-shaped payload that JSON-parses but fails schema.
     await server.primary!.publish(channelForUser(userId), JSON.stringify({ type: 'other', data: 'spam' }));
-    // Wait a beat for the (non-)delivery, then assert nothing reached us.
-    await new Promise((r) => setTimeout(r, 100));
-    expect(messages).toEqual([]);
 
     // A subsequent well-formed payload still gets through — proves the
-    // drop is selective, not a global silence.
+    // drop is selective, not a global silence. This well-formed frame
+    // doubles as a delivery sentinel: FakeRedis fans out synchronously in
+    // publish order, so the schema-invalid frame above — had it (wrongly)
+    // been forwarded — would queue onto the socket BEFORE this one. Once
+    // the sentinel arrives, `messages` must contain exactly it, proving
+    // the invalid publish was dropped. No fixed sleep needed.
     await server.primary!.publish(channelForUser(userId), JSON.stringify({ type: 'changed' }));
     await waitUntil(() => messages.length >= 1);
+    expect(messages).toHaveLength(1);
     expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
 
     await new Promise<void>((resolve) => {
