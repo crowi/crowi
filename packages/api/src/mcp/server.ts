@@ -31,6 +31,39 @@ const SERVER_INFO = {
   version: '1.0.0',
 } as const;
 
+/**
+ * Server-level usage guidance returned in the `initialize` response. MCP
+ * clients surface this to the model as a system-prompt-style hint (MCP
+ * spec: `instructions`), so it is the place for cross-cutting Crowi
+ * conventions that no single tool owns — path shape, date-page nesting,
+ * the get-before-update lock dance, and grant values.
+ */
+const SERVER_INSTRUCTIONS = `This server exposes a Crowi wiki (team knowledge base). When the user asks to
+search/read/create/update wiki pages, use these crowi_* tools — they operate on
+the wiki, not the local filesystem or codebase.
+
+Path conventions:
+- Paths are slash-separated hierarchies. A trailing slash means a portal
+  (directory) page; no trailing slash is the page itself.
+- Date-based pages nest by slash, NOT hyphens: \`/parent/YYYY/MM/DD/title\`
+  (e.g. /crowi/qa/2026/06/08/mcp-server), never \`/parent/2026-06-08-title\`.
+
+Choosing where to create a page:
+- Personal notes / daily memos belong under the author's own user page:
+  \`/user/<username>/memo/YYYY/MM/DD/title\`. If you do not know the username, ask
+  the user rather than guessing.
+- Project / team content follows the existing structure of that project. Before
+  creating, explore with crowi_search_pages / crowi_list_child_pages /
+  crowi_autocomplete_pages to see where similar pages already live, then place the
+  new page to match that hierarchy instead of inventing a new top-level path.
+
+Editing:
+- Before crowi_update_page, call crowi_get_page to read the current revision_id
+  (optimistic lock). A stale revision_id returns a 409 conflict — refetch and retry.
+
+Visibility (\`grant\` on create): 1 = public, 2 = restricted, 3 = specified users,
+4 = owner only. Omit to default to public.`;
+
 /** How a tool's validated input is turned into a dispatch request. */
 export type ToolKind = 'query' | 'body';
 
@@ -97,7 +130,7 @@ export interface McpServerContext {
  * by `attachMcp`.
  */
 export const buildMcpServer = (ctx: McpServerContext): McpServer => {
-  const server = new McpServer(SERVER_INFO);
+  const server = new McpServer(SERVER_INFO, { instructions: SERVER_INSTRUCTIONS });
   const descriptors: ToolDescriptor[] = [...pageTools, ...searchTools];
 
   for (const tool of descriptors) {

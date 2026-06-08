@@ -113,6 +113,21 @@ describe('MCP server (/mcp)', () => {
     expect(names).toHaveLength(13);
   });
 
+  it('advertises Crowi path conventions via the initialize `instructions`', async () => {
+    const res = await callMcp(webToken, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'smoke', version: '0' } },
+    });
+    expect(res.status).toBe(200);
+    const rpc = parseRpc(res);
+    const result = rpc.result as { instructions?: string; serverInfo?: { name?: string } };
+    expect(result.serverInfo?.name).toBe('crowi');
+    // The date-nesting convention is the whole point of the instructions.
+    expect(result.instructions).toContain('/parent/YYYY/MM/DD/title');
+  });
+
   it('crowi_get_page returns the real page body as text content', async () => {
     const res = await callMcp(webToken, {
       jsonrpc: '2.0',

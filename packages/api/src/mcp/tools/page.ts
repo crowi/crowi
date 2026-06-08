@@ -234,7 +234,8 @@ export const pageTools: ToolDescriptor[] = [
   // --------------------------------------------------------------- writes
   {
     name: 'crowi_create_page',
-    description: 'Create a new wiki page at `path` with markdown `body` (optional `grant` visibility). Fails if a page already exists at `path`.',
+    description:
+      'Create a new wiki page at `path` with markdown `body` (optional `grant` visibility). Fails if a page already exists at `path`. Paths are slash-separated hierarchies; date-based pages nest by slash, not hyphens — use `/parent/YYYY/MM/DD/title` (e.g. /crowi/qa/2026/06/08/mcp-server), not `/parent/2026-06-08-title`.',
     method: 'POST',
     path: '/pages',
     schema: CreatePageRequestSchema.shape,
