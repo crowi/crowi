@@ -45,7 +45,18 @@ const input = (overrides: Partial<EmbedInput> = {}): EmbedInput => ({
   pageId: overrides.pageId ?? new Types.ObjectId().toHexString(),
 });
 
-const drainSetImmediate = () => new Promise<void>((resolve) => setImmediate(resolve));
+// The background re-render is a fire-and-forget chain whose internal awaits
+// (real Mongo I/O) produce a variable number of microtasks / event-loop turns
+// before `renderer.calls` increments. A fixed `setImmediate` tick count was
+// flaky under parallel load (the I/O round-trip can spill past two ticks).
+// Poll by yielding the event loop until the expected call count appears, with
+// a safety bound — mirrors `backlink.test.ts`'s `waitForBacklinks`.
+const waitForCalls = async (renderer: { calls: number }, expectedCalls: number, maxTicks = 50): Promise<void> => {
+  for (let i = 0; i < maxTicks; i += 1) {
+    if (renderer.calls === expectedCalls) return;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+};
 
 describe('cachedRender stale-while-revalidate', () => {
   beforeEach(async () => {
@@ -109,9 +120,9 @@ describe('cachedRender stale-while-revalidate', () => {
     expect(result.freshness).toBe('stale');
     expect(result.html).toBe('<v1/>');
 
-    // Background re-render should fire.
-    await drainSetImmediate();
-    await drainSetImmediate();
+    // Background re-render should fire — poll until the call count settles
+    // rather than draining a fixed number of ticks.
+    await waitForCalls(renderer, 2);
     expect(renderer.calls).toBe(2);
   });
 
