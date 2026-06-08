@@ -63,12 +63,18 @@ const debug = Debug('crowi:hono:handlers:me');
 // `null | string`), so we forward `user.image` verbatim — no
 // `toUserImage` coercion. Only token endpoints, where the schema is
 // `z.string().optional()`, need `null → undefined`.
+// Normalise a legacy regional `lang` ('en-US' / 'en-GB') to 'en' for the
+// response. Rows predating the enum tightening can still hold a legacy value
+// until their next save (which the User `pre('validate')` hook coerces), so we
+// guard the read boundary too — the typed contract only allows 'en' / 'ja'.
+const toResponseLang = (lang: string): 'en' | 'ja' => (lang === 'ja' ? 'ja' : 'en');
+
 const userToProfileResponse = (user: UserDocument, hasPassword: boolean, emailChangePending?: boolean) => ({
   id: user._id.toString(),
   username: user.username,
   name: user.name,
   email: user.email,
-  lang: user.lang,
+  lang: toResponseLang(user.lang),
   theme: user.theme ?? 'system',
   image: user.image,
   introduction: user.introduction || undefined,

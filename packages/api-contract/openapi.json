@@ -7913,8 +7913,6 @@
                       "type": "string",
                       "enum": [
                         "en",
-                        "en-US",
-                        "en-GB",
                         "ja"
                       ]
                     },
@@ -8044,8 +8042,6 @@
                         "type": "string",
                         "enum": [
                           "en",
-                          "en-US",
-                          "en-GB",
                           "ja"
                         ]
                       }
@@ -8089,8 +8085,6 @@
                       "type": "string",
                       "enum": [
                         "en",
-                        "en-US",
-                        "en-GB",
                         "ja"
                       ]
                     },

@@ -1,8 +1,11 @@
 import { z } from '@hono/zod-openapi';
 import { PageSchema } from './page';
 
-// Language enum - matches User model
-export const LanguageSchema = z.enum(['en', 'en-US', 'en-GB', 'ja']);
+// Language enum - matches User model. Only `en` / `ja` are live UI locales
+// (paraglide `locales`); the legacy regional variants (`en-US` / `en-GB`) were
+// retired. Existing rows carrying them are normalised to `en` on read (see
+// `userToProfileResponse`) and coerced on write (User `pre('validate')` hook).
+export const LanguageSchema = z.enum(['en', 'ja']);
 export type Language = z.infer<typeof LanguageSchema>;
 
 // Theme enum - matches User model. `system` follows the OS setting.

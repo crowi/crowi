@@ -754,7 +754,7 @@ export interface paths {
                             /** Format: email */
                             email: string;
                             /** @enum {string} */
-                            lang: "en" | "en-US" | "en-GB" | "ja";
+                            lang: "en" | "ja";
                             /** @enum {string} */
                             theme: "system" | "light" | "dark";
                             image: string | null;
@@ -802,7 +802,7 @@ export interface paths {
                             /** Format: email */
                             email: string;
                             /** @enum {string} */
-                            lang: "en" | "en-US" | "en-GB" | "ja";
+                            lang: "en" | "ja";
                         };
                     };
                 };
@@ -821,7 +821,7 @@ export interface paths {
                             /** Format: email */
                             email: string;
                             /** @enum {string} */
-                            lang: "en" | "en-US" | "en-GB" | "ja";
+                            lang: "en" | "ja";
                             /** @enum {string} */
                             theme: "system" | "light" | "dark";
                             image: string | null;

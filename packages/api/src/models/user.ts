@@ -15,9 +15,11 @@ const STATUS_SUSPENDED = 3;
 const STATUS_DELETED = 4;
 const STATUS_INVITED = 5;
 const LANG_EN = 'en';
-const LANG_EN_US = 'en-US';
-const LANG_EN_GB = 'en-GB';
 const LANG_JA = 'ja';
+// Legacy regional variants ('en-US' / 'en-GB') were retired; only 'en' / 'ja'
+// remain. Existing rows carrying a legacy value are coerced to 'en' by the
+// `pre('validate')` hook below, so the tightened enum never rejects them.
+const LEGACY_LANGS = ['en-US', 'en-GB'];
 const THEME_SYSTEM = 'system';
 const THEME_LIGHT = 'light';
 const THEME_DARK = 'dark';
@@ -34,7 +36,7 @@ export interface UserDocument extends Document {
   email: string;
   introduction: string;
   password: string;
-  lang: 'en' | 'en-US' | 'en-GB' | 'ja';
+  lang: 'en' | 'ja';
   /**
    * Preferred UI theme, synced across devices (the web client's
    * `next-themes` localStorage value is the per-device fallback). Defaults
@@ -121,8 +123,6 @@ export interface UserModel extends PaginateModel<UserDocument> {
   STATUS_INVITED: number;
   PAGE_ITEMS: number;
   LANG_EN: string;
-  LANG_EN_US: string;
-  LANG_EN_GB: string;
   LANG_JA: string;
   THEME_SYSTEM: string;
   THEME_LIGHT: string;
@@ -147,7 +147,7 @@ export default (crowi: Crowi) => {
     lang: {
       type: String,
       enum: Object.values(getLanguageLabels()),
-      default: LANG_EN_US,
+      default: LANG_EN,
     },
     theme: {
       type: String,
@@ -227,13 +227,22 @@ export default (crowi: Crowi) => {
   function getLanguageLabels() {
     const lang = {
       LANG_EN,
-      LANG_EN_US,
-      LANG_EN_GB,
       LANG_JA,
     };
 
     return lang;
   }
+
+  // Coerce a legacy regional `lang` ('en-US' / 'en-GB') to 'en' before
+  // validation so saving a doc loaded from a pre-existing row never trips the
+  // tightened ['en','ja'] enum. Self-healing: the row is normalised on its
+  // next save, no separate data migration required.
+  userSchema.pre('validate', function (next) {
+    if (this.lang && LEGACY_LANGS.includes(this.lang)) {
+      this.lang = LANG_EN;
+    }
+    next();
+  });
 
   userSchema.methods.isPasswordSet = function () {
     if (this.password) {
@@ -840,8 +849,6 @@ export default (crowi: Crowi) => {
   User.PAGE_ITEMS = PAGE_ITEMS;
 
   User.LANG_EN = LANG_EN;
-  User.LANG_EN_US = LANG_EN_US;
-  User.LANG_EN_GB = LANG_EN_US;
   User.LANG_JA = LANG_JA;
 
   User.THEME_SYSTEM = THEME_SYSTEM;
