@@ -166,10 +166,19 @@ export default (crowi: Crowi) => {
   // the user-page creation it kicks off — which re-fires page events and
   // fans out to backlink / watch / mention — can be drained by the test
   // harness before disconnect. Production never drains, so this only adds
-  // the side-effect to the in-flight set. Listener semantics are unchanged:
-  // `onActivated` already swallows its own errors via `createUserPage`.
+  // the side-effect to the in-flight set.
+  //
+  // `onActivated` swallows errors only inside `createUserPage`; its own
+  // `findPage()` / `rename()` awaits are not caught, so a rejection there
+  // would surface as an unhandled rejection. Attach `.catch(debug)` here so
+  // the tracked promise can never reject — symmetric with the other
+  // fire-and-forget call sites.
   userEvent.on('activated', (user: UserDocument) => {
-    crowi.trackSideEffect(Promise.resolve(userEvent.onActivated(user)));
+    crowi.trackSideEffect(
+      Promise.resolve(userEvent.onActivated(user)).catch((err) => {
+        debug('userEvent activated handler failed', err);
+      }),
+    );
   });
 
   function decideUserStatusOnRegistration() {
