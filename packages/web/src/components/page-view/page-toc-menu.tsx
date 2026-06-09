@@ -28,7 +28,7 @@ export function PageTocMenu({ toc, activeId }: PageTocMenuProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="shrink-0 gap-1 text-muted-foreground hover:text-foreground" aria-label={m['page.toc_label']()}>
+        <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-2 text-muted-foreground hover:text-foreground" aria-label={m['page.toc_label']()}>
           <List className="h-4 w-4" />
           <span>{m['page.toc_label']()}</span>
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />

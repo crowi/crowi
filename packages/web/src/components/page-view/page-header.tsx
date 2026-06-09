@@ -217,7 +217,6 @@ export function PageHeader({
             the icon-button toolbar (chip + edit live next to the title
             on md+, watch / bookmark / link surface as own buttons). */}
         <div className="flex items-center gap-2 md:gap-1 shrink-0 self-end md:self-auto">
-          {tocMenu}
           {page.grant != null && (
             <span className="md:hidden">
               <GrantChip grant={page.grant} />
@@ -253,7 +252,12 @@ export function PageHeader({
         </div>
       </div>
 
-      {showPresence && isAuthenticated && <LivePresenceRow presence={presence} />}
+      {((showPresence && isAuthenticated) || tocMenu) && (
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">{showPresence && isAuthenticated && <LivePresenceRow presence={presence} />}</div>
+          {tocMenu}
+        </div>
+      )}
 
       {showTitle ? (
         // Mobile stacks the chip + edit button onto their own row below
@@ -348,13 +352,17 @@ export function PageHeader({
               </button>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
               <div className="flex items-center gap-1 shrink-0">
-                {tocMenu}
                 {!isDraft && isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}
                 {editIconButton}
                 {showActions && <PageActionsMenu page={page} compact isAuthenticated={isAuthenticated} />}
               </div>
             </div>
-            {showPresence && isAuthenticated && <LivePresenceRow presence={presence} size="compact" />}
+            {((showPresence && isAuthenticated) || tocMenu) && (
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">{showPresence && isAuthenticated && <LivePresenceRow presence={presence} size="compact" />}</div>
+                {tocMenu}
+              </div>
+            )}
           </div>
         </div>
       )}
