@@ -15,12 +15,6 @@ export const GetAppSettingsResponseSchema = z.object({
   app: z.object({
     title: z.string(),
     confidential: z.string(),
-    /**
-     * Read-only in this endpoint — managed via the Share settings screen.
-     * Surfaced here because the App screen displays it, not because it is
-     * editable from here.
-     */
-    externalShare: z.boolean(),
   }),
   /**
    * Whether a storage driver is registered (i.e. uploads are wired up).

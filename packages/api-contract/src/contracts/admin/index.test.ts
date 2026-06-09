@@ -18,7 +18,6 @@ import { adminMailRoutes } from './mail';
 import { adminPluginsRoutes } from './plugins';
 import { adminSearchRoutes } from './search';
 import { adminSecurityRoutes } from './security';
-import { adminShareRoutes } from './share';
 import { adminStorageRoutes } from './storage';
 import { adminUsersRoutes } from './users';
 
@@ -27,7 +26,6 @@ const allAdminRoutes = [
   ...Object.entries(adminAuthRoutes),
   ...Object.entries(adminSecurityRoutes),
   ...Object.entries(adminMailRoutes),
-  ...Object.entries(adminShareRoutes),
   ...Object.entries(adminStorageRoutes),
   ...Object.entries(adminSearchRoutes),
   ...Object.entries(adminUsersRoutes),
