@@ -14,7 +14,6 @@ export const ADMIN_SECTIONS = {
   aws: () => m['admin.nav_aws'](),
   google: () => m['admin.nav_google'](),
   github: () => m['admin.nav_github'](),
-  share: () => m['admin.nav_share'](),
   storage: () => m['admin.nav_storage'](),
   users: () => m['admin.nav_users'](),
   notification: () => m['admin.nav_notification'](),

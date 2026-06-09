@@ -78,13 +78,6 @@ const STATIC_GROUPS: AdminNavGroup[] = [
         description: () => m['admin.nav_auth_summary'](),
       },
       {
-        href: '/admin/share',
-        label: () => m['admin.nav_share'](),
-        icon: Share2,
-        status: 'available',
-        description: () => m['admin.nav_share_summary'](),
-      },
-      {
         href: '/admin/plugins',
         label: () => m['admin.nav_plugins'](),
         icon: Plug,
