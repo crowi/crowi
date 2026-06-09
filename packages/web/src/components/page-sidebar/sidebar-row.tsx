@@ -21,6 +21,8 @@ interface SidebarRowProps {
   // On the path to the current node, but not it — kept un-muted so the
   // open branch reads as active without competing with `isCurrent`.
   isOpen?: boolean;
+  // Optional marker shown after the label (e.g. the portal indicator).
+  trailing?: React.ReactNode;
 }
 
 /**
@@ -28,7 +30,7 @@ interface SidebarRowProps {
  * renderer can nest a child `<ul>` inside the same `<li>`. Presentational:
  * the caller supplies the href, label, leading icon, and active state.
  */
-export function SidebarRow({ href, label, leading, depth, isCurrent, isOpen }: SidebarRowProps) {
+export function SidebarRow({ href, label, leading, depth, isCurrent, isOpen, trailing }: SidebarRowProps) {
   return (
     <Link
       href={pagePathToHref(href)}
@@ -45,7 +47,8 @@ export function SidebarRow({ href, label, leading, depth, isCurrent, isOpen }: S
       style={{ paddingLeft: `${depth * INDENT_REM + 0.5}rem` }}
     >
       {leading}
-      <span className="truncate">{label}</span>
+      <span className="min-w-0 truncate">{label}</span>
+      {trailing}
     </Link>
   );
 }
@@ -60,7 +63,10 @@ export function SidebarRowLink({ segment, depth, isCurrent, isOpen }: { segment:
   const isDirectory = segment.count > 0 || segment.hasPortal;
   const href = isDirectory ? segment.path : segment.path.replace(/\/$/, '');
   const label = isDirectory ? `${segment.segment}/` : segment.segment;
-  const Icon = segment.hasPortal ? Compass : isDirectory ? Folder : FileText;
+  // Directories always use the folder icon (even when a portal exists); a
+  // portal is instead surfaced as a small marker after the label, so the
+  // leading column stays a consistent folder/file split.
+  const Icon = isDirectory ? Folder : FileText;
   return (
     <SidebarRow
       href={href}
@@ -69,6 +75,7 @@ export function SidebarRowLink({ segment, depth, isCurrent, isOpen }: { segment:
       depth={depth}
       isCurrent={isCurrent}
       isOpen={isOpen}
+      trailing={segment.hasPortal ? <Compass className="h-3 w-3 shrink-0 text-muted-foreground/70" aria-hidden /> : undefined}
     />
   );
 }

@@ -976,7 +976,7 @@ export default (crowi: Crowi) => {
       path: new RegExp(`^${escaped}`),
       $and: [{ $or: visiblePageGrantOr(userData._id) }, { $or: visiblePageStatusOr(userData._id) }],
     };
-    const docs: Array<{ path: string }> = await Page.find(query, { path: 1 }).lean().exec();
+    const docs: Array<{ path: string; status?: string | null }> = await Page.find(query, { path: 1, status: 1 }).lean().exec();
 
     const map = new Map<string, { segment: string; path: string; isPage: boolean; hasPortal: boolean; count: number }>();
     for (const doc of docs) {
@@ -996,14 +996,24 @@ export default (crowi: Crowi) => {
         // doc.path === `${prefix}${segment}` — the segment is a real page.
         entry.isPage = true;
       } else if (rest === `${segment}/`) {
-        // doc.path === `${prefix}${segment}/` — a portal page.
-        entry.hasPortal = true;
+        // doc.path === `${prefix}${segment}/` — a portal page. Only a
+        // *published* portal earns the sidebar portal marker; a draft
+        // portal (creator-visible via the status filter above) is not yet
+        // a real portal, so it must not flag the node.
+        entry.hasPortal = doc.status !== STATUS_DRAFT;
       } else {
         // A deeper descendant (`${prefix}${segment}/...`).
         entry.count += 1;
       }
     }
-    return Array.from(map.values()).sort((a, b) => a.segment.localeCompare(b.segment));
+    return (
+      Array.from(map.values())
+        // Drop phantom nodes that exist only because of a draft portal
+        // (no real page, no published portal, no descendants) so a draft
+        // portal never surfaces in the sidebar.
+        .filter((e) => e.isPage || e.hasPortal || e.count > 0)
+        .sort((a, b) => a.segment.localeCompare(b.segment))
+    );
   };
 
   pageSchema.statics.findUnfurlablePages = async function (type, array, grants = [GRANT_PUBLIC, GRANT_RESTRICTED]) {
