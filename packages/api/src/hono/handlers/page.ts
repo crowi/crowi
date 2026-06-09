@@ -318,6 +318,18 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             }
           }
 
+          // The portal document of the listed path is surfaced separately
+          // as `portalPage` (rendered as the portal card / fallback
+          // header), so drop it from the child rows. `findListByStartWith`
+          // matches `^{path}` which includes the `{path}` portal itself; a
+          // duplicate row is redundant and its link is a no-op (it's the
+          // page you're already on). Matches by id so a draft portal is
+          // dropped too.
+          if (portalPage) {
+            const portalId = String(portalPage._id);
+            pages = pages.filter((page) => String(page._id) !== portalId);
+          }
+
           const pageResponses = pages.map((page) => pageToResponse(page));
           // The portal document is rendered as a full page (PageContent)
           // by the web client, so — unlike the list rows — it needs
