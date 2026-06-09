@@ -22,6 +22,7 @@ import { LocaleSync } from '@/components/locale-sync';
 import { ThemeSync } from '@/components/theme-sync';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
+import { MobileSearch } from '@/components/search/mobile-search';
 import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
 import { decodePagePathFromUrl } from '@/lib/page-path';
 import { Toaster } from '@/components/ui/sonner';
@@ -117,8 +118,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
       <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
-          <div className="flex items-center gap-3 min-w-0 shrink-0">
+          <div className="flex items-center gap-1 min-w-0 shrink-0">
             <SiteBrand />
+            {/* Mobile (< md) search trigger next to the logo — the desktop
+                search input below is hidden on narrow viewports. */}
+            <MobileSearch />
           </div>
           <GlobalSearchInput />
           <div className="flex items-center gap-2 ml-auto">
