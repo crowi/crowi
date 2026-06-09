@@ -43,7 +43,7 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
   // Keys this suite touches. Used by the per-test cleanup so each test
   // starts from a clean slate even when one test seeds and the next
   // reads.
-  const APP_KEYS = ['app:title', 'app:confidential', 'app:externalShare'];
+  const APP_KEYS = ['app:title', 'app:confidential'];
 
   beforeAll(async () => {
     Config = crowi.model('Config');
@@ -82,7 +82,6 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
       expect(res.body.app).toEqual({
         title: 'My Wiki',
         confidential: 'For employees only',
-        externalShare: false,
       });
       // The pre-extraction shape included `upload.aws.*`. Asserting the
       // absence keeps the contract regression-proof.

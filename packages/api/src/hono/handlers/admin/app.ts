@@ -25,7 +25,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { coerceBoolean, coerceString, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { coerceString, getCrowiConfigNamespace } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
@@ -51,7 +51,6 @@ export const registerAdminAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
           app: {
             title: coerceString(crowiNs['app:title']),
             confidential: coerceString(crowiNs['app:confidential']),
-            externalShare: coerceBoolean(crowiNs['app:externalShare']),
           },
           isUploadable,
           registrationMode,

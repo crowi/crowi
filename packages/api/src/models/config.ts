@@ -95,8 +95,6 @@ export default (crowi: Crowi) => {
       'app:title': 'Crowi',
       'app:confidential': '',
 
-      'app:externalShare': false,
-
       'security:registrationMode': 'Open',
       'security:registrationWhiteList': [],
 
