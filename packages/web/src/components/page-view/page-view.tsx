@@ -19,7 +19,8 @@ import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
-import { PageToc } from './page-toc';
+import { PageToc, useTocScrollSpy } from './page-toc';
+import { cn } from '@/lib/utils';
 import { StaleRevisionBanner } from './stale-revision-banner';
 import { BacklinkList } from './backlink-list';
 import { AttachmentList } from './attachment-list';
@@ -46,6 +47,13 @@ export function PageView({ path, revisionId }: PageViewProps) {
 
   const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
   useMarkSeenOnView(page?._id, canMarkSeen);
+
+  // TOC + its scroll-spy are computed here (before the early returns, so the
+  // hook order stays stable) and shared by the right-rail `PageToc` and the
+  // header `PageTocMenu`. `toc` is derived from the possibly-null page; the
+  // hook no-ops for an empty list.
+  const toc = page?.revision?.meta?.toc ?? EMPTY_TOC;
+  const activeTocId = useTocScrollSpy(toc);
 
   useEffect(() => {
     if (redirectTo) {
@@ -158,7 +166,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
   }
 
   if (page) {
-    const toc = page.revision?.meta?.toc ?? EMPTY_TOC;
+    const hasToc = toc.length >= 2;
     const isStaleRevision = Boolean(page.latestRevision && page.revision?._id && page.latestRevision !== page.revision._id);
     // Drafts are creator-only and unpublished — strip the "social" affordances
     // (presence, comments) and swap the comments slot for an info notice that
@@ -169,10 +177,29 @@ export function PageView({ path, revisionId }: PageViewProps) {
       router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
     };
     return (
-      <>
-        <article className="space-y-12">
+      // Escape the shared `max-w-4xl` main and center a
+      // `[left spacer | content | TOC]` group on the full viewport. The
+      // left spacer (≥1440) reserves the fixed nav rail's width so the
+      // content stays dead-centre and symmetric at the 3-column width;
+      // below 1440 it collapses and content + TOC re-centre as a pair;
+      // below 1280 the TOC column hides (the header `PageTocMenu` takes
+      // over). The right column stays reserved at ≥1440 even with no TOC
+      // so a heading-light page is still symmetric. Margins/flex (no
+      // transform) keep the `position: fixed` compact header viewport-
+      // relative.
+      <div className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-6 px-4">
+        <div aria-hidden className="hidden w-56 shrink-0 min-[1440px]:block" />
+        <article className="w-full min-w-0 max-w-4xl space-y-12">
           {isStaleRevision && <StaleRevisionBanner pagePath={page.path} />}
-          <PageHeader page={page} onEdit={handleEdit} showActions={!isStaleRevision} showPresence={!isStaleRevision && !isDraft} sticky={!isStaleRevision} />
+          <PageHeader
+            page={page}
+            onEdit={handleEdit}
+            showActions={!isStaleRevision}
+            showPresence={!isStaleRevision && !isDraft}
+            sticky={!isStaleRevision}
+            toc={toc}
+            activeTocId={activeTocId}
+          />
           <PageContent page={page} />
           {!isStaleRevision && (
             <>
@@ -198,8 +225,10 @@ export function PageView({ path, revisionId }: PageViewProps) {
             </>
           )}
         </article>
-        <PageToc toc={toc} />
-      </>
+        <div className={cn('w-56 shrink-0', hasToc ? 'hidden min-[1280px]:block' : 'hidden min-[1440px]:block')}>
+          {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
+        </div>
+      </div>
     );
   }
 

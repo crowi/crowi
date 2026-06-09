@@ -99,8 +99,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     );
   }
 
+  // `overflow-x-clip`: the page view escapes the centred column with a
+  // `w-screen` group (see PageView). `100vw` is wider than the content
+  // box by the scrollbar width, so without clipping the right edge a
+  // few px of horizontal scroll would appear. `clip` (not `hidden`)
+  // avoids creating a scroll container, so `position: sticky` (TOC
+  // rail) and `position: fixed` (compact header) stay viewport-relative.
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-clip">
       <LocaleSync />
       <ThemeSync />
       {/* 接続エラーバナー */}

@@ -182,6 +182,8 @@
   "page.backlinks_read_more": "Read More Backlinks",
   "page.attachments_heading": "Attachments",
   "page.scroll_to_top": "Scroll to top",
+  "page.toc_label": "Contents",
+  "page.toc_heading": "On this page",
   "page.attachments_remove": "Remove",
   "page.attachments_remove_confirm": "Remove this attachment?",
   "page.attachments_remove_failed": "Failed to remove attachment.",

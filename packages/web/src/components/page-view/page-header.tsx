@@ -1,6 +1,6 @@
 'use client';
 
-import type { PageWithRevision } from '@crowi/api-contract';
+import type { PageWithRevision, TocEntryResponse } from '@crowi/api-contract';
 import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
 import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
@@ -19,6 +19,7 @@ import { LinkSharePopover } from './link-share-popover';
 import { LivePresenceRow } from './live-presence-row';
 import { MetaChipRow } from './meta-chip-row';
 import { PageActionsMenu } from './page-actions-menu';
+import { PageTocMenu } from './page-toc-menu';
 import { WatchButton } from './watch-button';
 
 interface PageHeaderProps {
@@ -51,6 +52,14 @@ interface PageHeaderProps {
    * pinning a header makes no sense.
    */
   sticky?: boolean;
+  /**
+   * Page TOC + its shared scroll-spy active id. Used to render the
+   * collapsed `PageTocMenu` ("目次" popover) in the header when the
+   * right-rail TOC is hidden (< 1280px). Omitted by non-page hosts
+   * (deleted page / user cover) — the menu then never renders.
+   */
+  toc?: TocEntryResponse[];
+  activeTocId?: string | null;
 }
 
 function getPageTitle(path: string): string {
@@ -98,7 +107,17 @@ export function GrantChip({ grant }: { grant: number }) {
   );
 }
 
-export function PageHeader({ page, onEdit, showActions = false, showMeta = true, showTitle = true, showPresence = false, sticky = false }: PageHeaderProps) {
+export function PageHeader({
+  page,
+  onEdit,
+  showActions = false,
+  showMeta = true,
+  showTitle = true,
+  showPresence = false,
+  sticky = false,
+  toc = [],
+  activeTocId = null,
+}: PageHeaderProps) {
   const { user, isAuthenticated } = useAuth();
 
   // ── Sticky-header machinery ───────────────────────────────────────────
@@ -141,6 +160,16 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
   const isDraft = page.status === PageStatusEnum.DRAFT;
   const pageTitle = getPageTitle(page.path);
 
+  // When a TOC rail is shown (≥1280, ≥2 entries), the article is part of
+  // a centred `content + TOC` pair and sits 7.75rem left of dead-centre
+  // in the [1280, 1440) band (see PageView). The compact header is a
+  // `fixed inset-x-0` overlay that centres its own `max-w-4xl` content,
+  // so without matching that shift its title would drift right of the
+  // article in that band. Apply the same shift, gated to the same band +
+  // TOC condition. At ≥1440 (spacer balances) and < 1280 (no rail) the
+  // article is dead-centre, so no shift.
+  const hasTocRail = toc.length >= 2;
+
   const editButton = onEdit && (
     <Button variant="ghost" size="sm" onClick={onEdit} className="shrink-0 text-muted-foreground hover:text-foreground">
       <Edit2 className="h-4 w-4 mr-1" />
@@ -161,6 +190,16 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
     </Button>
   );
 
+  // Collapsed TOC button, shown only below the right-rail breakpoint
+  // (< 1280px) where the rail is hidden. `PageTocMenu` itself no-ops for
+  // a sub-2-entry TOC, but we gate here too so the wrapper span isn't
+  // emitted for heading-light pages.
+  const tocMenu = toc.length >= 2 && (
+    <span className="min-[1280px]:hidden">
+      <PageTocMenu toc={toc} activeId={activeTocId} />
+    </span>
+  );
+
   // The expanded layout. Rendered inside the measurement wrapper, which
   // is always in normal flow at its natural width — so `H` is stable.
   // While compact this wrapper is visually hidden (but still occupies
@@ -178,6 +217,7 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
             the icon-button toolbar (chip + edit live next to the title
             on md+, watch / bookmark / link surface as own buttons). */}
         <div className="flex items-center gap-2 md:gap-1 shrink-0 self-end md:self-auto">
+          {tocMenu}
           {page.grant != null && (
             <span className="md:hidden">
               <GrantChip grant={page.grant} />
@@ -292,7 +332,9 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
               compact header lines up with the article column. The bar
               is a fixed 60px tall; the title row and the (shrunken)
               presence row are vertically centred inside it. */}
-          <div className="mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4">
+          <div
+            className={cn('mx-auto flex h-full max-w-4xl flex-col justify-center gap-1 px-4', hasTocRail && 'min-[1280px]:max-[1439px]:-translate-x-[7.75rem]')}
+          >
             <div className="flex items-center gap-2">
               {/* Scroll-to-top — sits to the left of the title, hanging
                   out past the content gutter (`-ml-9`). */}
@@ -306,6 +348,7 @@ export function PageHeader({ page, onEdit, showActions = false, showMeta = true,
               </button>
               <h1 className="text-base md:text-lg font-semibold tracking-tight text-foreground flex-1 min-w-0 truncate">{pageTitle}</h1>
               <div className="flex items-center gap-1 shrink-0">
+                {tocMenu}
                 {!isDraft && isAuthenticated && <LikeButton pageId={page._id} isLiked={isLiked} iconOnly />}
                 {editIconButton}
                 {showActions && <PageActionsMenu page={page} compact isAuthenticated={isAuthenticated} />}
