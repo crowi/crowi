@@ -228,7 +228,7 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
         e.preventDefault();
         handleSubmit();
       }}
-      className="flex flex-col gap-3"
+      className="flex min-h-0 flex-1 flex-col gap-3"
     >
       <Input
         ref={inputRef}
@@ -242,10 +242,10 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
         autoComplete="off"
         aria-label={m['create_page.input_aria']()}
         aria-describedby={listId}
-        className="h-12 font-mono text-lg"
+        className="h-12 shrink-0 font-mono text-lg"
       />
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <Kbd>Tab</Kbd>
           {m['create_page.kbd_next']()}
@@ -261,7 +261,7 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
         </span>
       </div>
 
-      <div id={listId} className="min-h-[2.5rem]">
+      <div id={listId} className="min-h-0 flex-1 overflow-y-auto">
         {hasList ? (
           <>
             {touched && !usingPrefixes && childPages.length > 0 ? (
@@ -280,7 +280,7 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
                         i === activeIndex && 'bg-accent',
                       )}
                     >
-                      <span className="truncate">{path}</span>
+                      <span className="min-w-0 truncate">{path}</span>
                       {label ? <span className="ml-auto shrink-0 text-xs text-muted-foreground">{label}</span> : null}
                     </button>
                   </li>
@@ -293,9 +293,9 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
 
       {/* Status line: one of namespace-prompt / exists-error / create-hint. */}
       {endsWithSlash ? (
-        <p className="text-sm text-muted-foreground">{m['create_page.continue_typing']()}</p>
+        <p className="shrink-0 text-sm text-muted-foreground">{m['create_page.continue_typing']()}</p>
       ) : alreadyExists ? (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <span className="text-destructive">{m['create_page.exists_error']()}</span>
           <button
             type="button"
@@ -310,7 +310,7 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
           </button>
         </div>
       ) : canSubmit ? (
-        <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+        <p className="flex shrink-0 flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
           <Kbd>Enter</Kbd>
           <span>
             {hintBefore}
@@ -320,7 +320,7 @@ function CreatePageForm({ defaultDir, onClose }: CreatePageFormProps) {
         </p>
       ) : null}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex shrink-0 justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onClose}>
           {m['common.cancel']()}
         </Button>
@@ -351,8 +351,13 @@ function CreatePageDialog({ defaultDir, trigger }: CreatePageDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      {/* Top-anchored (not vertically centred) so the input stays put at
+          ~40% of the viewport as the candidate list grows, instead of the
+          whole dialog drifting upward. `max-h` lets it extend down to a
+          ~2rem gap above the viewport bottom; the candidate list scrolls
+          internally past that. */}
+      <DialogContent className="top-[34dvh] flex max-h-[calc(100dvh-34dvh-2rem)] translate-y-0 flex-col overflow-hidden sm:max-w-xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{m['create_page.title']()}</DialogTitle>
           <DialogDescription>{m['create_page.description']()}</DialogDescription>
         </DialogHeader>
