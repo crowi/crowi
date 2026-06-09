@@ -1,29 +1,29 @@
-import Debug from 'debug';
-import path, { sep } from 'path';
-import mongoose from 'mongoose';
-import Tokens from 'csrf';
-import { createClient } from 'redis';
-import http from 'http';
-import { buildRedisOpts } from 'src/util/redis-opts';
-import models from 'src/models';
-import events from 'src/events';
-import { attachCollabServer, type AttachedCollab } from 'src/collab/attach';
-import { attachPresenceServer, type AttachedPresence } from 'src/presence/attach';
-import { attachNotificationsServer, type AttachedNotifications } from 'src/notifications/attach';
 import { createAdaptorServer } from '@hono/node-server';
+import Tokens from 'csrf';
+import Debug from 'debug';
+import http from 'http';
+import mongoose from 'mongoose';
+import path, { sep } from 'path';
+import { createClient } from 'redis';
+import { type AttachedCollab, attachCollabServer } from 'src/collab/attach';
+import events from 'src/events';
+import { registerMentionDispatch } from 'src/events/mention-dispatch';
+import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
-import LRU from '../service/lru';
-import ConfigService from '../service/config';
-import { MailService } from 'src/service/mail';
-import { resetKeyProvider } from 'src/util/crypto';
+import models from 'src/models';
+import { type AttachedNotifications, attachNotificationsServer } from 'src/notifications/attach';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
-import { type Renderer, createRenderer } from 'src/renderer';
-import { registerRenderCacheInvalidation } from 'src/events/render-cache';
-import { registerMentionDispatch } from 'src/events/mention-dispatch';
+import { type AttachedPresence, attachPresenceServer } from 'src/presence/attach';
+import { createRenderer, type Renderer } from 'src/renderer';
+import { MailService } from 'src/service/mail';
+import { type BootReporter, createBootReporter } from 'src/util/boot-reporter';
+import { resetKeyProvider } from 'src/util/crypto';
 import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
 import { runPageStatusMigration } from 'src/util/page-status-migration';
-import { type BootReporter, createBootReporter } from 'src/util/boot-reporter';
+import { buildRedisOpts } from 'src/util/redis-opts';
+import ConfigService from '../service/config';
+import LRU from '../service/lru';
 
 const pkg = require('../../package.json');
 
@@ -193,7 +193,9 @@ class Crowi {
     // Boot progress reporter — owns stdout (debug-independent) so operators
     // see layered spinner/✓ progress without `DEBUG=crowi:*`. Degrades to
     // structured plain lines on non-TTY (prod / `| cat`) or when DEBUG is set.
-    const reporter = createBootReporter();
+    // Silenced under jest: each of the 100+ test files boots Crowi, so the
+    // per-layer `[boot] … ok` lines would otherwise flood the test output.
+    const reporter = createBootReporter({ quiet: Boolean(process.env.JEST_WORKER_ID) });
     this.bootReporter = reporter;
 
     // A step throwing (DB/Redis down is the common dev case) rejects out of
@@ -672,7 +674,7 @@ class Crowi {
     // listen. The reporter was created in `init()`; if `start()` is somehow
     // called without it (defensive), make a fresh one so the banner/marker
     // still emit.
-    const reporter = this.bootReporter ?? createBootReporter();
+    const reporter = this.bootReporter ?? createBootReporter({ quiet: Boolean(process.env.JEST_WORKER_ID) });
     this.bootReporter = reporter;
     reporter.beginLayer('server');
 
