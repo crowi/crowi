@@ -9162,7 +9162,6 @@ export interface paths {
                             app: {
                                 title: string;
                                 confidential: string;
-                                externalShare: boolean;
                             };
                             isUploadable: boolean;
                             registrationMode: {
@@ -9912,172 +9911,6 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/share": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get the current share settings (externalShare toggle) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Current share settings */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            externalShare: boolean;
-                        };
-                    };
-                };
-                /** @description Authentication required */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "AUTHENTICATION_REQUIRED";
-                                /** @enum {string} */
-                                message: "Authentication is required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Admin permission required */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "ADMIN_REQUIRED";
-                                /** @enum {string} */
-                                message: "Admin permission required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "INTERNAL_ERROR";
-                                /** @enum {string} */
-                                message: "Internal server error";
-                            };
-                        };
-                    };
-                };
-            };
-        };
-        /** Toggle external sharing on/off (persists `app:externalShare`) */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        externalShare: boolean;
-                    };
-                };
-            };
-            responses: {
-                /** @description Updated settings (re-read from in-memory cache) */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            externalShare: boolean;
-                        };
-                    };
-                };
-                /** @description Authentication required */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "AUTHENTICATION_REQUIRED";
-                                /** @enum {string} */
-                                message: "Authentication is required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Admin permission required */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "ADMIN_REQUIRED";
-                                /** @enum {string} */
-                                message: "Admin permission required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "INTERNAL_ERROR";
-                                /** @enum {string} */
-                                message: "Internal server error";
-                            };
-                        };
-                    };
-                };
-            };
-        };
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -14299,7 +14132,6 @@ export interface components {
             app: {
                 title: string;
                 confidential: string;
-                externalShare: boolean;
             };
             isUploadable: boolean;
             registrationMode: {
