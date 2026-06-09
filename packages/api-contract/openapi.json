@@ -87,7 +87,6 @@
           "INVALID_CREDENTIALS",
           "REFRESH_TOKEN_REQUIRED",
           "REGISTRATION_CLOSED",
-          "PASSWORD_AUTH_REQUIRES_THIRDPARTY",
           "ENCRYPTION_NOT_CONFIGURED",
           "MAIL_TEST_FAILED",
           "PLUGIN_NOT_FOUND",
@@ -7929,18 +7928,6 @@
                     "introduction": {
                       "type": "string"
                     },
-                    "googleId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "githubId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
                     "hasPassword": {
                       "type": "boolean"
                     },
@@ -8100,18 +8087,6 @@
                     },
                     "introduction": {
                       "type": "string"
-                    },
-                    "googleId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "githubId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     },
                     "hasPassword": {
                       "type": "boolean"
@@ -30709,6 +30684,39 @@
               }
             }
           },
+          "400": {
+            "description": "Enabling a third-party-dependent setting (requireThirdPartyAuth / disablePasswordAuth) is rejected because third-party sign-in was removed from core",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "THIRD_PARTY_AUTH_UNAVAILABLE"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "401": {
             "description": "Authentication required",
             "content": {
@@ -30771,39 +30779,6 @@
                           ]
                         },
                         "redirectTo": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Self-lockout guard rejected the request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "PASSWORD_AUTH_REQUIRES_THIRDPARTY"
-                          ]
-                        },
-                        "message": {
                           "type": "string"
                         }
                       },
