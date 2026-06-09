@@ -1,9 +1,9 @@
-import request from 'supertest';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
 import { Types } from 'mongoose';
 import { app, crowi, Fixture } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
+import request from 'supertest';
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -433,9 +433,17 @@ describe('Routes /api/v2 attachments (Hono)', () => {
 
       // Simulate the AWS SDK v3 missing-object shape: `name === 'NoSuchKey'`
       // with `$metadata.httpStatusCode === 404` and NO `code` property.
+      //
+      // `mockImplementation` (not `...Once`): the storage driver is a
+      // process-shared singleton, so an in-flight fire-and-forget `get()`
+      // from elsewhere could consume a single-shot mock before this request's
+      // delivery `get()` runs — leaving the real driver to throw a non-missing
+      // error and 500 the request (flaky under parallel load). Rejecting on
+      // every call for the span of this test keeps the placeholder path
+      // deterministic; `finally` restores the spy.
       const driver = crowi.getPlugins().active.storage;
       if (!driver) throw new Error('storage driver missing in test env');
-      const getSpy = jest.spyOn(driver, 'get').mockImplementationOnce(() => {
+      const getSpy = jest.spyOn(driver, 'get').mockImplementation(() => {
         const err = Object.assign(new Error('The specified key does not exist.'), {
           name: 'NoSuchKey',
           $metadata: { httpStatusCode: 404 },

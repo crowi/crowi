@@ -9,6 +9,11 @@ import { crowi, Fixture } from 'src/test/setup';
 // and I/O round-trips. We poll by yielding the event loop until the expected
 // Backlink documents appear, with a safety bound.
 const waitForBacklinks = async (Backlink, filter, expectedCount, maxTicks = 50) => {
+  // Deterministically wait for the tracked fire-and-forget
+  // Backlink.createBySavedPage chain (wrapped via crowi.trackSideEffect in the
+  // flake-hardening work) to settle, rather than hoping a fixed tick budget
+  // outlasts the I/O under parallel load. The poll stays as a backstop.
+  await crowi.drainSideEffects();
   for (let i = 0; i < maxTicks; i += 1) {
     const found = await Backlink.find(filter);
     if (found.length === expectedCount) return found;
