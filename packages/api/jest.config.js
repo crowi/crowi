@@ -48,11 +48,15 @@ module.exports = {
   // Force coverage collection from ignored files usin a array of glob patterns
   // forceCoverageMatch: [],
 
-  // A path to a module which exports an async function that is triggered once before all test suites
-  // globalSetup: null,
+  // A path to a module which exports an async function that is triggered once before all test suites.
+  // Detects a reachable local docker Mongo (once, pre-fork) and records it in a
+  // sentinel file that crowi-environment.js reads, so all workers use it
+  // instead of per-file memory-servers. See the module for the why.
+  globalSetup: './src/test/global-setup.js',
 
-  // A path to a module which exports an async function that is triggered once after all test suites
-  // globalTeardown: null,
+  // A path to a module which exports an async function that is triggered once after all test suites.
+  // Removes the Mongo-strategy sentinel written by globalSetup.
+  globalTeardown: './src/test/global-teardown.js',
 
   // A set of global variables that need to be available in all test environments
   globals: {},
