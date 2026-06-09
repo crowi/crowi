@@ -30,10 +30,14 @@ export function MobileSearch() {
   const [debouncedQ, setDebouncedQ] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Only debounce while the surface is open — when closed the input is
+  // unmounted and `debouncedQ` is reset (see `close`), so neither the
+  // search nor the recents query does any background work.
   useEffect(() => {
+    if (!open) return;
     const id = setTimeout(() => setDebouncedQ(value.trim()), SUGGESTION_DEBOUNCE_MS);
     return () => clearTimeout(id);
-  }, [value]);
+  }, [value, open]);
 
   // Focus the input as soon as the surface opens; lock background scroll
   // so the full-screen results don't scroll the page behind them.
@@ -53,6 +57,9 @@ export function MobileSearch() {
   const close = () => {
     setOpen(false);
     setValue('');
+    // Reset so the search query (enabled on `q.length > 0`) goes idle
+    // while closed instead of holding the last term.
+    setDebouncedQ('');
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {

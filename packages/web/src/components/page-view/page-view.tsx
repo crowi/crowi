@@ -225,6 +225,9 @@ export function PageView({ path, revisionId }: PageViewProps) {
             </>
           )}
         </article>
+        {/* Right column. With a TOC it shows from the 1280px rail
+            breakpoint up; without one it still reserves width at ≥1440
+            so the article stays symmetric against the left nav spacer. */}
         <div className={cn('w-56 shrink-0', hasToc ? 'hidden min-[1280px]:block' : 'hidden min-[1440px]:block')}>
           {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
         </div>

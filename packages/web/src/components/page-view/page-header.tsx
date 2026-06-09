@@ -190,22 +190,19 @@ export function PageHeader({
     </Button>
   );
 
-  // Collapsed TOC button, shown only below the right-rail breakpoint
-  // (< 1280px) where the rail is hidden. `PageTocMenu` itself no-ops for
-  // a sub-2-entry TOC, but we gate here too so the wrapper span isn't
-  // emitted for heading-light pages.
-  const tocMenu = toc.length >= 2 && (
-    <span className="min-[1280px]:hidden">
-      <PageTocMenu toc={toc} activeId={activeTocId} />
-    </span>
-  );
-  // Compact (sticky) variant — smaller trigger so it fits the 60px bar's
-  // presence row.
-  const tocMenuCompact = toc.length >= 2 && (
-    <span className="min-[1280px]:hidden">
-      <PageTocMenu toc={toc} activeId={activeTocId} compact />
-    </span>
-  );
+  // Collapsed TOC button shown only below the right-rail breakpoint
+  // (< 1280px). `compact` shrinks the trigger to fit the sticky bar's
+  // 60px presence row. `PageTocMenu` itself no-ops for a sub-2-entry
+  // TOC, but we gate here too so the wrapper span isn't emitted for
+  // heading-light pages.
+  const renderTocMenu = (compact: boolean) =>
+    toc.length >= 2 && (
+      <span className="min-[1280px]:hidden">
+        <PageTocMenu toc={toc} activeId={activeTocId} compact={compact} />
+      </span>
+    );
+  const tocMenu = renderTocMenu(false);
+  const tocMenuCompact = renderTocMenu(true);
 
   // The expanded layout. Rendered inside the measurement wrapper, which
   // is always in normal flow at its natural width — so `H` is stable.
