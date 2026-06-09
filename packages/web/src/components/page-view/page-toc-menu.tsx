@@ -6,12 +6,19 @@ import { m } from '@paraglide/messages.js';
 import { ChevronDown, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { TocList } from './page-toc';
 
 interface PageTocMenuProps {
   toc: TocEntryResponse[];
   /** Shared scroll-spy active id (computed once in `PageView`). */
   activeId: string | null;
+  /**
+   * Render the trigger at the compact (sticky-header) size — ~0.75rem
+   * text + matching icons — so it fits the 60px compact bar's presence
+   * row. Defaults to the roomier expanded-header size.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -21,17 +28,22 @@ interface PageTocMenuProps {
  * mobile so the table of contents stays reachable at every width below
  * the rail breakpoint. Returns null below 2 entries (nothing to show).
  */
-export function PageTocMenu({ toc, activeId }: PageTocMenuProps) {
+export function PageTocMenu({ toc, activeId, compact = false }: PageTocMenuProps) {
   const [open, setOpen] = useState(false);
   if (toc.length < 2) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-2 text-muted-foreground hover:text-foreground" aria-label={m['page.toc_label']()}>
-          <List className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn('shrink-0 text-muted-foreground hover:text-foreground', compact ? 'h-6 gap-0.5 px-1.5 text-xs' : 'h-7 gap-1 px-2')}
+          aria-label={m['page.toc_label']()}
+        >
+          <List className={compact ? 'h-3 w-3' : 'h-4 w-4'} />
           <span>{m['page.toc_label']()}</span>
-          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+          <ChevronDown className={cn('opacity-60', compact ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="max-h-[70vh] w-72 overflow-y-auto">

@@ -199,6 +199,13 @@ export function PageHeader({
       <PageTocMenu toc={toc} activeId={activeTocId} />
     </span>
   );
+  // Compact (sticky) variant — smaller trigger so it fits the 60px bar's
+  // presence row.
+  const tocMenuCompact = toc.length >= 2 && (
+    <span className="min-[1280px]:hidden">
+      <PageTocMenu toc={toc} activeId={activeTocId} compact />
+    </span>
+  );
 
   // The expanded layout. Rendered inside the measurement wrapper, which
   // is always in normal flow at its natural width — so `H` is stable.
@@ -357,10 +364,10 @@ export function PageHeader({
                 {showActions && <PageActionsMenu page={page} compact isAuthenticated={isAuthenticated} />}
               </div>
             </div>
-            {((showPresence && isAuthenticated) || tocMenu) && (
+            {((showPresence && isAuthenticated) || tocMenuCompact) && (
               <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">{showPresence && isAuthenticated && <LivePresenceRow presence={presence} size="compact" />}</div>
-                {tocMenu}
+                {tocMenuCompact}
               </div>
             )}
           </div>
