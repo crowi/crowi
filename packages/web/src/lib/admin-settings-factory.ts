@@ -17,10 +17,10 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
  * - The app and mail settings hooks use a *different* shape (return null on
  *   non-200, parse 400 ZodIssues into per-field errors, invalidate instead
  *   of setQueryData). Those don't fit here — keep them inline.
- * - The 422 validation error path is opt-in via `mapValidationError`. For
- *   the current call sites only auth has a 422 (self-lockout); share and
- *   security pass `mapValidationError: undefined` and the helper falls
- *   through to the generic Error.
+ * - The 422 validation error path is opt-in via `mapValidationError`. No
+ *   current call site uses it (share / security omit it and fall through to
+ *   the generic Error); it is retained for sections that need to surface a
+ *   discriminated validation failure.
  */
 
 interface ErrorBody {
@@ -45,8 +45,8 @@ interface AdminSettingsHooksConfig<Settings, UpdateRequest> {
   updateErrorMessage: string;
   /**
    * Optional 422 mapper. Returning a non-null Error replaces the generic
-   * one — used by auth.ts to surface `AdminAuthSettingsValidationError`
-   * with its `code` discriminator.
+   * one — lets a section surface a discriminated validation failure with its
+   * own `code` instead of the localised message string.
    */
   mapValidationError?: (body: ErrorBody) => Error | null;
   /**

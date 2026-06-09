@@ -1,45 +1,34 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+
 import { apiClientV2 } from './api-client';
-import { createAdminSettingsHooks } from './admin-settings-factory';
-import type { AuthSettings, UpdateAuthSettingsRequest } from '@crowi/api-contract';
+import type { AuthSettings } from '@crowi/api-contract';
 
 export const adminAuthKeys = {
   all: ['admin', 'auth'] as const,
 };
 
 /**
- * Error subclass surfaced by `useUpdateAdminAuthSettings` when the API rejects
- * the update with the self-lockout guard (422 PASSWORD_AUTH_REQUIRES_THIRDPARTY).
+ * GET /admin/auth — read the two inert `auth:*` toggles.
  *
- * The form layer can pattern-match on `code` to render a more specific UI
- * (e.g. point the operator at /admin/google or /admin/github) without
- * relying on the localised message string.
+ * There is no write hook: third-party sign-in was removed from core in the
+ * 2.0.0-alpha line, so both `requireThirdPartyAuth` / `disablePasswordAuth`
+ * are permanently rejected by the API (400 `THIRD_PARTY_AUTH_UNAVAILABLE`) and
+ * the admin form renders them read-only. A write path returns when an auth
+ * provider plugin is installed.
  */
-export class AdminAuthSettingsValidationError extends Error {
-  readonly code: 'PASSWORD_AUTH_REQUIRES_THIRDPARTY';
-
-  constructor(message: string) {
-    super(message);
-    this.name = 'AdminAuthSettingsValidationError';
-    this.code = 'PASSWORD_AUTH_REQUIRES_THIRDPARTY';
-  }
+export function useAdminAuthSettings() {
+  return useQuery<AuthSettings, Error>({
+    queryKey: adminAuthKeys.all,
+    queryFn: async () => {
+      const response = await apiClientV2.admin.auth.$get();
+      if (response.status === 200) {
+        return (await response.json()) as AuthSettings;
+      }
+      throw new Error('Failed to fetch auth settings');
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 }
-
-/**
- * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.auth.*`
- * (ts-rest) to `apiClientV2.admin.auth.$method` (hc<AppType>). Wire
- * payload unchanged. The 422 envelope still triggers
- * `AdminAuthSettingsValidationError`.
- */
-const hooks = createAdminSettingsHooks<AuthSettings, UpdateAuthSettingsRequest>({
-  queryKey: adminAuthKeys.all,
-  fetch: () => apiClientV2.admin.auth.$get(),
-  update: (body) => apiClientV2.admin.auth.$put({ json: body }),
-  fetchErrorMessage: 'Failed to fetch auth settings',
-  updateErrorMessage: 'Failed to update auth settings',
-  mapValidationError: (body) => new AdminAuthSettingsValidationError(body.error.message),
-});
-
-export const useAdminAuthSettings = hooks.useGet;
-export const useUpdateAdminAuthSettings = hooks.useUpdate;
