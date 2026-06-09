@@ -41,7 +41,7 @@ interface AdminNavItem {
  * the plugin-api contract — plugins inject sidebar entries by
  * matching this key.
  */
-type SectionKey = 'settings' | 'users' | 'storage' | 'mail' | 'notification' | 'search' | 'renderer' | 'shared';
+type SectionKey = 'settings' | 'users' | 'storage' | 'mail' | 'search' | 'renderer' | 'shared';
 
 interface AdminNavGroup {
   key: SectionKey;
@@ -126,11 +126,6 @@ const STATIC_GROUPS: AdminNavGroup[] = [
     key: 'mail',
     heading: () => m['admin.section_mail'](),
     items: [{ href: '/admin/mail', label: () => m['admin.nav_mail'](), icon: Mail }],
-  },
-  {
-    key: 'notification',
-    heading: () => m['admin.section_notification'](),
-    items: [{ href: '/admin/notification', label: () => m['admin.nav_notification'](), icon: Bell }],
   },
   {
     key: 'search',

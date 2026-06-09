@@ -14,7 +14,6 @@ export const ADMIN_SECTIONS = {
   aws: () => m['admin.nav_aws'](),
   storage: () => m['admin.nav_storage'](),
   users: () => m['admin.nav_users'](),
-  notification: () => m['admin.nav_notification'](),
   search: () => m['admin.nav_search'](),
   plugins: () => m['admin.nav_plugins'](),
 } as const;
