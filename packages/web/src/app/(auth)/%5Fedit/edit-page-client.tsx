@@ -11,7 +11,7 @@ import { CollabForceReloadDialog } from '@/components/editor/CollabForceReloadDi
 import { CollaborativeMarkdownEditor, type CollabSession, useCollabSession } from '@/components/editor/CollaborativeMarkdownEditor';
 import { CollabPresenceAvatars } from '@/components/editor/CollabPresenceAvatars';
 import { CollabSameBlockWarning } from '@/components/editor/CollabSameBlockWarning';
-import { GrantSelect } from '@/components/editor/GrantSelect';
+import { PageSettingsDrawer } from '@/components/editor/PageSettingsDrawer';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
 import { MarkdownPreview } from '@/components/editor/MarkdownPreview';
 import { SessionReauthModal } from '@/components/editor/session-reauth-modal';
@@ -443,9 +443,22 @@ function EditorShell({
             <h2 className="text-lg font-semibold leading-tight">{title}</h2>
             <p className="text-muted-foreground truncate text-sm">{subtitle}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            {grant !== undefined && onChangeGrant && <GrantSelect value={grant} onChange={onChangeGrant} disabled={isGrantSaving || readonly} />}
+          <div className="flex shrink-0 items-center gap-2">
             {realtimePageId && <CollabPresenceAvatars awareness={session.awareness} localClientId={session.awareness?.clientID ?? null} />}
+            {/* Close (was the footer Cancel button): X in the top-right
+                corner. Routes through `handleCancelClick`, so it still
+                guards unsaved changes via the dialog. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCancelClick}
+              disabled={isSaving || collabSave.isSaving}
+              type="button"
+              aria-label={m['edit.cancel']()}
+              title={m['edit.cancel']()}
+            >
+              <X className="h-5 w-5" />
+            </Button>
           </div>
         </div>
         {feedback && (
@@ -532,10 +545,9 @@ function EditorShell({
           {realtimePageId && <CollabSameBlockWarning awareness={session.awareness} yText={session.yText} localClientId={session.awareness?.clientID ?? null} />}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleCancelClick} disabled={isSaving || collabSave.isSaving} type="button">
-            <X className="mr-1 h-4 w-4" />
-            {m['edit.cancel']()}
-          </Button>
+          {/* Page settings drawer (visibility + future per-page settings),
+              sits immediately left of Save. */}
+          {grant !== undefined && onChangeGrant && <PageSettingsDrawer grant={grant} onChangeGrant={onChangeGrant} isGrantSaving={isGrantSaving || readonly} />}
           {useRealtimeSave ? (
             <Button
               variant="default"
