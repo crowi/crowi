@@ -13,10 +13,6 @@
  * - Share.secretKeyword (looked up by equality, needs deterministic scheme)
  */
 const SENSITIVE_CONFIG_KEYS: ReadonlySet<string> = new Set([
-  // OAuth client secrets — still core config (these move to an auth plugin's
-  // namespace once auth providers become plugins).
-  'crowi:google:clientSecret',
-  'crowi:github:clientSecret',
   // Slack notification credentials.
   'notification:slack:clientSecret',
   'notification:slack:token',

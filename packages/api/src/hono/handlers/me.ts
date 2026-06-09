@@ -78,8 +78,6 @@ const userToProfileResponse = (user: UserDocument, hasPassword: boolean, emailCh
   theme: user.theme ?? 'system',
   image: user.image,
   introduction: user.introduction || undefined,
-  googleId: user.googleId,
-  githubId: user.githubId,
   hasPassword,
   createdAt: user.createdAt.toISOString(),
   ...(emailChangePending ? { emailChangePending: true } : {}),
