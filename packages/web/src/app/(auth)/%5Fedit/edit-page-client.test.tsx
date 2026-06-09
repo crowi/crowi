@@ -66,6 +66,13 @@ vi.mock('@/lib/use-page-mutations', () => ({
   useSetPageGrant: () => ({ mutateAsync: vi.fn(), isPending: false }),
   PageRevisionConflictError: class extends Error {},
 }));
+// `UpdatePageEditor` calls `useQueryClient()` directly (post-save cache
+// invalidation); stub it so the draft-editor branch doesn't need a real
+// `QueryClientProvider`.
+vi.mock('@tanstack/react-query', async () => {
+  const actual = await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query');
+  return { ...actual, useQueryClient: () => ({ invalidateQueries: vi.fn() }) };
+});
 
 import { DraftPathConflictError } from '@/lib/use-drafts';
 import { m } from '@paraglide/messages.js';
@@ -100,7 +107,9 @@ describe('CreatePageEditor (_edit?path=)', () => {
     render(<EditPageClient />);
 
     await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(createDraftMutateAsync).toHaveBeenCalledWith({ path: '/new/page' });
+    // The create flow seeds a path-derived H1 (editor-QoL): `/new/page`
+    // has a non-date leaf, so the title is the leaf `page`.
+    expect(createDraftMutateAsync).toHaveBeenCalledWith({ path: '/new/page', initialBody: '# page\n\n' });
     expect(replace).toHaveBeenCalledWith('/_edit?page_id=draft-1');
   });
 
