@@ -22,8 +22,6 @@ export const UserProfileResponseSchema = z.object({
   theme: ThemeSchema,
   image: z.string().nullable(),
   introduction: z.string().optional(),
-  googleId: z.string().nullable().optional(),
-  githubId: z.string().nullable().optional(),
   hasPassword: z.boolean(),
   createdAt: z.string(),
   /**
