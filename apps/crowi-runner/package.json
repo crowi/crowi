@@ -18,6 +18,7 @@
     "@crowi/plugin-renderer-katex": "workspace:^",
     "@crowi/plugin-renderer-plantuml": "workspace:^",
     "@crowi/plugin-search-elasticsearch": "workspace:^",
+    "@crowi/plugin-search-mongo": "workspace:^",
     "@crowi/plugin-search-opensearch": "workspace:^",
     "@crowi/plugin-storage-aws-s3": "workspace:^",
     "@crowi/plugin-storage-local": "workspace:^"

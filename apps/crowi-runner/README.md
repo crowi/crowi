@@ -27,11 +27,11 @@ This package fills three roles:
 
 ## What's bundled (full)
 
-All eleven first-party drivers are declared as `dependencies` so any of them
+All twelve first-party drivers are declared as `dependencies` so any of them
 can be activated from `crowi.config.json` without a rebuild:
 
 - storage: `storage-local`, `storage-aws-s3`
-- search: `search-elasticsearch`, `search-opensearch`
+- search: `search-mongo`, `search-elasticsearch`, `search-opensearch`
 - mail: `mail-smtp`, `mail-resend`, `mail-aws-ses`
 - renderer: `renderer-plantuml`, `renderer-emoji`, `renderer-katex`,
   `renderer-crowi-legacy`
@@ -40,9 +40,10 @@ can be activated from `crowi.config.json` without a rebuild:
 (`@crowi/plugin-api`) and the runner resolution library (`@crowi/runner`).
 Drivers live here, in the runner project.
 
-> The slim image (a minimal start-up set as a base for full customization)
-> is a follow-up after `@crowi/plugin-search-mongo` lands — it is not part
-> of this app yet.
+> A **slim** sibling — `apps/crowi-runner-slim` (`@crowi/runner-app-slim`) —
+> bundles only the minimal start-up set (the three implicit-default drivers:
+> `storage-local` + `search-mongo` + `mail-smtp`) and is the build source for
+> the slim Docker image, a base for full customization. See its README.
 
 ## Running
 
