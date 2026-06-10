@@ -59,13 +59,12 @@ export type CrowiConfigFile = z.infer<typeof CrowiConfigFileSchema>;
 /**
  * Plugins that are loaded *implicitly* on every boot, prepended to
  * whatever the user's config file lists. They cover the always-on
- * default drivers (local file storage, Mongo regex search) so a
- * fresh install starts up as a working Wiki without any additional
- * plugin install.
- *
- * `@crowi/plugin-search-mongo` is added in a follow-up step.
+ * default drivers (local file storage, Mongo regex search, SMTP mail)
+ * so a fresh install starts up as a working Wiki — backed only by
+ * MongoDB — without any additional plugin install. This same trio is
+ * the minimal start-up set the slim Docker image bundles.
  */
-export const IMPLICIT_DEFAULT_PLUGINS: readonly string[] = ['@crowi/plugin-storage-local', '@crowi/plugin-mail-smtp'];
+export const IMPLICIT_DEFAULT_PLUGINS: readonly string[] = ['@crowi/plugin-storage-local', '@crowi/plugin-search-mongo', '@crowi/plugin-mail-smtp'];
 
 /**
  * Read and validate `crowi.config.json` from the given project
