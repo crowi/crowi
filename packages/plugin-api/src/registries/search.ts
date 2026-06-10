@@ -99,7 +99,7 @@ export interface SearchHits {
 /**
  * Search backend driver. Active driver is selected by
  * `crowi.config.json:search.driver`. The default is `'mongo'` (Mongo
- * `$regex` over path / title / body), provided by `@crowi/search-mongo`.
+ * `$regex` over path / title / body), provided by `@crowi/plugin-search-mongo`.
  */
 export interface SearchDriver {
   /**
