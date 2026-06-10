@@ -25,10 +25,10 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@crowi/plugin-api": "^0.1.0",
     "zod": "catalog:"
   },
   "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
     "resend": "^6.12.4"
   },
   "devDependencies": {

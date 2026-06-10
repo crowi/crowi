@@ -26,10 +26,8 @@
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
     "zod": "catalog:"
-  },
-  "peerDependencies": {
-    "@crowi/plugin-api": "^0.1.0"
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",

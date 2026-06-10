@@ -25,10 +25,8 @@
     "type-check": "tsc --noEmit",
     "test": "jest --passWithNoTests"
   },
-  "peerDependencies": {
-    "@crowi/plugin-api": "^0.1.0"
-  },
   "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
     "jiti": "^2.7.0",
     "remark-emoji": "^5.0.1"
   },

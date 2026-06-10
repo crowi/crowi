@@ -26,10 +26,10 @@
     "test": "jest"
   },
   "peerDependencies": {
-    "@crowi/plugin-api": "^0.1.0",
     "zod": "catalog:"
   },
   "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
     "@elastic/elasticsearch": "^9.4.0"
   },
   "devDependencies": {

@@ -26,10 +26,10 @@
     "test": "jest --passWithNoTests"
   },
   "peerDependencies": {
-    "@crowi/plugin-api": "^0.1.0",
     "zod": "catalog:"
   },
   "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
     "plantuml-encoder": "^1.4.0"
   },
   "devDependencies": {
