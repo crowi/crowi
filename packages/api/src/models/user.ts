@@ -14,6 +14,37 @@ const STATUS_ACTIVE = 2;
 const STATUS_SUSPENDED = 3;
 const STATUS_DELETED = 4;
 const STATUS_INVITED = 5;
+
+/**
+ * Case-insensitive collation for the username / email unique indexes
+ * (feature-user-identity-uniqueness §b). `strength: 2` folds case (and
+ * accents) so `Sotarok` and `sotarok` collide, while the stored value keeps
+ * its original casing (display is verbatim). Kept as a module constant so the
+ * schema declaration and the migration's duplicate detection use the exact
+ * same locale/strength.
+ */
+export const USER_UNIQUE_COLLATION = { locale: 'en', strength: 2 } as const;
+
+/**
+ * Build the tombstone identity for a user being logically deleted
+ * (feature-migration-framework §Phase 5, tombstone approach — 2026-06-04).
+ *
+ * On STATUS_DELETED we discard the original username / email and replace them
+ * with per-id sentinels so the **plain** unique indexes (no
+ * `partialFilterExpression`, to stay portable to PostgreSQL) never collide a
+ * departed user against a living one, and so a living user can re-claim the
+ * freed name. The departed user shows as "deleted user" (Slack-style), so the
+ * original values are not preserved anywhere.
+ *
+ * `email` is `required` so it must always carry a value; `username` is
+ * `sparse`-indexed so an unset value would also be index-safe, but we set the
+ * tombstone there too for consistency (a deleted user reads back as
+ * `deleted-<id>` everywhere rather than sometimes blank).
+ */
+export function tombstoneIdentity(id: { toString(): string }): { username: string; email: string } {
+  const suffix = id.toString();
+  return { username: `deleted-${suffix}`, email: `deleted-${suffix}@deleted.invalid` };
+}
 const LANG_EN = 'en';
 const LANG_JA = 'ja';
 // Legacy regional variants ('en-US' / 'en-GB') were retired; only 'en' / 'ja'
@@ -140,8 +171,8 @@ export default (crowi: Crowi) => {
     googleId: String,
     githubId: String,
     name: { type: String, index: true },
-    username: { type: String, index: true },
-    email: { type: String, required: true, index: true },
+    username: { type: String },
+    email: { type: String, required: true },
     introduction: { type: String },
     password: { type: String, select: false },
     lang: {
@@ -160,6 +191,25 @@ export default (crowi: Crowi) => {
     emailConfirmedAt: { type: Date, default: null },
   });
   applyPaginatePlugin(userSchema);
+
+  // feature-user-identity-uniqueness — DB-level uniqueness on username / email
+  // (the final defence; app-layer findOne pre-checks remain only for UX).
+  //
+  // Tombstone + plain unique (no partialFilterExpression) so this stays
+  // portable to a future PostgreSQL backend (citext / lower() + plain UNIQUE).
+  // STATUS_DELETED users are renamed to `deleted-<id>` (see tombstoneIdentity /
+  // statusDelete), so they never collide a living user and free their name.
+  //
+  //  - email: required on every user → plain unique + case-insensitive collation.
+  //  - username: `sparse` so the INVITED rows created without a username
+  //    (createUsersByInvitation sets no `username` field) stay out of the index
+  //    and don't collide on a missing value; collation folds case like email.
+  //
+  // autoIndex is ON (mongoose default) so a fresh install builds these on boot;
+  // the `user-unique-prepare` preflight migration dedups + tombstones existing
+  // data so the build never hits E11000 on an in-place v1→v2 upgrade.
+  userSchema.index({ email: 1 }, { unique: true, collation: USER_UNIQUE_COLLATION });
+  userSchema.index({ username: 1 }, { unique: true, sparse: true, collation: USER_UNIQUE_COLLATION });
 
   userEvent.on('activated', userEvent.onActivated);
 
@@ -418,7 +468,14 @@ export default (crowi: Crowi) => {
     debug('Delete User', this);
     this.status = STATUS_DELETED;
     this.password = '';
-    this.email = 'deleted@deleted';
+    // Tombstone the identity: discard the original username / email and write
+    // per-id sentinels so the plain unique indexes free the name for re-use and
+    // never collide this departed user against a living one (Phase 5 tombstone
+    // approach). The former fixed `deleted@deleted` email collided across every
+    // deleted user under a plain unique index.
+    const tombstone = tombstoneIdentity(this._id);
+    this.username = tombstone.username;
+    this.email = tombstone.email;
     this.googleId = null;
     this.image = null;
     bridgeSave(this.save(), this, callback);
