@@ -19,9 +19,14 @@ security settings landed). See `TODO.md` for the up-to-date phase status.
 
 ```
 crowi/
+├── apps/crowi-runner/        # reference runner project (@crowi/runner-app): dev
+│                             #   launch point + full Docker image build source.
+│                             #   Owns @crowi/api + full plugin set + crowi.config.json.
 ├── apps/crowi-site/          # crowi.wiki LP + docs (Next.js + Fumadocs, :4303)
-├── crowi.config.json         # dev runner config (plugins + active drivers)
-├── .env(.sample)             # dev runtime env (loaded at CWD by packages/api)
+├── .env(.example)            # dev runtime env at repo root. dev loads it via the
+│                             #   api `dev` script's `--env-file-if-exists=../../.env`
+│                             #   (cwd is apps/crowi-runner); prod/operators rely on
+│                             #   app.ts `dotenv.config()` reading the cwd's .env.
 └── packages/
     ├── api/                  # Hono API (:4301)
     ├── api-contract/         # Hono (@hono/zod-openapi) contracts + Zod schemas
@@ -41,8 +46,14 @@ worth knowing without reading code:
   `createRequire(<projectDir>/package.json)` to load plugin npm packages from
   the runner's `node_modules/`. Operators add a plugin by declaring it in
   their runner's deps + listing in `crowi.config.json:plugins`; the api never
-  needs to be rebuilt. Dev path: `projectDir` = repo root, plugins resolve
-  via pnpm's hoisted `node_modules/` (see `.npmrc`).
+  needs to be rebuilt. Dev path: `projectDir` = `apps/crowi-runner` (the
+  monorepo's reference runner project `@crowi/runner-app`, which owns
+  `@crowi/api` + the full plugin set + `crowi.config.json`); the api `dev`
+  script `cd`s there before `tsx watch`, so dev resolves plugins exactly the
+  way prod does. The full Docker image (`packages/api/Dockerfile`) is built by
+  `pnpm deploy --filter=@crowi/runner-app`. `@crowi/api` itself is plugin-free
+  (SDK `@crowi/plugin-api` + core only). `.npmrc` still hoists `@crowi/plugin-*`
+  to the repo root for now.
 
 ## Tech Stack
 
@@ -106,7 +117,12 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 
 ## Key Environment Variables
 
-See `.env.example` at the repo root. Required / commonly-set:
+See `.env.example` at the repo root. In dev the api `dev` script loads this
+repo-root `.env` explicitly (`tsx ... --env-file-if-exists=../../.env`) because
+it runs with cwd = `apps/crowi-runner` (the projectDir). In prod / for external
+operators the api's `dotenv.config()` reads the `.env` in the process cwd (the
+runner project dir); the Docker image gets these from the container env instead.
+Required / commonly-set:
 - `MONGO_URI` — MongoDB connection
 - `REDIS_URL` — session / socket.io adapter + realtime-collab pub/sub
   (`@hocuspocus/extension-redis`) + per-page editor cap counter. **Required
