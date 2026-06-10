@@ -10,9 +10,12 @@
  *
  * 2. **Pin** the page to the viewport so the inner header / footer can
  *    sticky-stick and the editor / preview can claim the remaining
- *    height for their own scroll. `h-[calc(100dvh-3.5rem)]` reserves
- *    the height between the global header and the viewport bottom
- *    (3.5rem ≈ the auth-layout header). `100dvh` (not `100vh`) tracks
+ *    height for their own scroll. `h-[calc(100dvh-3.75rem)]` reserves
+ *    the height between the global chrome and the viewport bottom:
+ *    3.5rem ≈ the auth-layout header + 0.25rem for the `h-1` page-grant
+ *    accent strip the (auth) layout renders under it. Omitting the strip
+ *    leaves the column 0.25rem too tall, which lets the whole document
+ *    micro-scroll a few px at the footer. `100dvh` (not `100vh`) tracks
  *    mobile URL-bar changes so the editor doesn't poke past the screen.
  *
  * Scrollbar caveat: a vertical scrollbar pushes `100vw` past the
@@ -25,5 +28,5 @@
  * a separate task — see `feature-editor-foundation.json` openQuestions.
  */
 export default function EditLayout({ children }: { children: React.ReactNode }) {
-  return <div className="mx-[calc(50%-50vw)] flex h-[calc(100dvh-3.5rem)] w-screen flex-col -my-8 overflow-x-hidden overflow-y-hidden">{children}</div>;
+  return <div className="mx-[calc(50%-50vw)] flex h-[calc(100dvh-3.75rem)] w-screen flex-col -my-8 overflow-x-hidden overflow-y-hidden">{children}</div>;
 }

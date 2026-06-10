@@ -1,9 +1,9 @@
 'use client';
 
+import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import type { PageWithRevision, RenamePageRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
-import { m } from '@paraglide/messages.js';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.*` (ts-rest)
@@ -38,6 +38,60 @@ export class PageRevisionConflictError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'PageRevisionConflictError';
+  }
+}
+
+/**
+ * Conflict descriptor returned by a subtree rename (renameTree) when one or
+ * more destination paths collide / are not a creatable name.
+ */
+export interface RenameTreeConflict {
+  path: string;
+  reasons: string[];
+}
+
+/**
+ * Error thrown when a subtree rename (include_descendants:true) is refused
+ * up-front because of destination collisions, or fails midway (partial). The
+ * `conflicts` array carries the offending paths so the dialog can list them.
+ */
+export class RenameTreeConflictError extends Error {
+  readonly code = 'PAGE_RENAME_TREE_FAILED' as const;
+  readonly conflicts: RenameTreeConflict[];
+  readonly partial: boolean;
+
+  constructor(message: string, conflicts: RenameTreeConflict[], partial: boolean) {
+    super(message);
+    this.name = 'RenameTreeConflictError';
+    this.conflicts = conflicts;
+    this.partial = partial;
+  }
+}
+
+/**
+ * Result of a rename mutation: the moved (root) page plus how many pages were
+ * moved (1 for a single rename, root + descendants for a subtree).
+ */
+export interface RenamePageResult {
+  page: PageWithRevision;
+  renamedCount: number;
+}
+
+/**
+ * Inspect a parsed 400 body from a rename endpoint and, if it is the structured
+ * PAGE_RENAME_TREE_FAILED variant (the one carrying `conflicts`), throw a
+ * RenameTreeConflictError. Discriminates on the presence of `conflicts` — the
+ * generic page-error variant's `code` is a plain string and cannot narrow as a
+ * literal. Returns (without throwing) for any other body so the caller can fall
+ * back to a generic error.
+ */
+function throwIfRenameTreeConflict(body: unknown): void {
+  if (body && typeof body === 'object' && 'error' in body) {
+    const error = (body as { error: unknown }).error;
+    if (error && typeof error === 'object' && 'conflicts' in error) {
+      const treeError = error as { message: string; conflicts: RenameTreeConflict[]; partial?: boolean };
+      throw new RenameTreeConflictError(treeError.message, treeError.conflicts, Boolean(treeError.partial));
+    }
   }
 }
 
@@ -173,11 +227,14 @@ export function useRenamePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RenamePageRequest): Promise<PageWithRevision> => {
+    mutationFn: async (data: RenamePageRequest): Promise<RenamePageResult> => {
       const response = await apiClientV2.pages.rename.$post({ json: data });
       if (response.ok) {
         const body = await response.json();
-        return body.page as PageWithRevision;
+        return {
+          page: body.page as PageWithRevision,
+          renamedCount: 'renamed_count' in body ? body.renamed_count : 1,
+        };
       }
       if (response.status === 409) {
         throw new PageRevisionConflictError(m['errors.revision_conflict_update']());
@@ -186,10 +243,48 @@ export function useRenamePage() {
         // 404 covers grant-denied as well (existence-leak guard).
         throw new Error(m['errors.page_not_found']());
       }
+      if (response.status === 400) {
+        // A subtree rename can fail with a structured PAGE_RENAME_TREE_FAILED
+        // body (destination collisions / partial move). Surface the offending
+        // paths so the dialog can list them.
+        throwIfRenameTreeConflict(await response.json().catch(() => null));
+      }
+      throw new Error(m['errors.rename_failed']());
+    },
+    onSuccess: () => {
+      // A subtree rename moves many pages — invalidate the page + listing
+      // caches so the sidebar tree and any list views refresh.
+      queryClient.invalidateQueries({ queryKey: ['page'] });
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
+    },
+  });
+}
+
+/**
+ * Rename (move) a whole subtree by path — for a portal-less folder that has no
+ * page document of its own (so there is no page_id to key `useRenamePage` on).
+ * Always a subtree move; returns how many pages were rewritten.
+ */
+export function useRenameSubtree() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: RenameSubtreeRequest): Promise<number> => {
+      const response = await apiClientV2.pages['rename-subtree'].$post({ json: data });
+      if (response.ok) {
+        const body = await response.json();
+        return body.renamed_count;
+      }
+      if (response.status === 400) {
+        // Structured PAGE_RENAME_TREE_FAILED (collisions / nothing to move /
+        // partial), or a generic 400 → fall through to the generic error.
+        throwIfRenameTreeConflict(await response.json().catch(() => null));
+      }
       throw new Error(m['errors.rename_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
     },
   });
 }

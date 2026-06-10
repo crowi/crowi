@@ -1,5 +1,6 @@
 'use client';
 
+import { useTheme } from 'next-themes';
 import { Toaster as SonnerToaster, type ToasterProps } from 'sonner';
 
 /**
@@ -13,11 +14,14 @@ import { Toaster as SonnerToaster, type ToasterProps } from 'sonner';
  *   - close button: lets users dismiss the persistent "offline" toast
  *     once they've seen it
  *
- * Theme follows the `prefers-color-scheme` system setting via sonner's
- * built-in `'system'` mode — Crowi's design tokens are CSS variables
- * already, so sonner's themed defaults blend in without explicit
- * colour overrides.
+ * Theme follows the *app* theme (`next-themes`) rather than sonner's
+ * built-in `'system'` mode, so an explicit light/dark choice in the
+ * Crowi theme toggle also flips the toasts. We pass `theme` through
+ * directly: it is `'light' | 'dark' | 'system'`, matching sonner's
+ * accepted values 1:1, and `undefined` before mount falls back to
+ * sonner's default (`'system'`).
  */
 export function Toaster(props: ToasterProps) {
-  return <SonnerToaster theme="system" position="bottom-right" richColors closeButton {...props} />;
+  const { theme } = useTheme();
+  return <SonnerToaster theme={theme as ToasterProps['theme']} position="bottom-right" richColors closeButton {...props} />;
 }

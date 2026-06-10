@@ -18,8 +18,9 @@ export const UserStatusSchema = z.enum(['1', '2', '3', '4', '5']).transform((val
 // surfacing as a stale shorthand-property in the bundled output.
 export const UserStatusEnum = UserPublicStatus;
 
-// Language enum - matches User model
-export const UserLanguageSchema = z.enum(['en', 'en-US', 'en-GB', 'ja']);
+// Language enum - matches User model. Only `en` / `ja` are live UI locales;
+// legacy regional variants (`en-US` / `en-GB`) were retired.
+export const UserLanguageSchema = z.enum(['en', 'ja']);
 export type UserLanguage = z.infer<typeof UserLanguageSchema>;
 
 // Pagination request schema

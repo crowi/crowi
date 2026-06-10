@@ -2,23 +2,25 @@
 
 import { type ListPagesRequest, PageStatusEnum, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { Compass, Folder, HelpCircle, Pencil, Plus } from 'lucide-react';
+import { Compass, Folder, HelpCircle, MoreHorizontal, MoveRight, Pencil, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CreatePageListButton } from '@/components/create-page/create-page-dialog';
 import { PageContent } from '@/components/page-view/page-content';
+import { RenameDialog } from '@/components/page-view/rename-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ErrorAlert } from '@/components/ui/error-alert';
+import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import { draftEditHref } from '@/lib/use-drafts';
-import { pageDisplayName } from '@/lib/page-path';
 import { usePageList } from '@/lib/use-page-list';
 import type { PageListVariant } from './page-list-item';
 import { PageListEmptyCard, PageListSectionHeader, PageRowsCard, PageRowsSkeleton } from './page-list-shared';
-import { Pagination } from './pagination';
 import { PageSortMenu } from './page-sort-menu';
+import { Pagination } from './pagination';
 import { PortalHeader, PortalOverline } from './portal-header';
 
 /**
@@ -180,6 +182,10 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
             path={portalPath}
             showCreatePortal={!isTrash && !ownDraftPortalId && !disableCreatePortal}
             draftPortalId={disableCreatePortal ? undefined : ownDraftPortalId}
+            // A portal-less folder can still be renamed (moving its whole
+            // subtree). Same gating as the create-page button: own, non-root,
+            // non-trash, non-reserved namespace.
+            renamable={showCreateButton}
           />
         )
       )}
@@ -214,7 +220,17 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
  *     Portal?" help dialog (the legacy `page_list.html` side button).
  *     Suppressed for the trash variant.
  */
-function PortalFallbackHeader({ path, showCreatePortal = false, draftPortalId }: { path: string; showCreatePortal?: boolean; draftPortalId?: string }) {
+function PortalFallbackHeader({
+  path,
+  showCreatePortal = false,
+  draftPortalId,
+  renamable = false,
+}: {
+  path: string;
+  showCreatePortal?: boolean;
+  draftPortalId?: string;
+  renamable?: boolean;
+}) {
   const router = useRouter();
   const title = getPortalTitle(path);
   // Trailing slash + folder icon mark this view as "the children of a
@@ -245,7 +261,14 @@ function PortalFallbackHeader({ path, showCreatePortal = false, draftPortalId }:
             {m['page_list.continue_portal_draft']()}
           </Button>
         ) : (
-          showCreatePortal && <CreatePortalActions path={path} />
+          // Layout: [?] [Create Portal] [⋮]. The help icon sits left of the
+          // CTA it explains; the overflow menu (rename) takes the conventional
+          // far-right slot.
+          <div className="flex shrink-0 items-center gap-1">
+            {showCreatePortal && <PortalHelpButton />}
+            {showCreatePortal && <CreatePortalButton path={path} />}
+            {renamable && <FolderActionsMenu path={path} />}
+          </div>
         )}
       </div>
     </div>
@@ -253,52 +276,81 @@ function PortalFallbackHeader({ path, showCreatePortal = false, draftPortalId }:
 }
 
 /**
- * "Create Portal" button + "What is Portal?" help dialog, shown when the
- * current folder path has no portal document yet. The button routes to the
- * standard create flow at the portal path (the path already ends with `/`,
- * which is exactly what makes the resulting page a portal — see
- * `Page.isPortalPath`). The help dialog reproduces the legacy "What is
- * Portal?" explanation.
+ * "Create Portal" button, shown when the current folder path has no portal
+ * document yet. Routes to the standard create flow at the portal path (the
+ * path already ends with `/`, which is exactly what makes the resulting page a
+ * portal — see `Page.isPortalPath`).
  */
-function CreatePortalActions({ path }: { path: string }) {
+function CreatePortalButton({ path }: { path: string }) {
   const router = useRouter();
   // The portal page lives at the trailing-slash path itself. `normalizePath`
   // on the API side preserves the trailing slash, so `/_edit?path=/foo/`
   // creates the portal for `/foo/`.
   const portalPath = path.endsWith('/') ? path : `${path}/`;
-
   return (
-    <div className="flex shrink-0 items-center gap-1">
-      <Button size="sm" onClick={() => router.push(`/_edit?path=${encodeURIComponent(portalPath)}`)}>
-        <Plus className="mr-1 h-4 w-4" />
-        {m['page_list.create_portal']()}
-      </Button>
-      <Dialog>
-        <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label={m['page_list.what_is_portal']()} title={m['page_list.what_is_portal']()}>
-            <HelpCircle className="h-4 w-4 text-muted-foreground" />
+    <Button size="sm" onClick={() => router.push(`/_edit?path=${encodeURIComponent(portalPath)}`)}>
+      <Plus className="mr-1 h-4 w-4" />
+      {m['page_list.create_portal']()}
+    </Button>
+  );
+}
+
+/** "What is Portal?" help dialog (the legacy `page_list.html` side button). */
+function PortalHelpButton() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label={m['page_list.what_is_portal']()} title={m['page_list.what_is_portal']()}>
+          <HelpCircle className="h-4 w-4 text-muted-foreground" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Compass className="h-5 w-5 text-primary" />
+            {m['page_list.portal_help_title']()}
+          </DialogTitle>
+          <DialogDescription>{m['page_list.portal_help_intro']()}</DialogDescription>
+        </DialogHeader>
+        <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+          <li>{m['page_list.portal_help_point_path']()}</li>
+          <li>{m['page_list.portal_help_point_usage']()}</li>
+          <li>{m['page_list.portal_help_point_optional']()}</li>
+        </ul>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">{m['page_list.portal_help_close']()}</Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Overflow menu for a portal-less folder. Currently just "Rename" — opens the
+ * shared RenameDialog in folder mode (a path-based subtree move, since the
+ * folder has no page document of its own).
+ */
+function FolderActionsMenu({ path }: { path: string }) {
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const folderPath = path.endsWith('/') ? path : `${path}/`;
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label={m['page.action_more']()} className="text-muted-foreground hover:text-foreground">
+            <MoreHorizontal className="h-4 w-4" />
           </Button>
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Compass className="h-5 w-5 text-primary" />
-              {m['page_list.portal_help_title']()}
-            </DialogTitle>
-            <DialogDescription>{m['page_list.portal_help_intro']()}</DialogDescription>
-          </DialogHeader>
-          <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-            <li>{m['page_list.portal_help_point_path']()}</li>
-            <li>{m['page_list.portal_help_point_usage']()}</li>
-            <li>{m['page_list.portal_help_point_optional']()}</li>
-          </ul>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">{m['page_list.portal_help_close']()}</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setIsRenameOpen(true)}>
+            <MoveRight className="mr-2 h-4 w-4" />
+            {m['page.action_rename']()}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <RenameDialog folderPath={folderPath} open={isRenameOpen} onOpenChange={setIsRenameOpen} />
+    </>
   );
 }

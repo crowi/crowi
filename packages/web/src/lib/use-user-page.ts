@@ -39,6 +39,14 @@ export function useUserPage(username: string) {
       return userNotFound(response);
     },
     enabled: !!username,
+    // A missing / forbidden user is a definite answer — don't retry it
+    // (otherwise every `@mention` of a non-user and every bad /user/<x>
+    // URL spins through the default 3 retries before settling).
+    retry: (failureCount, error) => {
+      const message = error instanceof Error ? error.message : '';
+      if (message === 'User not found' || message === 'Authentication required') return false;
+      return failureCount < 2;
+    },
   });
 }
 

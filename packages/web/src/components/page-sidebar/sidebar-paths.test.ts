@@ -9,20 +9,22 @@ describe('pageSidebarLayout', () => {
         activeSegments: ['hoge', 'xxx', 'yyy'],
         currentSegment: 'yyy',
         currentLevelIndex: 2,
-        upPath: '/crowi/',
+        upPath: '/crowi/project/',
         userHome: null,
       });
     });
 
     it('shows the parent folder as a node for a shallow page (not just its page list)', () => {
       // Regression: /crowi/rfc/0002 must surface `rfc/` as a node rather
-      // than collapsing to the bare page list under an "⤴ crowi".
+      // than collapsing to the bare page list under an "⤴ crowi". The ⤴
+      // links to the display root `/crowi/` (the container of the listed
+      // children), not its parent `/`.
       expect(pageSidebarLayout('/crowi/rfc/0002-renderer')).toEqual({
         levelPaths: ['/crowi/', '/crowi/rfc/'],
         activeSegments: ['rfc', '0002-renderer'],
         currentSegment: '0002-renderer',
         currentLevelIndex: 1,
-        upPath: '/',
+        upPath: '/crowi/',
         userHome: null,
       });
     });
@@ -62,7 +64,7 @@ describe('pageSidebarLayout', () => {
         activeSegments: ['dev', 'ops', null],
         currentSegment: 'ops',
         currentLevelIndex: 1,
-        upPath: '/almoha/',
+        upPath: '/almoha/weall/',
         userHome: null,
       });
     });
@@ -74,7 +76,7 @@ describe('pageSidebarLayout', () => {
       expect(portal.levelPaths).toEqual(['/a/b/', '/a/b/c/']);
       expect(portal.currentSegment).toBe('c');
       expect(portal.currentLevelIndex).toBe(0);
-      expect(portal.upPath).toBe('/a/');
+      expect(portal.upPath).toBe('/a/b/');
     });
 
     it('lists top-level segments for the top page with no highlight or ⤴', () => {

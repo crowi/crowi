@@ -104,6 +104,11 @@ export function buildExtensions(props: BuildExtensionsProps): Extension[] {
   return [
     markdown(),
     syntaxHighlighting(defaultHighlightStyle),
+    // Soft-wrap long lines instead of scrolling horizontally. A wiki
+    // editor is prose-first, so a textarea-like wrap reads far better
+    // than an off-screen overflow — especially on mobile, where a
+    // horizontal scroll to reach the end of a paragraph is painful.
+    EditorView.lineWrapping,
     autocomplete ? autocompleteExtension() : [],
     // RFC-0004 Phase 6 — paste handler (URL smart-link + image upload).
     // Placed before `extraExtensions` so a caller-supplied paste handler

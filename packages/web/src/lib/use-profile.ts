@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getLocale, setLocale, locales, type Locale } from '@paraglide/runtime.js';
-import type { UpdatePasswordRequest, UpdateProfileRequest } from '@crowi/api-contract';
+import type { Theme, UpdatePasswordRequest, UpdateProfileRequest } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
 
 function profileLangToLocale(lang: string | undefined | null): Locale | null {
@@ -62,6 +62,30 @@ export function useUpdateProfile() {
         // Reloads the page so Server Components re-render in the new locale.
         setLocale(target);
       }
+    },
+  });
+}
+
+/**
+ * Persist the preferred theme to `User.theme` so it syncs across devices.
+ * Driven by `ThemeSync` (which observes the `next-themes` value), not by the
+ * profile form. On success we patch the cached profile in place rather than
+ * invalidating — the value we just wrote is authoritative and a refetch would
+ * race the optimistic UI the toggle already applied.
+ */
+export function useUpdateTheme() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (theme: Theme) => {
+      const response = await apiClientV2.me.theme.$patch({ json: { theme } });
+      if (response.status === 200) {
+        return response.json();
+      }
+      throw new Error('Failed to update theme');
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['profile'], (prev) => (prev ? { ...prev, theme: data.theme } : prev));
     },
   });
 }

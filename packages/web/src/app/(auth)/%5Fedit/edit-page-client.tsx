@@ -1,6 +1,7 @@
 'use client';
 
 import { m } from '@paraglide/messages.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Loader2, Save, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -24,11 +25,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
+import { defaultDraftBody, pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import type { CollabStatus } from '@/lib/use-collab-document';
 import { useCollabSave } from '@/lib/use-collab-save';
-import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
+import { DraftPathConflictError, draftEditHref, draftsKeys, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
 import { usePageTitle } from '@/lib/use-page-title';
@@ -160,6 +161,23 @@ interface EditorShellProps {
   onChangeGrant?: (grant: number) => void;
   /** `true` while a grant mutation is in flight (disables the selector). */
   isGrantSaving?: boolean;
+  /**
+   * Called after a successful realtime save (the `crowi:save` ack). The
+   * editor QoL flow uses this to leave the editor and return to the
+   * page view; the caller is responsible for invalidating the page
+   * cache so the view shows the just-saved revision. When omitted the
+   * save just clears the dirty flag and stays in the editor (the older
+   * behaviour).
+   */
+  onAfterSave?: () => void;
+  /**
+   * RFC editor-QoL — when `true` (the brand-new draft flow), the editor
+   * auto-focuses and drops the caret at the end of the seeded body
+   * (the blank line under the default H1) as soon as the realtime
+   * document's content has synced. Left `false` for existing-page edits
+   * and reloads so we never steal focus / move the caret unexpectedly.
+   */
+  autoFocusOnReady?: boolean;
 }
 
 function EditorShell({
@@ -180,6 +198,8 @@ function EditorShell({
   grant,
   onChangeGrant,
   isGrantSaving = false,
+  onAfterSave,
+  autoFocusOnReady = false,
 }: EditorShellProps) {
   // RFC-0003 Phase 7: a single Hocuspocus connection (= one Y.Doc +
   // one provider) is shared by the wide + narrow editor panes. Both
@@ -264,7 +284,10 @@ function EditorShell({
           setRealtimeDirty(false);
           setUnsavedDialogOpen(false);
           toast.success(m['collab.save_success']());
-          onCancel();
+          // Leave the editor for the page view. `onAfterSave` also
+          // refreshes the page cache; fall back to the plain cancel
+          // navigation when the caller didn't wire it.
+          (onAfterSave ?? onCancel)();
         })
         .catch((err: { message?: string }) => {
           toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
@@ -279,7 +302,7 @@ function EditorShell({
     // dirty body intact and can retry.
     onSave();
     setUnsavedDialogOpen(false);
-  }, [useRealtimeSave, collabSave, onCancel, onSave]);
+  }, [useRealtimeSave, collabSave, onCancel, onSave, onAfterSave]);
 
   const handleDialogDiscard = useCallback(() => {
     setUnsavedDialogOpen(false);
@@ -344,14 +367,42 @@ function EditorShell({
   // pattern `page-content.tsx` uses to subscribe to the URL hash.
   const isWide = useSyncExternalStore(subscribeWideQuery, getWideQuerySnapshot, getWideQueryServerSnapshot);
 
-  // The collab wrapper remounts the inner CodeMirror editor via `key`
-  // once Y.Text becomes ready (and again if the page swaps), producing a
-  // fresh `scrollDOM`. Mirror that key here so `useScrollSync` re-binds
-  // its editor→preview `scroll` listener to the new element — otherwise
-  // editor→preview sync silently dies after the ~100ms collab handshake
-  // (preview→editor survives via the live ref).
-  const scrollSyncRebindKey = `${realtimePageId ?? 'plain'}:${session.yText ? 'ready' : 'pending'}`;
-  useScrollSync({ editorRef: wideEditorRef, previewRef: widePreviewScrollRef, enabled: isWide, rebindKey: scrollSyncRebindKey });
+  // editor→preview survives the collab editor's view recreation because
+  // `useScrollSync` listens on `document` (capture phase) and matches the
+  // live `getScrollDOM()` each event — no per-remount rebind signal needed.
+  useScrollSync({ editorRef: wideEditorRef, previewRef: widePreviewScrollRef, enabled: isWide });
+
+  // Editor-QoL: auto-focus + caret-to-end for the brand-new draft flow.
+  // `yText` goes non-null the instant the Hocuspocus provider is built
+  // (before the seeded `# title\n\n` syncs from the server), so focusing
+  // then would land the caret at offset 0 and the inbound content would
+  // push past it. We instead wait for the first non-empty Y.Text state —
+  // for a fresh draft that *is* the seeded body — and place the caret at
+  // the end exactly once. The ySyncPlugin observer (registered when the
+  // inner view mounts, i.e. before this parent effect runs) applies the
+  // delta to the CodeMirror doc ahead of our observer, so `focusEnd`
+  // sees the populated document.
+  const didAutoFocusRef = useRef(false);
+  useEffect(() => {
+    if (!autoFocusOnReady || didAutoFocusRef.current) return;
+    const yText = session.yText;
+    if (!yText) return;
+    const focusVisibleEnd = (): boolean => {
+      if (didAutoFocusRef.current) return true;
+      if (yText.length === 0) return false; // seeded content not synced yet
+      didAutoFocusRef.current = true;
+      (isWide ? wideEditorRef : narrowEditorRef).current?.focusEnd();
+      return true;
+    };
+    // Content may already be present (warm session) or arrive shortly via
+    // a sync delta — handle both.
+    if (focusVisibleEnd()) return;
+    const observer = (): void => {
+      if (focusVisibleEnd()) yText.unobserve(observer);
+    };
+    yText.observe(observer);
+    return () => yText.unobserve(observer);
+  }, [autoFocusOnReady, session.yText, isWide]);
 
   /**
    * Hand a markdown snippet to the editor's `insertAtCursor` handle —
@@ -380,7 +431,7 @@ function EditorShell({
 
   // Full-viewport flex layout: title-bar at top, attach/save bar at
   // bottom, editor + preview filling the gap. Parent `EditLayout`
-  // sets `h-[calc(100dvh-3.5rem)] overflow-hidden`, so this column
+  // sets `h-[calc(100dvh-3.75rem)] overflow-hidden`, so this column
   // claims that height and each pane owns its own scroll. The
   // header/footer don't need `position: sticky` because the parent
   // doesn't scroll — flex order + `shrink-0` keeps them pinned.
@@ -494,6 +545,10 @@ function EditorShell({
                   .then(() => {
                     setRealtimeDirty(false);
                     toast.success(m['collab.save_success']());
+                    // Editor-QoL: leave the editor and return to the
+                    // page view. `onAfterSave` invalidates the page
+                    // cache so the view loads the just-saved revision.
+                    onAfterSave?.();
                   })
                   .catch((err: { message?: string }) => {
                     toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
@@ -644,10 +699,18 @@ function PreviewPane({
 
 interface UpdatePageEditorProps {
   pageId: string;
+  /**
+   * Forwarded to `EditorShell` — `true` only when reached via the
+   * brand-new draft create flow, so the editor auto-focuses + drops the
+   * caret below the seeded H1. Reloads / existing-page edits leave it
+   * `false`.
+   */
+  autoFocusOnReady?: boolean;
 }
 
-function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
+function UpdatePageEditor({ pageId, autoFocusOnReady = false }: UpdatePageEditorProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { page, isLoading, isError, error } = usePage({ page_id: pageId });
 
@@ -696,6 +759,21 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
       return;
     }
     router.back();
+  };
+
+  // Editor-QoL — after a successful realtime save, leave the editor for
+  // the page view. The realtime save path (`crowi:save`) does not touch
+  // react-query, so the page query can still hold a stale entry: a prior
+  // 404 for a freshly-created page's path, or the pre-edit revision for
+  // an existing one. Invalidate `['page']` (covers both the `page_id`
+  // and `path` keyed queries) so the destination refetches the latest;
+  // `['drafts']` too because a first save publishes the draft, dropping
+  // it from the "creating pages" list.
+  const handleAfterSave = () => {
+    if (!page) return;
+    queryClient.invalidateQueries({ queryKey: ['page'] });
+    queryClient.invalidateQueries({ queryKey: draftsKeys.all });
+    router.push(pagePathToHref(page.path));
   };
 
   // RFC-0005 Phase 2 — persist a visibility change immediately via the
@@ -791,6 +869,8 @@ function UpdatePageEditor({ pageId }: UpdatePageEditorProps) {
         grant={page.grant ?? 1}
         onChangeGrant={handleChangeGrant}
         isGrantSaving={setGrantMutation.isPending}
+        onAfterSave={handleAfterSave}
+        autoFocusOnReady={autoFocusOnReady}
       />
       <SessionReauthModal />
     </SessionReauthProvider>
@@ -875,7 +955,9 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
     // independently of the react-query observer's lifecycle, so the
     // surviving mount always receives the result.
     if (!draftPromiseRef.current) {
-      draftPromiseRef.current = createDraft.mutateAsync({ path });
+      // Seed the new draft with a path-derived H1 + blank cursor line so
+      // the editor opens ready to type (editor-QoL).
+      draftPromiseRef.current = createDraft.mutateAsync({ path, initialBody: defaultDraftBody(path) });
     }
     let cancelled = false;
     draftPromiseRef.current
@@ -917,7 +999,11 @@ function CreatePageEditor({ path }: CreatePageEditorProps) {
   // the direct mode switch that does not depend on the query-only
   // `router.replace` re-rendering `EditPageClient`.
   if (draftPageId) {
-    return <UpdatePageEditor pageId={draftPageId} />;
+    // `autoFocusOnReady` — this is the fresh create flow, so the editor
+    // should auto-focus + drop the caret below the seeded H1. A later
+    // reload enters `UpdatePageEditor` straight from `?page_id=` (no
+    // flag), so the auto-focus only ever fires on first creation.
+    return <UpdatePageEditor pageId={draftPageId} autoFocusOnReady />;
   }
 
   if (error) {

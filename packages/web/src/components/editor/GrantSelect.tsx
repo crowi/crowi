@@ -50,7 +50,7 @@ export function GrantSelect({ value, onChange, disabled = false }: GrantSelectPr
       <SelectContent>
         {SELECTABLE_GRANTS.map(({ grant, Icon, label }) => (
           <SelectItem key={grant} value={String(grant)}>
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2 whitespace-nowrap">
               <Icon className="h-4 w-4" aria-hidden="true" />
               {label()}
             </span>
@@ -58,7 +58,7 @@ export function GrantSelect({ value, onChange, disabled = false }: GrantSelectPr
         ))}
         {isSpecified && (
           <SelectItem value={String(PageGrantEnum.SPECIFIED)} disabled>
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2 whitespace-nowrap">
               <Lock className="h-4 w-4" aria-hidden="true" />
               {m['edit.grant_specified']()}
             </span>

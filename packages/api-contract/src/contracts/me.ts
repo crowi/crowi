@@ -30,8 +30,10 @@ import {
   ProfileErrorResponseSchema,
   RecentlyViewedPagesResponseSchema,
   SuccessResponseSchema,
+  ThemeUpdateResponseSchema,
   UpdatePasswordRequestSchema,
   UpdateProfileRequestSchema,
+  UpdateThemeRequestSchema,
   UserProfileResponseSchema,
 } from '../schemas/me';
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
@@ -72,6 +74,33 @@ export const updateProfileRoute = createRoute({
     },
     400: {
       description: 'Profile update failed',
+      content: { 'application/json': { schema: ProfileErrorResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+  },
+});
+
+export const updateThemeRoute = createRoute({
+  method: 'patch',
+  path: '/me/theme',
+  tags: ['me'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Update preferred UI theme',
+  request: {
+    body: {
+      content: { 'application/json': { schema: UpdateThemeRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Theme updated',
+      content: { 'application/json': { schema: ThemeUpdateResponseSchema } },
+    },
+    400: {
+      description: 'Theme update failed',
       content: { 'application/json': { schema: ProfileErrorResponseSchema } },
     },
     401: {
@@ -188,6 +217,7 @@ export const recentlyViewedPagesRoute = createRoute({
 export const meRoutes = {
   getProfileRoute,
   updateProfileRoute,
+  updateThemeRoute,
   uploadPictureRoute,
   deletePictureRoute,
   updatePasswordRoute,

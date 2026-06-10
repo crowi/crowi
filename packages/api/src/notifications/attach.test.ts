@@ -181,6 +181,46 @@ function probeWs(
   });
 }
 
+/**
+ * Open a WebSocket and resolve with the WS close code once the server
+ * closes the connection. Unlike `probeWs`, this waits for the `close`
+ * event itself rather than racing it against a fixed budget — the close
+ * code is exactly what reject-path tests assert, so settling early on a
+ * timeout would feed `undefined` into the assertion (the observed CI
+ * flake). Jest's per-test timeout is the backstop; if the close never
+ * arrives we reject with an explicit message instead of resolving with
+ * an undefined code. Mirrors the `waitUntil` polling philosophy already
+ * used for the happy-path subscribe assertions.
+ */
+function expectWsClose(url: string, timeoutMs = 10000): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        ws.close();
+      } catch {
+        // ignore
+      }
+      reject(new Error(`expectWsClose: no WS close frame within ${timeoutMs}ms for ${url}`));
+    }, timeoutMs);
+    ws.on('close', (code: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(code);
+    });
+    ws.on('error', () => {
+      // A transport-level error before a close frame is itself a close
+      // signal for the reject path — let the `close` handler resolve.
+      // If `close` never follows, the timer above rejects with an
+      // explicit message instead of leaking an undefined close code.
+    });
+  });
+}
+
 const validTokenFor = (userId: string): string => createNotificationsTokenUtil().signNotificationsToken({ selfUserId: userId }).token;
 
 describe('attachNotificationsServer — Redis-backed', () => {
@@ -236,24 +276,24 @@ describe('attachNotificationsServer — Redis-backed', () => {
 
   it('rejects a missing token with WS close 4401', async () => {
     const url = `ws://127.0.0.1:${testServer.port}/notifications/user-A`;
-    const result = await probeWs(url);
-    expect(result.closeCode).toBe(4401);
-  });
+    const closeCode = await expectWsClose(url);
+    expect(closeCode).toBe(4401);
+  }, 15000);
 
   it('rejects an invalid token with WS close 4401', async () => {
     const url = `ws://127.0.0.1:${testServer.port}/notifications/user-A?token=not-a-jwt`;
-    const result = await probeWs(url);
-    expect(result.closeCode).toBe(4401);
-  });
+    const closeCode = await expectWsClose(url);
+    expect(closeCode).toBe(4401);
+  }, 15000);
 
   it('rejects a token whose selfUserId does not match the path with WS close 4403', async () => {
     // Token signed for user-A but presented on user-B's URL — the spec's
     // "自分宛て以外の publish が WS に流れない" guarantee starts here.
     const token = validTokenFor('user-A');
     const url = `ws://127.0.0.1:${testServer.port}/notifications/user-B?token=${token}`;
-    const result = await probeWs(url);
-    expect(result.closeCode).toBe(4403);
-  });
+    const closeCode = await expectWsClose(url);
+    expect(closeCode).toBe(4403);
+  }, 15000);
 
   it('does NOT upgrade when the path is not under /notifications/', async () => {
     const url = `ws://127.0.0.1:${testServer.port}/some/other/path?token=${validTokenFor('user-A')}`;
@@ -435,14 +475,16 @@ describe('attachNotificationsServer — path handling edge cases', () => {
     const userId = 'user-extra';
     const token = validTokenFor(userId);
     const url = `ws://127.0.0.1:${server.port}/notifications/${userId}/extra?token=${token}`;
-    const result = await probeWs(url);
     // Note: we don't assert `opened === false` — the underlying WS
     // upgrade handshake succeeds (HTTP 101 returned by `ws`), so the
     // browser's `open` event still fires; the server then closes with
     // the application code 4403 a tick later. The mismatch-token test
-    // uses the same shape.
-    expect(result.closeCode).toBe(4403);
-  });
+    // uses the same shape. We wait on the close frame itself (not a
+    // fixed budget) so a busy CI worker can't settle early with an
+    // undefined close code.
+    const closeCode = await expectWsClose(url);
+    expect(closeCode).toBe(4403);
+  }, 15000);
 });
 
 describe('attachNotificationsServer — schema-guarded fan-out (#14)', () => {

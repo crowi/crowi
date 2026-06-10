@@ -52,8 +52,10 @@ export interface PageSidebarLayout {
    */
   currentLevelIndex: number;
   /**
-   * Where the ⤴ affordance links (one level above the display root), or
-   * `null` when the root is already the top — nowhere further up.
+   * Where the ⤴ affordance links: the display root itself — the portal
+   * that contains the listed children — so the user climbs one bounded
+   * level at a time. `null` when the root is already the top
+   * (`rootDepth === 0`) or inside a user space.
    */
   upPath: string | null;
   /**
@@ -70,12 +72,12 @@ export interface PageSidebarLayout {
  *   /crowi/project/hoge/xxx/yyy (page) →
  *     levelPaths:    ['/crowi/project/', '/crowi/project/hoge/', '/crowi/project/hoge/xxx/']
  *     activeSegments:['hoge', 'xxx', 'yyy']
- *     currentSegment:'yyy'  currentLevelIndex: 2  upPath: '/crowi/'
+ *     currentSegment:'yyy'  currentLevelIndex: 2  upPath: '/crowi/project/'
  *
  *   /crowi/project/hoge/ (portal) →
  *     levelPaths:    ['/crowi/project/', '/crowi/project/hoge/']
  *     activeSegments:['hoge', null]
- *     currentSegment:'hoge' currentLevelIndex: 0  upPath: '/crowi/'
+ *     currentSegment:'hoge' currentLevelIndex: 0  upPath: '/crowi/project/'
  */
 export function pageSidebarLayout(path: string): PageSidebarLayout {
   // The member directory itself has no hierarchy tree — its content is
@@ -119,7 +121,12 @@ export function pageSidebarLayout(path: string): PageSidebarLayout {
 
   const currentSegment = segs[segs.length - 1] ?? '';
   const currentLevelIndex = segs.length - 1 - rootDepth;
-  const upPath = isUserSpace || rootDepth === 0 ? null : dirPathAt(rootDepth - 1);
+  // ⤴ links to the display root itself — the portal that CONTAINS the
+  // listed children (e.g. on `/crowi/rfc/` the tree lists `/crowi/`'s
+  // children, so ⤴ goes to `/crowi/`, not its parent `/`). This lets the
+  // user climb one bounded level at a time instead of skipping over the
+  // container. `null` at the top (`rootDepth === 0`) or in a user space.
+  const upPath = isUserSpace || rootDepth === 0 ? null : dirPathAt(rootDepth);
   const userHome = isUserSpace ? segs[1] : null;
 
   return { levelPaths, activeSegments, currentSegment, currentLevelIndex, upPath, userHome };

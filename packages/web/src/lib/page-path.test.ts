@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { decodePagePathFromUrl, pageBasename, pageDirname, pageDisplayName, pageDisplayParent, pagePathToHref } from './page-path';
+import {
+  decodePagePathFromUrl,
+  defaultDraftBody,
+  pageBasename,
+  pageDefaultTitle,
+  pageDirname,
+  pageDisplayName,
+  pageDisplayParent,
+  pagePathToHref,
+} from './page-path';
 
 describe('pageBasename', () => {
   it('returns the last non-empty segment', () => {
@@ -97,6 +106,46 @@ describe('pageDisplayParent', () => {
   it('pairs with pageDisplayName to reconstruct the (trimmed) path', () => {
     const path = '/user/foo/日報/2026/05/23';
     expect(pageDisplayParent(path) + pageDisplayName(path)).toBe(path);
+  });
+});
+
+describe('pageDefaultTitle', () => {
+  it('keeps the notebook segment in front of a trailing date run', () => {
+    expect(pageDefaultTitle('/user/sotarok/memo/2026/06/08')).toBe('memo/2026/06/08');
+    expect(pageDefaultTitle('/crowi/日報/2026/06/08')).toBe('日報/2026/06/08');
+  });
+
+  it('returns just the leaf when the path does not end in a date run', () => {
+    expect(pageDefaultTitle('/user/sotarok/zyx/134/hoge-fuga-piyo')).toBe('hoge-fuga-piyo');
+    expect(pageDefaultTitle('/crowi/qa/2026/06/08/rfc-0011-mcp-server')).toBe('rfc-0011-mcp-server');
+    expect(pageDefaultTitle('/crowi/qa/rfc-0011-mcp-server')).toBe('rfc-0011-mcp-server');
+  });
+
+  it('keeps the segment before a bare trailing number', () => {
+    expect(pageDefaultTitle('/crowi/issues/123')).toBe('issues/123');
+  });
+
+  it('absorbs the whole path when it is entirely the date run', () => {
+    expect(pageDefaultTitle('/2026/06/08')).toBe('2026/06/08');
+  });
+
+  it('returns the leaf for a single-segment path', () => {
+    expect(pageDefaultTitle('/readme')).toBe('readme');
+  });
+
+  it('returns an empty string for the top page', () => {
+    expect(pageDefaultTitle('/')).toBe('');
+  });
+});
+
+describe('defaultDraftBody', () => {
+  it('wraps the default title in an H1 followed by a blank cursor line', () => {
+    expect(defaultDraftBody('/user/sotarok/memo/2026/06/08')).toBe('# memo/2026/06/08\n\n');
+    expect(defaultDraftBody('/crowi/qa/rfc-0011-mcp-server')).toBe('# rfc-0011-mcp-server\n\n');
+  });
+
+  it('falls back to a bare newline when no title can be derived', () => {
+    expect(defaultDraftBody('/')).toBe('\n');
   });
 });
 

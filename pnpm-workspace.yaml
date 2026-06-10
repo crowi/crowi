@@ -14,3 +14,6 @@ catalog:
   "@types/jest": ^29.5.14
   ts-jest: ^29.3.4
   zod: ^4.4.3
+  "@modelcontextprotocol/sdk": ^1.29.0
+  "@hono/mcp": ^0.3.0
+  hono-rate-limiter: ^0.5.3

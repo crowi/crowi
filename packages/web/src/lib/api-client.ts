@@ -1,5 +1,6 @@
 import { createClient } from '@crowi/api-contract';
 import { clearTokens, storeTokens } from './auth-token';
+import { API_TIMEOUT_MS, fetchWithTimeout } from './fetch-timeout';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
 
@@ -30,13 +31,17 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/api/v2/auth/refresh`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
       },
-      body: JSON.stringify({ refreshToken }),
-    });
+      API_TIMEOUT_MS,
+    );
 
     if (response.ok) {
       const data = await response.json();
@@ -80,7 +85,7 @@ const apiV2Fetch: typeof fetch = async (input, init) => {
     headers.set('authorization', `Bearer ${accessToken}`);
   }
 
-  let response = await fetch(input, { ...init, headers });
+  let response = await fetchWithTimeout(input, { ...init, headers }, API_TIMEOUT_MS);
 
   // Don't try to refresh when the failed call *is* the refresh endpoint —
   // doing so would recurse once `/auth/refresh` lands on Hono (Phase 4).
@@ -93,7 +98,9 @@ const apiV2Fetch: typeof fetch = async (input, init) => {
       const newAccessToken = await acquireRefreshedToken();
       if (newAccessToken) {
         headers.set('authorization', `Bearer ${newAccessToken}`);
-        response = await fetch(input, { ...init, headers });
+        // Fresh timeout for the retried request (a new AbortController per
+        // attempt so the first attempt's timer can't cancel the retry).
+        response = await fetchWithTimeout(input, { ...init, headers }, API_TIMEOUT_MS);
       }
     }
   }

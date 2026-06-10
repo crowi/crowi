@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useTheme } from 'next-themes';
 import { Loader2 } from 'lucide-react';
 import { DiffMethod } from 'react-diff-viewer-continued';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -32,6 +33,11 @@ interface RevisionDiffProps {
 export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   const { revisions, isLoading, isError, error, refetch } = useRevisionPair(fromId, toId);
   const [splitView, setSplitView] = useState(true);
+  // react-diff-viewer-continued ships its own light/dark palettes via
+  // `useDarkTheme`. Drive it from the app theme so the diff colours match
+  // the rest of the UI; `resolvedTheme` is `'dark'` for explicit dark or
+  // system + OS dark, anything else (incl. pre-mount `undefined`) is light.
+  const { resolvedTheme } = useTheme();
 
   const { fromRevision, toRevision } = useMemo(() => {
     if (!revisions) return { fromRevision: null, toRevision: null };
@@ -96,7 +102,7 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
           oldValue={oldValue}
           newValue={toRevision.body ?? ''}
           splitView={splitView}
-          useDarkTheme={false}
+          useDarkTheme={resolvedTheme === 'dark'}
           // markdown 本文は行単位での差分が分かりやすい
           compareMethod={DiffMethod.LINES}
           leftTitle={`From: ${fromLabel}`}

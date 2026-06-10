@@ -1,6 +1,6 @@
-import Crowi from 'src/crowi';
-import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
+import { Document, Model, model, Schema, Types } from 'mongoose';
+import Crowi from 'src/crowi';
 import { RevisionDocument } from './revision';
 import { UserDocument } from './user';
 
@@ -68,6 +68,27 @@ function pageNotFoundError(): Error {
   const error = new Error('Page not found');
   error.name = 'Crowi:Page:NotFound';
   return error;
+}
+
+/** Max simultaneous per-page operations during a subtree rename (renameTree). */
+const RENAME_TREE_CONCURRENCY = 8;
+
+/**
+ * Run `fn` over `items` with at most `limit` in flight at once, preserving
+ * result order. Rejects on the first error (like `Promise.all`); in-flight
+ * siblings are not cancelled but no new work is started after a rejection.
+ */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await fn(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 export const TYPE_PORTAL = 'portal';
@@ -1321,33 +1342,34 @@ export default (crowi: Crowi) => {
 
   pageSchema.statics.renameTree = async function (pathMap, user, options) {
     const { createRedirectPage = false, preserveUpdatedAt = true } = options;
-    await Promise.all(
-      Object.values(pathMap).map(async (newPath) => {
-        if (await Page.exists({ path: newPath })) {
-          const newPage = await Page.findPageByPath(newPath);
-          if (newPage.isUnlinkable(user)) {
-            await newPage.unlink(user);
-          } else {
-            throw new Error(`Failed to create this page (${newPage.path}). It already exists.`);
-          }
+    // Bound the fan-out: each rename emits a page `update` event that triggers
+    // re-indexing / backlink / notification recomputation, so an unbounded
+    // `Promise.all` over a large subtree would fire a reindex storm at the
+    // search backend and Mongo. A small pool keeps the load steady while still
+    // being far faster than fully sequential.
+    await mapWithConcurrency(Object.values(pathMap), RENAME_TREE_CONCURRENCY, async (newPath) => {
+      if (await Page.exists({ path: newPath })) {
+        const newPage = await Page.findPageByPath(newPath);
+        if (newPage.isUnlinkable(user)) {
+          await newPage.unlink(user);
+        } else {
+          throw new Error(`Failed to create this page (${newPage.path}). It already exists.`);
         }
-      }),
-    );
-    return Promise.all(
-      Object.entries(pathMap).map(async ([oldPath, newPath]) => {
-        try {
-          const options = {
-            createRedirectPage: !isPortalPath(newPath) && createRedirectPage,
-            preserveUpdatedAt,
-          };
-          const oldPage = await Page.findPageByPath(oldPath);
-          await Page.rename(oldPage, newPath, user, options);
-          return oldPage;
-        } catch (err) {
-          throw new Error(`Failed to update page (${oldPath}).`);
-        }
-      }),
-    );
+      }
+    });
+    return mapWithConcurrency(Object.entries(pathMap), RENAME_TREE_CONCURRENCY, async ([oldPath, newPath]) => {
+      try {
+        const options = {
+          createRedirectPage: !isPortalPath(newPath) && createRedirectPage,
+          preserveUpdatedAt,
+        };
+        const oldPage = await Page.findPageByPath(oldPath);
+        await Page.rename(oldPage, newPath, user, options);
+        return oldPage;
+      } catch (err) {
+        throw new Error(`Failed to update page (${oldPath}).`);
+      }
+    });
   };
 
   pageSchema.statics.allPageCount = function () {

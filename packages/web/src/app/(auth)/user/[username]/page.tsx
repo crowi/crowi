@@ -1,10 +1,14 @@
 'use client';
 
 import { use, useRef, useState } from 'react';
-import { notFound, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { UserX } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ErrorAlert } from '@/components/ui/error-alert';
+import { NotFoundCard } from '@/components/ui/not-found-card';
 import { UserProfile, UserRecentPages, UserBookmarks, type UserProfileTab } from '@/components/user-page';
 import { PageHeader, PageContent } from '@/components/page-view';
 import { useUserPage } from '@/lib/use-user-page';
@@ -44,8 +48,22 @@ export default function UserPage({ params }: UserPageProps) {
   }
 
   if (error) {
+    // A /user/<x> for a non-existent account is a dead end, not a page to
+    // create — show a friendly "no such user" with a link back to the
+    // members list (never the default 404 or a create-page prompt).
     if (error.message === 'User not found') {
-      notFound();
+      return (
+        <NotFoundCard
+          title={m['user_page.not_found_title']()}
+          icon={UserX}
+          description={m['user_page.not_found_description']({ username })}
+          actions={
+            <Button asChild variant="outline">
+              <Link href="/_user">{m['user_page.not_found_to_members']()}</Link>
+            </Button>
+          }
+        />
+      );
     }
     return <ErrorAlert message={m['user_page.failed_to_load_profile']()} />;
   }

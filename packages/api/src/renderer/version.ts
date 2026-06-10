@@ -20,10 +20,11 @@
  *   - 0.4.x  Phase 4 (cache contract + reservation + dispatch)
  *   - 0.5.x  Phase 5 (crowi-legacy + wikilink migrator)
  *   - 0.6.x  Phase 6 (plantuml + emoji + katex + addCodeBlockRenderer)
+ *   - 0.7.x  dark mode (shiki dual-theme CSS-variable output)
  *
  * Until `renderer:rebuild` ships (deferred to RFC-0008), version
  * mismatch is informational only — the read path's parse-on-read
  * fallback handles missing or stale `renderedAst` transparently at
  * a per-request CPU cost.
  */
-export const RENDERER_PIPELINE_VERSION = '0.6.0';
+export const RENDERER_PIPELINE_VERSION = '0.7.0';

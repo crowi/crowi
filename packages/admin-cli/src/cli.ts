@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { registerMigrate } from './commands/migrate';
 import { registerRebuild } from './commands/rebuild';
+import { registerWatcherBackfill } from './commands/watcher-backfill';
 
 /**
  * Build the root commander program. Exported so the bin entry point
@@ -25,6 +26,10 @@ export function createProgram(): Command {
   // `rebuild search`. No compatibility aliases (CHANGELOG / upgrade guide).
   registerMigrate(program);
   registerRebuild(program);
+  // `watcher backfill` (idempotent WATCH-row backfill) landed on main as a
+  // standalone command; kept as-is here. Could fold into the framework as a
+  // `rebuild` / `migrate` task later (see TODO backlog).
+  registerWatcherBackfill(program);
 
   return program;
 }
