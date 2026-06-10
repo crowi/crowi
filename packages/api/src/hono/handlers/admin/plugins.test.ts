@@ -116,9 +116,9 @@ describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints'
     });
 
     it('clears only the named plugin entries when the plugin is loaded', async () => {
-      // The dev runner loads `@crowi/plugin-storage-local` by default
-      // (see repo root crowi.config.json) — use it as the
-      // existing-plugin probe.
+      // The implicit-default plugin set always loads `@crowi/plugin-storage-local`
+      // (IMPLICIT_DEFAULT_PLUGINS in @crowi/runner), independent of any
+      // crowi.config.json — use it as the existing-plugin probe.
       const loaded = crowi.pluginManager?.getLoadedPlugins() ?? [];
       const targetName = loaded[0]?.name;
       // If the dev runner config in this test env doesn't carry any
