@@ -1,0 +1,17 @@
+{
+  "name": "@crowi/runner-app-slim",
+  "version": "2.0.0-dev",
+  "private": true,
+  "description": "Crowi slim reference runner project: the minimal start-up set (MongoDB-only — local storage + Mongo regex search + SMTP mail) and the build source for the official slim Docker image. A base/starter for operators who want to fully customize their plugin set.",
+  "scripts": {
+    "start": "crowi-api"
+  },
+  "dependencies": {
+    "@crowi/api": "workspace:^",
+    "@crowi/plugin-api": "workspace:^",
+    "@crowi/runner": "workspace:^",
+    "@crowi/plugin-mail-smtp": "workspace:^",
+    "@crowi/plugin-search-mongo": "workspace:^",
+    "@crowi/plugin-storage-local": "workspace:^"
+  }
+}
