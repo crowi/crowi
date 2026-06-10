@@ -229,10 +229,27 @@ export default (crowi: Crowi) => {
       ref: 'Revision',
       default: undefined,
     },
+    // RFC-0008 Phase 6 (revisions-schema-unify): `type` now carries
+    // `default: 'snapshot'` so EVERY newly written revision — including
+    // ones saved via the HTTP API path (Page.createPage / Page.updatePage),
+    // which never pass an explicit `type` — lands with a concrete value.
+    // This closes the write source so the `revisions-schema-unify` boot
+    // migration can't be re-pended indefinitely (same lesson as the Phase 3
+    // wikilink fix). The collab save flow (and RFC-0009's incremental saves)
+    // still set `type` explicitly; `default` is only the fallback and does
+    // not interfere. The read path keeps its `undefined → 'snapshot'`
+    // back-compat for v1.x rows that predate the field.
+    //
+    // The plain (non-sparse) `index: true` makes the migration's
+    // `findOne({ type: null })` probe index-backed and able to match both a
+    // missing field and an explicit `null` — the same mechanism page.status
+    // uses. A plain index (no partialFilterExpression) also ports cleanly to
+    // PostgreSQL.
     type: {
       type: String,
       enum: ['snapshot', 'incremental'],
-      default: undefined,
+      default: 'snapshot',
+      index: true,
     },
     yjsUpdate: {
       type: Buffer,
