@@ -59,20 +59,20 @@ describe('Config model test', () => {
       }
       resetKeyProvider();
       // Clean up so other tests don't see the encrypted rows.
-      await Config.deleteByParams('crowi', 'google:clientSecret');
+      await Config.deleteByParams('notification', 'slack:token');
       await Config.deleteByParams('crowi', 'mail:smtpPassword');
     });
 
     test('sensitive values are written encrypted and read back as plaintext', async () => {
-      const secret = 'super-secret-google-secret';
-      await Config.updateConfig('crowi', 'google:clientSecret', secret);
+      const secret = 'super-secret-slack-secret';
+      await Config.updateConfig('notification', 'slack:token', secret);
 
-      const stored = await Config.findOne({ ns: 'crowi', key: 'google:clientSecret' }).exec();
+      const stored = await Config.findOne({ ns: 'notification', key: 'slack:token' }).exec();
       expect(stored).not.toBeNull();
       expect(isEncrypted(stored!.value)).toBe(true);
 
       const config = await Config.loadAllConfig();
-      expect(config.crowi['google:clientSecret']).toBe(secret);
+      expect(config.notification['slack:token']).toBe(secret);
     });
 
     test('legacy plaintext rows for sensitive keys are still readable (back-compat)', async () => {
