@@ -1,0 +1,6 @@
+# Local runtime state produced when the api boots against this projectDir:
+# storage-local writes uploads under data/ (relative to crowi.config.json).
+# Redundant with the repo-root .gitignore `data` rule in this monorepo, but
+# kept so an external operator copying this dir as a reference runner project
+# inherits the right ignore out of the box.
+/data
