@@ -134,8 +134,18 @@ multi-phase 機能。v1→v2 in-place upgrade の preflight が最大ユース�
   生存重複 + 未 tombstone DELETED の生存衝突を conservative に検出し apply 後 false
   へ転じ boot クリア。`USERNAME_TAKEN` / `EMAIL_TAKEN` は codes.ts に既存 =
   contract 無変更
-- [ ] **Phase 6: revisions-schema-unify preflight** — skeleton + transform
-  設計確定待ち (autoContinue=false / 要調整)
+- [x] **Phase 6: revisions-schema-unify boot migration** — 既存 `Revision.type`
+  (`'snapshot'|'incremental'`, RFC-0003) の v1.x backfill。新フィールド追加ではなく
+  「既存 `type` を埋めて書き込み元を塞ぐ」設計。`models/revision.ts` の `type` に
+  `default: 'snapshot'` + plain `index: true` を付与 (HTTP API 経由の新規 revision も
+  必ず `type` を持つ → 恒久 boot ブロック回避、probe を index-backed 化、Postgres 移植も
+  plain index で素直)。`migrations/revisions-schema-unify.ts` は `updateMany({type:null},
+  {$set:{type:'snapshot'}})` の idempotent backfill (`page-status-default` と同型)。
+  **RFC §10.3/Appendix A は preflight 分類だが layer を `boot` に逸脱採用** — schema
+  default で source を塞げば軽量 idempotent backfill になるため (逸脱は migration の
+  JSDoc に明記)。`isPending` は `findOne({type:null})` (missing+null マッチ)、apply 後
+  かつ新規が default で埋まるため false 固定。backfill は `type` のみ
+  (`contributors` / `renderedAst` は不変)。contract 無変更 (wire の `type` は既に optional)
 
 ## High Priority — 横断的 advisory (累積)
 
