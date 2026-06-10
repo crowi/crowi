@@ -61,6 +61,42 @@ export let crowi: Crowi;
  */
 export let app: (req: IncomingMessage, res: ServerResponse) => void;
 
+/**
+ * Response barrier (test harness only).
+ *
+ * In PRODUCTION a response returns while its fire-and-forget side
+ * effects (backlink / auto-watch / Activity→Notification fan-out,
+ * render-cache invalidation, mention dispatch, user-page creation) are
+ * still in flight. In tests that timing is the dominant flake source:
+ * assertions race the fan-out under parallel-worker load (~1/15 of full
+ * runs lost a different single fan-out test).
+ *
+ * Every side effect is routed through `crowi.trackSideEffect()` (see
+ * feature-test-flake-hardening Phase 1), and the handler's emit() runs
+ * synchronously inside the awaited fetch — so by the time
+ * `honoApp.fetch` resolves, all first-level effects are in the tracked
+ * set, and `drainSideEffects()` loops until multi-level chains settle
+ * too. Draining at the fetch boundary (see `fetchFn` in `beforeAll`)
+ * lets a test assume: "the response returned ⇒ every side effect of
+ * that request has settled" — positive AND negative assertions become
+ * deterministic without per-test waiting code.
+ *
+ * Escape hatch: flip `responseBarrier.enabled = false` (per-file /
+ * per-block, restored in `afterAll`) to observe the intermediate state
+ * — response returned, fan-out not yet complete — at the HTTP level. A
+ * block that opts out owns its own waiting (`waitForModel` etc.). The
+ * flag is module-local per jest file, so it never leaks across files;
+ * only same-file blocks must restore it.
+ *
+ * CAVEAT (read before debugging "passes in test, races in prod"): this
+ * deliberately DIVERGES from production timing semantics. A real client
+ * reading immediately after a write may still see pre-fan-out state in
+ * production. Tests cannot catch that class of read-after-write race
+ * while the barrier is on — that contract gap is production
+ * architecture work (side-effect scheduler RFC), not a test concern.
+ */
+export const responseBarrier = { enabled: true };
+
 // @ts-ignore
 export const ROOT_DIR = global.ROOT_DIR as string;
 // @ts-ignore
@@ -103,7 +139,23 @@ beforeAll(async () => {
   // Wrap `honoApp.fetch` so the `/api/v2` prefix in supertest URLs is
   // stripped before Hono dispatches. Mirrors the rewrite that
   // `crowi/index.ts:start()` applies on the production listener.
-  const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiV2Prefix(request));
+  //
+  // Response barrier: when enabled, drain tracked fire-and-forget side
+  // effects AFTER `honoApp.fetch` resolves but BEFORE returning the
+  // response (see `responseBarrier` doc comment above). The handler's
+  // emit() runs synchronously inside the awaited fetch, so by the time
+  // it resolves every first-level effect is in the tracked set, and
+  // `drainSideEffects()` loops until multi-level chains settle too.
+  // Side-effect-free requests (e.g. rate-limit 429 floods) hit the
+  // fast path: the set is empty, so the drain's `while` is false on the
+  // first check and resolves effectively synchronously.
+  const fetchFn = async (request: Request): Promise<Response> => {
+    const res = await honoApp.fetch(stripApiV2Prefix(request));
+    if (responseBarrier.enabled) {
+      await crowi.drainSideEffects();
+    }
+    return res;
+  };
   app = getRequestListener(fetchFn);
 }, 60000);
 

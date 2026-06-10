@@ -312,6 +312,15 @@ class Crowi {
    * NOT re-throw or alter the rejection — the caller keeps its own
    * `.catch` and error-swallowing posture unchanged. This is purely
    * drain bookkeeping.
+   *
+   * INVARIANT: a tracked side effect MUST be a finite chain. Never track
+   * work that re-schedules itself (recurring / periodic timers, retry
+   * loops with no terminal condition) — `drainSideEffects()` loops until
+   * the set empties, so a self-rescheduling effect makes the drain
+   * (`afterEach` + the test response barrier in `test/setup.ts`) never
+   * settle, and every HTTP test then hangs until jest's `testTimeout`.
+   * Multi-level fan-out is fine (each level settles); unbounded
+   * re-arming is not.
    */
   trackSideEffect(p: Promise<unknown>): void {
     this.inFlightSideEffects.add(p);
