@@ -10,8 +10,11 @@
 #   docker compose --profile app up -d --build
 #
 # The `app` profile builds the api / web images from `packages/{api,web}/
-# Dockerfile`. The api service mounts repo-root `crowi.config.json` at
-# /app/crowi.config.json (operator-controlled, not baked into the image).
+# Dockerfile`. The api image is built from the `@crowi/runner-app` reference
+# runner project (apps/crowi-runner) and bakes that project's
+# `crowi.config.json` in. To override driver selection without a rebuild, the
+# api service re-mounts `apps/crowi-runner/crowi.config.json` at
+# /app/crowi.config.json (operator-controlled).
 services:
   mongodb:
     image: mongo:8
@@ -103,8 +106,10 @@ services:
       # (matches `.env.example` PORT and the `pnpm dev` api port).
       - "4301:3000"
     volumes:
-      # Operator-controlled plugin config — mount, do not bake into the image.
-      - ./crowi.config.json:/app/crowi.config.json:ro
+      # Operator-controlled plugin config. The image bakes the runner project's
+      # crowi.config.json in; this re-mount lets you override driver selection
+      # without rebuilding. Points at the runner project's copy.
+      - ./apps/crowi-runner/crowi.config.json:/app/crowi.config.json:ro
 
   web:
     profiles: ["app"]
