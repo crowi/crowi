@@ -10,6 +10,21 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll } from 'vitest';
 
+// React 19 prints "The current testing environment is not configured to
+// support act(...)" on EVERY act-driven update unless this global flag is
+// set. Tests that call React's own `act` (imported from 'react', not the
+// RTL re-export) don't get the flag set for them, so a single
+// event-dispatch test floods the output with hundreds of identical lines.
+// Setting it true here (the documented Vitest + React Testing Library setup)
+// configures the act environment once for the whole suite. With the flag on,
+// React instead warns only for updates genuinely NOT wrapped in act/waitFor
+// — which is the signal we actually want.
+declare global {
+  // eslint-disable-next-line no-var
+  var IS_REACT_ACT_ENVIRONMENT: boolean;
+}
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
 // Unmount anything a test rendered so the next test starts from a clean DOM.
 // `@testing-library/react`'s cleanup is idempotent, so files that still call
 // their own `afterEach(cleanup)` (kept intentionally — removing the per-file
