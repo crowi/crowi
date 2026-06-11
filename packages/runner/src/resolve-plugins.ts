@@ -47,17 +47,31 @@ export async function resolvePlugins(projectDir: string = process.cwd()): Promis
 // BFS the seed names and their transitive `requires`, deduplicated by
 // plugin name. Returns in first-occurrence order (seeds first, then
 // transitives). Sync because plugin tarballs ship CJS — see importPlugin.
+//
+// Resolution context matters. The seed names are the runner project's own
+// declared deps, so they resolve from the project root (`projectRequire`). A
+// plugin's transitive `requires` (e.g. `@crowi/plugin-storage-aws-s3` requires
+// `@crowi/plugin-aws`), however, are deps of *that plugin*, not of the runner
+// project — under `pnpm deploy --prod` they live in the requiring plugin's own
+// `node_modules`, not hoisted to the project root. So we resolve each plugin's
+// `requires` from *that plugin's* location. (Resolving from the root only
+// happened to work inside the dev monorepo, where `.npmrc` public-hoist makes
+// every `@crowi/plugin-*` resolvable from the root; it broke in a real deployed
+// image — caught by the prod Docker boot smoke.)
 function importWithTransitives(seedNames: string[], projectRequire: NodeRequire): CrowiPlugin[] {
   const loaded = new Map<string, CrowiPlugin>();
-  const queue = [...seedNames];
+  const queue: Array<{ name: string; require: NodeRequire }> = seedNames.map((name) => ({ name, require: projectRequire }));
 
   while (queue.length > 0) {
-    const name = queue.shift() as string;
+    const { name, require: req } = queue.shift() as { name: string; require: NodeRequire };
     if (loaded.has(name)) continue;
-    const plugin = importPlugin(name, projectRequire);
+    const { plugin, resolvedPath } = importPlugin(name, req);
     loaded.set(name, plugin);
+    // Build a require rooted at this plugin's entry file so its transitive
+    // `requires` resolve from its own `node_modules`.
+    const childRequire = createRequire(resolvedPath);
     for (const dep of plugin.requires ?? []) {
-      if (!loaded.has(dep)) queue.push(dep);
+      if (!loaded.has(dep)) queue.push({ name: dep, require: childRequire });
     }
   }
 
@@ -70,11 +84,15 @@ function importWithTransitives(seedNames: string[], projectRequire: NodeRequire)
 // `--experimental-vm-modules`. ESM-only plugins are intentionally
 // unsupported in Crowi 2.0 (the api itself is CJS-only via Express /
 // mongoose / passport).
-function importPlugin(name: string, projectRequire: NodeRequire): CrowiPlugin {
+//
+// Returns the plugin plus its resolved entry path so the caller can build a
+// `createRequire` rooted at this plugin for resolving its transitive `requires`.
+function importPlugin(name: string, pluginRequire: NodeRequire): { plugin: CrowiPlugin; resolvedPath: string } {
+  let resolvedPath: string;
   let mod: { default?: unknown };
   try {
-    const resolved = projectRequire.resolve(name);
-    mod = projectRequire(resolved) as { default?: unknown };
+    resolvedPath = pluginRequire.resolve(name);
+    mod = pluginRequire(resolvedPath) as { default?: unknown };
   } catch (err) {
     throw new Error(`Failed to import plugin '${name}': ${(err as Error).message}`);
   }
@@ -85,7 +103,7 @@ function importPlugin(name: string, projectRequire: NodeRequire): CrowiPlugin {
   if (candidate.name !== name) {
     throw new Error(`Plugin '${name}' declares its own name as '${candidate.name}'. They must match.`);
   }
-  return candidate;
+  return { plugin: candidate, resolvedPath };
 }
 
 const isCrowiPlugin = (value: unknown): value is CrowiPlugin => {
