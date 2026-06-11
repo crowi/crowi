@@ -59,7 +59,10 @@ export function ThemeToggle({ className }: { className?: string }) {
             }}
             className={cn(
               'rounded px-2 py-1 transition-colors',
-              isActive ? 'bg-white/90 text-foreground shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10',
+              // The active pill is always a near-white chip, so its content
+              // needs a fixed dark colour — `text-foreground` flips to white
+              // in dark mode and vanished against the pill.
+              isActive ? 'bg-white/90 text-gray-900 shadow-sm' : 'text-white/80 hover:text-white hover:bg-white/10',
             )}
           >
             <Icon className="h-4 w-4" />
