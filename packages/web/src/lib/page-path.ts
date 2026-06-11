@@ -12,6 +12,17 @@ export function pageBasename(path: string): string {
 }
 
 /**
+ * Whether `path` is a user's home page (`/user/<username>`, optional trailing
+ * slash). Its path is bound to the username, so it cannot be renamed or
+ * deleted — the server enforces this (`isRenamableName` / `isDeletableName`)
+ * and the UI hides the actions. Deeper pages under the home (e.g.
+ * `/user/<username>/memo`) are normal pages and are NOT matched.
+ */
+export function isUserHomePath(path: string): boolean {
+  return /^\/user\/[^/]+\/?$/.test(path);
+}
+
+/**
  * The directory portion of a wiki path — everything up to and including the
  * final slash before the basename. The natural pair of `pageBasename`, used
  * by the list view to render a muted path prefix beneath the page title.

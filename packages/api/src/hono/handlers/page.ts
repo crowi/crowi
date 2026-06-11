@@ -724,7 +724,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         const newPagePath = Page.normalizePath(new_path);
         const newPageIsPortal = newPagePath.endsWith('/');
 
-        if (!Page.isCreatableName(newPagePath)) {
+        // Destination must be a creatable name and must not be a user
+        // home page (`/user/<name>`) — that path is username-bound and
+        // can't be hijacked by renaming another page onto it.
+        if (!Page.isCreatableName(newPagePath) || !Page.isRenamableName(newPagePath)) {
           return c.json(pageBadRequestBody('PAGE_INVALID_NAME', `Cannot rename to this page name (${newPagePath})`), 400);
         }
 
@@ -732,6 +735,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
           if (!pageData) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+
+          // The user home page (`/user/<username>`) is bound to the username
+          // and must not be renamed (mirrors `isDeletableName`). Checked on
+          // the source path so it blocks both the single-page and
+          // include_descendants forms.
+          if (!Page.isRenamableName(pageData.path)) {
+            return c.json(pageBadRequestBody('PAGE_INVALID_NAME', `This page cannot be renamed (${pageData.path})`), 400);
           }
 
           // Optimistic-lock on the root page's revision — same as the
@@ -875,6 +886,20 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
           if (descendants.length === 0) {
             return c.json(renameTreeFailedBody('There are no pages to move under this path.', []), 400);
+          }
+
+          // Folder rename moves every descendant. A subtree rooted at
+          // `/user/` (or `/`) sweeps in every user's home page
+          // (`/user/<name>`), which would bypass the single-page rename
+          // guard. Refuse the whole move if any source is a home page.
+          const protectedSource = descendants.find((p) => !Page.isRenamableName(p.path));
+          if (protectedSource) {
+            return c.json(
+              renameTreeFailedBody(`This subtree contains a page that cannot be renamed (${protectedSource.path}).`, [
+                { path: protectedSource.path, reasons: ['PAGE_INVALID_NAME'] },
+              ]),
+              400,
+            );
           }
 
           const pathMap = Page.getPathMap(

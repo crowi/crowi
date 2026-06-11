@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Bookmark, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
+import { Bell, BellOff, Bookmark, ClipboardCopy, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { notify } from '@/lib/notify';
+import { isUserHomePath } from '@/lib/page-path';
 import { useToggleBookmark } from '@/lib/use-bookmark';
 import { useToggleLike } from '@/lib/use-like';
 import { useToggleWatch } from '@/lib/use-watch';
@@ -43,6 +45,20 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
   // that the compact dropdown otherwise folds in. The page-level
   // history / rename / delete actions still apply to the draft.
   const isDraft = page.status === PageStatusEnum.DRAFT;
+  // A user's home page (`/user/<username>`) is bound to the username, so it
+  // can't be renamed — the server rejects it too (`isRenamableName`).
+  const canRename = !isUserHomePath(page.path);
+
+  const handleCopyMarkdown = () => {
+    const body = page.revision?.body ?? '';
+    // An empty body has nothing to copy — don't show a "copied" toast for
+    // a no-op (false feedback).
+    if (body.length === 0) return;
+    void navigator.clipboard
+      ?.writeText(body)
+      .then(() => notify.info(m['page.markdown_copied']()))
+      .catch(() => notify.error(m['page.markdown_copy_failed']()));
+  };
 
   return (
     <>
@@ -77,10 +93,16 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
             <History className="h-4 w-4 mr-2" />
             {m['page.action_history']()}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setIsRenameOpen(true)}>
-            <MoveRight className="h-4 w-4 mr-2" />
-            {m['page.action_rename']()}
+          <DropdownMenuItem onSelect={handleCopyMarkdown}>
+            <ClipboardCopy className="h-4 w-4 mr-2" />
+            {m['page.action_copy_markdown']()}
           </DropdownMenuItem>
+          {canRename && (
+            <DropdownMenuItem onSelect={() => setIsRenameOpen(true)}>
+              <MoveRight className="h-4 w-4 mr-2" />
+              {m['page.action_rename']()}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setIsDeleteOpen(true)} className="text-red-600 focus:text-red-600">
             <Trash2 className="h-4 w-4 mr-2" />
@@ -89,7 +111,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <RenameDialog page={page} open={isRenameOpen} onOpenChange={setIsRenameOpen} />
+      {canRename && <RenameDialog page={page} open={isRenameOpen} onOpenChange={setIsRenameOpen} />}
       <DeletePageDialog pageId={page._id} pagePath={page.path} revisionId={page.revision?._id} open={isDeleteOpen} onOpenChange={setIsDeleteOpen} />
     </>
   );
