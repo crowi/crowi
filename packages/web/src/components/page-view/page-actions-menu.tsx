@@ -89,13 +89,14 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
               <DropdownMenuSeparator />
             </>
           )}
-          <DropdownMenuItem onSelect={() => router.push(`/_history?path=${encodeURIComponent(page.path)}`)}>
-            <History className="h-4 w-4 mr-2" />
-            {m['page.action_history']()}
-          </DropdownMenuItem>
           <DropdownMenuItem onSelect={handleCopyMarkdown}>
             <ClipboardCopy className="h-4 w-4 mr-2" />
             {m['page.action_copy_markdown']()}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => router.push(`/_history?path=${encodeURIComponent(page.path)}`)}>
+            <History className="h-4 w-4 mr-2" />
+            {m['page.action_history']()}
           </DropdownMenuItem>
           {canRename && (
             <DropdownMenuItem onSelect={() => setIsRenameOpen(true)}>
