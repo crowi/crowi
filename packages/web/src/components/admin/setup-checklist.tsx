@@ -1,6 +1,10 @@
+'use client';
+
 import Link from 'next/link';
-import { ChevronRight, HardDrive, Search, Mail, Users } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChevronRight, HardDrive, Search, Mail, Users, Check } from 'lucide-react';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAppSettings, useUpdateAppSettings } from '@/lib/use-admin-app-settings';
 import { m } from '@paraglide/messages.js';
 
 /**
@@ -8,6 +12,11 @@ import { m } from '@paraglide/messages.js';
  * deep link into the matching admin section with a short description, so a
  * freshly-installed instance has an obvious next-step path. Text-only by
  * design (no screenshots) to stay locale-agnostic and low-maintenance.
+ *
+ * The "mark as done" button persists the dismissal server-side via the
+ * `app:setupChecklistDismissed` flag (carried on the existing /admin/app
+ * GET/PUT), so once dismissed the checklist stays hidden across browsers
+ * and devices rather than just one localStorage.
  */
 const SETUP_ITEMS = [
   { href: '/admin/storage', icon: HardDrive, title: () => m['admin.setup.storage_title'](), body: () => m['admin.setup.storage_body']() },
@@ -17,11 +26,30 @@ const SETUP_ITEMS = [
 ] as const;
 
 export function SetupChecklist() {
+  const { data, isLoading } = useAppSettings();
+  const dismiss = useUpdateAppSettings();
+
+  // Hide while loading so a dismissed checklist never flashes in before the
+  // flag arrives, and hide once the admin has dismissed it.
+  if (isLoading || data?.setupChecklistDismissed === true) return null;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">{m['admin.setup.title']()}</CardTitle>
         <CardDescription>{m['admin.setup.subtitle']()}</CardDescription>
+        <CardAction>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => dismiss.mutate({ setupChecklistDismissed: true })}
+            disabled={dismiss.isPending}
+            aria-label={m['admin.setup.dismiss']()}
+          >
+            <Check className="h-4 w-4" />
+            {m['admin.setup.dismiss']()}
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent>
         <ul className="divide-y divide-border">

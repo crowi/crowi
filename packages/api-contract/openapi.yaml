@@ -4059,10 +4059,13 @@ components:
           type: object
           additionalProperties:
             type: string
+        setupChecklistDismissed:
+          type: boolean
       required:
         - app
         - isUploadable
         - registrationMode
+        - setupChecklistDismissed
     UpdateAppSettingsRequest:
       type: object
       properties:
@@ -4076,6 +4079,8 @@ components:
             confidential:
               type: string
               maxLength: 500
+        setupChecklistDismissed:
+          type: boolean
       additionalProperties: false
     UpdateAppSettingsResponse:
       type: object
@@ -19902,10 +19907,13 @@ paths:
                     type: object
                     additionalProperties:
                       type: string
+                  setupChecklistDismissed:
+                    type: boolean
                 required:
                   - app
                   - isUploadable
                   - registrationMode
+                  - setupChecklistDismissed
         '401':
           description: Authentication required
           content:
@@ -19978,6 +19986,8 @@ paths:
                     confidential:
                       type: string
                       maxLength: 500
+                setupChecklistDismissed:
+                  type: boolean
               additionalProperties: false
       responses:
         '200':

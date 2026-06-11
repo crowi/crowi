@@ -9163,6 +9163,7 @@ export interface paths {
                             registrationMode: {
                                 [key: string]: string;
                             };
+                            setupChecklistDismissed: boolean;
                         };
                     };
                 };
@@ -9217,6 +9218,7 @@ export interface paths {
                             title?: string;
                             confidential?: string;
                         };
+                        setupChecklistDismissed?: boolean;
                     };
                 };
             };
@@ -14133,12 +14135,14 @@ export interface components {
             registrationMode: {
                 [key: string]: string;
             };
+            setupChecklistDismissed: boolean;
         };
         UpdateAppSettingsRequest: {
             app?: {
                 title?: string;
                 confidential?: string;
             };
+            setupChecklistDismissed?: boolean;
         };
         UpdateAppSettingsResponse: {
             /** @enum {boolean} */

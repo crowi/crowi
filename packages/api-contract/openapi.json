@@ -5961,12 +5961,16 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "setupChecklistDismissed": {
+            "type": "boolean"
           }
         },
         "required": [
           "app",
           "isUploadable",
-          "registrationMode"
+          "registrationMode",
+          "setupChecklistDismissed"
         ]
       },
       "UpdateAppSettingsRequest": {
@@ -5985,6 +5989,9 @@
                 "maxLength": 500
               }
             }
+          },
+          "setupChecklistDismissed": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -30196,12 +30203,16 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "setupChecklistDismissed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "app",
                     "isUploadable",
-                    "registrationMode"
+                    "registrationMode",
+                    "setupChecklistDismissed"
                   ]
                 }
               }
@@ -30316,6 +30327,9 @@
                         "maxLength": 500
                       }
                     }
+                  },
+                  "setupChecklistDismissed": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false

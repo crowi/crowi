@@ -513,6 +513,7 @@ const stubGetAppSettings: GetAppSettingsResponse = {
   app: { title: '', confidential: '' },
   isUploadable: false,
   registrationMode: {},
+  setupChecklistDismissed: false,
 };
 const stubUpdateAppSettings: UpdateAppSettingsResponse = { ok: true };
 const stubAuthSettings: GetAuthSettingsResponse = { requireThirdPartyAuth: false, disablePasswordAuth: false };

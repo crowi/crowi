@@ -656,6 +656,7 @@
   "admin.setup.mail_body": "招待や通知メールを送るための送信設定を行います。",
   "admin.setup.users_title": "ユーザー招待 / 管理",
   "admin.setup.users_body": "メンバーを招待し、ユーザーアカウントを管理します。",
+  "admin.setup.dismiss": "完了にする",
   "admin.access_denied_title": "管理者専用",
   "admin.access_denied_description": "このページは Crowi 管理者のみアクセスできます。",
   "admin.access_denied_body": "現在のアカウントには管理者権限がありません。",

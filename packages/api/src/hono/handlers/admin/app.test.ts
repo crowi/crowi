@@ -43,7 +43,7 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
   // Keys this suite touches. Used by the per-test cleanup so each test
   // starts from a clean slate even when one test seeds and the next
   // reads.
-  const APP_KEYS = ['app:title', 'app:confidential'];
+  const APP_KEYS = ['app:title', 'app:confidential', 'app:setupChecklistDismissed'];
 
   beforeAll(async () => {
     Config = crowi.model('Config');
@@ -88,6 +88,8 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
       expect(res.body.upload).toBeUndefined();
       expect(typeof res.body.isUploadable).toBe('boolean');
       expect(res.body.registrationMode).toEqual(expect.objectContaining({ Open: 'open' }));
+      // Defaults to false on a fresh install (no row written).
+      expect(res.body.setupChecklistDismissed).toBe(false);
     });
   });
 
@@ -120,6 +122,17 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
       const get = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
       expect(get.status).toBe(200);
       expect(get.body.app).toEqual(expect.objectContaining({ title: 'Round Trip Wiki', confidential: 'Internal' }));
+    });
+
+    it('persists setupChecklistDismissed on its own and round-trips via GET', async () => {
+      const res = await request(app).put('/api/v2/admin/app').set(authHeaders(adminToken)).send({ setupChecklistDismissed: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+
+      const get = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
+      expect(get.status).toBe(200);
+      expect(get.body.setupChecklistDismissed).toBe(true);
     });
 
     it('rejects empty title with 400', async () => {

@@ -94,6 +94,7 @@ export default (crowi: Crowi) => {
       // 'app:installed'     : "0.0.0",
       'app:title': 'Crowi',
       'app:confidential': '',
+      'app:setupChecklistDismissed': false,
 
       'security:registrationMode': 'Open',
       'security:registrationWhiteList': [],

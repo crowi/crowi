@@ -656,6 +656,7 @@
   "admin.setup.mail_body": "Set up email delivery for invitations and notifications.",
   "admin.setup.users_title": "Invite and manage users",
   "admin.setup.users_body": "Invite your teammates and manage member accounts.",
+  "admin.setup.dismiss": "Mark as done",
   "admin.access_denied_title": "Admin only",
   "admin.access_denied_description": "Only Crowi administrators can access this page.",
   "admin.access_denied_body": "Your account does not have administrator privileges.",
