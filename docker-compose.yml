@@ -117,8 +117,15 @@ services:
       context: .
       dockerfile: packages/web/Dockerfile
       args:
-        # Web container talks to the api container over the compose network.
-        NEXT_PUBLIC_API_URL: http://api:3000
+        # NEXT_PUBLIC_API_URL is baked into the build and used by the BROWSER
+        # (the hc client makes absolute-URL requests client-side), so it must be
+        # a host-reachable api origin — NOT the compose-internal `http://api:3000`
+        # (the browser can't resolve `api`). This compose runs the api and web on
+        # separate host ports (4301 / 4302), so point at the api's host port; CORS
+        # allows it via the api's CLIENT_URL=http://localhost:4302. A real
+        # single-domain deployment puts both behind one origin (reverse proxy
+        # routing /api/v2 to the api) and sets this to that public origin.
+        NEXT_PUBLIC_API_URL: http://localhost:4301
     image: crowi-web:dev
     container_name: crowi-web
     restart: unless-stopped
@@ -128,7 +135,8 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      NEXT_PUBLIC_API_URL: http://api:3000
+      # Browser-reachable api origin (see the build arg note above).
+      NEXT_PUBLIC_API_URL: http://localhost:4301
     ports:
       # Host 4302 -> container 3000. 4302 is Crowi's canonical web port
       # (matches the `pnpm dev` web port).
