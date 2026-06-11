@@ -1,18 +1,29 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ADMIN_NAV_GROUPS } from '@/components/admin/admin-sidebar';
 import { CryptoStatusCard } from '@/components/admin/crypto-status-card';
+import { SetupChecklist } from '@/components/admin/setup-checklist';
+import { WelcomeDialog } from '@/components/admin/welcome-dialog';
 import { m } from '@paraglide/messages.js';
 
 export default function AdminIndexPage() {
   return (
     <div className="space-y-6">
+      {/* `WelcomeDialog` reads `?welcome=installed` via useSearchParams,
+          which needs a Suspense boundary in the App Router. */}
+      <Suspense fallback={null}>
+        <WelcomeDialog />
+      </Suspense>
+
       <div>
         <h1 className="text-2xl font-semibold">{m['admin.dashboard_title']()}</h1>
         <p className="text-muted-foreground mt-1 text-sm">{m['admin.dashboard_subtitle']()}</p>
       </div>
+
+      <SetupChecklist />
 
       <CryptoStatusCard />
 
