@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { AtSign, User, Mail, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,9 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
+import { loginWithPassword } from '@/lib/auth-login';
+import { installerStatusKeys } from '@/lib/use-installer-status';
 
 export function InstallerForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [formData, setFormData] = useState({
@@ -46,7 +50,22 @@ export function InstallerForm() {
       if (response.status === 200 || response.status === 400) {
         const body = await response.json();
         if (body.status === 'ok') {
-          router.push('/');
+          // The app is now installed. Eagerly update the cached installer
+          // status so `InstallerGate` doesn't bounce us back to /installer
+          // off its `staleTime: Infinity` snapshot taken before install.
+          queryClient.setQueryData(installerStatusKeys.all, { status: 'already_installed' });
+
+          // Auto sign-in as the just-created admin and land on the admin
+          // dashboard with the welcome modal trigger. `/auth/login` is now
+          // reachable because install completed above. If sign-in somehow
+          // fails, fall back to the login screen (install itself succeeded).
+          const loginResult = await loginWithPassword(formData.email, formData.password);
+          if (loginResult.ok) {
+            router.push('/admin?welcome=installed');
+          } else {
+            router.push('/login');
+          }
+          return;
         } else if (body.errors) {
           setErrors(body.errors);
         } else if (body.message) {
