@@ -50,8 +50,7 @@ describe('core/url-inline-expand', () => {
 
     const para = tree.children[0] as { children: Array<{ type: string; value?: string }> };
     const html = para.children.find((c) => c.type === 'html');
-    expect(html).toBeDefined();
-    expect((html as { value: string }).value).toContain('<div class="card">card</div>');
+    expect(html).toMatchObject({ type: 'html', value: expect.stringContaining('<div class="card">card</div>') });
   });
 
   it('falls through to the next expander when the first returns unchanged', async () => {
@@ -77,7 +76,7 @@ describe('core/url-inline-expand', () => {
     expect(callOrder).toEqual(['first', 'second']);
     const para = tree.children[0] as { children: Array<{ type: string; value?: string }> };
     const html = para.children.find((c) => c.type === 'html');
-    expect((html as { value: string }).value).toContain('<x>second</x>');
+    expect(html).toMatchObject({ type: 'html', value: expect.stringContaining('<x>second</x>') });
   });
 
   it('keeps the autolink as-is when every expander returns unchanged', async () => {

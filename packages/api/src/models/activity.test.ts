@@ -32,17 +32,12 @@ describe('Activity', function () {
           action: 'COMMENT',
         };
 
-        return Activity.createByParameters(parameters).then(
-          function (activity) {
-            expect(activity.user).toBe(userId);
-            expect(activity.target).toBe(targetId);
-            expect(activity.targetModel).toBe('Page');
-            expect(activity.action).toBe('COMMENT');
-          },
-          function (err) {
-            throw new Error(err);
-          },
-        );
+        return Activity.createByParameters(parameters).then(function (activity) {
+          expect(activity.user).toBe(userId);
+          expect(activity.target).toBe(targetId);
+          expect(activity.targetModel).toBe('Page');
+          expect(activity.action).toBe('COMMENT');
+        });
       });
     });
 

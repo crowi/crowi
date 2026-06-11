@@ -282,7 +282,7 @@ describe('Page', () => {
         const pageToFind = createdPages[0];
         const grantedUser = createdUsers[1];
 
-        await expect(Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser)).rejects.toThrow();
+        await expect(Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser)).rejects.toThrow('Page is not granted for the user');
       });
     });
   });

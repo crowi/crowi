@@ -296,7 +296,7 @@ describe('pipeline + core renderers', () => {
       const { tree } = await runCore('line1\nline2');
       const paragraph = tree.children[0] as { type: string; children: Array<{ type: string }> };
       expect(paragraph.type).toBe('paragraph');
-      expect(paragraph.children.find((c) => c.type === 'break')).toBeDefined();
+      expect(paragraph.children.find((c) => c.type === 'break')).toMatchObject({ type: 'break' });
     });
 
     it('does NOT collapse blank-line paragraph breaks into a `break` node', async () => {

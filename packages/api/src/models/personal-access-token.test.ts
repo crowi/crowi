@@ -132,7 +132,7 @@ describe('PersonalAccessToken', () => {
       await PersonalAccessToken.create({ tokenHash, userId, name: 'one', scopes: [] });
       // Ensure the unique index is built before asserting the conflict.
       await PersonalAccessToken.init();
-      await expect(PersonalAccessToken.create({ tokenHash, userId, name: 'dup', scopes: [] })).rejects.toThrow();
+      await expect(PersonalAccessToken.create({ tokenHash, userId, name: 'dup', scopes: [] })).rejects.toMatchObject({ code: 11000 });
     });
   });
 });

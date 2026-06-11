@@ -43,7 +43,7 @@ describe('Share', () => {
     describe('Create shares', () => {
       test('should be able to create only one active share per page', async () => {
         await expect(Share.createShare(createdPages[0]._id, user)).resolves.toBeInstanceOf(Share);
-        await expect(Share.createShare(createdPages[0]._id, user)).rejects.toThrow();
+        await expect(Share.createShare(createdPages[0]._id, user)).rejects.toThrow('Cannot create new share.');
       });
     });
   });

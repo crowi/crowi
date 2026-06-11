@@ -43,8 +43,8 @@ describe('PageYjsUpdate', () => {
     });
 
     test('rejects documents missing required fields', async () => {
-      await expect(PageYjsUpdate.create({ pageId: page._id })).rejects.toThrow();
-      await expect(PageYjsUpdate.create({ payload: Buffer.from([0x00]) })).rejects.toThrow();
+      await expect(PageYjsUpdate.create({ pageId: page._id })).rejects.toThrow(/Path `payload` is required/);
+      await expect(PageYjsUpdate.create({ payload: Buffer.from([0x00]) })).rejects.toThrow(/Path `pageId` is required/);
     });
   });
 

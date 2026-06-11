@@ -94,7 +94,7 @@ describe('Revision (RFC-0003 collab fields)', () => {
           author: user._id,
           type: 'rogue',
         }),
-      ).rejects.toThrow();
+      ).rejects.toThrow(/`rogue` is not a valid enum value for path `type`/);
     });
   });
 

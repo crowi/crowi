@@ -130,6 +130,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
         if (pageDoc && pageDoc.commentCount === 1) break;
         await new Promise((r) => setTimeout(r, 50));
       }
+      expect(pageDoc).not.toBeNull();
       expect(pageDoc?.commentCount).toBe(1);
     });
 
