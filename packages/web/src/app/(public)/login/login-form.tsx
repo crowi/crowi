@@ -10,15 +10,16 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormErrorList } from '@/components/ui/form-error-list';
 import { loginWithPassword } from '@/lib/auth-login';
-import { safeContinueUrl } from '@/lib/login-redirect';
+import { defaultLandingPath, safeContinueUrl } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Anything not a same-origin relative path is dropped — prevents
-  // open-redirect via a crafted `?continue=https://evil.example/` link.
-  const continueUrl = safeContinueUrl(searchParams.get('continue'));
+  // Raw param so we can distinguish "no continue given" (→ default landing
+  // on the user's page) from an explicit `?continue=...` (→ honour it after
+  // open-redirect sanitisation).
+  const rawContinue = searchParams.get('continue');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -42,7 +43,10 @@ export function LoginForm() {
     // helper, reused by the editor's inline session-reauth modal.
     const result = await loginWithPassword(formData.email, formData.password);
     if (result.ok) {
-      router.push(continueUrl);
+      // Explicit `continue` (sanitised) wins; otherwise land the user on
+      // their own user page rather than the portal root.
+      const destination = rawContinue ? safeContinueUrl(rawContinue) : defaultLandingPath(result.username);
+      router.push(destination);
     } else {
       setErrors([result.message]);
     }
