@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClientV2 } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
+import { defaultLandingPath } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
 
 type Phase = 'activating' | 'error';
@@ -33,7 +34,7 @@ export function ActivateForm() {
       if (res.status === 200) {
         const body = await res.json();
         storeTokens(body, body.expiresIn);
-        router.push('/');
+        router.push(defaultLandingPath(body.user.username));
       } else {
         setPhase('error');
       }
