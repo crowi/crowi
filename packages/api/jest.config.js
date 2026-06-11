@@ -111,6 +111,10 @@ module.exports = {
     {
       displayName: 'server',
       preset: 'ts-jest',
+      // `clearMocks` (root) only clears calls — a `jest.spyOn` implementation
+      // replacement would otherwise leak into the next test. Restore spies
+      // automatically so no test depends on a leftover spy.
+      restoreMocks: true,
       testEnvironment: './src/test/crowi-environment.js',
       setupFilesAfterEnv: ['./src/test/setup.ts'],
       testMatch: ['<rootDir>/src/**/*.test.ts'],

@@ -90,9 +90,11 @@ describe('PersonalAccessToken', () => {
       const userId = new ObjectId();
       const a = PersonalAccessToken.generateToken();
       const b = PersonalAccessToken.generateToken();
-      await PersonalAccessToken.create({ tokenHash: a.tokenHash, userId, name: 'first', scopes: ['pages:read', 'comments:write'] });
-      await new Promise((r) => setTimeout(r, 5));
-      await PersonalAccessToken.create({ tokenHash: b.tokenHash, userId, name: 'second', scopes: ['read'] });
+      // Explicit createdAt (t / t+1000) instead of sleeping between creates —
+      // the newest-first ordering must not depend on wall-clock timing.
+      const base = Date.now();
+      await PersonalAccessToken.create({ tokenHash: a.tokenHash, userId, name: 'first', scopes: ['pages:read', 'comments:write'], createdAt: new Date(base) });
+      await PersonalAccessToken.create({ tokenHash: b.tokenHash, userId, name: 'second', scopes: ['read'], createdAt: new Date(base + 1000) });
 
       const list = await PersonalAccessToken.listByUser(userId);
       expect(list).toHaveLength(2);
