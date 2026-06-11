@@ -23,7 +23,7 @@
 // SIGINT/SIGTERM is forwarded to the turbo child (own process group) so the
 // whole tree — turbo → api/web/plugins — stops cleanly with no zombies.
 
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import http from 'node:http'
 
 // ── shared contract with boot-reporter.ts ──
@@ -51,6 +51,9 @@ const TURBO_ARGS = [
 ]
 
 const WEB_PROBE_URL = 'http://localhost:4302/'
+
+// Known dev ports → human label, for a friendlier port-conflict message.
+const PORT_LABELS = { 4301: 'api', 4302: 'web', 4303: 'site' }
 
 // ── pure helpers (kept tiny + side-effect-free for reasoning/testing) ──
 
@@ -87,6 +90,39 @@ export function parseFailMarker(line) {
   const sp = rest.indexOf(' ')
   if (sp === -1) return { service: rest, reason: '' }
   return { service: rest.slice(0, sp), reason: rest.slice(sp + 1).trim() }
+}
+
+/**
+ * Detect an `EADDRINUSE` (port-already-in-use) error in an output line and
+ * return the conflicting port number, or null. Matches node's
+ * `listen EADDRINUSE: address already in use :::4302` and similar shapes —
+ * the first digit run after `EADDRINUSE` is the port.
+ * @param {string} line
+ * @returns {number | null}
+ */
+export function parsePortConflict(line) {
+  const m = line.match(/EADDRINUSE\D*(\d{2,5})/)
+  return m ? Number(m[1]) : null
+}
+
+/**
+ * Best-effort: PIDs currently holding a TCP port, via `lsof`. Returns [] when
+ * lsof is missing or finds nothing (so the conflict message degrades to just
+ * the copy-paste kill command). Synchronous — only ever called on the failure
+ * path, once.
+ * @param {number} port
+ * @returns {string[]}
+ */
+export function lsofPids(port) {
+  try {
+    const out = execFileSync('lsof', ['-ti', `:${port}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    return out
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -217,21 +253,19 @@ function main() {
     maybeAccepting()
   }
 
-  // Fatal api boot failure (e.g. database unreachable): there's no half-up
-  // state worth keeping — `tsx watch` survives the crash and web would keep
-  // serving against a dead api. Print why, tear the whole turbo tree down, and
-  // exit non-zero so `pnpm dev` fails loudly (the developer fixes the cause and
-  // re-runs). Idempotent.
-  const failBoot = (service, reason) => {
+  // Print a fatal message, tear the whole turbo tree down, and exit non-zero.
+  // Shared by the boot-failure and port-conflict paths. Idempotent: there's no
+  // half-up state worth keeping (`tsx watch` survives an api crash and web
+  // would keep serving against a dead api), so `pnpm dev` fails loudly and the
+  // developer fixes the cause and re-runs.
+  const teardown = (lines) => {
     if (bootFailed) return
     bootFailed = true
     if (isTTY) {
       clearDashboard()
       process.stdout.write(ANSI.showCursor)
     }
-    const why = reason ? `  ${ANSI.dim}${reason}${ANSI.reset}` : ''
-    process.stdout.write(`\n${ANSI.bold}${ANSI.red}✖ ${service} failed to boot${ANSI.reset}${why}\n`)
-    process.stdout.write(`${ANSI.dim}tearing down dev (api · web · deps)…${ANSI.reset}\n\n`)
+    process.stdout.write(`\n${lines.join('\n')}\n\n`)
     // Kill the whole turbo process group; child 'exit' then exits us non-zero.
     try {
       process.kill(-child.pid, 'SIGTERM')
@@ -244,6 +278,37 @@ function main() {
     }
     // Backstop: if the tree doesn't exit promptly, force a non-zero exit.
     setTimeout(() => process.exit(1), 2000).unref()
+  }
+
+  // A dev port is already taken — almost always a stale `pnpm dev` left running
+  // by parallel work / an agent. Show what's holding it and the exact command
+  // to free it, then tear down so the developer can kill + re-run cleanly.
+  const reportPortConflict = (port) => {
+    if (bootFailed) return
+    const label = PORT_LABELS[port] ? ` ${ANSI.dim}(${PORT_LABELS[port]})${ANSI.reset}` : ''
+    const pids = lsofPids(port)
+    const heldBy = pids.length ? `   ${ANSI.dim}held by PID ${pids.join(', ')}${ANSI.reset}` : ''
+    teardown([
+      `${ANSI.bold}${ANSI.red}✖ port ${port} already in use${ANSI.reset}${label}${heldBy}`,
+      `  ${ANSI.dim}a stale dev server is holding it (parallel work / an agent?).${ANSI.reset}`,
+      `  free it:     ${ANSI.bold}lsof -ti :${port} | xargs kill${ANSI.reset}  ${ANSI.dim}(add -9 if it persists)${ANSI.reset}`,
+      `  then re-run: ${ANSI.bold}pnpm dev${ANSI.reset}`,
+    ])
+  }
+
+  // Fatal api boot failure (e.g. database unreachable, or its own port taken).
+  const failBoot = (service, reason) => {
+    if (bootFailed) return
+    const port = reason ? parsePortConflict(reason) : null
+    if (port) {
+      reportPortConflict(port)
+      return
+    }
+    const why = reason ? `  ${ANSI.dim}${reason}${ANSI.reset}` : ''
+    teardown([
+      `${ANSI.bold}${ANSI.red}✖ ${service} failed to boot${ANSI.reset}${why}`,
+      `${ANSI.dim}tearing down dev (api · web · deps)…${ANSI.reset}`,
+    ])
   }
 
   // ── line-buffered stdout reader: detect the api marker, passthrough rest ──
@@ -268,10 +333,24 @@ function main() {
         failBoot('api', fail.reason)
         continue
       }
+      // Web (next) has no readiness marker — detect its raw EADDRINUSE here so
+      // a port clash gets the same friendly "what's holding it / how to free
+      // it" treatment instead of a bare stack trace.
+      const port = parsePortConflict(line)
+      if (port) {
+        passthrough(line) // keep the original error visible above the hint
+        reportPortConflict(port)
+        continue
+      }
       passthrough(line)
     }
   })
-  child.stderr.on('data', (data) => passthrough(data.toString()))
+  child.stderr.on('data', (data) => {
+    const s = data.toString()
+    const port = parsePortConflict(s)
+    if (port) reportPortConflict(port)
+    passthrough(s)
+  })
 
   // ── web readiness: HTTP probe with backoff (any response = listening) ──
   let webAttempt = 0
