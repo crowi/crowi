@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Bookmark, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
+import { Bell, BellOff, Bookmark, ClipboardCopy, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { notify } from '@/lib/notify';
 import { isUserHomePath } from '@/lib/page-path';
 import { useToggleBookmark } from '@/lib/use-bookmark';
 import { useToggleLike } from '@/lib/use-like';
@@ -48,6 +49,14 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
   // can't be renamed — the server rejects it too (`isRenamableName`).
   const canRename = !isUserHomePath(page.path);
 
+  const handleCopyMarkdown = () => {
+    const body = page.revision?.body ?? '';
+    void navigator.clipboard
+      ?.writeText(body)
+      .then(() => notify.info(m['page.markdown_copied']()))
+      .catch(() => notify.error(m['page.markdown_copy_failed']()));
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -80,6 +89,10 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
           <DropdownMenuItem onSelect={() => router.push(`/_history?path=${encodeURIComponent(page.path)}`)}>
             <History className="h-4 w-4 mr-2" />
             {m['page.action_history']()}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={handleCopyMarkdown}>
+            <ClipboardCopy className="h-4 w-4 mr-2" />
+            {m['page.action_copy_markdown']()}
           </DropdownMenuItem>
           {canRename && (
             <DropdownMenuItem onSelect={() => setIsRenameOpen(true)}>

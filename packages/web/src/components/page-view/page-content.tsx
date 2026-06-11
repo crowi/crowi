@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Check, Link2, X } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Check, Copy, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import Link from 'next/link';
@@ -94,6 +94,57 @@ function HeadingAnchor({ id }: { id?: string }) {
     >
       {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" /> : <Link2 className="h-4 w-4" aria-hidden="true" />}
     </button>
+  );
+}
+
+/**
+ * Fenced code block with a GitHub-style hover copy button. The single
+ * chokepoint for every code block: shiki-highlighted fences arrive as raw
+ * `<pre>` HTML that `raw()` parses back into a `<pre>` element, so they map
+ * through this `pre` override too. The copied text is read from the rendered
+ * `<pre>`'s `textContent`, which is correct for both shiki span trees and
+ * plain (un-highlighted) code.
+ */
+function CodeBlock({ children, ...props }: ChildrenProps) {
+  const preRef = useRef<HTMLPreElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    const text = preRef.current?.textContent ?? '';
+    if (!text) return;
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+      })
+      .catch(() => {});
+  };
+
+  return (
+    <InsidePreContext.Provider value={true}>
+      <div className="group/code relative my-6">
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={copied ? m['page.code_copied']() : m['page.code_copy']()}
+          title={copied ? m['page.code_copied']() : m['page.code_copy']()}
+          className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/code:opacity-100"
+        >
+          {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+        </button>
+        {/* `min-w-0` lets the parent flex/grid track shrink below the
+            <pre>'s natural width, otherwise long lines push the column
+            wider than the viewport instead of triggering `overflow-x-auto`. */}
+        <pre
+          ref={preRef}
+          className="bg-muted border border-border/60 rounded-xl px-4 py-3 text-[0.875rem] leading-relaxed font-mono overflow-x-auto max-w-full min-w-0"
+          {...props}
+        >
+          {children}
+        </pre>
+      </div>
+    </InsidePreContext.Provider>
   );
 }
 
@@ -264,19 +315,7 @@ const components = {
       </code>
     );
   },
-  pre: ({ children, ...props }: ChildrenProps) => (
-    <InsidePreContext.Provider value={true}>
-      {/* `min-w-0` lets the parent flex/grid track shrink below the
-          <pre>'s natural width, otherwise long lines push the column
-          wider than the viewport instead of triggering `overflow-x-auto`. */}
-      <pre
-        className="bg-muted border border-border/60 rounded-xl px-4 py-3 my-6 text-[0.875rem] leading-relaxed font-mono overflow-x-auto max-w-full min-w-0"
-        {...props}
-      >
-        {children}
-      </pre>
-    </InsidePreContext.Provider>
-  ),
+  pre: CodeBlock,
   blockquote: ({ children, ...props }: ChildrenProps) => (
     <blockquote className="border-l-2 border-foreground/25 pl-4 my-6 text-foreground/75 [&>p]:my-2" {...props}>
       {children}
