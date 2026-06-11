@@ -39,7 +39,7 @@
     "dev:web": "turbo run dev --filter @crowi/web",
     "dev:site": "turbo run dev --filter @crowi/site",
     "build": "turbo run build",
-    "test": "turbo run test --concurrency=1",
+    "test": "turbo run test --concurrency=3",
     "test:server": "turbo run test:server",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
