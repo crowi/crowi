@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import type { PageWithRevision } from '@crowi/api-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { PropsWithChildren, ReactElement } from 'react';
 import { createElement } from 'react';
-import type { PageWithRevision } from '@crowi/api-contract';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // PageHeader composes a tree of data-driven children. Mock every leaf
 // hook so the test is pure layout — no react-query, no API, no WS.
@@ -28,7 +28,7 @@ vi.mock('@/lib/use-presence', () => ({ usePresence }));
 vi.mock('@/lib/use-backlinks', () => ({ useBacklinks }));
 vi.mock('@/lib/use-likers', () => ({ useLikers, likersKeys: { pagePrefix: (id: string) => ['likers', id] } }));
 vi.mock('@/lib/use-seen', () => ({ useSeenUsers }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }) }));
 
 import { PageHeader } from './page-header';
 

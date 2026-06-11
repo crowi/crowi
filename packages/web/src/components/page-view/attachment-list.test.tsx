@@ -1,7 +1,7 @@
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
-import type { Attachment } from '@crowi/api-contract';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeAttachment } from '@/lib/test-utils/factories';
 
 // Mock the data + auth hooks so the list is pure UI — no react-query, no API.
 const { useAttachmentList } = vi.hoisted(() => ({ useAttachmentList: vi.fn() }));
@@ -21,23 +21,6 @@ vi.mock('next/link', () => ({
 }));
 
 import { AttachmentList } from './attachment-list';
-
-function makeAttachment(overrides: Partial<Attachment> = {}): Attachment {
-  return {
-    _id: 'att-1',
-    page: 'page-1',
-    creator: { _id: 'u1', username: 'alice', name: 'Alice', email: 'a@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
-    filePath: 'attachment/page-1/att-1.png',
-    fileName: 'att-1.png',
-    originalName: 'diagram.png',
-    fileFormat: 'image/png',
-    fileSize: 2048,
-    createdAt: '2026-05-01T00:00:00.000Z',
-    url: '/api/v2/attachments/att-1',
-    inUse: true,
-    ...overrides,
-  };
-}
 
 beforeEach(() => {
   useAuth.mockReturnValue({ user: null });

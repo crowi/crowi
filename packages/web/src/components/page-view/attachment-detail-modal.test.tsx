@@ -1,29 +1,12 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
-import type { Attachment } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatAbsoluteDateTime } from '@/lib/date-utils';
+import { makeAttachment } from '@/lib/test-utils/factories';
 import { AttachmentDetailModal } from './attachment-detail-modal';
 
 const removeLabel = m['page.attachments_remove']();
 const downloadLabel = m['page.attachment_detail_download']();
-
-function makeAttachment(overrides: Partial<Attachment> = {}): Attachment {
-  return {
-    _id: 'att-1',
-    page: 'page-1',
-    creator: { _id: 'u1', username: 'alice', name: 'Alice', email: 'a@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
-    filePath: 'attachment/page-1/att-1.png',
-    fileName: 'att-1.png',
-    originalName: 'diagram.png',
-    fileFormat: 'image/png',
-    fileSize: 2048,
-    createdAt: '2026-05-01T09:30:00.000Z',
-    url: '/api/v2/attachments/att-1',
-    inUse: true,
-    ...overrides,
-  };
-}
 
 const noopDelete = () => Promise.resolve();
 
