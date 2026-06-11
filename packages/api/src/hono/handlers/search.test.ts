@@ -1,30 +1,7 @@
 import request from 'supertest';
 import type { SearchDriver, SearchHits, SearchQuery, SearchableDoc } from '@crowi/plugin-api';
-import { app, crowi, Fixture } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string; admin?: boolean }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  if (info.admin) user.admin = true;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
-
-const createPageViaApi = async (accessToken: string, path: string, body: string) => {
-  const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body });
-  if (res.status !== 200) {
-    throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
-  }
-  return res.body.page as { _id: string; path: string };
-};
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 
 /**
  * Compact wrapper for the `GET /api/v2/search` request shape used in every

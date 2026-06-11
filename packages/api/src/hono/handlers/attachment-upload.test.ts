@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
+import { app, crowi } from 'src/test/setup';
+import { bearerAuthHeaders as authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 
 /**
  * RFC-0004 Phase 6 — `POST /api/v2/attachments/upload`.
@@ -11,28 +11,6 @@ import { createJwtUtil } from 'src/util/jwt';
  * lowercase `{ error, message, details? }` envelope, and the 20 req/min
  * per-user rate limit (429 + `Retry-After`).
  */
-
-const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` });
-const jsonHeaders = (token: string) => ({ ...authHeaders(token), 'Content-Type': 'application/json' });
-
-const createTestUser = async (info: { name: string; username: string; email: string }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
-
-const createPageViaApi = async (accessToken: string, pagePath: string, grant?: number) => {
-  const payload: Record<string, unknown> = { path: pagePath, body: '# upload target' };
-  if (grant !== undefined) payload.grant = grant;
-  const res = await request(app).post('/api/v2/pages').set(jsonHeaders(accessToken)).send(payload);
-  if (res.status !== 200) {
-    throw new Error(`Failed to seed page (${pagePath}): ${res.status} ${JSON.stringify(res.body)}`);
-  }
-  return res.body.page as { _id: string; path: string };
-};
 
 describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   const PATH_PREFIX = '/hono-attachment-upload-test/';
@@ -68,7 +46,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   });
 
   it('uploads a pasted image and returns { url, filename, mimeType, sizeBytes }', async () => {
-    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}ok`);
+    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}ok`, '# upload target');
     const res = await request(app)
       .post('/api/v2/attachments/upload')
       .set(authHeaders(ownerToken))
@@ -90,7 +68,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   });
 
   it('accepts the dnd intent as well', async () => {
-    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd`);
+    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd`, '# upload target');
     const res = await request(app)
       .post('/api/v2/attachments/upload')
       .set(authHeaders(ownerToken))
@@ -102,7 +80,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
 
   describe('intent-aware MIME / size limits (RFC-0004 Phase 7)', () => {
     it('accepts a PDF document for the dnd intent', async () => {
-      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-pdf`);
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-pdf`, '# upload target');
       const res = await request(app)
         .post('/api/v2/attachments/upload')
         .set(authHeaders(ownerToken))
@@ -114,7 +92,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     });
 
     it('accepts a zip archive for the dnd intent', async () => {
-      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-zip`);
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-zip`, '# upload target');
       const res = await request(app)
         .post('/api/v2/attachments/upload')
         .set(authHeaders(ownerToken))
@@ -125,7 +103,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     });
 
     it('rejects a PDF for the paste intent — paste is images only', async () => {
-      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-pdf`);
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-pdf`, '# upload target');
       const res = await request(app)
         .post('/api/v2/attachments/upload')
         .set(authHeaders(ownerToken))
@@ -138,7 +116,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     });
 
     it('rejects a paste image above the 10 MB paste cap (under the 50 MB dnd cap)', async () => {
-      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-big`);
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-big`, '# upload target');
       // 10 MB + 1 byte: passes the 50 MB multer cap, fails the in-handler
       // paste cap.
       const overPaste = Buffer.alloc(10 * 1024 * 1024 + 1, 0);
@@ -154,7 +132,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     });
 
     it('accepts the same 10 MB+ image for the dnd intent (within the 50 MB cap)', async () => {
-      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-mid`);
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-mid`, '# upload target');
       const overPaste = Buffer.alloc(10 * 1024 * 1024 + 1, 0);
       const res = await request(app)
         .post('/api/v2/attachments/upload')
@@ -166,7 +144,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     });
 
     it('rejects a dnd file above the 50 MB cap', async () => {
-      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-toolarge`);
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-toolarge`, '# upload target');
       // 50 MB + 1 byte — multer rejects during the multipart parse.
       const oversize = Buffer.alloc(50 * 1024 * 1024 + 1, 0);
       const res = await request(app)
@@ -192,7 +170,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   });
 
   it('returns 400 when intent is not paste/dnd', async () => {
-    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}badintent`);
+    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}badintent`, '# upload target');
     const res = await request(app)
       .post('/api/v2/attachments/upload')
       .set(authHeaders(ownerToken))
@@ -204,7 +182,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   });
 
   it('returns 415 for a disallowed MIME type', async () => {
-    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}badtype`);
+    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}badtype`, '# upload target');
     const res = await request(app)
       .post('/api/v2/attachments/upload')
       .set(authHeaders(ownerToken))
@@ -217,7 +195,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   });
 
   it('returns 413 when the file exceeds the 10 MB cap', async () => {
-    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}toolarge`);
+    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}toolarge`, '# upload target');
     // 10 MB + 1 byte of zeros; multer rejects during the multipart parse.
     const oversize = Buffer.alloc(10 * 1024 * 1024 + 1, 0);
     const res = await request(app)
@@ -233,7 +211,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
 
   it('returns 403 when the caller cannot view the target page', async () => {
     // Owner-granted page: the owner can attach, `other` cannot even see it.
-    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}private`, 4 /* GRANT_OWNER */);
+    const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}private`, '# upload target', 4 /* GRANT_OWNER */);
     const res = await request(app)
       .post('/api/v2/attachments/upload')
       .set(authHeaders(otherToken))
@@ -251,7 +229,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
         username: 'uplRateUser',
         email: 'upl-rate@example.com',
       });
-      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}rate`);
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}rate`, '# upload target');
 
       let sawRateLimit = false;
       // 21 hits exceeds the 20-req window.

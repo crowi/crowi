@@ -223,6 +223,22 @@ function expectWsClose(url: string, timeoutMs = 10000): Promise<number> {
 
 const validTokenFor = (userId: string): string => createNotificationsTokenUtil().signNotificationsToken({ selfUserId: userId }).token;
 
+/**
+ * Poll until `predicate()` returns true or the timeout elapses.
+ * Used in lieu of a fixed sleep — the server's `wireConnection` runs
+ * the subscribe asynchronously after the WS handshake's `open` event
+ * fires, so the subscribe-event-recorded condition is what we actually
+ * want to gate assertions on. A flat sleep was flaky on busy CI workers
+ * (parallel test load delays the subscribe round-trip past a fixed budget).
+ */
+const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+};
+
 describe('attachNotificationsServer — Redis-backed', () => {
   let testServer: TestServer;
 
@@ -233,23 +249,6 @@ describe('attachNotificationsServer — Redis-backed', () => {
   afterAll(async () => {
     await stopTestServer(testServer);
   }, 15000);
-
-  /**
-   * Poll until `predicate()` returns true or the timeout elapses.
-   * Used in lieu of a fixed sleep — the server's `wireConnection`
-   * runs the subscribe asynchronously after the WS handshake's
-   * `open` event fires, so the subscribe-event-recorded condition
-   * is what we actually want to gate the assertion on. A flat sleep
-   * was flaky on busy CI workers (parallel test load delays the
-   * subscribe round-trip past a fixed budget).
-   */
-  const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-    const start = Date.now();
-    while (!predicate()) {
-      if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
-      await new Promise((r) => setTimeout(r, 10));
-    }
-  };
 
   it('accepts a valid token + matching path userId and subscribes the user channel', async () => {
     const userId = 'user-A';
@@ -509,14 +508,6 @@ describe('attachNotificationsServer — schema-guarded fan-out (#14)', () => {
     await stopTestServer(server);
   }, 15000);
 
-  const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-    const start = Date.now();
-    while (!predicate()) {
-      if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
-      await new Promise((r) => setTimeout(r, 10));
-    }
-  };
-
   it('drops a schema-invalid Redis publish and never forwards it to the WS client', async () => {
     const userId = 'user-schema-drop';
     const token = validTokenFor(userId);
@@ -578,13 +569,6 @@ describe('attachNotificationsServer — subscribe/unsubscribe race serialisation
     // 1. Open a tab + wait for the first subscribe.
     const ws1 = new WebSocket(`ws://127.0.0.1:${server.port}/notifications/${userId}?token=${token}`);
     await new Promise<void>((resolve) => ws1.on('open', () => resolve()));
-    const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-      const start = Date.now();
-      while (!predicate()) {
-        if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
-        await new Promise((r) => setTimeout(r, 10));
-      }
-    };
     await waitUntil(() => eventsFor().some((e) => e.kind === 'subscribe'));
 
     // 2. Close + reconnect immediately. The server's handleClose runs

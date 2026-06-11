@@ -1,28 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
+import { app, crowi } from 'src/test/setup';
+import { bearerAuthHeaders as authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 import request from 'supertest';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-});
-
-const jsonHeaders = (token: string) => ({
-  ...authHeaders(token),
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string; admin?: boolean }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  if (info.admin) user.admin = true;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
 
 const cleanupPathPrefix = async (prefix: string) => {
   const Page = crowi.model('Page');
@@ -32,16 +13,6 @@ const cleanupPathPrefix = async (prefix: string) => {
   const pages = await Page.find(filter).select('_id').lean();
   const pageIds = pages.map((p: { _id: Types.ObjectId }) => p._id);
   await Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter), Attachment.deleteMany({ page: { $in: pageIds } })]);
-};
-
-const createPageViaApi = async (accessToken: string, pagePath: string, body: string, grant?: number) => {
-  const payload: Record<string, unknown> = { path: pagePath, body };
-  if (grant !== undefined) payload.grant = grant;
-  const res = await request(app).post('/api/v2/pages').set(jsonHeaders(accessToken)).send(payload);
-  if (res.status !== 200) {
-    throw new Error(`Failed to seed page (${pagePath}): ${res.status} ${JSON.stringify(res.body)}`);
-  }
-  return res.body.page as { _id: string; path: string };
 };
 
 describe('Routes /api/v2 attachments (Hono)', () => {

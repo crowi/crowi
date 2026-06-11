@@ -1,22 +1,7 @@
 import request from 'supertest';
-import { app, crowi, Fixture } from 'src/test/setup';
+import { app, crowi } from 'src/test/setup';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
-import { createJwtUtil } from 'src/util/jwt';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string; admin?: boolean }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  user.admin = !!info.admin;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
+import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
 /**
  * Reset the registration-related security:* keys back to defaults between

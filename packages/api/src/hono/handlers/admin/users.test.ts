@@ -1,12 +1,8 @@
 import request from 'supertest';
 import { app, crowi, Fixture } from 'src/test/setup';
+import { authHeaders } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
 import type { UserDocument } from 'src/models/user';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
 
 interface CreateTestUserInput {
   name: string;
@@ -36,6 +32,11 @@ const seedUsers = async (infos: Array<Record<string, unknown>>): Promise<UserDoc
   return users;
 };
 
+// NOTE: This file intentionally defines its own createTestUser rather than
+// importing from src/test/test-helpers. It uses the seedUsers+ownedUserIds
+// tracking mechanism so that clearUsers() can delete exactly this file's
+// users between describe blocks without touching other test files' users.
+// This is required for the exact pagination / count assertions in this suite.
 const createTestUser = async (info: CreateTestUserInput): Promise<{ user: UserDocument; accessToken: string }> => {
   const User = crowi.model('User');
   const [user] = await seedUsers([info]);

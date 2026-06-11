@@ -1,8 +1,8 @@
 import { Types } from 'mongoose';
 import request from 'supertest';
 
-import { Fixture, app, crowi } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
@@ -11,20 +11,6 @@ import { createJwtUtil } from 'src/util/jwt';
  * `COMMENT_NOT_FOUND` / `INVALID_REQUEST`), and the commentCount
  * post-save hook on the Comment model is exercised end-to-end.
  */
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
 
 const cleanupPathPrefix = async (prefix: string) => {
   const Page = crowi.model('Page');
