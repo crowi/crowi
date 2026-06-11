@@ -34,8 +34,11 @@ describe('AttachmentDetailModal', () => {
     const pdf = makeAttachment({ fileName: 'spec.pdf', originalName: 'spec.pdf', fileFormat: 'application/pdf', url: '/api/v2/attachments/att-2' });
     // The Dialog mounts into a portal on document.body, so query there.
     render(<AttachmentDetailModal attachment={pdf} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
-    // No enlarged <img> preview for a PDF.
+    // No enlarged <img> preview for a PDF. querySelector('img') is intentional: we are
+    // checking for the HTML <img> preview element specifically — BoringAvatar SVGs also carry
+    // role="img", so queryByRole('img') would produce false positives in the negative check.
     expect(document.body.querySelector('img')).toBeNull();
+    // `iframe` has no ARIA role — querySelector is the only portable way to reach it.
     const iframe = document.body.querySelector('iframe');
     expect(iframe).not.toBeNull();
     expect(iframe?.getAttribute('src')).toBe('/api/v2/attachments/att-2');
@@ -45,11 +48,14 @@ describe('AttachmentDetailModal', () => {
   it('shows a file-type icon and no preview for other file types', () => {
     const zip = makeAttachment({ fileName: 'data.zip', originalName: 'data.zip', fileFormat: 'application/zip' });
     render(<AttachmentDetailModal attachment={zip} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
-    // No image / iframe preview for a generic file type.
+    // No image / iframe preview for a generic file type. querySelector('img') is intentional:
+    // we are checking for the HTML <img> preview element — BoringAvatar SVGs also carry
+    // role="img", so queryByRole('img') would produce false positives here.
     expect(document.body.querySelector('img')).toBeNull();
+    // `iframe` has no ARIA role — querySelector is the only portable way to reach it.
     expect(document.body.querySelector('iframe')).toBeNull();
     expect(screen.getByText(m['page.attachment_detail_preview_unavailable']())).toBeTruthy();
-    // The file-type icon renders as an <svg>.
+    // The file-type icon renders as an aria-hidden <svg> with no accessible role — querySelector is the only portable way.
     expect(document.body.querySelector('svg')).not.toBeNull();
   });
 

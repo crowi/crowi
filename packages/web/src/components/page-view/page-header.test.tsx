@@ -106,7 +106,10 @@ function renderHeader(ui: ReactElement) {
 describe('PageHeader — expanded state', () => {
   it('renders the expanded header (no compact bar) when sticky is enabled but not scrolled', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
-    expect(document.querySelector('header')?.getAttribute('data-compact')).toBe('false');
+    // <header> has implicit role "banner"; query it semantically, then check the data-attribute.
+    expect(screen.getByRole('banner').getAttribute('data-compact')).toBe('false');
+    // page-header-expanded / page-header-compact are layout-state containers with no
+    // accessible role; getByTestId / queryByTestId are the only portable way to reach them.
     expect(screen.getByTestId('page-header-expanded')).toBeTruthy();
     // No fixed compact bar while expanded.
     expect(screen.queryByTestId('page-header-compact')).toBeNull();
@@ -116,6 +119,8 @@ describe('PageHeader — expanded state', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
     // While expanded the measurement/placeholder wrapper is the visible
     // header — it must not carry the `invisible` class.
+    // sticky-header-placeholder is a layout-state wrapper with no accessible role;
+    // getByTestId is the only portable way to reach it.
     const placeholder = screen.getByTestId('sticky-header-placeholder');
     expect(placeholder.className).not.toContain('invisible');
     expect(placeholder.getAttribute('aria-hidden')).toBe('false');
@@ -137,9 +142,12 @@ describe('PageHeader — expanded state', () => {
 
   it('renders no placeholder and no compact bar when sticky is disabled', () => {
     renderHeader(<PageHeader page={makePage()} showActions />);
+    // sticky-header-placeholder / page-header-compact are layout-state containers with no
+    // accessible role; queryByTestId is the only portable way to check absence.
     expect(screen.queryByTestId('sticky-header-placeholder')).toBeNull();
     expect(screen.queryByTestId('page-header-compact')).toBeNull();
-    expect(document.querySelector('header')?.getAttribute('data-compact')).toBe('false');
+    // <header> has implicit role "banner"; query it semantically, then check the data-attribute.
+    expect(screen.getByRole('banner').getAttribute('data-compact')).toBe('false');
   });
 });
 
@@ -148,18 +156,23 @@ describe('PageHeader — compact state', () => {
     mockCompact();
   });
 
-  /** The fixed compact bar. The compact-layout assertions scope here. */
+  /** The fixed compact bar. The compact-layout assertions scope here.
+   * page-header-compact is a layout-state wrapper with no accessible role;
+   * getByTestId is the only portable way to reach it. */
   function compactBar() {
     return within(screen.getByTestId('page-header-compact'));
   }
 
   it('marks the header as compact when scrolled past H', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
-    expect(document.querySelector('header')?.getAttribute('data-compact')).toBe('true');
+    // <header> has implicit role "banner"; query it semantically, then check the data-attribute.
+    expect(screen.getByRole('banner').getAttribute('data-compact')).toBe('true');
   });
 
   it('mounts a fixed compact bar with the compact-layout classes', () => {
     renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    // page-header-compact is a layout-state wrapper with no accessible role;
+    // getByTestId is the only portable way to reach it for className inspection.
     const bar = screen.getByTestId('page-header-compact');
     expect(bar.className).toContain('fixed');
     expect(bar.className).toContain('top-0');
@@ -172,6 +185,8 @@ describe('PageHeader — compact state', () => {
     // The expanded layout stays mounted and in flow — its measurement
     // wrapper is the placeholder spacer of height H. It is `invisible`
     // (still occupies space) so the article below never moves.
+    // sticky-header-placeholder and page-header-expanded are layout-state wrappers
+    // with no accessible role; getByTestId is the only portable way to reach them.
     const placeholder = screen.getByTestId('sticky-header-placeholder');
     expect(placeholder.className).toContain('invisible');
     expect(placeholder.getAttribute('aria-hidden')).toBe('true');
@@ -230,6 +245,8 @@ describe('PageHeader — compact state', () => {
       status: 'connected',
     });
     renderHeader(<PageHeader page={makePage()} sticky showActions showPresence />);
+    // live-presence-row is a layout row with a data-size attribute but no accessible role;
+    // getByTestId is the only portable way to reach it for data-size inspection.
     expect(compactBar().getByTestId('live-presence-row').getAttribute('data-size')).toBe('compact');
   });
 });
@@ -239,6 +256,8 @@ describe('PageHeader — placeholder keeps document flow constant', () => {
     // Expanded: the wrapper is the visible header.
     useStickyHeader.mockReturnValue({ compact: false });
     const { unmount } = renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    // sticky-header-placeholder is a layout-state wrapper with no accessible role;
+    // getByTestId is the only portable way to reach it.
     expect(screen.getByTestId('sticky-header-placeholder')).toBeTruthy();
     unmount();
     cleanup();
