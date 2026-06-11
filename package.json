@@ -40,6 +40,7 @@
     "dev:site": "turbo run dev --filter @crowi/site",
     "migrate": "node scripts/migrate.mjs",
     "build": "turbo run build",
+    "build:images": "node scripts/build-images.mjs",
     "test": "turbo run test",
     "test:server": "turbo run test:server",
     "lint": "turbo run lint",
