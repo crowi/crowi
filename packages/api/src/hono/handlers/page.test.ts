@@ -374,6 +374,24 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       expect(pageDoc.path).toBe(homePath);
     });
 
+    it('refuses to rename a page onto a user home path (/user/<name>) with 400 PAGE_INVALID_NAME', async () => {
+      const headers = authHeaders(accessToken);
+      const fromPath = `${PATH_PREFIX}rename-onto-home`;
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# x' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: '/user/renamePageTester' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
+
+      // The source page must stay where it is.
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.path).toBe(fromPath);
+    });
+
     it('creates a redirect page at the old path when create_redirect=true', async () => {
       const fromPath = `${PATH_PREFIX}from-redirect`;
       const toPath = `${PATH_PREFIX}to-redirect`;
@@ -833,6 +851,29 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
     expect(await Page.findOne({ path: `${PATH_PREFIX}moved/child-b` })).not.toBeNull();
     // Old descendant paths no longer exist as real pages.
     expect(await Page.findOne({ path: `${oldFolder}child-a`, redirectTo: null })).toBeNull();
+  });
+
+  it('refuses to rename a subtree that sweeps in a user home page (/user/<name>)', async () => {
+    const headers = authHeaders(accessToken);
+    // The user's home page + a child under the `/user/` namespace.
+    await request(app).post('/api/v2/pages').set(headers).send({ path: '/user/renameSubtreeTester', body: '# home' });
+    await request(app).post('/api/v2/pages').set(headers).send({ path: '/user/renameSubtreeTester/note', body: '# note' });
+
+    // Renaming the whole `/user/` subtree would move every user's home
+    // page — bypassing the single-page rename guard. It must be refused.
+    const res = await request(app)
+      .post('/api/v2/pages/rename-subtree')
+      .set(headers)
+      .send({ old_path: '/user/', new_path: `${PATH_PREFIX}stolen/` });
+
+    expect(res.status).toBe(400);
+    // Nothing moved: the home page + child stay put, destination empty.
+    expect(await Page.findOne({ path: '/user/renameSubtreeTester' })).not.toBeNull();
+    expect(await Page.findOne({ path: '/user/renameSubtreeTester/note' })).not.toBeNull();
+    expect(await Page.findOne({ path: `${PATH_PREFIX}stolen/note` })).toBeNull();
+
+    // afterEach only cleans PATH_PREFIX — drop the `/user/` pages we made.
+    await Page.deleteMany({ path: { $in: ['/user/renameSubtreeTester', '/user/renameSubtreeTester/note'] } });
   });
 
   it('does not move descendants the caller cannot see (grant-filtered)', async () => {
