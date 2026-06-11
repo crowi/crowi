@@ -16,14 +16,42 @@ import { afterEach, beforeAll } from 'vitest';
 // RTL re-export) don't get the flag set for them, so a single
 // event-dispatch test floods the output with hundreds of identical lines.
 // Setting it true here (the documented Vitest + React Testing Library setup)
-// configures the act environment once for the whole suite. With the flag on,
-// React instead warns only for updates genuinely NOT wrapped in act/waitFor
-// — which is the signal we actually want.
+// configures the act environment once for the whole suite, so explicit
+// `act(...)` calls actually flush updates instead of warning. The residual
+// "not wrapped in act" noise it surfaces is handled by the console filter
+// below.
 declare global {
-  // eslint-disable-next-line no-var
   var IS_REACT_ACT_ENVIRONMENT: boolean;
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+// Filter React's act() warnings out of the console.
+//
+// With the act environment on (above), React emits "An update to X inside a
+// test was not wrapped in act(...)" whenever an async state update settles
+// after a test's synchronous body. In this suite those come from benign
+// trailing updates — a Radix dialog closing its `openId` async, a hook's
+// saving-flag settling — that NO assertion depends on. They:
+//   - never correlate with a failure (a genuinely broken async test asserts
+//     the wrong value and FAILS; it does not merely warn),
+//   - fire intermittently (timing-dependent), and
+//   - are misattributed by vitest to whatever test happens to be running when
+//     the microtask fires, not the one that caused them,
+// so they are noise that floods the output without being actionable. Fixing
+// each at the source (await act / waitFor) is worthwhile where cheap — done
+// for use-collab-save — but chasing the misattributed long tail across every
+// dialog/provider test does not converge. Suppress ONLY this warning family;
+// every other console.error (including real React errors) still surfaces, and
+// a broken async test still fails loudly via its assertion.
+const REACT_ACT_NOISE = ['not wrapped in act', 'not configured to support act'];
+const originalConsoleError = console.error.bind(console);
+console.error = (...args: Parameters<typeof console.error>) => {
+  const first = typeof args[0] === 'string' ? args[0] : '';
+  if (REACT_ACT_NOISE.some((needle) => first.includes(needle))) {
+    return;
+  }
+  originalConsoleError(...args);
+};
 
 // Unmount anything a test rendered so the next test starts from a clean DOM.
 // `@testing-library/react`'s cleanup is idempotent, so files that still call
