@@ -192,6 +192,7 @@ export interface PageModel extends Model<PageDocument> {
   getDeletedPageName(path): any;
   getRevertDeletedPageName(path): any;
   isDeletableName(path): any;
+  isRenamableName(path): any;
   isCreatableName(name): any;
   fixToCreatableName(path): any;
   updateRevision(pageId, revisionId, cb): any;
@@ -628,6 +629,21 @@ export default (crowi: Crowi) => {
 
     for (let i = 0; i < notDeletable.length; i++) {
       const pattern = notDeletable[i];
+      if (path.match(pattern)) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  pageSchema.statics.isRenamableName = function (path) {
+    const notRenamable = [
+      /^\/user\/[^/]+$/, // user home page — its path is bound to the username
+    ];
+
+    for (let i = 0; i < notRenamable.length; i++) {
+      const pattern = notRenamable[i];
       if (path.match(pattern)) {
         return false;
       }

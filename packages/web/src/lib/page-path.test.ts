@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodePagePathFromUrl,
   defaultDraftBody,
+  isUserHomePath,
   pageBasename,
   pageDefaultTitle,
   pageDirname,
@@ -106,6 +107,21 @@ describe('pageDisplayParent', () => {
   it('pairs with pageDisplayName to reconstruct the (trimmed) path', () => {
     const path = '/user/foo/日報/2026/05/23';
     expect(pageDisplayParent(path) + pageDisplayName(path)).toBe(path);
+  });
+});
+
+describe('isUserHomePath', () => {
+  it('matches a user home page with or without a trailing slash', () => {
+    expect(isUserHomePath('/user/sotarok')).toBe(true);
+    expect(isUserHomePath('/user/sotarok/')).toBe(true);
+  });
+
+  it('does not match deeper pages under the home, the member directory, or other paths', () => {
+    expect(isUserHomePath('/user/sotarok/memo')).toBe(false);
+    expect(isUserHomePath('/user/')).toBe(false);
+    expect(isUserHomePath('/user')).toBe(false);
+    expect(isUserHomePath('/crowi/rfc')).toBe(false);
+    expect(isUserHomePath('/')).toBe(false);
   });
 });
 

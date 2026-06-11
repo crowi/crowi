@@ -734,6 +734,14 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
+          // The user home page (`/user/<username>`) is bound to the username
+          // and must not be renamed (mirrors `isDeletableName`). Checked on
+          // the source path so it blocks both the single-page and
+          // include_descendants forms.
+          if (!Page.isRenamableName(pageData.path)) {
+            return c.json(pageBadRequestBody('PAGE_INVALID_NAME', `This page cannot be renamed (${pageData.path})`), 400);
+          }
+
           // Optimistic-lock on the root page's revision — same as the
           // single-page path. Sub-pages are not individually version-checked
           // (legacy renameTree parity).

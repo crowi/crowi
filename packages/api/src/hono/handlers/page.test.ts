@@ -353,6 +353,27 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       expect(redirectPage).toBeNull();
     });
 
+    it('refuses to rename a user home page (/user/<username>) with 400 PAGE_INVALID_NAME', async () => {
+      const headers = authHeaders(accessToken);
+      const homePath = '/user/renamePageTester';
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: homePath, body: '# home' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app)
+        .post('/api/v2/pages/rename')
+        .set(headers)
+        .send({ page_id: pageId, new_path: `${PATH_PREFIX}moved-home` });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
+
+      // The page must stay at its home path.
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.path).toBe(homePath);
+    });
+
     it('creates a redirect page at the old path when create_redirect=true', async () => {
       const fromPath = `${PATH_PREFIX}from-redirect`;
       const toPath = `${PATH_PREFIX}to-redirect`;
