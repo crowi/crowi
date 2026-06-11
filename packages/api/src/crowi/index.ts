@@ -23,7 +23,7 @@ import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
 import { runBootMigrations } from 'src/migration/run-boot-migrations';
-import { type BootReporter, createBootReporter } from 'src/util/boot-reporter';
+import { type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
 
 const pkg = require('../../package.json');
 
@@ -692,6 +692,13 @@ class Crowi {
     // the terminal isn't left cursorless. Idempotent — the init()/start()
     // try-path may already have disposed.
     this.bootReporter?.dispose();
+    // Machine-readable failure marker (own stdout line, mirrors the readiness
+    // marker). `scripts/dev.mjs` watches for this to tear the whole dev tree
+    // (api · web · deps) down — otherwise `tsx watch` survives the crash and
+    // web keeps serving against a dead api. Harmless in prod (a grep-able line
+    // before exit). Reason is the first line of the error, length-capped.
+    const reason = (err instanceof Error ? err.message : String(err)).split('\n')[0].slice(0, 200);
+    process.stdout.write(`${formatFailMarker('api', reason)}\n`);
     console.error(err);
     console.error(err.stack);
     process.exit(1);

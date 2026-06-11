@@ -28,6 +28,7 @@ import http from 'node:http'
 
 // ── shared contract with boot-reporter.ts ──
 const READY_MARKER_PREFIX = '@@crowi:ready'
+const FAIL_MARKER_PREFIX = '@@crowi:fail'
 
 // Same filter list as the legacy root `dev` script. Kept here verbatim so the
 // turbo orchestration (concurrency / filters) is unchanged.
@@ -71,6 +72,24 @@ export function parseReadyMarker(line) {
 }
 
 /**
+ * Parse a `@@crowi:fail <service> <reason…>` marker (emitted by the api boot
+ * reporter on a fatal boot error, e.g. the database is unreachable). `service`
+ * is the first token; `reason` is the remainder (may be empty). Mirrors
+ * `parseFailMarker` in boot-reporter.ts.
+ * @param {string} line
+ * @returns {{ service: string, reason: string } | null}
+ */
+export function parseFailMarker(line) {
+  const idx = line.indexOf(FAIL_MARKER_PREFIX)
+  if (idx === -1) return null
+  const rest = line.slice(idx + FAIL_MARKER_PREFIX.length).trim()
+  if (!rest) return null
+  const sp = rest.indexOf(' ')
+  if (sp === -1) return { service: rest, reason: '' }
+  return { service: rest.slice(0, sp), reason: rest.slice(sp + 1).trim() }
+}
+
+/**
  * Exponential backoff with a ceiling, for the web probe retry loop.
  * @param {number} attempt 0-based retry count
  * @param {number} [base]
@@ -101,6 +120,7 @@ const ANSI = {
   cursorUp: (n) => `\x1b[${n}A`,
   green: '\x1b[32m',
   cyan: '\x1b[36m',
+  red: '\x1b[31m',
   dim: '\x1b[2m',
   bold: '\x1b[1m',
   reset: '\x1b[0m',
@@ -120,6 +140,7 @@ function main() {
   let apiUrl = 'http://localhost:4301'
   let phase = 'boot' // 'boot' → overlay dashboard; 'stream' → passthrough
   let dashboardLines = 0
+  let bootFailed = false
 
   // Drop the forced DEBUG flood: the api boot reporter is debug-independent, so
   // the default dev experience is the dashboard, not crowi:* debug spam.
@@ -196,6 +217,35 @@ function main() {
     maybeAccepting()
   }
 
+  // Fatal api boot failure (e.g. database unreachable): there's no half-up
+  // state worth keeping — `tsx watch` survives the crash and web would keep
+  // serving against a dead api. Print why, tear the whole turbo tree down, and
+  // exit non-zero so `pnpm dev` fails loudly (the developer fixes the cause and
+  // re-runs). Idempotent.
+  const failBoot = (service, reason) => {
+    if (bootFailed) return
+    bootFailed = true
+    if (isTTY) {
+      clearDashboard()
+      process.stdout.write(ANSI.showCursor)
+    }
+    const why = reason ? `  ${ANSI.dim}${reason}${ANSI.reset}` : ''
+    process.stdout.write(`\n${ANSI.bold}${ANSI.red}✖ ${service} failed to boot${ANSI.reset}${why}\n`)
+    process.stdout.write(`${ANSI.dim}tearing down dev (api · web · deps)…${ANSI.reset}\n\n`)
+    // Kill the whole turbo process group; child 'exit' then exits us non-zero.
+    try {
+      process.kill(-child.pid, 'SIGTERM')
+    } catch {
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        /* already dead */
+      }
+    }
+    // Backstop: if the tree doesn't exit promptly, force a non-zero exit.
+    setTimeout(() => process.exit(1), 2000).unref()
+  }
+
   // ── line-buffered stdout reader: detect the api marker, passthrough rest ──
   let stdoutBuf = ''
   child.stdout.on('data', (data) => {
@@ -209,6 +259,13 @@ function main() {
         // Don't echo the raw marker line (it's machine plumbing); show the
         // dashboard transition instead.
         markApiReady(marker.url)
+        continue
+      }
+      const fail = parseFailMarker(line)
+      if (fail && fail.service === 'api') {
+        // Don't echo the raw marker; failBoot prints a human message and tears
+        // the tree down.
+        failBoot('api', fail.reason)
         continue
       }
       passthrough(line)
@@ -261,6 +318,11 @@ function main() {
 
   child.on('exit', (code, signal) => {
     if (isTTY) process.stdout.write(ANSI.showCursor)
+    // A fatal api boot failure tore the tree down on purpose — surface it as a
+    // non-zero exit regardless of how turbo itself terminated.
+    if (bootFailed) {
+      process.exit(1)
+    }
     if (signal) {
       process.exit(0)
     }
