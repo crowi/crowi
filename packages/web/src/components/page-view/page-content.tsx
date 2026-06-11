@@ -113,7 +113,7 @@ function CodeBlock({ children, ...props }: ChildrenProps) {
     const text = preRef.current?.textContent ?? '';
     if (!text) return;
     navigator.clipboard
-      .writeText(text)
+      ?.writeText(text)
       .then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
