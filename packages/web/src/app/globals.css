@@ -276,6 +276,19 @@ html[data-page-grant="2"] {
   background-size: 100% 100%;
 }
 
+/*
+ * Dark-mode variant — the light gradient's bright teal/blue clashed with
+ * the dark auth card. Same hues (so the brand feel carries over) but deeply
+ * darkened/desaturated so the backdrop reads as dark and the card blends in.
+ */
+.dark .bg-crowi-login {
+  background-color: #0e171a;
+  background-image:
+    linear-gradient(215deg, #2a3f41, #1d3647, #0c1416),
+    linear-gradient(135deg, #0c1416, #22384f, #17302f),
+    linear-gradient(335deg, #36474b, #0c1416, #1e3a58);
+}
+
 @media (min-width: 768px) {
   .bg-crowi-login {
     background-size: 200% 200%;
