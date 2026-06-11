@@ -271,7 +271,10 @@ class Crowi {
     await this.setupDatabase();
     await this.setupModels();
     await this.setupConfig();
-    this.setupRenderer();
+    // Skip the page-save side-effect listeners (mention dispatch / render-cache
+    // invalidation): a migration's `updatePage` writes must not @-ping users or
+    // race the teardown connection close — see `setupRenderer`.
+    this.setupRenderer({ registerPageEventListeners: false });
     await this.setupPlugins();
     this.initialized = true;
   }
@@ -296,17 +299,26 @@ class Crowi {
     }
   }
 
-  setupRenderer() {
+  setupRenderer(options: { registerPageEventListeners?: boolean } = {}) {
     this.renderer = createRenderer(this);
-    // Register cache invalidation listeners on pageEvent. Needs to
-    // happen here (not in setupEvents) because the listener captures
-    // the renderer.cache handle constructed one line above.
-    registerRenderCacheInvalidation(this);
-    // RFC-0002 Phase 8: dispatch `@username` mention notifications on
-    // page save. Wired here (not in `setupEvents`) because the dispatcher
-    // reads `Revision.meta.mentions[]` produced by the renderer pipeline,
-    // so it must register after `setupRenderer` has run.
-    registerMentionDispatch(this);
+    // The page-save side-effect listeners below are skipped in CLI mode
+    // (`initForCli`): a bulk migration that rewrites page bodies via
+    // `updatePage` would otherwise fire mention notifications (wrong — nobody
+    // should be @-pinged by a syntax migration) and per-page render-cache
+    // invalidation (pointless in a one-shot process — and it races the CLI's
+    // `teardownForCli` connection close, logging spurious "client was closed"
+    // warnings). Deliberate cache rebuilds use `crowi-admin rebuild renderer`.
+    if (options.registerPageEventListeners ?? true) {
+      // Register cache invalidation listeners on pageEvent. Needs to
+      // happen here (not in setupEvents) because the listener captures
+      // the renderer.cache handle constructed one line above.
+      registerRenderCacheInvalidation(this);
+      // RFC-0002 Phase 8: dispatch `@username` mention notifications on
+      // page save. Wired here (not in `setupEvents`) because the dispatcher
+      // reads `Revision.meta.mentions[]` produced by the renderer pipeline,
+      // so it must register after `setupRenderer` has run.
+      registerMentionDispatch(this);
+    }
     // Eagerly initialise heavy ESM-only deps (jiti + shiki +
     // remark-*). The first pipeline run otherwise pays ~200ms cold-
     // load latency; we move that cost to boot time. Fire-and-forget —
