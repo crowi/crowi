@@ -641,7 +641,6 @@
   "sidebar.up_to_parent": "上の階層へ",
   "sidebar.empty": "このページの下にはまだページがありません",
   "admin.dashboard_title": "管理ダッシュボード",
-  "admin.dashboard_subtitle": "Crowi の管理者向け機能の一覧です。各セクションは順次実装予定です。",
   "admin.coming_soon": "Coming soon",
   "admin.coming_soon_body": "この機能は開発中です。",
   "admin.welcome.dialog_title": "セットアップ完了 🎉",

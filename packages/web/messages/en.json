@@ -641,7 +641,6 @@
   "sidebar.up_to_parent": "Up one level",
   "sidebar.empty": "No pages under here yet",
   "admin.dashboard_title": "Admin Dashboard",
-  "admin.dashboard_subtitle": "Index of administrator features. Sections will be implemented over time.",
   "admin.coming_soon": "Coming soon",
   "admin.coming_soon_body": "This feature is under development.",
   "admin.welcome.dialog_title": "Setup complete 🎉",
