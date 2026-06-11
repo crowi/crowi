@@ -6660,10 +6660,17 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "confidential": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "title"
+                    "title",
+                    "confidential"
                   ]
                 }
               }

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Clock, Search } from 'lucide-react';
 import { useSearchPages } from '@/lib/use-search';
 import { useRecentlyViewedPages } from '@/lib/use-recently-viewed';
+import { useSearchFocus } from '@/lib/search-focus-context';
 import { pagePathToHref } from '@/lib/page-path';
 import { SearchSuggestionItem } from './search-suggestion-item';
 import { m } from '@paraglide/messages.js';
@@ -22,6 +23,13 @@ export function GlobalSearchInput() {
   const [value, setValue] = useState(urlQ);
   const [isFocused, setIsFocused] = useState(false);
   const [debouncedQ, setDebouncedQ] = useState('');
+
+  // Publish focus state to the header so width-competing siblings (e.g.
+  // the confidentiality notice) can yield while the box is expanded.
+  const { setSearchFocused } = useSearchFocus();
+  useEffect(() => {
+    setSearchFocused(isFocused);
+  }, [isFocused, setSearchFocused]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);

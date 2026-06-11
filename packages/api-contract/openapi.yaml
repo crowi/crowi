@@ -4532,8 +4532,13 @@ paths:
                     type:
                       - string
                       - 'null'
+                  confidential:
+                    type:
+                      - string
+                      - 'null'
                 required:
                   - title
+                  - confidential
         '500':
           description: Internal server error
           content:

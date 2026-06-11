@@ -32,6 +32,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             title: string | null;
+                            confidential: string | null;
                         };
                     };
                 };

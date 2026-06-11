@@ -21,6 +21,8 @@ import { SiteBrand } from '@/components/site-brand';
 import { LocaleSync } from '@/components/locale-sync';
 import { ThemeSync } from '@/components/theme-sync';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
+import { ConfidentialNotice } from '@/components/confidential-notice';
+import { SearchFocusProvider } from '@/lib/search-focus-context';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
 import { MobileSearch } from '@/components/search/mobile-search';
 import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
@@ -116,42 +118,52 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* サーバーエラーモーダル */}
       <ServerErrorModal />
 
-      <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
-          <div className="flex items-center gap-1 min-w-0 shrink-0">
-            <SiteBrand />
-            {/* Mobile (< md) search trigger next to the logo — the desktop
+      <SearchFocusProvider>
+        <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
+          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
+            <div className="flex items-center gap-1 min-w-0 shrink-0">
+              <SiteBrand />
+              {/* Mobile (< md) search trigger next to the logo — the desktop
                 search input below is hidden on narrow viewports. */}
-            <MobileSearch />
+              <MobileSearch />
+            </div>
+            <GlobalSearchInput />
+            <div className="flex items-center gap-2 ml-auto">
+              {/* 機密注意書き — app:confidential 設定時に常時表示。スクショ/
+                印刷で機密文書と分かるよう右クラスタ先頭に控えめに出す。 */}
+              <ConfidentialNotice />
+              <CreatePageButton />
+              <NotificationBell />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hover:bg-muted flex items-center gap-2 px-1.5"
+                    aria-label={m['header.user_menu_aria']({ name: user?.name || user?.username || '' })}
+                  >
+                    {user && <UserAvatar user={user} size="sm" />}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {user && <UserDropdownIdentity user={user} />}
+                  <DropdownMenuSeparator />
+                  {user && <UserMenuItems username={user.username} isAdmin={user.admin === true} />}
+                  <DropdownMenuItem onClick={logout} className="text-destructive">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    {m['header.user_dropdown_logout']()}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-          <GlobalSearchInput />
-          <div className="flex items-center gap-2 ml-auto">
-            <CreatePageButton />
-            <NotificationBell />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="hover:bg-muted flex items-center gap-2 px-1.5"
-                  aria-label={m['header.user_menu_aria']({ name: user?.name || user?.username || '' })}
-                >
-                  {user && <UserAvatar user={user} size="sm" />}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                {user && <UserDropdownIdentity user={user} />}
-                <DropdownMenuSeparator />
-                {user && <UserMenuItems username={user.username} isAdmin={user.admin === true} />}
-                <DropdownMenuItem onClick={logout} className="text-destructive">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  {m['header.user_dropdown_logout']()}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+        </header>
+      </SearchFocusProvider>
+
+      {/* 機密注意書き(モバイル) — 右クラスタに余地がない < sm では、ヘッダー
+          直下の細い行で全文を表示し、どのビューポートでも機密マーカーが
+          スクショ/印刷に残るようにする。 */}
+      <ConfidentialNotice placement="bar" />
 
       {/*
         Page-grant accent strip — a thin horizontal bar directly
