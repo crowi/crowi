@@ -15,20 +15,20 @@ description: Crowi 2.0 のモノレポ構成と API + Web の全体像
 ```
 crowi/
 ├── apps/
+│   ├── crowi-runner/        # リファレンス runner プロジェクト — full イメージの構築元 (@crowi/runner-app)
+│   ├── crowi-runner-slim/   # 最小 runner プロジェクト — slim イメージの構築元 (@crowi/runner-app-slim)
 │   └── crowi-site/          # crowi.wiki LP + ドキュメント (Next.js + Fumadocs, :4303)
-├── crowi.config.json        # dev runner 設定 (plugins + 有効ドライバ)
-├── .env.example             # dev ランタイム env テンプレート
 └── packages/
-    ├── api/                 # Hono 4 API (:4301)
+    ├── api/                 # Hono 4 API (:4301) — plugin-free (SDK + コアのみ)
     ├── api-contract/        # Hono (@hono/zod-openapi) 契約 + Zod スキーマ
     ├── web/                 # Next.js 16 App Router フロントエンド (:4302)
     ├── collab/              # リアルタイム共同編集 (Hocuspocus) ライブラリ
-    ├── runner/              # 設定ローダ + プラグインリゾルバ
+    ├── runner/              # @crowi/runner: 設定ローダ + プラグインリゾルバ (createRequire)
     ├── plugin-api/          # プラグイン SDK (CrowiPlugin / レジストリ / context)
     ├── plugin-aws/          # AWS 系プラグインの共通資格情報ベース
-    ├── plugin-storage-local/         # ローカル FS ストレージドライバ (既定)
-    ├── plugin-storage-aws-s3/        # S3 ストレージドライバ
-    ├── plugin-search-elasticsearch/  # Elasticsearch 検索ドライバ
+    ├── plugin-storage-{local,aws-s3}/
+    ├── plugin-search-{mongo,elasticsearch,opensearch}/
+    ├── plugin-mail-{smtp,aws-ses,resend}/
     ├── plugin-renderer-{emoji,katex,plantuml,crowi-legacy}/
     ├── admin-cli/           # `crowi-admin` CLI
     └── tsconfig/            # 共有 tsconfig プリセット
@@ -36,7 +36,20 @@ crowi/
 
 3 つの大きな構成要素 — **API** (`packages/api`)、**Web**
 (`packages/web`)、**API 契約** (`packages/api-contract`) — を中心に、
-プラグインと runner が周囲を固めています。
+プラグインと runner プロジェクト (`apps/crowi-runner*`) が周囲を固めて
+います。
+
+api は **plugin-free** です。`@crowi/api` は SDK (`@crowi/plugin-api`)
+とコアのみを同梱し、ドライバは一切含みません。プラグインは
+**runner プロジェクト** — `@crowi/api` と選んだ `@crowi/plugin-*` を
+依存に持ち、`crowi.config.json` (どのプラグインをロードし、各レジストリで
+どのドライバを使うか) と `.env` を持つ小さな npm プロジェクト — が所有
+します。api は起動時に `@crowi/runner` ライブラリが
+`createRequire(projectDir)` で runner プロジェクトの `node_modules/`
+から列挙プラグインを解決するため、プラグインの追加・削除に api の再ビルド
+は不要です。`apps/crowi-runner` がリファレンス runner プロジェクトで
+(その `crowi.config.json` は `apps/crowi-runner/crowi.config.json`)、
+セルフホストする運用者は自前のものを用意します。
 
 ## 技術スタック
 
@@ -104,10 +117,27 @@ Hocuspocus は別プロセスではなく、`@crowi/collab` ライブラリと�
 プレゼンス) のアップグレードを処理します。詳細は
 [リアルタイム共同編集の運用](../operations/realtime-collab) を参照。
 
+### 公式 Docker イメージ
+
+公式イメージはいずれも `packages/api/Dockerfile` から、`@crowi/api` を
+直接ではなく runner プロジェクトを構築元としてビルドされます。
+
+- **full** (`apps/crowi-runner` から) — 12 個のファーストパーティ
+  ドライバをすべて同梱します。ストレージ / 検索 / メールのドライバは
+  `crowi.config.json` を編集するだけで切り替えられ、再ビルドは不要です。
+- **slim** (`apps/crowi-runner-slim` から) — 暗黙のデフォルト 3 ドライバ
+  (`storage-local` + `search-mongo` + `mail-smtp`) のみで、MongoDB だけで
+  動作します。独自のプラグインセットを組み立てたい運用者向けの最小の
+  土台です。
+
+api は Node ランタイムを必須とします (Workers では動作不可、Containers は可)。
+
 ## Web フロントエンド (`packages/web`)
 
-Next.js 16 App Router を採用し、`src/app/` 配下を 3 つの Route Group に
-分けています。
+Web アプリはプラグイン依存がゼロの **独立した deployable** です。api と
+HTTP で通信し、runner プロジェクトがどのドライバを読み込んだかは関知
+しません。Next.js 16 App Router を採用し、`src/app/` 配下を 3 つの Route
+Group に分けています。
 
 | Route Group | 内容 | ゲート |
 | ----------- | ---- | ------ |

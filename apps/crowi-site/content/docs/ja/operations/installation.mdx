@@ -6,10 +6,11 @@ description: Docker / 手動での Crowi のインストール手順
 このページでは、Crowi 2.0 (codename Reignite) を自分の環境で動かすための
 セットアップ手順を説明します。
 
-> **注意**: Crowi v2 は現在 alpha 開発中です。安定版リリースはまだありません。
-> **本番環境では使用しないでください。** 評価・開発・移行検証の用途を想定して
-> います。v1.x からの移行を検討している場合は [v1 からのアップグレード](./upgrading-from-v1)
-> もあわせて参照してください。
+> **注意**: Crowi v2 は現在 alpha 開発中です。安定版リリースはまだないため、
+> 特定のバージョンに固定し、十分に検証したうえで利用してください。評価・
+> 開発・移行検証の用途を主に想定しています。v1.x からの移行を検討して
+> いる場合は [v1 からのアップグレード](./upgrading-from-v1) もあわせて
+> 参照してください。
 
 ## 動作環境
 
@@ -116,9 +117,12 @@ docker compose --profile app up -d --build
 
 - `api` / `web` サービスのイメージが `packages/{api,web}/Dockerfile` から
   ビルドされます。
-- `api` サービスはリポジトリルートの `crowi.config.json` を
-  `/app/crowi.config.json` にマウントします。プラグイン構成は
-  イメージに焼き込まず、運用者がファイルで制御します。
+- `api` イメージはリファレンスの **ランナープロジェクト**
+  `apps/crowi-runner` からビルドされ、そのプロジェクトの
+  `crowi.config.json` をイメージに焼き込みます。compose ファイルは
+  さらに `apps/crowi-runner/crowi.config.json` を `/app/crowi.config.json`
+  に再マウントするため、再ビルドなしでドライバ選択を上書きできます。
+  プラグイン構成は運用者がこのファイルで制御します。
 - コンテナ内ではホスト名ベースの URI (`mongodb://mongodb:27017/crowi`
   など) が `.env` の `localhost` 値を上書きします。
 - ホスト側ポートは `pnpm dev` と揃えてあり、API が `4301`、Web が `4302`
@@ -127,6 +131,41 @@ docker compose --profile app up -d --build
 `api` サービスは `.env` ファイルを `env_file` として読み込むため、
 `CROWI_ENCRYPTION_KEY` や `WS_TOKEN_SECRET` などの機密値は `.env` に
 記述しておきます。詳しくは [設定](./configuration) を参照してください。
+
+## 公式 Docker イメージのビルド
+
+`@crowi/api` は **プラグインを同梱しません** — SDK とコアのみを出荷し、
+ストレージ / 検索 / メール / レンダラのドライバは同梱しません。ドライバは
+小さな **ランナープロジェクト** が所有します。`@crowi/api` と必要な
+`@crowi/plugin-*` パッケージを依存に持つ `package.json`、各ドライバを
+どのプラグインで提供するかを選択する `crowi.config.json`、そして `.env`
+からなります。api は起動時にランナープロジェクトの `node_modules/` から
+プラグインを解決するため、プラグインの追加・削除に api の再ビルドは
+不要です。ランナープロジェクト方式の詳細は [設定](./configuration) を
+参照してください。
+
+モノレポは 2 つのリファレンスランナープロジェクトを同梱しており、公式
+イメージは `packages/api/Dockerfile` を build arg でパラメータ化して、
+次の 2 種類のいずれかとしてビルドします。
+
+```bash
+# full (デフォルト): first-party の全 12 ドライバを同梱。
+# ドライバの切り替えは crowi.config.json の編集だけ — 再ビルド不要。
+docker build -f packages/api/Dockerfile -t crowi:full .
+
+# slim: implicit-default の 3 ドライバ
+# (storage-local + search-mongo + mail-smtp) のみ — MongoDB だけで動作し、
+# フルカスタマイズの土台になります。
+docker build -f packages/api/Dockerfile -t crowi:slim \
+  --build-arg RUNNER_APP=@crowi/runner-app-slim \
+  --build-arg RUNNER_APP_DIR=apps/crowi-runner-slim .
+```
+
+どちらのイメージも `WORKDIR=/app` (デプロイされたランナープロジェクトの
+ルート = api の `projectDir`) を設定し、`node node_modules/@crowi/api/dist/app.js`
+をコンテナ内ポート `3000` で実行します。**full** イメージは `app` compose
+プロファイルがビルドするものです。**slim** イメージは Elasticsearch も S3 も
+なしで起動できます。
 
 ## ビルド・テスト・型チェック
 

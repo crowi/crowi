@@ -51,29 +51,58 @@ UI とアプリケーション層は作り直されていますが、**データ
 このため、現時点では **本番データでの移行は行わず**、v1 データのコピーを
 使った検証環境での試用にとどめることを強くおすすめします。
 
-## crowi-admin による移行ツール
+## 移行フレームワーク (crowi-admin migrate)
 
-運用者向け CLI の `crowi-admin` には、データ変換コマンドが用意されて
-います。`crowi-admin` は MongoDB に直接接続するため、`@crowi/api` が
-インストールされたディレクトリ (通常は runner パッケージ) から実行
-します。
+v1 → v2 のデータ移行は RFC-0008 の移行フレームワークで実行され、
+`crowi-admin migrate plan | apply | status | list` という名前空間として
+提供されます。`crowi-admin` は MongoDB に直接接続するため、`@crowi/api` が
+インストールされたランナープロジェクトのディレクトリから実行します。
+モノレポでは `pnpm migrate` ラッパーが同じ CLI を実行します。
+
+移行は 2 つのレイヤーに分かれています。
+
+- **boot** 移行は、api 起動時に自動で適用されます。
+- **preflight** 移行は重い / 破壊的になりうるため、自動では適用されません。
+  代わりに、**未適用の preflight 移行が 1 つでもあると api は起動を拒否
+  します** (デフォルトの `block` ポリシー)。メンテナンスウィンドウで
+  `crowi-admin migrate apply` を使って明示的に実行します。
+
+```bash
+# 未適用の移行をプレビュー (デフォルトは preflight)
+crowi-admin migrate plan
+# または、モノレポでは:
+pnpm migrate plan
+
+# 未適用の preflight 移行を適用
+crowi-admin migrate apply
+
+# 未適用の移行件数を表示
+crowi-admin migrate status
+```
+
+> **Tip**: 開発中は `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` を設定する
+> ことで、preflight 移行が未適用のままでも api を起動できます (起動拒否が
+> 警告に格下げされます)。本番では、中途半端に移行されたデータベースが
+> リクエストを処理しないよう、デフォルトの `block` ポリシーのままに
+> してください。
 
 ### wikilink の移行
 
-v1 時代の wikilink 記法を v2 のレンダラーに合わせて変換する一回限りの
-データ移行です。
+`wikilink-format` preflight 移行は、v1 時代の wikilink 記法を v2 の
+レンダラーに合わせて変換します。
 
 ```bash
 # まず変更内容を確認 (新しいリビジョンは書き込まない)
-crowi-admin migrate --only=wikilink --dry-run
+crowi-admin migrate plan
 
-# 実際に移行を実行
-crowi-admin migrate --only=wikilink
+# この移行だけを適用
+crowi-admin migrate apply --id wikilink-format
 ```
 
-`--dry-run` をつけると、対象ページのスキャンとレポートだけを行い、
-実際の書き込みは行いません。本実行の前に必ず dry-run で影響範囲を
-確認してください。
+`migrate plan` は対象ページのスキャンとレポートだけを行い、実際の書き込みは
+行いません。適用前に必ず影響範囲を確認してください。この移行は書き換えの
+帰属先となる管理者ユーザーを必要とします — 管理者ユーザーが解決できない
+場合は `CROWI_MIGRATE_USER=<email>` を設定してください。
 
 > **Tip**: v1 由来の wikilink 記法は、`@crowi/plugin-renderer-crowi-legacy`
 > プラグインによってレンダリング時にも解釈できます。データ自体を変換
@@ -120,15 +149,18 @@ crowi-admin storage copy --from local --to s3
    環境で v2 を立ち上げます。
 3. **`CROWI_ENCRYPTION_KEY` を準備する** — v2 で機密設定の暗号化を使う
    場合は鍵を生成し、安全に保管します。
-4. **移行ツールを dry-run で確認する** — `crowi-admin migrate` や
-   `storage copy` は必ず `--dry-run` で影響範囲を確認してから実行します。
+4. **移行をまずプレビューする** — `crowi-admin migrate plan` で未適用の
+   preflight 移行を、`storage copy ... --dry-run` で対象を確認してから、
+   実際の適用を行います。
 
 ## まとめ
 
 - v2 のデータ形状は v1 と互換で、既存の Wiki データは持ち越せます。
 - ただし v2 は alpha 開発中で、移行パスは整備途上です。**本番移行は
   現時点では非推奨**です。
-- `crowi-admin` の移行コマンド (wikilink / search rebuild / storage copy)
-  は提供されていますが、いずれもまず `--dry-run` で確認してください。
+- `crowi-admin migrate` フレームワーク (`plan` / `apply` と preflight-block
+  の起動ガード)、および `search rebuild` / `storage copy` が提供されて
+  います。適用前にいずれもプレビュー (`migrate plan` / `--dry-run`) して
+  ください。
 - 安定版リリースに向け、移行手順は今後ドキュメント化されます。最新
   状況は `TODO.md` と Crowi のリリース告知を参照してください。

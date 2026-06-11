@@ -16,8 +16,12 @@ This page covers 1 and 2. For the settings in 3, see [Admin](./admin).
 
 ## Environment variables
 
-At boot, the API loads `.env` from the current directory (the repository
-root) using `dotenv`. Copy `.env.example` and edit it.
+At boot, the API loads `.env` from the current working directory using
+`dotenv`. In development that directory is the **repository root** (the
+`pnpm dev` api script loads it explicitly). In production it is the
+**runner project's directory** (the `process.cwd()` the api boots
+against), or you inject the variables through your compose file /
+orchestrator instead of a file. Copy `.env.example` and edit it.
 
 ```bash
 cp .env.example .env
@@ -32,7 +36,7 @@ cp .env.example .env
 | `NODE_ENV` | No | `development` / `production` |
 | `REDIS_URL` | Conditional | Sessions, the Socket.IO adapter, realtime-collab pub/sub, and the editor-cap counter. Optional for single-instance, **required for multi-instance deployments**. Use `rediss://` for TLS |
 | `PASSWORD_SEED` | Yes | Legacy password hashing seed (still used for fallback verification) |
-| `CLIENT_URL` | Required in production | CORS allowlist origin. Localhost origins are allowed automatically in development |
+| `CLIENT_URL` | Required in production | The web origin, set on the **api** side. Used as the CORS allowlist origin and to build links in outgoing mail. Localhost origins are allowed automatically in development |
 | `CROWI_ENCRYPTION_KEY` | Recommended | Base64-encoded 32-byte master key used to encrypt sensitive Config with AES-256-GCM. Falls back to plaintext when unset. See [Encrypting sensitive config](./encryption) |
 | `JWT_ACCESS_TOKEN_TTL_SECONDS` | No (default `3600` = 1 hour) | TTL the api uses when signing JWT access tokens |
 | `JWT_REFRESH_TOKEN_TTL_SECONDS` | No (default `2592000` = 30 days) | TTL the api uses when signing JWT refresh tokens |
@@ -48,8 +52,8 @@ details.
 | -------- | -------- | ------- |
 | `WS_TOKEN_SECRET` | Required for multi-instance | HMAC signing key for the short-lived JWT (wsToken) used to authenticate WebSocket connections. Must be the **same value** on every replica in a multi-instance deployment. When unset, a random secret is generated per process and a warning is logged |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | No (default `20`) | Per-page simultaneous-editor cap. Clients above the cap connect read-only |
-| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials. When unset, it is derived from `window.location`. Set it only when you front `/collab/*` on a host distinct from the API |
-| `NEXT_PUBLIC_API_URL` | Required for the web | The base URL of the API as seen by the browser |
+| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials. When unset, it is derived from `NEXT_PUBLIC_API_URL` + `window.location`. Set it only when the api and web run on **distinct hosts** (i.e. `/collab/*` is not reverse-proxied to the same host as the web) |
+| `NEXT_PUBLIC_API_URL` | Required for the web | The api origin as seen by the browser. This is a **web-side** variable, baked in at build time in the Docker image (the compose default is `http://api:3000`) |
 
 > **Tip**: Both `WS_TOKEN_SECRET` and `CROWI_ENCRYPTION_KEY` can be
 > generated with `openssl rand -base64 32`. `CROWI_ENCRYPTION_KEY` can
@@ -64,13 +68,25 @@ overridden by the `environment` entries in `docker-compose.yml`.
 Secrets such as `CROWI_ENCRYPTION_KEY` and `WS_TOKEN_SECRET` are passed
 through as long as they are present in `.env`.
 
+> **Tip**: The web app (`@crowi/web`) is a **separate deployable** with no
+> plugin dependencies; it talks to the api over HTTP and can run anywhere
+> (Vercel, a container, or co-located with the api). The api, by contrast,
+> is a long-lived Node server (Mongoose, Redis, the embedded Hocuspocus
+> WebSocket engine, runtime plugin loading), so it **requires a Node
+> runtime** — a Node host or a Node container (ECS / EKS / Fly / Render /
+> Cloud Run / Cloudflare Containers). It does not run on edge/isolate
+> serverless platforms such as Cloudflare Workers.
+
 ## crowi.config.json
 
-`crowi.config.json` is a JSON file placed at the repository root (= the
-root of the runner project in production). It declares **which plugins to
+`crowi.config.json` is a JSON file placed at the **root of the runner
+project** (in the monorepo, the reference runner project is
+`apps/crowi-runner`, so its config lives at
+`apps/crowi-runner/crowi.config.json`). It declares **which plugins to
 load and which drivers to enable**. Per-plugin configuration values
-(S3 bucket name, OAuth client ID, etc.) are not written here — they are
-stored in the MongoDB `Config` collection.
+(S3 bucket name, OAuth client ID, mail / storage credentials, etc.) are
+not written here — they are stored in the MongoDB `Config` collection and
+edited from the admin UI.
 
 ```json
 {
@@ -94,7 +110,7 @@ stored in the MongoDB `Config` collection.
 
 | Key | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
-| `plugins` | `string[]` | `[]` | npm package names of plugins to load at boot. Loaded in addition to the implicit defaults (`@crowi/plugin-storage-local`) |
+| `plugins` | `string[]` | `[]` | npm package names of plugins to load at boot. Loaded in addition to the implicit defaults (`@crowi/plugin-storage-local`, `@crowi/plugin-search-mongo`, `@crowi/plugin-mail-smtp`) |
 | `storage.driver` | `string` | `"local"` | The storage driver name the file uploader uses. See [Storage drivers](./storage) |
 | `search.driver` | `string` | `"mongo"` | The driver name the search service uses. See [Search setup](./search-setup) |
 
@@ -104,14 +120,23 @@ with an explicit error.
 
 ### How plugins are resolved
 
-The names listed in `plugins` are resolved from the runner project's
-`node_modules/`. To add a plugin, declare it as a dependency in the
-runner's `package.json` and add its name to `crowi.config.json:plugins`.
-The API package itself does not need to be rebuilt.
+`@crowi/api` is **plugin-free**: it ships the SDK (`@crowi/plugin-api`) and
+core only, and bundles no drivers. The plugins are owned by the runner
+project. The names listed in `plugins` are resolved at boot from the runner
+project's `node_modules/` (via `createRequire(projectDir)`). To add a
+plugin, declare it as a dependency in the runner's `package.json` and add
+its name to `crowi.config.json:plugins`. The api package itself does not
+need to be rebuilt.
 
-`@crowi/plugin-storage-local` is always loaded as an **implicit default
-plugin**, so local storage is available even without listing it in
-`plugins`.
+Three plugins are always loaded as **implicit default plugins** and need no
+configuration: `@crowi/plugin-storage-local`, `@crowi/plugin-search-mongo`,
+and `@crowi/plugin-mail-smtp`. As a result, a fresh install works out of
+the box with **local storage + MongoDB search + SMTP mail** — MongoDB is
+the only required infrastructure.
+
+The runner project is started with its `package.json` `"start": "crowi-api"`
+script (the `crowi-api` bin provided by `@crowi/api`), run from the project
+directory so that `process.cwd()` is the `projectDir`.
 
 For detailed steps on adding and enabling plugins, see
 [Managing plugins](../plugins/managing); for the kinds of plugins, see
@@ -127,7 +152,7 @@ follows.
 | ------- | ----------- | ----------- |
 | `storage.driver` | `local` | `@crowi/plugin-storage-local` (default) |
 | `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
-| `search.driver` | `mongo` | Core built-in (default) |
+| `search.driver` | `mongo` | `@crowi/plugin-search-mongo` (default) |
 | `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
 
 Renderer plugins (`@crowi/plugin-renderer-emoji` / `-katex` /

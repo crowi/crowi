@@ -4,27 +4,43 @@ description: Configuring outgoing mail and test delivery
 ---
 
 Crowi can send notification mail such as password resets and
-invitations. Mail delivery can use either **SMTP** or **AWS SES**, and is
-configured from the mail settings screen in the admin UI
-(`/admin/mail`).
+invitations. Like storage and search, mail delivery goes through a
+**mail driver** selected in the runner project's `crowi.config.json`
+(`mail.driver`), with the driver implementation provided by a
+`@crowi/plugin-mail-*` plugin. The per-driver credentials (SMTP password,
+SES / Resend keys, sender address) are entered from the mail settings
+screen in the admin UI (`/admin/mail`).
 
-> **Note**: Mail configuration is not required. When neither SMTP nor SES
-> is configured, the mailer is not initialized, and operations that
-> involve sending mail fail with a "mailer not configured" error.
+| `mail.driver` | Provided by | Delivery method |
+| ------------- | ----------- | --------------- |
+| `smtp` (default) | `@crowi/plugin-mail-smtp` (implicit default) | A generic SMTP server |
+| `ses` | `@crowi/plugin-mail-aws-ses` | AWS SES |
+| `resend` | `@crowi/plugin-mail-resend` | Resend |
+
+Because `@crowi/plugin-mail-smtp` is an implicit-default plugin, the
+`smtp` driver is available out of the box; to use SES or Resend, add the
+matching plugin to the runner project and set `mail.driver` accordingly.
+
+> **Note**: Mail configuration is not required. Until the active driver
+> has a sender address and credentials configured, the mailer stays
+> uninitialized, and operations that involve sending mail fail with a
+> "mailer not configured" error.
 
 ## Mailer selection logic
 
-At boot (and when settings are saved), the API loads the mail settings
-and decides the delivery method in the following priority order.
+The **delivery method is chosen by `mail.driver`** in `crowi.config.json`
+(default `smtp`), and the matching `@crowi/plugin-mail-*` plugin registers
+that driver at boot. The admin mail settings then supply the credentials
+the active driver needs.
 
-1. **`mail:from` is unset** → the mailer is not initialized (mail
-   feature off).
-2. **SMTP host and port are set** → use SMTP.
-3. **AWS access key and secret key are set** → use SES.
-4. None of the above → the mailer is not initialized.
+At boot (and when settings are saved), the API initializes the active
+mail driver only when it has enough configuration to send:
 
-In other words, SMTP settings take priority over SES. The sender address
-(`mail:from`) is required for either method.
+- The sender address (`mail:from`) is **required for every driver**. While
+  it is unset, the mailer stays uninitialized (mail feature off).
+- The active driver additionally needs its own settings — e.g. the SMTP
+  driver needs an SMTP host and port; the SES driver needs an AWS region
+  and credentials. If those are missing, the mailer stays uninitialized.
 
 ## Configuring mail in the admin UI
 
@@ -84,8 +100,9 @@ Behaviour related to the port:
 
 ## Sending via AWS SES
 
-To use AWS SES, leave the SMTP host / port blank and configure the SES
-region and credentials.
+To use AWS SES, add `@crowi/plugin-mail-aws-ses` to the runner project,
+set `mail.driver` to `ses` in `crowi.config.json`, and configure the SES
+region and credentials in the admin UI.
 
 | Setting | Example value |
 | ------- | ------------- |

@@ -7,9 +7,10 @@ This page covers how to set up Crowi 2.0 (codename Reignite) in your own
 environment.
 
 > **Caution**: Crowi v2 is currently in alpha development. There is no
-> stable release yet. **Do not run it in production.** It is intended for
-> evaluation, development, and migration testing. If you are considering
-> migrating from v1.x, also see [Upgrading from v1](./upgrading-from-v1).
+> stable release yet, so pin a specific version and validate thoroughly
+> before relying on it. It is primarily intended for evaluation,
+> development, and migration testing. If you are considering migrating
+> from v1.x, also see [Upgrading from v1](./upgrading-from-v1).
 
 ## Requirements
 
@@ -117,9 +118,11 @@ Behaviour in this case:
 
 - The `api` / `web` service images are built from
   `packages/{api,web}/Dockerfile`.
-- The `api` service mounts the repo-root `crowi.config.json` at
-  `/app/crowi.config.json`. The plugin configuration is not baked into
-  the image; it is operator-controlled via this file.
+- The `api` image is built from the reference **runner project**
+  `apps/crowi-runner` and bakes that project's `crowi.config.json` in. The
+  compose file then re-mounts `apps/crowi-runner/crowi.config.json` at
+  `/app/crowi.config.json` so you can override driver selection without a
+  rebuild. The plugin configuration is operator-controlled via this file.
 - Inside the containers, container-network URIs (such as
   `mongodb://mongodb:27017/crowi`) override the `localhost` values from
   `.env`.
@@ -129,6 +132,40 @@ Behaviour in this case:
 The `api` service reads `.env` as an `env_file`, so put secrets such as
 `CROWI_ENCRYPTION_KEY` and `WS_TOKEN_SECRET` in `.env`. See
 [Configuration](./configuration) for details.
+
+## Building the official Docker images
+
+`@crowi/api` is **plugin-free** — it ships the SDK and core only, with no
+storage / search / mail / renderer drivers bundled. The drivers are owned by
+a small **runner project**: a `package.json` that depends on `@crowi/api`
+plus the `@crowi/plugin-*` packages you want, a `crowi.config.json` that
+selects which plugin provides each driver, and a `.env`. At boot the api
+resolves plugins from the runner project's `node_modules/`, so adding or
+removing a plugin never requires rebuilding the api. See
+[Configuration](./configuration) for the runner-project model in detail.
+
+The monorepo ships two reference runner projects, and the official image is
+built from `packages/api/Dockerfile`, parameterized by build args to produce
+either of two flavours:
+
+```bash
+# full (default): all twelve first-party drivers bundled.
+# Switch drivers by editing crowi.config.json — no rebuild.
+docker build -f packages/api/Dockerfile -t crowi:full .
+
+# slim: only the three implicit-default drivers
+# (storage-local + search-mongo + mail-smtp) — runs on MongoDB alone,
+# a base for full customization.
+docker build -f packages/api/Dockerfile -t crowi:slim \
+  --build-arg RUNNER_APP=@crowi/runner-app-slim \
+  --build-arg RUNNER_APP_DIR=apps/crowi-runner-slim .
+```
+
+Both images set `WORKDIR=/app` (the deployed runner project's root, which is
+the api's `projectDir`) and run `node node_modules/@crowi/api/dist/app.js`,
+listening on container port `3000`. The **full** image is the one the
+`app` compose profile builds; the **slim** image needs neither
+Elasticsearch nor S3 to start.
 
 ## Build, test, and type-check
 

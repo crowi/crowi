@@ -4,8 +4,9 @@ description: Configuring local / S3 file storage
 ---
 
 Attachments uploaded to Crowi are stored through a **storage driver**. In
-Crowi 2.0, you select which driver to use in `crowi.config.json`, and the
-driver implementation itself is provided by the corresponding plugin.
+Crowi 2.0, you select which driver to use in the runner project's
+`crowi.config.json` (`storage.driver`), and the driver implementation
+itself is provided by the corresponding `@crowi/plugin-storage-*` plugin.
 
 > **Note**: The `FILE_UPLOAD` environment variable from Crowi v1 has been
 > removed. Storage selection is done with the combination of the

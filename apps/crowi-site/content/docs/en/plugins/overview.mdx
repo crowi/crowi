@@ -23,9 +23,11 @@ Crowi's plugin model rests on a few principles:
 - **Distributed as npm packages**: Plugins are ordinary npm packages, not
   a bespoke format. There is no global plugin registry and no
   curl-piped installer.
-- **No rebuild required**: The api itself does not depend on plugins.
-  Adding or removing a plugin is just a change to the operator's runner
-  project dependencies — the api image never needs to be rebuilt.
+- **Plugin-free api**: `@crowi/api` ships only the SDK
+  (`@crowi/plugin-api`) and core — it bundles no drivers. The plugins
+  live in a separate **runner project** (see below), so adding or
+  removing a plugin is just a change to that project's dependencies and
+  config; the api image never needs to be rebuilt.
 - **Stable API across v2.x**: A plugin written against
   `@crowi/plugin-api@2.x` keeps working through every v2 minor.
 
@@ -42,16 +44,44 @@ points.
 | Type | Extension point | Examples |
 | ---- | --------------- | -------- |
 | Storage | `registerStorage` | `@crowi/plugin-storage-local`, `@crowi/plugin-storage-aws-s3` |
-| Search | `registerSearch` | `@crowi/plugin-search-elasticsearch` |
+| Search | `registerSearch` | `@crowi/plugin-search-mongo`, `@crowi/plugin-search-elasticsearch`, `@crowi/plugin-search-opensearch` |
+| Mail | `registerMailer` | `@crowi/plugin-mail-smtp`, `@crowi/plugin-mail-aws-ses`, `@crowi/plugin-mail-resend` |
 | Renderer | `registerRenderer` | `@crowi/plugin-renderer-emoji` / `-katex` / `-plantuml` / `-crowi-legacy` |
 | Auth | `registerAuth` | (for external OAuth providers; expanding) |
 | Notifier | `registerNotifier` | (for notification sinks such as Slack; expanding) |
 | Base (config-only) | (no register) | `@crowi/plugin-aws` — shares credentials with downstream AWS plugins |
 | Routes | `registerRoutes` | Plugin HTTP routes — **currently a no-op stub**, pending a Hono-based redesign (see Developing plugins) |
 
-Storage and search each select a "driver" via `storage.driver` /
-`search.driver` in `crowi.config.json`. You can install several driver
-plugins and switch between them with configuration.
+Storage, search, and mail each select a "driver" via `storage.driver` /
+`search.driver` / `mail.driver` in `crowi.config.json`. You can install
+several driver plugins and switch between them with configuration.
+
+### First-party plugins
+
+The plugins maintained in the Crowi monorepo are:
+
+| Registry | Drivers |
+| -------- | ------- |
+| Storage | `local` (`@crowi/plugin-storage-local`), `aws-s3` (`@crowi/plugin-storage-aws-s3`) |
+| Search | `mongo` (`@crowi/plugin-search-mongo`), `elasticsearch` (`@crowi/plugin-search-elasticsearch`), `opensearch` (`@crowi/plugin-search-opensearch`) |
+| Mail | `smtp` (`@crowi/plugin-mail-smtp`), `ses` (`@crowi/plugin-mail-aws-ses`), `resend` (`@crowi/plugin-mail-resend`) |
+| Renderer | `@crowi/plugin-renderer-plantuml` / `-emoji` / `-katex` / `-crowi-legacy` |
+| Shared base | `@crowi/plugin-aws` (a config-only dependency the AWS-backed plugins require) |
+
+The plugin SDK every plugin is written against is `@crowi/plugin-api`.
+
+### Implicit-default plugins
+
+Three drivers are loaded on **every** boot, even when not listed in
+`crowi.config.json`, so a stock install needs no plugin configuration:
+
+- `@crowi/plugin-storage-local` — local filesystem storage
+- `@crowi/plugin-search-mongo` — MongoDB `$regex` search (the **default
+  search driver** — Elasticsearch / OpenSearch are opt-in)
+- `@crowi/plugin-mail-smtp` — SMTP mail
+
+Listing additional plugins and switching `*.driver` simply layers more
+options on top of these defaults.
 
 ## The `CrowiPlugin` interface
 
@@ -97,15 +127,32 @@ conduit through which a plugin reads core state. Plugins must not import
 `secretAccessKey`, and dependents such as `@crowi/plugin-storage-aws-s3`
 read them without duplicating the fields in their own schema.
 
-## Plugin resolution by the runner
+## The runner project vs. the `@crowi/runner` library
+
+Two related things share the word "runner" — keep them apart:
+
+- A **runner project** is the small api-runtime project that *owns* the
+  plugins. It is an ordinary npm project with a `package.json` depending
+  on `@crowi/api` plus the `@crowi/plugin-*` packages you chose, a
+  `crowi.config.json`, and an `.env`. The monorepo ships a reference
+  one, **`apps/crowi-runner`** (package name `@crowi/runner-app`,
+  private); a self-hosting operator writes their own equivalent.
+- **`@crowi/runner`** (no `-app`) is an internal library in
+  `packages/runner`. It is the *resolution engine*: it reads
+  `crowi.config.json` and uses `createRequire` to load the listed
+  plugins from the runner project's `node_modules/`.
+
+## Plugin resolution
 
 The api package itself does not depend on plugins. Resolving plugin npm
-names is the job of `@crowi/runner`.
+names is the job of the `@crowi/runner` library, against the runner
+project that boots the api.
 
-1. The runner reads `crowi.config.json` and takes the names listed in
-   the `plugins` array.
-2. Using `createRequire(<projectDir>/package.json)`, it resolves those
-   npm names against the **runner project's `node_modules/`**.
+1. It reads `crowi.config.json` and takes the names listed in the
+   `plugins` array (prepending the implicit-default plugins).
+2. Using `createRequire(<projectDir>/package.json)` — where
+   `projectDir` is the runner project — it resolves those npm names
+   against the **runner project's `node_modules/`**.
 3. It walks each plugin's `requires` via BFS, loading transitive
    dependencies too.
 4. The resulting list of resolved `CrowiPlugin` instances is handed to
@@ -114,9 +161,11 @@ names is the job of `@crowi/runner`.
 So adding a plugin as an operator is just two steps:
 
 - Add the plugin to the runner project's `package.json` dependencies
-- List the package name in `plugins` in `crowi.config.json`
+- List the package name in `plugins` in `crowi.config.json` (and switch
+  the matching `*.driver` if needed)
 
-For the concrete steps, see [Managing plugins](./managing).
+No api rebuild is involved. For the concrete steps, see
+[Managing plugins](./managing).
 
 ## Placement in the boot sequence
 

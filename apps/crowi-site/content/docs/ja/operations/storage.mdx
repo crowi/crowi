@@ -4,8 +4,9 @@ description: ローカル / S3 のファイルストレージ設定
 ---
 
 Crowi にアップロードされた添付ファイルは、**ストレージドライバ** を通じて
-保存されます。Crowi 2.0 では、どのドライバを使うかを `crowi.config.json`
-で選択し、ドライバの実体は対応するプラグインが提供します。
+保存されます。Crowi 2.0 では、どのドライバを使うかをランナープロジェクトの
+`crowi.config.json` (`storage.driver`) で選択し、ドライバの実体は対応する
+`@crowi/plugin-storage-*` プラグインが提供します。
 
 > **Note**: Crowi v1 にあった `FILE_UPLOAD` 環境変数は廃止されました。
 > ストレージの選択は `crowi.config.json` の `storage.driver` と、対応する

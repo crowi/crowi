@@ -40,8 +40,10 @@ pnpm add @crowi/plugin-storage-aws-s3
 
 ### 2. crowi.config.json に列挙
 
-リポジトリルートの `crowi.config.json` の `plugins` 配列に、導入する
-プラグインの npm パッケージ名を追加します。
+runner プロジェクトの `crowi.config.json` の `plugins` 配列に、導入する
+プラグインの npm パッケージ名を追加します (モノレポでは
+`apps/crowi-runner/crowi.config.json`。セルフホストする運用者は自分の
+runner プロジェクトのファイルを編集します)。
 
 ```json
 {
@@ -61,10 +63,11 @@ pnpm add @crowi/plugin-storage-aws-s3
 }
 ```
 
-ストレージや検索のように「ドライバ」を選択するプラグインの場合は、
-`storage.driver` / `search.driver` で使用するドライバ名を指定します。
-ドライバ名は省略すると、デフォルトのバッテリー同梱プラグインが提供する
-`local` / `mongo` が使われます。
+ストレージ・検索・メールのように「ドライバ」を選択するプラグインの場合は、
+`storage.driver` / `search.driver` / `mail.driver` で使用するドライバ名を
+指定します。省略すると、暗黙のデフォルトプラグインが提供する `local` /
+`mongo` / `smtp` が使われます (検索のデフォルトは Elasticsearch ではなく
+MongoDB です)。
 
 > **Tip**: `crowi.config.json` で列挙したプラグインが他プラグインを
 > `requires` で必要としている場合、推移的な依存も自動で読み込まれます。
@@ -77,9 +80,10 @@ pnpm add @crowi/plugin-storage-aws-s3
 変更したら api を再起動してください。プラグインの追加・削除に api イメージ
 の再ビルドは不要です。
 
-Docker 構成では、`crowi.config.json` はイメージに焼き込まず、コンテナへ
-マウントする運用です (`docker-compose.yml` の api サービスは
-`./crowi.config.json:/app/crowi.config.json:ro` をマウントしています)。
+公式 Docker イメージでは、runner プロジェクトの `crowi.config.json` が
+イメージに焼き込まれています (有効ドライバを選択するだけでシークレットは
+含みません)。有効にするプラグイン/ドライバを変えたい場合は、自前の
+ファイルを `/app/crowi.config.json` にマウントして上書きします。
 
 ## 管理画面からの設定
 

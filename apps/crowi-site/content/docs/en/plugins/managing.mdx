@@ -39,8 +39,10 @@ and need no extra install.
 
 ### 2. List it in crowi.config.json
 
-Add the plugin's npm package name to the `plugins` array in
-`crowi.config.json` at the repo root.
+Add the plugin's npm package name to the `plugins` array in the runner
+project's `crowi.config.json` (in the monorepo, that is
+`apps/crowi-runner/crowi.config.json`; a self-hosting operator edits the
+one in their own runner project).
 
 ```json
 {
@@ -60,10 +62,10 @@ Add the plugin's npm package name to the `plugins` array in
 }
 ```
 
-For plugins that select a "driver" — such as storage and search —
-specify the driver name to use via `storage.driver` / `search.driver`.
-If omitted, the default batteries-included plugins provide `local` /
-`mongo`.
+For plugins that select a "driver" — storage, search, and mail —
+specify the driver name to use via `storage.driver` / `search.driver` /
+`mail.driver`. If omitted, the implicit-default plugins provide `local`
+/ `mongo` / `smtp` (search defaults to MongoDB, not Elasticsearch).
 
 > **Tip**: If a plugin you list in `crowi.config.json` needs another
 > plugin via `requires`, the transitive dependency is loaded
@@ -77,9 +79,10 @@ Plugins are loaded exactly once at boot. After changing
 `crowi.config.json`, restart the api. Adding or removing a plugin does
 not require rebuilding the api image.
 
-In Docker setups, `crowi.config.json` is mounted into the container
-rather than baked into the image (the api service in
-`docker-compose.yml` mounts `./crowi.config.json:/app/crowi.config.json:ro`).
+In the official Docker images the runner project's `crowi.config.json`
+is baked in (it only selects active drivers — no secrets). To change
+which plugins/drivers are active, mount your own file over it at
+`/app/crowi.config.json`.
 
 ## Configuring from the admin screen
 

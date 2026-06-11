@@ -55,28 +55,59 @@ For this reason, we strongly recommend that for now you **do not migrate
 production data**, and limit yourself to trying it out in a verification
 environment using a copy of your v1 data.
 
-## Migration tools via crowi-admin
+## The migration framework (crowi-admin migrate)
 
-The operator-side CLI `crowi-admin` provides data conversion commands.
-Because `crowi-admin` connects directly to MongoDB, run it from a
-directory where `@crowi/api` is installed (usually the runner package).
+v1 → v2 data migrations run through the RFC-0008 migration framework,
+exposed as the `crowi-admin migrate plan | apply | status | list`
+namespace. Because `crowi-admin` connects directly to MongoDB, run it from
+the runner project directory (where `@crowi/api` is installed). In the
+monorepo, the `pnpm migrate` wrapper runs the same CLI.
+
+Migrations are split into two layers:
+
+- **boot** migrations apply automatically when the api starts.
+- **preflight** migrations are heavier / potentially destructive, so they
+  are *not* applied automatically. Instead, **the api refuses to boot while
+  any preflight migration is unapplied** (the default `block` policy). You
+  run them explicitly with `crowi-admin migrate apply` during a maintenance
+  window.
+
+```bash
+# Preview pending migrations (preflight by default)
+crowi-admin migrate plan
+# or, in the monorepo:
+pnpm migrate plan
+
+# Apply pending preflight migrations
+crowi-admin migrate apply
+
+# Show how many migrations are pending
+crowi-admin migrate status
+```
+
+> **Tip**: In development you can let the api boot with preflight
+> migrations still pending by setting
+> `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` — it downgrades the boot
+> refusal to a warning. Keep the default `block` policy in production so a
+> half-migrated database cannot serve traffic.
 
 ### wikilink migration
 
-A one-shot data migration that converts v1-era wikilink syntax to match
-the v2 renderer.
+The `wikilink-format` preflight migration converts v1-era wikilink syntax
+to match the v2 renderer.
 
 ```bash
 # First check what will change (does not write new revisions)
-crowi-admin migrate --only=wikilink --dry-run
+crowi-admin migrate plan
 
-# Actually run the migration
-crowi-admin migrate --only=wikilink
+# Apply just this migration
+crowi-admin migrate apply --id wikilink-format
 ```
 
-With `--dry-run`, the command only scans the target pages and reports;
-it does not write anything. Always check the scope of impact with a
-dry-run before the real run.
+`migrate plan` only scans the target pages and reports; it does not write
+anything. Always check the scope of impact before applying. The migration
+needs an admin user to attribute the rewrites to — set `CROWI_MIGRATE_USER=<email>`
+if no admin user is resolvable.
 
 > **Tip**: v1-era wikilink syntax can also be interpreted at render time
 > by the `@crowi/plugin-renderer-crowi-legacy` plugin. If you would rather
@@ -120,9 +151,9 @@ Before actually trying a migration, complete the following.
    bring up v2 in an environment isolated from production.
 3. **Prepare a `CROWI_ENCRYPTION_KEY`** — if you will use sensitive-config
    encryption in v2, generate a key and store it securely.
-4. **Check migration tools with a dry-run** — always check the scope of
-   impact with `--dry-run` before running `crowi-admin migrate` or
-   `storage copy`.
+4. **Preview the migrations first** — run `crowi-admin migrate plan` to
+   see the pending preflight migrations, and `storage copy ... --dry-run`,
+   before applying anything for real.
 
 ## Summary
 
@@ -131,8 +162,9 @@ Before actually trying a migration, complete the following.
 - However, v2 is under active alpha development and the migration path is
   still in progress. **Production migration is not recommended at this
   time.**
-- The `crowi-admin` migration commands (wikilink / search rebuild /
-  storage copy) are provided, but always check each one with `--dry-run`
-  first.
+- The `crowi-admin migrate` framework (with `plan` / `apply` and the
+  preflight-block boot guard), plus `search rebuild` and `storage copy`,
+  are provided. Preview each one (`migrate plan` / `--dry-run`) before
+  applying.
 - Migration procedures will be documented toward the stable release. See
   `TODO.md` and Crowi's release announcements for the latest status.
