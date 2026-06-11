@@ -51,6 +51,9 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
 
   const handleCopyMarkdown = () => {
     const body = page.revision?.body ?? '';
+    // An empty body has nothing to copy — don't show a "copied" toast for
+    // a no-op (false feedback).
+    if (body.length === 0) return;
     void navigator.clipboard
       ?.writeText(body)
       .then(() => notify.info(m['page.markdown_copied']()))

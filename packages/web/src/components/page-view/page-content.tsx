@@ -1,10 +1,11 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { Check, Copy, Link2, X } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import Link from 'next/link';
+import { useCopyFeedback } from '@/lib/use-copy-feedback';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/components/editor/list-classnames';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
@@ -65,24 +66,15 @@ function TargetedSection({ children, ...rest }: TargetedSectionProps) {
   );
 }
 
-const COPY_FEEDBACK_MS = 1500;
-
 function HeadingAnchor({ id }: { id?: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyFeedback();
 
   if (!id) return null;
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     if (typeof window === 'undefined') return;
-    const url = `${window.location.origin}${window.location.pathname}#${id}`;
-    navigator.clipboard
-      .writeText(url)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-      })
-      .catch(() => {});
+    copy(`${window.location.origin}${window.location.pathname}#${id}`);
   };
 
   return (
@@ -107,19 +99,9 @@ function HeadingAnchor({ id }: { id?: string }) {
  */
 function CodeBlock({ children, ...props }: ChildrenProps) {
   const preRef = useRef<HTMLPreElement>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyFeedback();
 
-  const handleCopy = () => {
-    const text = preRef.current?.textContent ?? '';
-    if (!text) return;
-    navigator.clipboard
-      ?.writeText(text)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-      })
-      .catch(() => {});
-  };
+  const handleCopy = () => copy(preRef.current?.textContent ?? '');
 
   return (
     <InsidePreContext.Provider value={true}>
