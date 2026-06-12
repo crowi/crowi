@@ -196,7 +196,14 @@ describe('attachCollabServer (RFC-0003 Phase 9 same-process attach)', () => {
   it('does NOT upgrade when the path is not under /collab/', async () => {
     const baseline = lastFakeHocuspocus?.handleConnection.mock.calls.length ?? 0;
     const url = `ws://127.0.0.1:${testServer.port}/some/other/path`;
-    const outcome = await probeWs(url, 500);
+    // 1500ms budget: this is a negative probe (we assert `opened === false`),
+    // so the timeout is only reached when the upgrade is correctly rejected
+    // and `open` never fires. A 500ms ceiling was too tight under parallel
+    // load — a successful handshake that takes >500ms would settle the probe
+    // via timeout with `opened` still false, producing a false negative.
+    // The happy path resolves on `open` instantly, so a higher ceiling adds
+    // no cost; it only stops a loaded CI runner from racing the open event.
+    const outcome = await probeWs(url, 1500);
     // No other upgrade handler is registered on the test server, so
     // the client times out without `open` ever firing.
     expect(outcome.opened).toBe(false);

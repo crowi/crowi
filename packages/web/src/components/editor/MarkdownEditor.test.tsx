@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, cleanup, act } from '@testing-library/react';
-import { createRef } from 'react';
 import { EditorState } from '@codemirror/state';
-import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
+import { act, cleanup, render } from '@testing-library/react';
+import { createRef } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildExtensions } from './build-extensions';
+import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
 
 afterEach(() => cleanup());
 
@@ -53,9 +53,9 @@ describe('buildExtensions', () => {
 describe('MarkdownEditor', () => {
   it('renders the initial value as the document body', () => {
     const { container } = render(<MarkdownEditor value="hello" onChange={() => {}} />);
-    // CodeMirror writes the doc into the `.cm-content` element. We
-    // assert on textContent rather than DOM shape so the test is
-    // resilient to internal codemirror layout changes.
+    // CodeMirror writes the doc into the `.cm-content` element. querySelector is
+    // intentional here — CodeMirror's internal DOM carries no accessible role, so
+    // there is no semantic RTL query that reaches it.
     const content = container.querySelector('.cm-content');
     expect(content).not.toBeNull();
     expect(content?.textContent).toBe('hello');
@@ -67,11 +67,13 @@ describe('MarkdownEditor', () => {
     // that path drives the listener.
     const onChange = vi.fn();
     const { rerender, container } = render(<MarkdownEditor value="one" onChange={onChange} />);
+    // CodeMirror internal DOM — no accessible role; querySelector is intentional.
     expect(container.querySelector('.cm-content')?.textContent).toBe('one');
 
     act(() => {
       rerender(<MarkdownEditor value="two" onChange={onChange} />);
     });
+    // CodeMirror internal DOM — no accessible role; querySelector is intentional.
     expect(container.querySelector('.cm-content')?.textContent).toBe('two');
     // The sync dispatch routes through the same updateListener that
     // user keystrokes do, so onChange should fire with the new body.
@@ -90,6 +92,7 @@ describe('MarkdownEditor', () => {
     // CodeMirror's default cursor is at offset 0 on a fresh state, so
     // the snippet lands at the beginning. The exact placement is less
     // important than the fact that insertAtCursor mutated the doc.
+    // CodeMirror internal DOM — no accessible role; querySelector is intentional.
     const text = container.querySelector('.cm-content')?.textContent ?? '';
     expect(text).toContain('start');
     expect(text).toContain(' end');

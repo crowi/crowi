@@ -9,6 +9,11 @@ import { crowi, Fixture } from 'src/test/setup';
 // and I/O round-trips. We poll by yielding the event loop until the expected
 // Backlink documents appear, with a safety bound.
 const waitForBacklinks = async (Backlink, filter, expectedCount, maxTicks = 50) => {
+  // Deterministically wait for the tracked fire-and-forget
+  // Backlink.createBySavedPage chain (wrapped via crowi.trackSideEffect in the
+  // flake-hardening work) to settle, rather than hoping a fixed tick budget
+  // outlasts the I/O under parallel load. The poll stays as a backstop.
+  await crowi.drainSideEffects();
   for (let i = 0; i < maxTicks; i += 1) {
     const found = await Backlink.find(filter);
     if (found.length === expectedCount) return found;
@@ -111,6 +116,14 @@ describe('Backlink', () => {
       const updated = await Page.findById(source._id);
       await Page.updatePage(updated, `<${t2Path}>`, user, {});
 
+      // Deterministically wait for the tracked update->createBySavedPage chain
+      // (stale-backlink removal then re-create) to settle, same posture as
+      // waitForBacklinks' stage-1 drain. Page.updatePage is driven directly
+      // (no HTTP), so the test response barrier never runs here — model-direct
+      // tests own their own drain (spec section 3). The poll below stays as a
+      // backstop for the t1->t2 reference flip.
+      await crowi.drainSideEffects();
+
       // Poll until the backlink points at t2 (the previous t1 link must be
       // removed first then re-created). Length stays at 1 throughout, so we
       // need to inspect the page reference, not just the count.
@@ -142,11 +155,12 @@ describe('Backlink', () => {
       const reloaded = await Page.findById(source._id);
       reloaded.commentCount = (reloaded.commentCount || 0) + 1;
       await reloaded.save();
-      // Give the (now-removed) post-save hook a chance to fire if it ever
-      // resurfaces — extra ticks are harmless when nothing happens.
-      for (let i = 0; i < 10; i += 1) {
-        await new Promise((resolve) => setImmediate(resolve));
-      }
+      // Negative check: drain any tracked side effect the bare .save() might
+      // schedule (the legacy post-save hook is gone, so nothing should), then
+      // assert no duplicate appeared. Draining makes "nothing happens"
+      // deterministic instead of relying on a fixed tick budget to outlast a
+      // would-be fan-out under parallel load.
+      await crowi.drainSideEffects();
 
       const after = await Backlink.find({ fromPage: source._id });
       expect(after).toHaveLength(1);

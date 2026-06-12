@@ -176,16 +176,24 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
   });
 
   it('preserves the original joinedAt across re-joins (stable avatar ordering)', async () => {
-    const service = await createPresenceService(new FakeRedis());
-    await service.join(PAGE_A, viewer('u1'));
-    const firstJoinedAt = (await service.listViewers(PAGE_A))[0].joinedAt;
+    // Fake timers instead of a real sleep: the re-join must happen at a
+    // *different* Date.now() so a regression (joinedAt overwritten) would
+    // be observable, without depending on wall-clock timing.
+    jest.useFakeTimers();
+    try {
+      const service = await createPresenceService(new FakeRedis());
+      await service.join(PAGE_A, viewer('u1'));
+      const firstJoinedAt = (await service.listViewers(PAGE_A))[0].joinedAt;
 
-    await new Promise((r) => setTimeout(r, 5));
-    await service.join(PAGE_A, viewer('u1'));
-    const secondJoinedAt = (await service.listViewers(PAGE_A))[0].joinedAt;
+      jest.advanceTimersByTime(1_000);
+      await service.join(PAGE_A, viewer('u1'));
+      const secondJoinedAt = (await service.listViewers(PAGE_A))[0].joinedAt;
 
-    expect(secondJoinedAt).toBe(firstJoinedAt);
-    await service.shutdown();
+      expect(secondJoinedAt).toBe(firstJoinedAt);
+      await service.shutdown();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('heartbeat refreshes a present viewer and reports false for an absent one', async () => {

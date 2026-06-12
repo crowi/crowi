@@ -10,8 +10,16 @@
  * Returns the document once found, or `null` after `maxTicks` exhausted.
  */
 import type { FilterQuery, Model } from 'mongoose';
+import { crowi } from './setup';
 
 export async function waitForModel<T>(model: Model<T>, filter: FilterQuery<T>, maxTicks = 50): Promise<T | null> {
+  // Deterministically wait for the tracked fire-and-forget side effects
+  // (auto-watch / backlink / Activity fan-out, wrapped via
+  // `crowi.trackSideEffect` in the flake-hardening work) to settle, instead
+  // of hoping a fixed number of event-loop ticks is enough — under parallel
+  // load the I/O round-trips can outlast the tick budget and flake. The poll
+  // below stays as a backstop for any untracked async.
+  await crowi.drainSideEffects();
   for (let i = 0; i < maxTicks; i++) {
     const found = await model.findOne(filter);
     if (found) return found;

@@ -37,12 +37,24 @@ export function registerRenderCacheInvalidation(crowi: Crowi): void {
       debug('skipping invalidation: pageEvent emit had no resolvable pageId (reason=%s)', reason);
       return;
     }
-    Promise.resolve()
-      .then(() => renderer.cache.invalidatePage(pageId))
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[crowi:render-cache] invalidatePage(${pageId}) on ${reason} failed: ${message}`);
-      });
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => {
+          // The cache store is the Mongoose connection (mongodb-cache).
+          // Skip the deferred write once the connection is no longer
+          // `connected` — during teardown the invalidation would only
+          // throw teardown-noise. Normal operation is unaffected.
+          if (!crowi.isMongoConnected()) {
+            debug('skip invalidatePage(%s) on %s: mongo connection not connected', pageId, reason);
+            return;
+          }
+          return renderer.cache.invalidatePage(pageId);
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          debug('invalidatePage(%s) on %s failed: %s', pageId, reason, message);
+        }),
+    );
   };
 
   pageEvent.on('update', (savedPage: unknown) => invalidate(savedPage as { _id?: unknown }, 'update'));

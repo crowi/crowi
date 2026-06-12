@@ -223,6 +223,22 @@ function expectWsClose(url: string, timeoutMs = 10000): Promise<number> {
 
 const validTokenFor = (userId: string): string => createNotificationsTokenUtil().signNotificationsToken({ selfUserId: userId }).token;
 
+/**
+ * Poll until `predicate()` returns true or the timeout elapses.
+ * Used in lieu of a fixed sleep — the server's `wireConnection` runs
+ * the subscribe asynchronously after the WS handshake's `open` event
+ * fires, so the subscribe-event-recorded condition is what we actually
+ * want to gate assertions on. A flat sleep was flaky on busy CI workers
+ * (parallel test load delays the subscribe round-trip past a fixed budget).
+ */
+const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+};
+
 describe('attachNotificationsServer — Redis-backed', () => {
   let testServer: TestServer;
 
@@ -233,23 +249,6 @@ describe('attachNotificationsServer — Redis-backed', () => {
   afterAll(async () => {
     await stopTestServer(testServer);
   }, 15000);
-
-  /**
-   * Poll until `predicate()` returns true or the timeout elapses.
-   * Used in lieu of a fixed sleep — the server's `wireConnection`
-   * runs the subscribe asynchronously after the WS handshake's
-   * `open` event fires, so the subscribe-event-recorded condition
-   * is what we actually want to gate the assertion on. A flat sleep
-   * was flaky on busy CI workers (parallel test load delays the
-   * subscribe round-trip past a fixed budget).
-   */
-  const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-    const start = Date.now();
-    while (!predicate()) {
-      if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
-      await new Promise((r) => setTimeout(r, 10));
-    }
-  };
 
   it('accepts a valid token + matching path userId and subscribes the user channel', async () => {
     const userId = 'user-A';
@@ -390,10 +389,17 @@ describe('attachNotificationsServer — Redis-backed', () => {
 
     // Publish on user B's channel — A's socket must remain quiet.
     await testServer.primary!.publish(channelForUser(userB), JSON.stringify({ type: 'changed' }));
-    // Give a generous beat for the (non-)delivery — `waitUntil`
-    // would loop until timeout here, so we just sleep briefly.
-    await new Promise((r) => setTimeout(r, 100));
-    expect(messages).toEqual([]);
+    // Then publish a sentinel on A's OWN channel, which is genuinely
+    // delivered. Because FakeRedis fans out synchronously in publish
+    // order and the WS frames queue onto the socket in that same order,
+    // any (erroneous) cross-channel frame would land BEFORE the sentinel.
+    // So once the sentinel arrives, `messages` must contain exactly it —
+    // proving the user-B publish never leaked to A — without depending on
+    // a fixed sleep that a busy worker could under- or over-shoot.
+    await testServer.primary!.publish(channelForUser(userA), JSON.stringify({ type: 'changed' }));
+    await waitUntil(() => messages.length >= 1);
+    expect(messages).toHaveLength(1);
+    expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
 
     await new Promise<void>((resolve) => {
       ws.on('close', () => resolve());
@@ -502,14 +508,6 @@ describe('attachNotificationsServer — schema-guarded fan-out (#14)', () => {
     await stopTestServer(server);
   }, 15000);
 
-  const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-    const start = Date.now();
-    while (!predicate()) {
-      if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
-      await new Promise((r) => setTimeout(r, 10));
-    }
-  };
-
   it('drops a schema-invalid Redis publish and never forwards it to the WS client', async () => {
     const userId = 'user-schema-drop';
     const token = validTokenFor(userId);
@@ -524,14 +522,17 @@ describe('attachNotificationsServer — schema-guarded fan-out (#14)', () => {
 
     // Foreign-shaped payload that JSON-parses but fails schema.
     await server.primary!.publish(channelForUser(userId), JSON.stringify({ type: 'other', data: 'spam' }));
-    // Wait a beat for the (non-)delivery, then assert nothing reached us.
-    await new Promise((r) => setTimeout(r, 100));
-    expect(messages).toEqual([]);
 
     // A subsequent well-formed payload still gets through — proves the
-    // drop is selective, not a global silence.
+    // drop is selective, not a global silence. This well-formed frame
+    // doubles as a delivery sentinel: FakeRedis fans out synchronously in
+    // publish order, so the schema-invalid frame above — had it (wrongly)
+    // been forwarded — would queue onto the socket BEFORE this one. Once
+    // the sentinel arrives, `messages` must contain exactly it, proving
+    // the invalid publish was dropped. No fixed sleep needed.
     await server.primary!.publish(channelForUser(userId), JSON.stringify({ type: 'changed' }));
     await waitUntil(() => messages.length >= 1);
+    expect(messages).toHaveLength(1);
     expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
 
     await new Promise<void>((resolve) => {
@@ -568,13 +569,6 @@ describe('attachNotificationsServer — subscribe/unsubscribe race serialisation
     // 1. Open a tab + wait for the first subscribe.
     const ws1 = new WebSocket(`ws://127.0.0.1:${server.port}/notifications/${userId}?token=${token}`);
     await new Promise<void>((resolve) => ws1.on('open', () => resolve()));
-    const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-      const start = Date.now();
-      while (!predicate()) {
-        if (Date.now() - start > timeoutMs) throw new Error(`waitUntil timed out after ${timeoutMs}ms`);
-        await new Promise((r) => setTimeout(r, 10));
-      }
-    };
     await waitUntil(() => eventsFor().some((e) => e.kind === 'subscribe'));
 
     // 2. Close + reconnect immediately. The server's handleClose runs

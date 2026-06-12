@@ -3,8 +3,8 @@ import request from 'supertest';
 
 import type { ActivityDocument } from 'src/models/activity';
 import type { NotificationDocument } from 'src/models/notification';
-import { Fixture, app, crowi } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
@@ -14,20 +14,6 @@ import { createJwtUtil } from 'src/util/jwt';
  * ordering. Foreign-user notifications surface 404 (not 403) so we do
  * not leak the existence of another user's data.
  */
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
 
 const cleanupPathPrefix = async (prefix: string) => {
   const Page = crowi.model('Page');
@@ -43,14 +29,6 @@ const cleanupPathPrefix = async (prefix: string) => {
     Notification.deleteMany({ target: { $in: pageIds } }),
     Activity.deleteMany({ target: { $in: pageIds } }),
   ]);
-};
-
-const createPageViaApi = async (accessToken: string, path: string, body: string) => {
-  const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body });
-  if (res.status !== 200) {
-    throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
-  }
-  return res.body.page as { _id: string; path: string };
 };
 
 /**

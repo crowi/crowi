@@ -65,20 +65,38 @@ export default (crowi: Crowi) => {
     const Page = crowi.model('Page');
     const Activity = crowi.model('Activity');
 
-    Comment.countCommentByPageId(savedComment.page)
-      .then(function (count) {
-        return Page.updateCommentCount(savedComment.page, count);
-      })
-      .then(function (page) {
-        debug('CommentCount Updated', page);
-      })
-      .catch(function () {});
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(function () {
+          // Skip the deferred commentCount recompute once the connection
+          // is no longer `connected` — it would only throw teardown-noise.
+          // Normal operation (readyState === 1) is unaffected.
+          if (!crowi.isMongoConnected()) return;
+          return Comment.countCommentByPageId(savedComment.page).then(function (count) {
+            return Page.updateCommentCount(savedComment.page, count);
+          });
+        })
+        .then(function (page) {
+          debug('CommentCount Updated', page);
+        })
+        .catch(function (err) {
+          debug('Failed to update commentCount', err);
+        }),
+    );
 
-    Activity.createByPageComment(savedComment)
-      .then(function (activityLog) {
-        debug('Activity created', activityLog);
-      })
-      .catch(function (err) {});
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(function () {
+          if (!crowi.isMongoConnected()) return;
+          return Activity.createByPageComment(savedComment);
+        })
+        .then(function (activityLog) {
+          debug('Activity created', activityLog);
+        })
+        .catch(function (err) {
+          debug('Failed to create comment Activity', err);
+        }),
+    );
   });
 
   const commentEvent = crowi.event('Comment');

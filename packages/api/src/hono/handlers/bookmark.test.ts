@@ -1,8 +1,8 @@
 import { Types } from 'mongoose';
 import request from 'supertest';
 
-import { Fixture, app, crowi } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
@@ -12,20 +12,6 @@ import { createJwtUtil } from 'src/util/jwt';
  * and the 401 / 400 envelopes from the Hono middleware.
  */
 
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
-
 const cleanupPathPrefix = async (prefix: string) => {
   const Page = crowi.model('Page');
   const Revision = crowi.model('Revision');
@@ -34,14 +20,6 @@ const cleanupPathPrefix = async (prefix: string) => {
   const pages = await Page.find(filter).select('_id').lean();
   const pageIds = pages.map((p: { _id: Types.ObjectId }) => p._id);
   await Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter), Bookmark.deleteMany({ page: { $in: pageIds } })]);
-};
-
-const createPageViaApi = async (accessToken: string, path: string, body: string) => {
-  const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body });
-  if (res.status !== 200) {
-    throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
-  }
-  return res.body.page as { _id: string; path: string };
 };
 
 describe('Routes /api/v2/bookmarks (Hono)', () => {

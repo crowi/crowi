@@ -1,10 +1,27 @@
 require('regenerator-runtime/runtime');
 const NodeEnvironment = require('jest-environment-node').default || require('jest-environment-node');
+const fs = require('node:fs');
 const path = require('path');
 const { randomBytes } = require('node:crypto');
+const { SENTINEL_PATH } = require('./test-mongo-sentinel');
 
 const ROOT_DIR = path.join(__dirname, '../..');
 const MODEL_DIR = path.join(__dirname, '../models');
+
+// The external Mongo URI that `global-setup.js` resolved once (the docker
+// server, if reachable). Read from the sentinel file rather than env because
+// jest does not reliably propagate a globalSetup env mutation to every worker.
+function resolvedExternalMongoUri() {
+  if (process.env.MONGO_URI && process.env.MONGO_URI.trim()) {
+    return process.env.MONGO_URI;
+  }
+  try {
+    const uri = fs.readFileSync(SENTINEL_PATH, 'utf8').trim();
+    return uri || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * jest environment for the @crowi/api server-side test project.
@@ -14,10 +31,14 @@ const MODEL_DIR = path.join(__dirname, '../models');
  *   1. `process.env.MONGO_URI` is set → connect to that MongoDB
  *      (CI uses `services: mongo` on the GitHub Actions runner; local
  *      developers can point this at the `docker compose up -d` mongo).
- *      Each test file gets its own database under that server so jest
- *      can run `--maxWorkers=N` in parallel without collisions, and
- *      teardown drops the per-file db so the shared server stays
- *      clean across runs.
+ *      `global-setup.js` ALSO sets this — once, in the jest main process
+ *      before any worker forks — when it detects a reachable local docker
+ *      Mongo, so a plain `pnpm test` with the docker stack up uses the
+ *      real server (and avoids the per-file mongodb-memory-server churn
+ *      that SIGSEGVs on full parallel runs) WITHOUT each worker doing its
+ *      own racy probe. Each test file gets its own database under that
+ *      server so jest can run `--maxWorkers=N` in parallel without
+ *      collisions, and teardown drops the per-file db.
  *
  *   2. Otherwise → `mongodb-memory-server` is started in-process.
  *      This is the "no infrastructure" fallback for local
@@ -59,7 +80,7 @@ class CrowiEnvironment extends NodeEnvironment {
     const suffix = randomBytes(4).toString('hex');
     const dbName = `crowi_test_${workerId}_${suffix}`;
 
-    const externalUri = process.env.MONGO_URI;
+    const externalUri = resolvedExternalMongoUri();
     if (externalUri && externalUri.trim()) {
       // Strip any trailing path / db / query on the supplied URI and
       // splice in our per-file db name. `mongodb://localhost:27017/foo?bar`
@@ -92,12 +113,17 @@ class CrowiEnvironment extends NodeEnvironment {
           `envCount=${envKeys.length} envMongoKeys=${envKeys.filter((k) => k.startsWith('MONGO')).join(',') || '(none)'}.`,
       );
     } else {
-      // memory-server fallback for local development only. Pin to
-      // 8.0.4 so the binary matches the `mongo:8.0.4` docker image
-      // used in CI's `services` block — keeps wire-protocol + index
-      // behaviour byte-identical between the two execution paths so
-      // we don't get "passes locally, fails in CI" mismatches from
-      // minor MongoDB version drift.
+      // No external Mongo and no docker server reachable (global-setup.js
+      // would have set MONGO_URI otherwise): spin up an in-process
+      // memory-server. This is the "no infrastructure" fallback for
+      // machines without the docker stack. Pin to 8.0.4 so the binary
+      // matches the `mongo:8.0.4` docker image used in CI's `services`
+      // block — keeps wire-protocol + index behaviour byte-identical
+      // between the two execution paths so we don't get "passes locally,
+      // fails in CI" mismatches from minor MongoDB version drift.
+      // NOTE: under `--maxWorkers=N` this path spawns a mongod per file
+      // and can SIGSEGV on large runs; prefer `docker compose up -d`
+      // (auto-detected by global-setup.js) for full runs.
       const { MongoMemoryServer } = require('mongodb-memory-server');
       this.memory = await MongoMemoryServer.create({ binary: { version: '8.0.4' } });
       const url = new URL(this.memory.getUri());

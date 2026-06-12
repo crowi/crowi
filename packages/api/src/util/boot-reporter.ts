@@ -165,6 +165,13 @@ export interface CreateBootReporterOptions {
    * interleave with debug output. Defaults to reading `process.env.DEBUG`.
    */
   debugEnabled?: boolean;
+  /**
+   * Suppress ALL output (progress lines, banner, readiness marker). Used by
+   * the test harness, where each of the 100+ test files boots Crowi and the
+   * per-layer `[boot] … ok` lines would otherwise flood the jest output.
+   * Defaults to `false`.
+   */
+  quiet?: boolean;
 }
 
 /**
@@ -173,10 +180,12 @@ export interface CreateBootReporterOptions {
  */
 export function createBootReporter(options: CreateBootReporterOptions = {}): BootReporter {
   const stream = options.stream ?? process.stdout;
+  const quiet = options.quiet ?? false;
   const debugEnabled = options.debugEnabled ?? Boolean(process.env.DEBUG);
   // Graceful degrade: spinner only when we own a real TTY *and* DEBUG isn't
-  // flooding the same stream.
-  const tty = (options.isTTY ?? Boolean(stream.isTTY)) && !debugEnabled;
+  // flooding the same stream. In quiet mode force plain (no spinner timer) —
+  // `write` is a no-op anyway, this just avoids arming a useless interval.
+  const tty = !quiet && (options.isTTY ?? Boolean(stream.isTTY)) && !debugEnabled;
 
   const bootStart = Date.now();
   let layerStart = 0;
@@ -185,6 +194,7 @@ export function createBootReporter(options: CreateBootReporterOptions = {}): Boo
   let timer: ReturnType<typeof setInterval> | null = null;
 
   const write = (s: string): void => {
+    if (quiet) return;
     stream.write(s);
   };
 

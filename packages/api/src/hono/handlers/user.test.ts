@@ -1,6 +1,7 @@
 import request from 'supertest';
 
 import { app, crowi } from 'src/test/setup';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
 
@@ -42,8 +43,12 @@ describe('Routes /api/v2/user (Hono)', () => {
 
   let targetUser: UserDocument;
   let viewerToken: string;
+  let configSnapshot: ConfigRow[];
 
   beforeAll(async () => {
+    // Snapshot the shared crowi config before wiping it (afterAll restores it
+    // to the as-discovered installed state rather than leaving it empty).
+    configSnapshot = await snapshotCrowiConfig(crowi);
     await Config().deleteMany({ ns: 'crowi' });
     await Config().applicationInstall();
     await crowi.getConfigService().load();
@@ -65,8 +70,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     await Page().deleteMany({ creator: targetUser._id });
     await Bookmark().deleteMany({ user: targetUser._id });
     await User().deleteMany({ $or: [{ email: TARGET_EMAIL }, { email: VIEWER_EMAIL }] });
-    await Config().deleteMany({ ns: 'crowi' });
-    await crowi.getConfigService().load();
+    await restoreCrowiConfig(crowi, configSnapshot);
   });
 
   describe('GET /user/:username', () => {

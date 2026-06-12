@@ -105,7 +105,9 @@ describe('Page', () => {
       expect(Page.isDeletableName('/hoge')).toBe(true);
       expect(Page.isDeletableName('/user/xxx')).toBe(false);
       expect(Page.isDeletableName('/user/xxx123')).toBe(false);
-      expect(Page.isDeletableName('/user/xxx/')).toBe(true);
+      // The trailing-slash variant is the same user-home portal page, guarded
+      // since the rename/delete bypass fix (USER_HOME_PAGE_PATH allows `/?$`).
+      expect(Page.isDeletableName('/user/xxx/')).toBe(false);
       expect(Page.isDeletableName('/user/xxx/hoge')).toBe(true);
     });
   });
@@ -282,7 +284,7 @@ describe('Page', () => {
         const pageToFind = createdPages[0];
         const grantedUser = createdUsers[1];
 
-        await expect(Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser)).rejects.toThrow();
+        await expect(Page.findPageByIdAndGrantedUser(pageToFind._id, grantedUser)).rejects.toThrow('Page is not granted for the user');
       });
     });
   });

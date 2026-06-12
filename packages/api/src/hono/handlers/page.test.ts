@@ -1,22 +1,8 @@
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
+import { app, crowi } from 'src/test/setup';
 import { waitForModel } from 'src/test/wait-for-model';
-import { createJwtUtil } from 'src/util/jwt';
+import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 import request from 'supertest';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
 
 const cleanupPathPrefix = (prefix: string) => {
   const Page = crowi.model('Page');
@@ -1374,16 +1360,6 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  const createPageViaApi = async (token: string, path: string, body: string, grant?: number) => {
-    const payload: { path: string; body: string; grant?: number } = { path, body };
-    if (grant !== undefined) payload.grant = grant;
-    const res = await request(app).post('/api/v2/pages').set(authHeaders(token)).send(payload);
-    if (res.status !== 200) {
-      throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
-    }
-    return res.body.page as { _id: string; path: string };
-  };
-
   describe('POST /api/v2/pages/like', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app).post('/api/v2/pages/like').send({ page_id: '000000000000000000000000' });
@@ -1539,16 +1515,6 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
     // Watchers are independent of page paths, so clean by user too.
     await Watcher.deleteMany({ user: { $in: [userId, otherUserId] } });
   });
-
-  const createPageViaApi = async (token: string, path: string, body: string, grant?: number) => {
-    const payload: { path: string; body: string; grant?: number } = { path, body };
-    if (grant !== undefined) payload.grant = grant;
-    const res = await request(app).post('/api/v2/pages').set(authHeaders(token)).send(payload);
-    if (res.status !== 200) {
-      throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
-    }
-    return res.body.page as { _id: string; path: string };
-  };
 
   // Auto-watch fires from the (fire-and-forget) pageEvent listener, so the
   // Watcher row may not exist yet when the create response returns. Poll on

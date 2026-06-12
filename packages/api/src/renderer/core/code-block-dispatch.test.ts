@@ -84,8 +84,7 @@ describe('core/code-block-dispatch', () => {
     const blockquote = result.tree.children[0] as { type: string; children: Array<{ type: string; value?: string }> };
     expect(blockquote.type).toBe('blockquote');
     const html = blockquote.children.find((c) => c.type === 'html');
-    expect(html).toBeDefined();
-    expect((html as { value: string }).value).toContain('data-lang="fake-lang"');
+    expect(html).toMatchObject({ type: 'html', value: expect.stringContaining('data-lang="fake-lang"') });
   });
 
   it('rewrites fences nested inside a list item', async () => {
@@ -99,7 +98,7 @@ describe('core/code-block-dispatch', () => {
     expect(list.type).toBe('list');
     const listItem = list.children[0];
     const html = listItem.children.find((c) => c.type === 'html');
-    expect(html).toBeDefined();
+    expect(html).toMatchObject({ type: 'html', value: expect.stringContaining('data-lang="fake-lang"') });
   });
 
   it('caches the render output and skips re-invocation on the second run', async () => {

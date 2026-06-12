@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
 import type { PresenceViewer } from '@crowi/api-contract';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { PresenceStatus, UsePresenceResult } from '@/lib/use-presence';
 import { LivePresenceRow } from './live-presence-row';
 
@@ -31,6 +31,8 @@ afterEach(() => {
 describe('LivePresenceRow', () => {
   // The row wrapper always renders (it reserves a fixed height to avoid
   // layout shift); only its *content* is conditional.
+  // live-presence-row is a layout-reservation div with no accessible role;
+  // getByTestId is used to reach it for childElementCount checks.
   it('reserves the row but shows no content when the only viewer is the current user', () => {
     render(<LivePresenceRow presence={makePresence([viewer('me')], 'me')} />);
     expect(screen.getByTestId('live-presence-row').childElementCount).toBe(0);
@@ -55,16 +57,20 @@ describe('LivePresenceRow', () => {
 
   it('renders the editing badge for a viewer with the editor open', () => {
     render(<LivePresenceRow presence={makePresence([viewer('me'), viewer('alice', { isEditing: true })], 'me')} />);
-    // The ✏️ corner badge is the role="img" element styled bg-primary;
-    // its accessible name embeds the editing user's display name.
-    const badges = Array.from(document.querySelectorAll<HTMLElement>('[role="img"].bg-primary'));
+    // The ✏️ corner badge carries role="img" and an aria-label with the editing
+    // user's display name. BoringAvatar SVGs also have role="img" but carry no
+    // accessible name, so filtering by name=/.+/ isolates the editing badges.
+    const badges = screen.getAllByRole('img', { name: /.+/ });
     expect(badges.length).toBeGreaterThan(0);
     expect(badges.some((b) => /User alice/.test(b.getAttribute('aria-label') ?? ''))).toBe(true);
   });
 
   it('renders no editing badge when nobody is editing', () => {
     render(<LivePresenceRow presence={makePresence([viewer('me'), viewer('alice')], 'me')} />);
-    expect(document.querySelector('[role="img"].bg-primary')).toBeNull();
+    // Editing badges are the only role="img" elements with an accessible name;
+    // BoringAvatar SVGs have role="img" but no aria-label. When nobody edits,
+    // no named img role element exists.
+    expect(screen.queryAllByRole('img', { name: /.+/ })).toHaveLength(0);
   });
 
   it('folds surplus viewers into a [+N] overflow button', () => {

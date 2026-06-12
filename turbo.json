@@ -40,26 +40,17 @@
     "test": {
       "dependsOn": [
         "^build"
-      ],
-      "outputs": [
-        "coverage/**"
       ]
     },
     "@crowi/collab#test": {
       "dependsOn": [
         "^build",
         "@crowi/api#build"
-      ],
-      "outputs": [
-        "coverage/**"
       ]
     },
     "test:server": {
       "dependsOn": [
         "^build"
-      ],
-      "outputs": [
-        "coverage/**"
       ]
     },
     "lint": {

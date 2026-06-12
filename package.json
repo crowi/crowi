@@ -41,7 +41,7 @@
     "migrate": "node scripts/migrate.mjs",
     "build": "turbo run build",
     "build:images": "node scripts/build-images.mjs",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=3",
     "test:server": "turbo run test:server",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",

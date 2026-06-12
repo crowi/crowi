@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, cleanup } from '@testing-library/react';
-import { useCollabSave, type CollabSaveSession } from './use-collab-save';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StatelessListener } from './use-collab-document';
+import { type CollabSaveSession, useCollabSave } from './use-collab-save';
 
 /**
  * Build a session double whose `sendStateless` records outgoing
@@ -56,21 +56,29 @@ afterEach(() => {
 describe('useCollabSave', () => {
   it('rejects with NOT_READY when session is null', async () => {
     const { result } = renderHook(() => useCollabSave(null));
-    await expect(result.current.save()).rejects.toMatchObject({ reason: 'NOT_READY' });
+    // `save()` flips the hook's saving state, so run it inside `act` to flush
+    // that update — otherwise React warns it was "not wrapped in act".
+    await act(async () => {
+      await expect(result.current.save()).rejects.toMatchObject({ reason: 'NOT_READY' });
+    });
   });
 
   it('rejects with READONLY when the session is read-only', async () => {
     const { session, setReadonly } = makeSession();
     setReadonly(true);
     const { result } = renderHook(() => useCollabSave(session));
-    await expect(result.current.save()).rejects.toMatchObject({ reason: 'READONLY' });
+    await act(async () => {
+      await expect(result.current.save()).rejects.toMatchObject({ reason: 'READONLY' });
+    });
   });
 
   it('rejects with NOT_READY when the session is not yet connected', async () => {
     const { session, setStatus } = makeSession();
     setStatus('connecting');
     const { result } = renderHook(() => useCollabSave(session));
-    await expect(result.current.save()).rejects.toMatchObject({ reason: 'NOT_READY' });
+    await act(async () => {
+      await expect(result.current.save()).rejects.toMatchObject({ reason: 'NOT_READY' });
+    });
   });
 
   it('emits a crowi:save stateless payload and resolves on crowi:save-ok', async () => {

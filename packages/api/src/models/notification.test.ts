@@ -18,18 +18,14 @@ describe('Notification', function () {
         const userId2 = new ObjectId();
         const targetId = new ObjectId();
         const activity = { _id: new ObjectId(), user: userId1, targetModel: 'Page', target: targetId, action: 'COMMENT' };
-        return Notification.upsertByActivity(userId2, activity)
-          .then(function (notification) {
-            expect(notification.user.toString()).toBe(userId2.toString());
-            expect(notification.targetModel).toBe('Page');
-            expect(notification.target.toString()).toBe(targetId.toString());
-            expect(notification.action).toBe('COMMENT');
-            expect(notification.status).toBe(Notification.STATUS_UNREAD);
-            expect(notification.activities).toHaveLength(1);
-          })
-          .catch(function (err) {
-            throw new Error(err);
-          });
+        return Notification.upsertByActivity(userId2, activity).then(function (notification) {
+          expect(notification.user.toString()).toBe(userId2.toString());
+          expect(notification.targetModel).toBe('Page');
+          expect(notification.target.toString()).toBe(targetId.toString());
+          expect(notification.action).toBe('COMMENT');
+          expect(notification.status).toBe(Notification.STATUS_UNREAD);
+          expect(notification.activities).toHaveLength(1);
+        });
       });
     });
 

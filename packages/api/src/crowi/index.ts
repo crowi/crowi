@@ -1,29 +1,29 @@
-import Debug from 'debug';
-import path, { sep } from 'path';
-import mongoose from 'mongoose';
-import Tokens from 'csrf';
-import { createClient } from 'redis';
-import http from 'http';
-import { buildRedisOpts } from 'src/util/redis-opts';
-import models from 'src/models';
-import events from 'src/events';
-import { attachCollabServer, type AttachedCollab } from 'src/collab/attach';
-import { attachPresenceServer, type AttachedPresence } from 'src/presence/attach';
-import { attachNotificationsServer, type AttachedNotifications } from 'src/notifications/attach';
 import { createAdaptorServer } from '@hono/node-server';
+import Tokens from 'csrf';
+import Debug from 'debug';
+import http from 'http';
+import mongoose from 'mongoose';
+import path, { sep } from 'path';
+import { createClient } from 'redis';
+import { type AttachedCollab, attachCollabServer } from 'src/collab/attach';
+import events from 'src/events';
+import { registerMentionDispatch } from 'src/events/mention-dispatch';
+import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
-import LRU from '../service/lru';
-import ConfigService from '../service/config';
+import models from 'src/models';
+import { type AttachedNotifications, attachNotificationsServer } from 'src/notifications/attach';
+import { PluginManager, type PluginRegistries } from 'src/plugin';
+import { type AttachedPresence, attachPresenceServer } from 'src/presence/attach';
+import { createRenderer, type Renderer } from 'src/renderer';
 import { MailService } from 'src/service/mail';
 import { resetKeyProvider } from 'src/util/crypto';
-import { PluginManager, type PluginRegistries } from 'src/plugin';
-import { type Renderer, createRenderer } from 'src/renderer';
-import { registerRenderCacheInvalidation } from 'src/events/render-cache';
-import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
 import { runBootMigrations } from 'src/migration/run-boot-migrations';
 import { type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
+import { buildRedisOpts } from 'src/util/redis-opts';
+import ConfigService from '../service/config';
+import LRU from '../service/lru';
 
 const pkg = require('../../package.json');
 
@@ -145,6 +145,19 @@ class Crowi {
 
   initialized = false;
 
+  /**
+   * In-flight fire-and-forget side effects (EventEmitter listeners +
+   * Mongoose `post('save')` hooks that start an un-awaited DB/redis write).
+   * `trackSideEffect` adds the promise here and removes it on settle;
+   * `drainSideEffects` awaits the set until it is empty.
+   *
+   * Production never calls `drainSideEffects`, so tracking is the only
+   * runtime cost on the request path (a Set add/delete per side effect) and
+   * the drain primitive is a no-op there. The test harness drains before
+   * disconnecting Mongo so settling writes do not race the close.
+   */
+  private inFlightSideEffects = new Set<Promise<unknown>>();
+
   constructor(rootdir: string, env: typeof process.env) {
     this.version = pkg.version;
 
@@ -180,7 +193,9 @@ class Crowi {
     // Boot progress reporter — owns stdout (debug-independent) so operators
     // see layered spinner/✓ progress without `DEBUG=crowi:*`. Degrades to
     // structured plain lines on non-TTY (prod / `| cat`) or when DEBUG is set.
-    const reporter = createBootReporter();
+    // Silenced under jest: each of the 100+ test files boots Crowi, so the
+    // per-layer `[boot] … ok` lines would otherwise flood the test output.
+    const reporter = createBootReporter({ quiet: Boolean(process.env.JEST_WORKER_ID) });
     this.bootReporter = reporter;
 
     // A step throwing (DB/Redis down is the common dev case) rejects out of
@@ -296,6 +311,45 @@ class Crowi {
     if (this.mongoose) {
       await this.mongoose.disconnect();
       this.mongoose = null;
+    }
+  }
+
+  /**
+   * Track a fire-and-forget side effect so the test harness can drain it
+   * before tearing the connection down. The promise is removed from the
+   * in-flight set once it settles (resolve OR reject); we deliberately do
+   * NOT re-throw or alter the rejection — the caller keeps its own
+   * `.catch` and error-swallowing posture unchanged. This is purely
+   * drain bookkeeping.
+   *
+   * INVARIANT: a tracked side effect MUST be a finite chain. Never track
+   * work that re-schedules itself (recurring / periodic timers, retry
+   * loops with no terminal condition) — `drainSideEffects()` loops until
+   * the set empties, so a self-rescheduling effect makes the drain
+   * (`afterEach` + the test response barrier in `test/setup.ts`) never
+   * settle, and every HTTP test then hangs until jest's `testTimeout`.
+   * Multi-level fan-out is fine (each level settles); unbounded
+   * re-arming is not.
+   */
+  trackSideEffect(p: Promise<unknown>): void {
+    this.inFlightSideEffects.add(p);
+    p.finally(() => {
+      this.inFlightSideEffects.delete(p);
+    });
+  }
+
+  /**
+   * Wait until every tracked side effect has settled. Loops because a
+   * side effect can spawn a second-level fire-and-forget while draining
+   * (Activity `post('save')` → Notification fan-out; `userEvent`
+   * 'activated' → user-page creation → page events → backlink/watch/
+   * mention), and those are tracked too. Resolves once the set is empty.
+   *
+   * Production never calls this — it is the test-teardown drain hook.
+   */
+  async drainSideEffects(): Promise<void> {
+    while (this.inFlightSideEffects.size > 0) {
+      await Promise.allSettled([...this.inFlightSideEffects]);
     }
   }
 
@@ -550,6 +604,21 @@ class Crowi {
     return this.mongoose;
   }
 
+  /**
+   * True when the Mongoose connection is in the `connected` state
+   * (`readyState === 1`). Used to guard fire-and-forget deferred writes:
+   * a side effect scheduled by a synchronous `emit()` / `post('save')`
+   * can fire after the harness has begun tearing the connection down
+   * (`connecting=2` / `disconnecting=3` / `disconnected=0`), at which
+   * point the write would throw a teardown-noise `MongoNotConnectedError`
+   * / `MongoPoolClosedError`. We skip the write instead. In normal
+   * operation `readyState === 1` always holds, so production behaviour is
+   * unchanged.
+   */
+  isMongoConnected(): boolean {
+    return this.mongoose?.connection?.readyState === 1;
+  }
+
   getIo(): any {
     // return this.io
     return null;
@@ -632,7 +701,7 @@ class Crowi {
     // listen. The reporter was created in `init()`; if `start()` is somehow
     // called without it (defensive), make a fresh one so the banner/marker
     // still emit.
-    const reporter = this.bootReporter ?? createBootReporter();
+    const reporter = this.bootReporter ?? createBootReporter({ quiet: Boolean(process.env.JEST_WORKER_ID) });
     this.bootReporter = reporter;
     reporter.beginLayer('server');
 

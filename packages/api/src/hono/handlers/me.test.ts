@@ -1,6 +1,7 @@
 import request from 'supertest';
 
 import { app, crowi } from 'src/test/setup';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
 
@@ -33,8 +34,13 @@ const seedActiveUser = async (info: { name: string; username: string; email: str
 describe('Routes /api/v2/me (Hono)', () => {
   const Config = () => crowi.model('Config');
   const User = () => crowi.model('User');
+  let configSnapshot: ConfigRow[];
 
   beforeAll(async () => {
+    // Snapshot the shared crowi config BEFORE wiping it, so afterAll can
+    // restore the namespace to its as-discovered (installed) state instead of
+    // leaving it empty for the next file (the cross-file seed-401 flake).
+    configSnapshot = await snapshotCrowiConfig(crowi);
     // /auth/login + /auth/register checks rely on `applicationInstall()`
     // having been called, but `/me/*` is auth-only. We still seed the
     // install flag so the test setup mirrors a real deployment.
@@ -44,8 +50,7 @@ describe('Routes /api/v2/me (Hono)', () => {
   });
 
   afterAll(async () => {
-    await Config().deleteMany({ ns: 'crowi' });
-    await crowi.getConfigService().load();
+    await restoreCrowiConfig(crowi, configSnapshot);
   });
 
   describe('GET /me', () => {

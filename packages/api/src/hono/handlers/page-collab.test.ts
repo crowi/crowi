@@ -7,25 +7,11 @@
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import request from 'supertest';
-import { app, crowi, Fixture } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import { createWsTokenUtil } from 'src/util/ws-token';
 import { _setEditorCapCounterForTesting } from 'src/util/collab-cap';
 import type { EditorCapCounter } from 'src/util/editor-cap-counter';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
 
 describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
   const PATH_PREFIX = '/hono-collab-token/';

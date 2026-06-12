@@ -211,7 +211,25 @@ export default (crowi: Crowi) => {
   userSchema.index({ email: 1 }, { unique: true, collation: USER_UNIQUE_COLLATION });
   userSchema.index({ username: 1 }, { unique: true, sparse: true, collation: USER_UNIQUE_COLLATION });
 
-  userEvent.on('activated', userEvent.onActivated);
+  // `onActivated` is async but `emit('activated', ...)` (a synchronous
+  // EventEmitter dispatch) does not await it. Track the returned promise so
+  // the user-page creation it kicks off — which re-fires page events and
+  // fans out to backlink / watch / mention — can be drained by the test
+  // harness before disconnect. Production never drains, so this only adds
+  // the side-effect to the in-flight set.
+  //
+  // `onActivated` swallows errors only inside `createUserPage`; its own
+  // `findPage()` / `rename()` awaits are not caught, so a rejection there
+  // would surface as an unhandled rejection. Attach `.catch(debug)` here so
+  // the tracked promise can never reject — symmetric with the other
+  // fire-and-forget call sites.
+  userEvent.on('activated', (user: UserDocument) => {
+    crowi.trackSideEffect(
+      Promise.resolve(userEvent.onActivated(user)).catch((err) => {
+        debug('userEvent activated handler failed', err);
+      }),
+    );
+  });
 
   function decideUserStatusOnRegistration() {
     const Config = crowi.model('Config');
