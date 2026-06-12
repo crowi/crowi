@@ -26,13 +26,13 @@
     "test": "jest"
   },
   "peerDependencies": {
-    "@crowi/plugin-api": "^0.1.0",
     "zod": "catalog:"
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^"
   },
   "devDependencies": {
+    "@crowi/plugin-api": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
